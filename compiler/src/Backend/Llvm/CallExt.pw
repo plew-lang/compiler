@@ -36,7 +36,7 @@ pub impl LlvmCtx {
             Expr.Ident(val start, val len) => {
                 // a primitive-int local/param (`v: U64`): its tracked type name (locTypeRef),
                 // so `v.hash[H](…)` dispatches on the primitive.
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     val tr: U64 = self.locTypeRef[li]
                     if tr != 0U64 {
@@ -69,7 +69,7 @@ pub impl LlvmCtx {
             }
             _ => {}
         }
-        if valueKind(c: inout c, st: inout self, id: recv) == 1U64 {
+        if self.valueKind(c: inout c, id: recv) == 1U64 {
             return c.kwSpan(kw: "String", kwLen: 6U64)
         }
         // a Bool receiver (`b.hash[H](…)`, `flag.eq(…)`): the backend models Bool method

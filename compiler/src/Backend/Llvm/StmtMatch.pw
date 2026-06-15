@@ -18,7 +18,7 @@ pub impl LlvmCtx {
                 val savedSP: Array[Bind] = c.cur.typeParams
                 val savedSA: Array[U64] = c.cur.typeArgs
                 val didSetS: Bool = self.setStructEnv(c: inout c, ref: self.exprTypeRef(c: inout c, id: scrut))
-                val sslot0: LLVMValueRef = entryAlloca(st: inout self, ty: sty)
+                val sslot0: LLVMValueRef = self.entryAlloca(ty: sty)
                 LLVMBuildStore(self.b, sv, sslot0)
                 val mark0: U64 = self.nLocals
                 self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
@@ -56,7 +56,7 @@ pub impl LlvmCtx {
             return
         }
         // store the scrutinee so payload fields can be read back as a variant struct.
-        val sslot: LLVMValueRef = entryAlloca(st: inout self, ty: sty)
+        val sslot: LLVMValueRef = self.entryAlloca(ty: sty)
         LLVMBuildStore(self.b, sv, sslot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "match.end"))
@@ -190,10 +190,10 @@ pub impl LlvmCtx {
                 // `await` inside the arm); otherwise a plain alloca.
                 mut val slot: LLVMValueRef = LLVMConstNull(self.ptrty)
                 if self.curAsync {
-                    slot = asyncFrameSlot(c: inout c, st: inout self, idx: self.asyncFieldNext)
+                    slot = self.asyncFrameSlot(c: inout c, idx: self.asyncFieldNext)
                     self.asyncFieldNext = self.asyncFieldNext + 1
                 } else {
-                    slot = entryAlloca(st: inout self, ty: pty)
+                    slot = self.entryAlloca(ty: pty)
                 }
                 LLVMBuildStore(self.b, fv, slot)
                 // an enum-typed bind carries a bare enum TypeRef so a nested match on it
@@ -233,7 +233,7 @@ pub impl LlvmCtx {
                         }
                     }
                 }
-                pushLocalR(st: inout self, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
+                self.pushLocalR(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
                 // an array-of-struct payload bind (`Expr.Call(.., val args)` with
                 // args: Array[Arg]): track the element struct + ref so `args[i].field`
                 // and nested-array/Ref elements resolve in the arm body.
@@ -242,9 +242,9 @@ pub impl LlvmCtx {
                         val et2: TypeRef = c.arena.types[elemRef]
                         val esi: U64 = self.localStructIdxFor(c: inout c, start: et2.nameStart, len: et2.nameLen)
                         if esi < c.arena.structs.count {
-                            setLocalElemStruct(st: inout self, esi: esi)
+                            self.setLocalElemStruct(esi: esi)
                         }
-                        setLocalElemTypeRef(st: inout self, ref: elemRef)
+                        self.setLocalElemTypeRef(ref: elemRef)
                     }
                 }
             }
@@ -280,7 +280,7 @@ pub impl LlvmCtx {
                     val fld: FieldDef = fs[fidx]
                     val fty: LLVMTypeRef = self.llvmTypeFor(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen, isArray: fld.tyIsArray)
                     val fv: LLVMValueRef = LLVMBuildLoad2(self.b, fty, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, fidx, anon()), anon())
-                    val slot: LLVMValueRef = entryAlloca(st: inout self, ty: fty)
+                    val slot: LLVMValueRef = self.entryAlloca(ty: fty)
                     LLVMBuildStore(self.b, fv, slot)
                     mut val elemTy: LLVMTypeRef = self.i64ty
                     mut val elemKind: U64 = 0
@@ -288,7 +288,7 @@ pub impl LlvmCtx {
                         elemTy = llvmScalarTy(c: inout c, st: inout self, tyStart: fld.tyStart, tyLen: fld.tyLen)
                         elemKind = kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
                     }
-                    pushLocal(st: inout self, nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
+                    self.pushLocal(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
                 }
                 bi += 1
             }

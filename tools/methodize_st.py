@@ -15,6 +15,9 @@ import re, sys, glob
 
 SRC = "compiler/src"
 path = sys.argv[1]
+# optional allow-list (2nd arg, comma-separated): only methodize these names; others
+# stay free. For bisecting which function's methodization triggers a codegen bug.
+ALLOW = set(sys.argv[2].split(",")) if len(sys.argv) > 2 and sys.argv[2] else None
 lines = open(path).read().split("\n")
 
 _decl_re = re.compile(r'^(export |pub )*(struct|enum|trait|newtype|extern|val|mut val)\b')
@@ -23,6 +26,18 @@ if _bad:
     print(f"REFUSE: {path} has top-level non-fn declarations that would be dropped:", file=sys.stderr)
     for L in _bad:
         print(f"    {L}", file=sys.stderr)
+    sys.exit(2)
+
+# A body-local named `self` collides with the synthesized receiver: the `st`->`self`
+# rewrite then resolves `self.field` to the LOCAL (a non-struct value), yielding a
+# backend "field access only on a registered struct" error. Refuse so the human
+# renames the local first (e.g. `self` -> `promiseSelf`).
+_self_local = [L for L in lines if re.search(r'^\s*(mut )?val self\b', L)]
+if _self_local:
+    print(f"REFUSE: {path} declares a local named `self` (collides with the receiver):", file=sys.stderr)
+    for L in _self_local:
+        print(f"    {L.strip()}", file=sys.stderr)
+    print("Rename the local before methodizing.", file=sys.stderr)
     sys.exit(2)
 
 fn_start = re.compile(r'^(export )?fn ')
@@ -57,6 +72,8 @@ def classify(sig):
         if not m:
             continue
         exported = bool(m.group(1)); name = m.group(2); rest = m.group(4)
+        if ALLOW is not None and name not in ALLOW:
+            return None
         ret = m.group(5) if hasret else None
         if keepc:
             newparams = "c: inout Comp" + (", " + rest if rest else "")

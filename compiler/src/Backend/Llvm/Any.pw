@@ -72,159 +72,162 @@ fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
     return false
 }
 
-// Build the thunk for requirement `idx` (`req`) on concrete struct `sidx`. Returns
-// its function pointer, or a null ptr when the requirement can't be dispatched
-// through `any` in this increment (assoc, inout/move self, or Self outside the
-// receiver). Saves/restores the builder position around the thunk body.
-fn buildAnyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, traitIdx: U64, req: Func, idx: U64) -> LLVMValueRef {
-    // a trait requirement Func carries no `self` param (hasRecv=false; self is
-    // implicit) — a method requirement is `!isAssoc`. An assoc-fn requirement has no
-    // receiver to carry the witness, so it is not dispatchable through `any`.
-    if req.isAssoc {
-        return LLVMConstNull(st.ptrty)
-    }
-    if reqUsesSelfInInput(c: inout c, req: req) {
-        return LLVMConstNull(st.ptrty)
-    }
-    // a `-> Self` requirement: the thunk re-erases the witness's concrete result back
-    // into the existential (the slot's signature returns the fat pointer).
-    val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
-    val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
-    if wfi >= c.arena.funcs.count {
-        return LLVMConstNull(st.ptrty)
-    }
-    val wslot: U64 = st.userFnSlot(idx: wfi)
-    if wslot >= st.fnIdx.count {
-        return LLVMConstNull(st.ptrty)
-    }
-    val sd: StructDef = c.arena.structs[sidx]
-    val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
-    if regSlot >= st.structIdxs.count {
-        return LLVMConstNull(st.ptrty)
-    }
-    val concreteTy: LLVMTypeRef = st.structTys[regSlot]
-    // the erased thunk signature uses the requirement's types with the trait's type
-    // parameters / associated types substituted by the existential's bindings
-    // (`Rhs`/`Output`/`Item` -> the bound concrete), set as the active env so
-    // paramLlvmTy / llvmFnRetTy ground them.
-    mut val envParams: Array[Bind] = []
-    mut val envArgs: Array[U64] = []
-    val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
-    val savedEP: Array[Bind] = c.cur.typeParams
-    val savedEA: Array[U64] = c.cur.typeArgs
-    if haveEnv {
-        c.cur.typeParams = envParams
-        c.cur.typeArgs = envArgs
-    }
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    mut val pi: U64 = 0
-    while pi < req.params.count {
-        ptys.append(value: st.paramLlvmTy(c: inout c, p: req.params[pi]))
-        pi += 1
-    }
-    mut val rty: LLVMTypeRef = st.llvmFnRetTy(c: inout c, f: req)
-    if haveEnv {
-        c.cur.typeParams = savedEP
-        c.cur.typeArgs = savedEA
-    }
-    // a `-> Self` thunk returns the existential fat pointer (the re-erased result).
-    if retsSelf {
-        rty = st.anyTy
-    }
-    val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
-    mut val nm: Array[U8] = []
-    appendBytes(into: inout nm, from: "pfvt".bytes)
-    appendU64Dec(into: inout nm, n: sidx)
-    appendBytes(into: inout nm, from: "_".bytes)
-    appendU64Dec(into: inout nm, n: idx)
-    appendBytes(into: inout nm, from: "_".bytes)
-    appendU64Dec(into: inout nm, n: anyBindKey(c: inout c, args: envArgs))
-    nm.append(value: 0)
-    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
-    val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
-    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
-    LLVMPositionBuilderAtEnd(st.b, entry)
-    // self: an `inout fn` witness takes self by pointer (mutates the boxed value in
-    // place — the box is shared via the fat pointer's data field, so the mutation
-    // persists); a by-value self is loaded from the box.
-    mut val selfArg: LLVMValueRef = LLVMGetParam(fv, 0U64)
-    if !(req.selfInout) {
-        selfArg = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
-    }
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: selfArg)
-    mut val ai: U64 = 0
-    while ai < req.params.count {
-        av.append(value: LLVMGetParam(fv, ai + 1U64))
-        ai += 1
-    }
-    val r: LLVMValueRef = LLVMBuildCall2(st.b, st.fnTy[wslot], st.fnVal[wslot], arrayCPtr(av), av.count, anon())
-    if req.hasRet {
-        if retsSelf {
-            // re-erase: box the witness's concrete result (the same concrete type as
-            // the boxed self) back into `any P` with this existential's vtable.
-            LLVMBuildRet(st.b, boxIntoAny(c: inout c, st: inout st, v: r, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx))
-        } else {
-            LLVMBuildRet(st.b, r)
+pub impl LlvmCtx {
+
+    // Build the thunk for requirement `idx` (`req`) on concrete struct `sidx`. Returns
+    // its function pointer, or a null ptr when the requirement can't be dispatched
+    // through `any` in this increment (assoc, inout/move self, or Self outside the
+    // receiver). Saves/restores the builder position around the thunk body.
+    inout fn buildAnyThunk(c: inout Comp, sidx: U64, anyRef: U64, traitIdx: U64, req: Func, idx: U64) -> LLVMValueRef {
+        // a trait requirement Func carries no `self` param (hasRecv=false; self is
+        // implicit) — a method requirement is `!isAssoc`. An assoc-fn requirement has no
+        // receiver to carry the witness, so it is not dispatchable through `any`.
+        if req.isAssoc {
+            return LLVMConstNull(self.ptrty)
         }
-    } else {
-        LLVMBuildRetVoid(st.b)
+        if reqUsesSelfInInput(c: inout c, req: req) {
+            return LLVMConstNull(self.ptrty)
+        }
+        // a `-> Self` requirement: the thunk re-erases the witness's concrete result back
+        // into the existential (the slot's signature returns the fat pointer).
+        val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
+        val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
+        if wfi >= c.arena.funcs.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        val wslot: U64 = self.userFnSlot(idx: wfi)
+        if wslot >= self.fnIdx.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        val sd: StructDef = c.arena.structs[sidx]
+        val regSlot: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+        if regSlot >= self.structIdxs.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        val concreteTy: LLVMTypeRef = self.structTys[regSlot]
+        // the erased thunk signature uses the requirement's types with the trait's type
+        // parameters / associated types substituted by the existential's bindings
+        // (`Rhs`/`Output`/`Item` -> the bound concrete), set as the active env so
+        // paramLlvmTy / llvmFnRetTy ground them.
+        mut val envParams: Array[Bind] = []
+        mut val envArgs: Array[U64] = []
+        val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
+        val savedEP: Array[Bind] = c.cur.typeParams
+        val savedEA: Array[U64] = c.cur.typeArgs
+        if haveEnv {
+            c.cur.typeParams = envParams
+            c.cur.typeArgs = envArgs
+        }
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        mut val pi: U64 = 0
+        while pi < req.params.count {
+            ptys.append(value: self.paramLlvmTy(c: inout c, p: req.params[pi]))
+            pi += 1
+        }
+        mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
+        if haveEnv {
+            c.cur.typeParams = savedEP
+            c.cur.typeArgs = savedEA
+        }
+        // a `-> Self` thunk returns the existential fat pointer (the re-erased result).
+        if retsSelf {
+            rty = self.anyTy
+        }
+        val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pfvt".bytes)
+        appendU64Dec(into: inout nm, n: sidx)
+        appendBytes(into: inout nm, from: "_".bytes)
+        appendU64Dec(into: inout nm, n: idx)
+        appendBytes(into: inout nm, from: "_".bytes)
+        appendU64Dec(into: inout nm, n: anyBindKey(c: inout c, args: envArgs))
+        nm.append(value: 0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        LLVMPositionBuilderAtEnd(self.b, entry)
+        // self: an `inout fn` witness takes self by pointer (mutates the boxed value in
+        // place — the box is shared via the fat pointer's data field, so the mutation
+        // persists); a by-value self is loaded from the box.
+        mut val selfArg: LLVMValueRef = LLVMGetParam(fv, 0U64)
+        if !(req.selfInout) {
+            selfArg = LLVMBuildLoad2(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+        }
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: selfArg)
+        mut val ai: U64 = 0
+        while ai < req.params.count {
+            av.append(value: LLVMGetParam(fv, ai + 1U64))
+            ai += 1
+        }
+        val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[wslot], self.fnVal[wslot], arrayCPtr(av), av.count, anon())
+        if req.hasRet {
+            if retsSelf {
+                // re-erase: box the witness's concrete result (the same concrete type as
+                // the boxed self) back into `any P` with this existential's vtable.
+                LLVMBuildRet(self.b, self.boxIntoAny(c: inout c, v: r, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx))
+            } else {
+                LLVMBuildRet(self.b, r)
+            }
+        } else {
+            LLVMBuildRetVoid(self.b)
+        }
+        LLVMPositionBuilderAtEnd(self.b, savedBB)
+        return fv
     }
-    LLVMPositionBuilderAtEnd(st.b, savedBB)
-    return fv
-}
 
-// Build the copy thunk for concrete struct `sidx` (vtable slot 0): `copy(ptr src)
-// -> ptr` allocates a fresh box, deep-copies the boxed concrete value into it (value
-// semantics — array/String fields are copied so the two existentials are
-// independent), and returns the new box pointer. Used to give `any P` value
-// semantics on copy (a `mut val b = a` must not alias a's boxed value).
-fn buildAnyCopyThunk(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> LLVMValueRef {
-    val sd: StructDef = c.arena.structs[sidx]
-    val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
-    if regSlot >= st.structIdxs.count {
-        return LLVMConstNull(st.ptrty)
+    // Build the copy thunk for concrete struct `sidx` (vtable slot 0): `copy(ptr src)
+    // -> ptr` allocates a fresh box, deep-copies the boxed concrete value into it (value
+    // semantics — array/String fields are copied so the two existentials are
+    // independent), and returns the new box pointer. Used to give `any P` value
+    // semantics on copy (a `mut val b = a` must not alias a's boxed value).
+    inout fn buildAnyCopyThunk(c: inout Comp, sidx: U64) -> LLVMValueRef {
+        val sd: StructDef = c.arena.structs[sidx]
+        val regSlot: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+        if regSlot >= self.structIdxs.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        val concreteTy: LLVMTypeRef = self.structTys[regSlot]
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pfvtcopy".bytes)
+        appendU64Dec(into: inout nm, n: sidx)
+        nm.append(value: 0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        LLVMPositionBuilderAtEnd(self.b, entry)
+        val srcVal: LLVMValueRef = LLVMBuildLoad2(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+        val copied: LLVMValueRef = self.deepCopyStructValue(c: inout c, v: srcVal, sidx: sidx)
+        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        LLVMBuildStore(self.b, copied, cell)
+        LLVMBuildRet(self.b, cell)
+        LLVMPositionBuilderAtEnd(self.b, savedBB)
+        return fv
     }
-    val concreteTy: LLVMTypeRef = st.structTys[regSlot]
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 1U64, 0I32)
-    mut val nm: Array[U8] = []
-    appendBytes(into: inout nm, from: "pfvtcopy".bytes)
-    appendU64Dec(into: inout nm, n: sidx)
-    nm.append(value: 0)
-    val fv: LLVMValueRef = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
-    val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
-    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
-    LLVMPositionBuilderAtEnd(st.b, entry)
-    val srcVal: LLVMValueRef = LLVMBuildLoad2(st.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
-    val copied: LLVMValueRef = st.deepCopyStructValue(c: inout c, v: srcVal, sidx: sidx)
-    val cell: LLVMValueRef = st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
-    LLVMBuildStore(st.b, copied, cell)
-    LLVMBuildRet(st.b, cell)
-    LLVMPositionBuilderAtEnd(st.b, savedBB)
-    return fv
-}
 
-// Value-semantics copy of an `any P` fat-pointer value: invoke its vtable's copy
-// thunk (slot 0) to duplicate the boxed concrete, returning a fresh `{ newdata,
-// vtable }`. So `mut val b = a` (and other place->owner copies) yields an
-// independent existential whose later mutation doesn't affect the source.
-fn copyAnyValue(c: inout Comp, st: inout LlvmCtx, fat: LLVMValueRef) -> LLVMValueRef {
-    val dataPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 0U64, anon())
-    val vtPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 1U64, anon())
-    val copyFn: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, vtPtr, anon())
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 1U64, 0I32)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: dataPtr)
-    val newData: LLVMValueRef = LLVMBuildCall2(st.b, fty, copyFn, arrayCPtr(av), 1U64, anon())
-    mut val agg: LLVMValueRef = LLVMGetUndef(st.anyTy)
-    agg = LLVMBuildInsertValue(st.b, agg, newData, 0U64, anon())
-    agg = LLVMBuildInsertValue(st.b, agg, vtPtr, 1U64, anon())
-    return agg
+    // Value-semantics copy of an `any P` fat-pointer value: invoke its vtable's copy
+    // thunk (slot 0) to duplicate the boxed concrete, returning a fresh `{ newdata,
+    // vtable }`. So `mut val b = a` (and other place->owner copies) yields an
+    // independent existential whose later mutation doesn't affect the source.
+    inout fn copyAnyValue(c: inout Comp, fat: LLVMValueRef) -> LLVMValueRef {
+        val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
+        val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
+        val copyFn: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, vtPtr, anon())
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: dataPtr)
+        val newData: LLVMValueRef = LLVMBuildCall2(self.b, fty, copyFn, arrayCPtr(av), 1U64, anon())
+        mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
+        agg = LLVMBuildInsertValue(self.b, agg, newData, 0U64, anon())
+        agg = LLVMBuildInsertValue(self.b, agg, vtPtr, 1U64, anon())
+        return agg
+    }
 }
 
 // Whether `id` is an `any P` PLACE (an Ident or Field) whose copy into a new owner
@@ -237,63 +240,66 @@ fn anyExprIsPlace(c: inout Comp, id: U64) -> Bool {
     }
 }
 
-// If `valueExpr` is an existing `any P` place being copied into a new owner, return
-// a value-semantics copy of its already-emitted value `rv`; else `rv` unchanged.
-fn copyAnyIfPlace(c: inout Comp, st: inout LlvmCtx, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
-    if refIsAny(c: inout c, ref: st.exprTypeRef(c: inout c, id: valueExpr)) {
-        if anyExprIsPlace(c: inout c, id: valueExpr) {
-            return copyAnyValue(c: inout c, st: inout st, fat: rv)
-        }
-    }
-    return rv
-}
+pub impl LlvmCtx {
 
-// Build (or fetch cached) the vtable global for (concrete struct `sidx`, trait
-// `traitIdx`): an array of ptr slots — slot 0 = copy thunk (value semantics), slot
-// 1.. = a thunk per requirement in declaration order. Returns the global pointer.
-fn ensureAnyVtable(c: inout Comp, st: inout LlvmCtx, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
-    // distinct existential bindings (`any Add[I32,…]` vs `any Add[I64,…]`) need
-    // distinct vtables; the key folds the bound concretes (0 for the no-binding case).
-    mut val envP: Array[Bind] = []
-    mut val envA: Array[U64] = []
-    anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envP, outArgs: inout envA)
-    val bindKey: U64 = anyBindKey(c: inout c, args: envA)
-    mut val ci: U64 = 0
-    while ci < st.anyVtType.count {
-        if st.anyVtType[ci] == sidx && st.anyVtTrait[ci] == traitIdx && st.anyVtBindKey[ci] == bindKey {
-            return st.anyVtVal[ci]
+    // If `valueExpr` is an existing `any P` place being copied into a new owner, return
+    // a value-semantics copy of its already-emitted value `rv`; else `rv` unchanged.
+    inout fn copyAnyIfPlace(c: inout Comp, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
+        if refIsAny(c: inout c, ref: self.exprTypeRef(c: inout c, id: valueExpr)) {
+            if anyExprIsPlace(c: inout c, id: valueExpr) {
+                return self.copyAnyValue(c: inout c, fat: rv)
+            }
         }
-        ci += 1
+        return rv
     }
-    val t: TraitDef = c.decls.traits[traitIdx]
-    // pre-create the global (with its final array type) and CACHE it before building
-    // thunks, so a `-> Self` re-erasure thunk that re-boxes into this same existential
-    // resolves to this vtable instead of recursing into ensureAnyVtable forever.
-    val slotCount: U64 = 1U64 + t.reqs.count
-    val arrTy: LLVMTypeRef = LLVMArrayType2(st.ptrty, slotCount)
-    mut val nm: Array[U8] = []
-    appendBytes(into: inout nm, from: "pfvtbl".bytes)
-    appendU64Dec(into: inout nm, n: sidx)
-    appendBytes(into: inout nm, from: "_".bytes)
-    appendU64Dec(into: inout nm, n: traitIdx)
-    appendBytes(into: inout nm, from: "_".bytes)
-    appendU64Dec(into: inout nm, n: bindKey)
-    nm.append(value: 0)
-    val g: LLVMValueRef = LLVMAddGlobal(st.mod, arrTy, arrayCPtr(nm))
-    LLVMSetGlobalConstant(g, 1I32)
-    st.anyVtType.append(value: sidx)
-    st.anyVtTrait.append(value: traitIdx)
-    st.anyVtBindKey.append(value: bindKey)
-    st.anyVtVal.append(value: g)
-    mut val slots: Array[LLVMValueRef] = []
-    slots.append(value: buildAnyCopyThunk(c: inout c, st: inout st, sidx: sidx))
-    mut val ri: U64 = 0
-    while ri < t.reqs.count {
-        slots.append(value: buildAnyThunk(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
-        ri += 1
+
+    // Build (or fetch cached) the vtable global for (concrete struct `sidx`, trait
+    // `traitIdx`): an array of ptr slots — slot 0 = copy thunk (value semantics), slot
+    // 1.. = a thunk per requirement in declaration order. Returns the global pointer.
+    inout fn ensureAnyVtable(c: inout Comp, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
+        // distinct existential bindings (`any Add[I32,…]` vs `any Add[I64,…]`) need
+        // distinct vtables; the key folds the bound concretes (0 for the no-binding case).
+        mut val envP: Array[Bind] = []
+        mut val envA: Array[U64] = []
+        anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envP, outArgs: inout envA)
+        val bindKey: U64 = anyBindKey(c: inout c, args: envA)
+        mut val ci: U64 = 0
+        while ci < self.anyVtType.count {
+            if self.anyVtType[ci] == sidx && self.anyVtTrait[ci] == traitIdx && self.anyVtBindKey[ci] == bindKey {
+                return self.anyVtVal[ci]
+            }
+            ci += 1
+        }
+        val t: TraitDef = c.decls.traits[traitIdx]
+        // pre-create the global (with its final array type) and CACHE it before building
+        // thunks, so a `-> Self` re-erasure thunk that re-boxes into this same existential
+        // resolves to this vtable instead of recursing into ensureAnyVtable forever.
+        val slotCount: U64 = 1U64 + t.reqs.count
+        val arrTy: LLVMTypeRef = LLVMArrayType2(self.ptrty, slotCount)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pfvtbl".bytes)
+        appendU64Dec(into: inout nm, n: sidx)
+        appendBytes(into: inout nm, from: "_".bytes)
+        appendU64Dec(into: inout nm, n: traitIdx)
+        appendBytes(into: inout nm, from: "_".bytes)
+        appendU64Dec(into: inout nm, n: bindKey)
+        nm.append(value: 0)
+        val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, arrayCPtr(nm))
+        LLVMSetGlobalConstant(g, 1I32)
+        self.anyVtType.append(value: sidx)
+        self.anyVtTrait.append(value: traitIdx)
+        self.anyVtBindKey.append(value: bindKey)
+        self.anyVtVal.append(value: g)
+        mut val slots: Array[LLVMValueRef] = []
+        slots.append(value: self.buildAnyCopyThunk(c: inout c, sidx: sidx))
+        mut val ri: U64 = 0
+        while ri < t.reqs.count {
+            slots.append(value: self.buildAnyThunk(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
+            ri += 1
+        }
+        LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count))
+        return g
     }
-    LLVMSetInitializer(g, LLVMConstArray2(st.ptrty, arrayCPtr(slots), slots.count))
-    return g
 }
 
 // The slot index (into the vtable) of trait `traitIdx`'s requirement matching method
@@ -314,271 +320,273 @@ fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, arg
     return 0U64
 }
 
-// Box concrete value `v` of struct `sidx` into a fresh ARC cell and wrap it with the
-// (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
-fn boxIntoAny(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
-    val sd: StructDef = c.arena.structs[sidx]
-    val regSlot: U64 = structRegSlot(c: inout c, st: inout st, start: sd.nameStart, len: sd.nameLen)
-    val concreteTy: LLVMTypeRef = st.structTys[regSlot]
-    val cell: LLVMValueRef = st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(st.i64ty, 1U64, 0I32))
-    LLVMBuildStore(st.b, v, cell)
-    val vt: LLVMValueRef = ensureAnyVtable(c: inout c, st: inout st, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx)
-    mut val agg: LLVMValueRef = LLVMGetUndef(st.anyTy)
-    agg = LLVMBuildInsertValue(st.b, agg, cell, 0U64, anon())
-    agg = LLVMBuildInsertValue(st.b, agg, vt, 1U64, anon())
-    return agg
-}
+pub impl LlvmCtx {
 
-// If target TypeRef `targetRef` is an existential `any P` and `valueExpr` is a
-// concrete struct conforming to P, emit `valueExpr`, box it, and return the `any P`
-// fat pointer. Returns a null sentinel (LLVMConstNull check via outBoxed) when no
-// coercion applies. `outBoxed` is set true iff a coercion happened.
-fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueExpr: U64, outBoxed: inout Bool) -> LLVMValueRef {
-    outBoxed = false
-    if !(refIsAny(c: inout c, ref: targetRef)) {
-        return LLVMConstNull(st.ptrty)
+    // Box concrete value `v` of struct `sidx` into a fresh ARC cell and wrap it with the
+    // (sidx, traitIdx) vtable, producing an `any P` fat-pointer value.
+    inout fn boxIntoAny(c: inout Comp, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
+        val sd: StructDef = c.arena.structs[sidx]
+        val regSlot: U64 = structRegSlot(c: inout c, st: inout self, start: sd.nameStart, len: sd.nameLen)
+        val concreteTy: LLVMTypeRef = self.structTys[regSlot]
+        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        LLVMBuildStore(self.b, v, cell)
+        val vt: LLVMValueRef = self.ensureAnyVtable(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx)
+        mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
+        agg = LLVMBuildInsertValue(self.b, agg, cell, 0U64, anon())
+        agg = LLVMBuildInsertValue(self.b, agg, vt, 1U64, anon())
+        return agg
     }
-    // already an `any` value (e.g. passing an `any P` local to an `any P` param):
-    // no re-boxing.
-    val srcRef: U64 = st.exprTypeRef(c: inout c, id: valueExpr)
-    if refIsAny(c: inout c, ref: srcRef) {
-        return LLVMConstNull(st.ptrty)
-    }
-    val sidx: U64 = st.exprStructIdx(c: inout c, id: valueExpr)
-    if sidx >= c.arena.structs.count {
-        return LLVMConstNull(st.ptrty)
-    }
-    val tr: TypeRef = c.arena.types[targetRef]
-    val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
-    if traitIdx >= c.decls.traits.count {
-        return LLVMConstNull(st.ptrty)
-    }
-    // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
-    // array/struct fields into the box, matching a plain struct copy — so a later
-    // mutation of the source leaves the existential's boxed value unchanged.
-    val v: LLVMValueRef = st.copyValueIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout st, id: valueExpr), valueExpr: valueExpr)
-    outBoxed = true
-    return boxIntoAny(c: inout c, st: inout st, v: v, sidx: sidx, anyRef: targetRef, traitIdx: traitIdx)
-}
 
-// Dynamic dispatch of `recv.name(args)` where `recv` is an existential `any P`
-// (anyRef names the trait). Loads the data + vtable from the fat pointer, indexes
-// the requirement's vtable slot, and calls the thunk with (data, args). Self-input
-// requirements have no vtable slot (anyMethodSlot returns 0) and are rejected.
-fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
-    val tr: TypeRef = c.arena.types[anyRef]
-    val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
-    if traitIdx >= c.decls.traits.count {
-        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
+    // If target TypeRef `targetRef` is an existential `any P` and `valueExpr` is a
+    // concrete struct conforming to P, emit `valueExpr`, box it, and return the `any P`
+    // fat pointer. Returns a null sentinel (LLVMConstNull check via outBoxed) when no
+    // coercion applies. `outBoxed` is set true iff a coercion happened.
+    inout fn coerceToAnyIfNeeded(c: inout Comp, targetRef: U64, valueExpr: U64, outBoxed: inout Bool) -> LLVMValueRef {
+        outBoxed = false
+        if !(refIsAny(c: inout c, ref: targetRef)) {
+            return LLVMConstNull(self.ptrty)
+        }
+        // already an `any` value (e.g. passing an `any P` local to an `any P` param):
+        // no re-boxing.
+        val srcRef: U64 = self.exprTypeRef(c: inout c, id: valueExpr)
+        if refIsAny(c: inout c, ref: srcRef) {
+            return LLVMConstNull(self.ptrty)
+        }
+        val sidx: U64 = self.exprStructIdx(c: inout c, id: valueExpr)
+        if sidx >= c.arena.structs.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        val tr: TypeRef = c.arena.types[targetRef]
+        val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
+        if traitIdx >= c.decls.traits.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
+        // array/struct fields into the box, matching a plain struct copy — so a later
+        // mutation of the source leaves the existential's boxed value unchanged.
+        val v: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: valueExpr), valueExpr: valueExpr)
+        outBoxed = true
+        return self.boxIntoAny(c: inout c, v: v, sidx: sidx, anyRef: targetRef, traitIdx: traitIdx)
     }
-    val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-    if slot == 0U64 {
-        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    val req: Func = c.decls.traits[traitIdx].reqs[slot - 1U64]
-    // spec/08: a member with `Self` in a non-receiver INPUT position is not callable
-    // through `any` (the erased concretes need not match, so a `Self` argument cannot
-    // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.
-    if reqUsesSelfInInput(c: inout c, req: req) {
-        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
-    val fat: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: recv)
-    val dataPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 0U64, anon())
-    val vtPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, fat, 1U64, anon())
-    // &vtable[slot] via flat ptr-element GEP (element type ptr), then load the fn ptr.
-    mut val gepIdx: Array[LLVMValueRef] = []
-    gepIdx.append(value: LLVMConstInt(st.i64ty, slot, 0I32))
-    val slotPtr: LLVMValueRef = LLVMBuildGEP2(st.b, st.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
-    val fnPtr: LLVMValueRef = LLVMBuildLoad2(st.b, st.ptrty, slotPtr, anon())
-    // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>,
-    // grounding the requirement's `Rhs`/`Item`/`Output` under the existential's
-    // bindings (matching the thunk built in buildAnyThunk).
-    mut val envParams: Array[Bind] = []
-    mut val envArgs: Array[U64] = []
-    val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
-    val savedEP: Array[Bind] = c.cur.typeParams
-    val savedEA: Array[U64] = c.cur.typeArgs
-    if haveEnv {
-        c.cur.typeParams = envParams
-        c.cur.typeArgs = envArgs
-    }
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    mut val pi: U64 = 0
-    while pi < req.params.count {
-        ptys.append(value: st.paramLlvmTy(c: inout c, p: req.params[pi]))
-        pi += 1
-    }
-    mut val rty: LLVMTypeRef = st.llvmFnRetTy(c: inout c, f: req)
-    if haveEnv {
-        c.cur.typeParams = savedEP
-        c.cur.typeArgs = savedEA
-    }
-    // a `-> Self` requirement's thunk returns the re-erased existential fat pointer.
-    if retsSelf {
-        rty = st.anyTy
-    }
-    val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: dataPtr)
-    mut val ai: U64 = 0
-    while ai < args.count {
-        av.append(value: st.genArgValue(c: inout c, argExpr: args[ai].expr, p: req.params[ai]))
-        ai += 1
-    }
-    return LLVMBuildCall2(st.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
-}
 
-fn genLlvmFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
-    val slot: U64 = st.userFnSlot(idx: fi)
-    genLlvmFuncBody(c: inout c, st: inout st, fi: fi, fv: st.fnVal[slot])
-}
-
-// Emit function `fi`'s body into the LLVM function value `fv` (under the active
-// substitution env, if any — used for both plain functions and generic instances).
-fn genLlvmFuncBody(c: inout Comp, st: inout LlvmCtx, fi: U64, fv: LLVMValueRef) {
-    val f: Func = c.arena.funcs[fi]
-    st.curFn = fv
-    st.curIsMain = false
-    st.curRetVoid = !f.hasRet
-    // a plain method's `Self` resolves to the receiver type, so `-> Self` / a `Self`
-    // param / `return self` ground (the generic-method path sets this via its
-    // instantiation elsewhere; here it covers a non-generic method on a plain type).
-    val didSelf: Bool = f.hasRecv && st.curRecvInstRef == 0U64 && c.cur.selfRef == 0U64
-    if didSelf {
-        c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+    // Dynamic dispatch of `recv.name(args)` where `recv` is an existential `any P`
+    // (anyRef names the trait). Loads the data + vtable from the fat pointer, indexes
+    // the requirement's vtable slot, and calls the thunk with (data, args). Self-input
+    // requirements have no vtable slot (anyMethodSlot returns 0) and are rejected.
+    inout fn genLlvmAnyDispatch(c: inout Comp, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        val tr: TypeRef = c.arena.types[anyRef]
+        val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
+        if traitIdx >= c.decls.traits.count {
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+        if slot == 0U64 {
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val req: Func = c.decls.traits[traitIdx].reqs[slot - 1U64]
+        // spec/08: a member with `Self` in a non-receiver INPUT position is not callable
+        // through `any` (the erased concretes need not match, so a `Self` argument cannot
+        // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.
+        if reqUsesSelfInInput(c: inout c, req: req) {
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
+        val fat: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
+        val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
+        val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
+        // &vtable[slot] via flat ptr-element GEP (element type ptr), then load the fn ptr.
+        mut val gepIdx: Array[LLVMValueRef] = []
+        gepIdx.append(value: LLVMConstInt(self.i64ty, slot, 0I32))
+        val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
+        val fnPtr: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon())
+        // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>,
+        // grounding the requirement's `Rhs`/`Item`/`Output` under the existential's
+        // bindings (matching the thunk built in buildAnyThunk).
+        mut val envParams: Array[Bind] = []
+        mut val envArgs: Array[U64] = []
+        val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envParams, outArgs: inout envArgs)
+        val savedEP: Array[Bind] = c.cur.typeParams
+        val savedEA: Array[U64] = c.cur.typeArgs
+        if haveEnv {
+            c.cur.typeParams = envParams
+            c.cur.typeArgs = envArgs
+        }
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        mut val pi: U64 = 0
+        while pi < req.params.count {
+            ptys.append(value: self.paramLlvmTy(c: inout c, p: req.params[pi]))
+            pi += 1
+        }
+        mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
+        if haveEnv {
+            c.cur.typeParams = savedEP
+            c.cur.typeArgs = savedEA
+        }
+        // a `-> Self` requirement's thunk returns the re-erased existential fat pointer.
+        if retsSelf {
+            rty = self.anyTy
+        }
+        val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: dataPtr)
+        mut val ai: U64 = 0
+        while ai < args.count {
+            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: req.params[ai]))
+            ai += 1
+        }
+        return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
     }
-    st.curRetTy = st.llvmFnRetTy(c: inout c, f: f)
-    st.curRetTyStart = f.retStart
-    st.curRetTyLen = f.retLen
-    // ground the return ref under any active generic env (a monomorphized method
-    // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
-    // can infer the concrete instance.
-    st.curRetRef = c.groundTypeRef(ref: f.retTy)
-    beginFnBody(st: inout st, fv: fv)
-    // fresh local scope; bind each param into an alloca (so it reads/writes
-    // uniformly with locals).
-    st.nLocals = 0
-    st.locStart = []
-    st.locLen = []
-    st.locPtr = []
-    st.locTy = []
-    st.locKind = []
-    st.locStructIdx = []
-    st.locIsArr = []
-    st.locElemTy = []
-    st.locElemKind = []
-    st.locTypeRef = []
-    st.locElemStructIdx = []
-    st.locElemTypeRef = []
-    st.locOwned = []
-    st.locMoved = []
-    // module-level variables (spec/15) are visible everywhere: seed them as locals
-    // (before self/params, so a same-named local shadows the global).
-    seedGlobals(c: inout c, st: inout st)
-    // method receiver: bind `self` as a local pointing at the struct storage —
-    // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
-    // fresh alloca (so mutations stay local). Field access then GEPs locPtr
-    // uniformly. Params follow self at index 1.
-    mut val base: U64 = 0
-    if f.hasRecv {
-        // a generic method's receiver is its instantiation (curRecvInstRef): its
-        // LLVM type / struct-index / env come from the instance, not the bare head
-        // name (which `llvmScalarTy` can't resolve to a registered generic type).
-        mut val recvTy: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout st, tyStart: f.recvStart, tyLen: f.recvLen)
-        mut val recvSidx: U64 = st.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
-        mut val recvRef: U64 = 0
-        if st.curRecvInstRef != 0U64 {
-            recvRef = st.curRecvInstRef
-            recvTy = llvmTypeOfRef(c: inout c, st: inout st, ref: st.curRecvInstRef)
-            val gs: U64 = st.genStructSlot(c: inout c, ref: st.curRecvInstRef)
-            if gs < st.genStructRefs.count {
-                recvSidx = st.genStructDefs[gs]
+
+    inout fn genLlvmFunc(c: inout Comp, fi: U64) {
+        val slot: U64 = self.userFnSlot(idx: fi)
+        self.genLlvmFuncBody(c: inout c, fi: fi, fv: self.fnVal[slot])
+    }
+
+    // Emit function `fi`'s body into the LLVM function value `fv` (under the active
+    // substitution env, if any — used for both plain functions and generic instances).
+    inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef) {
+        val f: Func = c.arena.funcs[fi]
+        self.curFn = fv
+        self.curIsMain = false
+        self.curRetVoid = !f.hasRet
+        // a plain method's `Self` resolves to the receiver type, so `-> Self` / a `Self`
+        // param / `return self` ground (the generic-method path sets this via its
+        // instantiation elsewhere; here it covers a non-generic method on a plain type).
+        val didSelf: Bool = f.hasRecv && self.curRecvInstRef == 0U64 && c.cur.selfRef == 0U64
+        if didSelf {
+            c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+        }
+        self.curRetTy = self.llvmFnRetTy(c: inout c, f: f)
+        self.curRetTyStart = f.retStart
+        self.curRetTyLen = f.retLen
+        // ground the return ref under any active generic env (a monomorphized method
+        // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
+        // can infer the concrete instance.
+        self.curRetRef = c.groundTypeRef(ref: f.retTy)
+        self.beginFnBody(fv: fv)
+        // fresh local scope; bind each param into an alloca (so it reads/writes
+        // uniformly with locals).
+        self.nLocals = 0
+        self.locStart = []
+        self.locLen = []
+        self.locPtr = []
+        self.locTy = []
+        self.locKind = []
+        self.locStructIdx = []
+        self.locIsArr = []
+        self.locElemTy = []
+        self.locElemKind = []
+        self.locTypeRef = []
+        self.locElemStructIdx = []
+        self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+        // module-level variables (spec/15) are visible everywhere: seed them as locals
+        // (before self/params, so a same-named local shadows the global).
+        self.seedGlobals(c: inout c)
+        // method receiver: bind `self` as a local pointing at the struct storage —
+        // an `inout fn`'s self IS the pointer param; a by-value self is stored into a
+        // fresh alloca (so mutations stay local). Field access then GEPs locPtr
+        // uniformly. Params follow self at index 1.
+        mut val base: U64 = 0
+        if f.hasRecv {
+            // a generic method's receiver is its instantiation (curRecvInstRef): its
+            // LLVM type / struct-index / env come from the instance, not the bare head
+            // name (which `llvmScalarTy` can't resolve to a registered generic type).
+            mut val recvTy: LLVMTypeRef = llvmScalarTy(c: inout c, st: inout self, tyStart: f.recvStart, tyLen: f.recvLen)
+            mut val recvSidx: U64 = self.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
+            mut val recvRef: U64 = 0
+            if self.curRecvInstRef != 0U64 {
+                recvRef = self.curRecvInstRef
+                recvTy = llvmTypeOfRef(c: inout c, st: inout self, ref: self.curRecvInstRef)
+                val gs: U64 = self.genStructSlot(c: inout c, ref: self.curRecvInstRef)
+                if gs < self.genStructRefs.count {
+                    recvSidx = self.genStructDefs[gs]
+                } else {
+                    // a method-own-type-param pseudo instance (`Pair[Bag]` where Pair is
+                    // NOT generic): keep the receiver-name's struct so `self.a` resolves.
+                    recvSidx = self.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
+                }
+            }
+            // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the
+            // {ptr,i64} array value, bound as an array so `self.get`/`self.count` resolve.
+            mut val selfIsArr: Bool = false
+            mut val selfElemTy: LLVMTypeRef = self.i64ty
+            if self.curRecvInstRef != 0U64 {
+                if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.curRecvInstRef].nameStart, len: c.arena.types[self.curRecvInstRef].nameLen, kw: "Array") {
+                    recvTy = self.arrayTy
+                    selfIsArr = true
+                    if c.arena.types[self.curRecvInstRef].args.count > 0U64 {
+                        selfElemTy = llvmTypeOfRef(c: inout c, st: inout self, ref: c.arena.types[self.curRecvInstRef].args[0])
+                    }
+                }
+            }
+            // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
+            // bare `match self` / `self == …` in the body recovers the enum.
+            if recvRef == 0U64 {
+                if recvSidx >= c.arena.structs.count {
+                    if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count {
+                        recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+                    }
+                }
+            }
+            mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
+            if !(f.selfInout) {
+                selfPtr = self.entryAlloca(ty: recvTy)
+                LLVMBuildStore(self.b, LLVMGetParam(fv, 0U64), selfPtr)
+            }
+            // an extension method's self is viewed as `Recv#Ext` (spec/09): a bare
+            // `self.m()` in the body resolves through the same extension (so it is
+            // recursion, not a call to a shadowed bare method); reach the shadowed
+            // method with `self#!Ext.m()`.
+            if f.extId != 0U64 {
+                if recvRef == 0U64 {
+                    mut val selfViewArgs: Array[U64] = []
+                    recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
+                }
+            }
+            // a view-rooted conferred witness (spec/09 chain conflict, `s#C.a()`): self is
+            // viewed as `Recv#root`, so an internal `self.m()` to a multi-path intermediate
+            // resolves through the SAME root C (findExtMethodById via the view chain).
+            if f.selfViewId != 0U64 {
+                if recvRef == 0U64 {
+                    mut val selfRootArgs: Array[U64] = []
+                    recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfRootArgs viewExtId=f.selfViewId />)
+                }
+            }
+            self.pushLocalR(nameStart: self.selfStart, nameLen: self.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
+            // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/
+            // `borrow fn` self is a borrow the caller owns.
+            self.setLocalOwned(owned: f.selfMove)
+            base = 1U64
+        }
+        mut val pi: U64 = 0
+        while pi < f.params.count {
+            self.bindOneParam(c: inout c, p: f.params[pi], fv: fv, argIdx: pi + base)
+            // a `move` param is owned (deinit'd here); inout/borrow/by-value are not.
+            self.setLocalOwned(owned: f.params[pi].isMove)
+            pi += 1
+        }
+        self.curBodyMark = self.nLocals
+        self.genLlvmBlock(c: inout c, id: f.body)
+        if !(self.terminated) {
+            // fall-through: the body block dropped its body locals; now drop owned
+            // params (a `move` param / `move fn` self the callee deinits).
+            self.dropScope(c: inout c, fromMark: 0U64, excludeLi: 18446744073709551615U64)
+            // checkReturns guarantees a non-() function diverges on every path, so a
+            // fall-through here is a () function: return void.
+            if self.curRetVoid {
+                LLVMBuildRetVoid(self.b)
             } else {
-                // a method-own-type-param pseudo instance (`Pair[Bag]` where Pair is
-                // NOT generic): keep the receiver-name's struct so `self.a` resolves.
-                recvSidx = st.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
+                LLVMBuildUnreachable(self.b)
             }
         }
-        // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the
-        // {ptr,i64} array value, bound as an array so `self.get`/`self.count` resolve.
-        mut val selfIsArr: Bool = false
-        mut val selfElemTy: LLVMTypeRef = st.i64ty
-        if st.curRecvInstRef != 0U64 {
-            if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[st.curRecvInstRef].nameStart, len: c.arena.types[st.curRecvInstRef].nameLen, kw: "Array") {
-                recvTy = st.arrayTy
-                selfIsArr = true
-                if c.arena.types[st.curRecvInstRef].args.count > 0U64 {
-                    selfElemTy = llvmTypeOfRef(c: inout c, st: inout st, ref: c.arena.types[st.curRecvInstRef].args[0])
-                }
-            }
+        if didSelf {
+            c.clearSelfItemEnv()
         }
-        // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
-        // bare `match self` / `self == …` in the body recovers the enum.
-        if recvRef == 0U64 {
-            if recvSidx >= c.arena.structs.count {
-                if st.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
-                    recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-                }
-            }
-        }
-        mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
-        if !(f.selfInout) {
-            selfPtr = entryAlloca(st: inout st, ty: recvTy)
-            LLVMBuildStore(st.b, LLVMGetParam(fv, 0U64), selfPtr)
-        }
-        // an extension method's self is viewed as `Recv#Ext` (spec/09): a bare
-        // `self.m()` in the body resolves through the same extension (so it is
-        // recursion, not a call to a shadowed bare method); reach the shadowed
-        // method with `self#!Ext.m()`.
-        if f.extId != 0U64 {
-            if recvRef == 0U64 {
-                mut val selfViewArgs: Array[U64] = []
-                recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
-            }
-        }
-        // a view-rooted conferred witness (spec/09 chain conflict, `s#C.a()`): self is
-        // viewed as `Recv#root`, so an internal `self.m()` to a multi-path intermediate
-        // resolves through the SAME root C (findExtMethodById via the view chain).
-        if f.selfViewId != 0U64 {
-            if recvRef == 0U64 {
-                mut val selfRootArgs: Array[U64] = []
-                recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfRootArgs viewExtId=f.selfViewId />)
-            }
-        }
-        pushLocalR(st: inout st, nameStart: st.selfStart, nameLen: st.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
-        // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/
-        // `borrow fn` self is a borrow the caller owns.
-        setLocalOwned(st: inout st, owned: f.selfMove)
-        base = 1U64
-    }
-    mut val pi: U64 = 0
-    while pi < f.params.count {
-        bindOneParam(c: inout c, st: inout st, p: f.params[pi], fv: fv, argIdx: pi + base)
-        // a `move` param is owned (deinit'd here); inout/borrow/by-value are not.
-        setLocalOwned(st: inout st, owned: f.params[pi].isMove)
-        pi += 1
-    }
-    st.curBodyMark = st.nLocals
-    st.genLlvmBlock(c: inout c, id: f.body)
-    if !(st.terminated) {
-        // fall-through: the body block dropped its body locals; now drop owned
-        // params (a `move` param / `move fn` self the callee deinits).
-        st.dropScope(c: inout c, fromMark: 0U64, excludeLi: 18446744073709551615U64)
-        // checkReturns guarantees a non-() function diverges on every path, so a
-        // fall-through here is a () function: return void.
-        if st.curRetVoid {
-            LLVMBuildRetVoid(st.b)
-        } else {
-            LLVMBuildUnreachable(st.b)
-        }
-    }
-    if didSelf {
-        c.clearSelfItemEnv()
     }
 }
-

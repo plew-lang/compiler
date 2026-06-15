@@ -283,7 +283,7 @@ pub impl LlvmCtx {
     // variant payload struct (under the active substitution env).
     inout fn buildEnumValue(c: inout Comp, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField]) -> LLVMValueRef {
         val vi: U64 = c.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-        val slot: LLVMValueRef = entryAlloca(st: inout self, ty: ety)
+        val slot: LLVMValueRef = self.entryAlloca(ty: ety)
         // zero the whole cell first (tag + payload) so unused payload words are
         // deterministic — a payload-less variant then has an all-zero payload, making
         // tag+word structural `==` well-defined.
@@ -459,7 +459,7 @@ pub impl LlvmCtx {
     // ids). Used by the `?.` / `try` desugar where the payload is an extracted SSA
     // value. The payload value types must match the variant's payload struct.
     inout fn buildEnumFromValues(c: inout Comp, eid: U64, ety: LLVMTypeRef, vi: U64, payloadVals: Array[LLVMValueRef]) -> LLVMValueRef {
-        val slot: LLVMValueRef = entryAlloca(st: inout self, ty: ety)
+        val slot: LLVMValueRef = self.entryAlloca(ty: ety)
         LLVMBuildStore(self.b, LLVMConstNull(ety), slot)
         LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
         if payloadVals.count > 0U64 {

@@ -85,7 +85,7 @@ pub impl LlvmCtx {
                 val savedSP: Array[Bind] = c.cur.typeParams
                 val savedSA: Array[U64] = c.cur.typeArgs
                 val didSetS: Bool = self.setStructEnv(c: inout c, ref: self.exprTypeRef(c: inout c, id: scrut))
-                val sslot0: LLVMValueRef = entryAlloca(st: inout self, ty: sty)
+                val sslot0: LLVMValueRef = self.entryAlloca(ty: sty)
                 LLVMBuildStore(self.b, sv, sslot0)
                 val mark0: U64 = self.nLocals
                 self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
@@ -123,7 +123,7 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: value-match is only supported on a registered enum (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val sslot: LLVMValueRef = entryAlloca(st: inout self, ty: sty)
+        val sslot: LLVMValueRef = self.entryAlloca(ty: sty)
         LLVMBuildStore(self.b, sv, sslot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vmatch.end"))
@@ -248,11 +248,11 @@ pub impl LlvmCtx {
         val reid: U64 = self.genEnumDefs[rge]
         val rety: LLVMTypeRef = self.genEnumTys[rge]
         val sv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: base)
-        val sslot: LLVMValueRef = entryAlloca(st: inout self, ty: bety)
+        val sslot: LLVMValueRef = self.entryAlloca(ty: bety)
         LLVMBuildStore(self.b, sv, sslot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, bety, sslot, 0U64, anon()), anon())
         val isSome: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, someVi, 0I32), anon())
-        val resSlot: LLVMValueRef = entryAlloca(st: inout self, ty: rety)
+        val resSlot: LLVMValueRef = self.entryAlloca(ty: rety)
         val someBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "oc.some"))
         val noneBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "oc.none"))
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "oc.end"))
@@ -314,7 +314,7 @@ pub impl LlvmCtx {
         val okVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
         val errVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
         val ev: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: expr)
-        val eslot: LLVMValueRef = entryAlloca(st: inout self, ty: eety)
+        val eslot: LLVMValueRef = self.entryAlloca(ty: eety)
         LLVMBuildStore(self.b, ev, eslot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, eety, eslot, 0U64, anon()), anon())
         val isErr: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, errVi, 0I32), anon())

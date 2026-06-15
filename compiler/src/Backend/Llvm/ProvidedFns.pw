@@ -161,7 +161,7 @@ pub impl LlvmCtx {
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = f.typeParams
             c.cur.typeArgs = fin.args
-            genLlvmFuncBody(c: inout c, st: inout self, fi: fin.fnIdx, fv: self.genFnVal[slot])
+            self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot])
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
             slot += 1

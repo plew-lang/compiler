@@ -7,503 +7,505 @@
 // The LLVM function type of a `fn(...) -> R` TypeRef under the closure ABI: env
 // pointer first, then the declared params, returning R (void for a `()` return).
 // fn TypeRef args = [retTy, paramTy0, paramTy1, ...].
-fn closureLlvmFnTy(c: inout Comp, st: inout LlvmCtx, fnRef: U64) -> LLVMTypeRef {
-    val t: TypeRef = c.arena.types[fnRef]
-    mut val ptys: Array[LLVMTypeRef] = []
-    ptys.append(value: st.ptrty)
-    mut val i: U64 = 1
-    while i < t.args.count {
-        ptys.append(value: llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[i]))
-        i += 1
-    }
-    mut val rty: LLVMTypeRef = st.voidty
-    if t.args.count > 0U64 {
-        val rt: TypeRef = c.arena.types[t.args[0]]
-        // a `()` return (the unnamed unit record) is void; any named type is a value.
-        if rt.nameLen != 0U64 {
-            rty = llvmTypeOfRef(c: inout c, st: inout st, ref: t.args[0])
-        }
-    }
-    return LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
-}
 
-// Emit an indirect call of a closure VALUE (the {fn, env} aggregate) of type fnRef:
-// extract the function pointer + environment, then call fn(env, coerced-args...).
-fn emitClosureCallValue(c: inout Comp, st: inout LlvmCtx, cloVal: LLVMValueRef, fnRef: U64, args: Array[Arg]) -> LLVMValueRef {
-    val fnPtr: LLVMValueRef = LLVMBuildExtractValue(st.b, cloVal, 0U64, anon())
-    val env: LLVMValueRef = LLVMBuildExtractValue(st.b, cloVal, 1U64, anon())
-    val fty: LLVMTypeRef = closureLlvmFnTy(c: inout c, st: inout st, fnRef: fnRef)
-    val ft: TypeRef = c.arena.types[fnRef]
-    mut val av: Array[LLVMValueRef] = []
-    av.append(value: env)
-    mut val i: U64 = 0
-    while i < args.count {
-        mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[i].expr)
-        // coerce an int arg to the declared param width (fn args = [ret, p0, p1, …]).
-        if i + 1U64 < ft.args.count {
-            if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
-                val pt: TypeRef = c.arena.types[ft.args[i + 1U64]]
-                v = coerceInt(st: inout st, v: v, target: llvmTypeOfRef(c: inout c, st: inout st, ref: ft.args[i + 1U64]), unsigned: isUnsignedName(c: inout c, start: pt.nameStart, len: pt.nameLen))
+pub impl LlvmCtx {
+    inout fn closureLlvmFnTy(c: inout Comp, fnRef: U64) -> LLVMTypeRef {
+        val t: TypeRef = c.arena.types[fnRef]
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        mut val i: U64 = 1
+        while i < t.args.count {
+            ptys.append(value: llvmTypeOfRef(c: inout c, st: inout self, ref: t.args[i]))
+            i += 1
+        }
+        mut val rty: LLVMTypeRef = self.voidty
+        if t.args.count > 0U64 {
+            val rt: TypeRef = c.arena.types[t.args[0]]
+            // a `()` return (the unnamed unit record) is void; any named type is a value.
+            if rt.nameLen != 0U64 {
+                rty = llvmTypeOfRef(c: inout c, st: inout self, ref: t.args[0])
             }
         }
-        av.append(value: v)
-        i += 1
+        return LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
     }
-    return LLVMBuildCall2(st.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
-}
 
-// Emit an indirect closure call where the callee is closure-typed local `li`.
-fn genLlvmClosureCall(c: inout Comp, st: inout LlvmCtx, li: U64, args: Array[Arg]) -> LLVMValueRef {
-    val cloVal: LLVMValueRef = LLVMBuildLoad2(st.b, st.closureTy, st.locPtr[li], anon())
-    return emitClosureCallValue(c: inout c, st: inout st, cloVal: cloVal, fnRef: st.locTypeRef[li], args: args)
-}
-
-// Emit a bare `pow(base:, exp:)` call (spec/12) by dispatching on the base argument's
-// type to its `Pow[Exp]` conformance's `pow` assoc fn. Returns a null value when the
-// base type has no matching `pow` (the caller then falls through to normal resolution).
-fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> LLVMValueRef {
-    // llvmArgTypeRef (not exprTypeRef) so a suffixed literal base (`pow(base: 10I64,…)`)
-    // recovers its type via typeOf, not just a typed local.
-    val br: U64 = st.llvmArgTypeRef(c: inout c, argExpr: base)
-    if br == 0U64 {
-        return LLVMConstNull(st.ptrty)
-    }
-    val bt: TypeRef = c.arena.types[br]
-    val powN: Bind = c.kwSpan(kw: "pow", kwLen: 3U64)
-    val afi: U64 = c.findAssoc(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
-    if afi >= c.arena.funcs.count {
-        return LLVMConstNull(st.ptrty)
-    }
-    mut val aslot: U64 = st.userFnSlot(idx: afi)
-    if aslot >= st.fnIdx.count {
-        aslot = st.ensureFreeFnDeclared(c: inout c, fi: afi)
-    }
-    if aslot >= st.fnIdx.count {
-        return LLVMConstNull(st.ptrty)
-    }
-    val af: Func = c.arena.funcs[afi]
-    mut val av: Array[LLVMValueRef] = []
-    mut val ai: U64 = 0
-    while ai < args.count {
-        av.append(value: st.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
-        ai += 1
-    }
-    return LLVMBuildCall2(st.b, st.fnTy[aslot], st.fnVal[aslot], arrayCPtr(av), av.count, anon())
-}
-
-fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
-    // a call whose "name" is a closure-typed local (`g(n: 4)` where g: fn(...)) is
-    // an indirect call: load the {fn, env} value, then call fn(env, args).
-    val cli: U64 = findLocal(c: inout c, st: inout st, start: nameStart, len: nameLen)
-    if cli < st.nLocals {
-        if c.isFnType(ref: st.locTypeRef[cli]) {
-            return genLlvmClosureCall(c: inout c, st: inout st, li: cli, args: args)
-        }
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "print") {
-        return emitPrint(c: inout c, st: inout st, argExpr: args[0].expr)
-    }
-    // `pow(base: x, exp: n)` (spec/12): the named exponentiation operation dispatches on
-    // the base argument's `Pow[Exp]` conformance (no `**` operator). Route the bare call
-    // to the base type's `pow` assoc fn; fall through if it does not resolve (so a
-    // user-defined free `pow` with other labels still works).
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
-        if args.count == 2U64 {
-            val pv: LLVMValueRef = genPowCall(c: inout c, st: inout st, base: args[0].expr, args: args)
-            if LLVMIsNull(pv) == 0I32 {
-                return pv
-            }
-        }
-    }
-    // `sleep(ms: I64) -> Promise[I64]` (@Std/Async intrinsic): a timer promise,
-    // `plew_sleep(i64) -> PlewPromise*` (await suspends until it fires).
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sleep") {
-        mut val sty: Array[LLVMTypeRef] = []
-        sty.append(value: st.i64ty)
-        val sleepTy: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(sty), 1U64, 0I32)
-        val sleepFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_sleep", nameId: 42U64, fnTy: sleepTy)
-        mut val sargs: Array[LLVMValueRef] = []
-        sargs.append(value: extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: false))
-        return LLVMBuildCall2(st.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "write") {
-        return emitStrSink(c: inout c, st: inout st, rtName: "plew_write_raw", rtId: 2U64, argExpr: args[0].expr)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") {
-        return emitStrSink(c: inout c, st: inout st, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: args[0].expr)
-    }
-    // @Std/Io writeByte(b: U8): putchar.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: st.i8ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_writeByte", nameId: 52U64, fnTy: fty)
+    // Emit an indirect call of a closure VALUE (the {fn, env} aggregate) of type fnRef:
+    // extract the function pointer + environment, then call fn(env, coerced-args...).
+    inout fn emitClosureCallValue(c: inout Comp, cloVal: LLVMValueRef, fnRef: U64, args: Array[Arg]) -> LLVMValueRef {
+        val fnPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, cloVal, 0U64, anon())
+        val env: LLVMValueRef = LLVMBuildExtractValue(self.b, cloVal, 1U64, anon())
+        val fty: LLVMTypeRef = self.closureLlvmFnTy(c: inout c, fnRef: fnRef)
+        val ft: TypeRef = c.arena.types[fnRef]
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i8ty, unsigned: true))
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-    }
-    // @Std/Process argCount() -> I64.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_argCount", nameId: 50U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 0U64, anon())
-    }
-    // @Std/Process argAt(i: I64) -> String (strty {ptr,i64}).
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argAt") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: st.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.strty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_argAt", nameId: 51U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(value: extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: false))
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-    }
-    // @Std/Random entropyU64() -> U64: a fresh 64-bit value from the OS entropy
-    // source (the seed for the in-language PRNG).
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "entropyU64") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_random_u64", nameId: 52U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 0U64, anon())
-    }
-    // (Prelude internal) bitCastU64(n: I64) -> U64: reinterpret a signed integer's
-    // two's-complement bit pattern as U64 (for hashing signed keys — `as U64` is
-    // lossless-only and rejects negatives). A no-op at the LLVM level: I64 and U64 are
-    // both i64, so the argument value passes through unchanged.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastU64") {
-        return extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: false)
-    }
-    // (Core internal) bitCastI64(n: U64) -> I64: the inverse reinterpret of bitCastU64
-    // (a non-negative U64's bit pattern as I64, after a range check). Also a no-op at
-    // the LLVM level (U64 and I64 are both i64), so the argument passes through.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastI64") {
-        return extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: true)
-    }
-    // (Prelude internal) truncU8(n: U64) -> U8: keep the low 8 bits (`as U8` is
-    // lossless-only and rejects wider values). Used to assemble UTF-8 bytes during
-    // string literal `\u{...}` decoding.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU8") {
-        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i8ty, unsigned: true)
-    }
-    // (Prelude internal) truncU16/U32(n: U64) -> UX: narrow a range-checked unsigned
-    // integer (low bits; trunc is signedness-agnostic, but the result type is unsigned).
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU16") {
-        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i16ty, unsigned: true)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU32") {
-        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i32ty, unsigned: true)
-    }
-    // (Prelude internal) truncI8/I16/I32(n: I64) -> IX: narrow a RANGE-CHECKED signed
-    // integer (`as` is lossless-only and rejects narrowing). The fallible `convert`
-    // factories (spec/12 TryFrom) call these only after proving the value fits.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI8") {
-        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i8ty, unsigned: false)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI16") {
-        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i16ty, unsigned: false)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI32") {
-        return coerceInt(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), target: st.i32ty, unsigned: false)
-    }
-    // (Core internal) isNanF64(f: F64) -> Bool: `fcmp uno f, f` (unordered = true iff
-    // NaN). A direct intrinsic because Plew's `==`/`!=` on floats PANIC on a NaN
-    // operand (spec/02), so the fallible float->int `convert` (spec/12 TryFrom) must
-    // test NaN with this BEFORE any ordered comparison.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "isNanF64") {
-        return LLVMBuildFCmp(st.b, 8U32, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), anon())
-    }
-    // (Core internal) f64ToI64(f: F64) -> I64: truncate toward zero (`fptosi`). Called
-    // only after the `convert` factory proves the value is finite and in [-2^63, 2^63)
-    // (out of that range, fptosi is UB) — so this is the in-range raw conversion.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToI64") {
-        return LLVMBuildFPToSI(st.b, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), st.i64ty, anon())
-    }
-    // (Core internal) f64ToU64(f: F64) -> U64: truncate toward zero (`fptoui`). Called
-    // only after the `convert` factory proves the value is finite and in [0, 2^64) —
-    // out of that range fptoui is UB — so this is the in-range raw conversion.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToU64") {
-        return LLVMBuildFPToUI(st.b, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), st.i64ty, anon())
-    }
-    // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
-    // a lazily-initialized random value (stable for the process), so SipHash is keyed
-    // unpredictably across runs (DoS resistance) while staying consistent within a run.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "__dictSeed") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_dict_seed", nameId: 53U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 0U64, anon())
-    }
-    // @Std/Io readFile(path: String) -> String and readFileBytes(path: Array[U8])
-    // -> String / fileExists(path: Array[U8]) -> Bool: the path argument is a
-    // {ptr,i64} value (String or Array[U8], same layout), passed as two args.
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFile") {
-        return emitPathStrIntrinsic(c: inout c, st: inout st, rtName: "plew_readFile", rtId: 55U64, retTy: st.strty, pathExpr: args[0].expr)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
-        return emitPathStrIntrinsic(c: inout c, st: inout st, rtName: "plew_readFileBytes", rtId: 53U64, retTy: st.strty, pathExpr: args[0].expr)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") {
-        val r: LLVMValueRef = emitPathStrIntrinsic(c: inout c, st: inout st, rtName: "plew_fileExists", rtId: 54U64, retTy: st.i64ty, pathExpr: args[0].expr)
-        // i64 1/0 -> Bool i1.
-        return LLVMBuildICmp(st.b, llvmIntNe(), r, LLVMConstInt(st.i64ty, 0U64, 0I32), anon())
-    }
-    // RawBuffer floor intrinsics (extern "plew-intrinsic"): the buffer is the raw
-    // data pointer over the rawbuf runtime; element type from the arg's RawBuffer[T].
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") {
-        // rawAlloc[T](cap, of) -> RawBuffer[T]: malloc cap*sizeof(T); `of`'s type is T.
-        val ofTy: LLVMTypeRef = LLVMTypeOf(genLlvmExpr(c: inout c, st: inout st, id: args[1].expr))
-        val cap: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        return st.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(ofTy), cap: cap)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
-        val et: LLVMTypeRef = st.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
-        val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
-        return LLVMBuildLoad2(st.b, et, st.arrElemPtr(elemTy: et, data: data, idx: idx), anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") {
-        val et: LLVMTypeRef = st.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
-        val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
-        val v: LLVMValueRef = st.coerceElem(v: genLlvmExpr(c: inout c, st: inout st, id: args[2].expr), elemTy: et)
-        LLVMBuildStore(st.b, v, st.arrElemPtr(elemTy: et, data: data, idx: idx))
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: st.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_rawbuf_cap", nameId: 28U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr))
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
-        // refcount == 1: the header word at data[-1] (data = header + 2).
-        val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        mut val idxs: Array[LLVMValueRef] = []
-        idxs.append(value: LLVMConstInt(st.i64ty, 18446744073709551615U64, 1I32))
-        val rcPtr: LLVMValueRef = LLVMBuildGEP2(st.b, st.i64ty, data, arrayCPtr(idxs), 1U64, anon())
-        val rc: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, rcPtr, anon())
-        return LLVMBuildICmp(st.b, llvmIntEq(), rc, LLVMConstInt(st.i64ty, 1U64, 0I32), anon())
-    }
-    // FFI String <-> C-string (@Std/Ffi extern(plewIntrinsic)).
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "cString") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: st.ptrty)
-        ptys.append(value: st.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.ptrty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_cString", nameId: 29U64, fnTy: fty)
-        val s: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(value: LLVMBuildExtractValue(st.b, s, 0U64, anon()))
-        av.append(value: LLVMBuildExtractValue(st.b, s, 1U64, anon()))
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") {
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: st.ptrty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.strty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_stringFromCString", nameId: 30U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr))
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") {
-        // an array's storage base as CPtr[T]: the data pointer (field 0).
-        return LLVMBuildExtractValue(st.b, genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), 0U64, anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromBytesUnchecked") {
-        // an (assumed-valid) UTF-8 Array[U8] -> String: same {ptr,i64} layout, so rebuild
-        // the strty aggregate from the array's data + count. The validated public path is
-        // `<String.checked source=bytes/>` (TryFrom[Array[U8]]); this is the unchecked floor.
-        val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        mut val s: LLVMValueRef = LLVMGetUndef(st.strty)
-        s = LLVMBuildInsertValue(st.b, s, LLVMBuildExtractValue(st.b, arr, 0U64, anon()), 0U64, anon())
-        s = LLVMBuildInsertValue(st.b, s, LLVMBuildExtractValue(st.b, arr, 1U64, anon()), 1U64, anon())
-        return s
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "floatToString") {
-        // a double -> String via the runtime (snprintf %g into a malloc'd buffer).
-        val fv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[0].expr)
-        mut val ftys: Array[LLVMTypeRef] = []
-        ftys.append(value: st.f64ty)
-        val ffty: LLVMTypeRef = LLVMFunctionType(st.strty, arrayCPtr(ftys), 1U64, 0I32)
-        val fcallee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ffty)
-        mut val fav: Array[LLVMValueRef] = []
-        fav.append(value: fv)
-        return LLVMBuildCall2(st.b, ffty, fcallee, arrayCPtr(fav), 1U64, anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
-        // read all of stdin into a String (strty {i8*,i64}) via the runtime.
-        mut val rtys: Array[LLVMTypeRef] = []
-        val rfty: LLVMTypeRef = LLVMFunctionType(st.strty, arrayCPtr(rtys), 0U64, 0I32)
-        val rcallee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_readStdin", nameId: 27U64, fnTy: rfty)
-        mut val rav: Array[LLVMValueRef] = []
-        return LLVMBuildCall2(st.b, rfty, rcallee, arrayCPtr(rav), 0U64, anon())
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "assert") {
-        // assert(cond): branch to a panic block when the condition is false.
-        val cond: LLVMValueRef = st.genLlvmCond(c: inout c, id: args[0].expr)
-        val okBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "assert.ok"))
-        val failBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "assert.fail"))
-        LLVMBuildCondBr(st.b, cond, okBB, failBB)
-        LLVMPositionBuilderAtEnd(st.b, failBB)
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: st.ptrty)
-        ptys.append(value: st.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 2U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_panic_raw", nameId: 4U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        // assert(cond, message: msg): use the caller's message String when given
-        // (its {ptr,len} aggregate), else the default "assertion failed".
-        if args.count > 1U64 {
-            val msg: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: args[1].expr)
-            av.append(value: LLVMBuildExtractValue(st.b, msg, 0U64, anon()))
-            av.append(value: LLVMBuildExtractValue(st.b, msg, 1U64, anon()))
-        } else {
-            av.append(value: LLVMBuildGlobalStringPtr(st.b, cstr(s: "assertion failed"), anon()))
-            av.append(value: LLVMConstInt(st.i64ty, 16U64, 0I32))
-        }
-        LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 2U64, anon())
-        LLVMBuildUnreachable(st.b)
-        LLVMPositionBuilderAtEnd(st.b, okBB)
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "exit") {
-        // void plew_exit(i64): truncate-free (the code is already i64), then call.
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: st.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(ptys), 1U64, 0I32)
-        val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_exit", nameId: 1U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(value: extendToI64(st: inout st, v: genLlvmExpr(c: inout c, st: inout st, id: args[0].expr), unsigned: valueKind(c: inout c, st: inout st, id: args[0].expr) == 3U64))
-        return LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), 1U64, anon())
-    }
-    // a user-defined free function: resolve like the C backend, then call the
-    // cached LLVMValueRef (declared in pass 1). Generic / extern / overload cases
-    // beyond a plain match arrive in later increments. Overloads differing only by
-    // a parameter's `#Ext` view (`f(a: P)` vs `f(a: P#Ext)`) are refined by the
-    // arguments' actual views (spec/09) — resolution is otherwise view-blind.
-    val cfi: U64 = st.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-    if cfi < c.arena.funcs.count {
-        mut val slot: U64 = st.userFnSlot(idx: cfi)
-        // a std free function reached from an emitted body (digitByteI from
-        // I64.format) is declared+emitted lazily.
-        if slot >= st.fnIdx.count {
-            if !(c.isGenericFreeFn(fi: cfi)) {
-                slot = st.ensureFreeFnDeclared(c: inout c, fi: cfi)
-            }
-        }
-        if slot < st.fnIdx.count {
-            val cf: Func = c.arena.funcs[cfi]
-            mut val av2: Array[LLVMValueRef] = []
-            mut val ai: U64 = 0
-            while ai < args.count {
-                // coerce each argument to the parameter's integer width.
-                av2.append(value: st.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
-                ai += 1
-            }
-            // fill omitted trailing params with their default expressions (spec/04).
-            mut val di: U64 = args.count
-            while di < cf.params.count {
-                av2.append(value: st.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
-                di += 1
-            }
-            return LLVMBuildCall2(st.b, st.fnTy[slot], st.fnVal[slot], arrayCPtr(av2), av2.count, anon())
-        }
-        // a generic free-function call: infer its concrete type args, find the
-        // instance, build args under the instance env, and call it.
-        if c.isGenericFreeFn(fi: cfi) {
-            val inferred: Array[U64] = st.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
-            val gslot: U64 = genFnSlotFor(c: inout c, fnIdx: cfi, args: inferred, st: inout st)
-            if gslot < st.genFnK.count {
-                val cf: Func = c.arena.funcs[cfi]
-                val savedP: Array[Bind] = c.cur.typeParams
-                val savedA: Array[U64] = c.cur.typeArgs
-                c.cur.typeParams = cf.typeParams
-                c.cur.typeArgs = inferred
-                mut val av3: Array[LLVMValueRef] = []
-                mut val ai3: U64 = 0
-                while ai3 < args.count {
-                    av3.append(value: st.genArgValue(c: inout c, argExpr: args[ai3].expr, p: cf.params[ai3]))
-                    ai3 += 1
+        av.append(value: env)
+        mut val i: U64 = 0
+        while i < args.count {
+            mut val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[i].expr)
+            // coerce an int arg to the declared param width (fn args = [ret, p0, p1, …]).
+            if i + 1U64 < ft.args.count {
+                if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
+                    val pt: TypeRef = c.arena.types[ft.args[i + 1U64]]
+                    v = coerceInt(st: inout self, v: v, target: llvmTypeOfRef(c: inout c, st: inout self, ref: ft.args[i + 1U64]), unsigned: isUnsignedName(c: inout c, start: pt.nameStart, len: pt.nameLen))
                 }
-                mut val di3: U64 = args.count
-                while di3 < cf.params.count {
-                    av3.append(value: st.genArgValue(c: inout c, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
-                    di3 += 1
-                }
-                c.cur.typeParams = savedP
-                c.cur.typeArgs = savedA
-                return LLVMBuildCall2(st.b, st.genFnTy[gslot], st.genFnVal[gslot], arrayCPtr(av3), av3.count, anon())
+            }
+            av.append(value: v)
+            i += 1
+        }
+        return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
+    }
+
+    // Emit an indirect closure call where the callee is closure-typed local `li`.
+    inout fn genLlvmClosureCall(c: inout Comp, li: U64, args: Array[Arg]) -> LLVMValueRef {
+        val cloVal: LLVMValueRef = LLVMBuildLoad2(self.b, self.closureTy, self.locPtr[li], anon())
+        return self.emitClosureCallValue(c: inout c, cloVal: cloVal, fnRef: self.locTypeRef[li], args: args)
+    }
+
+    // Emit a bare `pow(base:, exp:)` call (spec/12) by dispatching on the base argument's
+    // type to its `Pow[Exp]` conformance's `pow` assoc fn. Returns a null value when the
+    // base type has no matching `pow` (the caller then falls through to normal resolution).
+    inout fn genPowCall(c: inout Comp, base: U64, args: Array[Arg]) -> LLVMValueRef {
+        // llvmArgTypeRef (not exprTypeRef) so a suffixed literal base (`pow(base: 10I64,…)`)
+        // recovers its type via typeOf, not just a typed local.
+        val br: U64 = self.llvmArgTypeRef(c: inout c, argExpr: base)
+        if br == 0U64 {
+            return LLVMConstNull(self.ptrty)
+        }
+        val bt: TypeRef = c.arena.types[br]
+        val powN: Bind = c.kwSpan(kw: "pow", kwLen: 3U64)
+        val afi: U64 = c.findAssoc(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
+        if afi >= c.arena.funcs.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        mut val aslot: U64 = self.userFnSlot(idx: afi)
+        if aslot >= self.fnIdx.count {
+            aslot = self.ensureFreeFnDeclared(c: inout c, fi: afi)
+        }
+        if aslot >= self.fnIdx.count {
+            return LLVMConstNull(self.ptrty)
+        }
+        val af: Func = c.arena.funcs[afi]
+        mut val av: Array[LLVMValueRef] = []
+        mut val ai: U64 = 0
+        while ai < args.count {
+            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
+            ai += 1
+        }
+        return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count, anon())
+    }
+
+    inout fn genLlvmCall(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        // a call whose "name" is a closure-typed local (`g(n: 4)` where g: fn(...)) is
+        // an indirect call: load the {fn, env} value, then call fn(env, args).
+        val cli: U64 = self.findLocal(c: inout c, start: nameStart, len: nameLen)
+        if cli < self.nLocals {
+            if c.isFnType(ref: self.locTypeRef[cli]) {
+                return self.genLlvmClosureCall(c: inout c, li: cli, args: args)
             }
         }
-    }
-    // an extern(c) foreign function (`moduleCreate(…)`): call by its RAW C name
-    // with an FFI-mapped signature (opaque handles / CPtr -> ptr, scalars as-is).
-    if cfi < c.arena.funcs.count {
-        if c.arena.funcs[cfi].isExtern {
-            val ef: Func = c.arena.funcs[cfi]
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "print") {
+            return emitPrint(c: inout c, st: inout self, argExpr: args[0].expr)
+        }
+        // `pow(base: x, exp: n)` (spec/12): the named exponentiation operation dispatches on
+        // the base argument's `Pow[Exp]` conformance (no `**` operator). Route the bare call
+        // to the base type's `pow` assoc fn; fall through if it does not resolve (so a
+        // user-defined free `pow` with other labels still works).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
+            if args.count == 2U64 {
+                val pv: LLVMValueRef = self.genPowCall(c: inout c, base: args[0].expr, args: args)
+                if LLVMIsNull(pv) == 0I32 {
+                    return pv
+                }
+            }
+        }
+        // `sleep(ms: I64) -> Promise[I64]` (@Std/Async intrinsic): a timer promise,
+        // `plew_sleep(i64) -> PlewPromise*` (await suspends until it fires).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sleep") {
+            mut val sty: Array[LLVMTypeRef] = []
+            sty.append(value: self.i64ty)
+            val sleepTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(sty), 1U64, 0I32)
+            val sleepFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_sleep", nameId: 42U64, fnTy: sleepTy)
+            mut val sargs: Array[LLVMValueRef] = []
+            sargs.append(value: extendToI64(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), unsigned: false))
+            return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "write") {
+            return emitStrSink(c: inout c, st: inout self, rtName: "plew_write_raw", rtId: 2U64, argExpr: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") {
+            return emitStrSink(c: inout c, st: inout self, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: args[0].expr)
+        }
+        // @Std/Io writeByte(b: U8): putchar.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
             mut val ptys: Array[LLVMTypeRef] = []
-            mut val pe: U64 = 0
-            while pe < ef.params.count {
-                ptys.append(value: st.ffiTyOf(c: inout c, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
-                pe += 1
+            ptys.append(value: self.i8ty)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_writeByte", nameId: 52U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: self.i8ty, unsigned: true))
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        }
+        // @Std/Process argCount() -> I64.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_argCount", nameId: 50U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
+        }
+        // @Std/Process argAt(i: I64) -> String (strty {ptr,i64}).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argAt") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: self.i64ty)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ptys), 1U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_argAt", nameId: 51U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: extendToI64(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), unsigned: false))
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        }
+        // @Std/Random entropyU64() -> U64: a fresh 64-bit value from the OS entropy
+        // source (the seed for the in-language PRNG).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "entropyU64") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_random_u64", nameId: 52U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
+        }
+        // (Prelude internal) bitCastU64(n: I64) -> U64: reinterpret a signed integer's
+        // two's-complement bit pattern as U64 (for hashing signed keys — `as U64` is
+        // lossless-only and rejects negatives). A no-op at the LLVM level: I64 and U64 are
+        // both i64, so the argument value passes through unchanged.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastU64") {
+            return extendToI64(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), unsigned: false)
+        }
+        // (Core internal) bitCastI64(n: U64) -> I64: the inverse reinterpret of bitCastU64
+        // (a non-negative U64's bit pattern as I64, after a range check). Also a no-op at
+        // the LLVM level (U64 and I64 are both i64), so the argument passes through.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastI64") {
+            return extendToI64(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), unsigned: true)
+        }
+        // (Prelude internal) truncU8(n: U64) -> U8: keep the low 8 bits (`as U8` is
+        // lossless-only and rejects wider values). Used to assemble UTF-8 bytes during
+        // string literal `\u{...}` decoding.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU8") {
+            return coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: self.i8ty, unsigned: true)
+        }
+        // (Prelude internal) truncU16/U32(n: U64) -> UX: narrow a range-checked unsigned
+        // integer (low bits; trunc is signedness-agnostic, but the result type is unsigned).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU16") {
+            return coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: self.i16ty, unsigned: true)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU32") {
+            return coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: self.i32ty, unsigned: true)
+        }
+        // (Prelude internal) truncI8/I16/I32(n: I64) -> IX: narrow a RANGE-CHECKED signed
+        // integer (`as` is lossless-only and rejects narrowing). The fallible `convert`
+        // factories (spec/12 TryFrom) call these only after proving the value fits.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI8") {
+            return coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: self.i8ty, unsigned: false)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI16") {
+            return coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: self.i16ty, unsigned: false)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI32") {
+            return coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: self.i32ty, unsigned: false)
+        }
+        // (Core internal) isNanF64(f: F64) -> Bool: `fcmp uno f, f` (unordered = true iff
+        // NaN). A direct intrinsic because Plew's `==`/`!=` on floats PANIC on a NaN
+        // operand (spec/02), so the fallible float->int `convert` (spec/12 TryFrom) must
+        // test NaN with this BEFORE any ordered comparison.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "isNanF64") {
+            return LLVMBuildFCmp(self.b, 8U32, genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), anon())
+        }
+        // (Core internal) f64ToI64(f: F64) -> I64: truncate toward zero (`fptosi`). Called
+        // only after the `convert` factory proves the value is finite and in [-2^63, 2^63)
+        // (out of that range, fptosi is UB) — so this is the in-range raw conversion.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToI64") {
+            return LLVMBuildFPToSI(self.b, genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), self.i64ty, anon())
+        }
+        // (Core internal) f64ToU64(f: F64) -> U64: truncate toward zero (`fptoui`). Called
+        // only after the `convert` factory proves the value is finite and in [0, 2^64) —
+        // out of that range fptoui is UB — so this is the in-range raw conversion.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToU64") {
+            return LLVMBuildFPToUI(self.b, genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), self.i64ty, anon())
+        }
+        // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
+        // a lazily-initialized random value (stable for the process), so SipHash is keyed
+        // unpredictably across runs (DoS resistance) while staying consistent within a run.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "__dictSeed") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_dict_seed", nameId: 53U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
+        }
+        // @Std/Io readFile(path: String) -> String and readFileBytes(path: Array[U8])
+        // -> String / fileExists(path: Array[U8]) -> Bool: the path argument is a
+        // {ptr,i64} value (String or Array[U8], same layout), passed as two args.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFile") {
+            return emitPathStrIntrinsic(c: inout c, st: inout self, rtName: "plew_readFile", rtId: 55U64, retTy: self.strty, pathExpr: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
+            return emitPathStrIntrinsic(c: inout c, st: inout self, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.strty, pathExpr: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") {
+            val r: LLVMValueRef = emitPathStrIntrinsic(c: inout c, st: inout self, rtName: "plew_fileExists", rtId: 54U64, retTy: self.i64ty, pathExpr: args[0].expr)
+            // i64 1/0 -> Bool i1.
+            return LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        }
+        // RawBuffer floor intrinsics (extern "plew-intrinsic"): the buffer is the raw
+        // data pointer over the rawbuf runtime; element type from the arg's RawBuffer[T].
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") {
+            // rawAlloc[T](cap, of) -> RawBuffer[T]: malloc cap*sizeof(T); `of`'s type is T.
+            val ofTy: LLVMTypeRef = LLVMTypeOf(genLlvmExpr(c: inout c, st: inout self, id: args[1].expr))
+            val cap: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[0].expr)
+            return self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(ofTy), cap: cap)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
+            val et: LLVMTypeRef = self.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
+            val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[0].expr)
+            val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[1].expr)
+            return LLVMBuildLoad2(self.b, et, self.arrElemPtr(elemTy: et, data: data, idx: idx), anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") {
+            val et: LLVMTypeRef = self.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
+            val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[0].expr)
+            val idx: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[1].expr)
+            val v: LLVMValueRef = self.coerceElem(v: genLlvmExpr(c: inout c, st: inout self, id: args[2].expr), elemTy: et)
+            LLVMBuildStore(self.b, v, self.arrElemPtr(elemTy: et, data: data, idx: idx))
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: self.ptrty)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_rawbuf_cap", nameId: 28U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr))
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
+            // refcount == 1: the header word at data[-1] (data = header + 2).
+            val data: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[0].expr)
+            mut val idxs: Array[LLVMValueRef] = []
+            idxs.append(value: LLVMConstInt(self.i64ty, 18446744073709551615U64, 1I32))
+            val rcPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, data, arrayCPtr(idxs), 1U64, anon())
+            val rc: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, rcPtr, anon())
+            return LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        }
+        // FFI String <-> C-string (@Std/Ffi extern(plewIntrinsic)).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "cString") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: self.ptrty)
+            ptys.append(value: self.i64ty)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 2U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_cString", nameId: 29U64, fnTy: fty)
+            val s: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[0].expr)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: LLVMBuildExtractValue(self.b, s, 0U64, anon()))
+            av.append(value: LLVMBuildExtractValue(self.b, s, 1U64, anon()))
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: self.ptrty)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ptys), 1U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_stringFromCString", nameId: 30U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr))
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") {
+            // an array's storage base as CPtr[T]: the data pointer (field 0).
+            return LLVMBuildExtractValue(self.b, genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), 0U64, anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromBytesUnchecked") {
+            // an (assumed-valid) UTF-8 Array[U8] -> String: same {ptr,i64} layout, so rebuild
+            // the strty aggregate from the array's data + count. The validated public path is
+            // `<String.checked source=bytes/>` (TryFrom[Array[U8]]); this is the unchecked floor.
+            val arr: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[0].expr)
+            mut val s: LLVMValueRef = LLVMGetUndef(self.strty)
+            s = LLVMBuildInsertValue(self.b, s, LLVMBuildExtractValue(self.b, arr, 0U64, anon()), 0U64, anon())
+            s = LLVMBuildInsertValue(self.b, s, LLVMBuildExtractValue(self.b, arr, 1U64, anon()), 1U64, anon())
+            return s
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "floatToString") {
+            // a double -> String via the runtime (snprintf %g into a malloc'd buffer).
+            val fv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[0].expr)
+            mut val ftys: Array[LLVMTypeRef] = []
+            ftys.append(value: self.f64ty)
+            val ffty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ftys), 1U64, 0I32)
+            val fcallee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ffty)
+            mut val fav: Array[LLVMValueRef] = []
+            fav.append(value: fv)
+            return LLVMBuildCall2(self.b, ffty, fcallee, arrayCPtr(fav), 1U64, anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
+            // read all of stdin into a String (strty {i8*,i64}) via the runtime.
+            mut val rtys: Array[LLVMTypeRef] = []
+            val rfty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(rtys), 0U64, 0I32)
+            val rcallee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_readStdin", nameId: 27U64, fnTy: rfty)
+            mut val rav: Array[LLVMValueRef] = []
+            return LLVMBuildCall2(self.b, rfty, rcallee, arrayCPtr(rav), 0U64, anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "assert") {
+            // assert(cond): branch to a panic block when the condition is false.
+            val cond: LLVMValueRef = self.genLlvmCond(c: inout c, id: args[0].expr)
+            val okBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "assert.ok"))
+            val failBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "assert.fail"))
+            LLVMBuildCondBr(self.b, cond, okBB, failBB)
+            LLVMPositionBuilderAtEnd(self.b, failBB)
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: self.ptrty)
+            ptys.append(value: self.i64ty)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_panic_raw", nameId: 4U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            // assert(cond, message: msg): use the caller's message String when given
+            // (its {ptr,len} aggregate), else the default "assertion failed".
+            if args.count > 1U64 {
+                val msg: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: args[1].expr)
+                av.append(value: LLVMBuildExtractValue(self.b, msg, 0U64, anon()))
+                av.append(value: LLVMBuildExtractValue(self.b, msg, 1U64, anon()))
+            } else {
+                av.append(value: LLVMBuildGlobalStringPtr(self.b, cstr(s: "assertion failed"), anon()))
+                av.append(value: LLVMConstInt(self.i64ty, 16U64, 0I32))
             }
-            mut val rty: LLVMTypeRef = st.voidty
-            if ef.hasRet {
-                rty = st.ffiTyOf(c: inout c, tyStart: ef.retStart, tyLen: ef.retLen)
+            LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+            LLVMBuildUnreachable(self.b)
+            LLVMPositionBuilderAtEnd(self.b, okBB)
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "exit") {
+            // void plew_exit(i64): truncate-free (the code is already i64), then call.
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(value: self.i64ty)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+            val callee: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_exit", nameId: 1U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: extendToI64(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), unsigned: self.valueKind(c: inout c, id: args[0].expr) == 3U64))
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        }
+        // a user-defined free function: resolve like the C backend, then call the
+        // cached LLVMValueRef (declared in pass 1). Generic / extern / overload cases
+        // beyond a plain match arrive in later increments. Overloads differing only by
+        // a parameter's `#Ext` view (`f(a: P)` vs `f(a: P#Ext)`) are refined by the
+        // arguments' actual views (spec/09) — resolution is otherwise view-blind.
+        val cfi: U64 = self.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+        if cfi < c.arena.funcs.count {
+            mut val slot: U64 = self.userFnSlot(idx: cfi)
+            // a std free function reached from an emitted body (digitByteI from
+            // I64.format) is declared+emitted lazily.
+            if slot >= self.fnIdx.count {
+                if !(c.isGenericFreeFn(fi: cfi)) {
+                    slot = self.ensureFreeFnDeclared(c: inout c, fi: cfi)
+                }
             }
-            val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
-            // the C symbol is the raw function name (no mangling); cache by the
-            // function's interned nameId, OFFSET past the runtime cache's small ids
-            // (1-30) so a foreign symbol whose nameId is e.g. 5 doesn't alias
-            // plew_print_str.
-            val ckey: U64 = ef.nameId + 1000000000U64
-            mut val callee: LLVMValueRef = LLVMConstNull(st.ptrty)
-            mut val dfound: Bool = false
-            mut val di: U64 = 0
-            while di < st.declId.count {
-                if st.declId[di] == ckey {
-                    callee = st.declFn[di]
-                    dfound = true
-                    di = st.declId.count
-                } else {
+            if slot < self.fnIdx.count {
+                val cf: Func = c.arena.funcs[cfi]
+                mut val av2: Array[LLVMValueRef] = []
+                mut val ai: U64 = 0
+                while ai < args.count {
+                    // coerce each argument to the parameter's integer width.
+                    av2.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
+                    ai += 1
+                }
+                // fill omitted trailing params with their default expressions (spec/04).
+                mut val di: U64 = args.count
+                while di < cf.params.count {
+                    av2.append(value: self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
                     di += 1
                 }
+                return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av2), av2.count, anon())
             }
-            if !(dfound) {
-                mut val nm: Array[U8] = []
-                mut val k: U64 = 0
-                while k < nameLen {
-                    nm.append(value: c.arena.bytes[nameStart + k])
-                    k += 1
+            // a generic free-function call: infer its concrete type args, find the
+            // instance, build args under the instance env, and call it.
+            if c.isGenericFreeFn(fi: cfi) {
+                val inferred: Array[U64] = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
+                val gslot: U64 = genFnSlotFor(c: inout c, fnIdx: cfi, args: inferred, st: inout self)
+                if gslot < self.genFnK.count {
+                    val cf: Func = c.arena.funcs[cfi]
+                    val savedP: Array[Bind] = c.cur.typeParams
+                    val savedA: Array[U64] = c.cur.typeArgs
+                    c.cur.typeParams = cf.typeParams
+                    c.cur.typeArgs = inferred
+                    mut val av3: Array[LLVMValueRef] = []
+                    mut val ai3: U64 = 0
+                    while ai3 < args.count {
+                        av3.append(value: self.genArgValue(c: inout c, argExpr: args[ai3].expr, p: cf.params[ai3]))
+                        ai3 += 1
+                    }
+                    mut val di3: U64 = args.count
+                    while di3 < cf.params.count {
+                        av3.append(value: self.genArgValue(c: inout c, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
+                        di3 += 1
+                    }
+                    c.cur.typeParams = savedP
+                    c.cur.typeArgs = savedA
+                    return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av3), av3.count, anon())
                 }
-                nm.append(value: 0)
-                callee = LLVMAddFunction(st.mod, arrayCPtr(nm), fty)
-                st.declId.append(value: ckey)
-                st.declFn.append(value: callee)
-                st.declTy.append(value: fty)
             }
-            mut val av: Array[LLVMValueRef] = []
-            mut val ai: U64 = 0
-            while ai < args.count {
-                av.append(value: genLlvmExpr(c: inout c, st: inout st, id: args[ai].expr))
-                ai += 1
-            }
-            val rv: LLVMValueRef = LLVMBuildCall2(st.b, fty, callee, arrayCPtr(av), av.count, anon())
-            if ef.hasRet {
-                return rv
-            }
-            return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
+        // an extern(c) foreign function (`moduleCreate(…)`): call by its RAW C name
+        // with an FFI-mapped signature (opaque handles / CPtr -> ptr, scalars as-is).
+        if cfi < c.arena.funcs.count {
+            if c.arena.funcs[cfi].isExtern {
+                val ef: Func = c.arena.funcs[cfi]
+                mut val ptys: Array[LLVMTypeRef] = []
+                mut val pe: U64 = 0
+                while pe < ef.params.count {
+                    ptys.append(value: self.ffiTyOf(c: inout c, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
+                    pe += 1
+                }
+                mut val rty: LLVMTypeRef = self.voidty
+                if ef.hasRet {
+                    rty = self.ffiTyOf(c: inout c, tyStart: ef.retStart, tyLen: ef.retLen)
+                }
+                val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+                // the C symbol is the raw function name (no mangling); cache by the
+                // function's interned nameId, OFFSET past the runtime cache's small ids
+                // (1-30) so a foreign symbol whose nameId is e.g. 5 doesn't alias
+                // plew_print_str.
+                val ckey: U64 = ef.nameId + 1000000000U64
+                mut val callee: LLVMValueRef = LLVMConstNull(self.ptrty)
+                mut val dfound: Bool = false
+                mut val di: U64 = 0
+                while di < self.declId.count {
+                    if self.declId[di] == ckey {
+                        callee = self.declFn[di]
+                        dfound = true
+                        di = self.declId.count
+                    } else {
+                        di += 1
+                    }
+                }
+                if !(dfound) {
+                    mut val nm: Array[U8] = []
+                    mut val k: U64 = 0
+                    while k < nameLen {
+                        nm.append(value: c.arena.bytes[nameStart + k])
+                        k += 1
+                    }
+                    nm.append(value: 0)
+                    callee = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+                    self.declId.append(value: ckey)
+                    self.declFn.append(value: callee)
+                    self.declTy.append(value: fty)
+                }
+                mut val av: Array[LLVMValueRef] = []
+                mut val ai: U64 = 0
+                while ai < args.count {
+                    av.append(value: genLlvmExpr(c: inout c, st: inout self, id: args[ai].expr))
+                    ai += 1
+                }
+                val rv: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), av.count, anon())
+                if ef.hasRet {
+                    return rv
+                }
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
+            }
+        }
+        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
-    compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
-    return LLVMConstInt(st.i64ty, 0U64, 0I32)
 }
-

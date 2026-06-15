@@ -42,7 +42,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return LLVMConstRealOfStringAndSize(st.f64ty, floatTextCPtr(c: inout c, start: start, len: len), len)
         }
         Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
+            val li: U64 = st.findLocal(c: inout c, start: start, len: len)
             if li < st.nLocals {
                 return LLVMBuildLoad2(st.b, st.locTy[li], st.locPtr[li], anon())
             }
@@ -69,7 +69,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             }
             // float arithmetic / comparison: emit the IEEE op directly (the operands
             // are doubles). Arithmetic -> f-op; comparison -> fcmp (ordered) -> i1.
-            if valueKind(c: inout c, st: inout st, id: lhs) == 4U64 || valueKind(c: inout c, st: inout st, id: rhs) == 4U64 {
+            if st.valueKind(c: inout c, id: lhs) == 4U64 || st.valueKind(c: inout c, id: rhs) == 4U64 {
                 return genLlvmFloatBinop(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
             }
             // String ==/!= compares bytes via a runtime call (the operands are
@@ -81,7 +81,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // in a monomorphized `Dictionary[Pair].find`), which otherwise reinterprets
             // the struct's fields as a {ptr,len} String and dereferences garbage.
             if op == opEq() || op == opNe() {
-                if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
+                if st.valueKind(c: inout c, id: lhs) == 1U64 {
                     if st.exprStructIdx(c: inout c, id: lhs) >= c.arena.structs.count {
                         return emitStrEq(c: inout c, st: inout st, op: op, lhs: lhs, rhs: rhs)
                     }
@@ -171,15 +171,15 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             val wl: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(l))
             val wr: U32 = LLVMGetIntTypeWidth(LLVMTypeOf(r))
             if wl < wr {
-                l = coerceInt(st: inout st, v: l, target: LLVMTypeOf(r), unsigned: valueKind(c: inout c, st: inout st, id: lhs) == 3U64)
+                l = coerceInt(st: inout st, v: l, target: LLVMTypeOf(r), unsigned: st.valueKind(c: inout c, id: lhs) == 3U64)
             } else {
                 if wr < wl {
-                    r = coerceInt(st: inout st, v: r, target: LLVMTypeOf(l), unsigned: valueKind(c: inout c, st: inout st, id: rhs) == 3U64)
+                    r = coerceInt(st: inout st, v: r, target: LLVMTypeOf(l), unsigned: st.valueKind(c: inout c, id: rhs) == 3U64)
                 }
             }
             mut val uns: Bool = false
-            if valueKind(c: inout c, st: inout st, id: lhs) == 3U64 { uns = true }
-            if valueKind(c: inout c, st: inout st, id: rhs) == 3U64 { uns = true }
+            if st.valueKind(c: inout c, id: lhs) == 3U64 { uns = true }
+            if st.valueKind(c: inout c, id: rhs) == 3U64 { uns = true }
             return st.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
         }
         Expr.Str(val start, val len) => {
@@ -259,7 +259,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     mut val ci: U64 = 0
                     while ci < caps.count {
                         val cap: CaptureEntry = caps[ci]
-                        val li: U64 = findLocal(c: inout c, st: inout st, start: cap.nameStart, len: cap.nameLen)
+                        val li: U64 = st.findLocal(c: inout c, start: cap.nameStart, len: cap.nameLen)
                         if li < st.nLocals {
                             // a boxed (mut) capture stores the shared cell POINTER
                             // (locPtr is the heap cell); a by-value capture stores the
@@ -297,7 +297,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            return genLlvmCall(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, args: args)
+            return st.genLlvmCall(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             return st.genLlvmMethod(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -330,7 +330,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             if !(isBorrow) {
                 match c.arena.exprs[operand] {
                     Expr.Ident(start: val s, len: val l) => {
-                        markLocalMoved(c: inout c, st: inout st, start: s, len: l)
+                        st.markLocalMoved(c: inout c, start: s, len: l)
                     }
                     _ => {}
                 }
@@ -347,7 +347,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // no-op). (float -> int is lossy and is a fallible TryFrom, not `as`.)
             if c.isFloatType(start: tyStart, len: tyLen) {
                 if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
-                    if valueKind(c: inout c, st: inout st, id: operand) == 3U64 {
+                    if st.valueKind(c: inout c, id: operand) == 3U64 {
                         return LLVMBuildUIToFP(st.b, ov, st.f64ty, anon())
                     }
                     return LLVMBuildSIToFP(st.b, ov, st.f64ty, anon())
@@ -356,7 +356,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             }
             if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
                 if kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) != 1U64 {
-                    return coerceInt(st: inout st, v: ov, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: valueKind(c: inout c, st: inout st, id: operand) == 3U64)
+                    return coerceInt(st: inout st, v: ov, target: llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen), unsigned: st.valueKind(c: inout c, id: operand) == 3U64)
                 }
             }
             // a `newtype` re-tag (spec/10) over a NON-int underlying (`"a" as UserId`

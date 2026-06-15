@@ -18,7 +18,7 @@ pub impl LlvmCtx {
             }
             Expr.Str(start: _, len: _) => { return self.strty }
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     if self.locIsArr[li] {
                         return self.arrayTy
@@ -99,7 +99,7 @@ pub impl LlvmCtx {
     // (O(1), no copy — spec/02). The view's element type is i8 (unsigned).
     inout fn isStringBytesField(c: inout Comp, base: U64, nameStart: U64, nameLen: U64) -> Bool {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bytes") {
-            return valueKind(c: inout c, st: inout self, id: base) == 1U64
+            return self.valueKind(c: inout c, id: base) == 1U64
         }
         return false
     }
@@ -108,7 +108,7 @@ pub impl LlvmCtx {
     inout fn exprIsArray(c: inout Comp, id: U64) -> Bool {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     return self.locIsArr[li]
                 }
@@ -164,7 +164,7 @@ pub impl LlvmCtx {
     inout fn arrElemTyOf(c: inout Comp, id: U64) -> LLVMTypeRef {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     if self.locIsArr[li] { return self.locElemTy[li] }
                 }
@@ -231,7 +231,7 @@ pub impl LlvmCtx {
     inout fn arrElemKindOf(c: inout Comp, id: U64) -> U64 {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     if self.locIsArr[li] { return self.locElemKind[li] }
                 }
@@ -254,7 +254,7 @@ pub impl LlvmCtx {
             Expr.Ident(val start, val len) => {
                 // only an array LOCAL has its {ptr,count} in an alloca we can mutate in
                 // place; a non-array local is not array storage (null -> caller errors).
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     if self.locIsArr[li] { return self.locPtr[li] }
                 }
@@ -289,12 +289,12 @@ pub impl LlvmCtx {
         // an existential `any P` field (spec/08): box a concrete conforming initializer,
         // or value-semantics-copy an existing `any` place.
         mut val fldBoxed: Bool = false
-        val fldAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: fld.ty, valueExpr: valExpr, outBoxed: inout fldBoxed)
+        val fldAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: fld.ty, valueExpr: valExpr, outBoxed: inout fldBoxed)
         if fldBoxed {
             return fldAny
         }
         if refIsAny(c: inout c, ref: fld.ty) {
-            return copyAnyIfPlace(c: inout c, st: inout self, rv: genLlvmExpr(c: inout c, st: inout self, id: valExpr), valueExpr: valExpr)
+            return self.copyAnyIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: valExpr), valueExpr: valExpr)
         }
         // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
         // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).

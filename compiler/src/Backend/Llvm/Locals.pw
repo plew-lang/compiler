@@ -2,120 +2,122 @@
 
 // ---- local environment ----
 
-fn pushLocal(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64) {
-    pushLocalR(st: inout st, nameStart: nameStart, nameLen: nameLen, ptr: ptr, ty: ty, kind: kind, structIdx: structIdx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: 0U64)
-}
-fn pushLocalR(st: inout LlvmCtx, nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64, typeRef: U64) {
-    if st.nLocals < st.locStart.count {
-        st.locStart[st.nLocals] = nameStart
-        st.locLen[st.nLocals] = nameLen
-        st.locPtr[st.nLocals] = ptr
-        st.locTy[st.nLocals] = ty
-        st.locKind[st.nLocals] = kind
-        st.locStructIdx[st.nLocals] = structIdx
-        st.locIsArr[st.nLocals] = isArr
-        st.locElemTy[st.nLocals] = elemTy
-        st.locElemKind[st.nLocals] = elemKind
-        st.locTypeRef[st.nLocals] = typeRef
-        st.locElemStructIdx[st.nLocals] = 18446744073709551615U64
-        st.locElemTypeRef[st.nLocals] = 0U64
-        st.locOwned[st.nLocals] = true
-        st.locMoved[st.nLocals] = false
-    } else {
-        st.locStart.append(value: nameStart)
-        st.locLen.append(value: nameLen)
-        st.locPtr.append(value: ptr)
-        st.locTy.append(value: ty)
-        st.locKind.append(value: kind)
-        st.locStructIdx.append(value: structIdx)
-        st.locIsArr.append(value: isArr)
-        st.locElemTy.append(value: elemTy)
-        st.locElemKind.append(value: elemKind)
-        st.locTypeRef.append(value: typeRef)
-        st.locElemStructIdx.append(value: 18446744073709551615U64)
-        st.locElemTypeRef.append(value: 0U64)
-        st.locOwned.append(value: true)
-        st.locMoved.append(value: false)
+pub impl LlvmCtx {
+    inout fn pushLocal(nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64) {
+        self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: ptr, ty: ty, kind: kind, structIdx: structIdx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: 0U64)
     }
-    st.nLocals = st.nLocals + 1
-}
-
-// Set the just-pushed local's array element struct index (for an array-of-struct
-// local, so `arr[i].field` resolves the element). Call right after pushLocalR.
-// Set up a function/closure body's blocks: an `entry` block holding ALL the
-// function's allocas, ending in `br body0`, then `body0` where straight-line code
-// begins. `entryAlloca` inserts before entry's `br`, so an alloca emitted inside a
-// loop body lands in entry (allocated once) instead of accumulating stack per
-// iteration — which overflowed the 8 MB stack on large inputs. Positions the
-// builder at `body0`; the caller binds params + emits the body from there.
-fn beginFnBody(st: inout LlvmCtx, fv: LLVMValueRef) {
-    val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "entry"))
-    val body0: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, fv, cstr(s: "body0"))
-    LLVMPositionBuilderAtEnd(st.b, entry)
-    LLVMBuildBr(st.b, body0)
-    LLVMPositionBuilderAtEnd(st.b, body0)
-    st.terminated = false
-}
-
-// Allocate in the current function's entry block (before its terminator), then
-// restore the builder. The entry block always has a terminator here (beginFnBody's
-// `br`, or the async resume switch), so no null check is needed.
-fn entryAlloca(st: inout LlvmCtx, ty: LLVMTypeRef) -> LLVMValueRef {
-    val cur: LLVMBasicBlockRef = LLVMGetInsertBlock(st.b)
-    val entry: LLVMBasicBlockRef = LLVMGetEntryBasicBlock(st.curFn)
-    val term: LLVMValueRef = LLVMGetBasicBlockTerminator(entry)
-    LLVMPositionBuilderBefore(st.b, term)
-    val a: LLVMValueRef = LLVMBuildAlloca(st.b, ty, anon())
-    LLVMPositionBuilderAtEnd(st.b, cur)
-    return a
-}
-
-// Push a loop's (break, continue) target blocks (overwrite-in-place; loopDepth is
-// the live count). Break/Continue branch to the top of this stack.
-fn pushLoop(st: inout LlvmCtx, breakBB: LLVMBasicBlockRef, contBB: LLVMBasicBlockRef) {
-    if st.loopDepth < st.loopBreakBB.count {
-        st.loopBreakBB[st.loopDepth] = breakBB
-        st.loopContBB[st.loopDepth] = contBB
-    } else {
-        st.loopBreakBB.append(value: breakBB)
-        st.loopContBB.append(value: contBB)
+    inout fn pushLocalR(nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64, typeRef: U64) {
+        if self.nLocals < self.locStart.count {
+            self.locStart[self.nLocals] = nameStart
+            self.locLen[self.nLocals] = nameLen
+            self.locPtr[self.nLocals] = ptr
+            self.locTy[self.nLocals] = ty
+            self.locKind[self.nLocals] = kind
+            self.locStructIdx[self.nLocals] = structIdx
+            self.locIsArr[self.nLocals] = isArr
+            self.locElemTy[self.nLocals] = elemTy
+            self.locElemKind[self.nLocals] = elemKind
+            self.locTypeRef[self.nLocals] = typeRef
+            self.locElemStructIdx[self.nLocals] = 18446744073709551615U64
+            self.locElemTypeRef[self.nLocals] = 0U64
+            self.locOwned[self.nLocals] = true
+            self.locMoved[self.nLocals] = false
+        } else {
+            self.locStart.append(value: nameStart)
+            self.locLen.append(value: nameLen)
+            self.locPtr.append(value: ptr)
+            self.locTy.append(value: ty)
+            self.locKind.append(value: kind)
+            self.locStructIdx.append(value: structIdx)
+            self.locIsArr.append(value: isArr)
+            self.locElemTy.append(value: elemTy)
+            self.locElemKind.append(value: elemKind)
+            self.locTypeRef.append(value: typeRef)
+            self.locElemStructIdx.append(value: 18446744073709551615U64)
+            self.locElemTypeRef.append(value: 0U64)
+            self.locOwned.append(value: true)
+            self.locMoved.append(value: false)
+        }
+        self.nLocals = self.nLocals + 1
     }
-    st.loopDepth = st.loopDepth + 1U64
-}
 
-fn popLoop(st: inout LlvmCtx) {
-    if st.loopDepth > 0U64 {
-        st.loopDepth = st.loopDepth - 1U64
+    // Set the just-pushed local's array element struct index (for an array-of-struct
+    // local, so `arr[i].field` resolves the element). Call right after pushLocalR.
+    // Set up a function/closure body's blocks: an `entry` block holding ALL the
+    // function's allocas, ending in `br body0`, then `body0` where straight-line code
+    // begins. `entryAlloca` inserts before entry's `br`, so an alloca emitted inside a
+    // loop body lands in entry (allocated once) instead of accumulating stack per
+    // iteration — which overflowed the 8 MB stack on large inputs. Positions the
+    // builder at `body0`; the caller binds params + emits the body from there.
+    inout fn beginFnBody(fv: LLVMValueRef) {
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        val body0: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "body0"))
+        LLVMPositionBuilderAtEnd(self.b, entry)
+        LLVMBuildBr(self.b, body0)
+        LLVMPositionBuilderAtEnd(self.b, body0)
+        self.terminated = false
     }
-}
 
-fn setLocalElemStruct(st: inout LlvmCtx, esi: U64) {
-    if st.nLocals > 0U64 {
-        st.locElemStructIdx[st.nLocals - 1U64] = esi
+    // Allocate in the current function's entry block (before its terminator), then
+    // restore the builder. The entry block always has a terminator here (beginFnBody's
+    // `br`, or the async resume switch), so no null check is needed.
+    inout fn entryAlloca(ty: LLVMTypeRef) -> LLVMValueRef {
+        val cur: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        val entry: LLVMBasicBlockRef = LLVMGetEntryBasicBlock(self.curFn)
+        val term: LLVMValueRef = LLVMGetBasicBlockTerminator(entry)
+        LLVMPositionBuilderBefore(self.b, term)
+        val a: LLVMValueRef = LLVMBuildAlloca(self.b, ty, anon())
+        LLVMPositionBuilderAtEnd(self.b, cur)
+        return a
     }
-}
 
-// Set the just-pushed array local's element TypeRef (a Ref / nested-array element).
-fn setLocalElemTypeRef(st: inout LlvmCtx, ref: U64) {
-    if st.nLocals > 0U64 {
-        st.locElemTypeRef[st.nLocals - 1U64] = ref
+    // Push a loop's (break, continue) target blocks (overwrite-in-place; loopDepth is
+    // the live count). Break/Continue branch to the top of this stack.
+    inout fn pushLoop(breakBB: LLVMBasicBlockRef, contBB: LLVMBasicBlockRef) {
+        if self.loopDepth < self.loopBreakBB.count {
+            self.loopBreakBB[self.loopDepth] = breakBB
+            self.loopContBB[self.loopDepth] = contBB
+        } else {
+            self.loopBreakBB.append(value: breakBB)
+            self.loopContBB.append(value: contBB)
+        }
+        self.loopDepth = self.loopDepth + 1U64
     }
-}
 
-// Set the just-pushed local's ownership (false = a borrow/inout param the caller
-// owns, so it is not deinit'd here).
-fn setLocalOwned(st: inout LlvmCtx, owned: Bool) {
-    if st.nLocals > 0U64 {
-        st.locOwned[st.nLocals - 1U64] = owned
+    inout fn popLoop() {
+        if self.loopDepth > 0U64 {
+            self.loopDepth = self.loopDepth - 1U64
+        }
     }
-}
 
-// Mark the local named (start,len) as moved-out (ownership handed off): it is not
-// deinit'd at this scope's exit.
-fn markLocalMoved(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) {
-    val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-    if li < st.nLocals {
-        st.locMoved[li] = true
+    inout fn setLocalElemStruct(esi: U64) {
+        if self.nLocals > 0U64 {
+            self.locElemStructIdx[self.nLocals - 1U64] = esi
+        }
+    }
+
+    // Set the just-pushed array local's element TypeRef (a Ref / nested-array element).
+    inout fn setLocalElemTypeRef(ref: U64) {
+        if self.nLocals > 0U64 {
+            self.locElemTypeRef[self.nLocals - 1U64] = ref
+        }
+    }
+
+    // Set the just-pushed local's ownership (false = a borrow/inout param the caller
+    // owns, so it is not deinit'd here).
+    inout fn setLocalOwned(owned: Bool) {
+        if self.nLocals > 0U64 {
+            self.locOwned[self.nLocals - 1U64] = owned
+        }
+    }
+
+    // Mark the local named (start,len) as moved-out (ownership handed off): it is not
+    // deinit'd at this scope's exit.
+    inout fn markLocalMoved(c: inout Comp, start: U64, len: U64) {
+        val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+        if li < self.nLocals {
+            self.locMoved[li] = true
+        }
     }
 }
 
@@ -136,250 +138,252 @@ fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
     return 0U64
 }
 
-// Recover the type-kind of an expression: locals from the env tag; literals from
-// their shape; everything else via the front-end's typeOf (which resolves call
-// returns etc. without needing c.cur.locals).
-// The value-kind (0 int / 1 String / 2 Bool / 3 unsigned) of method `mfi`'s return
-// when called on `recv`: ground a type-parameter return under the receiver instance's
-// env (so `dict[K,V].getOr -> V` resolves V to the concrete value type) before
-// reading the kind, falling back to the declared return span when no env applies.
-fn methodReturnKind(c: inout Comp, st: inout LlvmCtx, recv: U64, mfi: U64) -> U64 {
-    val mf: Func = c.arena.funcs[mfi]
-    if mf.retTy != 0U64 {
-        val rRef: U64 = st.exprTypeRef(c: inout c, id: recv)
-        val savedP: Array[Bind] = c.cur.typeParams
-        val savedA: Array[U64] = c.cur.typeArgs
-        // ground the return's type param under the receiver's instance env. The receiver
-        // may be a generic STRUCT or a generic ENUM (`Optional[U8].unwrapOr -> T`): the
-        // enum case is what carries an unsigned element through, so without it `T` stays
-        // abstract and the kind defaults to signed (a U8 result printed as -56).
-        mut val didSet: Bool = st.setStructEnv(c: inout c, ref: rRef)
-        if !(didSet) {
-            didSet = st.setEnumEnv(c: inout c, ref: rRef)
-        }
-        val g: U64 = c.groundTypeRef(ref: mf.retTy)
-        if didSet {
-            c.cur.typeParams = savedP
-            c.cur.typeArgs = savedA
-        }
-        if g != 0U64 {
-            return kindFromTySpan(c: inout c, tyStart: c.arena.types[g].nameStart, tyLen: c.arena.types[g].nameLen)
-        }
-    }
-    return kindFromTySpan(c: inout c, tyStart: mf.retStart, tyLen: mf.retLen)
-}
+pub impl LlvmCtx {
 
-fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
-    match c.arena.exprs[id] {
-        Expr.Str(start: _, len: _) => { return 1U64 }
-        Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return 4U64 }
-        Expr.Cast(operand: _, val tyStart, val tyLen, ty: _) => { return kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) }
-        Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
-            if isBool { return 2U64 }
-            if tyLen > 0U64 {
-                if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
+    // Recover the type-kind of an expression: locals from the env tag; literals from
+    // their shape; everything else via the front-end's typeOf (which resolves call
+    // returns etc. without needing c.cur.locals).
+    // The value-kind (0 int / 1 String / 2 Bool / 3 unsigned) of method `mfi`'s return
+    // when called on `recv`: ground a type-parameter return under the receiver instance's
+    // env (so `dict[K,V].getOr -> V` resolves V to the concrete value type) before
+    // reading the kind, falling back to the declared return span when no env applies.
+    inout fn methodReturnKind(c: inout Comp, recv: U64, mfi: U64) -> U64 {
+        val mf: Func = c.arena.funcs[mfi]
+        if mf.retTy != 0U64 {
+            val rRef: U64 = self.exprTypeRef(c: inout c, id: recv)
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            // ground the return's type param under the receiver's instance env. The receiver
+            // may be a generic STRUCT or a generic ENUM (`Optional[U8].unwrapOr -> T`): the
+            // enum case is what carries an unsigned element through, so without it `T` stays
+            // abstract and the kind defaults to signed (a U8 result printed as -56).
+            mut val didSet: Bool = self.setStructEnv(c: inout c, ref: rRef)
+            if !(didSet) {
+                didSet = self.setEnumEnv(c: inout c, ref: rRef)
+            }
+            val g: U64 = c.groundTypeRef(ref: mf.retTy)
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
+            }
+            if g != 0U64 {
+                return kindFromTySpan(c: inout c, tyStart: c.arena.types[g].nameStart, tyLen: c.arena.types[g].nameLen)
+            }
+        }
+        return kindFromTySpan(c: inout c, tyStart: mf.retStart, tyLen: mf.retLen)
+    }
+
+    inout fn valueKind(c: inout Comp, id: U64) -> U64 {
+        match c.arena.exprs[id] {
+            Expr.Str(start: _, len: _) => { return 1U64 }
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => { return 4U64 }
+            Expr.Cast(operand: _, val tyStart, val tyLen, ty: _) => { return kindFromTySpan(c: inout c, tyStart: tyStart, tyLen: tyLen) }
+            Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
+                if isBool { return 2U64 }
+                if tyLen > 0U64 {
+                    if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
+                    return 0U64
+                }
+                // an untyped literal in a float context (recorded in typeCache.intCtx) is a
+                // float literal — `val x: F64 = 10 / 4` routes through the float binop.
+                val t: TypeInfo = c.typeOf(id: id)
+                if t.kind == 0 {
+                    if c.isFloatType(start: t.nameStart, len: t.nameLen) { return 4U64 }
+                }
                 return 0U64
             }
-            // an untyped literal in a float context (recorded in typeCache.intCtx) is a
-            // float literal — `val x: F64 = 10 / 4` routes through the float binop.
-            val t: TypeInfo = c.typeOf(id: id)
-            if t.kind == 0 {
-                if c.isFloatType(start: t.nameStart, len: t.nameLen) { return 4U64 }
+            Expr.Ident(val start, val len) => {
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+                if li < self.nLocals {
+                    return self.locKind[li]
+                }
             }
-            return 0U64
-        }
-        Expr.Ident(val start, val len) => {
-            val li: U64 = findLocal(c: inout c, st: inout st, start: start, len: len)
-            if li < st.nLocals {
-                return st.locKind[li]
+            Expr.Unary(val op, val operand) => {
+                if op == opNot() { return 2U64 }
+                return self.valueKind(c: inout c, id: operand)
             }
-        }
-        Expr.Unary(val op, val operand) => {
-            if op == opNot() { return 2U64 }
-            return valueKind(c: inout c, st: inout st, id: operand)
-        }
-        Expr.Binary(val op, val lhs, rhs: _) => {
-            if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                return 2U64
+            Expr.Binary(val op, val lhs, rhs: _) => {
+                if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                    return 2U64
+                }
+                return self.valueKind(c: inout c, id: lhs)
             }
-            return valueKind(c: inout c, st: inout st, id: lhs)
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            val sidx: U64 = st.exprStructIdx(c: inout c, id: base)
-            if sidx < c.arena.structs.count {
-                val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                if fidx < c.arena.structs[sidx].fields.count {
-                    val ffd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                    // ground a type-parameter field under the BASE's instance env (a
-                    // generic struct's `v: T` on `L[String]` must resolve T -> String, not
-                    // default to int) — so e.g. `print(a.v)` dispatches to the String sink.
-                    if ffd.ty != 0U64 {
-                        val fBaseRef: U64 = st.exprTypeRef(c: inout c, id: base)
-                        val savedFP: Array[Bind] = c.cur.typeParams
-                        val savedFA: Array[U64] = c.cur.typeArgs
-                        val didSetF: Bool = st.setStructEnv(c: inout c, ref: fBaseRef)
-                        mut val fg: U64 = ffd.ty
-                        if c.cur.typeParams.count > 0U64 {
-                            fg = c.groundTypeRef(ref: ffd.ty)
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
+                if sidx < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[sidx].fields.count {
+                        val ffd: FieldDef = c.arena.structs[sidx].fields[fidx]
+                        // ground a type-parameter field under the BASE's instance env (a
+                        // generic struct's `v: T` on `L[String]` must resolve T -> String, not
+                        // default to int) — so e.g. `print(a.v)` dispatches to the String sink.
+                        if ffd.ty != 0U64 {
+                            val fBaseRef: U64 = self.exprTypeRef(c: inout c, id: base)
+                            val savedFP: Array[Bind] = c.cur.typeParams
+                            val savedFA: Array[U64] = c.cur.typeArgs
+                            val didSetF: Bool = self.setStructEnv(c: inout c, ref: fBaseRef)
+                            mut val fg: U64 = ffd.ty
+                            if c.cur.typeParams.count > 0U64 {
+                                fg = c.groundTypeRef(ref: ffd.ty)
+                            }
+                            val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.arena.types[fg].nameStart, tyLen: c.arena.types[fg].nameLen)
+                            if didSetF {
+                                c.cur.typeParams = savedFP
+                                c.cur.typeArgs = savedFA
+                            }
+                            return fk
                         }
-                        val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.arena.types[fg].nameStart, tyLen: c.arena.types[fg].nameLen)
-                        if didSetF {
-                            c.cur.typeParams = savedFP
-                            c.cur.typeArgs = savedFA
-                        }
-                        return fk
-                    }
-                    return kindFromTySpan(c: inout c, tyStart: ffd.tyStart, tyLen: ffd.tyLen)
-                }
-            }
-        }
-        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            // an `any P` receiver: the result kind is the requirement's return,
-            // grounded under the existential's bindings (`Out`/`Item` -> concrete).
-            val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout st, recv: recv)
-            if atIdx < c.decls.traits.count {
-                val rr: U64 = anyMethodRetRef(c: inout c, anyRef: st.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-                if rr != 0U64 {
-                    return kindFromTySpan(c: inout c, tyStart: c.arena.types[rr].nameStart, tyLen: c.arena.types[rr].nameLen)
-                }
-            }
-            val rsidx: U64 = st.exprStructIdx(c: inout c, id: recv)
-            if rsidx < c.arena.structs.count {
-                val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mfi < c.arena.funcs.count {
-                    if c.arena.funcs[mfi].hasRet {
-                        // ground a type-parameter return under the receiver's instance
-                        // env (a generic struct local resolves to its def here, so
-                        // `dict.getOr -> V` must substitute V to the concrete value
-                        // type instead of defaulting `V` to int).
-                        return methodReturnKind(c: inout c, st: inout st, recv: recv, mfi: mfi)
+                        return kindFromTySpan(c: inout c, tyStart: ffd.tyStart, tyLen: ffd.tyLen)
                     }
                 }
             }
-            // a method on a generic enum/struct instance (`opt.isSome()`,
-            // `res.isOk()` -> Bool): resolve via the receiver's instance ref, since
-            // exprStructIdx doesn't see enums. The concrete return kind comes from
-            // the method's declared return span (Bool/numeric).
-            val rRef: U64 = st.exprTypeRef(c: inout c, id: recv)
-            if rRef != 0U64 {
-                val rt: TypeRef = c.arena.types[rRef]
-                val gmfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if gmfi < c.arena.funcs.count {
-                    if c.arena.funcs[gmfi].hasRet {
-                        return methodReturnKind(c: inout c, st: inout st, recv: recv, mfi: gmfi)
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                // an `any P` receiver: the result kind is the requirement's return,
+                // grounded under the existential's bindings (`Out`/`Item` -> concrete).
+                val atIdx: U64 = anyRecvTraitIdx(c: inout c, st: inout self, recv: recv)
+                if atIdx < c.decls.traits.count {
+                    val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if rr != 0U64 {
+                        return kindFromTySpan(c: inout c, tyStart: c.arena.types[rr].nameStart, tyLen: c.arena.types[rr].nameLen)
                     }
                 }
-            }
-            // a method on a primitive lang-item receiver (`s.isEmpty() -> Bool`, or an
-            // inherited String method on a `newtype UserId = String`): resolve on the
-            // underlying lang-item, mirroring genLlvmMethod's primRecv dispatch, so the
-            // return kind isn't defaulted to int. The front-end's typeOf can't see a
-            // newtype's inherited methods, so the fallback below would mis-kind it.
-            val primRecvK: Bind = st.primLangItemRecvName(c: inout c, recv: recv)
-            if primRecvK.nameLen != 0U64 {
-                val pmfi: U64 = c.findMethod(recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if pmfi < c.arena.funcs.count {
-                    if c.arena.funcs[pmfi].hasRet {
-                        return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[pmfi].retStart, tyLen: c.arena.funcs[pmfi].retLen)
-                    }
-                }
-            }
-        }
-        Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-            val rsidx: U64 = st.exprStructIdx(c: inout c, id: recv)
-            if rsidx < c.arena.structs.count {
-                val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if mfi < c.arena.funcs.count {
-                    if c.arena.funcs[mfi].hasRet {
-                        return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[mfi].retStart, tyLen: c.arena.funcs[mfi].retLen)
-                    }
-                }
-            }
-        }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
-            return valueKind(c: inout c, st: inout st, id: recv)
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            // a closure-typed local call (`tail()` where tail: fn() -> String): the
-            // fn return type's kind (fn args = [ret, p0, …]).
-            val cli: U64 = findLocal(c: inout c, st: inout st, start: nameStart, len: nameLen)
-            if cli < st.nLocals {
-                if c.isFnType(ref: st.locTypeRef[cli]) {
-                    val ft: TypeRef = c.arena.types[st.locTypeRef[cli]]
-                    if ft.args.count > 0U64 {
-                        val rt: TypeRef = c.arena.types[ft.args[0]]
-                        return kindFromTySpan(c: inout c, tyStart: rt.nameStart, tyLen: rt.nameLen)
-                    }
-                }
-            }
-            // a regular function call: the callee's return-type kind.
-            val cfi: U64 = c.resolvedCallee(id: id)
-            if cfi < c.arena.funcs.count {
-                if c.arena.funcs[cfi].hasRet {
-                    return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
-                }
-            }
-        }
-        Expr.Index(val base, val index) => {
-            // element kind: from the array local's tracked element kind (so an
-            // Array[U16] element is unsigned), else inferred from the element type.
-            match c.arena.exprs[base] {
-                Expr.Ident(start: val s2, len: val l2) => {
-                    val li2: U64 = findLocal(c: inout c, st: inout st, start: s2, len: l2)
-                    if li2 < st.nLocals {
-                        if st.locIsArr[li2] {
-                            return st.locElemKind[li2]
+                val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
+                if rsidx < c.arena.structs.count {
+                    val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if mfi < c.arena.funcs.count {
+                        if c.arena.funcs[mfi].hasRet {
+                            // ground a type-parameter return under the receiver's instance
+                            // env (a generic struct local resolves to its def here, so
+                            // `dict.getOr -> V` must substitute V to the concrete value
+                            // type instead of defaulting `V` to int).
+                            return self.methodReturnKind(c: inout c, recv: recv, mfi: mfi)
                         }
                     }
                 }
-                _ => {}
-            }
-            // a user-Index subscript (`dict[k]` -> `dict.at(key: k)`, a user type's
-            // `g[i]` -> `g.index(key: i)`): recover the kind through the same synthesized
-            // method call genLlvmIndex emits, so a String/Bool value isn't defaulted to
-            // int (which would miscompile the {ptr,i64} at the use site).
-            val ibsi: U64 = st.exprStructIdx(c: inout c, id: base)
-            if ibsi < c.arena.structs.count {
-                if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
-                    val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                    return valueKind(c: inout c, st: inout st, id: m)
+                // a method on a generic enum/struct instance (`opt.isSome()`,
+                // `res.isOk()` -> Bool): resolve via the receiver's instance ref, since
+                // exprStructIdx doesn't see enums. The concrete return kind comes from
+                // the method's declared return span (Bool/numeric).
+                val rRef: U64 = self.exprTypeRef(c: inout c, id: recv)
+                if rRef != 0U64 {
+                    val rt: TypeRef = c.arena.types[rRef]
+                    val gmfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if gmfi < c.arena.funcs.count {
+                        if c.arena.funcs[gmfi].hasRet {
+                            return self.methodReturnKind(c: inout c, recv: recv, mfi: gmfi)
+                        }
+                    }
                 }
-                if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "index") {
-                    val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                    return valueKind(c: inout c, st: inout st, id: m)
+                // a method on a primitive lang-item receiver (`s.isEmpty() -> Bool`, or an
+                // inherited String method on a `newtype UserId = String`): resolve on the
+                // underlying lang-item, mirroring genLlvmMethod's primRecv dispatch, so the
+                // return kind isn't defaulted to int. The front-end's typeOf can't see a
+                // newtype's inherited methods, so the fallback below would mis-kind it.
+                val primRecvK: Bind = self.primLangItemRecvName(c: inout c, recv: recv)
+                if primRecvK.nameLen != 0U64 {
+                    val pmfi: U64 = c.findMethod(recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if pmfi < c.arena.funcs.count {
+                        if c.arena.funcs[pmfi].hasRet {
+                            return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[pmfi].retStart, tyLen: c.arena.funcs[pmfi].retLen)
+                        }
+                    }
                 }
             }
-            // the env-aware element type (a generic array field `self.keys: Array[K]`
-            // with K -> String grounds to strty, so `self.keys[i] == key` is String ==).
-            val et: LLVMTypeRef = st.arrElemTyOf(c: inout c, id: base)
-            if LLVMGetTypeKind(et) == 10U32 { return 1U64 }
-            if LLVMGetTypeKind(et) == 8U32 {
-                if LLVMGetIntTypeWidth(et) == 1U32 { return 2U64 }
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
+                if rsidx < c.arena.structs.count {
+                    val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if mfi < c.arena.funcs.count {
+                        if c.arena.funcs[mfi].hasRet {
+                            return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[mfi].retStart, tyLen: c.arena.funcs[mfi].retLen)
+                        }
+                    }
+                }
             }
-            return 0U64
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+                return self.valueKind(c: inout c, id: recv)
+            }
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                // a closure-typed local call (`tail()` where tail: fn() -> String): the
+                // fn return type's kind (fn args = [ret, p0, …]).
+                val cli: U64 = self.findLocal(c: inout c, start: nameStart, len: nameLen)
+                if cli < self.nLocals {
+                    if c.isFnType(ref: self.locTypeRef[cli]) {
+                        val ft: TypeRef = c.arena.types[self.locTypeRef[cli]]
+                        if ft.args.count > 0U64 {
+                            val rt: TypeRef = c.arena.types[ft.args[0]]
+                            return kindFromTySpan(c: inout c, tyStart: rt.nameStart, tyLen: rt.nameLen)
+                        }
+                    }
+                }
+                // a regular function call: the callee's return-type kind.
+                val cfi: U64 = c.resolvedCallee(id: id)
+                if cfi < c.arena.funcs.count {
+                    if c.arena.funcs[cfi].hasRet {
+                        return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
+                    }
+                }
+            }
+            Expr.Index(val base, val index) => {
+                // element kind: from the array local's tracked element kind (so an
+                // Array[U16] element is unsigned), else inferred from the element type.
+                match c.arena.exprs[base] {
+                    Expr.Ident(start: val s2, len: val l2) => {
+                        val li2: U64 = self.findLocal(c: inout c, start: s2, len: l2)
+                        if li2 < self.nLocals {
+                            if self.locIsArr[li2] {
+                                return self.locElemKind[li2]
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                // a user-Index subscript (`dict[k]` -> `dict.at(key: k)`, a user type's
+                // `g[i]` -> `g.index(key: i)`): recover the kind through the same synthesized
+                // method call genLlvmIndex emits, so a String/Bool value isn't defaulted to
+                // int (which would miscompile the {ptr,i64} at the use site).
+                val ibsi: U64 = self.exprStructIdx(c: inout c, id: base)
+                if ibsi < c.arena.structs.count {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
+                        val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                        return self.valueKind(c: inout c, id: m)
+                    }
+                    if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "index") {
+                        val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                        return self.valueKind(c: inout c, id: m)
+                    }
+                }
+                // the env-aware element type (a generic array field `self.keys: Array[K]`
+                // with K -> String grounds to strty, so `self.keys[i] == key` is String ==).
+                val et: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
+                if LLVMGetTypeKind(et) == 10U32 { return 1U64 }
+                if LLVMGetTypeKind(et) == 8U32 {
+                    if LLVMGetIntTypeWidth(et) == 1U32 { return 2U64 }
+                }
+                return 0U64
+            }
+            _ => {}
         }
-        _ => {}
+        // fallback: the typed-AST cache (works for call results, fields, …).
+        val t: TypeInfo = c.typeOf(id: id)
+        if t.kind == 1 { return 1U64 }
+        if t.kind == 0 {
+            if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Bool") { return 2U64 }
+            if isUnsignedName(c: inout c, start: t.nameStart, len: t.nameLen) { return 3U64 }
+        }
+        return 0U64
     }
-    // fallback: the typed-AST cache (works for call results, fields, …).
-    val t: TypeInfo = c.typeOf(id: id)
-    if t.kind == 1 { return 1U64 }
-    if t.kind == 0 {
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Bool") { return 2U64 }
-        if isUnsignedName(c: inout c, start: t.nameStart, len: t.nameLen) { return 3U64 }
-    }
-    return 0U64
-}
 
-// Index of the live local matching (start,len) by content, searched from the most
-// recent so a shadowing declaration wins. Returns st.nLocals if not found.
-fn findLocal(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
-    mut val i: U64 = st.nLocals
-    while i > 0 {
-        i -= 1
-        if spansEqual(c: inout c, aStart: st.locStart[i], aLen: st.locLen[i], bStart: start, bLen: len) {
-            return i
+    // Index of the live local matching (start,len) by content, searched from the most
+    // recent so a shadowing declaration wins. Returns st.nLocals if not found.
+    inout fn findLocal(c: inout Comp, start: U64, len: U64) -> U64 {
+        mut val i: U64 = self.nLocals
+        while i > 0 {
+            i -= 1
+            if spansEqual(c: inout c, aStart: self.locStart[i], aLen: self.locLen[i], bStart: start, bLen: len) {
+                return i
+            }
         }
+        return self.nLocals
     }
-    return st.nLocals
 }
-

@@ -297,7 +297,7 @@ pub impl LlvmCtx {
                     self.curRetTyStart = retStart
                     self.curRetTyLen = retLen
                     self.curRetRef = retTy
-                    beginFnBody(st: inout self, fv: fv)
+                    self.beginFnBody(fv: fv)
                     self.nLocals = 0
                     self.locStart = []
                     self.locLen = []
@@ -323,7 +323,7 @@ pub impl LlvmCtx {
                     self.locOwned = []
                     self.locMoved = []
                     // module-level variables (spec/15) are visible inside closures too.
-                    seedGlobals(c: inout c, st: inout self)
+                    self.seedGlobals(c: inout c)
                     // bind captures from the env pointer (param 0): each capture loads
                     // from its env slot into a fresh local, so the body's identifier
                     // accesses resolve normally. (Immutable captures are by-value; a
@@ -342,10 +342,10 @@ pub impl LlvmCtx {
                             // in the body go through the same cell as the enclosing scope.
                             if cap.boxed {
                                 val valTy: LLVMTypeRef = self.captureValueTy(c: inout c, cap: cap)
-                                pushLocalR(st: inout self, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
+                                self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
                                 ci += 1
                             } else {
-                            val a: LLVMValueRef = entryAlloca(st: inout self, ty: slotTy)
+                            val a: LLVMValueRef = self.entryAlloca(ty: slotTy)
                             LLVMBuildStore(self.b, cv, a)
                             mut val cRef: U64 = 0
                             if cap.boxed {
@@ -363,14 +363,14 @@ pub impl LlvmCtx {
                             if cap.isArray {
                                 cElem = llvmScalarTy(c: inout c, st: inout self, tyStart: cap.tyStart, tyLen: cap.tyLen)
                             }
-                            pushLocalR(st: inout self, nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
+                            self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
                             ci += 1
                             }
                         }
                     }
                     mut val pi: U64 = 0
                     while pi < params.count {
-                        bindOneParam(c: inout c, st: inout self, p: params[pi], fv: fv, argIdx: pi + 1U64)
+                        self.bindOneParam(c: inout c, p: params[pi], fv: fv, argIdx: pi + 1U64)
                         pi += 1
                     }
                     self.genLlvmBlock(c: inout c, id: body)

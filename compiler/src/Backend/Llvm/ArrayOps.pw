@@ -22,7 +22,7 @@ pub impl LlvmCtx {
             mut val ev: LLVMValueRef = LLVMConstNull(self.ptrty)
             if elemIsAny {
                 mut val eb: Bool = false
-                ev = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
+                ev = self.coerceToAnyIfNeeded(c: inout c, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
                 if !(eb) {
                     ev = genLlvmExpr(c: inout c, st: inout self, id: elems[i])
                 }
@@ -81,7 +81,7 @@ pub impl LlvmCtx {
     inout fn arrayExprElemRef(c: inout Comp, arrayExpr: U64) -> U64 {
         match c.arena.exprs[arrayExpr] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     return self.locElemTypeRef[li]
                 }

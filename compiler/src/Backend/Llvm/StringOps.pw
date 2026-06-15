@@ -175,7 +175,7 @@ fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
         compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
-    val k: U64 = valueKind(c: inout c, st: inout st, id: argExpr)
+    val k: U64 = st.valueKind(c: inout c, id: argExpr)
     if k == 1U64 {
         return emitStrSink(c: inout c, st: inout st, rtName: "plew_print_str", rtId: 5U64, argExpr: argExpr)
     }
@@ -483,9 +483,9 @@ fn emitVariantPayloadCmp(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64, pA
 // active one is selected by tag (the inactive loads read the same zero-initialized
 // area harmlessly — no side effects). sty is the enum's LLVM struct type.
 fn emitEnumCmp(c: inout Comp, st: inout LlvmCtx, a: LLVMValueRef, b: LLVMValueRef, eid: U64, sty: LLVMTypeRef) -> LLVMValueRef {
-    val aslot: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
+    val aslot: LLVMValueRef = st.entryAlloca(ty: sty)
     LLVMBuildStore(st.b, a, aslot)
-    val bslot: LLVMValueRef = entryAlloca(st: inout st, ty: sty)
+    val bslot: LLVMValueRef = st.entryAlloca(ty: sty)
     LLVMBuildStore(st.b, b, bslot)
     val tagA: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, aslot, 0U64, anon()), anon())
     val tagB: LLVMValueRef = LLVMBuildLoad2(st.b, st.i64ty, LLVMBuildStructGEP2(st.b, sty, bslot, 0U64, anon()), anon())

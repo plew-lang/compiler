@@ -365,7 +365,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
             // a String operand under an arithmetic op resolves the String lang-item's
             // witness (`String.add` for `"a" + "b"`, spec/02,12). String isn't a
             // registered struct/enum, so detect it by value-kind.
-            if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
+            if st.valueKind(c: inout c, id: lhs) == 1U64 {
                 val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
                 ownStart = ss.nameStart
                 ownLen = ss.nameLen

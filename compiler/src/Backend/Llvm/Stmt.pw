@@ -28,7 +28,7 @@ pub impl LlvmCtx {
                     if exprIsAwaitLL(c: inout c, id: init) {
                         match c.arena.exprs[init] {
                             Expr.Await(val operand) => {
-                                genLlvmAsyncAwaitLet(c: inout c, st: inout self, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, ty: ty, operand: operand)
+                                self.genLlvmAsyncAwaitLet(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, ty: ty, operand: operand)
                             }
                             _ => {}
                         }
@@ -56,7 +56,7 @@ pub impl LlvmCtx {
                             isArr = true
                             if elems.count > 0U64 {
                                 elemTy = self.exprLlvmType(c: inout c, id: elems[0])
-                                elemKind = valueKind(c: inout c, st: inout self, id: elems[0])
+                                elemKind = self.valueKind(c: inout c, id: elems[0])
                             }
                         }
                         _ => {
@@ -95,11 +95,11 @@ pub impl LlvmCtx {
                     if ty != 0U64 {
                         if refIsAny(c: inout c, ref: ty) {
                             mut val lb: Bool = false
-                            v = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: ty, valueExpr: init, outBoxed: inout lb)
+                            v = self.coerceToAnyIfNeeded(c: inout c, targetRef: ty, valueExpr: init, outBoxed: inout lb)
                             if !(lb) {
                                 // initializer is already an `any P` value (`val s2 = s`):
                                 // value semantics — copy the box if it is a place.
-                                v = copyAnyIfPlace(c: inout c, st: inout self, rv: genLlvmExpr(c: inout c, st: inout self, id: init), valueExpr: init)
+                                v = self.copyAnyIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: init), valueExpr: init)
                             }
                             builtArr = true
                         }
@@ -128,7 +128,7 @@ pub impl LlvmCtx {
                         v = self.copyValueIfPlace(c: inout c, rv: v, valueExpr: init)
                     }
                 }
-                mut val kind: U64 = valueKind(c: inout c, st: inout self, id: init)
+                mut val kind: U64 = self.valueKind(c: inout c, id: init)
                 if tyLen > 0U64 {
                     if !(isArr) {
                         v = coerceIntTo(c: inout c, st: inout self, v: v, tyStart: tyStart, tyLen: tyLen)
@@ -256,17 +256,17 @@ pub impl LlvmCtx {
                 if self.curAsync {
                     // inside an async fn, a (non-await) binding's storage is a frame
                     // field so its value survives later `await` suspensions.
-                    slot = asyncFrameSlot(c: inout c, st: inout self, idx: self.asyncFieldNext)
+                    slot = self.asyncFrameSlot(c: inout c, idx: self.asyncFieldNext)
                     self.asyncFieldNext = self.asyncFieldNext + 1
                 } else {
                     if localIsBoxedCapture(c: inout c, start: nameStart, len: nameLen) {
                         slot = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(lty), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                     } else {
-                        slot = entryAlloca(st: inout self, ty: lty)
+                        slot = self.entryAlloca(ty: lty)
                     }
                 }
                 LLVMBuildStore(self.b, v, slot)
-                pushLocalR(st: inout self, nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
+                self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
                 // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the
                 // shared cell so the pointee deinits only when the LAST owner drops.
                 if self.refDeinitPointeeSidx(c: inout c, refTy: tref) < c.arena.structs.count {
@@ -280,7 +280,7 @@ pub impl LlvmCtx {
                     if tyLen > 0U64 {
                         val esi: U64 = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
                         if esi < c.arena.structs.count {
-                            setLocalElemStruct(st: inout self, esi: esi)
+                            self.setLocalElemStruct(esi: esi)
                         }
                     }
                     // track the element's TypeRef so `ys[i]` recovers a Ref / nested-array
@@ -289,7 +289,7 @@ pub impl LlvmCtx {
                         if ty != 0U64 {
                             val at: TypeRef = c.arena.types[ty]
                             if at.args.count > 0U64 {
-                                setLocalElemTypeRef(st: inout self, ref: at.args[0])
+                                self.setLocalElemTypeRef(ref: at.args[0])
                             }
                         }
                     }
@@ -303,16 +303,16 @@ pub impl LlvmCtx {
                 }
                 match c.arena.exprs[target] {
                     Expr.Ident(val start, val len) => {
-                        val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                        val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                         if li < self.nLocals {
                             // an existential `any P` local: box a concrete conforming RHS
                             // into the fat pointer before the store (spec/08).
                             if refIsAny(c: inout c, ref: self.locTypeRef[li]) {
                                 mut val ab: Bool = false
-                                mut val arv: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: self.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
+                                mut val arv: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: self.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
                                 if !(ab) {
                                     // any -> any: value-semantics copy of a place.
-                                    arv = copyAnyIfPlace(c: inout c, st: inout self, rv: genLlvmExpr(c: inout c, st: inout self, id: value), valueExpr: value)
+                                    arv = self.copyAnyIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: value), valueExpr: value)
                                 }
                                 LLVMBuildStore(self.b, arv, self.locPtr[li])
                                 return
@@ -356,11 +356,11 @@ pub impl LlvmCtx {
                             } else {
                                 val cur: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
                                 mut val nv: LLVMValueRef = LLVMConstNull(self.ptrty)
-                                if valueKind(c: inout c, st: inout self, id: target) == 4U64 {
+                                if self.valueKind(c: inout c, id: target) == 4U64 {
                                     // a float local: the compound op is an IEEE float op.
                                     nv = buildF64BinOp(st: inout self, op: compoundBinOp(op: op), l: cur, r: rv)
                                 } else {
-                                    nv = self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout self, id: target) == 3U64)
+                                    nv = self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: self.valueKind(c: inout c, id: target) == 3U64)
                                 }
                                 LLVMBuildStore(self.b, nv, self.locPtr[li])
                             }
@@ -417,7 +417,7 @@ pub impl LlvmCtx {
                             LLVMBuildStore(self.b, rv, ep)
                         } else {
                             val cur: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
-                            LLVMBuildStore(self.b, self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: valueKind(c: inout c, st: inout self, id: target) == 3U64), ep)
+                            LLVMBuildStore(self.b, self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: self.valueKind(c: inout c, id: target) == 3U64), ep)
                         }
                     }
                     Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
@@ -425,7 +425,7 @@ pub impl LlvmCtx {
                         // alloca + store (base must be an addressable struct local).
                         match c.arena.exprs[fbase] {
                             Expr.Ident(start: val bs, len: val bl) => {
-                                val li: U64 = findLocal(c: inout c, st: inout self, start: bs, len: bl)
+                                val li: U64 = self.findLocal(c: inout c, start: bs, len: bl)
                                 val sidx: U64 = self.exprStructIdx(c: inout c, id: fbase)
                                 if li < self.nLocals && sidx < c.arena.structs.count {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: fnameStart, len: fnameLen)
@@ -552,7 +552,7 @@ pub impl LlvmCtx {
                     if exprIsAwaitLL(c: inout c, id: expr) {
                         match c.arena.exprs[expr] {
                             Expr.Await(val operand) => {
-                                emitLlvmAsyncSuspend(c: inout c, st: inout self, operandId: operand)
+                                self.emitLlvmAsyncSuspend(c: inout c, operandId: operand)
                             }
                             _ => {}
                         }
@@ -570,7 +570,7 @@ pub impl LlvmCtx {
                 // inside an async fn, `return` resolves `__self` (a `return await e`
                 // first suspends), frees the frame, and returns from the resume fn.
                 if self.curAsync {
-                    genLlvmAsyncReturn(c: inout c, st: inout self, value: value, hasValue: hasValue)
+                    self.genLlvmAsyncReturn(c: inout c, value: value, hasValue: hasValue)
                     return
                 }
                 val sentinel: U64 = 18446744073709551615U64
@@ -591,14 +591,14 @@ pub impl LlvmCtx {
                         // conforming value into the fat pointer.
                         if refIsAny(c: inout c, ref: self.curRetRef) {
                             mut val rb: Bool = false
-                            mut val rav: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: self.curRetRef, valueExpr: value, outBoxed: inout rb)
+                            mut val rav: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: self.curRetRef, valueExpr: value, outBoxed: inout rb)
                             if !(rb) {
                                 // already an `any P` value: value-semantics copy of a place.
-                                rav = copyAnyIfPlace(c: inout c, st: inout self, rv: genLlvmExpr(c: inout c, st: inout self, id: value), valueExpr: value)
+                                rav = self.copyAnyIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: value), valueExpr: value)
                             }
                             mut val exLi: U64 = sentinel
                             match c.arena.exprs[value] {
-                                Expr.Ident(start: val vs, len: val vl) => { exLi = findLocal(c: inout c, st: inout self, start: vs, len: vl) }
+                                Expr.Ident(start: val vs, len: val vl) => { exLi = self.findLocal(c: inout c, start: vs, len: vl) }
                                 _ => {}
                             }
                             self.dropScope(c: inout c, fromMark: 0U64, excludeLi: exLi)
@@ -651,7 +651,7 @@ pub impl LlvmCtx {
                         mut val excludeLi: U64 = sentinel
                         match c.arena.exprs[value] {
                             Expr.Ident(start: val s, len: val l) => {
-                                val li: U64 = findLocal(c: inout c, st: inout self, start: s, len: l)
+                                val li: U64 = self.findLocal(c: inout c, start: s, len: l)
                                 if li < self.nLocals {
                                     excludeLi = li
                                 }
@@ -706,9 +706,9 @@ pub impl LlvmCtx {
                 LLVMPositionBuilderAtEnd(self.b, bodyBB)
                 self.terminated = false
                 // `break` -> endBB, `continue` -> condBB (re-test) for this loop.
-                pushLoop(st: inout self, breakBB: endBB, contBB: condBB)
+                self.pushLoop(breakBB: endBB, contBB: condBB)
                 self.genLlvmBlock(c: inout c, id: body)
-                popLoop(st: inout self)
+                self.popLoop()
                 if !(self.terminated) {
                     LLVMBuildBr(self.b, condBB)
                 }

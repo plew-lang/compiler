@@ -24,7 +24,7 @@ pub impl LlvmCtx {
         // body emits with curTypeParams = mf.typeParams -> curTypeArgs = margs while the
         // self type still resolves from the receiver name.
         val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
-        val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout self, mfi: mfi, instRef: pinst, ownArgs: [])
+        val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: pinst, ownArgs: [])
         if gslot < self.genMethK.count {
             return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
         }
@@ -137,7 +137,7 @@ pub impl LlvmCtx {
     inout fn placePtrStrict(c: inout Comp, id: U64) -> LLVMValueRef {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     return self.locPtr[li]
                 }
@@ -147,7 +147,7 @@ pub impl LlvmCtx {
                 // (so a generic-struct local's field GEPs with the right instance type).
                 match c.arena.exprs[base] {
                     Expr.Ident(start: val bs, len: val bl) => {
-                        val bli: U64 = findLocal(c: inout c, st: inout self, start: bs, len: bl)
+                        val bli: U64 = self.findLocal(c: inout c, start: bs, len: bl)
                         val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
                         if bli < self.nLocals && bsi < c.arena.structs.count {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
@@ -204,7 +204,7 @@ pub impl LlvmCtx {
         // not a place (a fresh value): materialize into a temp slot so a callee taking
         // `inout`/`borrow` still gets a pointer (it mutates the copy, harmlessly).
         val v: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: id)
-        val slot: LLVMValueRef = entryAlloca(st: inout self, ty: LLVMTypeOf(v))
+        val slot: LLVMValueRef = self.entryAlloca(ty: LLVMTypeOf(v))
         LLVMBuildStore(self.b, v, slot)
         return slot
     }
@@ -267,7 +267,7 @@ pub impl LlvmCtx {
         if p.isMove {
             match c.arena.exprs[argExpr] {
                 Expr.Ident(start: val s, len: val l) => {
-                    markLocalMoved(c: inout c, st: inout self, start: s, len: l)
+                    self.markLocalMoved(c: inout c, start: s, len: l)
                 }
                 _ => {}
             }
@@ -275,12 +275,12 @@ pub impl LlvmCtx {
         // an `any P` parameter (spec/08): box a concrete conforming argument into the
         // existential fat pointer, or value-semantics-copy an existing `any` place.
         mut val argBoxed: Bool = false
-        val argAny: LLVMValueRef = coerceToAnyIfNeeded(c: inout c, st: inout self, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
+        val argAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
         if argBoxed {
             return argAny
         }
         if refIsAny(c: inout c, ref: p.ty) {
-            return copyAnyIfPlace(c: inout c, st: inout self, rv: genLlvmExpr(c: inout c, st: inout self, id: argExpr), valueExpr: argExpr)
+            return self.copyAnyIfPlace(c: inout c, rv: genLlvmExpr(c: inout c, st: inout self, id: argExpr), valueExpr: argExpr)
         }
         if p.tyIsArray {
             match c.arena.exprs[argExpr] {

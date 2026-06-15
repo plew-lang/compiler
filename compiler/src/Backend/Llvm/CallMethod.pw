@@ -106,7 +106,7 @@ pub impl LlvmCtx {
         // vtable. The receiver's TypeRef carries isAny.
         val anyRecvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
         if refIsAny(c: inout c, ref: anyRecvRef) {
-            return genLlvmAnyDispatch(c: inout c, st: inout self, recv: recv, anyRef: anyRecvRef, nameStart: nameStart, nameLen: nameLen, args: args)
+            return self.genLlvmAnyDispatch(c: inout c, recv: recv, anyRef: anyRecvRef, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         // associated-function call `Type.name(args)` (the receiver is a type name, not
         // a value): dispatch to the assoc fn (no self argument).
@@ -236,7 +236,7 @@ pub impl LlvmCtx {
                     // adapter receiver): infer the own args from the call so the slot is
                     // keyed by them and the body's env grounds the own param.
                     val gOwn: Array[U64] = methodOwnArgs(c: inout c, mfi: gmfi, instRef: recvRef, args: args)
-                    val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout self, mfi: gmfi, instRef: recvRef, ownArgs: gOwn)
+                    val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: gmfi, instRef: recvRef, ownArgs: gOwn)
                     if gslot < self.genMethK.count {
                         return self.genGenMethodCall(c: inout c, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
                     }
@@ -268,7 +268,7 @@ pub impl LlvmCtx {
                     mut val aargs: Array[U64] = []
                     aargs.append(value: elemRef)
                     val arrInst: U64 = c.pushType(t: <TypeRef nameStart=arrB.nameStart nameLen=arrB.nameLen args=aargs />)
-                    val gslot: U64 = ensureGenMethodDeclared(c: inout c, st: inout self, mfi: amfi, instRef: arrInst, ownArgs: [])
+                    val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: amfi, instRef: arrInst, ownArgs: [])
                     if gslot < self.genMethK.count {
                         return self.genGenMethodCall(c: inout c, recv: recv, mfi: amfi, slot: gslot, instRef: arrInst, args: args)
                     }
@@ -289,7 +289,7 @@ pub impl LlvmCtx {
         if wop != -1I64 {
             val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
             if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
-                val uns: Bool = valueKind(c: inout c, st: inout self, id: recv) == 3U64
+                val uns: Bool = self.valueKind(c: inout c, id: recv) == 3U64
                 val bv: LLVMValueRef = coerceInt(st: inout self, v: genLlvmExpr(c: inout c, st: inout self, id: args[0].expr), target: LLVMTypeOf(rv), unsigned: uns)
                 return self.buildBinOpS(c: inout c, op: wop, l: rv, r: bv, unsigned: uns)
             }
@@ -371,7 +371,7 @@ pub impl LlvmCtx {
                 if c.isFnType(ref: grounded) {
                     val recvVal: LLVMValueRef = genLlvmExpr(c: inout c, st: inout self, id: recv)
                     val cloVal: LLVMValueRef = LLVMBuildExtractValue(self.b, recvVal, ffi, anon())
-                    return emitClosureCallValue(c: inout c, st: inout self, cloVal: cloVal, fnRef: grounded, args: args)
+                    return self.emitClosureCallValue(c: inout c, cloVal: cloVal, fnRef: grounded, args: args)
                 }
             }
             // a bare call to a method that exists only as an extension method (spec/09):
@@ -415,7 +415,7 @@ pub impl LlvmCtx {
         if mf.selfMove {
             match c.arena.exprs[recv] {
                 Expr.Ident(start: val s, len: val l) => {
-                    markLocalMoved(c: inout c, st: inout self, start: s, len: l)
+                    self.markLocalMoved(c: inout c, start: s, len: l)
                 }
                 _ => {}
             }

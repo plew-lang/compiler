@@ -54,7 +54,7 @@ pub impl LlvmCtx {
     inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     return self.locStructIdx[li]
                 }
@@ -251,7 +251,7 @@ pub impl LlvmCtx {
                 // an array-of-struct local (`store : Array[Box]`): its tracked element
                 // struct (sentinel-large = element is not a struct). Safe now that array
                 // value-semantics CoW makes an aliased `b = a` independent.
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     if self.locElemStructIdx[li] < c.arena.structs.count {
                         return self.locElemStructIdx[li]
@@ -319,7 +319,7 @@ pub impl LlvmCtx {
                 // terminal's body): propagate the source local's tracked instance TypeRef so
                 // `it` is a MapIter/FilterIter/… and a later `it.next()` routes through the
                 // generic-receiver dispatch (else it's untracked and the call is not emitted).
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     return self.locTypeRef[li]
                 }

@@ -147,7 +147,7 @@ pub impl LlvmCtx {
         }
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = findLocal(c: inout c, st: inout self, start: start, len: len)
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     return self.locTypeRef[li]
                 }
@@ -196,7 +196,7 @@ pub impl LlvmCtx {
                 // -> `ys[i]->v`, a generic element, or a nested-array element).
                 match c.arena.exprs[base] {
                     Expr.Ident(start: val bs, len: val bl) => {
-                        val bli: U64 = findLocal(c: inout c, st: inout self, start: bs, len: bl)
+                        val bli: U64 = self.findLocal(c: inout c, start: bs, len: bl)
                         if bli < self.nLocals {
                             return self.locElemTypeRef[bli]
                         }

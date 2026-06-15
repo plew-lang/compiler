@@ -77,11 +77,11 @@ export fn emitLlvm(c: inout Comp) {
     // method instances (one per receiver instantiation).
     st.declareUserFns(c: inout c)
     st.declareGenFns(c: inout c)
-    declareGenMethods(c: inout c, st: inout st)
+    st.declareGenMethods(c: inout c)
     // async fns: build each frame struct + resume fn, and a non-main entry symbol
     // in the fnIdx table (so a call `doubler(x: 21)` resolves to a promise-returning
     // call). Done before bodies emit so main's resume can call them.
-    declareAsyncFns(c: inout c, st: inout st)
+    st.declareAsyncFns(c: inout c)
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
     st.collectClosures(c: inout c)
@@ -92,7 +92,7 @@ export fn emitLlvm(c: inout Comp) {
     // every global's initializer once) and record each global's metadata, BEFORE any
     // function body so `seedGlobals` can re-bind them at every body entry. Done after
     // pass-1 declarations so an initializer may call a user function.
-    genLlvmInitGlobals(c: inout c, st: inout st)
+    st.genLlvmInitGlobals(c: inout c)
 
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
@@ -114,7 +114,7 @@ export fn emitLlvm(c: inout Comp) {
             // an `async fn main` is lowered with the rest of the async fns (entry +
             // resume + drain the event loop); a plain main is the synchronous shape.
             if !(isAsyncFn(c: inout c, fi: fi)) {
-                genLlvmMain(c: inout c, st: inout st, fi: fi)
+                st.genLlvmMain(c: inout c, fi: fi)
             }
             foundMain = true
         } else {
@@ -122,17 +122,17 @@ export fn emitLlvm(c: inout Comp) {
                 // the dead user main: skip entirely.
             } else {
                 if st.isPlainUserFn(c: inout c, fi: fi) {
-                    genLlvmFunc(c: inout c, st: inout st, fi: fi)
+                    st.genLlvmFunc(c: inout c, fi: fi)
                 }
             }
         }
         fi += 1
     }
     // async fn entry + resume bodies (main's entry drains the loop).
-    emitAsyncFns(c: inout c, st: inout st)
+    st.emitAsyncFns(c: inout c)
     // generic free-function + generic-method instance bodies.
     st.emitGenFns(c: inout c)
-    emitGenMethods(c: inout c, st: inout st)
+    st.emitGenMethods(c: inout c)
     // lambda-lifted closure bodies + function-value thunks.
     st.emitClosures(c: inout c)
     st.emitThunks(c: inout c)
@@ -145,11 +145,11 @@ export fn emitLlvm(c: inout Comp) {
     mut val draining: Bool = true
     while draining {
         while provDone < st.provEmit.count {
-            genLlvmFuncBody(c: inout c, st: inout st, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])])
+            st.genLlvmFuncBody(c: inout c, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])])
             provDone += 1
         }
         while genmDone < st.genMethEmit.count {
-            emitOneGenMethod(c: inout c, st: inout st, slot: st.genMethEmit[genmDone])
+            st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone])
             genmDone += 1
         }
         if provDone >= st.provEmit.count {
@@ -167,64 +167,67 @@ export fn emitLlvm(c: inout Comp) {
     LLVMDisposeMessage(ir)
 }
 
-// Emit `void @plew_init_globals()` (spec/15): one body that runs each module-level
-// variable's initializer in lowering (= declaration) order and stores the result into
-// its LLVM global. Each initializer is the same `Stmt.Let` a local binding produces,
-// so we emit it through the normal statement path (which pushes a fully-typed local +
-// alloca), then copy that local's recovered value into a fresh LLVM global and record
-// its metadata in `gval*` so `seedGlobals` can re-bind it at every body entry. A later
-// global's initializer can reference an earlier one (resolved as the alloca-local just
-// pushed). Globals are program-lifetime, so they are never deinit'd (no scope-exit
-// drop here — the same leak level as a top-level array/String value).
-fn genLlvmInitGlobals(c: inout Comp, st: inout LlvmCtx) {
-    if c.arena.globals.count == 0U64 {
-        return
+pub impl LlvmCtx {
+
+    // Emit `void @plew_init_globals()` (spec/15): one body that runs each module-level
+    // variable's initializer in lowering (= declaration) order and stores the result into
+    // its LLVM global. Each initializer is the same `Stmt.Let` a local binding produces,
+    // so we emit it through the normal statement path (which pushes a fully-typed local +
+    // alloca), then copy that local's recovered value into a fresh LLVM global and record
+    // its metadata in `gval*` so `seedGlobals` can re-bind it at every body entry. A later
+    // global's initializer can reference an earlier one (resolved as the alloca-local just
+    // pushed). Globals are program-lifetime, so they are never deinit'd (no scope-exit
+    // drop here — the same leak level as a top-level array/String value).
+    inout fn genLlvmInitGlobals(c: inout Comp) {
+        if c.arena.globals.count == 0U64 {
+            return
+        }
+        mut val noParams: Array[LLVMTypeRef] = []
+        val fnTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
+        val fv: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_init_globals", nameId: 9120U64, fnTy: fnTy)
+        self.curFn = fv
+        self.curIsMain = false
+        self.curRetVoid = true
+        self.curAsync = false
+        self.beginFnBody(fv: fv)
+        self.nLocals = 0
+        self.locStart = []
+        self.locLen = []
+        self.locPtr = []
+        self.locTy = []
+        self.locKind = []
+        self.locStructIdx = []
+        self.locIsArr = []
+        self.locElemTy = []
+        self.locElemKind = []
+        self.locTypeRef = []
+        self.locElemStructIdx = []
+        self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+        mut val gi: U64 = 0
+        while gi < c.arena.globals.count {
+            self.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
+            val li: U64 = self.nLocals - 1U64
+            val lty: LLVMTypeRef = self.locTy[li]
+            val gv: LLVMValueRef = LLVMAddGlobal(self.mod, lty, cstr(s: globalSymbol(idx: gi)))
+            LLVMSetInitializer(gv, LLVMConstNull(lty))
+            val cur: LLVMValueRef = LLVMBuildLoad2(self.b, lty, self.locPtr[li], anon())
+            LLVMBuildStore(self.b, cur, gv)
+            self.gvalRef.append(value: gv)
+            self.gvalLty.append(value: lty)
+            self.gvalKind.append(value: self.locKind[li])
+            self.gvalSidx.append(value: self.locStructIdx[li])
+            self.gvalIsArr.append(value: self.locIsArr[li])
+            self.gvalElemTy.append(value: self.locElemTy[li])
+            self.gvalElemKind.append(value: self.locElemKind[li])
+            self.gvalTref.append(value: self.locTypeRef[li])
+            self.gvalElemStructIdx.append(value: self.locElemStructIdx[li])
+            self.gvalElemTypeRef.append(value: self.locElemTypeRef[li])
+            gi += 1
+        }
+        LLVMBuildRetVoid(self.b)
     }
-    mut val noParams: Array[LLVMTypeRef] = []
-    val fnTy: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(noParams), 0U64, 0I32)
-    val fv: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_init_globals", nameId: 9120U64, fnTy: fnTy)
-    st.curFn = fv
-    st.curIsMain = false
-    st.curRetVoid = true
-    st.curAsync = false
-    beginFnBody(st: inout st, fv: fv)
-    st.nLocals = 0
-    st.locStart = []
-    st.locLen = []
-    st.locPtr = []
-    st.locTy = []
-    st.locKind = []
-    st.locStructIdx = []
-    st.locIsArr = []
-    st.locElemTy = []
-    st.locElemKind = []
-    st.locTypeRef = []
-    st.locElemStructIdx = []
-    st.locElemTypeRef = []
-    st.locOwned = []
-    st.locMoved = []
-    mut val gi: U64 = 0
-    while gi < c.arena.globals.count {
-        st.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
-        val li: U64 = st.nLocals - 1U64
-        val lty: LLVMTypeRef = st.locTy[li]
-        val gv: LLVMValueRef = LLVMAddGlobal(st.mod, lty, cstr(s: globalSymbol(idx: gi)))
-        LLVMSetInitializer(gv, LLVMConstNull(lty))
-        val cur: LLVMValueRef = LLVMBuildLoad2(st.b, lty, st.locPtr[li], anon())
-        LLVMBuildStore(st.b, cur, gv)
-        st.gvalRef.append(value: gv)
-        st.gvalLty.append(value: lty)
-        st.gvalKind.append(value: st.locKind[li])
-        st.gvalSidx.append(value: st.locStructIdx[li])
-        st.gvalIsArr.append(value: st.locIsArr[li])
-        st.gvalElemTy.append(value: st.locElemTy[li])
-        st.gvalElemKind.append(value: st.locElemKind[li])
-        st.gvalTref.append(value: st.locTypeRef[li])
-        st.gvalElemStructIdx.append(value: st.locElemStructIdx[li])
-        st.gvalElemTypeRef.append(value: st.locElemTypeRef[li])
-        gi += 1
-    }
-    LLVMBuildRetVoid(st.b)
 }
 
 // A unique, stable LLVM symbol for the module-level variable at lowering index `idx`
@@ -236,80 +239,82 @@ fn globalSymbol(idx: U64) -> String {
     return stringFromBytesUnchecked(s)
 }
 
-// Re-register every module-level variable as a local pointing at its LLVM global, so
-// reads (`x`), writes (`x = …` for a `mut val` global), and all type-recovery
-// (`x.field`, `x[i]`, method dispatch) resolve through the normal local machinery
-// (findLocal). Called at the start of each function/closure/async body AFTER the local
-// reset and BEFORE params/captures — so a same-named param or local shadows the global
-// (findLocal returns the most-recently pushed match).
-fn seedGlobals(c: inout Comp, st: inout LlvmCtx) {
-    mut val gi: U64 = 0
-    while gi < st.gvalRef.count {
-        pushLocalR(st: inout st, nameStart: c.arena.globals[gi].nameStart, nameLen: c.arena.globals[gi].nameLen, ptr: st.gvalRef[gi], ty: st.gvalLty[gi], kind: st.gvalKind[gi], structIdx: st.gvalSidx[gi], isArr: st.gvalIsArr[gi], elemTy: st.gvalElemTy[gi], elemKind: st.gvalElemKind[gi], typeRef: st.gvalTref[gi])
-        setLocalElemStruct(st: inout st, esi: st.gvalElemStructIdx[gi])
-        setLocalElemTypeRef(st: inout st, ref: st.gvalElemTypeRef[gi])
-        gi += 1
+pub impl LlvmCtx {
+
+    // Re-register every module-level variable as a local pointing at its LLVM global, so
+    // reads (`x`), writes (`x = …` for a `mut val` global), and all type-recovery
+    // (`x.field`, `x[i]`, method dispatch) resolve through the normal local machinery
+    // (findLocal). Called at the start of each function/closure/async body AFTER the local
+    // reset and BEFORE params/captures — so a same-named param or local shadows the global
+    // (findLocal returns the most-recently pushed match).
+    inout fn seedGlobals(c: inout Comp) {
+        mut val gi: U64 = 0
+        while gi < self.gvalRef.count {
+            self.pushLocalR(nameStart: c.arena.globals[gi].nameStart, nameLen: c.arena.globals[gi].nameLen, ptr: self.gvalRef[gi], ty: self.gvalLty[gi], kind: self.gvalKind[gi], structIdx: self.gvalSidx[gi], isArr: self.gvalIsArr[gi], elemTy: self.gvalElemTy[gi], elemKind: self.gvalElemKind[gi], typeRef: self.gvalTref[gi])
+            self.setLocalElemStruct(esi: self.gvalElemStructIdx[gi])
+            self.setLocalElemTypeRef(ref: self.gvalElemTypeRef[gi])
+            gi += 1
+        }
+    }
+
+    // Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
+    inout fn genLlvmMain(c: inout Comp, fi: U64) {
+        // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
+        // (@Std/Process argCount/argAt) — the args are stashed into the runtime via
+        // plew_set_args before the body runs.
+        mut val mainParams: Array[LLVMTypeRef] = []
+        mainParams.append(value: self.i32ty)
+        mainParams.append(value: self.ptrty)
+        val mainTy: LLVMTypeRef = LLVMFunctionType(self.i32ty, arrayCPtr(mainParams), 2U64, 0I32)
+        val mainFn: LLVMValueRef = LLVMAddFunction(self.mod, cstr(s: "main"), mainTy)
+        self.curFn = mainFn
+        self.curIsMain = true
+        self.curRetVoid = false
+        self.beginFnBody(fv: mainFn)
+        // plew_set_args(argc, argv).
+        mut val saTys: Array[LLVMTypeRef] = []
+        saTys.append(value: self.i32ty)
+        saTys.append(value: self.ptrty)
+        val saTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(saTys), 2U64, 0I32)
+        val saFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_set_args", nameId: 56U64, fnTy: saTy)
+        mut val saArgs: Array[LLVMValueRef] = []
+        saArgs.append(value: LLVMGetParam(mainFn, 0U64))
+        saArgs.append(value: LLVMGetParam(mainFn, 1U64))
+        LLVMBuildCall2(self.b, saTy, saFn, arrayCPtr(saArgs), 2U64, anon())
+        // initialize module-level variables (spec/15) before the body runs.
+        self.callInitGlobals(c: inout c)
+        // fresh local scope.
+        self.nLocals = 0
+        self.locStart = []
+        self.locLen = []
+        self.locPtr = []
+        self.locTy = []
+        self.locKind = []
+        self.locStructIdx = []
+        self.locIsArr = []
+        self.locElemTy = []
+        self.locElemKind = []
+        self.locTypeRef = []
+        self.locElemStructIdx = []
+        self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+        self.seedGlobals(c: inout c)
+        self.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
+        if !(self.terminated) {
+            LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))
+        }
+    }
+
+    // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).
+    inout fn callInitGlobals(c: inout Comp) {
+        if c.arena.globals.count == 0U64 {
+            return
+        }
+        mut val noParams: Array[LLVMTypeRef] = []
+        val igTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(noParams), 0U64, 0I32)
+        val igFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout self, name: "plew_init_globals", nameId: 9120U64, fnTy: igTy)
+        mut val noArgs: Array[LLVMValueRef] = []
+        LLVMBuildCall2(self.b, igTy, igFn, arrayCPtr(noArgs), 0U64, anon())
     }
 }
-
-// Emit the user `main` as C `i32 @main()` returning 0 (Plew main returns ()).
-fn genLlvmMain(c: inout Comp, st: inout LlvmCtx, fi: U64) {
-    // `i32 main(i32 argc, ptr argv)` so the program can read its command-line args
-    // (@Std/Process argCount/argAt) — the args are stashed into the runtime via
-    // plew_set_args before the body runs.
-    mut val mainParams: Array[LLVMTypeRef] = []
-    mainParams.append(value: st.i32ty)
-    mainParams.append(value: st.ptrty)
-    val mainTy: LLVMTypeRef = LLVMFunctionType(st.i32ty, arrayCPtr(mainParams), 2U64, 0I32)
-    val mainFn: LLVMValueRef = LLVMAddFunction(st.mod, cstr(s: "main"), mainTy)
-    st.curFn = mainFn
-    st.curIsMain = true
-    st.curRetVoid = false
-    beginFnBody(st: inout st, fv: mainFn)
-    // plew_set_args(argc, argv).
-    mut val saTys: Array[LLVMTypeRef] = []
-    saTys.append(value: st.i32ty)
-    saTys.append(value: st.ptrty)
-    val saTy: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(saTys), 2U64, 0I32)
-    val saFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_set_args", nameId: 56U64, fnTy: saTy)
-    mut val saArgs: Array[LLVMValueRef] = []
-    saArgs.append(value: LLVMGetParam(mainFn, 0U64))
-    saArgs.append(value: LLVMGetParam(mainFn, 1U64))
-    LLVMBuildCall2(st.b, saTy, saFn, arrayCPtr(saArgs), 2U64, anon())
-    // initialize module-level variables (spec/15) before the body runs.
-    callInitGlobals(c: inout c, st: inout st)
-    // fresh local scope.
-    st.nLocals = 0
-    st.locStart = []
-    st.locLen = []
-    st.locPtr = []
-    st.locTy = []
-    st.locKind = []
-    st.locStructIdx = []
-    st.locIsArr = []
-    st.locElemTy = []
-    st.locElemKind = []
-    st.locTypeRef = []
-    st.locElemStructIdx = []
-    st.locElemTypeRef = []
-    st.locOwned = []
-    st.locMoved = []
-    seedGlobals(c: inout c, st: inout st)
-    st.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
-    if !(st.terminated) {
-        LLVMBuildRet(st.b, LLVMConstInt(st.i32ty, 0U64, 0I32))
-    }
-}
-
-// Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).
-fn callInitGlobals(c: inout Comp, st: inout LlvmCtx) {
-    if c.arena.globals.count == 0U64 {
-        return
-    }
-    mut val noParams: Array[LLVMTypeRef] = []
-    val igTy: LLVMTypeRef = LLVMFunctionType(st.voidty, arrayCPtr(noParams), 0U64, 0I32)
-    val igFn: LLVMValueRef = getOrDeclare(c: inout c, st: inout st, name: "plew_init_globals", nameId: 9120U64, fnTy: igTy)
-    mut val noArgs: Array[LLVMValueRef] = []
-    LLVMBuildCall2(st.b, igTy, igFn, arrayCPtr(noArgs), 0U64, anon())
-}
-
