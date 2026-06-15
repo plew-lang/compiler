@@ -98,16 +98,6 @@ pub impl LlvmCtx {
     }
 }
 
-// Append the decimal digits of n to a byte buffer (for synthetic symbol names).
-// Uses digitStrU's per-digit String (its bytes are U8) to avoid a U64->U8 narrow,
-// which Plew's lossless `as` does not allow.
-fn appendU64Dec(into: inout Array[U8], n: U64) {
-    if n >= 10U64 {
-        appendU64Dec(into: inout into, n: n / 10U64)
-    }
-    appendBytes(into: inout into, from: digitStrU(d: n % 10U64).bytes)
-}
-
 pub impl LlvmCtx {
 
     // Pass 2: emit a plain user function's body.
@@ -294,19 +284,4 @@ pub impl LlvmCtx {
             i += 1
         }
     }
-}
-
-// Find the registered generic-fn instance slot for (fnIdx, args), or count.
-fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) -> U64 {
-    mut val slot: U64 = 0
-    while slot < st.genFnK.count {
-        val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
-        if fin.fnIdx == fnIdx {
-            if typeArgsEq(c: inout c, a: fin.args, b: args) {
-                return slot
-            }
-        }
-        slot += 1
-    }
-    return st.genFnK.count
 }

@@ -371,29 +371,6 @@ pub impl LlvmCtx {
     }
 }
 
-// Concatenate two type-param lists (`add` first, then `base`). Used to MERGE a
-// nested generic construct's env onto the enclosing one — e.g. building
-// `<Optional.Some v=self.f(x:v) />` inside a monomorphized `MapIter.next`: the
-// field type `T` resolves via Optional's params while the payload sub-expression
-// `self.f` resolves via MapIter's (the outer env). Disjoint names, so first-match
-// in groundTypeRef picks the right one; same length so args pair 1:1.
-fn concatParams(add: Array[Bind], base: Array[Bind]) -> Array[Bind] {
-    mut val r: Array[Bind] = []
-    mut val i: U64 = 0
-    while i < add.count { r.append(value: add[i])  i += 1 }
-    mut val j: U64 = 0
-    while j < base.count { r.append(value: base[j])  j += 1 }
-    return r
-}
-fn concatArgs(add: Array[U64], base: Array[U64]) -> Array[U64] {
-    mut val r: Array[U64] = []
-    mut val i: U64 = 0
-    while i < add.count { r.append(value: add[i])  i += 1 }
-    mut val j: U64 = 0
-    while j < base.count { r.append(value: base[j])  j += 1 }
-    return r
-}
-
 pub impl LlvmCtx {
 
     // If `ref` is a generic enum instance, set the substitution env to it and return

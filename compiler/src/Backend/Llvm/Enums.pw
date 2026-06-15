@@ -426,32 +426,6 @@ pub impl LlvmCtx {
     }
 }
 
-// If field `f` is of array type — declared `Array[E]`, or a type param that
-// grounds (under the active env) to `Array[E]` — the element type ref E, else 0.
-fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
-    if f.tyIsArray {
-        if f.ty != 0U64 {
-            val t: TypeRef = c.arena.types[f.ty]
-            if t.args.count > 0U64 {
-                return t.args[0]
-            }
-        }
-        return 0U64
-    }
-    if f.ty != 0U64 {
-        if c.cur.typeParams.count > 0U64 {
-            val g: U64 = c.groundTypeRef(ref: f.ty)
-            val gt: TypeRef = c.arena.types[g]
-            if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
-                if gt.args.count > 0U64 {
-                    return gt.args[0]
-                }
-            }
-        }
-    }
-    return 0U64
-}
-
 pub impl LlvmCtx {
 
     // Build an enum value of LLVM type `ety` for def `eid`, variant `vi`, from

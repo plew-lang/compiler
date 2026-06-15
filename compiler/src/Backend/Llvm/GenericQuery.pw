@@ -34,19 +34,6 @@ pub impl LlvmCtx {
     }
 }
 
-// The declared index of field (start,len) in struct sidx, or sd.fields.count.
-fn structFieldIndex(c: inout Comp, sidx: U64, start: U64, len: U64) -> U64 {
-    val sd: StructDef = c.arena.structs[sidx]
-    mut val i: U64 = 0
-    while i < sd.fields.count {
-        if spansEqual(c: inout c, aStart: sd.fields[i].nameStart, aLen: sd.fields[i].nameLen, bStart: start, bLen: len) {
-            return i
-        }
-        i += 1
-    }
-    return sd.fields.count
-}
-
 pub impl LlvmCtx {
 
     // The owning struct index of an expression (Ident local / Make), or
@@ -379,30 +366,6 @@ pub impl LlvmCtx {
         }
         return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
     }
-}
-
-// If field `fld` is a (non-array) generic-instance type by value, its grounded
-// instance TypeRef (under the active env), else 0. Used at assignment sites to set
-// st.expectedTy so an un-suffixed RHS construction (`b.a = <Optional.Some v=9 />`)
-// infers the instance's type args, mirroring genFieldValue at construction.
-fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
-    if fld.tyIsArray {
-        return 0U64
-    }
-    if fld.ty == 0U64 {
-        return 0U64
-    }
-    mut val g: U64 = fld.ty
-    if c.cur.typeParams.count > 0U64 {
-        g = c.groundTypeRef(ref: fld.ty)
-    }
-    if c.isGenericInst(ref: g) {
-        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
-            return 0U64
-        }
-        return g
-    }
-    return 0U64
 }
 
 pub impl LlvmCtx {

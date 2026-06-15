@@ -171,21 +171,6 @@ pub impl LlvmCtx {
     }
 }
 
-// Element-wise structural equality of two type-argument lists.
-fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
-    if a.count != b.count {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < a.count {
-        if !(c.typeRefEq(a: a[i], b: b[i])) {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
-
 pub impl LlvmCtx {
 
     // Bind one function/closure parameter (the LLVM arg at `argIdx`) as a local: an

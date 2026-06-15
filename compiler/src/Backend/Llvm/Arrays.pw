@@ -372,18 +372,6 @@ pub impl LlvmCtx {
     }
 }
 
-// Whether an array-valued expression is an existing PLACE (an array local or a
-// struct field) — copying it makes a new independent owner (value semantics). A
-// literal `[…]`, an append/call result, etc. already produce a fresh owned buffer
-// and must NOT be re-copied.
-fn arrayExprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: _, len: _) => { return true }
-        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
-        _ => { return false }
-    }
-}
-
 pub impl LlvmCtx {
 
     // Deep value-semantics copy of a struct value `v` of struct `sidx`: the aggregate
@@ -419,16 +407,6 @@ pub impl LlvmCtx {
             fi += 1
         }
         return agg
-    }
-}
-
-// Whether a non-array expression is an existing struct PLACE (Ident/Field) whose
-// value-copy must deep-copy array fields.
-fn structExprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: _, len: _) => { return true }
-        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
-        _ => { return false }
     }
 }
 

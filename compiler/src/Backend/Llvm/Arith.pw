@@ -32,22 +32,6 @@ pub impl LlvmCtx {
     }
 }
 
-// ---- checked arithmetic (overflow / divide-by-zero panic) ----
-//
-// add/sub/mul/div/rem route through the runtime `plew_<w><Op>` helpers (which
-// panic on overflow / div-by-zero), matching the C backend's checked floor
-// (spec/12: overflow and 0-division always panic; wrapping is opt-in). Bitwise,
-// shift, and comparison ops have no overflow and stay raw (buildBinOpS). The
-// wrapping* methods deliberately keep calling buildBinOpS (no check).
-
-// Width bucket 0..3 for an 8/16/32/64-bit integer type.
-fn llvmWidthIdx(w: U32) -> U64 {
-    if w <= 8U32 { return 0U64 }
-    if w <= 16U32 { return 1U64 }
-    if w <= 32U32 { return 2U64 }
-    return 3U64
-}
-
 pub impl LlvmCtx {
 
     // The i8/i16/i32/i64 LLVM type for a width bucket.
@@ -57,63 +41,6 @@ pub impl LlvmCtx {
         if wi == 2U64 { return self.i32ty }
         return self.i64ty
     }
-}
-
-// "Add"/"Sub"/"Mul"/"Div"/"Rem" bytes for an op (callers guard to these ops).
-fn checkedOpName(op: I64) -> Array[U8] {
-    if op == opAdd() { return "Add".bytes }
-    if op == opSub() { return "Sub".bytes }
-    if op == opMul() { return "Mul".bytes }
-    if op == opDiv() { return "Div".bytes }
-    return "Rem".bytes
-}
-
-// 0..4 op index for a checked binary op (Add/Sub/Mul/Div/Rem), for nameId.
-fn checkedOpIdx(op: I64) -> U64 {
-    if op == opAdd() { return 0U64 }
-    if op == opSub() { return 1U64 }
-    if op == opMul() { return 2U64 }
-    if op == opDiv() { return 3U64 }
-    return 4U64
-}
-
-// "i8".."u64" prefix bytes (signedness + width) for a `plew_<prefix><Op>` symbol.
-fn checkedPrefixBytes(unsigned: Bool, wi: U64) -> Array[U8] {
-    mut val b: Array[U8] = []
-    if unsigned { b.append(value: 117) } else { b.append(value: 105) }
-    if wi == 0U64 {
-        b.append(value: 56)
-        return b
-    }
-    if wi == 1U64 {
-        b.append(value: 49)
-        b.append(value: 54)
-        return b
-    }
-    if wi == 2U64 {
-        b.append(value: 51)
-        b.append(value: 50)
-        return b
-    }
-    b.append(value: 54)
-    b.append(value: 52)
-    return b
-}
-
-// The runtime symbol name for a checked binary op: `plew_<prefix><Op>`.
-fn checkedFnName(op: I64, unsigned: Bool, wi: U64) -> String {
-    mut val b: Array[U8] = "plew_".bytes
-    appendBytes(into: inout b, from: checkedPrefixBytes(unsigned: unsigned, wi: wi))
-    appendBytes(into: inout b, from: checkedOpName(op: op))
-    return stringFromBytesUnchecked(b)
-}
-
-// A stable, collision-free getOrDeclare id for a checked helper (base 9000;
-// op*8 + sign*? + width keeps the 48 binop slots distinct; Neg uses 9100+wi).
-fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
-    mut val sgn: U64 = 0U64
-    if unsigned { sgn = 4U64 }
-    return 9000U64 + checkedOpIdx(op: op) * 8U64 + sgn + wi
 }
 
 pub impl LlvmCtx {

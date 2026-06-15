@@ -26,26 +26,6 @@ pub impl LlvmCtx {
     }
 }
 
-// Whether an assoc-fn name is an operator-trait witness (binary add/sub/mul/div/
-// rem/bitand/bitor/bitxor/shl/shr, unary neg/not/bitnot). Used to seed reachable
-// emission for operator desugar, which leaves no call node to scan.
-fn isOperatorWitnessName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "add") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "sub") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "mul") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "div") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "rem") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitand") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitor") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitxor") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "shl") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "shr") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "neg") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "not") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitnot") { return true }
-    return false
-}
-
 pub impl LlvmCtx {
 
     inout fn inReachAssoc(fi: U64) -> Bool {

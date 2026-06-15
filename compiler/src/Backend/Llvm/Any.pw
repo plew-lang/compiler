@@ -13,64 +13,6 @@
 
 // Do two parameter lists have identical labels positionally (a conformance witness
 // reproduces the requirement's labels)?
-fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
-    if a.count != b.count {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < a.count {
-        if a[i].nameId != b[i].nameId {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
-
-// The witness method on concrete struct `sidx` for trait requirement `req` (matched
-// by name + param labels). c.arena.funcs.count if none.
-fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
-    val sd: StructDef = c.arena.structs[sidx]
-    val recvId: U64 = intern(c: inout c, start: sd.nameStart, len: sd.nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv && f.extId == 0U64 && !f.isAssoc {
-            if f.nameId == req.nameId && f.recvId == recvId {
-                if paramLabelsEqual(c: inout c, a: f.params, b: req.params) {
-                    return i
-                }
-            }
-        }
-        i += 1
-    }
-    return c.arena.funcs.count
-}
-
-// Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
-// Such a member is NOT callable through `any` (spec/08: two `any P` values need not
-// share a concrete type, so a `Self` argument cannot be supplied).
-fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
-    mut val i: U64 = 0
-    while i < req.params.count {
-        if rangeEquals(bytes: c.arena.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
-
-// Does requirement `req` return bare `Self`? Such a member IS callable through `any`
-// (spec/08): the output `Self` is re-erased to `any P` — the thunk re-boxes the
-// witness's concrete result into the existential. (A `Self` nested in a generic
-// return like `Optional[Self]` is not handled yet.)
-fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
-    if req.hasRet {
-        return rangeEquals(bytes: c.arena.bytes, start: req.retStart, len: req.retLen, kw: "Self")
-    }
-    return false
-}
 
 pub impl LlvmCtx {
 
@@ -230,16 +172,6 @@ pub impl LlvmCtx {
     }
 }
 
-// Whether `id` is an `any P` PLACE (an Ident or Field) whose copy into a new owner
-// must duplicate the boxed value (value semantics).
-fn anyExprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: _, len: _) => { return true }
-        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
-        _ => { return false }
-    }
-}
-
 pub impl LlvmCtx {
 
     // If `valueExpr` is an existing `any P` place being copied into a new owner, return
@@ -300,24 +232,6 @@ pub impl LlvmCtx {
         LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count))
         return g
     }
-}
-
-// The slot index (into the vtable) of trait `traitIdx`'s requirement matching method
-// (nameStart,nameLen) with the call's argument labels, or 0 (the reserved drop slot
-// = "not found"). Slot = 1 + requirement-declaration-index.
-fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-    val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    val t: TraitDef = c.decls.traits[traitIdx]
-    mut val ri: U64 = 0
-    while ri < t.reqs.count {
-        if t.reqs[ri].nameId == qNameId {
-            if c.paramsLabelsOk(params: t.reqs[ri].params, args: args) {
-                return ri + 1U64
-            }
-        }
-        ri += 1
-    }
-    return 0U64
 }
 
 pub impl LlvmCtx {

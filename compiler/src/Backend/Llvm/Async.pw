@@ -13,9 +13,6 @@
 // SAME C as the C backend, emitted by `--runtime` (external linkage so the IR
 // links against it). The state machine is the only part lowered to IR.
 
-fn isAsyncFn(c: inout Comp, fi: U64) -> Bool {
-    return c.arena.funcs[fi].isAsync
-}
 
 pub impl LlvmCtx {
 
@@ -258,13 +255,6 @@ pub impl LlvmCtx {
         val sub: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 2U64), anon())
         val valPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, sub, 1U64, anon())
         return LLVMBuildLoad2(self.b, self.i64ty, valPtr, anon())
-    }
-}
-
-fn exprIsAwaitLL(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Await(operand: _) => { return true }
-        _ => { return false }
     }
 }
 

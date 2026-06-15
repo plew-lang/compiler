@@ -121,23 +121,6 @@ pub impl LlvmCtx {
     }
 }
 
-// The Plew-type-kind tag (0 int/signed, 1 String, 2 Bool, 3 unsigned) of a type
-// name span. Used to tag locals/params at declaration.
-fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
-    // a `newtype` (spec/10) shares its underlying type's representation AND value-kind
-    // (a `newtype UserId = String` formats/dispatches as a String): resolve to the
-    // underlying first so a newtype local/cast carries the right kind (1=String, …).
-    val ntu: Bind = c.newtypeUnderName(start: tyStart, len: tyLen)
-    if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
-        return kindFromTySpan(c: inout c, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
-    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
-    if c.isFloatType(start: tyStart, len: tyLen) { return 4U64 }
-    if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
-    return 0U64
-}
-
 pub impl LlvmCtx {
 
     // Recover the type-kind of an expression: locals from the env tag; literals from

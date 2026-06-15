@@ -177,25 +177,6 @@ pub impl LlvmCtx {
     }
 }
 
-// Whether two parameter lists have the same type-name heads (ignoring views) —
-// i.e. they are the same overload signature differing only by a `#Ext` view.
-fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
-    if a.count != b.count {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < a.count {
-        if a[i].tyNameId != b[i].tyNameId {
-            return false
-        }
-        if a[i].tyIsArray != b[i].tyIsArray {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
-
 pub impl LlvmCtx {
 
     // The extension-view id active on an expression's value (spec/09): a direct

@@ -5,10 +5,15 @@
 # header, and `import`/`part` lines stay put. Same-module scope, so call sites are
 # unchanged. Run per file; build + fixpoint after a batch.
 #
-# Usage: relocate_free.py <part-file.pw> [<part-file.pw> ...]
+# Usage: relocate_free.py [--root <module-root.pw>] <part-file.pw> [<part-file.pw> ...]
+# --root defaults to the Frontend module root.
 import re, sys
 
 ROOT = "compiler/src/Frontend.pw"
+argv = sys.argv[1:]
+if argv and argv[0] == "--root":
+    ROOT = argv[1]
+    argv = argv[2:]
 fn_start = re.compile(r'^(export )?fn ')
 impl_start = re.compile(r'^(pub )?impl ')
 
@@ -29,7 +34,7 @@ def consume(lines, i):
     return block, j
 
 moved = []   # relocated free-fn blocks (with leading comments)
-for path in sys.argv[1:]:
+for path in argv:
     lines = open(path).read().split("\n")
     out = []; i = 0; pending = []
     # file header (comments/blanks/imports until first fn/impl) stays

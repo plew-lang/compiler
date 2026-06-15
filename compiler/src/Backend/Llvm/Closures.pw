@@ -3,17 +3,6 @@
 // ---- closures (lambda-lifted function values) ----
 //
 // The captures of closure `cloId`, in declaration order (the env struct layout).
-fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
-    mut val out: Array[CaptureEntry] = []
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
-        if c.monoWork.captures[i].closureId == cloId {
-            out.append(value: c.monoWork.captures[i])
-        }
-        i += 1
-    }
-    return out
-}
 
 pub impl LlvmCtx {
 
@@ -37,22 +26,6 @@ pub impl LlvmCtx {
         }
         return self.captureValueTy(c: inout c, cap: cap)
     }
-}
-
-// Whether the local named (start,len) is captured by some closure as a boxed
-// (`mut val`, shared-cell) capture — so its storage must be a heap cell that
-// outlives the declaring scope (Swift-style reference capture).
-fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
-        if c.monoWork.captures[i].boxed {
-            if spansEqual(c: inout c, aStart: c.monoWork.captures[i].nameStart, aLen: c.monoWork.captures[i].nameLen, bStart: start, bLen: len) {
-                return true
-            }
-        }
-        i += 1
-    }
-    return false
 }
 
 pub impl LlvmCtx {
@@ -80,29 +53,6 @@ pub impl LlvmCtx {
         }
         return self.cloIdx.count
     }
-}
-
-// Whether the LLVM backend can lower closure `cloId` yet: a `mut val` (boxed,
-// shared-cell) capture isn't modeled, so such a closure is left undeclared and its
-// literal rejects loudly (a clean unsupported, not a miscompile).
-fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
-        if c.monoWork.captures[i].closureId == cloId {
-            // a boxed (mut) capture is supported for a scalar/Bool cell; a boxed
-            // array/struct/generic-instance cell isn't modeled yet.
-            if c.monoWork.captures[i].boxed {
-                if c.monoWork.captures[i].isArray {
-                    return false
-                }
-                if c.isGenericInst(ref: c.monoWork.captures[i].ty) {
-                    return false
-                }
-            }
-        }
-        i += 1
-    }
-    return true
 }
 
 pub impl LlvmCtx {

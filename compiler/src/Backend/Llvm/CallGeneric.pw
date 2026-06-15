@@ -32,43 +32,6 @@ pub impl LlvmCtx {
     }
 }
 
-// The method-own type arguments of a call — those of the method's type params that
-// the receiver instance does NOT ground. Empty for an ordinary method (all its type
-// params are the receiver's). For a provided terminal copied onto a generic receiver
-// (`fold[B]` on `MapIter[I, F, B]`: own param B), infer the full arg list from the
-// call (inferFnArgs) and return the entries beyond the receiver's arg count.
-fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Array[U64] {
-    val mf: Func = c.arena.funcs[mfi]
-    val rcount: U64 = c.arena.types[instRef].args.count
-    if mf.typeParams.count <= rcount {
-        return []
-    }
-    val inferred: Array[U64] = c.inferFnArgs(f: mf, args: args)
-    mut val out: Array[U64] = []
-    mut val i: U64 = rcount
-    while i < inferred.count {
-        // a failed inference (0) or out-of-range ref would seed the env with the index-0
-        // dummy type and crash emission; bail to an empty list so the caller leaves the
-        // method undeclared and reports the honest "not emittable yet" instead.
-        if inferred[i] == 0U64 || inferred[i] >= c.arena.types.count {
-            return []
-        }
-        // only a primitive (int / float) own argument is supported for now: a scalar
-        // accumulator shares the item's i64/double representation, so the receiver-`B`
-        // (item) / own-`B` (accumulator) name collision is observably harmless. A
-        // String / struct / array accumulator (a different LLVM representation) is not
-        // yet emitted correctly through the collided env, so bail to the loud reject
-        // rather than miscompile.
-        val owt: TypeRef = c.arena.types[inferred[i]]
-        if !(c.isIntType(start: owt.nameStart, len: owt.nameLen) || c.isFloatType(start: owt.nameStart, len: owt.nameLen)) {
-            return []
-        }
-        out.append(value: inferred[i])
-        i += 1
-    }
-    return out
-}
-
 pub impl LlvmCtx {
 
     inout fn genGenMethodCall(c: inout Comp, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
@@ -208,34 +171,6 @@ pub impl LlvmCtx {
         LLVMBuildStore(self.b, v, slot)
         return slot
     }
-}
-
-// Emit a call argument for a parameter `p`: an array-literal arg is built with the
-// parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
-// i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
-// Whether (start,len) names a concrete value type (struct / enum / newtype /
-// primitive) — as opposed to a bare generic type parameter. A generic parameter
-// absorbs a `#`-view argument via inference (`T` binds to `S#P`), so the view-
-// invariance check below must not fire on it.
-fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
-    if c.isPrimType(start: start, len: len) {
-        return true
-    }
-    if c.structIndexByName(start: start, len: len) < c.arena.structs.count {
-        return true
-    }
-    if c.isEnumName(start: start, len: len) {
-        return true
-    }
-    val qid: U64 = intern(c: inout c, start: start, len: len)
-    mut val nti: U64 = 0
-    while nti < c.arena.newtypes.count {
-        if c.arena.newtypes[nti].nameId == qid {
-            return true
-        }
-        nti += 1
-    }
-    return false
 }
 
 pub impl LlvmCtx {

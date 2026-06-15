@@ -14,4 +14,1634 @@ import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bin
 import ./Frontend with { Comp, intern, spansEqual, compileErrorAt, digitStrU, runFrontend }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
+// ---- backend state (threaded inout through the emitters) ----
+//
+// Holds the LLVM context/module/builder, cached primitive types, the current
+// function being emitted, and the local-variable environment (a stack of
+// name-span -> alloca pointer + element type; searched from the end so a
+// shadowing redeclaration wins). `terminated` tracks whether the current basic
+// block already has a terminator, so we never append after a ret/br.
+struct LlvmCtx {
+    pub val ctx: LLVMContextRef
+    pub val mod: LLVMModuleRef
+    pub mut val b: LLVMBuilderRef
+    pub val i1ty: LLVMTypeRef
+    pub val i8ty: LLVMTypeRef
+    pub val i16ty: LLVMTypeRef
+    pub val i32ty: LLVMTypeRef
+    pub val i64ty: LLVMTypeRef
+    // the IEEE-754 double type for float (F64/F32) literals and arithmetic. F32 is
+    // represented as double for now (observably fine for the float floor; a true 32-bit
+    // float is additive).
+    pub val f64ty: LLVMTypeRef
+    pub val voidty: LLVMTypeRef
+    pub val ptrty: LLVMTypeRef
+    // String value type: { i8* data, i64 len } (ABI-identical to C PlewString).
+    pub val strty: LLVMTypeRef
+    // Array value type: { ptr data, i64 count } (element behind the pointer).
+    pub val arrayTy: LLVMTypeRef
+    // Closure / function-value type: { ptr fn, ptr env } — a lambda-lifted function
+    // pointer plus its captured-environment pointer (NULL for non-capturing). Every
+    // `fn(...) -> ...` value is this fat pointer; the callee ABI takes env first.
+    pub val closureTy: LLVMTypeRef
+    // Existential `any P` value type (spec/08): { ptr data, ptr vtable } — a fat
+    // pointer. `data` points at an ARC-boxed copy of the erased concrete value;
+    // `vtable` at the static per-(concrete-type, trait) thunk table (slot 0 = drop,
+    // slot 1.. = the trait's requirement methods in declaration order).
+    pub val anyTy: LLVMTypeRef
+    // built vtables, cached by (concrete struct idx, traitId, binding key) -> the LLVM
+    // global value. The binding key distinguishes existentials whose associated-type /
+    // type-parameter bindings differ (`any Add[I32,…]` vs `any Add[I64,…]`).
+    pub mut val anyVtType: Array[U64]
+    pub mut val anyVtTrait: Array[U64]
+    pub mut val anyVtBindKey: Array[U64]
+    pub mut val anyVtVal: Array[LLVMValueRef]
+    pub mut val curFn: LLVMValueRef
+    pub mut val terminated: Bool
+    // the function currently being emitted: is it `main` (returns i32 0), and its
+    // LLVM return type + whether it returns void (Plew `()`), so `return` and the
+    // fall-through epilogue terminate with the right instruction.
+    pub mut val curIsMain: Bool
+    pub mut val curRetVoid: Bool
+    pub mut val curRetTy: LLVMTypeRef
+    pub mut val curRetTyStart: U64
+    pub mut val curRetTyLen: U64
+    // the value yielded by the innermost value-position block (a `give` statement
+    // sets it; IfExpr reads it after emitting each branch block).
+    pub mut val giveValue: LLVMValueRef
+    // registered struct types (parallel: c.arena.structs index -> named LLVM struct type).
+    pub mut val structIdxs: Array[U64]
+    pub mut val structTys: Array[LLVMTypeRef]
+    // generic struct instances (parallel: TypeRef index -> LLVM type, generic def
+    // index). A generic-typed local points locStructIdx at the def and locTypeRef
+    // at the instance, so field access reuses the struct machinery + substitution.
+    pub mut val genStructRefs: Array[U64]
+    pub mut val genStructTys: Array[LLVMTypeRef]
+    pub mut val genStructDefs: Array[U64]
+    // registered enum types (parallel: c.arena.enums index -> named LLVM type
+    // `{ i64 tag, [maxWords x i64] payload }`).
+    pub mut val enumIdxs: Array[U64]
+    pub mut val enumTys: Array[LLVMTypeRef]
+    // generic enum instances (parallel: TypeRef ref -> LLVM type, generic def idx).
+    pub mut val genEnumRefs: Array[U64]
+    pub mut val genEnumTys: Array[LLVMTypeRef]
+    pub mut val genEnumDefs: Array[U64]
+    // a byte span whose content is "self" (appended to c.arena.bytes), to bind the
+    // method receiver as a local that the body's `self` identifiers resolve to.
+    pub mut val selfStart: U64
+    pub mut val selfLen: U64
+    // while emitting a generic method body, the receiver's instantiation TypeRef
+    // (so `self`'s LLVM type / struct-or-enum env resolve to the instance). 0 when
+    // emitting a free function or a non-generic method.
+    pub mut val curRecvInstRef: U64
+    // the expected type of the expression about to be emitted (a let annotation, a
+    // boxed field's pointee type, …) — used to infer a JSX generic-enum/struct
+    // construction whose own `ty` is the ungrounded head (`<Optional.Some v=42 />`
+    // with no `[I64]`). Consumed (cleared to 0) by the construction that uses it so
+    // it doesn't leak into sub-expressions. 0 when no expectation is in effect.
+    pub mut val expectedTy: U64
+    // the current function/closure's return TypeRef (0 = void / none), so a `return
+    // <Optional.Some …/>` infers its type args from the declared return type.
+    pub mut val curRetRef: U64
+    // the local index of the current function's FIRST body local (= param count
+    // incl. self), so scope-exit deinit drops skip params (borrows/inout self that
+    // the caller still owns and will deinit).
+    pub mut val curBodyMark: U64
+    // declared user functions, cached by c.arena.funcs index (parallel arrays), so a call
+    // resolves to the same LLVMValueRef without name mangling (the symbol name is a
+    // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
+    pub mut val fnIdx: Array[U64]
+    pub mut val fnVal: Array[LLVMValueRef]
+    pub mut val fnTy: Array[LLVMTypeRef]
+    // generic free-function instances (parallel: c.monoWork.fnInsts index -> value, type).
+    pub mut val genFnK: Array[U64]
+    pub mut val genFnVal: Array[LLVMValueRef]
+    pub mut val genFnTy: Array[LLVMTypeRef]
+    // generic-method instances, one per (method func, receiver instantiation):
+    // a method on a generic struct/enum (`box.get()`, `maybe.unwrapOr(...)`) is
+    // monomorphized per receiver instance, keyed by (genMethK, genMethInst).
+    pub mut val genMethK: Array[U64]
+    pub mut val genMethInst: Array[U64]
+    pub mut val genMethVal: Array[LLVMValueRef]
+    pub mut val genMethTy: Array[LLVMTypeRef]
+    // method-own type arguments for each gen-method slot (parallel to genMethK):
+    // a provided terminal with its own type params (`fold[B]` copied onto a generic
+    // receiver) instantiates per (mfi, instRef, ownArgs), since the same receiver
+    // instance folds into different accumulator types. Empty for ordinary methods
+    // whose type params are fully grounded by the receiver instance.
+    pub mut val genMethOwn: Array[Array[U64]]
+    // local environment (parallel arrays). `nLocals` is the logical count: blocks
+    // save it on entry and restore it on exit (lexical scope), so a shadowing
+    // binding inside a block leaves scope at the block's end and a later reference
+    // resolves to the outer binding. push overwrites the slot at `nLocals` (or
+    // appends), so the arrays may be longer than `nLocals` — only [0, nLocals) is live.
+    pub mut val nLocals: U64
+    pub mut val locStart: Array[U64]
+    pub mut val locLen: Array[U64]
+    pub mut val locPtr: Array[LLVMValueRef]
+    pub mut val locTy: Array[LLVMTypeRef]
+    // a small Plew-type-kind tag per local (0 int/signed, 1 String, 2 Bool, 3
+    // unsigned int), so String ==/!= and print pick the right lowering without
+    // c.cur.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
+    pub mut val locKind: Array[U64]
+    // per-local owning struct index (c.arena.structs.count = not a struct), so field
+    // access x.field can resolve the layout from a struct-typed local.
+    pub mut val locStructIdx: Array[U64]
+    // per-local array element type + is-array flag (for arr[i] / .append / .count).
+    pub mut val locIsArr: Array[Bool]
+    pub mut val locElemTy: Array[LLVMTypeRef]
+    pub mut val locElemKind: Array[U64]
+    pub mut val locTypeRef: Array[U64]
+    // per-array-local element struct index (c.arena.structs.count = element is not a
+    // struct), so `arr[i].field` on an array-of-struct LOCAL resolves the element.
+    pub mut val locElemStructIdx: Array[U64]
+    // per-array-local element TypeRef (0 = none), so `arr[i]` recovers the element's
+    // instance — a Ref (`Array[Ref[Box]]` -> `ys[0]->v`) or a nested array.
+    pub mut val locElemTypeRef: Array[U64]
+    // per-local ownership for scope-exit deinit (spec/03): `locOwned` = this local's
+    // value is owned here and must be deinit'd at scope exit (body locals + `move`
+    // params + a `move fn` self; false for inout/borrow params / by-value-self
+    // borrows the caller owns). `locMoved` = ownership was handed off (a `move`
+    // arg / `move fn` receiver / `move x`), so it is NOT deinit'd here.
+    pub mut val locOwned: Array[Bool]
+    pub mut val locMoved: Array[Bool]
+    // module-level variables (spec/15), parallel arrays indexed by `Comp.arena.globals`
+    // position. `genLlvmInitGlobals` builds the LLVM global `gvalRef[i]` and records
+    // the binding's recovered local metadata (so `seedGlobals` can re-register each
+    // global as a local at every body entry, routing reads/writes/type-recovery
+    // through the normal local machinery). The init values are stored once, in
+    // declaration order, by `plew_init_globals`.
+    pub mut val gvalRef: Array[LLVMValueRef] = []
+    pub mut val gvalLty: Array[LLVMTypeRef] = []
+    pub mut val gvalKind: Array[U64] = []
+    pub mut val gvalSidx: Array[U64] = []
+    pub mut val gvalIsArr: Array[Bool] = []
+    pub mut val gvalElemTy: Array[LLVMTypeRef] = []
+    pub mut val gvalElemKind: Array[U64] = []
+    pub mut val gvalTref: Array[U64] = []
+    pub mut val gvalElemStructIdx: Array[U64] = []
+    pub mut val gvalElemTypeRef: Array[U64] = []
+    // declared runtime/intrinsic functions, cached by name id (parallel arrays).
+    pub mut val declId: Array[U64]
+    pub mut val declFn: Array[LLVMValueRef]
+    pub mut val declTy: Array[LLVMTypeRef]
+    // associated functions reached (called) from emitted code — only these are
+    // emitted, so derive-generated but uncalled witnesses (the LLVM backend lowers
+    // Eq/Ord natively, bypassing them) aren't emitted into failing bodies.
+    pub mut val reachAssoc: Array[U64]
+    // lambda-lifted closures, cached by Closure-expr arena id (parallel arrays):
+    // the emitted `__closure<id>` LLVM function value and its function type (env
+    // pointer first param). A closure literal builds a {fn, env} value from these.
+    pub mut val cloIdx: Array[U64]
+    pub mut val cloVal: Array[LLVMValueRef]
+    pub mut val cloTy: Array[LLVMTypeRef]
+    // function-value thunks, cached by c.arena.funcs index: a bare function reference
+    // (`val g = twice`) becomes a closure {thunk, null}, where the thunk adapts the
+    // plain function to the env-first closure ABI by forwarding its arguments.
+    pub mut val thunkIdx: Array[U64]
+    pub mut val thunkVal: Array[LLVMValueRef]
+    pub mut val thunkTy: Array[LLVMTypeRef]
+    // provided trait methods reached (called) during emission: declared lazily (so
+    // an uncalled std-trait adapter method — map/filter, whose body constructs an
+    // unsupported adapter — is never emitted), then their bodies drained after the
+    // main pass (a body may reach further provided methods — fixpoint).
+    pub mut val provEmit: Array[U64]
+    // generic-method instances declared LAZILY on demand (a std/non-entry-module
+    // generic method — Optional.unwrapOr, MapIter.next — reached by a call): the
+    // genMeth* slot index is queued here and its body drained after the main pass,
+    // looping until the queue stops growing (a body may reach further ones).
+    pub mut val genMethEmit: Array[U64]
+    // ---- async (spec/14): stackless state machine, mirrors Codegen/Async.pw ----
+    // PlewPromise value type { i32 done, i64 value, ptr k, ptr kframe } — ABI-
+    // identical to the C runtime's PlewPromise (the resume continuation `k` is a
+    // void(*)(void*); `kframe` is its frame). Awaited promises are PlewPromise*.
+    pub mut val promiseTy: LLVMTypeRef
+    // emitting an async fn's resume body? When set, `let`/match-bind storage is a
+    // frame field (survives `await` suspensions) not an alloca, `return` resolves
+    // `__self`, and a head `await` suspends.
+    pub mut val curAsync: Bool
+    // the current resume fn's frame pointer (void* arg 0, used as the frame base),
+    // its named struct type `{i32 state, ptr self, ptr sub, <params>, <locals>}`,
+    // the resume fn value (stored as a suspended promise's continuation), the entry
+    // dispatch `switch` (await points add a `case state -> resume block`), the await
+    // state counter (1-based), and the next frame field index to hand a `let`/bind.
+    pub mut val curFrameBase: LLVMValueRef
+    pub mut val curFrameTy: LLVMTypeRef
+    pub mut val curResumeFn: LLVMValueRef
+    pub mut val curAsyncSwitch: LLVMValueRef
+    pub mut val curAsyncState: U64
+    pub mut val asyncFieldNext: U64
+    // per async fn (parallel, keyed by c.arena.funcs index): its frame struct type and
+    // resume fn value, so the entry/resume/await sites all agree on the layout.
+    pub mut val asyncFnIdx: Array[U64]
+    pub mut val asyncFrameTy: Array[LLVMTypeRef]
+    pub mut val asyncResumeFn: Array[LLVMValueRef]
+    // the current resume fn's per-field frame-slot GEPs, ALL built in the resume
+    // entry block (which dominates every resume block reached via the dispatch
+    // switch) — caching them there avoids "instruction does not dominate all uses"
+    // when a field GEP built mid-body is read in a switch-reachable resume block.
+    pub mut val asyncSlotPtrs: Array[LLVMValueRef]
+    // loop break/continue target blocks (a stack — innermost loop on top), so a
+    // `break` branches to the enclosing loop's end and `continue` to its
+    // header/step. Pushed by while/for codegen, popped at the loop's end. The
+    // arrays are reused buffers; loopDepth is the live count (overwrite-in-place,
+    // matching the local-scope idiom — Array has no pop).
+    pub mut val loopBreakBB: Array[LLVMBasicBlockRef]
+    pub mut val loopContBB: Array[LLVMBasicBlockRef]
+    pub mut val loopDepth: U64
+}
+
+// ---- libLLVM-C bindings (raw FFI floor; positional, no labels) ----
+//
+// Opaque handles are void* ABI-identical to the real LLVM `…Opaque *` typedefs,
+// so no <llvm-c/*.h> include is needed — the compiler self-emits the prototypes.
+extern(c) {
+    type LLVMContextRef
+    type LLVMModuleRef
+    type LLVMTypeRef
+    type LLVMValueRef
+    type LLVMBasicBlockRef
+    type LLVMBuilderRef
+
+    // Context / module.
+    fn LLVMContextCreate() -> LLVMContextRef
+    fn LLVMModuleCreateWithNameInContext(name~: CPtr[U8], ctx~: LLVMContextRef) -> LLVMModuleRef
+    fn LLVMPrintModuleToString(m~: LLVMModuleRef) -> CPtr[U8]
+    fn LLVMDisposeMessage(msg~: CPtr[U8])
+
+    // Types.
+    fn LLVMInt1TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt8TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt16TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt32TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMInt64TypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMDoubleTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMConstRealOfStringAndSize(ty~: LLVMTypeRef, text~: CPtr[U8], len~: U64) -> LLVMValueRef
+    fn LLVMVoidTypeInContext(ctx~: LLVMContextRef) -> LLVMTypeRef
+    fn LLVMPointerTypeInContext(ctx~: LLVMContextRef, addrSpace~: U32) -> LLVMTypeRef
+    fn LLVMStructTypeInContext(ctx~: LLVMContextRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32) -> LLVMTypeRef
+    fn LLVMStructCreateNamed(ctx~: LLVMContextRef, name~: CPtr[U8]) -> LLVMTypeRef
+    fn LLVMStructSetBody(structTy~: LLVMTypeRef, elemTypes~: CPtr[LLVMTypeRef], count~: U64, packed~: I32)
+    fn LLVMCountStructElementTypes(structTy~: LLVMTypeRef) -> U32
+    fn LLVMArrayType2(elemTy~: LLVMTypeRef, count~: U64) -> LLVMTypeRef
+    fn LLVMBuildStructGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, idx~: U64, name~: CPtr[U8]) -> LLVMValueRef
+    // count is the C API's `unsigned`; declared U64 here because Plew has no
+    // narrowing `as` yet (an Array.count is U64). Safe on LP64 (arm64/x86-64):
+    // the callee reads the low 32 bits, and our counts are tiny. Revisit once
+    // integer narrowing (wrapping / TryFrom) lands.
+    fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U64, isVarArg~: I32) -> LLVMTypeRef
+
+    // Functions / basic blocks / params.
+    fn LLVMAddFunction(m~: LLVMModuleRef, name~: CPtr[U8], fnTy~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMGetParam(func~: LLVMValueRef, index~: U64) -> LLVMValueRef
+    fn LLVMAppendBasicBlockInContext(ctx~: LLVMContextRef, func~: LLVMValueRef, name~: CPtr[U8]) -> LLVMBasicBlockRef
+
+    // Constants / introspection.
+    fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
+    fn LLVMConstNull(ty~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMIsNull(v~: LLVMValueRef) -> I32
+    fn LLVMSizeOf(ty~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMBuildGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, indices~: CPtr[LLVMValueRef], numIndices~: U64, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMTypeOf(v~: LLVMValueRef) -> LLVMTypeRef
+    fn LLVMGetIntTypeWidth(ty~: LLVMTypeRef) -> U32
+    fn LLVMGetTypeKind(ty~: LLVMTypeRef) -> U32
+    fn LLVMStructGetTypeAtIndex(structTy~: LLVMTypeRef, i~: U32) -> LLVMTypeRef
+
+    // Builder + instructions.
+    fn LLVMCreateBuilderInContext(ctx~: LLVMContextRef) -> LLVMBuilderRef
+    fn LLVMPositionBuilderAtEnd(b~: LLVMBuilderRef, bb~: LLVMBasicBlockRef)
+    fn LLVMGetInsertBlock(b~: LLVMBuilderRef) -> LLVMBasicBlockRef
+    fn LLVMBuildRet(b~: LLVMBuilderRef, v~: LLVMValueRef) -> LLVMValueRef
+    fn LLVMBuildRetVoid(b~: LLVMBuilderRef) -> LLVMValueRef
+    fn LLVMBuildCall2(b~: LLVMBuilderRef, fnTy~: LLVMTypeRef, func~: LLVMValueRef, args~: CPtr[LLVMValueRef], numArgs~: U64, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSub(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildMul(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFAdd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFSub(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFMul(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFDiv(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFNeg(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFCmp(b~: LLVMBuilderRef, pred~: U32, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSDiv(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSRem(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildUDiv(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildURem(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildLShr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildNeg(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildNot(b~: LLVMBuilderRef, v~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAnd(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildOr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildXor(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildShl(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAShr(b~: LLVMBuilderRef, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildICmp(b~: LLVMBuilderRef, pred~: U32, lhs~: LLVMValueRef, rhs~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSelect(b~: LLVMBuilderRef, cond~: LLVMValueRef, thenV~: LLVMValueRef, elseV~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildZExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildUIToFP(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFPToSI(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildFPToUI(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildSExt(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildTrunc(b~: LLVMBuilderRef, v~: LLVMValueRef, destTy~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildAlloca(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMGetEntryBasicBlock(fn~: LLVMValueRef) -> LLVMBasicBlockRef
+    fn LLVMGetBasicBlockTerminator(bb~: LLVMBasicBlockRef) -> LLVMValueRef
+    fn LLVMPositionBuilderBefore(b~: LLVMBuilderRef, instr~: LLVMValueRef)
+    fn LLVMBuildLoad2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildStore(b~: LLVMBuilderRef, v~: LLVMValueRef, ptr~: LLVMValueRef) -> LLVMValueRef
+    fn LLVMBuildBr(b~: LLVMBuilderRef, dest~: LLVMBasicBlockRef) -> LLVMValueRef
+    fn LLVMBuildCondBr(b~: LLVMBuilderRef, cond~: LLVMValueRef, thenBB~: LLVMBasicBlockRef, elseBB~: LLVMBasicBlockRef) -> LLVMValueRef
+    fn LLVMBuildUnreachable(b~: LLVMBuilderRef) -> LLVMValueRef
+    fn LLVMBuildSwitch(b~: LLVMBuilderRef, v~: LLVMValueRef, elseBB~: LLVMBasicBlockRef, numCases~: U32) -> LLVMValueRef
+    fn LLVMAddCase(switch~: LLVMValueRef, onVal~: LLVMValueRef, dest~: LLVMBasicBlockRef)
+    fn LLVMBuildPhi(b~: LLVMBuilderRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMAddIncoming(phi~: LLVMValueRef, vals~: CPtr[LLVMValueRef], blocks~: CPtr[LLVMBasicBlockRef], count~: U64)
+
+    // Aggregates / globals (String = {ptr, i64}).
+    fn LLVMGetUndef(ty~: LLVMTypeRef) -> LLVMValueRef
+    fn LLVMBuildInsertValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, elt~: LLVMValueRef, index~: U64, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildExtractValue(b~: LLVMBuilderRef, agg~: LLVMValueRef, index~: U64, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMBuildGlobalStringPtr(b~: LLVMBuilderRef, str~: CPtr[U8], name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMAddGlobal(m~: LLVMModuleRef, ty~: LLVMTypeRef, name~: CPtr[U8]) -> LLVMValueRef
+    fn LLVMSetInitializer(global~: LLVMValueRef, val~: LLVMValueRef)
+    fn LLVMSetGlobalConstant(global~: LLVMValueRef, isConstant~: I32)
+    fn LLVMConstArray2(elemTy~: LLVMTypeRef, vals~: CPtr[LLVMValueRef], count~: U64) -> LLVMValueRef
+}
+
 part ./Backend/Llvm
+
+// ---- relocated free helpers (were in parts; kept at module root so parts are impl-only) ----
+
+fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].nameId != b[i].nameId {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// The witness method on concrete struct `sidx` for trait requirement `req` (matched
+// by name + param labels). c.arena.funcs.count if none.
+fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
+    val sd: StructDef = c.arena.structs[sidx]
+    val recvId: U64 = intern(c: inout c, start: sd.nameStart, len: sd.nameLen)
+    mut val i: U64 = 0
+    while i < c.arena.funcs.count {
+        val f: Func = c.arena.funcs[i]
+        if f.hasRecv && f.extId == 0U64 && !f.isAssoc {
+            if f.nameId == req.nameId && f.recvId == recvId {
+                if paramLabelsEqual(c: inout c, a: f.params, b: req.params) {
+                    return i
+                }
+            }
+        }
+        i += 1
+    }
+    return c.arena.funcs.count
+}
+
+// Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
+// Such a member is NOT callable through `any` (spec/08: two `any P` values need not
+// share a concrete type, so a `Self` argument cannot be supplied).
+fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
+    mut val i: U64 = 0
+    while i < req.params.count {
+        if rangeEquals(bytes: c.arena.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// Does requirement `req` return bare `Self`? Such a member IS callable through `any`
+// (spec/08): the output `Self` is re-erased to `any P` — the thunk re-boxes the
+// witness's concrete result into the existential. (A `Self` nested in a generic
+// return like `Optional[Self]` is not handled yet.)
+fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
+    if req.hasRet {
+        return rangeEquals(bytes: c.arena.bytes, start: req.retStart, len: req.retLen, kw: "Self")
+    }
+    return false
+}
+
+// Whether `id` is an `any P` PLACE (an Ident or Field) whose copy into a new owner
+// must duplicate the boxed value (value semantics).
+fn anyExprIsPlace(c: inout Comp, id: U64) -> Bool {
+    match c.arena.exprs[id] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
+// The slot index (into the vtable) of trait `traitIdx`'s requirement matching method
+// (nameStart,nameLen) with the call's argument labels, or 0 (the reserved drop slot
+// = "not found"). Slot = 1 + requirement-declaration-index.
+fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
+    val t: TraitDef = c.decls.traits[traitIdx]
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        if t.reqs[ri].nameId == qNameId {
+            if c.paramsLabelsOk(params: t.reqs[ri].params, args: args) {
+                return ri + 1U64
+            }
+        }
+        ri += 1
+    }
+    return 0U64
+}
+
+// ---- checked arithmetic (overflow / divide-by-zero panic) ----
+//
+// add/sub/mul/div/rem route through the runtime `plew_<w><Op>` helpers (which
+// panic on overflow / div-by-zero), matching the C backend's checked floor
+// (spec/12: overflow and 0-division always panic; wrapping is opt-in). Bitwise,
+// shift, and comparison ops have no overflow and stay raw (buildBinOpS). The
+// wrapping* methods deliberately keep calling buildBinOpS (no check).
+// Width bucket 0..3 for an 8/16/32/64-bit integer type.
+fn llvmWidthIdx(w: U32) -> U64 {
+    if w <= 8U32 { return 0U64 }
+    if w <= 16U32 { return 1U64 }
+    if w <= 32U32 { return 2U64 }
+    return 3U64
+}
+
+// "Add"/"Sub"/"Mul"/"Div"/"Rem" bytes for an op (callers guard to these ops).
+fn checkedOpName(op: I64) -> Array[U8] {
+    if op == opAdd() { return "Add".bytes }
+    if op == opSub() { return "Sub".bytes }
+    if op == opMul() { return "Mul".bytes }
+    if op == opDiv() { return "Div".bytes }
+    return "Rem".bytes
+}
+
+// 0..4 op index for a checked binary op (Add/Sub/Mul/Div/Rem), for nameId.
+fn checkedOpIdx(op: I64) -> U64 {
+    if op == opAdd() { return 0U64 }
+    if op == opSub() { return 1U64 }
+    if op == opMul() { return 2U64 }
+    if op == opDiv() { return 3U64 }
+    return 4U64
+}
+
+// "i8".."u64" prefix bytes (signedness + width) for a `plew_<prefix><Op>` symbol.
+fn checkedPrefixBytes(unsigned: Bool, wi: U64) -> Array[U8] {
+    mut val b: Array[U8] = []
+    if unsigned { b.append(value: 117) } else { b.append(value: 105) }
+    if wi == 0U64 {
+        b.append(value: 56)
+        return b
+    }
+    if wi == 1U64 {
+        b.append(value: 49)
+        b.append(value: 54)
+        return b
+    }
+    if wi == 2U64 {
+        b.append(value: 51)
+        b.append(value: 50)
+        return b
+    }
+    b.append(value: 54)
+    b.append(value: 52)
+    return b
+}
+
+// The runtime symbol name for a checked binary op: `plew_<prefix><Op>`.
+fn checkedFnName(op: I64, unsigned: Bool, wi: U64) -> String {
+    mut val b: Array[U8] = "plew_".bytes
+    appendBytes(into: inout b, from: checkedPrefixBytes(unsigned: unsigned, wi: wi))
+    appendBytes(into: inout b, from: checkedOpName(op: op))
+    return stringFromBytesUnchecked(b)
+}
+
+// A stable, collision-free getOrDeclare id for a checked helper (base 9000;
+// op*8 + sign*? + width keeps the 48 binop slots distinct; Neg uses 9100+wi).
+fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
+    mut val sgn: U64 = 0U64
+    if unsigned { sgn = 4U64 }
+    return 9000U64 + checkedOpIdx(op: op) * 8U64 + sgn + wi
+}
+
+// Whether an array-valued expression is an existing PLACE (an array local or a
+// struct field) — copying it makes a new independent owner (value semantics). A
+// literal `[…]`, an append/call result, etc. already produce a fresh owned buffer
+// and must NOT be re-copied.
+fn arrayExprIsPlace(c: inout Comp, id: U64) -> Bool {
+    match c.arena.exprs[id] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
+// Whether a non-array expression is an existing struct PLACE (Ident/Field) whose
+// value-copy must deep-copy array fields.
+fn structExprIsPlace(c: inout Comp, id: U64) -> Bool {
+    match c.arena.exprs[id] {
+        Expr.Ident(start: _, len: _) => { return true }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        _ => { return false }
+    }
+}
+
+// Whether an assoc-fn name is an operator-trait witness (binary add/sub/mul/div/
+// rem/bitand/bitor/bitxor/shl/shr, unary neg/not/bitnot). Used to seed reachable
+// emission for operator desugar, which leaves no call node to scan.
+fn isOperatorWitnessName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "add") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "sub") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "mul") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "div") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "rem") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitand") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitor") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitxor") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "shl") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "shr") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "neg") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "not") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "bitnot") { return true }
+    return false
+}
+
+fn isAsyncFn(c: inout Comp, fi: U64) -> Bool {
+    return c.arena.funcs[fi].isAsync
+}
+
+fn exprIsAwaitLL(c: inout Comp, id: U64) -> Bool {
+    match c.arena.exprs[id] {
+        Expr.Await(operand: _) => { return true }
+        _ => { return false }
+    }
+}
+
+fn llvmIntEq() -> U32 { return 32U32 }
+
+fn llvmIntNe() -> U32 { return 33U32 }
+
+fn llvmIntSlt() -> U32 { return 40U32 }
+
+fn llvmIntSle() -> U32 { return 41U32 }
+
+fn llvmIntSgt() -> U32 { return 38U32 }
+
+fn llvmIntSge() -> U32 { return 39U32 }
+
+fn llvmIntUlt() -> U32 { return 36U32 }
+
+fn llvmIntUle() -> U32 { return 37U32 }
+
+fn llvmIntUgt() -> U32 { return 34U32 }
+
+fn llvmIntUge() -> U32 { return 35U32 }
+
+// Whether two parameter lists have the same type-name heads (ignoring views) —
+// i.e. they are the same overload signature differing only by a `#Ext` view.
+fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if a[i].tyNameId != b[i].tyNameId {
+            return false
+        }
+        if a[i].tyIsArray != b[i].tyIsArray {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// The method-own type arguments of a call — those of the method's type params that
+// the receiver instance does NOT ground. Empty for an ordinary method (all its type
+// params are the receiver's). For a provided terminal copied onto a generic receiver
+// (`fold[B]` on `MapIter[I, F, B]`: own param B), infer the full arg list from the
+// call (inferFnArgs) and return the entries beyond the receiver's arg count.
+fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Array[U64] {
+    val mf: Func = c.arena.funcs[mfi]
+    val rcount: U64 = c.arena.types[instRef].args.count
+    if mf.typeParams.count <= rcount {
+        return []
+    }
+    val inferred: Array[U64] = c.inferFnArgs(f: mf, args: args)
+    mut val out: Array[U64] = []
+    mut val i: U64 = rcount
+    while i < inferred.count {
+        // a failed inference (0) or out-of-range ref would seed the env with the index-0
+        // dummy type and crash emission; bail to an empty list so the caller leaves the
+        // method undeclared and reports the honest "not emittable yet" instead.
+        if inferred[i] == 0U64 || inferred[i] >= c.arena.types.count {
+            return []
+        }
+        // only a primitive (int / float) own argument is supported for now: a scalar
+        // accumulator shares the item's i64/double representation, so the receiver-`B`
+        // (item) / own-`B` (accumulator) name collision is observably harmless. A
+        // String / struct / array accumulator (a different LLVM representation) is not
+        // yet emitted correctly through the collided env, so bail to the loud reject
+        // rather than miscompile.
+        val owt: TypeRef = c.arena.types[inferred[i]]
+        if !(c.isIntType(start: owt.nameStart, len: owt.nameLen) || c.isFloatType(start: owt.nameStart, len: owt.nameLen)) {
+            return []
+        }
+        out.append(value: inferred[i])
+        i += 1
+    }
+    return out
+}
+
+// Emit a call argument for a parameter `p`: an array-literal arg is built with the
+// parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
+// i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
+// Whether (start,len) names a concrete value type (struct / enum / newtype /
+// primitive) — as opposed to a bare generic type parameter. A generic parameter
+// absorbs a `#`-view argument via inference (`T` binds to `S#P`), so the view-
+// invariance check below must not fire on it.
+fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
+    if c.isPrimType(start: start, len: len) {
+        return true
+    }
+    if c.structIndexByName(start: start, len: len) < c.arena.structs.count {
+        return true
+    }
+    if c.isEnumName(start: start, len: len) {
+        return true
+    }
+    val qid: U64 = intern(c: inout c, start: start, len: len)
+    mut val nti: U64 = 0
+    while nti < c.arena.newtypes.count {
+        if c.arena.newtypes[nti].nameId == qid {
+            return true
+        }
+        nti += 1
+    }
+    return false
+}
+
+fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
+    mut val out: Array[CaptureEntry] = []
+    mut val i: U64 = 0
+    while i < c.monoWork.captures.count {
+        if c.monoWork.captures[i].closureId == cloId {
+            out.append(value: c.monoWork.captures[i])
+        }
+        i += 1
+    }
+    return out
+}
+
+// Whether the local named (start,len) is captured by some closure as a boxed
+// (`mut val`, shared-cell) capture — so its storage must be a heap cell that
+// outlives the declaring scope (Swift-style reference capture).
+fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.monoWork.captures.count {
+        if c.monoWork.captures[i].boxed {
+            if spansEqual(c: inout c, aStart: c.monoWork.captures[i].nameStart, aLen: c.monoWork.captures[i].nameLen, bStart: start, bLen: len) {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether the LLVM backend can lower closure `cloId` yet: a `mut val` (boxed,
+// shared-cell) capture isn't modeled, so such a closure is left undeclared and its
+// literal rejects loudly (a clean unsupported, not a miscompile).
+fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
+    mut val i: U64 = 0
+    while i < c.monoWork.captures.count {
+        if c.monoWork.captures[i].closureId == cloId {
+            // a boxed (mut) capture is supported for a scalar/Bool cell; a boxed
+            // array/struct/generic-instance cell isn't modeled yet.
+            if c.monoWork.captures[i].boxed {
+                if c.monoWork.captures[i].isArray {
+                    return false
+                }
+                if c.isGenericInst(ref: c.monoWork.captures[i].ty) {
+                    return false
+                }
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+export fn emitLlvm(c: inout Comp) {
+    val ctx: LLVMContextRef = LLVMContextCreate()
+    val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
+    val ptrty: LLVMTypeRef = LLVMPointerTypeInContext(ctx, 0U32)
+    val i64ty: LLVMTypeRef = LLVMInt64TypeInContext(ctx)
+    // String = { i8* data, i64 len } (ABI-identical to the C runtime's PlewString).
+    mut val strelems: Array[LLVMTypeRef] = []
+    strelems.append(value: ptrty)
+    strelems.append(value: i64ty)
+    val strty: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(strelems), 2U64, 0I32)
+    mut val arrelems: Array[LLVMTypeRef] = []
+    arrelems.append(value: ptrty)
+    arrelems.append(value: i64ty)
+    val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(arrelems), 2U64, 0I32)
+    mut val cloelems: Array[LLVMTypeRef] = []
+    cloelems.append(value: ptrty)
+    cloelems.append(value: ptrty)
+    val closureTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(cloelems), 2U64, 0I32)
+    // any P = { ptr data, ptr vtable } (fat pointer for existentials).
+    mut val anyelems: Array[LLVMTypeRef] = []
+    anyelems.append(value: ptrty)
+    anyelems.append(value: ptrty)
+    val anyTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(anyelems), 2U64, 0I32)
+    // PlewPromise = { i32 done, i64 value, ptr k, ptr kframe } (ABI-identical to
+    // the C runtime). Awaited values are type-erased through `value` (i64).
+    mut val promelems: Array[LLVMTypeRef] = []
+    promelems.append(value: LLVMInt32TypeInContext(ctx))
+    promelems.append(value: i64ty)
+    promelems.append(value: ptrty)
+    promelems.append(value: ptrty)
+    val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
+    mut val st: LlvmCtx = <LlvmCtx
+        ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
+        i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
+        i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
+        voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
+        curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
+        curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
+        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethOwn=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] locElemTypeRef=[] locOwned=[] locMoved=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] provEmit=[] genMethEmit=[]
+        promiseTy=promiseTy curAsync=false
+        curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
+        curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
+        curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
+        curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopDepth=0 />
+
+    // a "self" byte span (appended past the source) to bind method receivers.
+    st.selfStart = c.arena.bytes.count
+    c.appendSrc(from: "self".bytes)
+    st.selfLen = 4U64
+
+    // register user struct + enum types, then generic struct/enum instances. ALL
+    // NAMES first (plain structs, plain enums, generic-struct instances, generic-enum
+    // instances), THEN all cross-referencing bodies — so a struct/enum body may hold a
+    // member of generic-instance type (`struct Pair { a: Optional[I64] }`) regardless
+    // of declaration order. (Plain enums and generic-enum instances are self-contained
+    // `{ i64 tag, [maxWords] payload }`, sized by the front-end, so their bodies are
+    // set with their names; only struct + generic-struct bodies cross-reference named
+    // types, so those are deferred to the body passes.)
+    st.registerStructNames(c: inout c)
+    st.registerEnums(c: inout c)
+    st.registerGenStructNames(c: inout c)
+    st.registerGenEnums(c: inout c)
+    st.registerStructBodies(c: inout c)
+    st.registerGenStructBodies(c: inout c)
+
+    // determine which assoc fns are actually reached (called) before declaring.
+    st.collectReachableAssoc(c: inout c)
+
+    // pass 1: declare all plain user functions + generic free-fn instances + generic
+    // method instances (one per receiver instantiation).
+    st.declareUserFns(c: inout c)
+    st.declareGenFns(c: inout c)
+    st.declareGenMethods(c: inout c)
+    // async fns: build each frame struct + resume fn, and a non-main entry symbol
+    // in the fnIdx table (so a call `doubler(x: 21)` resolves to a promise-returning
+    // call). Done before bodies emit so main's resume can call them.
+    st.declareAsyncFns(c: inout c)
+    // declare lambda-lifted closures (after the named types + functions they may
+    // reference exist), so a closure literal can build its {fn, env} value.
+    st.collectClosures(c: inout c)
+    // declare function-value thunks (a bare function reference -> {thunk, null}).
+    st.collectThunks(c: inout c)
+
+    // module-level variables (spec/15): emit `plew_init_globals` (one body that runs
+    // every global's initializer once) and record each global's metadata, BEFORE any
+    // function body so `seedGlobals` can re-bind them at every body entry. Done after
+    // pass-1 declarations so an initializer may call a user function.
+    st.genLlvmInitGlobals(c: inout c)
+
+    // pass 2: emit `main` and every plain user function's body.
+    mut val fi: U64 = 0
+    mut val foundMain: Bool = false
+    while fi < c.arena.funcs.count {
+        // gen mode (spec/16): the program is the synthesized harness main at
+        // `genMainIdx`; the user's own `main` is dead (it calls macro-generated
+        // functions that don't exist in this build), so it is neither the entry
+        // main nor a plain fn. Treat only genMainIdx as main here.
+        mut val isMainFn: Bool = c.nameIsMain(f: c.arena.funcs[fi])
+        if c.genMode {
+            if isMainFn {
+                if fi != c.genMainIdx {
+                    isMainFn = false
+                }
+            }
+        }
+        if isMainFn {
+            // an `async fn main` is lowered with the rest of the async fns (entry +
+            // resume + drain the event loop); a plain main is the synchronous shape.
+            if !(isAsyncFn(c: inout c, fi: fi)) {
+                st.genLlvmMain(c: inout c, fi: fi)
+            }
+            foundMain = true
+        } else {
+            if c.genMode && c.nameIsMain(f: c.arena.funcs[fi]) {
+                // the dead user main: skip entirely.
+            } else {
+                if st.isPlainUserFn(c: inout c, fi: fi) {
+                    st.genLlvmFunc(c: inout c, fi: fi)
+                }
+            }
+        }
+        fi += 1
+    }
+    // async fn entry + resume bodies (main's entry drains the loop).
+    st.emitAsyncFns(c: inout c)
+    // generic free-function + generic-method instance bodies.
+    st.emitGenFns(c: inout c)
+    st.emitGenMethods(c: inout c)
+    // lambda-lifted closure bodies + function-value thunks.
+    st.emitClosures(c: inout c)
+    st.emitThunks(c: inout c)
+    // provided trait methods + lazily-declared std/generic methods reached during
+    // the passes above. Both queues can grow as bodies emit (a provided body calls
+    // a std generic method, a generic body reaches a provided one), so drain to a
+    // fixpoint: loop until neither queue advances.
+    mut val provDone: U64 = 0
+    mut val genmDone: U64 = 0
+    mut val draining: Bool = true
+    while draining {
+        while provDone < st.provEmit.count {
+            st.genLlvmFuncBody(c: inout c, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])])
+            provDone += 1
+        }
+        while genmDone < st.genMethEmit.count {
+            st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone])
+            genmDone += 1
+        }
+        if provDone >= st.provEmit.count {
+            if genmDone >= st.genMethEmit.count {
+                draining = false
+            }
+        }
+    }
+    if !(foundMain) {
+        compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
+    }
+
+    val ir: CPtr[U8] = LLVMPrintModuleToString(st.mod)
+    write(s: stringFromCString(ir))
+    LLVMDisposeMessage(ir)
+}
+
+// A unique, stable LLVM symbol for the module-level variable at lowering index `idx`
+// ("plew.g.<idx>"), so a same-named user local never collides with the global symbol.
+fn globalSymbol(idx: U64) -> String {
+    mut val s: Array[U8] = []
+    appendBytes(into: inout s, from: "plew.g.".bytes)
+    appendU64Dec(into: inout s, n: idx)
+    return stringFromBytesUnchecked(s)
+}
+
+// If field `f` is of array type — declared `Array[E]`, or a type param that
+// grounds (under the active env) to `Array[E]` — the element type ref E, else 0.
+fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
+    if f.tyIsArray {
+        if f.ty != 0U64 {
+            val t: TypeRef = c.arena.types[f.ty]
+            if t.args.count > 0U64 {
+                return t.args[0]
+            }
+        }
+        return 0U64
+    }
+    if f.ty != 0U64 {
+        if c.cur.typeParams.count > 0U64 {
+            val g: U64 = c.groundTypeRef(ref: f.ty)
+            val gt: TypeRef = c.arena.types[g]
+            if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
+                if gt.args.count > 0U64 {
+                    return gt.args[0]
+                }
+            }
+        }
+    }
+    return 0U64
+}
+
+// (diagnostic) A source span as a String — for the "unsupported" error messages
+// (exprFormName) that name the offending identifier/field/call.
+fn dbgSpan(c: inout Comp, start: U64, len: U64) -> String {
+    mut val nm: Array[U8] = []
+    mut val j: U64 = start
+    while j < start + len {
+        nm.append(value: c.arena.bytes[j])
+        j += 1
+    }
+    return stringFromBytesUnchecked(nm)
+}
+
+// (diagnostic) The name of an expression's arena variant.
+fn exprFormName(c: inout Comp, id: U64) -> String {
+    match c.arena.exprs[id] {
+        Expr.Ident(start: val s, len: val l) => { return dbgSpan(c: inout c, start: s, len: l) }
+        Expr.Field(base: _, val nameStart, val nameLen) => { return dbgSpan(c: inout c, start: nameStart, len: nameLen) }
+        Expr.Call(val nameStart, val nameLen, args: _) => { return dbgSpan(c: inout c, start: nameStart, len: nameLen) }
+        _ => { return exprFormName2(c: inout c, id: id) }
+    }
+}
+
+fn exprFormName2(c: inout Comp, id: U64) -> String {
+    match c.arena.exprs[id] {
+        Expr.Index(base: _, index: _) => { return "Index" }
+        Expr.Array(elems: _) => { return "Array" }
+        Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
+        Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
+        Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return "IfExpr" }
+        Expr.OptChain(base: _, memberStart: _, memberLen: _) => { return "OptChain" }
+        Expr.Try(expr: _) => { return "Try" }
+        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return "Arrow" }
+        Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => { return "Closure" }
+        Expr.Move(operand: _, isBorrow: _) => { return "Move" }
+        Expr.Await(operand: _) => { return "Await" }
+        _ => { return "other" }
+    }
+}
+
+fn refIsAny(c: inout Comp, ref: U64) -> Bool {
+    if ref < c.arena.types.count {
+        return c.arena.types[ref].isAny
+    }
+    return false
+}
+
+// The requirement of trait `traitIdx` matching method (name,args), or a sentinel
+// Func with hasRet=false / retLen=0 when none — so callers reading its return span
+// get a no-result. Used by the type-recovery functions to type an `any P` method
+// call as the requirement's declared return.
+fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Func {
+    val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+    if slot != 0U64 {
+        return c.decls.traits[traitIdx].reqs[slot - 1U64]
+    }
+    return <Func nameStart=0 nameLen=0 typeParams=[] params=[] hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
+}
+
+// Build the substitution env for an `any P[bindings]` existential (spec/08,12): map
+// each of trait `traitIdx`'s type parameters and associated types to its binding
+// from the any TypeRef. Positional any-args (argLabels entry 0) fill the type
+// parameters in order; named any-args bind a parameter or associated type by name.
+// Fills the parallel (names, args) lists used as c.cur.typeParams/curTypeArgs so
+// requirement signatures naming `Rhs`/`Item`/`Output` ground to concrete types.
+// Returns false if any parameter / associated type is left unbound.
+fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Array[Bind], outArgs: inout Array[U64]) -> Bool {
+    val t: TraitDef = c.decls.traits[traitIdx]
+    val ar: TypeRef = c.arena.types[anyRef]
+    // positional binding refs (argLabels entry 0), in source order.
+    mut val positional: Array[U64] = []
+    mut val ai: U64 = 0
+    while ai < ar.args.count {
+        mut val lbl: U64 = 0
+        if ai < ar.argLabels.count {
+            lbl = ar.argLabels[ai]
+        }
+        if lbl == 0U64 {
+            positional.append(value: ar.args[ai])
+        }
+        ai += 1
+    }
+    mut val posIdx: U64 = 0
+    // type parameters: a named binding wins, else the next positional.
+    mut val tpi: U64 = 0
+    while tpi < t.typeParams.count {
+        val tp: Bind = t.typeParams[tpi]
+        mut val ref: U64 = 0
+        mut val found: Bool = false
+        mut val bi: U64 = 0
+        while bi < ar.args.count {
+            if bi < ar.argLabels.count {
+                if ar.argLabels[bi] == tp.nameId && tp.nameId != 0U64 {
+                    ref = ar.args[bi]
+                    found = true
+                }
+            }
+            bi += 1
+        }
+        if !(found) {
+            if posIdx < positional.count {
+                ref = positional[posIdx]
+                posIdx += 1
+                found = true
+            }
+        }
+        if !(found) {
+            return false
+        }
+        outParams.append(value: tp)
+        outArgs.append(value: ref)
+        tpi += 1
+    }
+    // associated types: named binding only.
+    mut val asi: U64 = 0
+    while asi < t.assocTypes.count {
+        val at: Bind = t.assocTypes[asi]
+        mut val ref2: U64 = 0
+        mut val found2: Bool = false
+        mut val bj: U64 = 0
+        while bj < ar.args.count {
+            if bj < ar.argLabels.count {
+                if ar.argLabels[bj] == at.nameId && at.nameId != 0U64 {
+                    ref2 = ar.args[bj]
+                    found2 = true
+                }
+            }
+            bj += 1
+        }
+        if !(found2) {
+            return false
+        }
+        outParams.append(value: at)
+        outArgs.append(value: ref2)
+        asi += 1
+    }
+    return true
+}
+
+// A cache key distinguishing existential vtables whose concrete bindings differ
+// (`any Add[I32,…]` vs `any Add[I64,…]`): a fold over the bound type refs' head name
+// ids. 0 when there are no bindings (the canonical case, keyed only by sidx+trait).
+fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
+    mut val k: U64 = 0
+    mut val i: U64 = 0
+    while i < args.count {
+        mut val nid: U64 = 0
+        if args[i] < c.arena.types.count {
+            nid = c.arena.types[args[i]].nameId
+        }
+        k = k * 1000003U64 + nid + 1U64
+        i += 1
+    }
+    return k
+}
+
+// The grounded return TypeRef of trait `traitIdx`'s requirement matching
+// (name,args) on an `any P` value (anyRef carries the bindings), or 0 for a void /
+// unmatched requirement. Used by type recovery so an `any` method returning an
+// associated / type-parameter type (`Output`, `Optional[Item]`) recovers concretely.
+fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    val req: Func = anyMethodReq(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
+    if !(req.hasRet) {
+        return 0U64
+    }
+    // a `-> Self` requirement re-erases to the existential itself (`fn dup() -> Self`
+    // on `any P` returns `any P`).
+    if reqReturnsSelf(c: inout c, req: req) {
+        return anyRef
+    }
+    if req.retTy == 0U64 {
+        return 0U64
+    }
+    mut val params: Array[Bind] = []
+    mut val argz: Array[U64] = []
+    if !(anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz)) {
+        return req.retTy
+    }
+    val savedP: Array[Bind] = c.cur.typeParams
+    val savedA: Array[U64] = c.cur.typeArgs
+    c.cur.typeParams = params
+    c.cur.typeArgs = argz
+    val g: U64 = c.groundTypeRef(ref: req.retTy)
+    c.cur.typeParams = savedP
+    c.cur.typeArgs = savedA
+    return g
+}
+
+// Is this type name a fixed-width primitive integer (the operator-witness owners).
+fn isPrimIntName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
+    return isUnsignedName(c: inout c, start: start, len: len)
+}
+
+// Is this type name an unsigned integer (for choosing signed vs unsigned ops /
+// formatting)? Defaults to signed.
+fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
+    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
+    return false
+}
+
+// The declared index of field (start,len) in struct sidx, or sd.fields.count.
+fn structFieldIndex(c: inout Comp, sidx: U64, start: U64, len: U64) -> U64 {
+    val sd: StructDef = c.arena.structs[sidx]
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        if spansEqual(c: inout c, aStart: sd.fields[i].nameStart, aLen: sd.fields[i].nameLen, bStart: start, bLen: len) {
+            return i
+        }
+        i += 1
+    }
+    return sd.fields.count
+}
+
+// If field `fld` is a (non-array) generic-instance type by value, its grounded
+// instance TypeRef (under the active env), else 0. Used at assignment sites to set
+// st.expectedTy so an un-suffixed RHS construction (`b.a = <Optional.Some v=9 />`)
+// infers the instance's type args, mirroring genFieldValue at construction.
+fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
+    if fld.tyIsArray {
+        return 0U64
+    }
+    if fld.ty == 0U64 {
+        return 0U64
+    }
+    mut val g: U64 = fld.ty
+    if c.cur.typeParams.count > 0U64 {
+        g = c.groundTypeRef(ref: fld.ty)
+    }
+    if c.isGenericInst(ref: g) {
+        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
+            return 0U64
+        }
+        return g
+    }
+    return 0U64
+}
+
+// Concatenate two type-param lists (`add` first, then `base`). Used to MERGE a
+// nested generic construct's env onto the enclosing one — e.g. building
+// `<Optional.Some v=self.f(x:v) />` inside a monomorphized `MapIter.next`: the
+// field type `T` resolves via Optional's params while the payload sub-expression
+// `self.f` resolves via MapIter's (the outer env). Disjoint names, so first-match
+// in groundTypeRef picks the right one; same length so args pair 1:1.
+fn concatParams(add: Array[Bind], base: Array[Bind]) -> Array[Bind] {
+    mut val r: Array[Bind] = []
+    mut val i: U64 = 0
+    while i < add.count { r.append(value: add[i])  i += 1 }
+    mut val j: U64 = 0
+    while j < base.count { r.append(value: base[j])  j += 1 }
+    return r
+}
+
+fn concatArgs(add: Array[U64], base: Array[U64]) -> Array[U64] {
+    mut val r: Array[U64] = []
+    mut val i: U64 = 0
+    while i < add.count { r.append(value: add[i])  i += 1 }
+    mut val j: U64 = 0
+    while j < base.count { r.append(value: base[j])  j += 1 }
+    return r
+}
+
+// Element-wise structural equality of two type-argument lists.
+fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
+    if a.count != b.count {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < a.count {
+        if !(c.typeRefEq(a: a[i], b: b[i])) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// The Plew-type-kind tag (0 int/signed, 1 String, 2 Bool, 3 unsigned) of a type
+// name span. Used to tag locals/params at declaration.
+fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
+    // a `newtype` (spec/10) shares its underlying type's representation AND value-kind
+    // (a `newtype UserId = String` formats/dispatches as a String): resolve to the
+    // underlying first so a newtype local/cast carries the right kind (1=String, …).
+    val ntu: Bind = c.newtypeUnderName(start: tyStart, len: tyLen)
+    if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
+        return kindFromTySpan(c: inout c, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
+    }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
+    if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
+    if c.isFloatType(start: tyStart, len: tyLen) { return 4U64 }
+    if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
+    return 0U64
+}
+
+// Append the decimal digits of n to a byte buffer (for synthetic symbol names).
+// Uses digitStrU's per-digit String (its bytes are U8) to avoid a U64->U8 narrow,
+// which Plew's lossless `as` does not allow.
+fn appendU64Dec(into: inout Array[U8], n: U64) {
+    if n >= 10U64 {
+        appendU64Dec(into: inout into, n: n / 10U64)
+    }
+    appendBytes(into: inout into, from: digitStrU(d: n % 10U64).bytes)
+}
+
+// Find the registered generic-fn instance slot for (fnIdx, args), or count.
+fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) -> U64 {
+    mut val slot: U64 = 0
+    while slot < st.genFnK.count {
+        val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
+        if fin.fnIdx == fnIdx {
+            if typeArgsEq(c: inout c, a: fin.args, b: args) {
+                return slot
+            }
+        }
+        slot += 1
+    }
+    return st.genFnK.count
+}
+
+fn wOvf(p: String, ct: String, name: String, bi: String) {
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: name)
+    write(s: "(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b){ ")
+    write(s: ct)
+    write(s: " r; if(")
+    write(s: bi)
+    write(s: "(a,b,&r)) plew_panic_raw(\"integer overflow\",16); return r; }\n")
+}
+
+// The checked integer helpers for one width-prefix `p` / C-type `ct` (signed min
+// `mn`, `sgn` = signed). Add/Sub/Mul overflow-panic, Div/Rem div-by-zero-panic
+// (+ signed INT_MIN/-1 overflow), and signed widths also get a checked Neg.
+fn wLlvmChecked(p: String, ct: String, mn: String, sgn: Bool) {
+    wOvf(p: p, ct: ct, name: "Add", bi: "__builtin_add_overflow")
+    wOvf(p: p, ct: ct, name: "Sub", bi: "__builtin_sub_overflow")
+    wOvf(p: p, ct: ct, name: "Mul", bi: "__builtin_mul_overflow")
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: "Div(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b){ if(b==0) plew_panic_raw(\"division by zero\",16); ")
+    if sgn {
+        write(s: "if(b==-1 && a==")
+        write(s: mn)
+        write(s: ") plew_panic_raw(\"integer overflow\",16); ")
+    }
+    write(s: "return a/b; }\n")
+    write(s: ct)
+    write(s: " plew_")
+    write(s: p)
+    write(s: "Rem(")
+    write(s: ct)
+    write(s: " a, ")
+    write(s: ct)
+    write(s: " b){ if(b==0) plew_panic_raw(\"remainder by zero\",17); ")
+    if sgn {
+        write(s: "if(b==-1) return 0; ")
+    }
+    write(s: "return a%b; }\n")
+    if sgn {
+        write(s: ct)
+        write(s: " plew_")
+        write(s: p)
+        write(s: "Neg(")
+        write(s: ct)
+        write(s: " a){ ")
+        write(s: ct)
+        write(s: " r; if(__builtin_sub_overflow((")
+        write(s: ct)
+        write(s: ")0,a,&r)) plew_panic_raw(\"integer overflow\",16); return r; }\n")
+    }
+}
+
+// All width-prefixed checked integer helpers (i8..i64 signed, u8..u64 unsigned).
+fn emitLlvmIntChecked() {
+    wLlvmChecked(p: "i8", ct: "int8_t", mn: "INT8_MIN", sgn: true)
+    wLlvmChecked(p: "i16", ct: "int16_t", mn: "INT16_MIN", sgn: true)
+    wLlvmChecked(p: "i32", ct: "int32_t", mn: "INT32_MIN", sgn: true)
+    wLlvmChecked(p: "i64", ct: "int64_t", mn: "INT64_MIN", sgn: true)
+    wLlvmChecked(p: "u8", ct: "unsigned char", mn: "", sgn: false)
+    wLlvmChecked(p: "u16", ct: "uint16_t", mn: "", sgn: false)
+    wLlvmChecked(p: "u32", ct: "uint32_t", mn: "", sgn: false)
+    wLlvmChecked(p: "u64", ct: "uint64_t", mn: "", sgn: false)
+}
+
+export fn emitLlvmRuntime() {
+    write(s: "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdint.h>\n")
+    write(s: "void plew_exit(long long code){ exit((int)code); }\n")
+    write(s: "void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }\n")
+    write(s: "void plew_eprint_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stderr); }\n")
+    write(s: "__attribute__((noreturn)) void plew_panic_raw(const char* d, long long n){ fputs(\"panic: \",stderr); fwrite(d,1,(size_t)n,stderr); fputc('\\n',stderr); exit(1); }\n")
+    // print(x) formatters (textual form + newline), matching the Plew Format impls.
+    write(s: "void plew_print_str(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); fputc('\\n',stdout); }\n")
+    write(s: "void plew_print_i64(long long v){ printf(\"%lld\\n\", v); }\n")
+    write(s: "void plew_print_f64(double v){ printf(\"%g\\n\", v); }\n")
+    write(s: "void plew_print_u64(unsigned long long v){ printf(\"%llu\\n\", v); }\n")
+    write(s: "void plew_print_bool(long long v){ fputs(v?\"1\":\"0\",stdout); fputc('\\n',stdout); }\n")
+    write(s: "long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }\n")
+    // read all of stdin into a String ({ i8* data, i64 len }), matching the C runtime.
+    write(s: "typedef struct { char* d; long long n; } PlewStrR;\n")
+    write(s: "PlewStrR plew_f64_to_str(double v){ char* buf=(char*)malloc(32); int n=snprintf(buf,32,\"%g\",v); PlewStrR s; s.d=buf; s.n=(long long)n; return s; }\n")
+    write(s: "void plew_f64_nan_check(double a, double b){ if(a!=a || b!=b) plew_panic_raw(\"NaN comparison\",14); }\n")
+    write(s: "PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } PlewStrR s; s.d=buf; s.n=(long long)len; return s; }\n")
+    // FFI String <-> C-string (spec/15): cString materializes a NUL-terminated copy
+    // (owned by C until freed); stringFromCString copies a NUL-terminated C string.
+    write(s: "unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }\n")
+    write(s: "PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=(char*)\"\"; s.n=0; return s; } size_t n=strlen((const char*)p); char* b=(char*)malloc(n+1); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }\n")
+    // Array storage floor (a [cap][rc][data...] buffer; ARC/CoW not yet modeled —
+    // copies share, no free; documented gap). alloc/cap/grow are element-size
+    // generic; per-element load/store is inlined in IR via typed GEP.
+    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }\n")
+    write(s: "long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }\n")
+    write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
+    write(s: "void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
+    write(s: "void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }\n")
+    write(s: "long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }\n")
+    write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
+    // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
+    // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
+    // LLVM backend matches the C backend's loud overflow/div-zero behaviour.
+    emitLlvmIntChecked()
+    // ---- process args + file I/O (the path-taking intrinsics take (ptr,i64), so
+    // no struct-by-value ABI is assumed; readers return PlewStrR {ptr,i64}). ----
+    write(s: "static int plew_argc = 0; static char** plew_argv = 0;\n")
+    write(s: "void plew_set_args(int argc, char** argv){ plew_argc = argc; plew_argv = argv; }\n")
+    write(s: "long long plew_argCount(void){ return (long long)plew_argc; }\n")
+    write(s: "PlewStrR plew_argAt(long long i){ PlewStrR s; if(i<0||i>=plew_argc){ s.d=(char*)\"\"; s.n=0; return s; } s.d=plew_argv[i]; s.n=(long long)strlen(plew_argv[i]); return s; }\n")
+    write(s: "void plew_writeByte(unsigned char b){ putchar((int)b); }\n")
+    write(s: "unsigned long long plew_random_u64(void){ unsigned long long x=0; FILE* f=fopen(\"/dev/urandom\",\"rb\"); if(f){ size_t r=fread(&x,sizeof(x),1,f); fclose(f); if(r==1) return x; } return ((unsigned long long)(uintptr_t)&x * 0x9E3779B97F4A7C15ULL) | 1ULL; }\n")
+    write(s: "unsigned long long plew_dict_seed(void){ static unsigned long long s=0; static int init=0; if(!init){ s=plew_random_u64(); init=1; } return s; }\n")
+    write(s: "static PlewStrR plew_readPath(const char* path){ FILE* f=fopen(path,\"rb\"); PlewStrR s; if(!f){ s.d=(char*)\"\"; s.n=0; return s; } fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc((size_t)sz+1); size_t n=fread(buf,1,(size_t)sz,f); fclose(f); buf[n]=0; s.d=buf; s.n=(long long)n; return s; }\n")
+    write(s: "PlewStrR plew_readFile(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR r=plew_readPath(p); free(p); return r; }\n")
+    write(s: "PlewStrR plew_readFileBytes(char* d, long long n){ return plew_readFile(d,n); }\n")
+    write(s: "long long plew_fileExists(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; FILE* f=fopen(p,\"rb\"); free(p); if(f){ fclose(f); return 1; } return 0; }\n")
+    // ---- async runtime (event loop / promises / timers) ----
+    //
+    // The SAME runtime as the C backend (Codegen/Async.pw), but the symbols the IR
+    // calls (promise_new / promise_resolve / sleep / loop_run / frame_alloc /
+    // frame_free) have EXTERNAL linkage — the IR is a separate translation unit, so
+    // `static` (file-local, as in the single-TU C backend) would leave them
+    // unresolved at link time. The queues/timers and their helpers stay file-local.
+    // PlewPromise's layout matches the IR's { i32 done, i64 value, ptr k, ptr kframe }.
+    write(s: "typedef struct PlewPromise PlewPromise;\n")
+    write(s: "typedef void (*PlewResumeFn)(void*);\n")
+    write(s: "struct PlewPromise { int done; long long value; PlewResumeFn k; void* kframe; };\n")
+    write(s: "typedef struct { PlewResumeFn fn; void* arg; } PlewTask;\n")
+    write(s: "static PlewTask* plew_ready = 0; static long long plew_ready_len = 0, plew_ready_cap = 0, plew_ready_head = 0;\n")
+    write(s: "static void plew_enqueue(PlewResumeFn fn, void* arg) { if (plew_ready_len == plew_ready_cap) { plew_ready_cap = plew_ready_cap ? plew_ready_cap * 2 : 16; plew_ready = (PlewTask*)realloc(plew_ready, (size_t)plew_ready_cap * sizeof(PlewTask)); } plew_ready[plew_ready_len].fn = fn; plew_ready[plew_ready_len].arg = arg; plew_ready_len++; }\n")
+    write(s: "static int plew_dequeue(PlewTask* out) { if (plew_ready_head >= plew_ready_len) { plew_ready_head = 0; plew_ready_len = 0; return 0; } *out = plew_ready[plew_ready_head++]; return 1; }\n")
+    write(s: "typedef struct { long long deadline; PlewPromise* p; } PlewTimer;\n")
+    write(s: "static PlewTimer* plew_timers = 0; static long long plew_timers_len = 0, plew_timers_cap = 0; static long long plew_vnow = 0;\n")
+    write(s: "void* plew_frame_alloc(long long sz) { return malloc((size_t)sz); }\n")
+    write(s: "void plew_frame_free(void* p) { free(p); }\n")
+    write(s: "PlewPromise* plew_promise_new(void) { PlewPromise* p = (PlewPromise*)malloc(sizeof(PlewPromise)); p->done = 0; p->value = 0; p->k = 0; p->kframe = 0; return p; }\n")
+    write(s: "void plew_promise_resolve(PlewPromise* p, long long v) { p->done = 1; p->value = v; if (p->k) { PlewResumeFn k = p->k; void* f = p->kframe; p->k = 0; plew_enqueue(k, f); } }\n")
+    write(s: "static void plew_timer_add(long long delay, PlewPromise* p) { if (plew_timers_len == plew_timers_cap) { plew_timers_cap = plew_timers_cap ? plew_timers_cap * 2 : 8; plew_timers = (PlewTimer*)realloc(plew_timers, (size_t)plew_timers_cap * sizeof(PlewTimer)); } plew_timers[plew_timers_len].deadline = plew_vnow + delay; plew_timers[plew_timers_len].p = p; plew_timers_len++; }\n")
+    write(s: "PlewPromise* plew_sleep(long long ms) { PlewPromise* p = plew_promise_new(); plew_timer_add(ms, p); return p; }\n")
+    write(s: "void plew_loop_run(void) { PlewTask t; while (1) { while (plew_dequeue(&t)) { t.fn(t.arg); } if (plew_timers_len == 0) break; long long bi = -1, bd = 0; for (long long i = 0; i < plew_timers_len; i++) { if (bi < 0 || plew_timers[i].deadline < bd) { bi = i; bd = plew_timers[i].deadline; } } PlewPromise* p = plew_timers[bi].p; plew_vnow = plew_timers[bi].deadline; plew_timers[bi] = plew_timers[--plew_timers_len]; plew_promise_resolve(p, 0); } }\n")
+}
+
+fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
+    mut val bs: Array[U8] = []
+    mut val i: U64 = 0
+    while i < len {
+        bs.append(value: c.arena.bytes[start + i])
+        i += 1U64
+    }
+    return cstr(s: stringFromBytesUnchecked(bs))
+}
+
+fn cstr(s: String) -> CPtr[U8] {
+    return cString(s)
+}
+
+// Empty instruction name (LLVM auto-numbers unnamed values).
+fn anon() -> CPtr[U8] {
+    return cString("")
+}
+
+fn structDeinitFi(c: inout Comp, sidx: U64) -> U64 {
+    val sd: StructDef = c.arena.structs[sidx]
+    val b: Bind = c.kwSpan(kw: "deinit", kwLen: 6U64)
+    val noArgs: Array[Arg] = []
+    return c.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
+}
+
+// ---- string literals ----
+//
+// Decode one C-style escape (the byte after a backslash) to its actual byte.
+fn escByte(nx: U8) -> U8 {
+    if nx == 110 { return 10 }
+    if nx == 116 { return 9 }
+    if nx == 114 { return 13 }
+    if nx == 48 { return 0 }
+    return nx
+}
+
+// Decode a string literal's source span (start = the opening quote) to its actual
+// bytes plus a trailing NUL, mirroring strDecodedLen's escape model (a backslash
+// escapes the next byte). The trailing NUL makes it usable as a C string for
+// LLVMBuildGlobalStringPtr; the PlewString length excludes it.
+// Value of one ASCII hex digit (0-9 / a-f / A-F); 0 for anything else.
+fn hexDigitVal(b: U8) -> U64 {
+    if b >= 48U8 && b <= 57U8 { return (b - 48U8) as U64 }
+    if b >= 97U8 && b <= 102U8 { return (b - 87U8) as U64 }
+    if b >= 65U8 && b <= 70U8 { return (b - 55U8) as U64 }
+    return 0U64
+}
+
+// UTF-8 encode a Unicode scalar `cp` (from a `\u{...}` escape) into `out`.
+fn appendUtf8(out: inout Array[U8], cp: U64) {
+    if cp < 128U64 {
+        out.append(value: truncU8(n: cp))
+        return
+    }
+    if cp < 2048U64 {
+        out.append(value: truncU8(n: 192U64 | (cp >> 6U64)))
+        out.append(value: truncU8(n: 128U64 | (cp & 63U64)))
+        return
+    }
+    if cp < 65536U64 {
+        out.append(value: truncU8(n: 224U64 | (cp >> 12U64)))
+        out.append(value: truncU8(n: 128U64 | ((cp >> 6U64) & 63U64)))
+        out.append(value: truncU8(n: 128U64 | (cp & 63U64)))
+        return
+    }
+    out.append(value: truncU8(n: 240U64 | (cp >> 18U64)))
+    out.append(value: truncU8(n: 128U64 | ((cp >> 12U64) & 63U64)))
+    out.append(value: truncU8(n: 128U64 | ((cp >> 6U64) & 63U64)))
+    out.append(value: truncU8(n: 128U64 | (cp & 63U64)))
+}
+
+fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
+    mut val out: Array[U8] = []
+    mut val j: U64 = start + 1
+    val end: U64 = start + len - 1
+    while j < end {
+        if c.arena.bytes[j] == 92 {
+            if c.arena.bytes[j + 1] == 117U8 {
+                // \u{XXXX}: parse hex code point between braces, UTF-8 encode it.
+                mut val k: U64 = j + 2
+                if k < end && c.arena.bytes[k] == 123U8 { k += 1 }
+                mut val cp: U64 = 0U64
+                while k < end && c.arena.bytes[k] != 125U8 {
+                    cp = (cp << 4U64) | hexDigitVal(b: c.arena.bytes[k])
+                    k += 1
+                }
+                if k < end && c.arena.bytes[k] == 125U8 { k += 1 }
+                // a `\u{...}` escape must name a valid Unicode SCALAR (spec/02: String
+                // is valid UTF-8): reject a value above U+10FFFF or in the surrogate
+                // range U+D800..U+DFFF, which would encode to invalid UTF-8 bytes.
+                if cp > 1114111U64 {
+                    compileErrorAt(line: c.lineOf(offset: start), msg: "`\\u{...}` escape is out of range — a Unicode scalar is at most U+10FFFF (spec/02)")
+                }
+                if cp >= 55296U64 {
+                    if cp <= 57343U64 {
+                        compileErrorAt(line: c.lineOf(offset: start), msg: "`\\u{...}` escape is a UTF-16 surrogate (U+D800..U+DFFF), not a valid Unicode scalar (spec/02)")
+                    }
+                }
+                appendUtf8(out: inout out, cp: cp)
+                j = k
+            } else {
+                out.append(value: escByte(nx: c.arena.bytes[j + 1]))
+                j += 2
+            }
+        } else {
+            out.append(value: c.arena.bytes[j])
+            j += 1
+        }
+    }
+    out.append(value: 0)
+    return out
+}
+
+// Whether every variant of an enum is payload-less (so `==` is a tag comparison;
+// payload-carrying enums need a per-variant switch, deferred).
+fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
+    val ed: EnumDef = c.arena.enums[eid]
+    mut val i: U64 = 0
+    while i < ed.variants.count {
+        if ed.variants[i].fields.count > 0U64 {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether a struct is registerable as a named LLVM value type in this increment:
+// non-generic, non-extern, non-unique, and every field is either an array (the
+// {ptr,i64} value type, element-agnostic), a primitive scalar/String/Bool, an
+// extern lang-item struct field (I64/String/Bool), or a *nested registerable*
+// struct (struct-of-struct). Enum fields and generic-instance fields are not yet
+// modeled. Value types cannot be cyclic by value, so the recursion terminates.
+fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
+    val sd: StructDef = c.arena.structs[sidx]
+    if sd.typeParams.count > 0 { return false }
+    if sd.isExtern { return false }
+    // unique structs are now registerable (same field layout); their deinit runs at
+    // scope-exit drop (emitted via the synthetic `deinit` method).
+    mut val i: U64 = 0
+    while i < sd.fields.count {
+        val f: FieldDef = sd.fields[i]
+        // a boxed (recursive) field is a heap pointer regardless of its pointee
+        // type — always representable, and it breaks the recursion cycle (we don't
+        // recurse into the pointee, so a mutually-recursive struct still terminates).
+        if c.fieldIsBoxed(f: f) {
+            i += 1
+        } else {
+            if f.tyIsArray {
+            } else if c.isGenericInst(ref: f.ty) {
+                // a generic-instance field (`o: Optional[I64]`, `b: Box[I32]`): its
+                // concrete instance is registered as a named tagged-union / struct type
+                // (every reached instance in c.monoWork.genInsts is registered), so the field is
+                // representable by value. The named type is created before any body is
+                // set, so referencing it here is order-independent.
+            } else {
+                // an enum-typed field (`kind: Kind`): the enum's tagged-union value by
+                // value — OK if the enum is itself representable (pure predicate, so
+                // registration order doesn't matter; non-boxed value cycles are a
+                // front-end error, so the mutual recursion terminates).
+                val feid: U64 = c.enumIdxByName(start: f.tyStart, len: f.tyLen)
+                if feid < c.arena.enums.count {
+                    if !(enumRepresentable(c: inout c, eid: feid)) {
+                        return false
+                    }
+                } else {
+                    val fsi: U64 = c.structIndexByName(start: f.tyStart, len: f.tyLen)
+                    if fsi < c.arena.structs.count {
+                        // an extern struct field is a primitive lang-item (ok); a real
+                        // nested struct must itself be registerable (recursively).
+                        if !(c.arena.structs[fsi].isExtern) {
+                            if !(structRegisterable(c: inout c, sidx: fsi)) {
+                                return false
+                            }
+                        }
+                    }
+                    // else: a primitive scalar name (I8.. / unknown) -> a scalar.
+                }
+            }
+            i += 1
+        }
+    }
+    return true
+}
+
+// Whether an enum is representable as a named tagged-union `{ i64 tag, [maxWords x
+// i64] payload }` — pure (type-graph only, registration-order-independent): every
+// variant field is primitive/array/boxed, or a representable struct/enum (recursing
+// through the pure predicates). Non-boxed value cycles are a front-end error, so the
+// mutual recursion with structRegisterable terminates.
+fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
+    val e: EnumDef = c.arena.enums[eid]
+    if e.typeParams.count > 0 { return false }
+    mut val vi: U64 = 0
+    while vi < e.variants.count {
+        val fs: Array[FieldDef] = e.variants[vi].fields
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            if c.fieldIsBoxed(f: fs[fj]) {
+                fj += 1
+            } else {
+                if fs[fj].tyIsArray {
+                    fj += 1
+                } else if c.isGenericInst(ref: fs[fj].ty) {
+                    // a generic-instance variant payload (`A(o: Optional[I64])`): its
+                    // concrete instance is a registered named type (see structRegisterable).
+                    fj += 1
+                } else {
+                    val peid: U64 = c.enumIdxByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
+                    if peid < c.arena.enums.count {
+                        if !(enumRepresentable(c: inout c, eid: peid)) {
+                            return false
+                        }
+                    } else {
+                        val si: U64 = c.structIndexByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
+                        if si < c.arena.structs.count {
+                            if !(c.arena.structs[si].isExtern) {
+                                if !(structRegisterable(c: inout c, sidx: si)) {
+                                    return false
+                                }
+                            }
+                        }
+                        // else: a primitive scalar (I8.. / String / Bool / unknown).
+                    }
+                    fj += 1
+                }
+            }
+        }
+        vi += 1
+    }
+    return true
+}
