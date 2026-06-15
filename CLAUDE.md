@@ -59,5 +59,5 @@ spec を**再掲せずリンク**し役割で書き分ける。**残す**＝設�
 - **決定したら即同期**：spec（正典）＋`claude/*.md` を更新し grep で陳腐化を点検（章の改番時は相対リンクも sed 一括）。大きな巻き戻しの後は spec を通し読みして齟齬を点検する。
 - **commit & push はキリごとに**（大きな塊を溜めない）。コミットメッセージは**英語**で追える粒度。正常動作の区切りでは**記述的 git タグ**（例 `self-host`・`metaprogramming-m1`）。
 - **作業ログをこまめに更新**（[worklog.md](claude/worklog.md)）。**メモはすべて repo 内（`CLAUDE.md`／`claude/`）に置き、外部 memory は使わない**。
-- **コンパイラの分割は part だけでなくモジュール分割も可**（密結合＝part・境界を `import` で切れる塊＝module・過度な細分化は避ける）→ [compiler-refactor.md](claude/compiler-refactor.md)。
+- **コンパイラの分割は `import` 子モジュール（DAG）が既定**（境界を `import` で切れる塊＝module・過度な細分化は避ける）。**`part` は型の `impl` を定義モジュールに置くためだけ**（part 内は impl のみ・自由関数/型/top-level val は root か別モジュール・相互再帰は型の impl メソッド化で 1 モジュール内に収める・循環 import は常に回避可能＝設計誤り）→ [compiler-refactor.md](claude/compiler-refactor.md)。
 - **日本語でやり取りする**。

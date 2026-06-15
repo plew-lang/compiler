@@ -2,7 +2,7 @@
 
 正典コンパイラ `compiler/src/` を「現実装の理想像」までリファクタする計画。**なぜ・到達点・マイルストーン・未検証リスク**を残す（進捗の「やった」は git）。現在地は [worklog.md](worklog.md)。
 
-> **現在地（tag）**：M0〜M3（`Comp` god-struct 83→**11 フィールド**・巨大ファイル全分割）＋**M5（scoped resolution＋循環検出）完了**。**M4（モジュール昇格）に着手＝M4-1 完了：IR をデータモジュール `Ir.pw` へ昇格**（旧 `Ast.pw`＝コンパイラ自身の IR 語彙＋共有 `Comp` 算術。パーサ AST = `@Std/Syntax` の `*Ast` とは別物なので名前も是正）。全 IR 型を `export`、passes が cross-module 構築する leaf/decl struct＋`Comp` に pub `factory` を付与、interner サービス（`intern`/`spansEqual` を export・`internHash`/`internGrow` は内部）を `Comp.pushType` の循環回避のため Ir へ同梱。root `_.pw` は `part ./Ast`→`import ./Ir with { … }`。**これがコンパイラ初の cross-module 共有可変 `Comp`**（M0 probe が struct 変異＋enum variant 構築の両方を実証済）。**M4 の主目的は part 撲滅＝モジュール構造を [spec/15](../spec/04-execution/15-modules.md) 準拠に**（91 part の単一モジュール解消）。**M4-2/M4-3 完了＝`Ir ← Frontend ← Backend ← entry` の一方向 DAG を達成**（commit `2ddba1b`・不動点緑）。残 91 part は全て Frontend/Backend 内にあり、依存グラフ実測で**核が強連結成分（Resolve↔Check↔Mono↔Infer↔Verify↔Stmt）＝spec/15 理由②で part が正当**と確認＝**「part 最低限・spec/15 準拠」は実質達成**（下表「到達状態」）。さらなる削減は周縁モジュール抽出（小利得）かメソッド化（北極星）のみ。型回復統一（typed IR）は part 撲滅に不要と判明し**後段の任意トラックへ退避**（下記）。M5 で resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行済：`nameVisibleFrom`（同モジュール定義 or imported+exported）を選択の唯一の基準にし、自由関数（`findFunc`）・型/トレイト（`checkTypeVisibility`）の双方をスコープ化、`detectImportCycles` で DAG を強制（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）。**gate は作らず構造的に解消**（当初計画通り）。M5 は単一モジュールのまま緑を保ったまま完了＝M4 の前提インフラが整った。新カテゴリ `tests/partreject/`（多ファイル reject）追加。
+> **現在地（tag）**：M0〜M3（`Comp` god-struct 83→**11 フィールド**・巨大ファイル全分割）＋**M5（scoped resolution＋循環検出）完了**。**M4（モジュール昇格）に着手＝M4-1 完了：IR をデータモジュール `Ir.pw` へ昇格**（旧 `Ast.pw`＝コンパイラ自身の IR 語彙＋共有 `Comp` 算術。パーサ AST = `@Std/Syntax` の `*Ast` とは別物なので名前も是正）。全 IR 型を `export`、passes が cross-module 構築する leaf/decl struct＋`Comp` に pub `factory` を付与、interner サービス（`intern`/`spansEqual` を export・`internHash`/`internGrow` は内部）を `Comp.pushType` の循環回避のため Ir へ同梱。root `_.pw` は `part ./Ast`→`import ./Ir with { … }`。**これがコンパイラ初の cross-module 共有可変 `Comp`**（M0 probe が struct 変異＋enum variant 構築の両方を実証済）。**M4 の主目的は part 撲滅＝モジュール構造を [spec/15](../spec/04-execution/15-modules.md) 準拠に**（91 part の単一モジュール解消）。**M4-2/M4-3 完了＝`Ir ← Frontend ← Backend ← entry` の一方向 DAG を達成**（commit `2ddba1b`・不動点緑）。続いて leaf 抽出に着手＝`Path.pw`（loader のパス計算）を import モジュール化済。**方針改定 2026-06：spec/15 から旧 reason②（相互再帰は part）を撤去し「part 内は impl のみ／相互再帰は型の impl メソッド化で 1 モジュール内に収める」へ**（下記「到達状態と理想形への地図」）。∴ 解析核の自由関数 part は違反＝`impl Comp`／`impl LlvmCtx` メソッド化が正道（Comp 定義を Ir→Frontend へ移す）。型回復統一（typed IR）は本道に不要＝**後段の任意トラックへ退避**（下記）。M5 で resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行済：`nameVisibleFrom`（同モジュール定義 or imported+exported）を選択の唯一の基準にし、自由関数（`findFunc`）・型/トレイト（`checkTypeVisibility`）の双方をスコープ化、`detectImportCycles` で DAG を強制（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）。**gate は作らず構造的に解消**（当初計画通り）。M5 は単一モジュールのまま緑を保ったまま完了＝M4 の前提インフラが整った。新カテゴリ `tests/partreject/`（多ファイル reject）追加。
 
 ## 診断（何が問題か）
 
@@ -72,7 +72,7 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 ### M4 の主目的＝モジュール構造を spec/15 ベストプラクティスへ（part 撲滅）
 
-**決定（再優先）**：M4 の主目的は `compiler/src/` を [spec/15 ベストプラクティス](../spec/04-execution/15-modules.md) に沿わせる＝**巨大単一モジュール（91 part）の解消**。spec/15:207 は「既定は `import`、`part` を選ぶのは①[無名 impl の配置](../spec/04-execution/15-modules.md#無名-impl-の配置)が型/トレイトの定義モジュールを要求 ②相互再帰などで DAG に切れない（＝論理的に1モジュール）ときだけ。『関連が近い／大きい』は part の理由にならない」と定める。現状は 91 part が単一モジュールにぶら下がり大半が「関連／大きい」理由＝違反。これを `import` 層へ切り、`part` は spec が許す箇所（相互再帰核・無名 impl）だけに絞る。
+**決定（再優先）**：M4 の主目的は `compiler/src/` を [spec/15 ベストプラクティス](../spec/04-execution/15-modules.md) に沿わせる＝**巨大単一モジュール（91 part）の解消**。spec/15（2026-06 改定）は「既定は `import`、**`part` の唯一の用途＝[無名 impl の配置](../spec/04-execution/15-modules.md#無名-impl-の配置)**（型/トレイトの定義モジュールに impl を置くため）。**part 内は `impl` のみ**（自由関数・型・top-level val は root か別モジュール）。相互再帰は『型の impl メソッド化で 1 モジュール内に収める』で表現し part に自由関数を逃がさない。循環 import は常に回避可能＝設計の誤り」と定める。現状は 91 part が自由関数を抱える＝違反。これを `import` 層＋`impl` メソッド化で正す。
 
 **前提＝モジュールグラフは DAG**（spec/15＋M5 の循環検出が強制）。今 part を事実上「正当化」しているのは **Backend↔Frontend の循環**：
 - Backend → Frontend：`findFunc`/`resolvedCallee`/`typeOf`/`spansEqual`/`structIndexByName`/`moduleOf` 等を呼ぶ（**正しい向き**＝Backend は Frontend の解析結果を消費）。
@@ -92,23 +92,31 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 各段 dev-rebuild→test→reseed→不動点→tag。M5 の循環検出が「分割境界が DAG か」を実際に検査する。
 
-#### 到達状態と「これ以上の part 削減」の地図（依存グラフ実測）
+#### 到達状態と理想形への地図（依存グラフ実測＋方針改定 2026-06）
 
-**cross-module 構造は spec/15 ベストプラクティス準拠（DAG）達成**。残 91 part は全て Frontend / Backend の 2 モジュール内にあり、その正当性を実測（`fn` 定義元 → 呼出元の area 間エッジ集計）で確認した：
+**cross-module 構造は DAG 達成**（`Ir ← Frontend ← Backend ← entry`）。だが理想＝**part 内は `impl` のみ**（[spec/15](../spec/04-execution/15-modules.md) 改定で part の唯一の用途＝無名 impl の配置に確定）には**未到達**：残 91 part は全て自由関数を抱える＝違反。**方針改定で旧 reason②（相互再帰は part で綴じてよい）を撤去**：相互再帰は「型の `impl` メソッド化で 1 モジュール内に収める」で表現し、part に自由関数を逃がさない（[design-decisions.md](design-decisions.md) DAG 項・spec/15 循環依存節と同期）。
 
-- **Frontend の核は強連結成分（SCC）**＝`Resolve ↔ Check ↔ Mono ↔ Infer ↔ Verify ↔ Stmt`（Resolve↔Mono 21/40・Check↔Resolve 49/3・Check↔Infer 23/5 等の双方向）。**spec/15 理由②（DAG に切れない＝論理的に1モジュール）で part が正当**。この核が Frontend の大半＝part 削減の主塊は本質的に不可分（メソッド化＝北極星を除き）。
-- **周縁は概ね一方向**で SCC に入れているのは**誤配置ユーティリティの逆エッジ1〜2本のみ**：`aliasReal`(Parser→Resolve)・`tyRefIsGround`/`sameMangle`(Emit→Mono)・`extractSpan`(Lower→Loader)。これらを正しい層（Ir / 低位クエリ area）へ pure-move すれば Parser/Emit/Loader 等は一方向化し、別 `import` モジュールへ昇格し得る（＝part を import 層へ振替）。ただし**総 part は大きくは減らない**（核 SCC＋Backend codegen 核は残る）。
-- **Backend/Llvm（32 part）** も式↔文↔呼出の codegen が相互再帰＝同様に理由②で1モジュール正当。
+依存グラフ実測（`fn` 定義元→呼出元の area/function 間エッジ）で確定した構造：
+- **Frontend の解析核は area レベルで 1 つの強連結成分**＝`Resolve/Check/Mono/Infer/Lower/Stmt/Verify/Decl/Ops/Emit/Expr/Parser` が密に相互再帰（関数 28 本を共有下層へ移しても area サイクルは解けない＝三角・長サイクルが多数。関数レベル SCC は小さい〔最大 18〕が area は 1 つの塊）。**これは「論理的に 1 モジュール」**＝`Comp` を共有状態とする一群。理想形では**自由関数 `fn(c: inout Comp,…)` を `impl Comp` へメソッド化**し（Comp 定義モジュール内の part-impl）、相互再帰をモジュール内に収める。
+- **DAG で切り出せる周縁**（実測で SCC 外）＝`Path`（leaf・完了）・`Array`（leaf＝無依存で Resolve からのみ呼ばれる）・`Gen`（核の上層・Driver からのみ）・`Driver`（最上位＝バレル/root 候補）。これらは `import` サブモジュールへ昇格できる。
+- **Backend/Llvm** も式↔文↔呼出 codegen が相互再帰（SCC 54＋22）＝`impl LlvmCtx` メソッド化で 1 モジュール内に収める。leaf ヘルパ（Bindings/State/Types/算術）は import サブモジュールへ。
 
-∴ **「part 最低限・spec/15 準拠」は実質達成**（part は全て理由②の相互再帰核に収まる）。**さらに減らすには (a) 周縁モジュール抽出＝小利得・要逆エッジ除去 か (b) メソッド化＝北極星（長い裾）** のいずれか。
+**理想形（Node 風 directory+barrel）**：
+```
+Frontend/ _.pw = Driver + バレル（子を import & 再エクスポート、runFrontend を export）
+          Path/Array  (leaf import モジュール)
+          Gen         (核を import する上層)
+          Core/       (Comp 定義＋解析を impl Comp の part-impl 群で分割)
+Backend/  _.pw = バレル；leaf ヘルパ(import) ＋ codegen Core(impl LlvmCtx の part-impl)
+```
+これで **part は全て `impl`（reason①）**・自由関数は module root か leaf import モジュール・循環 import ゼロ＝spec/15 完全準拠。
 
-#### 努力目標（後で言語制約化）：part 内は `impl` のみ
+**実装順（増分・各段 dev-rebuild→test→reseed→不動点緑）**：
+1. **DAG で切れる leaf/上層を import モジュール化**（`Path` 済 → `Array` → `Gen`）。低リスク・先行。
+2. **解析核を `impl Comp`／`impl LlvmCtx` へメソッド化**（part-impl 化）＝最大の裾。コヒーレンス上 `impl Comp` は **Comp 定義モジュールにしか書けない**ので **Comp の定義を `Ir→Frontend` へ移す**（型＝振る舞いの同居）。Backend は `impl LlvmCtx`（`st: inout LlvmCtx` を受け手に）で `Comp` を引数受け。受け手のない純ヘルパは module root か leaf へ。
+3. **Frontend/Backend を directory+barrel へ整える**（`X.pw`→`X/_.pw`・part パスは `../` 調整。directory+barrel/再エクスポート機構は検証済＝`import ./X` は `X.pw`→`X/_.pw` の順に解決・`export ./Child with {…}` で透過再公開・第三モジュールはバレル経由で推移 import 可）。
 
-**方針（ユーザー・enforcement は後）**：part のベストプラクティスを構造で強制するため、最終的に **part に書けるのは `impl` だけ**にする（自由関数・型・top-level val を part に置けない）。コンパイラをまずその状態へ寄せ、達成後に言語制約として実装する。
-- **狙い**：spec/15 の part 正当理由①（無名 impl の配置）に part 用途を縛り、「関連が近い/大きいから part」の濫用を言語レベルで不能にする。
-- **含意（理由②＝相互再帰モジュール）**：自由関数を part 分割できなくなるので、(a) モジュール root に置く（巨大化）か (b) **メソッド化**（`fn f(c: inout Comp,…)` → `impl Comp { fn f(…) }`）して impl として分割。本コンパイラは解析がほぼ `fn(c: inout Comp,…)`＝実質 Comp メソッドゆえ (b) が機械的に可能。
-- **再評価する緊張**：メソッド化で Comp の API 面が再増殖（M2/M3 の状態削減とは別軸だが意識）／どの型のメソッドでもない純ユーティリティ（`spansEqual` 的）はモジュール root 行き。到達後に enforcement の是非・緩和（part-local private 自由関数を許すか等）を判断。
-- **段取り上の位置**：まず import 層化（Ir/Frontend/Backend/entry）を緑に。その後段に「各モジュールの part を impl のみへ寄せるメソッド化フェーズ」が乗る（長い裾・北極星）。
+**緊張点（到達後に判断）**：メソッド化で `Comp` の API 面が再増殖（M2/M3 の状態削減とは別軸）。`part 内 impl のみ` の enforcement の緩和（part-local private 自由関数を許すか）は到達後に再評価。
 
 **済んだ予備作業**＝`findFunc` の解決を単一チョークポイント `resolvedCallee`（exprId キー永続 memo `TypeCache.callee`）へ集約済（13 site 中 12・tag `refactor-m4-b1` 他）。下記 typed IR トラックの一部だが、Backend の findFunc 呼びを memo 読みに替えて結合を薄くする副次効果もある。
 
