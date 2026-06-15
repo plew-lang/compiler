@@ -2,7 +2,7 @@
 
 正典コンパイラ `compiler/src/` を「現実装の理想像」までリファクタする計画。**なぜ・到達点・マイルストーン・未検証リスク**を残す（進捗の「やった」は git）。現在地は [worklog.md](worklog.md)。
 
-> **現在地（tag）**：M0〜M3（`Comp` god-struct 83→**11 フィールド**・巨大ファイル全分割）＋**M5（scoped resolution＋循環検出）完了**。**M4（モジュール昇格）に着手＝M4-1 完了：IR をデータモジュール `Ir.pw` へ昇格**（旧 `Ast.pw`＝コンパイラ自身の IR 語彙＋共有 `Comp` 算術。パーサ AST = `@Std/Syntax` の `*Ast` とは別物なので名前も是正）。全 IR 型を `export`、passes が cross-module 構築する leaf/decl struct＋`Comp` に pub `factory` を付与、interner サービス（`intern`/`spansEqual` を export・`internHash`/`internGrow` は内部）を `Comp.pushType` の循環回避のため Ir へ同梱。root `_.pw` は `part ./Ast`→`import ./Ir with { … }`。**これがコンパイラ初の cross-module 共有可変 `Comp`**（M0 probe が struct 変異＋enum variant 構築の両方を実証済）。残り＝**M4-2（Backend を独立モジュール化）→ M4-3（Frontend passes をモジュール化）**。M5 で resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行済：`nameVisibleFrom`（同モジュール定義 or imported+exported）を選択の唯一の基準にし、自由関数（`findFunc`）・型/トレイト（`checkTypeVisibility`）の双方をスコープ化、`detectImportCycles` で DAG を強制（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）。**gate は作らず構造的に解消**（当初計画通り）。M5 は単一モジュールのまま緑を保ったまま完了＝M4 の前提インフラが整った。新カテゴリ `tests/partreject/`（多ファイル reject）追加。
+> **現在地（tag）**：M0〜M3（`Comp` god-struct 83→**11 フィールド**・巨大ファイル全分割）＋**M5（scoped resolution＋循環検出）完了**。**M4（モジュール昇格）に着手＝M4-1 完了：IR をデータモジュール `Ir.pw` へ昇格**（旧 `Ast.pw`＝コンパイラ自身の IR 語彙＋共有 `Comp` 算術。パーサ AST = `@Std/Syntax` の `*Ast` とは別物なので名前も是正）。全 IR 型を `export`、passes が cross-module 構築する leaf/decl struct＋`Comp` に pub `factory` を付与、interner サービス（`intern`/`spansEqual` を export・`internHash`/`internGrow` は内部）を `Comp.pushType` の循環回避のため Ir へ同梱。root `_.pw` は `part ./Ast`→`import ./Ir with { … }`。**これがコンパイラ初の cross-module 共有可変 `Comp`**（M0 probe が struct 変異＋enum variant 構築の両方を実証済）。**M4 の主目的は part 撲滅＝モジュール構造を [spec/15](../spec/04-execution/15-modules.md) 準拠に**（91 part の単一モジュール解消）。残り＝**M4-2（逆依存を断ち Backend 独立モジュール化）→ M4-3（Frontend モジュール化）**。型回復統一（typed IR）は part 撲滅に不要と判明し**後段の任意トラックへ退避**（下記）。M5 で resolver を **flat global＋ヒューリスティック＋post-hoc gate** から **scoped resolution** へ移行済：`nameVisibleFrom`（同モジュール定義 or imported+exported）を選択の唯一の基準にし、自由関数（`findFunc`）・型/トレイト（`checkTypeVisibility`）の双方をスコープ化、`detectImportCycles` で DAG を強制（[spec/15 循環依存](../spec/04-execution/15-modules.md#循環依存モジュールグラフは-dag)）。**gate は作らず構造的に解消**（当初計画通り）。M5 は単一モジュールのまま緑を保ったまま完了＝M4 の前提インフラが整った。新カテゴリ `tests/partreject/`（多ファイル reject）追加。
 
 ## 診断（何が問題か）
 
@@ -70,44 +70,40 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 各 M 内も増分（1 ファイル/1 カテゴリ/1 パスごと commit＋tag）。M3 完了時点で god-object は消え、**実施順は M3→M5→M4**：M5（resolver の scoped 化）を単一モジュールのまま終え、M4 で「分割した境界を scoped resolution が検査する」が噛み合う。
 
-### M4 の改訂：目標を B（典型 IR／解決の前計算）に据え、モジュール昇格は最後（決定）
+### M4 の主目的＝モジュール構造を spec/15 ベストプラクティスへ（part 撲滅）
 
-**決定（ユーザー）**：M4 の本来あるべき終状態は **B＝pre-resolved arena**（Backend は解決を一切行わず、フロントが確定した結果を arena から読むだけ）。モジュール昇格（旧 M4＝Backend/Frontend を独立モジュール化）はその副産物として最後に pure-move で行う。
+**決定（再優先）**：M4 の主目的は `compiler/src/` を [spec/15 ベストプラクティス](../spec/04-execution/15-modules.md) に沿わせる＝**巨大単一モジュール（91 part）の解消**。spec/15:207 は「既定は `import`、`part` を選ぶのは①[無名 impl の配置](../spec/04-execution/15-modules.md#無名-impl-の配置)が型/トレイトの定義モジュールを要求 ②相互再帰などで DAG に切れない（＝論理的に1モジュール）ときだけ。『関連が近い／大きい』は part の理由にならない」と定める。現状は 91 part が単一モジュールにぶら下がり大半が「関連／大きい」理由＝違反。これを `import` 層へ切り、`part` は spec が許す箇所（相互再帰核・無名 impl）だけに絞る。
 
-**なぜ B が先か（A 先行をやめた根拠）**：Backend を素朴に独立モジュール化しようとすると、Backend は他パスの自由関数を **~78 個**呼んでおり（裏取り済）、うち**解決の「決定」**を emission 中に再実行している（`findFunc` 8 箇所・`structIndexByName` 8 箇所・`moduleOf` 等）。逆に Backend 定義の共有クエリ（`enumIdxByName`/`findTraitIdxByName`/`methodInEntryModule`）を Verify/Check が呼ぶ**逆依存も 5 個**。これは architecture.md「根① 型付き IR が無い」の症状そのもの。**A（純粋クエリを共有 `Sema` 層へ移す pure-move）は B を楽にしない**（B が触るのは「決定」であって純粋ルックアップと独立）。かつ **B は挙動依存**なので、本節冒頭の原則「構造改造は単一モジュール内で完結・昇格は最後」に従い、**1 モジュールのうちに B を済ませる**のが安全（不動点が挙動を守る）。B 完了後は Backend の外向き依存が純粋クエリのみになり、Sema 抽出＋モジュール昇格は綺麗な pure-move に落ちる。
+**前提＝モジュールグラフは DAG**（spec/15＋M5 の循環検出が強制）。今 part を事実上「正当化」しているのは **Backend↔Frontend の循環**：
+- Backend → Frontend：`findFunc`/`resolvedCallee`/`typeOf`/`spansEqual`/`structIndexByName`/`moduleOf` 等を呼ぶ（**正しい向き**＝Backend は Frontend の解析結果を消費）。
+- Frontend → Backend：Backend 定義の**誤配置クエリ** `enumIdxByName`/`findTraitIdxByName`/`methodInEntryModule` を Check/Verify が呼ぶ（**逆向き**＝循環の原因・裏取り済）。
 
-**B の中核＝解決の前計算（旗艦増分）**：`Expr.Call(nameStart, nameLen, args)` は**解決済み callee を持たない**ため、`findFunc(nameStart, nameLen, args) -> funcIdx` が**コンパイラ全体で 13 箇所**（Backend 8＋フロント 5＝ExprType/Mono/Infer/Check×2）から独立に再実行されている。
-- **健全性の根拠（実機検証済）**：`findFunc` は「**どの関数 decl に解決するか**（テンプレート選択）」を返すだけで、インスタンス選択は別機構（`registerCallInst`→`fnInsts`・型引数キー）。鍵は **オーバーロード解決がインスタンス不変**であること ── ジェネリック本体で型パラメータ引数からオーバーロードを選ぶのは spec/06 で禁止（型パラメータは不透明＝`fn g(I64)`/`g(F64)` を `g(x:T)` で呼ぶとコンパイルエラー `type parameter is a distinct opaque type`）。∴ コンパイルの通る call は解決に効く引数型が必ず具象で、**call-expr-id ごとに findFunc 結果が安定**。`TypeCache` が body ごとにリセットされるのは「ノードの型は置換で変わる」別問題で、「どの decl に解決するか」は不変。よって **per-exprId の global lazy memo**（body リセット不要・`TypeCache` と違い一度埋めたら永続）で正しく前計算でき、先に走るフロントが埋め→Backend は読むだけ＝B が達成される。全 findFunc 呼び出しは `match c.arena.exprs[id] { Expr.Call(...) }` の中＝exprId が手元にある。
-- **増分手順**：① arena に `callCallee: Array[U64]`（exprId キー・sentinel=funcs.count）と memo 化 `resolvedCallee(c, id)` を追加。② フロントの解決パスで `Expr.Call` を見たとき findFunc 結果を記録（or lazy memo）。③ 13 箇所を `resolvedCallee` 読みに置換。各ステップ dev-rebuild→test→不動点。
-- **view-aware refinement の正しい扱い（決定）**：`findFuncViewAware`（CallExt・1 箇所）は backend が引数 view を見てオーバーロードを精緻化する＝唯一 backend に残る「決定」。だが **view は静的な型レベルのプロパティ**（`TypeRef.viewExtId`・spec/09＝`Person` と `Person#Ext` は別型）で、解決＝意味決定だからフロントに属する。今 backend に残るのは「型回復の `TypeInfo` が `TypeRef` の `viewExtId` を落としている lossy さ」が原因＝根①の一症状。
-  - **二重化しない**：フロントに 2 つ目の view 追跡を足すのは負債の温存ゆえ不可。正しい設計は `resolvedCallee` と同じ「**一度計算し両者が読む**」＝view 回復を `st` 非依存にして単一チョークポイント＋per-exprId キャッシュへ集約し、追跡を**増やさず減らす**。
-  - **訂正（実コード精査で判明）＝view-aware は型回復統一と不可分**：当初「view はインスタンス不変ゆえ型回復統一を待たず単独 de-dup 可」と書いたが楽観的すぎた。`exprViewExtId` の view 計算は `ExtView`/`Call`（callee 戻り型）こそ静的・`Ident` も `c.cur.locals[].ty`（`localTypeRefByName`＝st 非依存）で取れるが、**`Field`/`Index` は `exprTypeRef(c, st, id)`（backend 局所表＋生成中 env で grounding）に依存**＝「その式がどの型か」を知る部分が、フロント（`exprType`→lossy `TypeInfo`）と backend（`exprTypeRef`+`st`）で**二重**になっている根①の本体に触れる。view は grounding 不変だが「式の型を知る」部分が二重化の核心。Field/Index を近似すると fixpoint が割れ、フロントに型回復を別途書けば二重化（不可）。
-  - **∴ view-aware を単独で綺麗に前計算する道は無い**。「inherently codegen」ではなく「**型回復統一に blocked**」が正しい理解。型回復統一（下記）と一体で行えば view-aware は自然に前計算に落ちる。それまでは backend の原理的残留として保持（統一待ちタグ）。
+∴ **循環を断つ＝逆向きを消す**：この3関数（純粋クエリで Backend にある必然なし）を正しい層（Frontend/Ir）へ戻す pure-move。これで **Ir ← Frontend ← Backend** の一方向 DAG になり、最大塊 Backend（11.6k 行）を独立モジュールへ切れる。**型回復の二重実装（typed IR）は part 撲滅に不要**＝Backend→Frontend の型回復呼び（`typeOf` 等）は一方向で循環を作らない。
 
-**B の残り**：findFunc 以外の「決定」（`structIndexByName` 等は純粋ルックアップ＝B 対象外で A 行き／Check・Verify の解決呼びは個別精査）も同じ「フロントで決定→arena 記録→読むだけ」で順次消す。Backend の外向き「決定」依存がゼロになった時点で、A（Sema 抽出）＋Backend/Frontend モジュール昇格を pure-move で実施。
+**自然に綺麗になる副産物**：層を切ると「どの関数がどの層に属すべきか」が構造で強制され、誤配置（逆依存・Backend に紛れた純粋クエリ）が炙り出され是正される。
 
-| M | 内容 | リスク | 主眼 |
-|---|---|---|---|
-| **M4-1** | **IR をデータモジュール `Ir.pw` へ昇格**（完了・tag `refactor-m4-1`）。旧 `Ast.pw`＝コンパイラ IR 語彙＋共有 `Comp` を `export`、pub factory、interner 同梱。root が `import ./Ir`＝初の cross-module 共有可変 `Comp`。 | 低 | モジュール昇格の足場 |
-| **M4-B** | **解決の前計算（典型 IR 化）**：findFunc 系の「決定」をフロントで確定し arena へ記録、Backend は読むだけに。単一モジュール内・不動点で挙動を固定。 | 中（挙動依存） | **「根① 型付き IR が無い」の解消** |
-| **M4-2** | **A＋モジュール昇格**：純粋クエリを共有 `Sema` 層へ、Backend/Frontend を独立モジュール化（B 完了後の pure-move）。 | 低 | 理想像の完成 |
+#### マイルストーン（モジュール昇格）
 
-### M4-B 型回復統一（根①の本丸・決定）
+| M | 内容 | 状態 |
+|---|---|---|
+| **M4-1** | IR をデータモジュール `Ir.pw` へ昇格（`Expr`/`Stmt`/`Comp`/interner…）。初の cross-module 共有可変 `Comp`。 | 完了・tag `refactor-m4-1` |
+| **M4-2** | 逆依存3関数を Backend→Frontend/Ir へ戻し循環を断つ → **Backend を独立モジュール化**（`import Ir` ＋ Frontend の export 結果）。 | 次 |
+| **M4-3** | **Frontend をモジュール化**（root＝Driver/Loader/main が `import`）。内部で DAG に切れる層は更に `import`、相互再帰核は spec/15 が許す `part` のまま残す（目標は「part ゼロ」でなく「spec が正当化する part だけ」）。 | 後 |
 
-findFunc の前計算（callee チョークポイント）の後、残る backend の「決定」は view-aware だけで、それは**式の型回復がフロント／backend で二重**なことに起因。これを統一するのが根①の本丸。**実コード精査で確定した事実と方針**：
+各段 dev-rebuild→test→reseed→不動点→tag。M5 の循環検出が「分割境界が DAG か」を実際に検査する。
 
-- **二重実装**：`exprType(c,id)->TypeInfo`（フロント・`Resolve/ExprType.pw`・33+ arm・全式）と `exprTypeRef(c,st,id)->TypeRef index`（backend・`Backend/Llvm/GenericStruct.pw:138`・6 arm・place 式のみ）が「この式の型は？」を別実装で答える。クロス呼びは `valueKind`→`typeOf`（kind だけフロントへ委譲）の1本のみ。
-- **表現ギャップ**：`TypeInfo`（lossy＝kind/nameStart/nameLen/ref）vs `TypeRef`（完全＝+viewExtId/isAny/argLabels）。view-aware が backend に残るのは TypeInfo が view を落とすから（＝根①の症状）。
-- **局所型の二重管理（linchpin）**：フロント `c.cur.locals[].ty`（テンプレ型・スコープ push/pop）vs backend `st.locTypeRef[]`（**grounded 型**・body 入口 reset・emission 中に `groundTypeRef` で構築）。
-- **検証で判明した制約**：①フロントの型付けは **lazy・非網羅**（専用 walk なし）かつ generic 本体はインスタンス依存で毎回再導出 ⇒「フロントが全式を1回記録」は不可。②**grounding は backend の正当な仕事**（インスタンス固有・前計算不可）。
+**済んだ予備作業**＝`findFunc` の解決を単一チョークポイント `resolvedCallee`（exprId キー永続 memo `TypeCache.callee`）へ集約済（13 site 中 12・tag `refactor-m4-b1` 他）。下記 typed IR トラックの一部だが、Backend の findFunc 呼びを memo 読みに替えて結合を薄くする副次効果もある。
 
-**∴ あるべき形**：消すべき二重化は **(a) 回復ロジックの二重実装** と **(b) lossy 表現**。grounding は backend に残す（正当）。単一グローバル型キャッシュは不要（インスタンス差は grounding が担う）。局所型は **(B) backend が `c.cur.locals` を可変保持＝意味の再導出ゆえ却下**。正しくは「**テンプレ型を単一の回復ロジックで出し、backend はそれを ground して読む**」。
+### 別トラック（後段・任意）：型回復統一＝typed IR（根①）
 
-**段取り（各段 fixpoint 緑・linchpin は局所型）**：
-1. **表現統一**：回復が完全 `TypeRef`（view 込み）を出せるように（`TypeInfo` 拡張 or `typeOf` が TypeRef index も返す）。foundation・additive。
-2. **局所テンプレ型の単一出所（linchpin）**：local のテンプレ型を宣言時に1回記録し、フロントはそのまま・backend は ground して読む（backend 専用の grounded キャッシュ `st.locTypeRef` は codegen 用に残してよいが、出所＝テンプレは単一に）。最難関・要詳細設計。
-3. **回復ロジックの単一化**：backend `exprTypeRef` の各 arm を、統一回復（テンプレ TypeRef を返す）＋ backend 側 grounding に置換、重複 match を削除。
-4. **view-aware が落ちる**：`exprViewExtId` が回復済み TypeRef の view を読む薄い reader になり、view-aware 解決が前計算化＝backend 最後の「決定」撤去。
+> ⚠ **これは M4（part 撲滅）の critical path ではない**。Backend の独立は逆依存3関数の除去だけで足り、型回復の二重実装は Backend→Frontend の一方向呼びゆえ循環を作らない。typed IR は「根① 型付き IR が無い」（[architecture.md](architecture.md)）への独立した品質改善として後段で任意に行う。view-aware オーバーロード解決が backend に残る唯一の「決定」で、その前計算はこのトラックに blocked。以下は実コード精査で確定した知見（着手時の土台）。
+
+- **二重実装**：`exprType(c,id)->TypeInfo`（フロント・`Resolve/ExprType.pw`・33+ arm・全式）と `exprTypeRef(c,st,id)->TypeRef index`（backend・`Backend/Llvm/GenericStruct.pw:138`・6 arm・place 式のみ）が「この式の型は？」を別実装で答える。クロス呼びは `valueKind`→`typeOf`（kind だけ委譲）の1本のみ＝**一方向（循環でない）**。
+- **表現ギャップ**：`TypeInfo`（lossy＝kind/nameStart/nameLen/ref／**stage 1 で `viewExtId` 追加済**）vs `TypeRef`（完全）。view-aware が backend に残るのは TypeInfo が view を落とすから。
+- **局所型の二重管理（linchpin）**：フロント `c.cur.locals[].ty`（テンプレ型）vs backend `st.locTypeRef[]`（**grounded 型**・emission 中に `groundTypeRef` で構築）。
+- **制約（裏取り済）**：①フロントの型付けは lazy・非網羅で generic 本体はインスタンス依存（毎回再導出）⇒「全式を1回記録」は不可。②**grounding は backend の正当な仕事**（インスタンス固有・前計算不可）。
+- **あるべき形**：消すべきは (a) 回復ロジックの二重実装 (b) lossy 表現。grounding は残す。局所型は **(B) backend が `c.cur.locals` を可変保持は却下**（意味の再導出）。正しくは「**テンプレ型を単一ロジックで出し backend はそれを ground して読む**」。
+- **段取り**：1.表現統一（TypeRef view 込み・stage 1 着手済＝`TypeInfo.viewExtId`）→ 2.局所テンプレ型の単一出所（linchpin・最難関）→ 3.backend `exprTypeRef` を統一回復＋grounding に置換 → 4.view-aware が薄い reader に落ち前計算化。
 
 ## scoped resolution への移行（M5・resolver の理想化）
 
