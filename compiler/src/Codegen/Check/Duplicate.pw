@@ -163,7 +163,7 @@ pub impl Comp {
                                             if g.extId == 0U64 {
                                                 gBare = true
                                             } else {
-                                                if isDefaultExt(c: inout self, typeId: de.typeId, extId: g.extId) {
+                                                if self.isDefaultExt(typeId: de.typeId, extId: g.extId) {
                                                     gBare = true
                                                 }
                                             }

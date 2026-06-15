@@ -20,6 +20,19 @@ if _tot != _cf:
     print(f"REFUSE: {path} is mixed ({_cf}/{_tot} c-first). Handle non-c fns manually.", file=sys.stderr)
     sys.exit(2)
 
+# Guard: a top-level non-fn declaration (struct/enum/trait/val/...) embedded among
+# the functions would be SILENTLY DROPPED — the body-collection loop below only
+# keeps `fn` blocks. Refuse loudly so the human moves it out first (a struct can't
+# live inside `pub impl Comp` anyway). Column-0 keyword = top-level item.
+_decl_re = re.compile(r'^(export |pub )*(struct|enum|trait|newtype|extern|impl|val|mut val)\b')
+_bad = [L for L in lines if _decl_re.match(L)]
+if _bad:
+    print(f"REFUSE: {path} has top-level non-fn declarations that would be dropped:", file=sys.stderr)
+    for L in _bad:
+        print(f"    {L}", file=sys.stderr)
+    print("Move them out (e.g. to the module root) before methodizing.", file=sys.stderr)
+    sys.exit(2)
+
 fn_re = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) -> (.+) \{$')
 fn_re_noret = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) \{$')
 

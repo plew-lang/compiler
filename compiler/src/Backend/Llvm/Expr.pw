@@ -48,7 +48,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             }
             // a bare reference to a free function (`val g = twice`): the closure
             // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
-            val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+            val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
             if fvi < c.arena.funcs.count {
                 val ts: U64 = thunkSlot(st: inout st, fi: fvi)
                 if ts < st.thunkIdx.count {

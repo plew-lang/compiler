@@ -342,7 +342,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // a user type's `a[k]` desugars to `a.index(key:k)`; its type is the
             // `index` method's return (the Index trait's `Output`).
             if bt.kind == 2 {
-                return firstMethodRetType(c: inout c, typeStart: bt.nameStart, typeLen: bt.nameLen, name: "index")
+                return c.firstMethodRetType(typeStart: bt.nameStart, typeLen: bt.nameLen, name: "index")
             }
             return scalarInfo()
         }
@@ -355,7 +355,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // `recv#Ext.name(args)` (spec/09): return type from the extension method.
             val rt: TypeInfo = exprType(c: inout c, id: recv)
             if rt.kind == 2 {
-                val mfi: U64 = findExtMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mfi: U64 = c.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.arena.funcs.count {
                     val mf: Func = c.arena.funcs[mfi]
                     if mf.hasRet {
@@ -369,7 +369,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // `Type.name(args)` assoc-fn call: return type from the assoc fn.
             val arn: Bind = assocRecvName(c: inout c, recv: recv)
             if arn.nameLen != 0 {
-                val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val afi: U64 = c.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if afi == c.arena.funcs.count {
                     return scalarInfo()
                 }
@@ -475,7 +475,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         }
                     }
                 }
-                val mi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.arena.funcs.count {
                     return scalarInfo()
                 }
@@ -560,7 +560,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 // the "Array" receiver, then substitute a return type that is exactly
                 // the type parameter T with the array's element type E.
                 val arrName: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5)
-                val mi: U64 = findMethod(c: inout c, recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mi: U64 = c.findMethod(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mi == c.arena.funcs.count {
                     return scalarInfo()
                 }

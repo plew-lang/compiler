@@ -239,7 +239,7 @@ pub impl Comp {
         if arn.nameLen == 0U64 {
             return
         }
-        val afi: U64 = findAssoc(c: inout self, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        val afi: U64 = self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if afi >= self.arena.funcs.count {
             return
         }
@@ -277,7 +277,7 @@ pub impl Comp {
             return
         }
         val genericRecv: Bool = isGenericInst(c: inout self, ref: rt.ref)
-        val mi: U64 = findMethod(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if mi == self.arena.funcs.count {
             return
         }

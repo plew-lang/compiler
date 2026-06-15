@@ -331,12 +331,12 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     // error conversion (spec/13): when the function's error type E differs from the
     // operand's E', convert E' -> E through E's `from` factory before rewrapping.
     mut val convErrVal: LLVMValueRef = errVal
-    val opErrRef: U64 = resultErrArgRef(c: inout c, ref: exprRef)
-    val fnErrRef: U64 = resultErrArgRef(c: inout c, ref: st.curRetRef)
+    val opErrRef: U64 = c.resultErrArgRef(ref: exprRef)
+    val fnErrRef: U64 = c.resultErrArgRef(ref: st.curRetRef)
     if opErrRef != 0U64 {
         if fnErrRef != 0U64 {
             if c.arena.types[opErrRef].nameId != c.arena.types[fnErrRef].nameId {
-                val ffi: U64 = typeRefFromFactoryIdx(c: inout c, errRef: fnErrRef)
+                val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef)
                 if ffi < c.arena.funcs.count {
                     mut val fslot: U64 = userFnSlot(st: inout st, idx: ffi)
                     if fslot >= st.fnIdx.count {

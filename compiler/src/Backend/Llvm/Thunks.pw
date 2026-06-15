@@ -53,7 +53,7 @@ fn collectThunks(c: inout Comp, st: inout LlvmCtx) {
     while i < c.arena.exprs.count {
         match c.arena.exprs[i] {
             Expr.Ident(val start, val len) => {
-                val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+                val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
                 if fvi < c.arena.funcs.count {
                     val f: Func = c.arena.funcs[fvi]
                     if !(f.hasRecv || f.isAssoc || f.typeParams.count > 0U64) {

@@ -256,7 +256,7 @@ export fn runFrontend() -> Comp {
     buildKwCache(c: inout c)
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
-    rewriteAssocValReads(c: inout c)
+    c.rewriteAssocValReads()
     // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
     // when `name` is a named factory (not an enum variant).
     rewriteFactoryConstruction(c: inout c)

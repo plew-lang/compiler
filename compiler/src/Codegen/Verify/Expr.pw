@@ -292,7 +292,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                                             if !(c.typesCompatible(expected: fnR.args[1], inferred: opR.args[1])) {
                                                 // E != E' is allowed when E owns a `from` factory:
                                                 // `try` then converts E' -> E via E.from (spec/13).
-                                                if !(typeRefHasFromFactory(c: inout c, errRef: fnR.args[1])) {
+                                                if !(c.typeRefHasFromFactory(errRef: fnR.args[1])) {
                                                     compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
                                                 }
                                             }

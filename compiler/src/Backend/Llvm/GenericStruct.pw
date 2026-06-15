@@ -306,7 +306,7 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
             return 0U64
         }
     }
-    val mfi: U64 = findMethod(c: inout c, recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
+    val mfi: U64 = c.findMethod(recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
     if mfi < c.arena.funcs.count {
         val mf: Func = c.arena.funcs[mfi]
         if mf.hasRet {

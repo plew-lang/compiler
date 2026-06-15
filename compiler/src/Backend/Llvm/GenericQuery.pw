@@ -130,7 +130,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // `p.scaled().x`): resolve the callee's return struct.
             val marn: Bind = assocRecvName(c: inout c, recv: mrecv)
             if marn.nameLen != 0U64 {
-                val afi: U64 = findAssoc(c: inout c, recvStart: marn.nameStart, recvLen: marn.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
+                val afi: U64 = c.findAssoc(recvStart: marn.nameStart, recvLen: marn.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                 if afi < c.arena.funcs.count {
                     if c.arena.funcs[afi].hasRet {
                         return localStructIdxFor(c: inout c, st: inout st, start: c.arena.funcs[afi].retStart, len: c.arena.funcs[afi].retLen)
@@ -139,7 +139,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             } else {
                 val mrsi: U64 = exprStructIdx(c: inout c, st: inout st, id: mrecv)
                 if mrsi < c.arena.structs.count {
-                    val mfi: U64 = findMethod(c: inout c, recvStart: c.arena.structs[mrsi].nameStart, recvLen: c.arena.structs[mrsi].nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
+                    val mfi: U64 = c.findMethod(recvStart: c.arena.structs[mrsi].nameStart, recvLen: c.arena.structs[mrsi].nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                     if mfi < c.arena.funcs.count {
                         if c.arena.funcs[mfi].hasRet {
                             return localStructIdxFor(c: inout c, st: inout st, start: c.arena.funcs[mfi].retStart, len: c.arena.funcs[mfi].retLen)
@@ -152,7 +152,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                     val mrRef: U64 = exprTypeRef(c: inout c, st: inout st, id: mrecv)
                     if mrRef != 0U64 {
                         val rt: TypeRef = c.arena.types[mrRef]
-                        val emfi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
+                        val emfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                         if emfi < c.arena.funcs.count {
                             if c.arena.funcs[emfi].hasRet {
                                 if c.arena.funcs[emfi].retTy != 0U64 {

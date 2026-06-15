@@ -46,7 +46,7 @@ export fn resolvedCallee(c: inout Comp, id: U64) -> U64 {
     mut val r: U64 = c.arena.funcs.count
     match c.arena.exprs[id] {
         Expr.Call(val nameStart, val nameLen, val args) => {
-            r = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            r = c.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
         }
         _ => {}
     }

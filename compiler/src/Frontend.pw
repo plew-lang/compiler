@@ -60,6 +60,18 @@ export struct Comp {
     pub mut val modules: Modules = <Modules />
 }
 
+// The effective declared type of a `val`/`mut val` binding: the written
+// annotation, or — when omitted (`val x = expr`) — inferred from the initializer.
+// (start,len,arr) is the head/array view; ty the structured TypeRef. Shared by
+// genStmt's Let lowering and the async frame-field collection so they agree.
+// (Produced by `Comp.inferLetType`; a Frontend-internal resolution helper.)
+struct LetEff {
+    pub val start: U64
+    pub val len: U64
+    pub val arr: Bool
+    pub val ty: U64
+}
+
 // ---- arena helpers ----
 //
 // Methods on the arena (Comp). All take `inout self`: the struct is large, so a

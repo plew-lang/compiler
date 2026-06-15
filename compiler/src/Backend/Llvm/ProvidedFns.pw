@@ -116,7 +116,7 @@ fn declareGenFns(c: inout Comp, st: inout LlvmCtx) {
         // restrict to the entry module: a std generic fn (print[T] etc.) has a body
         // full of not-yet-supported constructs and shouldn't be emitted (print is
         // special-cased at the call site, so its instance is never called).
-        if fin.recvInstRef == 0U64 && moduleOf(c: inout c, offset: c.arena.funcs[fin.fnIdx].nameStart) == 0U64 {
+        if fin.recvInstRef == 0U64 && c.moduleOf(offset: c.arena.funcs[fin.fnIdx].nameStart) == 0U64 {
             if c.isGenericFreeFn(fi: fin.fnIdx) {
                 val f: Func = c.arena.funcs[fin.fnIdx]
                 val savedP: Array[Bind] = c.cur.typeParams

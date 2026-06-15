@@ -465,9 +465,9 @@ fn synthesizeDerives(c: inout Comp) {
 // imported here (and exported by its own module). `(segStart,segLen)` is the path's
 // last segment (the source submodule) — kept for a future path-correctness check.
 fn markImport(c: inout Comp, segStart: U64, segLen: U64, nameStart: U64, nameLen: U64) {
-    c.modules.imports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=moduleOf(c: inout c, offset: nameStart) fieldLen=0 />)
+    c.modules.imports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=c.moduleOf(offset: nameStart) fieldLen=0 />)
 }
 
 fn recordExport(c: inout Comp, nameStart: U64, nameLen: U64) {
-    c.modules.exports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=moduleOf(c: inout c, offset: nameStart) fieldLen=0 />)
+    c.modules.exports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=c.moduleOf(offset: nameStart) fieldLen=0 />)
 }

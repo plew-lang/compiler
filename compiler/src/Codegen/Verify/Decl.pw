@@ -14,7 +14,7 @@ pub impl Comp {
             // validated separately (test suite + self-compile); walking it here falsely
             // rejected a no-import program because a prelude body's operator witness
             // (`Add[U64]` in SipHasher) lives in Core, loaded only on import.
-            if !(f.isExtern || methodInEntryModule(c: inout self, f: f)) {
+            if !(f.isExtern || self.methodInEntryModule(f: f)) {
                 fi += 1
                 continue
             }
@@ -82,7 +82,7 @@ pub impl Comp {
         while si < self.arena.structs.count {
             val sd: StructDef = self.arena.structs[si]
             if !(sd.isExtern) {
-                if moduleOf(c: inout self, offset: sd.nameStart) == 0U64 {
+                if self.moduleOf(offset: sd.nameStart) == 0U64 {
                     self.checkDupFields(fs: sd.fields, ctx: "struct")
                 }
             }
@@ -91,7 +91,7 @@ pub impl Comp {
         mut val ei: U64 = 0
         while ei < self.arena.enums.count {
             val ed: EnumDef = self.arena.enums[ei]
-            if moduleOf(c: inout self, offset: ed.nameStart) == 0U64 {
+            if self.moduleOf(offset: ed.nameStart) == 0U64 {
                 // duplicate variant names, and duplicate fields within each variant.
                 mut val vi: U64 = 0
                 while vi < ed.variants.count {
@@ -115,7 +115,7 @@ pub impl Comp {
         while i < self.decls.conforms.count {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) {
-                if moduleOf(c: inout self, offset: cf.typeStart) == 0U64 {
+                if self.moduleOf(offset: cf.typeStart) == 0U64 {
                     if self.isBlanketConform(cf: cf) {
                         compileErrorAt(line: lineOf(c: inout self, offset: cf.typeStart), msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
                     }
@@ -132,9 +132,9 @@ pub impl Comp {
             // extern structs ARE the canonical lang-item declarations (String/Bool/numeric
             // intrinsics in Core, defOffset 0) — skip them; only a non-extern user redef hits.
             if !(sd.isExtern) {
-                if offsetIsLoaded(c: inout self, offset: sd.defOffset) {
-                    if moduleOf(c: inout self, offset: sd.defOffset) == 0U64 {
-                        if isAmbientInLang(c: inout self, start: sd.nameStart, len: sd.nameLen) {
+                if self.offsetIsLoaded(offset: sd.defOffset) {
+                    if self.moduleOf(offset: sd.defOffset) == 0U64 {
+                        if self.isAmbientInLang(start: sd.nameStart, len: sd.nameLen) {
                             compileErrorAt(line: lineOf(c: inout self, offset: sd.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
                         }
                     }
@@ -145,9 +145,9 @@ pub impl Comp {
         mut val ei: U64 = 0
         while ei < self.arena.enums.count {
             val ed: EnumDef = self.arena.enums[ei]
-            if offsetIsLoaded(c: inout self, offset: ed.defOffset) {
-                if moduleOf(c: inout self, offset: ed.defOffset) == 0U64 {
-                    if isAmbientInLang(c: inout self, start: ed.nameStart, len: ed.nameLen) {
+            if self.offsetIsLoaded(offset: ed.defOffset) {
+                if self.moduleOf(offset: ed.defOffset) == 0U64 {
+                    if self.isAmbientInLang(start: ed.nameStart, len: ed.nameLen) {
                         compileErrorAt(line: lineOf(c: inout self, offset: ed.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
                     }
                 }
@@ -163,7 +163,7 @@ pub impl Comp {
         while si < self.arena.structs.count {
             val sd: StructDef = self.arena.structs[si]
             if !(sd.isExtern) {
-                if moduleOf(c: inout self, offset: sd.nameStart) == 0U64 {
+                if self.moduleOf(offset: sd.nameStart) == 0U64 {
                     names.append(value: intern(c: inout self, start: sd.nameStart, len: sd.nameLen))
                     offs.append(value: sd.nameStart)
                 }
@@ -173,7 +173,7 @@ pub impl Comp {
         mut val ei: U64 = 0
         while ei < self.arena.enums.count {
             val ed: EnumDef = self.arena.enums[ei]
-            if moduleOf(c: inout self, offset: ed.nameStart) == 0U64 {
+            if self.moduleOf(offset: ed.nameStart) == 0U64 {
                 names.append(value: intern(c: inout self, start: ed.nameStart, len: ed.nameLen))
                 offs.append(value: ed.nameStart)
             }
@@ -244,7 +244,7 @@ pub impl Comp {
         while fi < self.arena.funcs.count {
             val f: Func = self.arena.funcs[fi]
             if f.typeParams.count == 0U64 && !f.isProvided && !f.isExtern && !self.fnHasDefault(f: f) {
-                if moduleOf(c: inout self, offset: f.nameStart) == 0U64 {
+                if self.moduleOf(offset: f.nameStart) == 0U64 {
                     cand.append(value: fi)
                 }
             }
@@ -268,7 +268,7 @@ pub impl Comp {
         while fi < self.arena.funcs.count {
             val f: Func = self.arena.funcs[fi]
             if !(f.isExtern || f.isProvided) {
-                if moduleOf(c: inout self, offset: f.nameStart) == 0U64 {
+                if self.moduleOf(offset: f.nameStart) == 0U64 {
                     mut val i: U64 = 0
                     while i < f.params.count {
                         if !(f.params[i].noLabel) {

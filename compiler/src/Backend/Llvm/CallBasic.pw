@@ -70,7 +70,7 @@ fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> 
     }
     val bt: TypeRef = c.arena.types[br]
     val powN: Bind = kwSpan(c: inout c, kw: "pow", kwLen: 3U64)
-    val afi: U64 = findAssoc(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
+    val afi: U64 = c.findAssoc(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
     if afi >= c.arena.funcs.count {
         return LLVMConstNull(st.ptrty)
     }

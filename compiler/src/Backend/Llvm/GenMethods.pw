@@ -41,7 +41,7 @@ fn declareGenMethods(c: inout Comp, st: inout LlvmCtx) {
                 val mf: Func = c.arena.funcs[mfi]
                 if c.methodMatchesInst(f: mf, instRef: instRef) {
                     if !(mf.isProvided) {
-                        if methodInEntryModule(c: inout c, f: mf) {
+                        if c.methodInEntryModule(f: mf) {
                             if genMethSlotFor(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: []) == st.genMethK.count {
                                 declareOneGenMethod(c: inout c, st: inout st, mfi: mfi, instRef: instRef, ownArgs: [])
                             }

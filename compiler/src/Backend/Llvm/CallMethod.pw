@@ -44,7 +44,7 @@ fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, 
     mut val mfi: U64 = c.arena.funcs.count
     mut val vi: U64 = 0
     while vi < views.count {
-        val cand: U64 = findExtMethodById(c: inout c, recvStart: recvNameStart, recvLen: recvNameLen, srcId: views[vi], nameStart: nameStart, nameLen: nameLen, args: args)
+        val cand: U64 = c.findExtMethodById(recvStart: recvNameStart, recvLen: recvNameLen, srcId: views[vi], nameStart: nameStart, nameLen: nameLen, args: args)
         if cand < c.arena.funcs.count {
             if mfi < c.arena.funcs.count {
                 if mfi != cand {
@@ -65,7 +65,7 @@ fn genLlvmExtMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, srcStart: U64, 
         // `s` (spec/09: `#` selects among *available* sources; it subtracts nothing). This
         // mirrors the plain-`recv.foo()` path (genLlvmMethod). Bare findMethod still
         // excludes `viewOnly` witnesses, so a multi-path conformance stays loud-ambiguous.
-        mfi = findMethod(c: inout c, recvStart: recvNameStart, recvLen: recvNameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        mfi = c.findMethod(recvStart: recvNameStart, recvLen: recvNameLen, nameStart: nameStart, nameLen: nameLen, args: args)
     }
     if mfi >= c.arena.funcs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
@@ -120,7 +120,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
                 return pv
             }
         }
-        val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        val afi: U64 = c.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if afi < c.arena.funcs.count {
             // a generic assoc fn (`Box[T].make(v: T)`): it has no self, so it rides the
             // generic free-function machinery (declareGenFns/emitGenFns). Infer the type
@@ -193,7 +193,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     // structs), so dispatch to their std method and lazily emit the body.
     val primRecv: Bind = primLangItemRecvName(c: inout c, st: inout st, recv: recv)
     if primRecv.nameLen != 0U64 {
-        val smfi: U64 = findMethod(c: inout c, recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        val smfi: U64 = c.findMethod(recvStart: primRecv.nameStart, recvLen: primRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if smfi < c.arena.funcs.count {
             // a method with its own type params on a primitive (`(self.a:U64).absorb[S](…)`).
             if c.arena.funcs[smfi].typeParams.count > 0U64 {
@@ -228,7 +228,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         val rtnm: TypeRef = c.arena.types[recvRef]
         if isGenericInst(c: inout c, ref: recvRef) && !rangeEquals(bytes: c.arena.bytes, start: rtnm.nameStart, len: rtnm.nameLen, kw: "Array") {
             val grt: TypeRef = c.arena.types[recvRef]
-            val gmfi: U64 = findMethod(c: inout c, recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            val gmfi: U64 = c.findMethod(recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
             if gmfi < c.arena.funcs.count {
                 // a provided terminal with method-own type params (`fold[B]` on a lazy
                 // adapter receiver): infer the own args from the call so the slot is
@@ -259,7 +259,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         // a USER method on Array (`xs.first()` for `impl[T] Array[T]`): monomorphize
         // it for Array[elem] (the element ref drives the instance).
         val arrB: Bind = kwSpan(c: inout c, kw: "Array", kwLen: 5U64)
-        val amfi: U64 = findMethod(c: inout c, recvStart: arrB.nameStart, recvLen: arrB.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        val amfi: U64 = c.findMethod(recvStart: arrB.nameStart, recvLen: arrB.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         if amfi < c.arena.funcs.count {
             val elemRef: U64 = arrayExprElemRef(c: inout c, st: inout st, arrayExpr: recv)
             if elemRef != 0U64 {
@@ -300,7 +300,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         if erecvRef != 0U64 {
             val et: TypeRef = c.arena.types[erecvRef]
             if enumRegSlot(c: inout c, st: inout st, start: et.nameStart, len: et.nameLen) < st.enumIdxs.count {
-                val emfi: U64 = findMethod(c: inout c, recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val emfi: U64 = c.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if emfi < c.arena.funcs.count {
                     mut val eslot: U64 = userFnSlot(st: inout st, idx: emfi)
                     if eslot >= st.fnIdx.count {
@@ -344,7 +344,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
     mut val mfi: U64 = c.arena.funcs.count
     mut val vci: U64 = 0
     while vci < viewChain.count {
-        val cand: U64 = findExtMethodById(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: viewChain[vci], nameStart: nameStart, nameLen: nameLen, args: args)
+        val cand: U64 = c.findExtMethodById(recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: viewChain[vci], nameStart: nameStart, nameLen: nameLen, args: args)
         if cand < c.arena.funcs.count {
             if mfi < c.arena.funcs.count {
                 if mfi != cand {
@@ -357,7 +357,7 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         vci += 1
     }
     if mfi >= c.arena.funcs.count {
-        mfi = findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        mfi = c.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
     }
     if mfi >= c.arena.funcs.count {
         // `self.f(n: x)` where `f` is a closure-typed field (the iterator-adapter
@@ -374,14 +374,14 @@ fn genLlvmMethod(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, na
         }
         // a bare call to a method that exists only as an extension method (spec/09):
         // extension methods don't join bare resolution — point the user at the view.
-        if extMethodNameExists(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
+        if c.extMethodNameExists(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "this method is only provided by an extension — call it through the view (`value#Ext.method()`) or declare `defaultExtension #Ext` on the type")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         // a multi-path inter-trait conformance (spec/09): the type reaches the target
         // trait through more than one subject trait, so it does not conform bare —
         // the method is reachable only by selecting a path with `value#P`.
-        if viewOnlyMethodExists(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
+        if c.viewOnlyMethodExists(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
             compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "ambiguous inter-trait conformance: this type reaches the trait providing this method through more than one subject trait — select a conformance path with `value#P.method()` (spec/09)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }

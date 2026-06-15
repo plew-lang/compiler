@@ -81,7 +81,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     mut val iterStructStart: U64 = isd.nameStart
     mut val iterStructLen: U64 = isd.nameLen
     val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
-    val itfi: U64 = findMethod(c: inout c, recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
+    val itfi: U64 = c.findMethod(recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.arena.funcs.count {
         val itSlotF: U64 = userFnSlot(st: inout st, idx: itfi)
         if itSlotF >= st.fnIdx.count {
@@ -96,7 +96,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     }
     // next() on the Iter struct -> Optional[Item]
     val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
-    val nfi: U64 = findMethod(c: inout c, recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+    val nfi: U64 = c.findMethod(recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
     if nfi >= c.arena.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
         return
@@ -121,7 +121,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     mut val iterVal: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
     mut val iterInstRef: U64 = recvRef
     val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
-    val itfi: U64 = findMethod(c: inout c, recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
+    val itfi: U64 = c.findMethod(recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.arena.funcs.count {
         // an Iterable: call iterator() and switch the instance ref to the iterator's.
         val itSlot: U64 = ensureGenMethodDeclared(c: inout c, st: inout st, mfi: itfi, instRef: recvRef, ownArgs: [])
@@ -144,7 +144,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     }
     val it: TypeRef = c.arena.types[iterInstRef]
     val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
-    val nfi: U64 = findMethod(c: inout c, recvStart: it.nameStart, recvLen: it.nameLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+    val nfi: U64 = c.findMethod(recvStart: it.nameStart, recvLen: it.nameLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
     if nfi >= c.arena.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
         return

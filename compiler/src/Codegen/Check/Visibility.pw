@@ -59,12 +59,12 @@ fn checkUseVisibility(c: inout Comp) {
     while i < c.arena.exprs.count {
         match c.arena.exprs[i] {
             Expr.Call(val nameStart, val nameLen, val args) => {
-                val useMod: U64 = moduleOf(c: inout c, offset: nameStart)
+                val useMod: U64 = c.moduleOf(offset: nameStart)
                 // The name is in scope iff some free fn of this name is visible from the
                 // call's module (scoped resolution). If so, any remaining mismatch is an
                 // overload/label/type error reported elsewhere — not a visibility issue.
-                if firstVisibleFuncByName(c: inout c, useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= c.arena.funcs.count {
-                    if firstFuncByName(c: inout c, nameStart: nameStart, nameLen: nameLen) < c.arena.funcs.count {
+                if c.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= c.arena.funcs.count {
+                    if c.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < c.arena.funcs.count {
                         // a free fn of this name exists only in other (loaded) modules and
                         // was not imported here — the use needs an import.
                         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
@@ -98,7 +98,7 @@ fn checkUseVisibility(c: inout Comp) {
 // lang-item TYPES are handled separately by `isAmbientInLang` at the type site (= @Std/Lang's
 // export surface) — no OTHER module is "ambient" as a whole (spec/15).
 fn defModuleVisible(c: inout Comp, defOffset: U64, useMod: U64) -> Bool {
-    return moduleOf(c: inout c, offset: defOffset) == useMod
+    return c.moduleOf(offset: defOffset) == useMod
 }
 
 fn typeDeclVisibleFrom(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bool {
@@ -182,7 +182,7 @@ fn realTypeNameInModule(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bin
     while ai < c.decls.importAliases.count {
         val al: Bind = c.decls.importAliases[ai]
         if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
-            if moduleOf(c: inout c, offset: al.nameStart) == useMod {
+            if c.moduleOf(offset: al.nameStart) == useMod {
                 return <Bind nameStart=al.fieldStart nameLen=al.fieldLen fieldStart=al.fieldStart fieldLen=al.fieldLen />
             }
         }
@@ -193,8 +193,8 @@ fn realTypeNameInModule(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bin
 
 fn checkTypeName(c: inout Comp, siteOffset: U64, start: U64, len: U64) {
     if len == 0 { return }
-    if isAmbientInLang(c: inout c, start: start, len: len) { return }
-    val useMod: U64 = moduleOf(c: inout c, offset: siteOffset)
+    if c.isAmbientInLang(start: start, len: len) { return }
+    val useMod: U64 = c.moduleOf(offset: siteOffset)
     // a `Real as Alias` use resolves to Real (imports/exports are keyed by the real name).
     val real: Bind = realTypeNameInModule(c: inout c, useMod: useMod, start: start, len: len)
     if typeDeclVisibleFrom(c: inout c, useMod: useMod, start: real.nameStart, len: real.nameLen) { return }
@@ -217,7 +217,7 @@ fn checkTypeVisibility(c: inout Comp) {
     while i < c.arena.types.count {
         val t: TypeRef = c.arena.types[i]
         if t.siteOffset != 0U64 {
-            if offsetIsLoaded(c: inout c, offset: t.siteOffset) {
+            if c.offsetIsLoaded(offset: t.siteOffset) {
                 checkTypeName(c: inout c, siteOffset: t.siteOffset, start: t.nameStart, len: t.nameLen)
             }
         }
@@ -233,17 +233,17 @@ fn importCycleSentinel() -> U64 { return 4000000000U64 }
 // re-interned). importCycleSentinel() if no such declaration is loaded. Used to turn an
 // `import … with { name }` record into a module→module dependency edge.
 fn definingModuleOfName(c: inout Comp, start: U64, len: U64) -> U64 {
-    val fi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
+    val fi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
     if fi < c.arena.funcs.count {
         val f: Func = c.arena.funcs[fi]
-        return moduleOf(c: inout c, offset: f.nameStart)
+        return c.moduleOf(offset: f.nameStart)
     }
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val i: U64 = 0
     while i < c.arena.structs.count {
         val sd: StructDef = c.arena.structs[i]
         if sd.nameId == qId {
-            if sd.defOffset != 0U64 { return moduleOf(c: inout c, offset: sd.defOffset) }
+            if sd.defOffset != 0U64 { return c.moduleOf(offset: sd.defOffset) }
         }
         i += 1
     }
@@ -251,21 +251,21 @@ fn definingModuleOfName(c: inout Comp, start: U64, len: U64) -> U64 {
     while i < c.arena.enums.count {
         val ed: EnumDef = c.arena.enums[i]
         if ed.nameId == qId {
-            if ed.defOffset != 0U64 { return moduleOf(c: inout c, offset: ed.defOffset) }
+            if ed.defOffset != 0U64 { return c.moduleOf(offset: ed.defOffset) }
         }
         i += 1
     }
     i = 0
     while i < c.decls.traits.count {
         val td: TraitDef = c.decls.traits[i]
-        if td.nameId == qId { return moduleOf(c: inout c, offset: td.nameStart) }
+        if td.nameId == qId { return c.moduleOf(offset: td.nameStart) }
         i += 1
     }
     i = 0
     while i < c.arena.newtypes.count {
         val nt: NewtypeDef = c.arena.newtypes[i]
         if spansEqual(c: inout c, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
-            if nt.defOffset != 0U64 { return moduleOf(c: inout c, offset: nt.defOffset) }
+            if nt.defOffset != 0U64 { return c.moduleOf(offset: nt.defOffset) }
         }
         i += 1
     }

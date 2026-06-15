@@ -117,7 +117,7 @@ pub impl Comp {
                 self.checkFnSigAgainst(ft: ft, params: params, retTy: retTy, offset: exprOffset(c: inout self, id: init))
             }
             Expr.Ident(start: val s, len: val l) => {
-                val fi: U64 = firstFuncByName(c: inout self, nameStart: s, nameLen: l)
+                val fi: U64 = self.firstFuncByName(nameStart: s, nameLen: l)
                 if fi < self.arena.funcs.count {
                     self.checkFnSigAgainst(ft: ft, params: self.arena.funcs[fi].params, retTy: self.arena.funcs[fi].retTy, offset: exprOffset(c: inout self, id: init))
                 }
@@ -291,7 +291,7 @@ pub impl Comp {
             }
         }
         if rt.kind == 2 {
-            val mi: U64 = findMethod(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
             if mi != self.arena.funcs.count {
                 val mf: Func = self.arena.funcs[mi]
                 self.tcCheckGenericArgConsistency(f: mf, args: args)
@@ -411,7 +411,7 @@ pub impl Comp {
         // (the value `S.make(n: true)` would otherwise reinterpret a Bool as I64).
         match self.arena.exprs[recv] {
             Expr.Ident(start: val rStart, len: val rLen) => {
-                val ai: U64 = findAssoc(c: inout self, recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val ai: U64 = self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if ai < self.arena.funcs.count {
                     val aps: Array[Param] = self.arena.funcs[ai].params
                     mut val k: U64 = 0

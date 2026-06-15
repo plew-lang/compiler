@@ -180,7 +180,7 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 val rt: TypeInfo = exprType(c: inout self, id: recv)
                 if rt.kind == 2 {
-                    val mi: U64 = findMethod(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     if mi != self.arena.funcs.count {
                         return !self.arena.funcs[mi].hasRet
                     }

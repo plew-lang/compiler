@@ -5,7 +5,7 @@ fn structDeinitFi(c: inout Comp, sidx: U64) -> U64 {
     val sd: StructDef = c.arena.structs[sidx]
     val b: Bind = kwSpan(c: inout c, kw: "deinit", kwLen: 6U64)
     val noArgs: Array[Arg] = []
-    return findMethod(c: inout c, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
+    return c.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
 }
 
 // Whether destroying a value of struct `sidx` runs any deinit — its own, or a

@@ -76,7 +76,7 @@ fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
             val arn: Bind = assocRecvName(c: inout c, recv: recv)
             if arn.nameLen != 0U64 {
-                val afi: U64 = findAssoc(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val afi: U64 = c.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if afi < c.arena.funcs.count {
                     markReachAssoc(st: inout st, fi: afi)
                 }
@@ -219,10 +219,10 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         }
         if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
         if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
-            return methodInEntryModule(c: inout c, f: f)
+            return c.methodInEntryModule(f: f)
         }
         if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.enumIdxs.count {
-            return methodInEntryModule(c: inout c, f: f)
+            return c.methodInEntryModule(f: f)
         }
         return false
     }
@@ -238,10 +238,10 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
                 return false
             }
         }
-        return methodInEntryModule(c: inout c, f: f)
+        return c.methodInEntryModule(f: f)
     }
     // a free function: entry module only (see registerStructs note on reachability).
-    return moduleOf(c: inout c, offset: f.nameStart) == 0U64
+    return c.moduleOf(offset: f.nameStart) == 0U64
 }
 
 // The LLVM type of a parameter: a pointer for an `inout` parameter (it receives

@@ -416,7 +416,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             // annotation), mirroring codegen — otherwise a later `p.x` on an
             // inferred-typed `val p = <P …/>` can't recover its type, so a generic
             // call like `print(p.x + p.y)` fails to discover its instantiation.
-            val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+            val le: LetEff = c.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
             c.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
         }
         Stmt.Assign(val op, val target, val value) => {

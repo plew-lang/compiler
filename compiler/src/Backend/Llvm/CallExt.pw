@@ -140,7 +140,7 @@ fn funcViewsMatch(c: inout Comp, st: inout LlvmCtx, fi: U64, args: Array[Arg]) -
 // Falls back to the view-blind result if no view-matching overload exists (the
 // view-mismatch enforcement at genArgValue then reports it).
 fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-    val base: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+    val base: U64 = c.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
     if base >= c.arena.funcs.count {
         return base
     }

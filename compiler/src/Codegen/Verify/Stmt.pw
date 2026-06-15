@@ -83,7 +83,7 @@ pub impl Comp {
                 }
                 // register the binding (after the init, so it can't see itself) with its
                 // effective type and mutability, so later places resolve / check.
-                val le: LetEff = inferLetType(c: inout self, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val op, val target, val value) => {

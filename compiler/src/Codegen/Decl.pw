@@ -437,7 +437,7 @@ pub impl Comp {
         while i < self.arena.exprs.count {
             match self.arena.exprs[i] {
                 Expr.Ident(val start, val len) => {
-                    val fvi: U64 = firstFuncByName(c: inout self, nameStart: start, nameLen: len)
+                    val fvi: U64 = self.firstFuncByName(nameStart: start, nameLen: len)
                     if fvi < self.arena.funcs.count {
                         val f: Func = self.arena.funcs[fvi]
                         if !(f.hasRecv) {

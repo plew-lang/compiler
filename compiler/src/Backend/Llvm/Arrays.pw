@@ -50,7 +50,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             }
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
             if rsidx < c.arena.structs.count {
-                val mfi: U64 = findMethod(c: inout c, recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.arena.funcs.count {
                     return llvmFnRetTy(c: inout c, st: inout st, f: c.arena.funcs[mfi])
                 }
@@ -60,7 +60,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
             if rsidx < c.arena.structs.count {
-                val mfi: U64 = findExtMethod(c: inout c, recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.arena.funcs.count {
                     return llvmFnRetTy(c: inout c, st: inout st, f: c.arena.funcs[mfi])
                 }

@@ -245,7 +245,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
             if rsidx < c.arena.structs.count {
-                val mfi: U64 = findMethod(c: inout c, recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.arena.funcs.count {
                     if c.arena.funcs[mfi].hasRet {
                         // ground a type-parameter return under the receiver's instance
@@ -263,7 +263,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             val rRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
             if rRef != 0U64 {
                 val rt: TypeRef = c.arena.types[rRef]
-                val gmfi: U64 = findMethod(c: inout c, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val gmfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if gmfi < c.arena.funcs.count {
                     if c.arena.funcs[gmfi].hasRet {
                         return methodReturnKind(c: inout c, st: inout st, recv: recv, mfi: gmfi)
@@ -277,7 +277,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // newtype's inherited methods, so the fallback below would mis-kind it.
             val primRecvK: Bind = primLangItemRecvName(c: inout c, st: inout st, recv: recv)
             if primRecvK.nameLen != 0U64 {
-                val pmfi: U64 = findMethod(c: inout c, recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val pmfi: U64 = c.findMethod(recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if pmfi < c.arena.funcs.count {
                     if c.arena.funcs[pmfi].hasRet {
                         return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[pmfi].retStart, tyLen: c.arena.funcs[pmfi].retLen)
@@ -288,7 +288,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
             val rsidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
             if rsidx < c.arena.structs.count {
-                val mfi: U64 = findExtMethod(c: inout c, recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mfi < c.arena.funcs.count {
                     if c.arena.funcs[mfi].hasRet {
                         return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[mfi].retStart, tyLen: c.arena.funcs[mfi].retLen)

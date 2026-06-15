@@ -167,7 +167,7 @@ pub impl Comp {
                 // the same binop type-check verifyProgram runs on non-generic bodies, but
                 // only for the USER's (entry-module) generic templates (std is trusted).
                 if self.cur.checkFn < self.arena.funcs.count {
-                    if methodInEntryModule(c: inout self, f: self.arena.funcs[self.cur.checkFn]) {
+                    if self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn]) {
                         self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                     }
                 }
@@ -257,7 +257,7 @@ pub impl Comp {
                         // generic-receiver method's grounded param types are handled by the
                         // backend; here we check the non-generic-receiver case.
                         if !(isGenericInst(c: inout self, ref: rt.ref)) {
-                            val mi: U64 = findMethod(c: inout self, recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                             if mi != self.arena.funcs.count {
                                 val mps: Array[Param] = self.arena.funcs[mi].params
                                 mut val mk: U64 = 0
@@ -363,7 +363,7 @@ pub impl Comp {
         // trusted and validated separately (its array-element inferType quirks — e.g.
         // `Array.get` reporting the result as `Array` not the element `T` — would
         // false-positive here). Mirrors verifyProgram's entry-module gate.
-        if !(methodInEntryModule(c: inout self, f: self.arena.funcs[self.cur.checkFn])) {
+        if !(self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn])) {
             return
         }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
@@ -548,7 +548,7 @@ pub impl Comp {
                 shouldCheck = true
             }
             if self.methodRecvIsTrait(f: f) {
-                if methodInEntryModule(c: inout self, f: f) {
+                if self.methodInEntryModule(f: f) {
                     shouldCheck = true
                 }
             }

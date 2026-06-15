@@ -15,7 +15,7 @@ pub impl Comp {
         while gi < self.arena.globals.count {
             match self.arena.stmts[self.arena.globals[gi].letStmt] {
                 Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                    val le: LetEff = inferLetType(c: inout self, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                    val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                     self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
                 }
                 _ => {}
@@ -300,7 +300,7 @@ pub impl Comp {
         if sd.isExtern {
             return
         }
-        val defMod: U64 = moduleOf(c: inout self, offset: sd.defOffset)
+        val defMod: U64 = self.moduleOf(offset: sd.defOffset)
         mut val i: U64 = 0
         while i < fields.count {
             val v: U64 = self.fieldVis(structStart: typeStart, structLen: typeLen, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
@@ -308,8 +308,8 @@ pub impl Comp {
                 // gate by the field's ORIGINAL source offset (nameStart is re-interned and
                 // does not map to a module); synthesized constructions carry an unloaded
                 // offset (the dict literal's `keys`/… use the interned span) and are skipped.
-                if offsetIsLoaded(c: inout self, offset: fields[i].offset) {
-                    if moduleOf(c: inout self, offset: fields[i].offset) != defMod {
+                if self.offsetIsLoaded(offset: fields[i].offset) {
+                    if self.moduleOf(offset: fields[i].offset) != defMod {
                         if v == 0U64 {
                             compileErrorAt(line: lineOf(c: inout self, offset: fields[i].offset), msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
                         } else {
@@ -326,8 +326,8 @@ pub impl Comp {
         // representative construction-site offset (a loaded field) to locate its module.
         mut val ci: U64 = 0
         while ci < fields.count {
-            if offsetIsLoaded(c: inout self, offset: fields[ci].offset) {
-                if moduleOf(c: inout self, offset: fields[ci].offset) != defMod {
+            if self.offsetIsLoaded(offset: fields[ci].offset) {
+                if self.moduleOf(offset: fields[ci].offset) != defMod {
                     if !(self.structHasPubFactory(nameId: sd.nameId)) {
                         compileErrorAt(line: lineOf(c: inout self, offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
                     }

@@ -139,7 +139,7 @@ fn rewriteFactoryConstruction(c: inout Comp) {
         match c.arena.exprs[i] {
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                 if isEnum {
-                    if typeHasAssocFn(c: inout c, typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
+                    if c.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
                         val recv: U64 = c.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                         mut val args: Array[Arg] = []
                         mut val fi: U64 = 0
@@ -155,7 +155,7 @@ fn rewriteFactoryConstruction(c: inout Comp) {
                     // constructions are untouched.
                     if fields.count == 1U64 {
                         if spansEqual(c: inout c, aStart: fields[0].nameStart, aLen: fields[0].nameLen, bStart: fromN.nameStart, bLen: fromN.nameLen) {
-                            if typeHasAssocFn(c: inout c, typeStart: typeStart, typeLen: typeLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
+                            if c.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
                                 val recv: U64 = c.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                                 mut val fargs: Array[Arg] = []
                                 fargs.append(value: <Arg expr=fields[0].value isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
@@ -169,7 +169,7 @@ fn rewriteFactoryConstruction(c: inout Comp) {
                 // `x as T` ⟺ `<T from=x/>` (spec/12): when `T` owns a `from` factory
                 // (an anonymous `factory(from: …)`), route the cast to it. Numeric casts
                 // are untouched (primitives have no `from` factory).
-                if typeHasAssocFn(c: inout c, typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
+                if c.typeHasAssocFn(typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
                     val recv: U64 = c.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
                     mut val cargs: Array[Arg] = []
                     cargs.append(value: <Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
@@ -199,7 +199,7 @@ fn rewriteImportAliases(c: inout Comp) {
                 while ai < c.decls.importAliases.count {
                     val al: Bind = c.decls.importAliases[ai]
                     if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
-                        if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: nameStart) {
+                        if c.moduleOf(offset: al.nameStart) == c.moduleOf(offset: nameStart) {
                             c.arena.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
                             ai = c.decls.importAliases.count
                         } else {
@@ -231,7 +231,7 @@ fn aliasReal(c: inout Comp, start: U64, len: U64) -> Bind {
     while ai < c.decls.importAliases.count {
         val al: Bind = c.decls.importAliases[ai]
         if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
-            if moduleOf(c: inout c, offset: al.nameStart) == moduleOf(c: inout c, offset: start) {
+            if c.moduleOf(offset: al.nameStart) == c.moduleOf(offset: start) {
                 return <Bind nameStart=al.fieldStart nameLen=al.fieldLen fieldStart=al.fieldStart fieldLen=al.fieldLen />
             }
         }
@@ -252,7 +252,7 @@ export fn assocRecvName(c: inout Comp, recv: U64) -> Bind {
             if c.localIndexByName(start: start, len: len) < c.cur.locals.count {
                 return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
             }
-            if isTypeName(c: inout c, start: start, len: len) {
+            if c.isTypeName(start: start, len: len) {
                 // resolve an import alias (`with { Real as Alias }`) so `Alias.fn(args)`
                 // dispatches to the assoc fn declared on the real type (spec/15).
                 return aliasReal(c: inout c, start: start, len: len)

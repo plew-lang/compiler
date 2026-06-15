@@ -99,7 +99,7 @@ pub impl Comp {
             // imports). This matters now that std files carry `@[...]` (e.g. Core's primitive
             // `@[IntTryFrom]`): force-loading @Std/Core alongside an entry that IS Core would
             // otherwise collect the same annotations twice.
-            if moduleOf(c: inout self, offset: d.declStart) != 0U64 {
+            if self.moduleOf(offset: d.declStart) != 0U64 {
                 i += 1
                 continue
             }
