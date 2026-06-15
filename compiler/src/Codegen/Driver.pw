@@ -247,24 +247,9 @@ fn runFrontend() -> Comp {
         c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count - fileStart fieldStart=0 fieldLen=0 />)
         val items: Array[TopItemAst] = parseAndLowerFile(c: inout c, fileBytes: s.bytes, fileStart: fileStart)
     }
-    // Auto-load the implicit prelude (the ambient Array methods) as its own module,
-    // appended + lowered last. It lives next to the binary at `std/Prelude.pw` and
-    // needs no `import` — like the `Array` lang-item type, its methods are always in
-    // scope. Skipped if absent (a freshly-seeded compiler still builds).
-    mut val prelPath: Array[U8] = []
-    appendBytes(into: inout prelPath, from: computeStdRoot(arg0: argAt(0).bytes))
-    appendBytes(into: inout prelPath, from: "Prelude.pw".bytes)
-    if fileExists(path: prelPath) {
-        val prelSrc: String = readFileBytes(prelPath)
-        if c.arena.bytes.count > 0 {
-            c.arena.bytes.append(10)
-        }
-        val prelStart: U64 = c.arena.bytes.count
-        c.appendSrc(from: prelSrc.bytes)
-        c.modules.ranges.append(<Bind nameStart=prelStart nameLen=c.arena.bytes.count - prelStart fieldStart=nextModuleId fieldLen=0 />)
-        nextModuleId = nextModuleId + 1
-        val items: Array[TopItemAst] = parseAndLowerFile(c: inout c, fileBytes: prelSrc.bytes, fileStart: prelStart)
-    }
+    // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried
+    // — Array/Dictionary — now live in @Std/Lang, the single ambient module force-loaded
+    // first above. There is no implicit prelude module anymore.)
     // built-in-name span cache (kwSpan): append the lang-item names at known
     // offsets so type recovery can name `String`/`U64`/`Array`/… without scanning
     // the source. Before any analysis (which calls kwSpan via exprType).

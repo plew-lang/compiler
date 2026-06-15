@@ -1,4 +1,0 @@
-// @Std/Prelude — retained as an (empty) force-loaded module. The ambient lang-item
-// types it used to carry — `Array` and `Dictionary` — now live in @Std/Lang (the single
-// ambient module, spec/15), alongside `Optional`/`Result`/`Ordering`. This file is kept
-// only so the driver's prelude force-load stays valid; it declares nothing.
