@@ -5,15 +5,49 @@
 // import-required. Force-loaded first (Driver), so the foundational types resolve for
 // Core/Hash/Prelude; its module id is the ambient axis of type visibility.
 //
-// (Currently holds Optional/Result/Ordering; Array/Dictionary and the primitive +
-// synthesized intrinsic types move here in following increments. Until the visibility
-// flip, ambient is still keyed by `isLangItemTypeName` — these types stay ambient by
-// name regardless of which module declares them, so the move is behaviour-neutral.)
+// (Holds Optional/Result/Ordering, Array/Dictionary, and the primitive scalar types;
+// the synthesized intrinsic types move here in a following increment. Until the
+// visibility flip, ambient is still keyed by `isLangItemTypeName` — these types stay
+// ambient by name regardless of which module declares them, so the move is
+// behaviour-neutral.)
 
 // The `Dictionary` lang item (below) is built on hashing, which is NOT a language item
 // (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash, so this module
 // imports it like any non-ambient dependency.
 import @Std/Hash with { Hash, Hasher, SipHasher }
+// The primitive `@[IntTryFrom]` derive (below) generates `impl T as TryFrom[S]` into
+// Lang.gen.pw, which names `TryFrom`/`RangeError` (the conversion protocol, owned by Core
+// — non-ambient, import-required). Importing them here is not a cycle: Core uses Lang's
+// ambient types (primitives, Optional, Array) without importing Lang.
+import @Std/Core with { TryFrom, RangeError }
+
+// --- lang-item primitive type declarations (spec/15 core-library boundary) ---
+// Opaque intrinsic types (representation is the compiler's int*_t / PlewString mapping):
+// the language's built-in scalar types, declared here in the ambient module so they are in
+// scope everywhere. The integer primitives carry `@[IntTryFrom(sources: […])]` listing the
+// sub-64-bit SOURCE types whose narrowing TryFrom into that target is fallible (spec/12);
+// the `@[IntTryFrom]` derive (in @Std/Syntax) renders one delegating `impl T as TryFrom[S]`
+// per source into Lang.gen.pw. (I64 as a TARGET has no fallible sub-64-bit source — all
+// widen into it — and the wide/float sources are hand-written in Core, where TryFrom lives.)
+extern "plew-intrinsic" {
+    @[IntTryFrom(sources: ["I16", "I32", "U8", "U16", "U32"])]
+    struct I8
+    @[IntTryFrom(sources: ["I32", "U16", "U32"])]
+    struct I16
+    @[IntTryFrom(sources: ["U32"])]
+    struct I32
+    struct I64
+    @[IntTryFrom(sources: ["I8", "I16", "I32", "U16", "U32"])]
+    struct U8
+    @[IntTryFrom(sources: ["I8", "I16", "I32", "U32"])]
+    struct U16
+    @[IntTryFrom(sources: ["I8", "I16", "I32"])]
+    struct U32
+    @[IntTryFrom(sources: ["I8", "I16", "I32"])]
+    struct U64
+    struct F32  struct F64
+    struct Bool struct String
+}
 
 // An optional value: `Some` holds a `T`, `None` holds nothing.
 enum Optional[T] {
