@@ -92,7 +92,7 @@ fn genLlvmAdapterWrap(c: inout Comp, st: inout LlvmCtx, recv: U64, args: Array[A
     val savedA: Array[U64] = c.cur.typeArgs
     c.cur.typeParams = sd.typeParams
     c.cur.typeArgs = c.arena.types[adapterRef].args
-    val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: exprOffset(c: inout c, id: recv))
+    val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: c.exprOffset(id: recv))
     c.cur.typeParams = savedP
     c.cur.typeArgs = savedA
     return v

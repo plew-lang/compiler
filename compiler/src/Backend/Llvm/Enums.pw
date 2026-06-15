@@ -91,7 +91,7 @@ fn enumPayloadWords(c: inout Comp, st: inout LlvmCtx, eid: U64) -> U64 {
 // The payload-word count of an enum field, honoring boxing: a boxed (recursive)
 // field is a single heap pointer (1 word); otherwise its type's natural size.
 fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
-    if fieldIsBoxed(c: inout c, f: f) {
+    if c.fieldIsBoxed(f: f) {
         return 1U64
     }
     // an array field (declared `Array[E]`, tyStart naming the element) is the
@@ -107,7 +107,7 @@ fn fieldWordsF(c: inout Comp, st: inout LlvmCtx, f: FieldDef) -> U64 {
         if c.cur.typeParams.count > 0U64 {
             g = c.groundTypeRef(ref: f.ty)
         }
-        if isGenericInst(c: inout c, ref: g) {
+        if c.isGenericInst(ref: g) {
             // Array[E] is the {ptr,i64} value type, not an inline instance.
             if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
                 return 2U64
@@ -213,7 +213,7 @@ fn variantPayloadTy(c: inout Comp, st: inout LlvmCtx, eid: U64, vi: U64) -> LLVM
         // the array ({ptr,i64}), existential (fat ptr), generic-instance (its named
         // tagged-union / struct type), or scalar type — matching the value built in
         // buildEnumValue, so insertvalue types agree.
-        if fieldIsBoxed(c: inout c, f: fs[i]) {
+        if c.fieldIsBoxed(f: fs[i]) {
             elems.append(value: st.ptrty)
         } else {
             elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: fs[i]))
@@ -236,14 +236,14 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
     // through the active env so it resolves to the registered concrete instance
     // (mirrors genLlvmMake for structs). Without this, genEnumSlot looks up the
     // ungrounded `Optional[T]` template and fails.
-    if isGenericInst(c: inout c, ref: ty) {
+    if c.isGenericInst(ref: ty) {
         if c.cur.typeParams.count > 0U64 {
             ty = c.groundTypeRef(ref: ty)
         }
     }
-    if !(isGenericInst(c: inout c, ref: ty)) {
+    if !(c.isGenericInst(ref: ty)) {
         if st.expectedTy != 0U64 {
-            if isGenericInst(c: inout c, ref: st.expectedTy) {
+            if c.isGenericInst(ref: st.expectedTy) {
                 val et: TypeRef = c.arena.types[st.expectedTy]
                 if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
                     ty = st.expectedTy
@@ -253,7 +253,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
     }
     st.expectedTy = 0U64
     // a generic enum instance (Optional[I64]): build under its substitution env.
-    if isGenericInst(c: inout c, ref: ty) {
+    if c.isGenericInst(ref: ty) {
         val gslot: U64 = genEnumSlot(c: inout c, st: inout st, ref: ty)
         if gslot < st.genEnumRefs.count {
             val savedP: Array[Bind] = c.cur.typeParams
@@ -271,7 +271,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
     }
     val reg: U64 = enumRegSlot(c: inout c, st: inout st, start: typeStart, len: typeLen)
     if reg >= st.enumIdxs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: typeStart), msg: "LLVM backend: construction of this enum not yet supported (generic / array-field enums are TODO)")
+        compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this enum not yet supported (generic / array-field enums are TODO)")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     return buildEnumValue(c: inout c, st: inout st, eid: st.enumIdxs[reg], ety: st.enumTys[reg], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
@@ -280,7 +280,7 @@ fn genLlvmMakeEnum(c: inout Comp, st: inout LlvmCtx, typeStart: U64, typeLen: U6
 // Build an enum value of LLVM type `ety` for def `eid`: store the tag + the
 // variant payload struct (under the active substitution env).
 fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField]) -> LLVMValueRef {
-    val vi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+    val vi: U64 = c.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
     val slot: LLVMValueRef = entryAlloca(st: inout st, ty: ety)
     // zero the whole cell first (tag + payload) so unused payload words are
     // deterministic — a payload-less variant then has an all-zero payload, making
@@ -325,7 +325,7 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
             // a boxed (recursive) field: build the payload value, heap-allocate a
             // cell, store the value, and put the cell pointer in the payload. (No
             // refcount/free yet — leaky, but observably correct, like Ref.)
-            if fieldIsBoxed(c: inout c, f: fs[fj]) {
+            if c.fieldIsBoxed(f: fs[fj]) {
                 // ground the boxed field type under the env so a recursive GENERIC enum
                 // payload (`Node(l: Tree[T], r: Tree[T])` in `Tree[I64]`) grounds to the
                 // registered concrete instance instead of the ungrounded template.
@@ -376,7 +376,7 @@ fn buildEnumValue(c: inout Comp, st: inout LlvmCtx, eid: U64, ety: LLVMTypeRef, 
                             }
                         }
                     }
-                    if gpf != 0U64 && (isGenericInst(c: inout c, ref: gpf) || gpfIsRecord) {
+                    if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
                         st.expectedTy = gpf
                         agg = LLVMBuildInsertValue(st.b, agg, genLlvmExpr(c: inout c, st: inout st, id: valExpr), fj, anon())
                     } else {

@@ -12,10 +12,10 @@ pub impl Comp {
             // (`isEmpty`, `append`, …) written in Core, so they are not in this group.
             mut val onBuiltin: Bool = false
             if f.hasRecv {
-                onBuiltin = isPrimType(c: inout self, start: f.recvStart, len: f.recvLen)
+                onBuiltin = self.isPrimType(start: f.recvStart, len: f.recvLen)
             } else {
                 if f.isAssoc {
-                    onBuiltin = isPrimType(c: inout self, start: f.recvStart, len: f.recvLen)
+                    onBuiltin = self.isPrimType(start: f.recvStart, len: f.recvLen)
                 }
             }
             // a *trait-conformance* member on a primitive/String is allowed: Core owns
@@ -37,7 +37,7 @@ pub impl Comp {
                 onBuiltin = false
             }
             if onBuiltin {
-                compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
+                compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
             }
             i += 1
         }
@@ -48,8 +48,8 @@ pub impl Comp {
         while i < self.arena.funcs.count {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv || f.isAssoc {
-                if newtypeUnderRef(c: inout self, start: f.recvStart, len: f.recvLen) != 0U64 {
-                    compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
+                if self.newtypeUnderRef(start: f.recvStart, len: f.recvLen) != 0U64 {
+                    compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
                 }
             }
             i += 1
@@ -63,7 +63,7 @@ pub impl Comp {
             if f.hasRecv {
                 if f.selfMove {
                     if !(self.typeIsUnique(start: f.recvStart, len: f.recvLen)) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
+                        compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
                     }
                 }
             }

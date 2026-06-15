@@ -72,6 +72,30 @@ struct LetEff {
     pub val ty: U64
 }
 
+// A folded constant integer: non-negative magnitude `value` (U64) plus a `neg`
+// sign, mirroring the literal model (Expr.Int is a magnitude; `-` is a Unary).
+// (Used by Check/Literal's integer-bounds folding; a Frontend-internal helper.)
+struct ConstInt {
+    pub val isConst: Bool
+    pub val neg: Bool
+    pub val value: U64
+}
+
+// An integer type's bit width + signedness, known only when a span names an integer
+// type. (Used by Check/Literal's bounds checking; a Frontend-internal helper.)
+struct IntTy {
+    pub val known: Bool
+    pub val bits: U64
+    pub val sgn: Bool
+}
+
+// One scalar-match arm's `if` condition. A wildcard has none (it is the terminal
+// `else`). (Used by Lower/Match's scalar-match lowering; a Frontend-internal helper.)
+struct ScalarCond {
+    pub val hasCond: Bool
+    pub val cond: U64
+}
+
 // ---- arena helpers ----
 //
 // Methods on the arena (Comp). All take `inout self`: the struct is large, so a

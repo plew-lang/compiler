@@ -28,7 +28,7 @@ pub impl Comp {
     }
 
     inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
-        val nameN: Bind = internBytes(c: inout self, s: m.name)
+        val nameN: Bind = self.internBytes(s: m.name)
         // typeParams = impl's `[T]` (in scope for every member) ++ the method's own.
         mut val typeParams: Array[Bind] = []
         mut val ipi: U64 = 0
@@ -56,13 +56,13 @@ pub impl Comp {
             ski += 1
         }
         self.cur.typeParams = skipScope
-        val params: Array[Param] = lowerParams(c: inout self, params: m.params)
+        val params: Array[Param] = self.lowerParams(params: m.params)
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if m.hasRet {
-            val pt: PType = lowerType(c: inout self, t: m.ret)
+            val pt: PType = self.lowerType(t: m.ret)
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -73,10 +73,10 @@ pub impl Comp {
         // in `Optional[Self]` (`optional`) or `Result[Self, E]` (`result[E]`).
         mut val effHasRet: Bool = m.hasRet
         if m.isFactory {
-            val ft: PType = lowerType(c: inout self, t: im.recvType)
+            val ft: PType = self.lowerType(t: im.recvType)
             effHasRet = true
             if m.factoryKind == 1U64 {
-                val optN: Bind = internBytes(c: inout self, s: "Optional")
+                val optN: Bind = self.internBytes(s: "Optional")
                 mut val oargs: Array[U64] = []
                 oargs.append(value: ft.ref)
                 retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs />)
@@ -85,8 +85,8 @@ pub impl Comp {
                 retIsArray = false
             } else {
                 if m.factoryKind == 2U64 {
-                    val resN: Bind = internBytes(c: inout self, s: "Result")
-                    val et: PType = lowerType(c: inout self, t: m.factoryErr)
+                    val resN: Bind = self.internBytes(s: "Result")
+                    val et: PType = self.lowerType(t: m.factoryErr)
                     mut val rargs: Array[U64] = []
                     rargs.append(value: ft.ref)
                     rargs.append(value: et.ref)
@@ -106,7 +106,7 @@ pub impl Comp {
         // is a pure requirement signature (body 0, no recv/self/assoc/async).
         if im.isTraitImpl {
             if m.isVia {
-                val realN: Bind = internBytes(c: inout self, s: m.viaName)
+                val realN: Bind = self.internBytes(s: m.viaName)
                 self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
                 witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
                 self.cur.typeParams = savedTP
@@ -116,14 +116,14 @@ pub impl Comp {
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
-        val body: U64 = lowerBlock(c: inout self, b: m.body)
+        val body: U64 = self.lowerBlock(b: m.body)
         self.cur.lowerRetTy = savedRet
         val fnIdx: U64 = self.arena.funcs.count
         // an extension method (spec/09) is tagged with its extension's name id so it is
         // excluded from bare resolution (reachable only via `value#Ext.m()`).
         mut val extId: U64 = 0
         if im.extName.bytes.count > 0 {
-            val extN: Bind = internBytes(c: inout self, s: im.extName)
+            val extN: Bind = self.internBytes(s: im.extName)
             extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
         }
         self.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
@@ -133,7 +133,7 @@ pub impl Comp {
     }
 
     inout fn lowerImpl(im: ImplAst) {
-        val recvN: Bind = internBytes(c: inout self, s: im.recvType.name)
+        val recvN: Bind = self.internBytes(s: im.recvType.name)
         val implParamBinds: Array[Bind] = self.lowerTypeParamNames(names: im.implParams)
         // the impl's lowering-time skip scope: its `[T]`, plus the associated types of the trait
         // it implements/extends — both a bare `impl Iterator` (recv IS the trait, its provided
@@ -148,7 +148,7 @@ pub impl Comp {
         }
         self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
         if im.isTraitImpl {
-            val trN: Bind = internBytes(c: inout self, s: im.traitName)
+            val trN: Bind = self.internBytes(s: im.traitName)
             self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: trN.nameStart, len: trN.nameLen))
         }
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -165,19 +165,19 @@ pub impl Comp {
                     self.lowerMethodMember(im: im, m: m, recvN: recvN, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
                 }
                 MemberKind.Deinit => {
-                    val deinitN: Bind = internBytes(c: inout self, s: "deinit")
-                    val body: U64 = lowerBlock(c: inout self, b: m.body)
+                    val deinitN: Bind = self.internBytes(s: "deinit")
+                    val body: U64 = self.lowerBlock(b: m.body)
                     val noParams: Array[Param] = []
                     val noTypeParams: Array[Bind] = []
                     self.arena.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
                     self.decls.deinits.append(<Bind nameStart=recvN.nameStart nameLen=recvN.nameLen fieldStart=recvN.nameStart fieldLen=recvN.nameLen />)
                 }
                 MemberKind.AssocType => {
-                    val pt: PType = lowerType(c: inout self, t: m.assocTy)
-                    val atN: Bind = internBytes(c: inout self, s: m.name)
+                    val pt: PType = self.lowerType(t: m.assocTy)
+                    val atN: Bind = self.internBytes(s: m.name)
                     mut val trId: U64 = 0
                     if im.traitName.bytes.count > 0 {
-                        val trN: Bind = internBytes(c: inout self, s: im.traitName)
+                        val trN: Bind = self.internBytes(s: im.traitName)
                         trId = trN.nameId
                     }
                     self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
@@ -193,24 +193,24 @@ pub impl Comp {
             mi += 1
         }
         if im.isTraitImpl {
-            val traitN: Bind = internBytes(c: inout self, s: im.traitName)
+            val traitN: Bind = self.internBytes(s: im.traitName)
             mut val traitArgs: Array[U64] = []
             mut val ti: U64 = 0
             while ti < im.traitArgs.count {
-                val pt: PType = lowerType(c: inout self, t: im.traitArgs[ti])
+                val pt: PType = self.lowerType(t: im.traitArgs[ti])
                 traitArgs.append(pt.ref)
                 ti += 1
             }
             mut val cfExtId: U64 = 0
             if im.extName.bytes.count > 0 {
-                val cfExtN: Bind = internBytes(c: inout self, s: im.extName)
+                val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
             self.decls.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed extId=cfExtId />)
         }
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.
-        drainDerives(c: inout self, typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: im.span.start, declEnd: im.span.end)
+        self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: im.span.start, declEnd: im.span.end)
         self.cur.typeParams = savedTP
     }
 
@@ -228,13 +228,13 @@ pub impl Comp {
             stpi += 1
         }
         self.cur.typeParams = scopeTP
-        val params: Array[Param] = lowerParams(c: inout self, params: sig.params)
+        val params: Array[Param] = self.lowerParams(params: sig.params)
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if sig.hasRet {
-            val pt: PType = lowerType(c: inout self, t: sig.ret)
+            val pt: PType = self.lowerType(t: sig.ret)
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -250,7 +250,7 @@ pub impl Comp {
         mut val supertraits: Array[Bind] = []
         mut val si: U64 = 0
         while si < t.supertraits.count {
-            supertraits.append(internBytes(c: inout self, s: t.supertraits[si]))
+            supertraits.append(self.internBytes(s: t.supertraits[si]))
             si += 1
         }
         // collect the trait's binders BEFORE lowering reqs: its type params `[Rhs]` AND its
@@ -260,7 +260,7 @@ pub impl Comp {
         mut val assocTypes: Array[Bind] = []
         mut val ai: U64 = 0
         while ai < t.assocTypes.count {
-            assocTypes.append(internBytes(c: inout self, s: t.assocTypes[ai]))
+            assocTypes.append(self.internBytes(s: t.assocTypes[ai]))
             ai += 1
         }
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams)
@@ -287,6 +287,6 @@ pub impl Comp {
         self.decls.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
-        drainDerives(c: inout self, typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
+        self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
     }
 }

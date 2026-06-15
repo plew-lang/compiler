@@ -7,293 +7,296 @@
 // The literal-range / call-arg / make-field / unique-arg checks are driven by
 // checkLitCtx at the statement level (it walks the same tree), so this walk adds
 // only the checks checkLitCtx does not perform.
-fn verifyExpr(c: inout Comp, id: U64) {
-    match c.arena.exprs[id] {
-        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
-            // verify the closure BODY with the closure's own return type as context —
-            // else `return e` inside a closure escapes the return-type check entirely
-            // (the body was previously never walked). Captured outer locals stay visible
-            // (the closure's params are pushed on top of the current scope).
-            val sRV: Bool = c.cur.retVoid
-            val sRS: U64 = c.cur.retStart
-            val sRL: U64 = c.cur.retLen
-            val sRA: Bool = c.cur.retIsArray
-            val sRT: U64 = c.cur.retTy
-            if hasRet {
-                c.cur.retVoid = false
-                c.cur.retStart = retStart
-                c.cur.retLen = retLen
-                c.cur.retIsArray = retIsArray
-                c.cur.retTy = retTy
-            } else {
-                c.cur.retVoid = true
-                c.cur.retStart = 0
-                c.cur.retLen = 0
-                c.cur.retIsArray = false
-                c.cur.retTy = 0
-            }
-            val cmark: U64 = c.scopeMark()
-            mut val cpi: U64 = 0
-            while cpi < params.count {
-                val cp: Param = params[cpi]
-                c.addLocal(nameStart: cp.nameStart, nameLen: cp.nameLen, tyStart: cp.tyStart, tyLen: cp.tyLen, isArray: cp.tyIsArray, ty: cp.ty, isInout: cp.isInout, isMut: false, owned: cp.isMove)
-                cpi += 1U64
-            }
-            // a closure is a function boundary: `break`/`continue` inside it do not
-            // target an enclosing loop, so reset the loop depth across its body.
-            val sLoopDepth: U64 = c.cur.verifyLoopDepth
-            c.cur.verifyLoopDepth = 0U64
-            c.verifyBlock(blockId: body)
-            c.cur.verifyLoopDepth = sLoopDepth
-            // a closure with a declared NON-unit return type must return on every path,
-            // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
-            // void and exempt). spec/04.
-            if hasRet {
-                mut val retIsUnit: Bool = retLen == 0U64
-                if rangeEquals(bytes: c.arena.bytes, start: retStart, len: retLen, kw: "()") {
-                    retIsUnit = true
+
+pub impl Comp {
+    inout fn verifyExpr(id: U64) {
+        match self.arena.exprs[id] {
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
+                // verify the closure BODY with the closure's own return type as context —
+                // else `return e` inside a closure escapes the return-type check entirely
+                // (the body was previously never walked). Captured outer locals stay visible
+                // (the closure's params are pushed on top of the current scope).
+                val sRV: Bool = self.cur.retVoid
+                val sRS: U64 = self.cur.retStart
+                val sRL: U64 = self.cur.retLen
+                val sRA: Bool = self.cur.retIsArray
+                val sRT: U64 = self.cur.retTy
+                if hasRet {
+                    self.cur.retVoid = false
+                    self.cur.retStart = retStart
+                    self.cur.retLen = retLen
+                    self.cur.retIsArray = retIsArray
+                    self.cur.retTy = retTy
+                } else {
+                    self.cur.retVoid = true
+                    self.cur.retStart = 0
+                    self.cur.retLen = 0
+                    self.cur.retIsArray = false
+                    self.cur.retTy = 0
                 }
-                if !(retIsUnit) {
-                    if !(c.blockDiverges(blkId: body)) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
+                val cmark: U64 = self.scopeMark()
+                mut val cpi: U64 = 0
+                while cpi < params.count {
+                    val cp: Param = params[cpi]
+                    self.addLocal(nameStart: cp.nameStart, nameLen: cp.nameLen, tyStart: cp.tyStart, tyLen: cp.tyLen, isArray: cp.tyIsArray, ty: cp.ty, isInout: cp.isInout, isMut: false, owned: cp.isMove)
+                    cpi += 1U64
+                }
+                // a closure is a function boundary: `break`/`continue` inside it do not
+                // target an enclosing loop, so reset the loop depth across its body.
+                val sLoopDepth: U64 = self.cur.verifyLoopDepth
+                self.cur.verifyLoopDepth = 0U64
+                self.verifyBlock(blockId: body)
+                self.cur.verifyLoopDepth = sLoopDepth
+                // a closure with a declared NON-unit return type must return on every path,
+                // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
+                // void and exempt). spec/04.
+                if hasRet {
+                    mut val retIsUnit: Bool = retLen == 0U64
+                    if rangeEquals(bytes: self.arena.bytes, start: retStart, len: retLen, kw: "()") {
+                        retIsUnit = true
                     }
-                }
-            }
-            c.popLocals(mark: cmark)
-            c.cur.retVoid = sRV
-            c.cur.retStart = sRS
-            c.cur.retLen = sRL
-            c.cur.retIsArray = sRA
-            c.cur.retTy = sRT
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            c.verifyFieldReadVis(base: base, nameStart: nameStart, nameLen: nameLen)
-            verifyExpr(c: inout c, id: base)
-        }
-        Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            c.verifyMethodVis(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-            verifyExpr(c: inout c, id: recv)
-            c.verifyArgs(args: args)
-            c.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-        }
-        Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
-            c.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
-            verifyExpr(c: inout c, id: recv)
-            c.verifyArgs(args: args)
-        }
-        Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
-            c.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
-            verifyExpr(c: inout c, id: recv)
-        }
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            c.verifyArgs(args: args)
-            c.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
-        }
-        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-            // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
-            // field — a variant payload has no default values, so a missing field was
-            // silently constructed with garbage (spec/05). (Struct construction is
-            // covered by the backend missing-field check plus field defaults.)
-            if isEnum {
-                mut val cei: U64 = c.enumIdxByName(start: typeStart, len: typeLen)
-                if cei >= c.arena.enums.count {
-                    cei = c.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
-                }
-                if cei < c.arena.enums.count {
-                    // a construction naming a variant the enum does not declare
-                    // (`<E.Z />`) would silently build variant 0 (variantIndex returns 0
-                    // for an unknown name) — a garbage tag. Reject it (spec/05).
-                    mut val vfound: Bool = false
-                    mut val vk: U64 = 0
-                    while vk < c.arena.enums[cei].variants.count {
-                        if spansEqual(c: inout c, aStart: c.arena.enums[cei].variants[vk].nameStart, aLen: c.arena.enums[cei].variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
-                            vfound = true
+                    if !(retIsUnit) {
+                        if !(self.blockDiverges(blkId: body)) {
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
                         }
-                        vk += 1
                     }
-                    if !(vfound) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "unknown enum variant in construction (this enum has no such variant)")
+                }
+                self.popLocals(mark: cmark)
+                self.cur.retVoid = sRV
+                self.cur.retStart = sRS
+                self.cur.retLen = sRL
+                self.cur.retIsArray = sRA
+                self.cur.retTy = sRT
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                self.verifyFieldReadVis(base: base, nameStart: nameStart, nameLen: nameLen)
+                self.verifyExpr(id: base)
+            }
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                self.verifyMethodVis(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                self.verifyExpr(id: recv)
+                self.verifyArgs(args: args)
+                self.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            }
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
+                self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
+                self.verifyExpr(id: recv)
+                self.verifyArgs(args: args)
+            }
+            Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+                self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
+                self.verifyExpr(id: recv)
+            }
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                self.verifyArgs(args: args)
+                self.checkCallArgCategories(nameStart: nameStart, nameLen: nameLen, args: args)
+            }
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                // enum variant construction (`<E.A x=1 />`) must specify EVERY payload
+                // field — a variant payload has no default values, so a missing field was
+                // silently constructed with garbage (spec/05). (Struct construction is
+                // covered by the backend missing-field check plus field defaults.)
+                if isEnum {
+                    mut val cei: U64 = self.enumIdxByName(start: typeStart, len: typeLen)
+                    if cei >= self.arena.enums.count {
+                        cei = self.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
                     }
-                    val cvi: U64 = variantIndex(c: inout c, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                    if cvi < c.arena.enums[cei].variants.count {
-                        val cfs: Array[FieldDef] = c.arena.enums[cei].variants[cvi].fields
-                        // for a NON-generic enum, also category-check each provided
-                        // payload value against the field's declared type (`<E.V a="s"/>`
-                        // for `a: I64`). Generic enums (payload types need env grounding)
-                        // are deferred.
-                        val enumIsGen: Bool = c.arena.enums[cei].typeParams.count > 0U64
-                        mut val cfi: U64 = 0
-                        while cfi < cfs.count {
-                            if !(makeFieldsCoverField(c: inout c, fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen)) {
-                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "variant construction is missing a payload field; every field of the variant must be set")
+                    if cei < self.arena.enums.count {
+                        // a construction naming a variant the enum does not declare
+                        // (`<E.Z />`) would silently build variant 0 (variantIndex returns 0
+                        // for an unknown name) — a garbage tag. Reject it (spec/05).
+                        mut val vfound: Bool = false
+                        mut val vk: U64 = 0
+                        while vk < self.arena.enums[cei].variants.count {
+                            if spansEqual(c: inout self, aStart: self.arena.enums[cei].variants[vk].nameStart, aLen: self.arena.enums[cei].variants[vk].nameLen, bStart: variantStart, bLen: variantLen) {
+                                vfound = true
                             }
-                            if !(enumIsGen) {
-                                mut val mfk: U64 = 0
-                                while mfk < fields.count {
-                                    if spansEqual(c: inout c, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
-                                        c.tcCheckValue(expectedRef: cfs[cfi].ty, valueExpr: fields[mfk].value, pos: c.tcFieldPos(prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
-                                        mfk = fields.count
-                                    } else {
-                                        mfk += 1U64
+                            vk += 1
+                        }
+                        if !(vfound) {
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "unknown enum variant in construction (this enum has no such variant)")
+                        }
+                        val cvi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                        if cvi < self.arena.enums[cei].variants.count {
+                            val cfs: Array[FieldDef] = self.arena.enums[cei].variants[cvi].fields
+                            // for a NON-generic enum, also category-check each provided
+                            // payload value against the field's declared type (`<E.V a="s"/>`
+                            // for `a: I64`). Generic enums (payload types need env grounding)
+                            // are deferred.
+                            val enumIsGen: Bool = self.arena.enums[cei].typeParams.count > 0U64
+                            mut val cfi: U64 = 0
+                            while cfi < cfs.count {
+                                if !(self.makeFieldsCoverField(fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen)) {
+                                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "variant construction is missing a payload field; every field of the variant must be set")
+                                }
+                                if !(enumIsGen) {
+                                    mut val mfk: U64 = 0
+                                    while mfk < fields.count {
+                                        if spansEqual(c: inout self, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
+                                            self.tcCheckValue(expectedRef: cfs[cfi].ty, valueExpr: fields[mfk].value, pos: self.tcFieldPos(prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
+                                            mfk = fields.count
+                                        } else {
+                                            mfk += 1U64
+                                        }
                                     }
                                 }
+                                cfi += 1U64
                             }
-                            cfi += 1U64
                         }
                     }
                 }
-            }
-            // generic arity: a generic type's construction must supply exactly as many
-            // type arguments as the type has parameters (`<Box[I64, I64] …/>` for a
-            // `Box[T]` was silently accepted, dropping the extra) — spec/06.
-            if ty != 0U64 {
-                val tr: TypeRef = c.arena.types[ty]
-                if tr.args.count > 0U64 {
-                    mut val tpCount: U64 = c.arena.structs.count + c.arena.enums.count + 1U64
-                    val gsi: U64 = c.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
-                    if gsi < c.arena.structs.count {
-                        tpCount = c.arena.structs[gsi].typeParams.count
-                    } else {
-                        val gei: U64 = c.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
-                        if gei < c.arena.enums.count {
-                            tpCount = c.arena.enums[gei].typeParams.count
-                        }
-                    }
-                    if tpCount <= c.arena.structs.count + c.arena.enums.count {
-                        if tr.args.count != tpCount {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "wrong number of type arguments for this generic type")
-                        }
-                    }
-                }
-            }
-            // a NON-GENERIC struct's field value whose category disagrees with the
-            // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
-            // — reject (same reliable-value discipline as the let-annotation check).
-            // Generic structs / enums (field types need env grounding) are deferred.
-            mut val nonGenSidx: U64 = c.arena.structs.count
-            if !(isEnum) {
-                if ty == 0U64 || c.arena.types[ty].args.count == 0U64 {
-                    val sidxC: U64 = c.structIndexByName(start: typeStart, len: typeLen)
-                    if sidxC < c.arena.structs.count {
-                        if c.arena.structs[sidxC].typeParams.count == 0U64 && !c.arena.structs[sidxC].isExtern {
-                            nonGenSidx = sidxC
-                        }
-                    }
-                }
-            }
-            // field gate (spec/05): a non-`pub` field cannot be set from another module.
-            c.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
-            mut val i: U64 = 0
-            while i < fields.count {
-                verifyExpr(c: inout c, id: fields[i].value)
-                if nonGenSidx < c.arena.structs.count {
-                    val cfs: Array[FieldDef] = c.arena.structs[nonGenSidx].fields
-                    mut val fk: U64 = 0
-                    while fk < cfs.count {
-                        if spansEqual(c: inout c, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
-                            c.tcCheckValue(expectedRef: cfs[fk].ty, valueExpr: fields[i].value, pos: "field")
-                            fk = cfs.count
+                // generic arity: a generic type's construction must supply exactly as many
+                // type arguments as the type has parameters (`<Box[I64, I64] …/>` for a
+                // `Box[T]` was silently accepted, dropping the extra) — spec/06.
+                if ty != 0U64 {
+                    val tr: TypeRef = self.arena.types[ty]
+                    if tr.args.count > 0U64 {
+                        mut val tpCount: U64 = self.arena.structs.count + self.arena.enums.count + 1U64
+                        val gsi: U64 = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
+                        if gsi < self.arena.structs.count {
+                            tpCount = self.arena.structs[gsi].typeParams.count
                         } else {
-                            fk += 1U64
+                            val gei: U64 = self.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
+                            if gei < self.arena.enums.count {
+                                tpCount = self.arena.enums[gei].typeParams.count
+                            }
+                        }
+                        if tpCount <= self.arena.structs.count + self.arena.enums.count {
+                            if tr.args.count != tpCount {
+                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "wrong number of type arguments for this generic type")
+                            }
                         }
                     }
                 }
-                // a field specified twice in one construction (`<P x=1 x=2 />`) is a
-                // silent last-wins bug otherwise — reject the duplicate (spec/05).
-                mut val j: U64 = 0
-                while j < i {
-                    if spansEqual(c: inout c, aStart: fields[j].nameStart, aLen: fields[j].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: fields[i].offset), msg: "duplicate field in construction; each field may be set at most once")
-                    }
-                    j += 1U64
-                }
-                i += 1
-            }
-        }
-        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
-            c.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen)
-            verifyExpr(c: inout c, id: operand)
-        }
-        Expr.Binary(val op, val lhs, val rhs) => {
-            verifyExpr(c: inout c, id: lhs)
-            verifyExpr(c: inout c, id: rhs)
-            c.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
-            c.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
-        }
-        Expr.Unary(val op, val operand) => {
-            verifyExpr(c: inout c, id: operand)
-            c.tcCheckUnary(op: op, operand: operand)
-        }
-        Expr.Index(val base, val index) => {
-            verifyExpr(c: inout c, id: base)
-            verifyExpr(c: inout c, id: index)
-            c.tcCheckArrayIndex(base: base, index: index)
-            c.checkIndexKeyType(base: base, index: index)
-        }
-        Expr.Array(val elems) => {
-            mut val i: U64 = 0
-            while i < elems.count {
-                verifyExpr(c: inout c, id: elems[i])
-                i += 1
-            }
-        }
-        Expr.Arrow(val base, nameStart: _, nameLen: _) => {
-            verifyExpr(c: inout c, id: base)
-        }
-        Expr.OptChain(val base, memberStart: _, memberLen: _) => {
-            verifyExpr(c: inout c, id: base)
-        }
-        Expr.Try(val expr) => {
-            verifyExpr(c: inout c, id: expr)
-            // `try` is only valid in a function that RETURNS a Result (spec/13): it
-            // early-returns the enclosing function's Result on `Err`. In a void /
-            // non-Result function this used to crash the backend (it indexed the
-            // return type's variant table, which isn't a Result). Reject cleanly.
-            mut val retIsResult: Bool = false
-            if !(c.cur.retVoid) {
-                if c.cur.retLen > 0U64 {
-                    if rangeEquals(bytes: c.arena.bytes, start: c.cur.retStart, len: c.cur.retLen, kw: "Result") {
-                        retIsResult = true
-                    }
-                }
-            }
-            if !(retIsResult) {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` is only valid in a function that returns a Result (spec/13)")
-            }
-            // `try` works only on a Result (spec/13). The operand being some OTHER
-            // registered enum (notably `Optional`) used to crash the backend (it
-            // assumed Ok/Err variants and indexed out of bounds). An Optional uses
-            // `unwrapOr` / `?.` / `match` instead.
-            val tti: TypeInfo = typeOf(c: inout c, id: expr)
-            if tti.nameLen > 0U64 {
-                mut val isEnum: Bool = c.enumIdxByName(start: tti.nameStart, len: tti.nameLen) < c.arena.enums.count
+                // a NON-GENERIC struct's field value whose category disagrees with the
+                // field's declared type (`<A x="s" />` for `x: I64`) reinterprets the bits
+                // — reject (same reliable-value discipline as the let-annotation check).
+                // Generic structs / enums (field types need env grounding) are deferred.
+                mut val nonGenSidx: U64 = self.arena.structs.count
                 if !(isEnum) {
-                    isEnum = c.genericEnumIndex(nameStart: tti.nameStart, nameLen: tti.nameLen) < c.arena.enums.count
-                }
-                if isEnum {
-                    if !(rangeEquals(bytes: c.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
+                    if ty == 0U64 || self.arena.types[ty].args.count == 0U64 {
+                        val sidxC: U64 = self.structIndexByName(start: typeStart, len: typeLen)
+                        if sidxC < self.arena.structs.count {
+                            if self.arena.structs[sidxC].typeParams.count == 0U64 && !self.arena.structs[sidxC].isExtern {
+                                nonGenSidx = sidxC
+                            }
+                        }
                     }
                 }
-                // the operand's error type E' must match the enclosing function's
-                // error type E (spec/13): `try` propagates the Err unchanged — From
-                // error-conversion is not yet implemented, so E == E' is required.
-                // `try g()` (Result[_, String]) inside `-> Result[_, I64]` would
-                // reinterpret the String error as an I64. Compare the Err args (index 1).
-                if retIsResult {
-                    if tti.ref != 0U64 {
-                        if tti.ref < c.arena.types.count {
-                            if c.cur.retTy != 0U64 {
-                                if c.cur.retTy < c.arena.types.count {
-                                    val opR: TypeRef = c.arena.types[tti.ref]
-                                    val fnR: TypeRef = c.arena.types[c.cur.retTy]
-                                    if opR.args.count >= 2U64 {
-                                        if fnR.args.count >= 2U64 {
-                                            if !(c.typesCompatible(expected: fnR.args[1], inferred: opR.args[1])) {
-                                                // E != E' is allowed when E owns a `from` factory:
-                                                // `try` then converts E' -> E via E.from (spec/13).
-                                                if !(c.typeRefHasFromFactory(errRef: fnR.args[1])) {
-                                                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
+                // field gate (spec/05): a non-`pub` field cannot be set from another module.
+                self.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
+                mut val i: U64 = 0
+                while i < fields.count {
+                    self.verifyExpr(id: fields[i].value)
+                    if nonGenSidx < self.arena.structs.count {
+                        val cfs: Array[FieldDef] = self.arena.structs[nonGenSidx].fields
+                        mut val fk: U64 = 0
+                        while fk < cfs.count {
+                            if spansEqual(c: inout self, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
+                                self.tcCheckValue(expectedRef: cfs[fk].ty, valueExpr: fields[i].value, pos: "field")
+                                fk = cfs.count
+                            } else {
+                                fk += 1U64
+                            }
+                        }
+                    }
+                    // a field specified twice in one construction (`<P x=1 x=2 />`) is a
+                    // silent last-wins bug otherwise — reject the duplicate (spec/05).
+                    mut val j: U64 = 0
+                    while j < i {
+                        if spansEqual(c: inout self, aStart: fields[j].nameStart, aLen: fields[j].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
+                            compileErrorAt(line: self.lineOf(offset: fields[i].offset), msg: "duplicate field in construction; each field may be set at most once")
+                        }
+                        j += 1U64
+                    }
+                    i += 1
+                }
+            }
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
+                self.verifyCastLossless(operand: operand, tyStart: tyStart, tyLen: tyLen)
+                self.verifyExpr(id: operand)
+            }
+            Expr.Binary(val op, val lhs, val rhs) => {
+                self.verifyExpr(id: lhs)
+                self.verifyExpr(id: rhs)
+                self.verifyBinaryOp(op: op, lhs: lhs, rhs: rhs)
+                self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
+            }
+            Expr.Unary(val op, val operand) => {
+                self.verifyExpr(id: operand)
+                self.tcCheckUnary(op: op, operand: operand)
+            }
+            Expr.Index(val base, val index) => {
+                self.verifyExpr(id: base)
+                self.verifyExpr(id: index)
+                self.tcCheckArrayIndex(base: base, index: index)
+                self.checkIndexKeyType(base: base, index: index)
+            }
+            Expr.Array(val elems) => {
+                mut val i: U64 = 0
+                while i < elems.count {
+                    self.verifyExpr(id: elems[i])
+                    i += 1
+                }
+            }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+                self.verifyExpr(id: base)
+            }
+            Expr.OptChain(val base, memberStart: _, memberLen: _) => {
+                self.verifyExpr(id: base)
+            }
+            Expr.Try(val expr) => {
+                self.verifyExpr(id: expr)
+                // `try` is only valid in a function that RETURNS a Result (spec/13): it
+                // early-returns the enclosing function's Result on `Err`. In a void /
+                // non-Result function this used to crash the backend (it indexed the
+                // return type's variant table, which isn't a Result). Reject cleanly.
+                mut val retIsResult: Bool = false
+                if !(self.cur.retVoid) {
+                    if self.cur.retLen > 0U64 {
+                        if rangeEquals(bytes: self.arena.bytes, start: self.cur.retStart, len: self.cur.retLen, kw: "Result") {
+                            retIsResult = true
+                        }
+                    }
+                }
+                if !(retIsResult) {
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: expr)), msg: "`try` is only valid in a function that returns a Result (spec/13)")
+                }
+                // `try` works only on a Result (spec/13). The operand being some OTHER
+                // registered enum (notably `Optional`) used to crash the backend (it
+                // assumed Ok/Err variants and indexed out of bounds). An Optional uses
+                // `unwrapOr` / `?.` / `match` instead.
+                val tti: TypeInfo = self.typeOf(id: expr)
+                if tti.nameLen > 0U64 {
+                    mut val isEnum: Bool = self.enumIdxByName(start: tti.nameStart, len: tti.nameLen) < self.arena.enums.count
+                    if !(isEnum) {
+                        isEnum = self.genericEnumIndex(nameStart: tti.nameStart, nameLen: tti.nameLen) < self.arena.enums.count
+                    }
+                    if isEnum {
+                        if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: expr)), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
+                        }
+                    }
+                    // the operand's error type E' must match the enclosing function's
+                    // error type E (spec/13): `try` propagates the Err unchanged — From
+                    // error-conversion is not yet implemented, so E == E' is required.
+                    // `try g()` (Result[_, String]) inside `-> Result[_, I64]` would
+                    // reinterpret the String error as an I64. Compare the Err args (index 1).
+                    if retIsResult {
+                        if tti.ref != 0U64 {
+                            if tti.ref < self.arena.types.count {
+                                if self.cur.retTy != 0U64 {
+                                    if self.cur.retTy < self.arena.types.count {
+                                        val opR: TypeRef = self.arena.types[tti.ref]
+                                        val fnR: TypeRef = self.arena.types[self.cur.retTy]
+                                        if opR.args.count >= 2U64 {
+                                            if fnR.args.count >= 2U64 {
+                                                if !(self.typesCompatible(expected: fnR.args[1], inferred: opR.args[1])) {
+                                                    // E != E' is allowed when E owns a `from` factory:
+                                                    // `try` then converts E' -> E via E.from (spec/13).
+                                                    if !(self.typeRefHasFromFactory(errRef: fnR.args[1])) {
+                                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: expr)), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
+                                                    }
                                                 }
                                             }
                                         }
@@ -304,70 +307,70 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     }
                 }
             }
-        }
-        Expr.MatchExpr(val scrut, val arms) => {
-            verifyExpr(c: inout c, id: scrut)
-            c.checkMatchArmsEnum(scrut: scrut, arms: arms)
-            if !(matchExhaustive(c: inout c, arms: arms)) {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
-            }
-            mut val ai: U64 = 0
-            while ai < arms.count {
-                val armMark: U64 = c.scopeMark()
-                checkDestructureComplete(c: inout c, a: arms[ai])
-                verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
-                c.verifyBlock(blockId: arms[ai].body)
-                c.popLocals(mark: armMark)
-                ai += 1
-            }
-        }
-        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-            verifyExpr(c: inout c, id: cond)
-            c.verifyBlock(blockId: thenBlk)
-            c.verifyBlock(blockId: elseBlk)
-        }
-        Expr.Ident(val start, val len) => {
-            // use-after-move (spec/03): reading a local whose value was `move`d away.
-            if c.cur.verifyMovedIdx.count > 0U64 {
-                if c.verifyIsMoved(idx: c.localIndexByName(start: start, len: len)) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
+            Expr.MatchExpr(val scrut, val arms) => {
+                self.verifyExpr(id: scrut)
+                self.checkMatchArmsEnum(scrut: scrut, arms: arms)
+                if !(self.matchExhaustive(arms: arms)) {
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                }
+                mut val ai: U64 = 0
+                while ai < arms.count {
+                    val armMark: U64 = self.scopeMark()
+                    self.checkDestructureComplete(a: arms[ai])
+                    self.verifyAddArmBinds(a: arms[ai], scrut: scrut)
+                    self.verifyBlock(blockId: arms[ai].body)
+                    self.popLocals(mark: armMark)
+                    ai += 1
                 }
             }
-        }
-        Expr.Move(val operand, val isBorrow) => {
-            // `move`/`borrow` of a place (mirrors genExpr's Move arm). `move` is
-            // restricted to a bare local (field/element partial moves aren't tracked
-            // yet) that is not `self` and not declared outside the enclosing branch
-            // (a conditional move would skip the source's deinit on other paths).
-            if !(isBorrow) {
-                match c.arena.exprs[operand] {
-                    Expr.Ident(val start, val len) => {
-                        if c.isSelfRef(start: start, len: len) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "moving `self` is not yet supported")
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                self.verifyExpr(id: cond)
+                self.verifyBlock(blockId: thenBlk)
+                self.verifyBlock(blockId: elseBlk)
+            }
+            Expr.Ident(val start, val len) => {
+                // use-after-move (spec/03): reading a local whose value was `move`d away.
+                if self.cur.verifyMovedIdx.count > 0U64 {
+                    if self.verifyIsMoved(idx: self.localIndexByName(start: start, len: len)) {
+                        compileErrorAt(line: self.lineOf(offset: start), msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
+                    }
+                }
+            }
+            Expr.Move(val operand, val isBorrow) => {
+                // `move`/`borrow` of a place (mirrors genExpr's Move arm). `move` is
+                // restricted to a bare local (field/element partial moves aren't tracked
+                // yet) that is not `self` and not declared outside the enclosing branch
+                // (a conditional move would skip the source's deinit on other paths).
+                if !(isBorrow) {
+                    match self.arena.exprs[operand] {
+                        Expr.Ident(val start, val len) => {
+                            if self.isSelfRef(start: start, len: len) {
+                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "moving `self` is not yet supported")
+                            }
+                            if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
+                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                            }
                         }
-                        if c.localIndexByName(start: start, len: len) < c.cur.branchBase {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                        _ => {
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
                         }
                     }
-                    _ => {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
+                }
+                // verify the operand FIRST (a second `move u` / a read after move resolves
+                // through the Ident arm below and reports the use-after-move), THEN record
+                // the move so later uses are caught. spec/03.
+                self.verifyExpr(id: operand)
+                if !(isBorrow) {
+                    match self.arena.exprs[operand] {
+                        Expr.Ident(val start, val len) => {
+                            self.verifyMarkMoved(idx: self.localIndexByName(start: start, len: len))
+                        }
+                        _ => {}
                     }
                 }
             }
-            // verify the operand FIRST (a second `move u` / a read after move resolves
-            // through the Ident arm below and reports the use-after-move), THEN record
-            // the move so later uses are caught. spec/03.
-            verifyExpr(c: inout c, id: operand)
-            if !(isBorrow) {
-                match c.arena.exprs[operand] {
-                    Expr.Ident(val start, val len) => {
-                        c.verifyMarkMoved(idx: c.localIndexByName(start: start, len: len))
-                    }
-                    _ => {}
-                }
-            }
+            _ => {}
         }
-        _ => {}
     }
 }
 
@@ -391,112 +394,114 @@ fn armDiagOffset(a: MatchArm) -> U64 {
     return a.enumStart
 }
 
-// Whether any construction field matches the given field name (start,len).
-fn makeFieldsCoverField(c: inout Comp, fields: Array[MakeField], fieldStart: U64, fieldLen: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < fields.count {
-        if spansEqual(c: inout c, aStart: fields[i].nameStart, aLen: fields[i].nameLen, bStart: fieldStart, bLen: fieldLen) {
-            return true
-        }
-        i += 1U64
-    }
-    return false
-}
+pub impl Comp {
 
-fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < binds.count {
-        if spansEqual(c: inout c, aStart: binds[i].fieldStart, aLen: binds[i].fieldLen, bStart: fieldStart, bLen: fieldLen) {
-            return true
+    // Whether any construction field matches the given field name (start,len).
+    inout fn makeFieldsCoverField(fields: Array[MakeField], fieldStart: U64, fieldLen: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < fields.count {
+            if spansEqual(c: inout self, aStart: fields[i].nameStart, aLen: fields[i].nameLen, bStart: fieldStart, bLen: fieldLen) {
+                return true
+            }
+            i += 1U64
         }
-        i += 1
+        return false
     }
-    return false
-}
 
-// A struct-destructure pattern `S { … }` must bind OR discard (`field: _`) EVERY
-// field — `..` is not allowed (spec/05,11). Omitting a field silently dropped it
-// before; now a missing field is a loud error, so adding a field to a struct makes
-// existing patterns fail (catching silent take-misses). Generic-struct patterns
-// (`Box[I32] { … }`) resolve fields via the generic def.
-fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
-    if a.isStruct {
-        mut val si: U64 = c.structIndexByName(start: a.enumStart, len: a.enumLen)
-        if si >= c.arena.structs.count {
-            si = c.genericStructIndex(nameStart: a.enumStart, nameLen: a.enumLen)
+    inout fn bindsCoverField(binds: Array[Bind], fieldStart: U64, fieldLen: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < binds.count {
+            if spansEqual(c: inout self, aStart: binds[i].fieldStart, aLen: binds[i].fieldLen, bStart: fieldStart, bLen: fieldLen) {
+                return true
+            }
+            i += 1
         }
-        if si < c.arena.structs.count {
-            val sd: StructDef = c.arena.structs[si]
-            mut val fi: U64 = 0
-            while fi < sd.fields.count {
-                if !(bindsCoverField(c: inout c, binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: a.enumStart), msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
+        return false
+    }
+
+    // A struct-destructure pattern `S { … }` must bind OR discard (`field: _`) EVERY
+    // field — `..` is not allowed (spec/05,11). Omitting a field silently dropped it
+    // before; now a missing field is a loud error, so adding a field to a struct makes
+    // existing patterns fail (catching silent take-misses). Generic-struct patterns
+    // (`Box[I32] { … }`) resolve fields via the generic def.
+    inout fn checkDestructureComplete(a: MatchArm) {
+        if a.isStruct {
+            mut val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
+            if si >= self.arena.structs.count {
+                si = self.genericStructIndex(nameStart: a.enumStart, nameLen: a.enumLen)
+            }
+            if si < self.arena.structs.count {
+                val sd: StructDef = self.arena.structs[si]
+                mut val fi: U64 = 0
+                while fi < sd.fields.count {
+                    if !(self.bindsCoverField(binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
+                        compileErrorAt(line: self.lineOf(offset: a.enumStart), msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
+                    }
+                    fi += 1
                 }
-                fi += 1
             }
+            return
         }
-        return
-    }
-    // an enum payload destructure `E.V(val a, b: _)`: when the arm binds ANY payload
-    // field it must cover EVERY field of the variant (bind or discard) — spec/05,11. A
-    // bare tag match `E.V =>` (no binds) matches only the tag and is left alone.
-    if a.binds.count == 0U64 {
-        return
-    }
-    val ei: U64 = c.enumIdxByName(start: a.enumStart, len: a.enumLen)
-    if ei < c.arena.enums.count {
-        val vi: U64 = variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)
-        if vi < c.arena.enums[ei].variants.count {
-            val fs: Array[FieldDef] = c.arena.enums[ei].variants[vi].fields
-            mut val fi: U64 = 0
-            while fi < fs.count {
-                if !(bindsCoverField(c: inout c, binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: a.binds[0].offset), msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
+        // an enum payload destructure `E.V(val a, b: _)`: when the arm binds ANY payload
+        // field it must cover EVERY field of the variant (bind or discard) — spec/05,11. A
+        // bare tag match `E.V =>` (no binds) matches only the tag and is left alone.
+        if a.binds.count == 0U64 {
+            return
+        }
+        val ei: U64 = self.enumIdxByName(start: a.enumStart, len: a.enumLen)
+        if ei < self.arena.enums.count {
+            val vi: U64 = self.variantIndex(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)
+            if vi < self.arena.enums[ei].variants.count {
+                val fs: Array[FieldDef] = self.arena.enums[ei].variants[vi].fields
+                mut val fi: U64 = 0
+                while fi < fs.count {
+                    if !(self.bindsCoverField(binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {
+                        compileErrorAt(line: self.lineOf(offset: a.binds[0].offset), msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
+                    }
+                    fi += 1
                 }
-                fi += 1
+            }
+        }
+    }
+
+    inout fn verifyAddArmBinds(a: MatchArm, scrut: U64) {
+        if a.isWildcard {
+            return
+        }
+        val st: TypeInfo = self.typeOf(id: scrut)
+        val generic: Bool = self.isGenericInst(ref: st.ref)
+        mut val bi: U64 = 0
+        if a.isStruct {
+            // a struct destructure requires a scrutinee OF that struct type (spec/11). A
+            // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
+            // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
+            if st.nameLen > 0U64 {
+                if !(spansEqual(c: inout self, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
+                    compileErrorAt(line: self.lineOf(offset: armDiagOffset(a: a)), msg: "struct destructure pattern type does not match the scrutinee type")
+                }
+            }
+            while bi < a.binds.count {
+                val bd: Bind = a.binds[bi]
+                mut val ft: TypeInfo = scalarInfo()
+                if generic {
+                    ft = self.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                } else {
+                    ft = self.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                }
+                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+                bi += 1
+            }
+        } else {
+            while bi < a.binds.count {
+                val bd: Bind = a.binds[bi]
+                if generic {
+                    val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                    self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
+                } else {
+                    self.addBindLocalCn(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)
+                }
+                bi += 1
             }
         }
     }
 }
-
-fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
-    if a.isWildcard {
-        return
-    }
-    val st: TypeInfo = typeOf(c: inout c, id: scrut)
-    val generic: Bool = isGenericInst(c: inout c, ref: st.ref)
-    mut val bi: U64 = 0
-    if a.isStruct {
-        // a struct destructure requires a scrutinee OF that struct type (spec/11). A
-        // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
-        // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
-        if st.nameLen > 0U64 {
-            if !(spansEqual(c: inout c, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
-                compileErrorAt(line: lineOf(c: inout c, offset: armDiagOffset(a: a)), msg: "struct destructure pattern type does not match the scrutinee type")
-            }
-        }
-        while bi < a.binds.count {
-            val bd: Bind = a.binds[bi]
-            mut val ft: TypeInfo = scalarInfo()
-            if generic {
-                ft = c.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-            } else {
-                ft = c.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-            }
-            c.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
-            bi += 1
-        }
-    } else {
-        while bi < a.binds.count {
-            val bd: Bind = a.binds[bi]
-            if generic {
-                val bti: TypeInfo = c.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-                c.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
-            } else {
-                c.addBindLocalCn(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)
-            }
-            bi += 1
-        }
-    }
-}
-

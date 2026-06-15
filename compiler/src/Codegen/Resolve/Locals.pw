@@ -76,7 +76,7 @@ pub impl Comp {
         // a newtype over a unique type is itself unique (spec/10: uniqueness propagates —
         // else the newtype could be copied to dodge the underlying's single-ownership and
         // break resource safety). Resolve to the underlying before the struct lookup.
-        val ntu: Bind = newtypeUnderName(c: inout self, start: start, len: len)
+        val ntu: Bind = self.newtypeUnderName(start: start, len: len)
         mut val rStart: U64 = start
         mut val rLen: U64 = len
         if ntu.nameStart != start || ntu.nameLen != len {
@@ -104,7 +104,7 @@ pub impl Comp {
     }
 
     inout fn optChainResultRef(base: U64, memberStart: U64, memberLen: U64) -> U64 {
-        val bt: TypeInfo = typeOf(c: inout self, id: base)
+        val bt: TypeInfo = self.typeOf(id: base)
         if bt.kind != 2 {
             return 0
         }
@@ -133,7 +133,7 @@ pub impl Comp {
     inout fn fieldType(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
         // resolve an import alias (`with { Real as Alias }`) so a field access on a value
         // typed by its alias finds the real struct's fields (spec/15).
-        val arS: Bind = aliasReal(c: inout self, start: structStart, len: structLen)
+        val arS: Bind = self.aliasReal(start: structStart, len: structLen)
         mut val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         // a newtype inherits the underlying struct's fields (spec/10): resolve to the
         // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
@@ -160,11 +160,11 @@ pub impl Comp {
                         // structured ref, so a match/dispatch on the field recovers the
                         // mangled C name (`Optional_Node`) and substitutes payload types.
                         if !(f.tyIsArray) {
-                            if isGenericInst(c: inout self, ref: f.ty) {
+                            if self.isGenericInst(ref: f.ty) {
                                 return <TypeInfo kind=2 nameStart=f.tyStart nameLen=f.tyLen ref=f.ty />
                             }
                         }
-                        return typeInfoOfName(c: inout self, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
+                        return self.typeInfoOfName(start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
                     }
                     fi += 1
                 }
@@ -250,7 +250,7 @@ pub impl Comp {
         val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "field is private (visible only in its type's anonymous impl)")
+                compileErrorAt(line: self.lineOf(offset: offset), msg: "field is private (visible only in its type's anonymous impl)")
             }
         }
     }
@@ -259,12 +259,12 @@ pub impl Comp {
         val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
         if v == 0U64 {
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "field is private (writable only in its type's anonymous impl)")
+                compileErrorAt(line: self.lineOf(offset: offset), msg: "field is private (writable only in its type's anonymous impl)")
             }
         } else {
             if v == 1U64 {
                 if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl")
+                    compileErrorAt(line: self.lineOf(offset: offset), msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl")
                 }
             }
         }
@@ -273,7 +273,7 @@ pub impl Comp {
     inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
         if !(mf.isPub) {
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
-                compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
+                compileErrorAt(line: self.lineOf(offset: offset), msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
             }
         }
     }
@@ -311,9 +311,9 @@ pub impl Comp {
                 if self.offsetIsLoaded(offset: fields[i].offset) {
                     if self.moduleOf(offset: fields[i].offset) != defMod {
                         if v == 0U64 {
-                            compileErrorAt(line: lineOf(c: inout self, offset: fields[i].offset), msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
+                            compileErrorAt(line: self.lineOf(offset: fields[i].offset), msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
                         } else {
-                            compileErrorAt(line: lineOf(c: inout self, offset: fields[i].offset), msg: "cannot set a `pub(get)` field when constructing from another module (it is read-only outside its module)")
+                            compileErrorAt(line: self.lineOf(offset: fields[i].offset), msg: "cannot set a `pub(get)` field when constructing from another module (it is read-only outside its module)")
                         }
                     }
                 }
@@ -329,7 +329,7 @@ pub impl Comp {
             if self.offsetIsLoaded(offset: fields[ci].offset) {
                 if self.moduleOf(offset: fields[ci].offset) != defMod {
                     if !(self.structHasPubFactory(nameId: sd.nameId)) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
+                        compileErrorAt(line: self.lineOf(offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
                     }
                 }
                 ci = fields.count

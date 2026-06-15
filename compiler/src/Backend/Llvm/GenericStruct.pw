@@ -18,7 +18,7 @@ fn registerGenStructNames(c: inout Comp, st: inout LlvmCtx) {
     mut val k: U64 = 0
     while k < c.monoWork.genInsts.count {
         val ref: U64 = c.monoWork.genInsts[k]
-        if isGenericInst(c: inout c, ref: ref) {
+        if c.isGenericInst(ref: ref) {
             val t: TypeRef = c.arena.types[ref]
             val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if defIdx < c.arena.structs.count {
@@ -54,7 +54,7 @@ fn registerGenStructBodies(c: inout Comp, st: inout LlvmCtx) {
             // registerStructBodies and the value built in genFieldValue. Required for a
             // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
             // the inline layout disagrees with the boxed (ptr) construction value.
-            if fieldIsBoxed(c: inout c, f: sd.fields[fi]) {
+            if c.fieldIsBoxed(f: sd.fields[fi]) {
                 elems.append(value: st.ptrty)
             } else {
                 elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))
@@ -87,7 +87,7 @@ fn registerGenEnums(c: inout Comp, st: inout LlvmCtx) {
     mut val k: U64 = 0
     while k < c.monoWork.genInsts.count {
         val ref: U64 = c.monoWork.genInsts[k]
-        if isGenericInst(c: inout c, ref: ref) {
+        if c.isGenericInst(ref: ref) {
             val t: TypeRef = c.arena.types[ref]
             val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if defIdx < c.arena.enums.count {
@@ -139,7 +139,7 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     // a desugared non-Optional `?.` (a Chain rewrite) records its result `Head[U]`; use
     // it so a method call on the result (`(a?.x).chain()` in a nested `a?.x?.y`) resolves
     // its receiver type. Checked first since the node is a generic MatchExpr.
-    val cr: U64 = chainResultRef(c: inout c, exprId: id)
+    val cr: U64 = c.chainResultRef(exprId: id)
     if cr != 0U64 {
         return cr
     }
@@ -177,7 +177,7 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                         c.cur.typeArgs = savedA
                     }
                     if g != 0U64 {
-                        if isGenericInst(c: inout c, ref: g) {
+                        if c.isGenericInst(ref: g) {
                             return g
                         }
                         // an existential `any P` field: yield its TypeRef so a bare
@@ -324,7 +324,7 @@ fn methodResultRef(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, 
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
                 }
-                if isGenericInst(c: inout c, ref: g) {
+                if c.isGenericInst(ref: g) {
                     return g
                 }
             }

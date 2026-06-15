@@ -380,7 +380,7 @@ pub impl Comp {
 
     inout fn structIndexByName(start: U64, len: U64) -> U64 {
         // a use of an import alias (`with { Real as Alias }`) resolves to the real name.
-        val ar: Bind = aliasReal(c: inout self, start: start, len: len)
+        val ar: Bind = self.aliasReal(start: start, len: len)
         val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         mut val i: U64 = 0
         while i < self.arena.structs.count {
@@ -397,7 +397,7 @@ pub impl Comp {
 
     inout fn enumIdxByName(start: U64, len: U64) -> U64 {
         // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
-        val ar: Bind = aliasReal(c: inout self, start: start, len: len)
+        val ar: Bind = self.aliasReal(start: start, len: len)
         val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         mut val i: U64 = 0
         while i < self.arena.enums.count {

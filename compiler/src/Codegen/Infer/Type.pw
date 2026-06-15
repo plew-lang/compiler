@@ -17,7 +17,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        val ti: TypeInfo = typeOf(c: inout self, id: id)
+        val ti: TypeInfo = self.typeOf(id: id)
         if ti.ref != 0U64 {
             return ti.ref
         }
@@ -32,7 +32,7 @@ pub impl Comp {
     }
 
     inout fn isConcreteTypeName(start: U64, len: U64) -> Bool {
-        if isPrimType(c: inout self, start: start, len: len) {
+        if self.isPrimType(start: start, len: len) {
             return true
         }
         if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "String") {
@@ -85,8 +85,8 @@ pub impl Comp {
         // int↔float conversion (spec/12) — so only exempt when BOTH sides are float. (An
         // untyped int LITERAL flowing into a float context is polymorphic and passes via the
         // unknown-id path below, not here.)
-        val eFloat: Bool = isFloatType(c: inout self, start: te.nameStart, len: te.nameLen)
-        val iFloat: Bool = isFloatType(c: inout self, start: tin.nameStart, len: tin.nameLen)
+        val eFloat: Bool = self.isFloatType(start: te.nameStart, len: te.nameLen)
+        val iFloat: Bool = self.isFloatType(start: tin.nameStart, len: tin.nameLen)
         if eFloat && iFloat {
             return true
         }
@@ -172,7 +172,7 @@ pub impl Comp {
     inout fn exprIsVoidCall(id: U64) -> Bool {
         match self.arena.exprs[id] {
             Expr.Call(val nameStart, val nameLen, val args) => {
-                val fi: U64 = resolvedCallee(c: inout self, id: id)
+                val fi: U64 = self.resolvedCallee(id: id)
                 if fi < self.arena.funcs.count {
                     return !self.arena.funcs[fi].hasRet
                 }

@@ -1,30 +1,25 @@
 #!/usr/bin/env python3
-# Methodize an "all-c" frontend file: every top-level `fn NAME(c: inout Comp, …)`
-# becomes an `inout fn NAME(…)` inside one `pub impl Comp { }`, body `c`→`self`;
-# then rewrite call sites `NAME(c: inout RECV, …)` → `RECV.NAME(…)` across src.
+# Methodize the `c: inout Comp`-first free functions of a frontend file into one or
+# more `pub impl Comp { }` blocks (`fn NAME(c: inout Comp, …)` -> `inout fn NAME(…)`,
+# body `c`->`self`), then rewrite call sites `NAME(c: inout RECV, …)` -> `RECV.NAME(…)`
+# across src. MIXED files are handled: non-`c`-first free functions (and multi-line
+# signatures) are left verbatim and free, in place; only the c-first single-line-sig
+# functions become methods. Source order is preserved, so doc comments stay attached.
 #
-# Usage: methodize.py <file.pw>   (assumes ALL top-level fns take c: inout Comp first)
+# Usage: methodize.py <file.pw>
 # Prints the methodized (exported) names so you can drop them from Backend's import.
-import re, sys, glob, os
+import re, sys, glob
 
 SRC = "compiler/src"
 path = sys.argv[1]
-text = open(path).read()
-lines = text.split("\n")
-
-# Guard: this script only handles "all-c" files (every top-level fn takes
-# `c: inout Comp` first). A mixed file would have its non-c fns silently dropped.
-_tot = sum(1 for L in lines if re.match(r'^(export )?fn ', L))
-_cf = sum(1 for L in lines if re.match(r'^(export )?fn [A-Za-z0-9_]+\(c: inout Comp', L))
-if _tot != _cf:
-    print(f"REFUSE: {path} is mixed ({_cf}/{_tot} c-first). Handle non-c fns manually.", file=sys.stderr)
-    sys.exit(2)
+lines = open(path).read().split("\n")
 
 # Guard: a top-level non-fn declaration (struct/enum/trait/val/...) embedded among
-# the functions would be SILENTLY DROPPED — the body-collection loop below only
-# keeps `fn` blocks. Refuse loudly so the human moves it out first (a struct can't
-# live inside `pub impl Comp` anyway). Column-0 keyword = top-level item.
-_decl_re = re.compile(r'^(export |pub )*(struct|enum|trait|newtype|extern|impl|val|mut val)\b')
+# the functions would be SILENTLY DROPPED — it can't live inside `pub impl Comp`.
+# Refuse loudly so the human moves it out first (column-0 keyword = top-level item).
+# `impl` is exempt: an existing `pub impl Comp { }` block (e.g. from earlier twin
+# work) is preserved verbatim as a raw segment, and new methods join a fresh block.
+_decl_re = re.compile(r'^(export |pub )*(struct|enum|trait|newtype|extern|val|mut val)\b')
 _bad = [L for L in lines if _decl_re.match(L)]
 if _bad:
     print(f"REFUSE: {path} has top-level non-fn declarations that would be dropped:", file=sys.stderr)
@@ -33,77 +28,114 @@ if _bad:
     print("Move them out (e.g. to the module root) before methodizing.", file=sys.stderr)
     sys.exit(2)
 
+fn_start = re.compile(r'^(export )?fn ')
+impl_start = re.compile(r'^(pub )?impl ')
 fn_re = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) -> (.+) \{$')
 fn_re_noret = re.compile(r'^(export )?fn ([A-Za-z0-9_]+)\(c: inout Comp(, )?(.*)\) \{$')
 
-methodized = []   # (name, exported)
-out = []          # leading non-fn lines (header)
-bodies = []       # list of (sig_line_replacement, [body lines])
-i = 0
-# collect leading header (comments / blank) until first fn
-while i < len(lines) and not (lines[i].startswith("fn ") or lines[i].startswith("export fn ")):
-    out.append(lines[i]); i += 1
-
-while i < len(lines):
-    line = lines[i]
-    if not (line.startswith("fn ") or line.startswith("export fn ")):
-        i += 1
-        continue
-    m = fn_re.match(line); ret = None
-    if m: ret = m.group(5)
-    else:
-        m = fn_re_noret.match(line)
-    if not m:
-        print(f"!! SKIP (not c-first or multiline sig): {line}", file=sys.stderr)
-        # consume to matching brace to avoid mis-parsing
-        i += 1; continue
-    exported = bool(m.group(1)); name = m.group(2); rest = m.group(4)
-    methodized.append((name, exported))
-    newsig = f"    inout fn {name}({rest})" + (f" -> {ret} {{" if ret else " {")
-    # gather body until matching close brace (brace count from the sig line's `{`)
-    depth = 1; i += 1; body = []
-    while i < len(lines) and depth > 0:
-        bl = lines[i]
+def consume_fn(i):
+    # Return (block_lines, next_i): lines[i] (the `fn …`/`impl …` line) through its
+    # matching closing brace, handling a multi-line signature (the `{` may be later).
+    block = [lines[i]]
+    depth = lines[i].count("{") - lines[i].count("}")
+    opened = depth > 0
+    j = i + 1
+    while j < len(lines):
+        bl = lines[j]; block.append(bl)
         depth += bl.count("{") - bl.count("}")
-        if depth == 0:
-            break   # this line is the closing `}` of the fn
-        body.append(bl); i += 1
-    i += 1  # skip closing brace line
-    bodies.append((newsig, body))
+        if not opened and depth > 0:
+            opened = True
+        j += 1
+        if opened and depth == 0:
+            break
+    return block, j
 
-# transform bodies: c. -> self. ; inout c -> inout self
-def xf(s):
+# Parse the file into ordered segments: file header, raw blocks (free fns / comments
+# kept verbatim), and methodized c-first fns (with their leading comment lines).
+segments = []
+i = 0
+header = []
+while i < len(lines) and not (fn_start.match(lines[i]) or impl_start.match(lines[i])):
+    header.append(lines[i]); i += 1
+segments.append(("header", header))
+
+pending = []  # comment/blank lines since the last fn — attach to the next fn
+while i < len(lines):
+    if impl_start.match(lines[i]):
+        # an existing `impl … { }` block: preserve it verbatim (its methods are
+        # already methodized); flush pending comments before it.
+        block, ni = consume_fn(i)
+        segments.append(("raw", pending + block))
+        pending = []
+        i = ni
+    elif fn_start.match(lines[i]):
+        block, ni = consume_fn(i)
+        sig = block[0]
+        m = fn_re.match(sig); ret = None
+        if m:
+            ret = m.group(5)
+        else:
+            m = fn_re_noret.match(sig)
+        if m:  # c-first, single-line signature -> a method
+            segments.append(("method", pending, bool(m.group(1)), m.group(2), m.group(4), ret, block[1:-1]))
+        else:  # non-c-first or multi-line sig -> stays a free function, verbatim
+            segments.append(("raw", pending + block))
+        pending = []
+        i = ni
+    else:
+        pending.append(lines[i]); i += 1
+if pending:
+    segments.append(("raw", pending))
+
+def xf(s):  # method body: c. -> self. ; inout c -> inout self
+    # `\bc\.` (word-boundary) so a local like `sc.field` / `src.x` is NOT mangled
+    # (naive `c.`->`self.` turned `sc.hasCond` into `sself.hasCond`).
     s = s.replace("inout c,", "inout self,").replace("inout c)", "inout self)")
-    s = s.replace("c.", "self.")
-    return s
+    return re.sub(r'\bc\.', 'self.', s)
 
-newfile = "\n".join(out).rstrip("\n") + "\n\npub impl Comp {\n"
-for sig, body in bodies:
-    newfile += sig + "\n"
-    for bl in body:
-        newfile += ("    " + xf(bl) if bl.strip() else bl) + "\n"
-    newfile += "    }\n\n"
-newfile = newfile.rstrip("\n") + "\n}\n"
-open(path, "w").write(newfile)
+methodized = []
+out = []
+impl_open = False
+for seg in segments:
+    if seg[0] in ("header", "raw"):
+        if impl_open:
+            out.append("}"); impl_open = False
+        # trim a leading run of blank lines on a raw block right after `}` is cosmetic;
+        # keep verbatim (formatting does not affect the fixpoint).
+        out.extend(seg[1])
+    else:
+        _, pend, exported, name, rest, ret, body = seg
+        if not impl_open:
+            if out and out[-1].strip() != "":
+                out.append("")
+            out.append("pub impl Comp {"); impl_open = True
+        for pl in pend:
+            out.append(("    " + pl) if pl.strip() else pl)
+        out.append(f"    inout fn {name}({rest})" + (f" -> {ret} {{" if ret else " {"))
+        for bl in body:
+            out.append(("    " + xf(bl)) if bl.strip() else bl)
+        out.append("    }")
+        methodized.append((name, exported))
+if impl_open:
+    out.append("}")
+
+open(path, "w").write("\n".join(out).rstrip("\n") + "\n")
 
 # rewrite call sites repo-wide (INCLUDING the transformed file itself — its own
 # intra-file calls, now `NAME(c: inout self, …)`, must become `self.NAME(…)`).
+# Skip `fn …` DEFINITION lines so a twin overload's signature in another (mixed)
+# file is not mangled into `fn Comp.NAME(…)`; methodize such a partner by hand.
 names = [n for n, _ in methodized]
-_defline = re.compile(r'^(export )?fn ')
 for f in glob.glob(SRC + "/**/*.pw", recursive=True):
     s = open(f).read(); orig = s
-    # rewrite call sites line-by-line, but NEVER a `fn NAME(c: inout Comp, …)`
-    # DEFINITION line — a twin overload of NAME living in another (mixed) file would
-    # otherwise be mangled into `fn Comp.NAME(…)`. Such a partner must be methodized
-    # by hand; leave its signature intact.
-    out_lines = []
+    res = []
     for ln in s.split("\n"):
-        if not _defline.match(ln):
+        if not fn_start.match(ln):
             for n in names:
                 ln = re.sub(r'\b' + n + r'\(c: inout (\w+)\)', r'\1.' + n + r'()', ln)
                 ln = re.sub(r'\b' + n + r'\(c: inout (\w+), ', r'\1.' + n + r'(', ln)
-        out_lines.append(ln)
-    s = "\n".join(out_lines)
+        res.append(ln)
+    s = "\n".join(res)
     if s != orig:
         open(f, "w").write(s)
 

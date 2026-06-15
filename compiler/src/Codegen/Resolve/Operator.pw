@@ -14,7 +14,7 @@ pub impl Comp {
         if lt.nameLen == 0U64 {
             return lt
         }
-        val trN: Bind = internBytes(c: inout self, s: binTraitName(op: op))
+        val trN: Bind = self.internBytes(s: binTraitName(op: op))
         mut val i: U64 = 0
         while i < self.decls.assocBindings.count {
             val ab: AssocBinding = self.decls.assocBindings[i]
@@ -26,7 +26,7 @@ pub impl Comp {
                                 return self.typeInfoOfRef(ref: ab.ty)
                             }
                         }
-                        return typeInfoOfName(c: inout self, start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)
+                        return self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)
                     }
                 }
             }

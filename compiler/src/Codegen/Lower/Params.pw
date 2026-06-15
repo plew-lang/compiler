@@ -1,68 +1,70 @@
 // Part of the lowering pass (root: _.pw): parameter and pattern-binding
 // lowering.
 
-fn lowerParams(c: inout Comp, params: Array[ParamAst]) -> Array[Param] {
-    mut val out: Array[Param] = []
-    mut val i: U64 = 0
-    while i < params.count {
-        val p: ParamAst = params[i]
-        val nm: Bind = internBytes(c: inout c, s: p.name)
-        mut val tyStart: U64 = 0
-        mut val tyLen: U64 = 0
-        mut val tyIsArray: Bool = false
-        mut val tyRef: U64 = 0
-        // a record type has an empty `name` (its fields ride in args/argLabels), so gate
-        // on isRecord too — else a record-typed param keeps no type and `p.field` fails.
-        if p.ty.name.bytes.count > 0 || p.ty.isRecord {
-            val pt: PType = lowerType(c: inout c, t: p.ty)
-            tyStart = pt.start
-            tyLen = pt.len
-            tyIsArray = pt.isArray
-            tyRef = pt.ref
+pub impl Comp {
+    inout fn lowerParams(params: Array[ParamAst]) -> Array[Param] {
+        mut val out: Array[Param] = []
+        mut val i: U64 = 0
+        while i < params.count {
+            val p: ParamAst = params[i]
+            val nm: Bind = self.internBytes(s: p.name)
+            mut val tyStart: U64 = 0
+            mut val tyLen: U64 = 0
+            mut val tyIsArray: Bool = false
+            mut val tyRef: U64 = 0
+            // a record type has an empty `name` (its fields ride in args/argLabels), so gate
+            // on isRecord too — else a record-typed param keeps no type and `p.field` fails.
+            if p.ty.name.bytes.count > 0 || p.ty.isRecord {
+                val pt: PType = self.lowerType(t: p.ty)
+                tyStart = pt.start
+                tyLen = pt.len
+                tyIsArray = pt.isArray
+                tyRef = pt.ref
+            }
+            // a default argument `name: T = expr` (spec/04). Closures never carry one
+            // (hasDefault is always false there), so this is a no-op for closure params.
+            mut val hasDefault: Bool = false
+            mut val defaultExpr: U64 = 0
+            if p.hasDefault {
+                defaultExpr = self.lowerExpr(e: p.defaultVal)
+                hasDefault = true
+            }
+            out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=hasDefault defaultExpr=defaultExpr />)
+            i += 1
         }
-        // a default argument `name: T = expr` (spec/04). Closures never carry one
-        // (hasDefault is always false there), so this is a no-op for closure params.
-        mut val hasDefault: Bool = false
-        mut val defaultExpr: U64 = 0
-        if p.hasDefault {
-            defaultExpr = c.lowerExpr(e: p.defaultVal)
-            hasDefault = true
+        return out
+    }
+
+    inout fn lowerBinds(binds: Array[BindAst]) -> Array[Bind] {
+        mut val out: Array[Bind] = []
+        mut val i: U64 = 0
+        while i < binds.count {
+            val b: BindAst = binds[i]
+            val nm: Bind = self.internBytes(s: b.name)
+            val fd: Bind = self.internBytes(s: b.field)
+            out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen nameId=nm.nameId fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start />)
+            i += 1
         }
-        out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=hasDefault defaultExpr=defaultExpr />)
-        i += 1
+        return out
     }
-    return out
-}
 
-fn lowerBinds(c: inout Comp, binds: Array[BindAst]) -> Array[Bind] {
-    mut val out: Array[Bind] = []
-    mut val i: U64 = 0
-    while i < binds.count {
-        val b: BindAst = binds[i]
-        val nm: Bind = internBytes(c: inout c, s: b.name)
-        val fd: Bind = internBytes(c: inout c, s: b.field)
-        out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen nameId=nm.nameId fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start />)
-        i += 1
+    // Lower a pattern into the arena MatchArm fields (minus the body).
+    inout fn lowerPatternInfo(p: PatternAst) -> PatInfo {
+        if p.isWildcard {
+            val noBinds: Array[Bind] = []
+            return <PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds isStruct=false />
+        }
+        val en: Bind = self.internBytes(s: p.typeName)
+        mut val vStart: U64 = 0
+        mut val vLen: U64 = 0
+        if p.variant.bytes.count > 0 {
+            val vb: Bind = self.internBytes(s: p.variant)
+            vStart = vb.nameStart
+            vLen = vb.nameLen
+        }
+        val binds: Array[Bind] = self.lowerBinds(binds: p.binds)
+        return <PatInfo isWildcard=false enumStart=en.nameStart enumLen=en.nameLen variantStart=vStart variantLen=vLen binds=binds isStruct=p.isStruct />
     }
-    return out
-}
-
-// Lower a pattern into the arena MatchArm fields (minus the body).
-fn lowerPatternInfo(c: inout Comp, p: PatternAst) -> PatInfo {
-    if p.isWildcard {
-        val noBinds: Array[Bind] = []
-        return <PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds isStruct=false />
-    }
-    val en: Bind = internBytes(c: inout c, s: p.typeName)
-    mut val vStart: U64 = 0
-    mut val vLen: U64 = 0
-    if p.variant.bytes.count > 0 {
-        val vb: Bind = internBytes(c: inout c, s: p.variant)
-        vStart = vb.nameStart
-        vLen = vb.nameLen
-    }
-    val binds: Array[Bind] = lowerBinds(c: inout c, binds: p.binds)
-    return <PatInfo isWildcard=false enumStart=en.nameStart enumLen=en.nameLen variantStart=vStart variantLen=vLen binds=binds isStruct=p.isStruct />
 }
 
 // True if a value-match arm block diverges (`=> panic …` / `=> return …`) rather
@@ -76,4 +78,3 @@ fn armBlockDiverges(b: BlockAst) -> Bool {
         _ => { return true }
     }
 }
-

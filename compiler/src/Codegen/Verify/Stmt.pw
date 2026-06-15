@@ -7,13 +7,13 @@ pub impl Comp {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 // literal range against the annotation (or context-free if none).
                 if tyLen > 0U64 {
-                    checkLitSpanCtx(c: inout self, id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
+                    self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
                 } else {
-                    checkLitCtx(c: inout self, id: init, eKind: 0, eBits: 0, eSgn: false)
+                    self.checkLitCtx(id: init, eKind: 0, eBits: 0, eSgn: false)
                 }
                 // a bare unique place on the rhs is a forbidden copy (`val g = f`).
                 self.checkUniquePlaceCopy(exprId: init, inoutOk: false)
-                verifyExpr(c: inout self, id: init)
+                self.verifyExpr(id: init)
                 // an explicit annotation whose category clearly disagrees with the
                 // initializer reinterprets the bits — a hidden-meaning bug (`val x: I64 =
                 // "s"` / `val a: A = <B…/>`). Reject only when the INITIALIZER is RELIABLY
@@ -28,7 +28,7 @@ pub impl Comp {
                 // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
                 if tyIsArray {
                     if self.valueIsReliablyNonArray(value: init) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: init)), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
+                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: init)), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
                     }
                 }
                 if tyLen > 0U64 {
@@ -63,13 +63,13 @@ pub impl Comp {
                                 if ty != 0U64 {
                                     if self.arena.types[ty].args.count > 0U64 {
                                         val de: TypeRef = self.arena.types[self.arena.types[ty].args[0]]
-                                        val it: TypeInfo = typeOf(c: inout self, id: init)
+                                        val it: TypeInfo = self.typeOf(id: init)
                                         if it.kind == 3 {
                                             if it.nameLen > 0U64 {
-                                                if isPrimType(c: inout self, start: de.nameStart, len: de.nameLen) {
-                                                    if isPrimType(c: inout self, start: it.nameStart, len: it.nameLen) {
+                                                if self.isPrimType(start: de.nameStart, len: de.nameLen) {
+                                                    if self.isPrimType(start: it.nameStart, len: it.nameLen) {
                                                         if !(spansEqual(c: inout self, aStart: de.nameStart, aLen: de.nameLen, bStart: it.nameStart, bLen: it.nameLen)) {
-                                                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: init)), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
+                                                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: init)), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
                                                         }
                                                     }
                                                 }
@@ -90,8 +90,8 @@ pub impl Comp {
                 self.verifyAssign(op: op, target: target, value: value)
             }
             Stmt.ExprStmt(val expr) => {
-                checkLitCtx(c: inout self, id: expr, eKind: 0, eBits: 0, eSgn: false)
-                verifyExpr(c: inout self, id: expr)
+                self.checkLitCtx(id: expr, eKind: 0, eBits: 0, eSgn: false)
+                self.verifyExpr(id: expr)
             }
             Stmt.Return(val value, val hasValue, val offset) => {
                 if hasValue {
@@ -100,15 +100,15 @@ pub impl Comp {
                     // unless the value is itself the unit `()` (a bare-record construction).
                     if self.cur.retVoid {
                         if !(self.exprIsUnit(id: value)) {
-                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: value)), msg: "a function with no return type cannot return a value (spec/04)")
                         }
                     }
-                    checkLitSpanCtx(c: inout self, id: value, tyStart: self.cur.retStart, tyLen: self.cur.retLen, isArray: self.cur.retIsArray, ctxRef: self.cur.retTy)
+                    self.checkLitSpanCtx(id: value, tyStart: self.cur.retStart, tyLen: self.cur.retLen, isArray: self.cur.retIsArray, ctxRef: self.cur.retTy)
                     // returning a non-array where the declared return type IS an array
                     // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
                     if self.cur.retIsArray {
                         if self.valueIsReliablyNonArray(value: value) {
-                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
                         }
                     }
                     // a returned value whose category disagrees with the declared return
@@ -117,7 +117,7 @@ pub impl Comp {
                     if self.cur.retLen > 0U64 {
                         self.tcCheckValue(expectedRef: self.cur.retTy, valueExpr: value, pos: "return")
                     }
-                    verifyExpr(c: inout self, id: value)
+                    self.verifyExpr(id: value)
                 } else {
                     // a bare `return` in a value-returning function leaves the result
                     // uninitialized (spec/04: a non-`()` function must return a value on
@@ -127,14 +127,14 @@ pub impl Comp {
                         retIsUnit = true
                     }
                     if !(retIsUnit) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
+                        compileErrorAt(line: self.lineOf(offset: offset), msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
                     }
                 }
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
-                checkLitCtx(c: inout self, id: cond, eKind: 0, eBits: 0, eSgn: false)
+                self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
                 self.checkCondBool(cond: cond)
-                verifyExpr(c: inout self, id: cond)
+                self.verifyExpr(id: cond)
                 // locals already in scope are "outside" this branch (a `move` of one
                 // inside would be conditional) — mark the boundary for the move guard.
                 val savedBB: U64 = self.cur.branchBase
@@ -146,9 +146,9 @@ pub impl Comp {
                 self.cur.branchBase = savedBB
             }
             Stmt.While(val cond, val body) => {
-                checkLitCtx(c: inout self, id: cond, eKind: 0, eBits: 0, eSgn: false)
+                self.checkLitCtx(id: cond, eKind: 0, eBits: 0, eSgn: false)
                 self.checkCondBool(cond: cond)
-                verifyExpr(c: inout self, id: cond)
+                self.verifyExpr(id: cond)
                 val savedBB: U64 = self.cur.branchBase
                 self.cur.branchBase = self.scopeMark()
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
@@ -157,27 +157,27 @@ pub impl Comp {
                 self.cur.branchBase = savedBB
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
-                verifyExpr(c: inout self, id: iter)
+                self.verifyExpr(id: iter)
                 if isRange {
-                    verifyExpr(c: inout self, id: rangeHi)
+                    self.verifyExpr(id: rangeHi)
                     // a range is iterated via `Step`, which is integer-only (spec/02,11):
                     // `for x in 0.0..<5.0` has no Step witness. Reject a float-typed range
                     // (by the loop-var annotation or either bound).
                     mut val rangeIsFloat: Bool = self.exprIsFloat(id: iter) || self.exprIsFloat(id: rangeHi)
                     if varTyLen != 0U64 {
-                        if isFloatType(c: inout self, start: varTyStart, len: varTyLen) {
+                        if self.isFloatType(start: varTyStart, len: varTyLen) {
                             rangeIsFloat = true
                         }
                     }
                     if rangeIsFloat {
-                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: iter)), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)")
+                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: iter)), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)")
                     }
                     // a range bound annotated by the loop var (`for val i: I32 in …`)
                     // types both bounds; otherwise each must determine its own type, so a
                     // bare literal range (`0..<5`) is ambiguous and rejected.
                     if varTyLen != 0U64 {
-                        checkLitSpan(c: inout self, id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
-                        checkLitSpan(c: inout self, id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                        self.checkLitSpan(id: iter, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
+                        self.checkLitSpan(id: rangeHi, tyStart: varTyStart, tyLen: varTyLen, isArray: false)
                         // checkLitSpan only range-checks a SUFFIXED literal against its own
                         // suffix, so a mismatched width (`for val i: I64 in 0I64..<5I32`)
                         // slips through — check each bound's type against the loop var type.
@@ -185,7 +185,7 @@ pub impl Comp {
                         self.tcCheckValue(expectedRef: vref, valueExpr: iter, pos: "range bound")
                         self.tcCheckValue(expectedRef: vref, valueExpr: rangeHi, pos: "range bound")
                     } else {
-                        checkArithNoCtx(c: inout self, lhs: iter, rhs: rangeHi)
+                        self.checkArithNoCtx(lhs: iter, rhs: rangeHi)
                         // both bounds must share a type (`0I64..<5I32` is a width mismatch).
                         self.tcCheckValue(expectedRef: self.inferType(id: iter), valueExpr: rangeHi, pos: "range bound")
                     }
@@ -199,7 +199,7 @@ pub impl Comp {
                     mut val ltS: U64 = varTyStart
                     mut val ltL: U64 = varTyLen
                     if ltL == 0U64 {
-                        val bt2: TypeInfo = typeOf(c: inout self, id: rangeHi)
+                        val bt2: TypeInfo = self.typeOf(id: rangeHi)
                         if bt2.kind == 0 {
                             ltS = bt2.nameStart
                             ltL = bt2.nameLen
@@ -207,17 +207,17 @@ pub impl Comp {
                     }
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = typeOf(c: inout self, id: iter)
+                    val et: TypeInfo = self.typeOf(id: iter)
                     if et.kind == 3 {
                         if isStruct {
                             // the destructure pattern type must name the element struct.
                             if intern(c: inout self, start: patStart, len: patLen) != intern(c: inout self, start: et.nameStart, len: et.nameLen) {
-                                compileErrorAt(line: lineOf(c: inout self, offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
+                                compileErrorAt(line: self.lineOf(offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
                             }
                             mut val bi: U64 = 0
                             while bi < binds.count {
                                 val bd: Bind = binds[bi]
-                                val ft: TypeInfo = forBindFieldType(c: inout self, et: et, bd: bd)
+                                val ft: TypeInfo = self.forBindFieldType(et: et, bd: bd)
                                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
                                 bi += 1
                             }
@@ -234,18 +234,18 @@ pub impl Comp {
                 self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
-                verifyExpr(c: inout self, id: scrut)
+                self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
-                if !(matchExhaustive(c: inout self, arms: arms)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                if !(self.matchExhaustive(arms: arms)) {
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 }
                 mut val ai: U64 = 0
                 while ai < arms.count {
                     val armMark: U64 = self.scopeMark()
                     val savedArmBB: U64 = self.cur.branchBase
                     self.cur.branchBase = armMark
-                    checkDestructureComplete(c: inout self, a: arms[ai])
-                    verifyAddArmBinds(c: inout self, a: arms[ai], scrut: scrut)
+                    self.checkDestructureComplete(a: arms[ai])
+                    self.verifyAddArmBinds(a: arms[ai], scrut: scrut)
                     self.verifyBlock(blockId: arms[ai].body)
                     self.cur.branchBase = savedArmBB
                     self.popLocals(mark: armMark)
@@ -253,27 +253,27 @@ pub impl Comp {
                 }
             }
             Stmt.Panic(val msg, offset: _) => {
-                verifyExpr(c: inout self, id: msg)
+                self.verifyExpr(id: msg)
             }
             Stmt.Give(val value) => {
                 // a value-position if/match yielding a unique value isn't supported yet
                 // (per-path move/drop handling); mirrors genStmt's Give guard.
-                val gvt: TypeInfo = typeOf(c: inout self, id: value)
+                val gvt: TypeInfo = self.typeOf(id: value)
                 if gvt.kind == 2 {
                     if self.typeIsUnique(start: gvt.nameStart, len: gvt.nameLen) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
+                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
                     }
                 }
-                verifyExpr(c: inout self, id: value)
+                self.verifyExpr(id: value)
             }
             Stmt.Break(val offset) => {
                 if self.cur.verifyLoopDepth == 0U64 {
-                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "`break` outside a loop (spec/11)")
+                    compileErrorAt(line: self.lineOf(offset: offset), msg: "`break` outside a loop (spec/11)")
                 }
             }
             Stmt.Continue(val offset) => {
                 if self.cur.verifyLoopDepth == 0U64 {
-                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "`continue` outside a loop (spec/11)")
+                    compileErrorAt(line: self.lineOf(offset: offset), msg: "`continue` outside a loop (spec/11)")
                 }
             }
         }
@@ -283,37 +283,37 @@ pub impl Comp {
         match self.arena.exprs[target] {
             Expr.Index(val base, val index) => {
                 if !(self.placeIsMutable(id: base)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
                 }
-                verifyExpr(c: inout self, id: base)
-                verifyExpr(c: inout self, id: index)
+                self.verifyExpr(id: base)
+                self.verifyExpr(id: index)
                 self.checkIndexKeyType(base: base, index: index)
             }
             Expr.Field(base: val fbase, val nameStart, val nameLen) => {
                 // the whole place must be mutable (binding + field both `mut val`).
                 if !(self.placeIsMutable(id: target)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
                 }
                 // field-write visibility on the base's owner type.
-                val bt: TypeInfo = typeOf(c: inout self, id: fbase)
+                val bt: TypeInfo = self.typeOf(id: fbase)
                 if bt.kind == 2 {
                     self.checkFieldWriteVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                 }
-                verifyExpr(c: inout self, id: fbase)
+                self.verifyExpr(id: fbase)
             }
             Expr.Ident(val start, val len) => {
                 if !(self.placeIsMutable(id: target)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
+                    compileErrorAt(line: self.lineOf(offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
                 }
             }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => {
                 // a Ref pointee is always mutable through `->`.
-                verifyExpr(c: inout self, id: base)
+                self.verifyExpr(id: base)
             }
             _ => {}
         }
         self.checkUniquePlaceCopy(exprId: value, inoutOk: false)
-        verifyExpr(c: inout self, id: value)
+        self.verifyExpr(id: value)
         // a plain reassignment `u = e` reinitializes `u`, so it is live again — clear any
         // use-after-move mark (the value was verified above, so a moved read in `e` is
         // already reported). spec/03.

@@ -74,22 +74,22 @@ pub impl Comp {
             val mf: MakeField = d.args[ai]
             val v: U64 = self.fieldVis(structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             if v == 0U64 {
-                compileErrorAt(line: lineOf(c: inout self, offset: mf.nameStart), msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
+                compileErrorAt(line: self.lineOf(offset: mf.nameStart), msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
             }
             ai += 1
         }
     }
 
     inout fn synthGenMain() {
-        val writeN: Bind = internBytes(c: inout self, s: "write")
-        val sN: Bind = internBytes(c: inout self, s: "s")
-        val deriveN: Bind = internBytes(c: inout self, s: "derive")
-        val parseN: Bind = internBytes(c: inout self, s: "parseItem")
-        val inputN: Bind = internBytes(c: inout self, s: "input")
-        val srcN: Bind = internBytes(c: inout self, s: "source")
-        val startN: Bind = internBytes(c: inout self, s: "start")
-        val endN: Bind = internBytes(c: inout self, s: "end")
-        val mainN: Bind = internBytes(c: inout self, s: "main")
+        val writeN: Bind = self.internBytes(s: "write")
+        val sN: Bind = self.internBytes(s: "s")
+        val deriveN: Bind = self.internBytes(s: "derive")
+        val parseN: Bind = self.internBytes(s: "parseItem")
+        val inputN: Bind = self.internBytes(s: "input")
+        val srcN: Bind = self.internBytes(s: "source")
+        val startN: Bind = self.internBytes(s: "start")
+        val endN: Bind = self.internBytes(s: "end")
+        val mainN: Bind = self.internBytes(s: "main")
         mut val stmts: Array[U64] = []
         mut val i: U64 = 0
         while i < self.decls.derives.count {

@@ -16,7 +16,7 @@ pub impl Comp {
         if lo.isArray {
             return true
         }
-        if isPrimType(c: inout self, start: lo.tyStart, len: lo.tyLen) {
+        if self.isPrimType(start: lo.tyStart, len: lo.tyLen) {
             return true
         }
         if rangeEquals(bytes: self.arena.bytes, start: lo.tyStart, len: lo.tyLen, kw: "String") {
@@ -56,32 +56,32 @@ pub impl Comp {
             // scalar (`mut val`) cells; mutable non-scalar capture is additive later.
             // (an array's type span names its element, so guard isArray explicitly.)
             if lo.isArray {
-                compileErrorAt(line: lineOf(c: inout self, offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
+                compileErrorAt(line: self.lineOf(offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
             } else {
-                if isPrimType(c: inout self, start: lo.tyStart, len: lo.tyLen) {
+                if self.isPrimType(start: lo.tyStart, len: lo.tyLen) {
                     boxed = true
                 } else {
-                    compileErrorAt(line: lineOf(c: inout self, offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
+                    compileErrorAt(line: self.lineOf(offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
                 }
             }
         } else {
             if !(self.captureSupported(lo: lo)) {
-                compileErrorAt(line: lineOf(c: inout self, offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
+                compileErrorAt(line: self.lineOf(offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
             }
         }
         self.monoWork.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
     }
 
     inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, memberStart: U64, memberLen: U64, headStart: U64, headLen: U64) {
-        val chainN: Bind = internBytes(c: inout self, s: "chain")
-        val fromValueN: Bind = internBytes(c: inout self, s: "fromValue")
-        val emptyN: Bind = internBytes(c: inout self, s: "empty")
-        val optN: Bind = internBytes(c: inout self, s: "Optional")
-        val someN: Bind = internBytes(c: inout self, s: "Some")
-        val noneN: Bind = internBytes(c: inout self, s: "None")
-        val vFieldN: Bind = internBytes(c: inout self, s: "v")
-        val cvN: Bind = internBytes(c: inout self, s: "__chainVal")
-        val valueN: Bind = internBytes(c: inout self, s: "value")
+        val chainN: Bind = self.internBytes(s: "chain")
+        val fromValueN: Bind = self.internBytes(s: "fromValue")
+        val emptyN: Bind = self.internBytes(s: "empty")
+        val optN: Bind = self.internBytes(s: "Optional")
+        val someN: Bind = self.internBytes(s: "Some")
+        val noneN: Bind = self.internBytes(s: "None")
+        val vFieldN: Bind = self.internBytes(s: "v")
+        val cvN: Bind = self.internBytes(s: "__chainVal")
+        val valueN: Bind = self.internBytes(s: "value")
         // scrutinee: base.chain()
         val noArgs: Array[Arg] = []
         val scrut: U64 = self.pushExpr(e: <Expr.Method recv=base nameStart=chainN.nameStart nameLen=chainN.nameLen args=noArgs />)
@@ -140,7 +140,7 @@ pub impl Comp {
         // type arg): register the concrete instance so the desugar's `match base.chain()`
         // sets the enum env and types the Some-payload bind (the front-end method-result
         // typeOf can recover only the ungrounded `Optional[T]` template otherwise).
-        val optN: Bind = internBytes(c: inout self, s: "Optional")
+        val optN: Bind = self.internBytes(s: "Optional")
         mut val optArgs: Array[U64] = []
         optArgs.append(value: vRef)
         val optVRef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optArgs />)
@@ -177,7 +177,7 @@ pub impl Comp {
 
     inout fn findAssocByName(recvStart: U64, recvLen: U64, name: String) -> U64 {
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val nm: Bind = internBytes(c: inout self, s: name)
+        val nm: Bind = self.internBytes(s: name)
         val qName: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val i: U64 = 0
         while i < self.arena.funcs.count {
@@ -215,7 +215,7 @@ pub impl Comp {
                 // env construction would have to reach the outer env, which is not
                 // wired yet — reject loudly rather than miscompile.
                 if self.cur.inClosure {
-                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: exprId)), msg: "nested closures are not yet supported")
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: exprId)), msg: "nested closures are not yet supported")
                 }
                 // walk the body with the closure's own scope so enclosing references
                 // become captures. Save/restore the capture context (single-level;
@@ -279,7 +279,7 @@ pub impl Comp {
                 // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so
                 // its typedef + methods (and the provided method's reachability) depend
                 // on registering it here.
-                val mrt: TypeInfo = typeOf(c: inout self, id: exprId)
+                val mrt: TypeInfo = self.typeOf(id: exprId)
                 if mrt.ref != 0 {
                     self.scanType(ref: mrt.ref)
                 }
@@ -310,10 +310,10 @@ pub impl Comp {
                 // over `base.chain()` with `fromValue`/`empty`) and scan the new tree so
                 // its method/assoc instances are discovered. Optional keeps the backend
                 // fast path (an observable-equivalent inlining, not a special case).
-                val bt: TypeInfo = typeOf(c: inout self, id: base)
+                val bt: TypeInfo = self.typeOf(id: base)
                 if bt.kind == 2 {
                     if !(rangeEquals(bytes: self.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
-                        val chN: Bind = internBytes(c: inout self, s: "chain")
+                        val chN: Bind = self.internBytes(s: "chain")
                         if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
                             self.rewriteOptChainToChainMatch(exprId: exprId, base: base, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
                             self.scanExprInsts(exprId: exprId)
@@ -346,7 +346,7 @@ pub impl Comp {
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: typeOf(c: inout self, id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -362,7 +362,7 @@ pub impl Comp {
         // struct (mirrors codegen's addForStructBinds), so a generic call on a bound
         // field (`print(items.count)`) recovers its type.
         if a.isStruct {
-            addForStructBinds(c: inout self, et: scrutTi, binds: a.binds)
+            self.addForStructBinds(et: scrutTi, binds: a.binds)
             return
         }
         val genericMatch: Bool = self.isGenericEnumInst(ref: scrutTi.ref)
@@ -421,7 +421,7 @@ pub impl Comp {
                     mut val rtS: U64 = varTyStart
                     mut val rtL: U64 = varTyLen
                     if rtL == 0 {
-                        val bt: TypeInfo = typeOf(c: inout self, id: rangeHi)
+                        val bt: TypeInfo = self.typeOf(id: rangeHi)
                         if bt.kind == 0 {
                             rtS = bt.nameStart
                             rtL = bt.nameLen
@@ -429,9 +429,9 @@ pub impl Comp {
                     }
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: rtS, tyLen: rtL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = typeOf(c: inout self, id: iter)
+                    val et: TypeInfo = self.typeOf(id: iter)
                     if isStruct {
-                        addForStructBinds(c: inout self, et: et, binds: binds)
+                        self.addForStructBinds(et: et, binds: binds)
                     } else {
                         if et.kind == 3 {
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
@@ -450,7 +450,7 @@ pub impl Comp {
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: typeOf(c: inout self, id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1

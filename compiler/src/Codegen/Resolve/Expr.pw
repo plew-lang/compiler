@@ -7,18 +7,21 @@ fn typeUnfilled() -> I64 {
     return 99
 }
 
-// Allocate the typed-AST cache (one slot per expression node), all unfilled.
-// Called once before emission; expr ids are stable by then.
-fn buildExprTyTable(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.arena.exprs.count {
-        c.typeCache.kind.append(typeUnfilled())
-        c.typeCache.start.append(0)
-        c.typeCache.len.append(0)
-        c.typeCache.ref.append(0)
-        c.typeCache.intCtx.append(0)
-        c.typeCache.callee.append(calleeUnfilled())
-        i += 1
+pub impl Comp {
+
+    // Allocate the typed-AST cache (one slot per expression node), all unfilled.
+    // Called once before emission; expr ids are stable by then.
+    inout fn buildExprTyTable() {
+        mut val i: U64 = 0
+        while i < self.arena.exprs.count {
+            self.typeCache.kind.append(typeUnfilled())
+            self.typeCache.start.append(0)
+            self.typeCache.len.append(0)
+            self.typeCache.ref.append(0)
+            self.typeCache.intCtx.append(0)
+            self.typeCache.callee.append(calleeUnfilled())
+            i += 1
+        }
     }
 }
 
@@ -28,32 +31,35 @@ fn calleeUnfilled() -> U64 {
     return 18446744073709551615U64
 }
 
-// Pre-resolved free-function callee for the call expression `id`: the `findFunc`
-// result (`funcs.count` if it resolves to no declared function), memoized in
-// `typeCache.callee`. The single choke point through which every pass reads call
-// resolution — the first pass to ask fills the slot, the rest read it, so the
-// backend stops re-running overload resolution during emission. The result is
-// stable per call-expr id (overloads can't be selected via opaque type-parameter
-// args, spec/06), so the memo is sound and never cleared. A non-call id (or an id
-// past the table, i.e. a node synthesized after buildExprTyTable) resolves directly
-// without caching.
-export fn resolvedCallee(c: inout Comp, id: U64) -> U64 {
-    if id < c.typeCache.callee.count {
-        if c.typeCache.callee[id] != calleeUnfilled() {
-            return c.typeCache.callee[id]
+pub impl Comp {
+
+    // Pre-resolved free-function callee for the call expression `id`: the `findFunc`
+    // result (`funcs.count` if it resolves to no declared function), memoized in
+    // `typeCache.callee`. The single choke point through which every pass reads call
+    // resolution — the first pass to ask fills the slot, the rest read it, so the
+    // backend stops re-running overload resolution during emission. The result is
+    // stable per call-expr id (overloads can't be selected via opaque type-parameter
+    // args, spec/06), so the memo is sound and never cleared. A non-call id (or an id
+    // past the table, i.e. a node synthesized after buildExprTyTable) resolves directly
+    // without caching.
+    inout fn resolvedCallee(id: U64) -> U64 {
+        if id < self.typeCache.callee.count {
+            if self.typeCache.callee[id] != calleeUnfilled() {
+                return self.typeCache.callee[id]
+            }
         }
-    }
-    mut val r: U64 = c.arena.funcs.count
-    match c.arena.exprs[id] {
-        Expr.Call(val nameStart, val nameLen, val args) => {
-            r = c.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
+        mut val r: U64 = self.arena.funcs.count
+        match self.arena.exprs[id] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                r = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
+            }
+            _ => {}
         }
-        _ => {}
+        if id < self.typeCache.callee.count {
+            self.typeCache.callee.set(i: id, value: r)
+        }
+        return r
     }
-    if id < c.typeCache.callee.count {
-        c.typeCache.callee.set(i: id, value: r)
-    }
-    return r
 }
 
 // The kw name for a recorded int-context code (1..8 -> I8..U64).
@@ -70,73 +76,75 @@ fn intCtxKw(code: U64) -> String {
     return "F32"
 }
 
-// The TypeInfo for `id`'s recorded int context (scalarInfo if none) — the fallback
-// `typeOf` uses for a width-less expression whose type came only from context.
-fn exprIntCtxTypeInfo(c: inout Comp, id: U64) -> TypeInfo {
-    if id < c.typeCache.intCtx.count {
-        val code: U64 = c.typeCache.intCtx[id]
-        if code != 0 {
-            val kw: String = intCtxKw(code: code)
-            val b: Bind = kwSpan(c: inout c, kw: kw, kwLen: kw.bytes.count)
-            if b.nameLen != 0 {
-                return <TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 />
+pub impl Comp {
+
+    // The TypeInfo for `id`'s recorded int context (scalarInfo if none) — the fallback
+    // `typeOf` uses for a width-less expression whose type came only from context.
+    inout fn exprIntCtxTypeInfo(id: U64) -> TypeInfo {
+        if id < self.typeCache.intCtx.count {
+            val code: U64 = self.typeCache.intCtx[id]
+            if code != 0 {
+                val kw: String = intCtxKw(code: code)
+                val b: Bind = self.kwSpan(kw: kw, kwLen: kw.bytes.count)
+                if b.nameLen != 0 {
+                    return <TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 />
+                }
             }
         }
+        return scalarInfo()
     }
-    return scalarInfo()
-}
 
-// The type of expression `id` — the typed-AST read path codegen uses instead of
-// re-deriving with `exprType`. Caching is restricted to a pure free-function
-// context: no type params, no receiver-instantiation, no receiver/Self/Item env.
-// There a node's type is env-independent AND its body is emitted exactly once, so
-// it can be computed once via `exprType` and cached. Method bodies are excluded
-// because a provided trait method shares one body AST across conforming types
-// (its node types vary with Self); generic bodies vary per instantiation. Those
-// re-derive every time.
-// The recorded result TypeRef of a desugared non-Optional `?.` at `exprId` (a Chain
-// rewrite, set by registerChainResultInsts), or 0 if this node isn't one. Lets typeOf
-// / exprTypeRef recover a Chain stage's type without re-deriving it from the rewritten
-// match's internal bindings (needed for a nested `a?.x?.y`).
-export fn chainResultRef(c: inout Comp, exprId: U64) -> U64 {
-    mut val i: U64 = 0
-    while i < c.decls.chainResults.count {
-        if c.decls.chainResults[i].nameStart == exprId {
-            return c.decls.chainResults[i].fieldStart
+    // The type of expression `id` — the typed-AST read path codegen uses instead of
+    // re-deriving with `exprType`. Caching is restricted to a pure free-function
+    // context: no type params, no receiver-instantiation, no receiver/Self/Item env.
+    // There a node's type is env-independent AND its body is emitted exactly once, so
+    // it can be computed once via `exprType` and cached. Method bodies are excluded
+    // because a provided trait method shares one body AST across conforming types
+    // (its node types vary with Self); generic bodies vary per instantiation. Those
+    // re-derive every time.
+    // The recorded result TypeRef of a desugared non-Optional `?.` at `exprId` (a Chain
+    // rewrite, set by registerChainResultInsts), or 0 if this node isn't one. Lets typeOf
+    // / exprTypeRef recover a Chain stage's type without re-deriving it from the rewritten
+    // match's internal bindings (needed for a nested `a?.x?.y`).
+    inout fn chainResultRef(exprId: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.decls.chainResults.count {
+            if self.decls.chainResults[i].nameStart == exprId {
+                return self.decls.chainResults[i].fieldStart
+            }
+            i += 1
         }
-        i += 1
+        return 0
     }
-    return 0
-}
 
-export fn typeOf(c: inout Comp, id: U64) -> TypeInfo {
-    mut val t: TypeInfo = scalarInfo()
-    if id < c.typeCache.kind.count {
-        if c.typeCache.kind[id] == typeUnfilled() {
-            t = c.exprType(id: id)
-            c.typeCache.kind[id] = t.kind
-            c.typeCache.start[id] = t.nameStart
-            c.typeCache.len[id] = t.nameLen
-            c.typeCache.ref[id] = t.ref
-            c.typeCache.filled.append(id)
+    inout fn typeOf(id: U64) -> TypeInfo {
+        mut val t: TypeInfo = scalarInfo()
+        if id < self.typeCache.kind.count {
+            if self.typeCache.kind[id] == typeUnfilled() {
+                t = self.exprType(id: id)
+                self.typeCache.kind[id] = t.kind
+                self.typeCache.start[id] = t.nameStart
+                self.typeCache.len[id] = t.nameLen
+                self.typeCache.ref[id] = t.ref
+                self.typeCache.filled.append(id)
+            } else {
+                t = <TypeInfo kind=self.typeCache.kind[id] nameStart=self.typeCache.start[id] nameLen=self.typeCache.len[id] ref=self.typeCache.ref[id] />
+            }
         } else {
-            t = <TypeInfo kind=c.typeCache.kind[id] nameStart=c.typeCache.start[id] nameLen=c.typeCache.len[id] ref=c.typeCache.ref[id] />
+            t = self.exprType(id: id)
         }
-    } else {
-        t = c.exprType(id: id)
-    }
-    // width-less recovery: a form whose type came only from context (`0-1` in an
-    // `I32` binding, `match{...}+1`) is type-less to the structural recovery but the
-    // checker recorded its int context — use it so the op routes through the witness.
-    // Read fresh (not cached) since typeCache.intCtx is filled during emission.
-    if t.kind == 0 {
-        if t.nameLen == 0 {
-            val ctx: TypeInfo = exprIntCtxTypeInfo(c: inout c, id: id)
-            if ctx.nameLen != 0 {
-                return ctx
+        // width-less recovery: a form whose type came only from context (`0-1` in an
+        // `I32` binding, `match{...}+1`) is type-less to the structural recovery but the
+        // checker recorded its int context — use it so the op routes through the witness.
+        // Read fresh (not cached) since typeCache.intCtx is filled during emission.
+        if t.kind == 0 {
+            if t.nameLen == 0 {
+                val ctx: TypeInfo = self.exprIntCtxTypeInfo(id: id)
+                if ctx.nameLen != 0 {
+                    return ctx
+                }
             }
         }
+        return t
     }
-    return t
 }
-

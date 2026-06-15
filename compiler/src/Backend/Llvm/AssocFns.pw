@@ -74,7 +74,7 @@ fn scanExprAssoc(c: inout Comp, st: inout LlvmCtx, id: U64) {
         }
         Expr.Index(val base, val index) => { scanExprAssoc(c: inout c, st: inout st, id: base) scanExprAssoc(c: inout c, st: inout st, id: index) }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            val arn: Bind = assocRecvName(c: inout c, recv: recv)
+            val arn: Bind = c.assocRecvName(recv: recv)
             if arn.nameLen != 0U64 {
                 val afi: U64 = c.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if afi < c.arena.funcs.count {
@@ -266,7 +266,7 @@ fn paramLlvmTy(c: inout Comp, st: inout LlvmCtx, p: Param) -> LLVMTypeRef {
     if c.cur.typeParams.count > 0U64 {
         pt = c.groundTypeRef(ref: pt)
     }
-    if isGenericInst(c: inout c, ref: pt) {
+    if c.isGenericInst(ref: pt) {
         return llvmTypeOfRef(c: inout c, st: inout st, ref: pt)
     }
     return llvmTypeFor(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
@@ -304,7 +304,7 @@ fn llvmFnRetTy(c: inout Comp, st: inout LlvmCtx, f: Func) -> LLVMTypeRef {
         if c.cur.typeParams.count > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
             rt = c.groundTypeRef(ref: rt)
         }
-        if isGenericInst(c: inout c, ref: rt) {
+        if c.isGenericInst(ref: rt) {
             return llvmTypeOfRef(c: inout c, st: inout st, ref: rt)
         }
         return llvmTypeFor(c: inout c, st: inout st, tyStart: f.retStart, tyLen: f.retLen, isArray: f.retIsArray)

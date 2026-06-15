@@ -15,9 +15,9 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             } else {
                 // width from the literal's recovered type (typeOf folds in the
                 // suffix and the checker-recorded context width typeCache.intCtx).
-                val t: TypeInfo = typeOf(c: inout c, id: id)
+                val t: TypeInfo = c.typeOf(id: id)
                 if t.kind == 0 {
-                    if isFloatType(c: inout c, start: t.nameStart, len: t.nameLen) {
+                    if c.isFloatType(start: t.nameStart, len: t.nameLen) {
                         // a polymorphic int literal in a float context (`val x: F64 = 5`):
                         // emit it as a double (uitofp of the magnitude, then negate).
                         val iv: LLVMValueRef = LLVMConstInt(st.i64ty, value, 0I32)
@@ -58,7 +58,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return cv
                 }
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
+            compileErrorAt(line: c.lineOf(offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Binary(val op, val lhs, val rhs) => {
@@ -162,7 +162,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // witness in the C backend; not modeled here — reject loudly rather than
             // emit an invalid icmp/arith on an aggregate.
             if LLVMGetTypeKind(LLVMTypeOf(l)) != 8U32 {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
+                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
                 return LLVMConstInt(st.i1ty, 0U64, 0I32)
             }
             // normalize operand widths: a context-less literal defaults to i64 but
@@ -222,7 +222,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     // Optional[N[T]]` on a base of type `N[I64]`) loads the concrete
                     // `Optional[N[I64]]` layout, not the ungrounded template (which would
                     // default to i64 and load the wrong type).
-                    if fieldIsBoxed(c: inout c, f: fd) {
+                    if c.fieldIsBoxed(f: fd) {
                         val bRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
                         val savedBP: Array[Bind] = c.cur.typeParams
                         val savedBA: Array[U64] = c.cur.typeArgs
@@ -241,7 +241,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return raw
                 }
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
@@ -279,7 +279,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                 cv = LLVMBuildInsertValue(st.b, cv, env, 1U64, anon())
                 return cv
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "LLVM backend: closure not declared")
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: closure not declared")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -293,7 +293,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
                     return LLVMBuildExtractValue(st.b, loadRefPointee(c: inout c, st: inout st, base: base), fidx, anon())
                 }
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
@@ -345,7 +345,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // `n as F64` / `n as F32`: int -> float (sitofp / uitofp, IEEE-rounded —
             // spec/12 total conversion), or a float -> float widen (both are double =
             // no-op). (float -> int is lossy and is a fallible TryFrom, not `as`.)
-            if isFloatType(c: inout c, start: tyStart, len: tyLen) {
+            if c.isFloatType(start: tyStart, len: tyLen) {
                 if LLVMGetTypeKind(LLVMTypeOf(ov)) == 8U32 {
                     if valueKind(c: inout c, st: inout st, id: operand) == 3U64 {
                         return LLVMBuildUIToFP(st.b, ov, st.f64ty, anon())
@@ -366,16 +366,16 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // above.) The front-end (Verify) already gated legality, so reaching here
             // with a non-int/non-float operand means a representation-preserving re-tag:
             // either the TARGET is a newtype (wrap) or the OPERAND's type is (unwrap).
-            if newtypeUnderRef(c: inout c, start: tyStart, len: tyLen) != 0U64 {
+            if c.newtypeUnderRef(start: tyStart, len: tyLen) != 0U64 {
                 return ov
             }
             val opRef: U64 = exprTypeRef(c: inout c, st: inout st, id: operand)
             if opRef != 0U64 {
-                if newtypeUnderRef(c: inout c, start: c.arena.types[opRef].nameStart, len: c.arena.types[opRef].nameLen) != 0U64 {
+                if c.newtypeUnderRef(start: c.arena.types[opRef].nameStart, len: c.arena.types[opRef].nameLen) != 0U64 {
                     return ov
                 }
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         Expr.Unary(val op, val operand) => {
@@ -400,14 +400,14 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             if op == opNot() || op == opBitNot() {
                 return LLVMBuildNot(st.b, genLlvmExpr(c: inout c, st: inout st, id: operand), anon())
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "LLVM backend: unary operator not yet supported")
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: unary operator not yet supported")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
         _ => {
             eprint(text: "[exprform] ")
             eprint(text: exprFormName(c: inout c, id: id))
             eprint(text: "\n")
-            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: id)), msg: "LLVM backend: expression form not yet supported")
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: expression form not yet supported")
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
     }

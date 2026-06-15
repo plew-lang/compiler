@@ -14,7 +14,7 @@ pub impl Comp {
         // (`val x: I64 = doNothing()`) is a type error (spec/04).
         if self.exprIsVoidCall(id: valueExpr) {
             if !(self.tcLog) {
-                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
+                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
             }
             return
         }
@@ -91,10 +91,10 @@ pub impl Comp {
             eprint(text: " from=")
             eprint(text: self.tcExprKind(id: valueExpr))
             eprint(text: " line=")
-            eprintInt(n: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)))
+            eprintInt(n: self.lineOf(offset: self.exprOffset(id: valueExpr)))
             eprint(text: "\n")
         } else {
-            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)")
+            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)")
         }
     }
 
@@ -102,7 +102,7 @@ pub impl Comp {
         // `&&` / `||` are short-circuit control flow (spec/12), not a trait op: both
         // operands must be Bool (`1I64 && true` has no truthiness coercion).
         if op == opAnd() || op == opOr() {
-            val bs: Bind = kwSpan(c: inout self, kw: "Bool", kwLen: 4U64)
+            val bs: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
             if bs.nameLen != 0U64 {
                 val boolRef: U64 = self.simpleTypeRef(nameStart: bs.nameStart, nameLen: bs.nameLen)
                 self.tcCheckValue(expectedRef: boolRef, valueExpr: lhs, pos: "logical")
@@ -149,7 +149,7 @@ pub impl Comp {
         // `Add[Money]` on a primitive int. typesCompatible carries the F32/F64 leniency
         // and the int↔float rejection. A non-numeric LHS (a user type whose `Add[Rhs]`
         // may legitimately differ) is excluded here — its witness is checked elsewhere.
-        val lNum: Bool = isIntType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || isFloatType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen)
+        val lNum: Bool = self.isIntType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || self.isFloatType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen)
         if lNum {
             self.tcCheckValue(expectedRef: l, valueExpr: rhs, pos: "binop")
         }
@@ -174,10 +174,10 @@ pub impl Comp {
             eprint(text: " got=")
             eprint(text: self.tcRefName(ref: self.inferType(id: operand)))
             eprint(text: " line=")
-            eprintInt(n: lineOf(c: inout self, offset: exprOffset(c: inout self, id: operand)))
+            eprintInt(n: self.lineOf(offset: self.exprOffset(id: operand)))
             eprint(text: "\n")
         } else {
-            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: operand)), msg: msg)
+            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: msg)
         }
     }
 
@@ -187,9 +187,9 @@ pub impl Comp {
             return
         }
         val tn: TypeRef = self.arena.types[t]
-        val isInt: Bool = isIntType(c: inout self, start: tn.nameStart, len: tn.nameLen)
+        val isInt: Bool = self.isIntType(start: tn.nameStart, len: tn.nameLen)
         val isBool: Bool = rangeEquals(bytes: self.arena.bytes, start: tn.nameStart, len: tn.nameLen, kw: "Bool")
-        val isFloat: Bool = isFloatType(c: inout self, start: tn.nameStart, len: tn.nameLen)
+        val isFloat: Bool = self.isFloatType(start: tn.nameStart, len: tn.nameLen)
         // String is a primitive with NO Neg/Not/BitNot witness, so judge it too (`-s`
         // falls to each branch's reject). only judge a primitive operand (int / Bool /
         // float / String); skip user types (which may implement Neg/Not/BitNot).
@@ -222,7 +222,7 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.types.count {
             return false
         }
-        return isIntType(c: inout self, start: self.arena.types[ref].nameStart, len: self.arena.types[ref].nameLen)
+        return self.isIntType(start: self.arena.types[ref].nameStart, len: self.arena.types[ref].nameLen)
     }
 
     inout fn tcCheckCompoundAssign(op: I64, target: U64, value: U64) {
@@ -236,15 +236,15 @@ pub impl Comp {
         // a primitive numeric target forces the value to match (same as the binop it
         // desugars to: `x: I64; x += true` / `x += "a"` has no `Add[Bool]`/`Add[String]`
         // on I64). A user-type target uses `Add[Rhs]` and is checked by its own witness.
-        if isIntType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || isFloatType(c: inout self, start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) {
+        if self.isIntType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || self.isFloatType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) {
             self.tcCheckValue(expectedRef: l, valueExpr: value, pos: "compound")
         }
     }
 
     inout fn tcCheckArrayIndex(base: U64, index: U64) {
-        val bt: TypeInfo = typeOf(c: inout self, id: base)
+        val bt: TypeInfo = self.typeOf(id: base)
         if bt.kind == 3 {
-            val u64: Bind = kwSpan(c: inout self, kw: "U64", kwLen: 3U64)
+            val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3U64)
             if u64.nameLen == 0U64 {
                 return
             }
@@ -311,7 +311,7 @@ pub impl Comp {
                     if ei >= self.arena.enums.count {
                         return
                     }
-                    val vi: U64 = variantIndex(c: inout self, enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                    val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                     if vi >= self.arena.enums[ei].variants.count {
                         return
                     }

@@ -180,7 +180,7 @@ fn llvmTypeOfRef(c: inout Comp, st: inout LlvmCtx, ref: U64) -> LLVMTypeRef {
             return st.arrayTy
         }
     }
-    if isGenericInst(c: inout c, ref: ref) {
+    if c.isGenericInst(ref: ref) {
         val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ref)
         if gs < st.genStructRefs.count {
             return st.genStructTys[gs]
@@ -366,7 +366,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
             // witness (`String.add` for `"a" + "b"`, spec/02,12). String isn't a
             // registered struct/enum, so detect it by value-kind.
             if valueKind(c: inout c, st: inout st, id: lhs) == 1U64 {
-                val ss: Bind = kwSpan(c: inout c, kw: "String", kwLen: 6U64)
+                val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
                 ownStart = ss.nameStart
                 ownLen = ss.nameLen
             } else {
@@ -409,7 +409,7 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
                             }
                         }
                         if intMatch == c.arena.funcs.count {
-                            if isIntType(c: inout c, start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                            if c.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
                                 intMatch = i
                             }
                         }
@@ -454,7 +454,7 @@ fn emitWitnessCall(c: inout Comp, st: inout LlvmCtx, fi: U64, lhs: U64, rhs: U64
         aslot = ensureFreeFnDeclared(c: inout c, st: inout st, fi: fi)
     }
     if aslot >= st.fnIdx.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val af: Func = c.arena.funcs[fi]

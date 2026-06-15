@@ -68,7 +68,7 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
         _ => {}
     }
     if valueKind(c: inout c, st: inout st, id: recv) == 1U64 {
-        return kwSpan(c: inout c, kw: "String", kwLen: 6U64)
+        return c.kwSpan(kw: "String", kwLen: 6U64)
     }
     // a Bool receiver (`b.hash[H](…)`, `flag.eq(…)`): the backend models Bool method
     // dispatch like a primitive lang-item. Recover the type from the grounded env
@@ -77,7 +77,7 @@ fn primLangItemRecvName(c: inout Comp, st: inout LlvmCtx, recv: U64) -> Bind {
     val rt: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
     if rt != 0U64 {
         if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[rt].nameStart, len: c.arena.types[rt].nameLen, kw: "Bool") {
-            return kwSpan(c: inout c, kw: "Bool", kwLen: 4U64)
+            return c.kwSpan(kw: "Bool", kwLen: 4U64)
         }
     }
     val z: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
@@ -159,7 +159,7 @@ fn findFuncViewAware(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: 
         if !(f.hasRecv) {
             if !(f.isAssoc) {
                 if f.nameId == qName {
-                    if paramsLabelsOk(c: inout c, params: f.params, args: args) {
+                    if c.paramsLabelsOk(params: f.params, args: args) {
                         if sameParamTypeHeads(c: inout c, a: c.arena.funcs[base].params, b: f.params) {
                             if funcViewsMatch(c: inout c, st: inout st, fi: i, args: args) {
                                 return i
@@ -207,7 +207,7 @@ fn exprViewExtId(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             // a call to a `-> Type#Ext` function yields a viewed value.
-            val fi: U64 = resolvedCallee(c: inout c, id: id)
+            val fi: U64 = c.resolvedCallee(id: id)
             if fi < c.arena.funcs.count {
                 if c.arena.funcs[fi].retTy != 0U64 {
                     return c.arena.types[c.arena.funcs[fi].retTy].viewExtId

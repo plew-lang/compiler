@@ -125,13 +125,13 @@ fn kindFromTySpan(c: inout Comp, tyStart: U64, tyLen: U64) -> U64 {
     // a `newtype` (spec/10) shares its underlying type's representation AND value-kind
     // (a `newtype UserId = String` formats/dispatches as a String): resolve to the
     // underlying first so a newtype local/cast carries the right kind (1=String, …).
-    val ntu: Bind = newtypeUnderName(c: inout c, start: tyStart, len: tyLen)
+    val ntu: Bind = c.newtypeUnderName(start: tyStart, len: tyLen)
     if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
         return kindFromTySpan(c: inout c, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
     }
     if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") { return 1U64 }
     if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") { return 2U64 }
-    if isFloatType(c: inout c, start: tyStart, len: tyLen) { return 4U64 }
+    if c.isFloatType(start: tyStart, len: tyLen) { return 4U64 }
     if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
     return 0U64
 }
@@ -182,9 +182,9 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
             // an untyped literal in a float context (recorded in typeCache.intCtx) is a
             // float literal — `val x: F64 = 10 / 4` routes through the float binop.
-            val t: TypeInfo = typeOf(c: inout c, id: id)
+            val t: TypeInfo = c.typeOf(id: id)
             if t.kind == 0 {
-                if isFloatType(c: inout c, start: t.nameStart, len: t.nameLen) { return 4U64 }
+                if c.isFloatType(start: t.nameStart, len: t.nameLen) { return 4U64 }
             }
             return 0U64
         }
@@ -304,7 +304,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // fn return type's kind (fn args = [ret, p0, …]).
             val cli: U64 = findLocal(c: inout c, st: inout st, start: nameStart, len: nameLen)
             if cli < st.nLocals {
-                if isFnType(c: inout c, ref: st.locTypeRef[cli]) {
+                if c.isFnType(ref: st.locTypeRef[cli]) {
                     val ft: TypeRef = c.arena.types[st.locTypeRef[cli]]
                     if ft.args.count > 0U64 {
                         val rt: TypeRef = c.arena.types[ft.args[0]]
@@ -313,7 +313,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
             // a regular function call: the callee's return-type kind.
-            val cfi: U64 = resolvedCallee(c: inout c, id: id)
+            val cfi: U64 = c.resolvedCallee(id: id)
             if cfi < c.arena.funcs.count {
                 if c.arena.funcs[cfi].hasRet {
                     return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
@@ -361,7 +361,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
         _ => {}
     }
     // fallback: the typed-AST cache (works for call results, fields, …).
-    val t: TypeInfo = typeOf(c: inout c, id: id)
+    val t: TypeInfo = c.typeOf(id: id)
     if t.kind == 1 { return 1U64 }
     if t.kind == 0 {
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Bool") { return 2U64 }

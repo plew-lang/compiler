@@ -23,7 +23,7 @@ pub impl Comp {
                             while fj < fs.count {
                                 val fd: FieldDef = fs[fj]
                                 if fd.nameId == qField {
-                                    return typeInfoOfName(c: inout self, start: fd.tyStart, len: fd.tyLen, isArray: fd.tyIsArray)
+                                    return self.typeInfoOfName(start: fd.tyStart, len: fd.tyLen, isArray: fd.tyIsArray)
                                 }
                                 fj += 1
                             }
@@ -40,7 +40,7 @@ pub impl Comp {
 
     inout fn checkMakeFieldExists(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, mf: MakeField) {
         if isEnum {
-            if concreteEnumIndex(c: inout self, nStart: typeStart, nLen: typeLen) >= self.arena.enums.count {
+            if self.concreteEnumIndex(nStart: typeStart, nLen: typeLen) >= self.arena.enums.count {
                 return
             }
         } else {
@@ -52,7 +52,7 @@ pub impl Comp {
                 return
             }
         }
-        val fd: FieldDef = findFieldDef(c: inout self, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        val fd: FieldDef = self.findFieldDef(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
         if fd.nameLen == 0 {
             // mf.offset is the field name's original source offset (mf.nameStart is
             // re-interned, so it maps to a bogus line); fall back to nameStart if 0.
@@ -60,7 +60,7 @@ pub impl Comp {
             if off == 0 {
                 off = mf.nameStart
             }
-            compileErrorAt(line: lineOf(c: inout self, offset: off), msg: "no such field on this struct/variant (check the field name)")
+            compileErrorAt(line: self.lineOf(offset: off), msg: "no such field on this struct/variant (check the field name)")
         }
     }
 
@@ -73,7 +73,7 @@ pub impl Comp {
             // place (which would double-deinit: the source and the new owner).
             self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
             mut val ft: TypeInfo = scalarInfo()
-            if isRefInst(c: inout self, ref: ty) {
+            if self.isRefInst(ref: ty) {
                 // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
                 // a literal (`value=7`) types from T (else "no type from context").
                 val rt: TypeRef = self.arena.types[ty]
@@ -82,7 +82,7 @@ pub impl Comp {
                 if self.isGenericEnumInst(ref: ty) {
                     ft = self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                 } else {
-                    if isGenericInst(c: inout self, ref: ty) {
+                    if self.isGenericInst(ref: ty) {
                         ft = self.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                     } else {
                         ft = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
@@ -90,9 +90,9 @@ pub impl Comp {
                 }
             }
             if ft.kind == 3 {
-                checkLitArray(c: inout self, id: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
+                self.checkLitArray(id: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
             } else {
-                checkLitTi(c: inout self, id: mf.value, ti: ft)
+                self.checkLitTi(id: mf.value, ti: ft)
             }
             i += 1
         }
@@ -118,7 +118,7 @@ pub impl Comp {
                 if off == 0 {
                     off = bd.fieldStart
                 }
-                compileErrorAt(line: lineOf(c: inout self, offset: off), msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
+                compileErrorAt(line: self.lineOf(offset: off), msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
             }
             i += 1
         }

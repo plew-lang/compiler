@@ -21,7 +21,7 @@ fn captureValueTy(c: inout Comp, st: inout LlvmCtx, cap: CaptureEntry) -> LLVMTy
     if cap.isArray {
         return st.arrayTy
     }
-    if isGenericInst(c: inout c, ref: cap.ty) {
+    if c.isGenericInst(ref: cap.ty) {
         return llvmTypeOfRef(c: inout c, st: inout st, ref: cap.ty)
     }
     return llvmScalarTy(c: inout c, st: inout st, tyStart: cap.tyStart, tyLen: cap.tyLen)
@@ -89,7 +89,7 @@ fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
                 if c.monoWork.captures[i].isArray {
                     return false
                 }
-                if isGenericInst(c: inout c, ref: c.monoWork.captures[i].ty) {
+                if c.isGenericInst(ref: c.monoWork.captures[i].ty) {
                     return false
                 }
             }
@@ -120,7 +120,7 @@ fn declareClosure(c: inout Comp, st: inout LlvmCtx, id: U64) {
             }
             mut val rty: LLVMTypeRef = st.voidty
             if hasRet {
-                if isGenericInst(c: inout c, ref: retTy) {
+                if c.isGenericInst(ref: retTy) {
                     rty = llvmTypeOfRef(c: inout c, st: inout st, ref: retTy)
                 } else {
                     rty = llvmTypeFor(c: inout c, st: inout st, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
@@ -278,7 +278,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                 st.curIsMain = false
                 st.curRetVoid = !hasRet
                 if hasRet {
-                    if isGenericInst(c: inout c, ref: retTy) {
+                    if c.isGenericInst(ref: retTy) {
                         st.curRetTy = llvmTypeOfRef(c: inout c, st: inout st, ref: retTy)
                     } else {
                         st.curRetTy = llvmTypeFor(c: inout c, st: inout st, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
@@ -343,7 +343,7 @@ fn emitClosures(c: inout Comp, st: inout LlvmCtx) {
                         if cap.boxed {
                             cRef = cap.ty
                         } else {
-                            if isGenericInst(c: inout c, ref: cap.ty) {
+                            if c.isGenericInst(ref: cap.ty) {
                                 cRef = cap.ty
                             } else {
                                 if enumRegSlot(c: inout c, st: inout st, start: cap.tyStart, len: cap.tyLen) < st.enumIdxs.count {

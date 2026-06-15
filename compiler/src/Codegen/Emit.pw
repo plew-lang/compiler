@@ -52,84 +52,87 @@ export fn compileErrorAt(line: I64, msg: String) {
     exit(code: 1)
 }
 
-export fn isPrimType(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Bool") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F64") { return true }
-    return false
-}
+pub impl Comp {
 
-// Whether a type-name span names a float type (F32 / F64).
-export fn isFloatType(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F64") { return true }
-    return false
-}
-
-// Whether a type-name span is one of the 8 integer types (excludes Bool/String).
-export fn isIntType(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
-    return false
-}
-
-// Bit width of an integer type-name span (0 if not an integer type).
-fn intBits(c: inout Comp, start: U64, len: U64) -> U64 {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return 8 }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return 8 }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return 16 }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return 16 }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return 32 }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return 32 }
-    return 64
-}
-
-// Whether an integer type-name span is signed (`I*`). Assumes isIntType.
-fn intSigned(c: inout Comp, start: U64, len: U64) -> Bool {
-    return c.arena.bytes[start] == 'I'
-}
-
-// Whether `src as dst` (both integer types) is lossless — i.e. dst represents
-// every src value (spec: `as` is lossless-only; narrowing/signedness -> TryFrom).
-fn losslessInt(c: inout Comp, srcStart: U64, srcLen: U64, dstStart: U64, dstLen: U64) -> Bool {
-    val sBits: U64 = intBits(c: inout c, start: srcStart, len: srcLen)
-    val dBits: U64 = intBits(c: inout c, start: dstStart, len: dstLen)
-    val sSigned: Bool = intSigned(c: inout c, start: srcStart, len: srcLen)
-    val dSigned: Bool = intSigned(c: inout c, start: dstStart, len: dstLen)
-    if sSigned {
-        if dSigned {
-            return dBits >= sBits
-        }
-        // signed -> unsigned: negatives are unrepresentable.
+    inout fn isPrimType(start: U64, len: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I8") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I16") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I32") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I64") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U8") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U16") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U32") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U64") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "Bool") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F32") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F64") { return true }
         return false
     }
-    if dSigned {
-        // unsigned -> signed needs a strictly wider target (the sign bit).
-        return dBits > sBits
-    }
-    return dBits >= sBits
-}
 
-// Whether the literal (magnitude `value`, negated if `neg`) fits the target
-// integer type's range.
-fn litFitsType(c: inout Comp, value: U64, neg: Bool, dstStart: U64, dstLen: U64) -> Bool {
-    val bits: U64 = intBits(c: inout c, start: dstStart, len: dstLen)
-    val sgn: Bool = intSigned(c: inout c, start: dstStart, len: dstLen)
-    return litFitsBits(value: value, neg: neg, bits: bits, sgn: sgn)
+    // Whether a type-name span names a float type (F32 / F64).
+    inout fn isFloatType(start: U64, len: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F32") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "F64") { return true }
+        return false
+    }
+
+    // Whether a type-name span is one of the 8 integer types (excludes Bool/String).
+    inout fn isIntType(start: U64, len: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I8") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I16") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I32") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I64") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U8") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U16") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U32") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U64") { return true }
+        return false
+    }
+
+    // Bit width of an integer type-name span (0 if not an integer type).
+    inout fn intBits(start: U64, len: U64) -> U64 {
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I8") { return 8 }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U8") { return 8 }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I16") { return 16 }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U16") { return 16 }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "I32") { return 32 }
+        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "U32") { return 32 }
+        return 64
+    }
+
+    // Whether an integer type-name span is signed (`I*`). Assumes isIntType.
+    inout fn intSigned(start: U64, len: U64) -> Bool {
+        return self.arena.bytes[start] == 'I'
+    }
+
+    // Whether `src as dst` (both integer types) is lossless — i.e. dst represents
+    // every src value (spec: `as` is lossless-only; narrowing/signedness -> TryFrom).
+    inout fn losslessInt(srcStart: U64, srcLen: U64, dstStart: U64, dstLen: U64) -> Bool {
+        val sBits: U64 = self.intBits(start: srcStart, len: srcLen)
+        val dBits: U64 = self.intBits(start: dstStart, len: dstLen)
+        val sSigned: Bool = self.intSigned(start: srcStart, len: srcLen)
+        val dSigned: Bool = self.intSigned(start: dstStart, len: dstLen)
+        if sSigned {
+            if dSigned {
+                return dBits >= sBits
+            }
+            // signed -> unsigned: negatives are unrepresentable.
+            return false
+        }
+        if dSigned {
+            // unsigned -> signed needs a strictly wider target (the sign bit).
+            return dBits > sBits
+        }
+        return dBits >= sBits
+    }
+
+    // Whether the literal (magnitude `value`, negated if `neg`) fits the target
+    // integer type's range.
+    inout fn litFitsType(value: U64, neg: Bool, dstStart: U64, dstLen: U64) -> Bool {
+        val bits: U64 = self.intBits(start: dstStart, len: dstLen)
+        val sgn: Bool = self.intSigned(start: dstStart, len: dstLen)
+        return litFitsBits(value: value, neg: neg, bits: bits, sgn: sgn)
+    }
 }
 
 // Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
@@ -161,137 +164,139 @@ fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
     return true
 }
 
-// Emit the C *element* type for a type-name span (no Array wrapper). Each Plew
-// integer type maps to its exact-width C stdint type so storage width and
-// signedness match the declared type (no hidden widening); U8 -> unsigned char
-// (== uint8_t, keeps byte arrays aliasing a char buffer for String.bytes);
-// Bool -> long long (width irrelevant); String -> PlewString; named -> echoed.
-// The element ref recorded for the array-element name span (start,len), or 0 if
-// it is not a recorded element (genCElem falls back to the name path then).
-fn arrayElemRef(c: inout Comp, start: U64, len: U64) -> U64 {
-    mut val i: U64 = 0
-    while i < c.monoWork.arrayElems.count {
-        val ae: Bind = c.monoWork.arrayElems[i]
-        if spansEqual(c: inout c, aStart: ae.nameStart, aLen: ae.nameLen, bStart: start, bLen: len) {
-            return ae.fieldStart
-        }
-        i += 1
-    }
-    return 0
-}
+pub impl Comp {
 
-// The registered array-element name span for a given element ref (head name for
-// a simple element, the mangled name for a compound one). Falls back to the
-// type's head name. Used to recover a nested array's element name in exprType.
-fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
-    mut val i: U64 = 0
-    while i < c.monoWork.arrayElems.count {
-        val ae: Bind = c.monoWork.arrayElems[i]
-        // match by mangle (type refs are not interned, so the same type can have
-        // a different index than the one stored at registration). Skip a non-ground
-        // (template) entry like `Array[T]`'s element `T`: sameMangle resolves through
-        // the active type-param env, so under an `impl[T] Array[T]` method's env
-        // (T -> the concrete element) a stored `T` would spuriously match the
-        // concrete lookup ref and return the template name (`Array_T_get`). Only a
-        // ground stored element is a real match; the fallback below covers the rest.
-        if ae.fieldStart != 0 {
-            if c.tyRefIsGround(ref: ae.fieldStart) {
-                if c.sameMangle(refA: ae.fieldStart, refB: elemRef) {
-                    return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
-                }
-            }
-        }
-        i += 1
-    }
-    if elemRef < c.arena.types.count {
-        val t: TypeRef = c.arena.types[elemRef]
-        return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 />
-    }
-    return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
-}
-
-// --- numeric intrinsic runtime (O6) ---------------------------------------
-// The C floor under the operator-trait witnesses: Core's `impl I32 as Add[I32]`
-// etc. call intrinsics (`i32Add`), which lower to these `plew_*` functions. Per
-// width and signedness: add/sub/mul are overflow-checked, div/rem zero-checked
-// (+ signed INT_MIN/-1 / x%-1==0), bitwise/shift unchecked, bitnot truncates,
-// neg checked (signed only). clang inlines them, so routing every `+` through a
-// witness call is free at -O (spec/12: primitives are not special-cased — the
-// operator desugars to a witness uniformly, the cost is hidden in the floor).
-
-// If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
-// Codegen resolves a newtype to its underlying for representation / method dispatch.
-export fn newtypeUnderRef(c: inout Comp, start: U64, len: U64) -> U64 {
-    if c.arena.newtypes.count == 0U64 {
-        return 0U64
-    }
-    val nid: U64 = intern(c: inout c, start: start, len: len)
-    mut val i: U64 = 0
-    while i < c.arena.newtypes.count {
-        if c.arena.newtypes[i].nameId == nid {
-            return c.arena.newtypes[i].underRef
-        }
-        i += 1
-    }
-    return 0U64
-}
-
-// The underlying type's head-name span for a `newtype` named (start, len), or the
-// input span unchanged when it is not a newtype.
-export fn newtypeUnderName(c: inout Comp, start: U64, len: U64) -> Bind {
-    if c.arena.newtypes.count != 0U64 {
-        val nid: U64 = intern(c: inout c, start: start, len: len)
+    // Emit the C *element* type for a type-name span (no Array wrapper). Each Plew
+    // integer type maps to its exact-width C stdint type so storage width and
+    // signedness match the declared type (no hidden widening); U8 -> unsigned char
+    // (== uint8_t, keeps byte arrays aliasing a char buffer for String.bytes);
+    // Bool -> long long (width irrelevant); String -> PlewString; named -> echoed.
+    // The element ref recorded for the array-element name span (start,len), or 0 if
+    // it is not a recorded element (genCElem falls back to the name path then).
+    inout fn arrayElemRef(start: U64, len: U64) -> U64 {
         mut val i: U64 = 0
-        while i < c.arena.newtypes.count {
-            if c.arena.newtypes[i].nameId == nid {
-                return <Bind nameStart=c.arena.newtypes[i].underStart nameLen=c.arena.newtypes[i].underLen fieldStart=0 fieldLen=0 />
+        while i < self.monoWork.arrayElems.count {
+            val ae: Bind = self.monoWork.arrayElems[i]
+            if spansEqual(c: inout self, aStart: ae.nameStart, aLen: ae.nameLen, bStart: start, bLen: len) {
+                return ae.fieldStart
             }
             i += 1
         }
+        return 0
     }
-    return <Bind nameStart=start nameLen=len fieldStart=0 fieldLen=0 />
-}
 
-
-// 1-based source line for a byte offset (count newlines before it). For
-// diagnostics; works across the assembled multi-file buffer.
-export fn lineOf(c: inout Comp, offset: U64) -> I64 {
-    mut val line: I64 = 1
-    mut val i: U64 = 0
-    while i < offset {
-        if c.arena.bytes[i] == 10 {
-            line += 1
+    // The registered array-element name span for a given element ref (head name for
+    // a simple element, the mangled name for a compound one). Falls back to the
+    // type's head name. Used to recover a nested array's element name in exprType.
+    inout fn arrayElemNameForRef(elemRef: U64) -> Bind {
+        mut val i: U64 = 0
+        while i < self.monoWork.arrayElems.count {
+            val ae: Bind = self.monoWork.arrayElems[i]
+            // match by mangle (type refs are not interned, so the same type can have
+            // a different index than the one stored at registration). Skip a non-ground
+            // (template) entry like `Array[T]`'s element `T`: sameMangle resolves through
+            // the active type-param env, so under an `impl[T] Array[T]` method's env
+            // (T -> the concrete element) a stored `T` would spuriously match the
+            // concrete lookup ref and return the template name (`Array_T_get`). Only a
+            // ground stored element is a real match; the fallback below covers the rest.
+            if ae.fieldStart != 0 {
+                if self.tyRefIsGround(ref: ae.fieldStart) {
+                    if self.sameMangle(refA: ae.fieldStart, refB: elemRef) {
+                        return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
+                    }
+                }
+            }
+            i += 1
         }
-        i += 1
+        if elemRef < self.arena.types.count {
+            val t: TypeRef = self.arena.types[elemRef]
+            return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 />
+        }
+        return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
     }
-    return line
-}
 
-// Best-effort byte offset for an expression (for diagnostics). Leaf nodes with
-// a span return it; compound nodes recurse to a representative child.
-export fn exprOffset(c: inout Comp, id: U64) -> U64 {
-    val e: Expr = c.arena.exprs[id]
-    match e {
-        Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return offset }
-        Expr.Ident(val start, val len) => { return start }
-        Expr.Str(val start, val len) => { return start }
-        Expr.Call(val nameStart, val nameLen, val args) => { return nameStart }
-        Expr.Method(val recv, val nameStart, val nameLen, val args) => { return nameStart }
-        Expr.ExtMethod(val recv, srcStart: _, srcLen: _, val nameStart, nameLen: _, args: _) => { return nameStart }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return exprOffset(c: inout c, id: recv) }
-        Expr.Field(val base, val nameStart, val nameLen) => { return exprOffset(c: inout c, id: base) }
-        Expr.Index(val base, val index) => { return exprOffset(c: inout c, id: base) }
-        Expr.Binary(val op, val lhs, val rhs) => { return exprOffset(c: inout c, id: lhs) }
-        Expr.Unary(val op, val operand) => { return exprOffset(c: inout c, id: operand) }
-        Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { return exprOffset(c: inout c, id: operand) }
-        Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => { return typeStart }
-        Expr.MatchExpr(val scrut, val arms) => { return exprOffset(c: inout c, id: scrut) }
-        Expr.IfExpr(val cond, val thenBlk, val elseBlk) => { return exprOffset(c: inout c, id: cond) }
-        Expr.OptChain(val base, memberStart: _, memberLen: _) => { return exprOffset(c: inout c, id: base) }
-        Expr.Try(val expr) => { return exprOffset(c: inout c, id: expr) }
-        Expr.Arrow(val base, val nameStart, val nameLen) => { return exprOffset(c: inout c, id: base) }
-        Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => { return retStart }
-        _ => { return 0 }
+    // --- numeric intrinsic runtime (O6) ---------------------------------------
+    // The C floor under the operator-trait witnesses: Core's `impl I32 as Add[I32]`
+    // etc. call intrinsics (`i32Add`), which lower to these `plew_*` functions. Per
+    // width and signedness: add/sub/mul are overflow-checked, div/rem zero-checked
+    // (+ signed INT_MIN/-1 / x%-1==0), bitwise/shift unchecked, bitnot truncates,
+    // neg checked (signed only). clang inlines them, so routing every `+` through a
+    // witness call is free at -O (spec/12: primitives are not special-cased — the
+    // operator desugars to a witness uniformly, the cost is hidden in the floor).
+
+    // If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
+    // Codegen resolves a newtype to its underlying for representation / method dispatch.
+    inout fn newtypeUnderRef(start: U64, len: U64) -> U64 {
+        if self.arena.newtypes.count == 0U64 {
+            return 0U64
+        }
+        val nid: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = 0
+        while i < self.arena.newtypes.count {
+            if self.arena.newtypes[i].nameId == nid {
+                return self.arena.newtypes[i].underRef
+            }
+            i += 1
+        }
+        return 0U64
+    }
+
+    // The underlying type's head-name span for a `newtype` named (start, len), or the
+    // input span unchanged when it is not a newtype.
+    inout fn newtypeUnderName(start: U64, len: U64) -> Bind {
+        if self.arena.newtypes.count != 0U64 {
+            val nid: U64 = intern(c: inout self, start: start, len: len)
+            mut val i: U64 = 0
+            while i < self.arena.newtypes.count {
+                if self.arena.newtypes[i].nameId == nid {
+                    return <Bind nameStart=self.arena.newtypes[i].underStart nameLen=self.arena.newtypes[i].underLen fieldStart=0 fieldLen=0 />
+                }
+                i += 1
+            }
+        }
+        return <Bind nameStart=start nameLen=len fieldStart=0 fieldLen=0 />
+    }
+
+
+    // 1-based source line for a byte offset (count newlines before it). For
+    // diagnostics; works across the assembled multi-file buffer.
+    inout fn lineOf(offset: U64) -> I64 {
+        mut val line: I64 = 1
+        mut val i: U64 = 0
+        while i < offset {
+            if self.arena.bytes[i] == 10 {
+                line += 1
+            }
+            i += 1
+        }
+        return line
+    }
+
+    // Best-effort byte offset for an expression (for diagnostics). Leaf nodes with
+    // a span return it; compound nodes recurse to a representative child.
+    inout fn exprOffset(id: U64) -> U64 {
+        val e: Expr = self.arena.exprs[id]
+        match e {
+            Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return offset }
+            Expr.Ident(val start, val len) => { return start }
+            Expr.Str(val start, val len) => { return start }
+            Expr.Call(val nameStart, val nameLen, val args) => { return nameStart }
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => { return nameStart }
+            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, val nameStart, nameLen: _, args: _) => { return nameStart }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.exprOffset(id: recv) }
+            Expr.Field(val base, val nameStart, val nameLen) => { return self.exprOffset(id: base) }
+            Expr.Index(val base, val index) => { return self.exprOffset(id: base) }
+            Expr.Binary(val op, val lhs, val rhs) => { return self.exprOffset(id: lhs) }
+            Expr.Unary(val op, val operand) => { return self.exprOffset(id: operand) }
+            Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => { return self.exprOffset(id: operand) }
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => { return typeStart }
+            Expr.MatchExpr(val scrut, val arms) => { return self.exprOffset(id: scrut) }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => { return self.exprOffset(id: cond) }
+            Expr.OptChain(val base, memberStart: _, memberLen: _) => { return self.exprOffset(id: base) }
+            Expr.Try(val expr) => { return self.exprOffset(id: expr) }
+            Expr.Arrow(val base, val nameStart, val nameLen) => { return self.exprOffset(id: base) }
+            Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => { return retStart }
+            _ => { return 0 }
+        }
     }
 }
-

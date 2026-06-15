@@ -131,7 +131,7 @@ pub impl Comp {
         if !(changed) {
             return ref
         }
-        val nm: Bind = internBytes(c: inout self, s: stringFromBytesUnchecked(b: cn))
+        val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(b: cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val gi: U64 = 0
         while gi < self.arena.structs.count {
@@ -174,7 +174,7 @@ pub impl Comp {
     }
 
     inout fn groundUnderInst(instRef: U64, tyRef: U64) -> U64 {
-        if !(isGenericInst(c: inout self, ref: instRef)) {
+        if !(self.isGenericInst(ref: instRef)) {
             return tyRef
         }
         val inst: TypeRef = self.arena.types[instRef]
@@ -332,7 +332,7 @@ pub impl Comp {
             }
         }
         // register a function type for its C typedef (deduped structurally).
-        if isFnType(c: inout self, ref: ref) {
+        if self.isFnType(ref: ref) {
             mut val fj: U64 = 0
             mut val seen: Bool = false
             while fj < self.monoWork.fnTypes.count {
@@ -345,7 +345,7 @@ pub impl Comp {
                 self.monoWork.fnTypes.append(ref)
             }
         }
-        if isGenericInst(c: inout self, ref: ref) {
+        if self.isGenericInst(ref: ref) {
             if self.tyRefIsGround(ref: ref) {
                 mut val j: U64 = 0
                 while j < self.monoWork.genInsts.count {
@@ -355,7 +355,7 @@ pub impl Comp {
                     j += 1
                 }
                 if self.instArgCollidesParamName(instRef: ref) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: self.arena.types[ref].nameStart), msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
+                    compileErrorAt(line: self.lineOf(offset: self.arena.types[ref].nameStart), msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
                 }
                 // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
                 if self.genMode {

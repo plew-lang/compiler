@@ -53,7 +53,7 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
                 return genLlvmExpr(c: inout c, st: inout st, id: m)
             }
         }
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: base)
@@ -62,7 +62,7 @@ fn genLlvmIndex(c: inout Comp, st: inout LlvmCtx, base: U64, index: U64) -> LLVM
     // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
     // rather than extractvalue on a scalar (which crashes the LLVM builder).
     if LLVMGetTypeKind(LLVMTypeOf(arr)) != 10U32 {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val data: LLVMValueRef = LLVMBuildExtractValue(st.b, arr, 0U64, anon())

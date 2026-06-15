@@ -73,7 +73,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
             LLVMBuildBr(st.b, armBB)
             lastWasWildcard = true
         } else {
-            val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+            val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
             val nextBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "match.next"))
             val eq: LLVMValueRef = LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, vi, 0I32), anon())
             LLVMBuildCondBr(st.b, eq, armBB, nextBB)
@@ -124,7 +124,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
     if arm.binds.count == 0U64 {
         return
     }
-    val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+    val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
     val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: eid, vi: vi)
     val payload: LLVMValueRef = LLVMBuildLoad2(st.b, payloadTy, LLVMBuildStructGEP2(st.b, scrutTy, scrutSlot, 1U64, anon()), anon())
     val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
@@ -170,7 +170,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
                     if c.cur.typeParams.count > 0U64 {
                         gfp = c.groundTypeRef(ref: fd.ty)
                     }
-                    if isGenericInst(c: inout c, ref: gfp) {
+                    if c.isGenericInst(ref: gfp) {
                         if !(rangeEquals(bytes: c.arena.bytes, start: c.arena.types[gfp].nameStart, len: c.arena.types[gfp].nameLen, kw: "Array")) {
                             genFieldRef = gfp
                             pty = llvmTypeOfRef(c: inout c, st: inout st, ref: gfp)
@@ -181,7 +181,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             // a boxed (recursive) payload field holds a heap pointer; load the boxed
             // value back. A non-boxed field is the value directly.
             mut val fv: LLVMValueRef = LLVMBuildExtractValue(st.b, payload, fidx, anon())
-            if fieldIsBoxed(c: inout c, f: fd) {
+            if c.fieldIsBoxed(f: fd) {
                 fv = LLVMBuildLoad2(st.b, pty, fv, anon())
             }
             // inside an async fn the bind's storage is a frame field (survives an
@@ -224,7 +224,7 @@ fn bindMatchPayload(c: inout Comp, st: inout LlvmCtx, eid: U64, arm: MatchArm, s
             // `v.field` in the arm body resolves.
             mut val bindStructIdx: U64 = localStructIdxFor(c: inout c, st: inout st, start: fd.tyStart, len: fd.tyLen)
             if genFieldRef != 0U64 {
-                if isGenericInst(c: inout c, ref: genFieldRef) {
+                if c.isGenericInst(ref: genFieldRef) {
                     val gbs: U64 = genStructSlot(c: inout c, st: inout st, ref: genFieldRef)
                     if gbs < st.genStructRefs.count {
                         bindStructIdx = st.genStructDefs[gbs]

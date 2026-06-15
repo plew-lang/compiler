@@ -12,11 +12,11 @@ pub impl Comp {
         if inoutOk {
             return
         }
-        if isPlaceExpr(c: inout self, id: exprId) {
+        if self.isPlaceExpr(id: exprId) {
             val ti: TypeInfo = self.exprType(id: exprId)
             if ti.kind == 2 {
                 if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: exprId)), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: exprId)), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
                 }
             }
         }
@@ -50,7 +50,7 @@ pub impl Comp {
                                     firstRef = ar
                                 } else {
                                     if !(self.typesCompatible(expected: firstRef, inferred: ar)) {
-                                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: args[ai].expr)), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
+                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: args[ai].expr)), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
                                     }
                                 }
                             }
@@ -70,17 +70,17 @@ pub impl Comp {
                 // a local/field/subscript/Ref-pointee, not a literal or call result — and
                 // (b) be mutable (spec/03: `inc(x: inout n)` needs `mut val n`).
                 if !(self.exprIsPlace(id: arg.expr)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: arg.expr)), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
                 }
                 if !(self.placeIsMutable(id: arg.expr)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: arg.expr)), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
                 }
             } else {
-                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: arg.expr)), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)")
+                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)")
             }
         } else {
             if arg.isInout {
-                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: arg.expr)), msg: "this parameter is not `inout`; remove `inout` from the argument (spec/03)")
+                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "this parameter is not `inout`; remove `inout` from the argument (spec/03)")
             }
         }
     }
@@ -90,7 +90,7 @@ pub impl Comp {
         if ft.args.count >= 1U64 {
             if retTy != 0U64 {
                 if !(self.typesCompatible(expected: ft.args[0], inferred: retTy)) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "function value's return type does not match the expected function type (spec/04)")
+                    compileErrorAt(line: self.lineOf(offset: offset), msg: "function value's return type does not match the expected function type (spec/04)")
                 }
             }
         }
@@ -99,7 +99,7 @@ pub impl Comp {
             if k + 1U64 < ft.args.count {
                 if params[k].ty != 0U64 {
                     if !(self.typesCompatible(expected: ft.args[k + 1U64], inferred: params[k].ty)) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "function value's parameter type does not match the expected function type (spec/04)")
+                        compileErrorAt(line: self.lineOf(offset: offset), msg: "function value's parameter type does not match the expected function type (spec/04)")
                     }
                 }
             }
@@ -108,18 +108,18 @@ pub impl Comp {
     }
 
     inout fn checkFnValueSig(declTy: U64, init: U64) {
-        if !(isFnType(c: inout self, ref: declTy)) {
+        if !(self.isFnType(ref: declTy)) {
             return
         }
         val ft: TypeRef = self.arena.types[declTy]
         match self.arena.exprs[init] {
             Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
-                self.checkFnSigAgainst(ft: ft, params: params, retTy: retTy, offset: exprOffset(c: inout self, id: init))
+                self.checkFnSigAgainst(ft: ft, params: params, retTy: retTy, offset: self.exprOffset(id: init))
             }
             Expr.Ident(start: val s, len: val l) => {
                 val fi: U64 = self.firstFuncByName(nameStart: s, nameLen: l)
                 if fi < self.arena.funcs.count {
-                    self.checkFnSigAgainst(ft: ft, params: self.arena.funcs[fi].params, retTy: self.arena.funcs[fi].retTy, offset: exprOffset(c: inout self, id: init))
+                    self.checkFnSigAgainst(ft: ft, params: self.arena.funcs[fi].params, retTy: self.arena.funcs[fi].retTy, offset: self.exprOffset(id: init))
                 }
             }
             _ => {}
@@ -140,14 +140,14 @@ pub impl Comp {
 
     inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
         self.checkUniqueArgModes(args: args)
-        val fi: U64 = resolvedCallee(c: inout self, id: id)
+        val fi: U64 = self.resolvedCallee(id: id)
         if fi == self.arena.funcs.count {
             // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
             // is a local, not a declared function, so check each arg against the fn type's
             // parameter types (the TypeRef stores args as [return, param0, param1, …]).
             val lty: U64 = self.localTypeRefByName(nameStart: nameStart, nameLen: nameLen)
             if lty != 0U64 {
-                if isFnType(c: inout self, ref: lty) {
+                if self.isFnType(ref: lty) {
                     val ft: TypeRef = self.arena.types[lty]
                     mut val k: U64 = 0
                     while k < args.count {
@@ -161,7 +161,7 @@ pub impl Comp {
             }
             mut val i: U64 = 0
             while i < args.count {
-                checkLitCtx(c: inout self, id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
+                self.checkLitCtx(id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
                 i += 1
             }
             return
@@ -174,7 +174,7 @@ pub impl Comp {
             if i < ps.count {
                 val p: Param = ps[i]
                 self.checkArgInoutMode(p: p, arg: args[i])
-                checkLitSpan(c: inout self, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                 self.checkClosureArgArity(argExpr: args[i].expr, p: p)
                 // full type-compatibility (not just literal context): a non-literal VALUE
                 // argument whose type disagrees with the parameter (a closure with the wrong
@@ -183,7 +183,7 @@ pub impl Comp {
                 // types pass through).
                 self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
             } else {
-                checkLitCtx(c: inout self, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
+                self.checkLitCtx(id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
             }
             i += 1
         }
@@ -193,7 +193,7 @@ pub impl Comp {
         if p.ty == 0U64 {
             return
         }
-        if !(isFnType(c: inout self, ref: p.ty)) {
+        if !(self.isFnType(ref: p.ty)) {
             return
         }
         match self.arena.exprs[argExpr] {
@@ -214,14 +214,14 @@ pub impl Comp {
                                 val expLbl: U64 = expLabels[pj + 1U64]
                                 if expLbl != 0U64 {
                                     if params[pj].nameId != expLbl {
-                                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: argExpr)), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)")
+                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: argExpr)), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)")
                                     }
                                 }
                             }
                             pj += 1U64
                         }
                     } else {
-                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: argExpr)), msg: "closure has the wrong number of parameters for the expected function type")
+                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: argExpr)), msg: "closure has the wrong number of parameters for the expected function type")
                     }
                     // the closure's declared return type must match the expected function
                     // type's return (`fn(...)->R` args = [R, param0, …]) — else the caller
@@ -232,7 +232,7 @@ pub impl Comp {
                             val expRet: U64 = self.arena.types[p.ty].args[0]
                             if expRet != 0U64 {
                                 if !(self.typesCompatible(expected: expRet, inferred: retTy)) {
-                                    compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: argExpr)), msg: "closure return type does not match the expected function type")
+                                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: argExpr)), msg: "closure return type does not match the expected function type")
                                 }
                             }
                         }
@@ -257,7 +257,7 @@ pub impl Comp {
 
     inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
         self.checkUniqueArgModes(args: args)
-        checkLitCtx(c: inout self, id: recv, eKind: 0, eBits: 0, eSgn: false)
+        self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
         val rt: TypeInfo = self.exprType(id: recv)
         // `dict.insert(key:, value:)` on a Dictionary[K, V] (also how a `[k: v]` literal
         // lowers): the generic-receiver arg grounding is incomplete, so check key->K and
@@ -296,7 +296,7 @@ pub impl Comp {
                 val mf: Func = self.arena.funcs[mi]
                 self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = mf.params
-                val genericRecv: Bool = isGenericInst(c: inout self, ref: rt.ref)
+                val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
                 mut val i: U64 = 0
                 while i < args.count {
                     if i < ps.count {
@@ -307,14 +307,14 @@ pub impl Comp {
                             // needs no grounding — check it directly. (substTypeInfo with the
                             // method's own type params mis-grounds a method-own generic like
                             // `fold[B]`'s `B`, so only primitives are checked this way.)
-                            if isPrimType(c: inout self, start: p.tyStart, len: p.tyLen) {
-                                checkLitSpan(c: inout self, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                            if self.isPrimType(start: p.tyStart, len: p.tyLen) {
+                                self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                                 self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
                             } else {
                                 // resolve the param's type under the receiver's
                                 // instantiation so a literal arg gets the concrete context.
                                 val pti: TypeInfo = self.substTypeInfo(instRef: rt.ref, params: mf.typeParams, tyRef: p.ty)
-                                checkLitTi(c: inout self, id: args[i].expr, ti: pti)
+                                self.checkLitTi(id: args[i].expr, ti: pti)
                                 // full type-compatibility against the GROUNDED param type — a
                                 // typed value whose type disagrees with the (instantiated)
                                 // parameter (`w.combine(x: 5I64)` on `W[String]` stores an I64
@@ -352,11 +352,11 @@ pub impl Comp {
                                 }
                             }
                         } else {
-                            checkLitSpan(c: inout self, id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                            self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                             self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
                         }
                     } else {
-                        checkLitCtx(c: inout self, id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
+                        self.checkLitCtx(id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
                     }
                     i += 1
                 }
@@ -371,14 +371,14 @@ pub impl Comp {
                 mut val innerArr: Bool = false
                 mut val innerStart: U64 = 0
                 mut val innerLen: U64 = 0
-                val er: U64 = arrayElemRef(c: inout self, start: rt.nameStart, len: rt.nameLen)
+                val er: U64 = self.arrayElemRef(start: rt.nameStart, len: rt.nameLen)
                 if er != 0 {
                     val rr: U64 = self.resolveTy(tyRef: er)
                     if rr < self.arena.types.count {
                         val rtp: TypeRef = self.arena.types[rr]
                         if rangeEquals(bytes: self.arena.bytes, start: rtp.nameStart, len: rtp.nameLen, kw: "Array") {
                             if rtp.args.count > 0 {
-                                val xn: Bind = arrayElemNameForRef(c: inout self, elemRef: rtp.args[0])
+                                val xn: Bind = self.arrayElemNameForRef(elemRef: rtp.args[0])
                                 innerArr = true
                                 innerStart = xn.nameStart
                                 innerLen = xn.nameLen
@@ -389,15 +389,15 @@ pub impl Comp {
                 mut val i: U64 = 0
                 while i < args.count {
                     if innerArr {
-                        checkLitArray(c: inout self, id: args[i].expr, elemStart: innerStart, elemLen: innerLen)
+                        self.checkLitArray(id: args[i].expr, elemStart: innerStart, elemLen: innerLen)
                     } else {
-                        checkLitSpan(c: inout self, id: args[i].expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
+                        self.checkLitSpan(id: args[i].expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
                         // a primitive-element array: the appended value's type must match the
                         // element type (`Array[I64].append(true)` — checkLitSpan range-checks a
                         // literal but a `true`/typed value of the wrong type slips through). Only
                         // primitives are checked (their simpleTypeRef is reliable; a struct/
                         // generic element name may be mangled and is left to other checks).
-                        if isIntType(c: inout self, start: rt.nameStart, len: rt.nameLen) || isFloatType(c: inout self, start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
+                        if self.isIntType(start: rt.nameStart, len: rt.nameLen) || self.isFloatType(start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
                             self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
                         }
                     }
@@ -419,7 +419,7 @@ pub impl Comp {
                         if k < aps.count {
                             val ap: Param = aps[k]
                             self.checkArgInoutMode(p: ap, arg: args[k])
-                            checkLitSpan(c: inout self, id: args[k].expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
+                            self.checkLitSpan(id: args[k].expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
                             self.tcCheckValue(expectedRef: ap.ty, valueExpr: args[k].expr, pos: "arg")
                         }
                         k += 1
@@ -431,7 +431,7 @@ pub impl Comp {
         }
         mut val i: U64 = 0
         while i < args.count {
-            checkLitCtx(c: inout self, id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
+            self.checkLitCtx(id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
             i += 1
         }
     }

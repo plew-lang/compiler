@@ -45,23 +45,26 @@ fn isWrappingMethod(c: inout Comp, nameStart: U64, nameLen: U64) -> Bool {
     return false
 }
 
-// The integer result type of an arithmetic binary (operands share a type, so
-// either operand's recovered int type works). Width-less scalar if neither is a
-// recoverable integer type — then the overflow check is skipped (documented gap).
-fn arithIntType(c: inout Comp, lhs: U64, rhs: U64) -> TypeInfo {
-    val lt: TypeInfo = typeOf(c: inout c, id: lhs)
-    if lt.kind == 0 {
-        if isIntType(c: inout c, start: lt.nameStart, len: lt.nameLen) {
-            return lt
+pub impl Comp {
+
+    // The integer result type of an arithmetic binary (operands share a type, so
+    // either operand's recovered int type works). Width-less scalar if neither is a
+    // recoverable integer type — then the overflow check is skipped (documented gap).
+    inout fn arithIntType(lhs: U64, rhs: U64) -> TypeInfo {
+        val lt: TypeInfo = self.typeOf(id: lhs)
+        if lt.kind == 0 {
+            if self.isIntType(start: lt.nameStart, len: lt.nameLen) {
+                return lt
+            }
         }
-    }
-    val rt: TypeInfo = typeOf(c: inout c, id: rhs)
-    if rt.kind == 0 {
-        if isIntType(c: inout c, start: rt.nameStart, len: rt.nameLen) {
-            return rt
+        val rt: TypeInfo = self.typeOf(id: rhs)
+        if rt.kind == 0 {
+            if self.isIntType(start: rt.nameStart, len: rt.nameLen) {
+                return rt
+            }
         }
+        return scalarInfo()
     }
-    return scalarInfo()
 }
 
 // The binary opcode underlying a compound-assign op (`+=` -> `+`, `&=` -> `&`),
@@ -80,4 +83,3 @@ export fn compoundBinOp(op: I64) -> I64 {
     if op == opShlAssign() { return opShl() }
     return opShr()
 }
-

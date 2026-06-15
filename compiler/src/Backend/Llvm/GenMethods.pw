@@ -253,7 +253,7 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
         }
         pty = st.arrayTy
     } else {
-        if isGenericInst(c: inout c, ref: p.ty) {
+        if c.isGenericInst(ref: p.ty) {
             pty = llvmTypeOfRef(c: inout c, st: inout st, ref: p.ty)
             pRef = p.ty
             val pgs: U64 = genStructSlot(c: inout c, st: inout st, ref: p.ty)
@@ -261,13 +261,13 @@ fn bindOneParam(c: inout Comp, st: inout LlvmCtx, p: Param, fv: LLVMValueRef, ar
                 pSidx = st.genStructDefs[pgs]
             }
         }
-        if isRefInst(c: inout c, ref: p.ty) {
+        if c.isRefInst(ref: p.ty) {
             pty = st.ptrty
             pRef = p.ty
         }
         // a function-value param (`f: fn(n: I32) -> I32`): track the fn TypeRef so a
         // call `f(n: x)` resolves the closure signature for the indirect call.
-        if isFnType(c: inout c, ref: p.ty) {
+        if c.isFnType(ref: p.ty) {
             pRef = p.ty
         }
         if pRef == 0U64 {

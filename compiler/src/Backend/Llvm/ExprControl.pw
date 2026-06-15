@@ -69,7 +69,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
     // overrides any inherited expectation, which for a nested chain's inner stage (in the
     // outer's scrutinee position) would be the OUTER result and ground the arms' factories
     // to the wrong instance.
-    val crET: U64 = chainResultRef(c: inout c, exprId: exprId)
+    val crET: U64 = c.chainResultRef(exprId: exprId)
     if crET != 0U64 {
         matchExpectedTy = crET
     }
@@ -138,7 +138,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
             LLVMBuildBr(st.b, armBB)
             lastWasWildcard = true
         } else {
-            val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+            val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
             val nextBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(st.ctx, st.curFn, cstr(s: "vmatch.next"))
             LLVMBuildCondBr(st.b, LLVMBuildICmp(st.b, llvmIntEq(), tag, LLVMConstInt(st.i64ty, vi, 0I32), anon()), armBB, nextBB)
             checkBB = nextBB
@@ -204,27 +204,27 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     val baseRef: U64 = exprTypeRef(c: inout c, st: inout st, id: base)
     val bge: U64 = genEnumSlot(c: inout c, st: inout st, ref: baseRef)
     if bge >= st.genEnumRefs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` base must be a registered Optional instance")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` base must be a registered Optional instance")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val beid: U64 = st.genEnumDefs[bge]
     val bety: LLVMTypeRef = st.genEnumTys[bge]
     val ed: EnumDef = c.arena.enums[beid]
-    val someB: Bind = kwSpan(c: inout c, kw: "Some", kwLen: 4U64)
-    val noneB: Bind = kwSpan(c: inout c, kw: "None", kwLen: 4U64)
-    val someVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
-    val noneVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: noneB.nameStart, variantLen: noneB.nameLen)
+    val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
+    val noneB: Bind = c.kwSpan(kw: "None", kwLen: 4U64)
+    val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
+    val noneVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: noneB.nameStart, variantLen: noneB.nameLen)
     // the inner element struct (Optional's arg0) and the member field index.
     val tRef: U64 = c.arena.types[baseRef].args[0]
     val tName: TypeRef = c.arena.types[tRef]
     val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
     if tSidx >= c.arena.structs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` element must be a registered struct")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` element must be a registered struct")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
     if fidx >= c.arena.structs[tSidx].fields.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` element has no such field")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` element has no such field")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     // result Optional[U] where U is the member field's type: build the ref and find
@@ -240,7 +240,7 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
     val rge: U64 = genEnumSlot(c: inout c, st: inout st, ref: rr)
     if rge >= st.genEnumRefs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` result Optional instance is not registered")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` result Optional instance is not registered")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val reid: U64 = st.genEnumDefs[rge]
@@ -295,11 +295,11 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     val ege: U64 = genEnumSlot(c: inout c, st: inout st, ref: exprRef)
     val rge: U64 = genEnumSlot(c: inout c, st: inout st, ref: st.curRetRef)
     if ege >= st.genEnumRefs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "LLVM backend: `try` needs a registered Result instance")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: expr)), msg: "LLVM backend: `try` needs a registered Result instance")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     if rge >= st.genEnumRefs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: expr)), msg: "LLVM backend: `try` is only valid in a function returning a registered Result")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: expr)), msg: "LLVM backend: `try` is only valid in a function returning a registered Result")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val eeid: U64 = st.genEnumDefs[ege]
@@ -307,10 +307,10 @@ fn genLlvmTry(c: inout Comp, st: inout LlvmCtx, expr: U64) -> LLVMValueRef {
     val reid: U64 = st.genEnumDefs[rge]
     val rety: LLVMTypeRef = st.genEnumTys[rge]
     val ed: EnumDef = c.arena.enums[eeid]
-    val okB: Bind = kwSpan(c: inout c, kw: "Ok", kwLen: 2U64)
-    val errB: Bind = kwSpan(c: inout c, kw: "Err", kwLen: 3U64)
-    val okVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
-    val errVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
+    val okB: Bind = c.kwSpan(kw: "Ok", kwLen: 2U64)
+    val errB: Bind = c.kwSpan(kw: "Err", kwLen: 3U64)
+    val okVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
+    val errVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
     val ev: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: expr)
     val eslot: LLVMValueRef = entryAlloca(st: inout st, ty: eety)
     LLVMBuildStore(st.b, ev, eslot)

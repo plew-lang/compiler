@@ -85,11 +85,11 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
                 // is valid UTF-8): reject a value above U+10FFFF or in the surrogate
                 // range U+D800..U+DFFF, which would encode to invalid UTF-8 bytes.
                 if cp > 1114111U64 {
-                    compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "`\\u{...}` escape is out of range — a Unicode scalar is at most U+10FFFF (spec/02)")
+                    compileErrorAt(line: c.lineOf(offset: start), msg: "`\\u{...}` escape is out of range — a Unicode scalar is at most U+10FFFF (spec/02)")
                 }
                 if cp >= 55296U64 {
                     if cp <= 57343U64 {
-                        compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "`\\u{...}` escape is a UTF-16 surrogate (U+D800..U+DFFF), not a valid Unicode scalar (spec/02)")
+                        compileErrorAt(line: c.lineOf(offset: start), msg: "`\\u{...}` escape is a UTF-16 surrogate (U+D800..U+DFFF), not a valid Unicode scalar (spec/02)")
                     }
                 }
                 appendUtf8(out: inout out, cp: cp)
@@ -172,7 +172,7 @@ fn emitI64Sink(c: inout Comp, st: inout LlvmCtx, rtName: String, rtId: U64, v: L
 // supported here (rejected loudly).
 fn emitPrint(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> LLVMValueRef {
     if exprStructIdx(c: inout c, st: inout st, id: argExpr) < c.arena.structs.count {
-        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)
     }
     val k: U64 = valueKind(c: inout c, st: inout st, id: argExpr)
@@ -304,7 +304,7 @@ fn structOrdSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
         if rangeEquals(bytes: c.arena.bytes, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen, kw: "String") {
             return false
         }
-        if isEnumName(c: inout c, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen) {
+        if c.isEnumName(start: sd.fields[i].tyStart, len: sd.fields[i].tyLen) {
             return false
         }
         val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen)
@@ -352,7 +352,7 @@ fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             return ei
         }
     }
-    val t: TypeInfo = typeOf(c: inout c, id: id)
+    val t: TypeInfo = c.typeOf(id: id)
     if t.kind == 2 {
         return c.enumIdxByName(start: t.nameStart, len: t.nameLen)
     }
@@ -405,7 +405,7 @@ fn enumEqWordable(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
         while fj < fs.count {
             if fs[fj].tyIsArray { return false }
             if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
-            if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
+            if c.isEnumName(start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
             if structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen) < st.structIdxs.count { return false }
             fj += 1
         }
@@ -445,7 +445,7 @@ fn enumOrdSupported(c: inout Comp, st: inout LlvmCtx, eid: U64) -> Bool {
         while fj < fs.count {
             if fs[fj].tyIsArray { return false }
             if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
-            if isEnumName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
+            if c.isEnumName(start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
             val sreg: U64 = structRegSlot(c: inout c, st: inout st, start: fs[fj].tyStart, len: fs[fj].tyLen)
             if sreg < st.structIdxs.count {
                 if !(structOrdSupported(c: inout c, st: inout st, sidx: st.structIdxs[sreg])) {
@@ -531,7 +531,7 @@ fn structEqSupported(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
         if sd.fields[i].tyIsArray {
             return false
         }
-        if isEnumName(c: inout c, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen) {
+        if c.isEnumName(start: sd.fields[i].tyStart, len: sd.fields[i].tyLen) {
             return false
         }
         i += 1

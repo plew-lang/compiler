@@ -47,7 +47,7 @@ pub impl Comp {
                     if reqs[a].nameId == reqs[b].nameId {
                         if self.sameLabels(a: reqs[a].params, b: reqs[b].params) {
                             if self.paramTypesEqual(a: reqs[a].params, b: reqs[b].params) {
-                                compileErrorAt(line: lineOf(c: inout self, offset: reqs[b].nameStart), msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)")
+                                compileErrorAt(line: self.lineOf(offset: reqs[b].nameStart), msg: "duplicate trait requirement: another requirement has the same name, labels, and parameter types (spec/08)")
                             }
                         }
                     }
@@ -73,10 +73,10 @@ pub impl Comp {
                                 if fi.nameId == fj.nameId {
                                     if self.sameLabels(a: fi.params, b: fj.params) {
                                         if fi.typeParams.count > 0 {
-                                            compileErrorAt(line: lineOf(c: inout self, offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
+                                            compileErrorAt(line: self.lineOf(offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
                                         } else {
                                             if fj.typeParams.count > 0 {
-                                                compileErrorAt(line: lineOf(c: inout self, offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
+                                                compileErrorAt(line: self.lineOf(offset: fj.nameStart), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
                                             }
                                         }
                                     }
@@ -169,7 +169,7 @@ pub impl Comp {
                                             }
                                             if gBare {
                                                 if self.sameSelector(a: f, b: g) {
-                                                    compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "defaultExtension method collides with another bare-callable method of the same selector on this type (don't make it default, or rename — spec/09)")
+                                                    compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "defaultExtension method collides with another bare-callable method of the same selector on this type (don't make it default, or rename — spec/09)")
                                                 }
                                             }
                                         }

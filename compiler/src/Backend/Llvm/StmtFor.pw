@@ -62,7 +62,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     // iterator()/next() methods are monomorphized into the generic-method slots,
     // so route through that path rather than the plain user-fn slots.
     if recvRef != 0U64 {
-        if isGenericInst(c: inout c, ref: recvRef) {
+        if c.isGenericInst(ref: recvRef) {
             genLlvmForGenIterable(c: inout c, st: inout st, varStart: varStart, varLen: varLen, iter: iter, body: body, recvRef: recvRef)
             return
         }
@@ -80,7 +80,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
     mut val iterVal: LLVMValueRef = iterableVal
     mut val iterStructStart: U64 = isd.nameStart
     mut val iterStructLen: U64 = isd.nameLen
-    val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
+    val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
     val itfi: U64 = c.findMethod(recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.arena.funcs.count {
         val itSlotF: U64 = userFnSlot(st: inout st, idx: itfi)
@@ -95,7 +95,7 @@ fn genLlvmForIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U
         iterStructLen = c.arena.funcs[itfi].retLen
     }
     // next() on the Iter struct -> Optional[Item]
-    val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
+    val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
     val nfi: U64 = c.findMethod(recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
     if nfi >= c.arena.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
@@ -120,7 +120,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
     val noArgs: Array[Arg] = []
     mut val iterVal: LLVMValueRef = LLVMConstInt(st.i64ty, 0U64, 0I32)
     mut val iterInstRef: U64 = recvRef
-    val itB: Bind = kwSpan(c: inout c, kw: "iterator", kwLen: 8U64)
+    val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
     val itfi: U64 = c.findMethod(recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
     if itfi < c.arena.funcs.count {
         // an Iterable: call iterator() and switch the instance ref to the iterator's.
@@ -143,7 +143,7 @@ fn genLlvmForGenIterable(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen
         iterVal = genLlvmExpr(c: inout c, st: inout st, id: iter)
     }
     val it: TypeRef = c.arena.types[iterInstRef]
-    val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
+    val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
     val nfi: U64 = c.findMethod(recvStart: it.nameStart, recvLen: it.nameLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
     if nfi >= c.arena.funcs.count {
         compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
@@ -185,8 +185,8 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
     val optEid: U64 = st.genEnumDefs[ge]
     val optTy: LLVMTypeRef = st.genEnumTys[ge]
     val ed: EnumDef = c.arena.enums[optEid]
-    val someB: Bind = kwSpan(c: inout c, kw: "Some", kwLen: 4U64)
-    val someVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
+    val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
+    val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
     val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: optEid, vi: someVi)
     // the bound element's declared type (the Some payload's single field).
     val itemFs: Array[FieldDef] = ed.variants[someVi].fields
@@ -248,7 +248,7 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
         compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
         return
     }
-    val nextB: Bind = kwSpan(c: inout c, kw: "next", kwLen: 4U64)
+    val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
     val noArgs: Array[Arg] = []
     // the grounded Optional[Item] the existential's next() returns.
     val optRef: U64 = anyMethodRetRef(c: inout c, anyRef: anyRef, traitIdx: traitIdx, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
@@ -268,8 +268,8 @@ fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U6
     val optEid: U64 = st.genEnumDefs[ge]
     val optTy: LLVMTypeRef = st.genEnumTys[ge]
     val ed: EnumDef = c.arena.enums[optEid]
-    val someB: Bind = kwSpan(c: inout c, kw: "Some", kwLen: 4U64)
-    val someVi: U64 = variantIndex(c: inout c, enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
+    val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
+    val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
     val payloadTy: LLVMTypeRef = variantPayloadTy(c: inout c, st: inout st, eid: optEid, vi: someVi)
     val itemFs: Array[FieldDef] = ed.variants[someVi].fields
     val mark: U64 = st.nLocals
@@ -341,7 +341,7 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
         mut val elemSidx: U64 = c.arena.structs.count
         if forElemRef != 0U64 {
             if forElemRef < c.arena.types.count {
-                if isGenericInst(c: inout c, ref: forElemRef) {
+                if c.isGenericInst(ref: forElemRef) {
                     val egs: U64 = genStructSlot(c: inout c, st: inout st, ref: forElemRef)
                     if egs < st.genStructRefs.count {
                         elemSidx = st.genStructDefs[egs]

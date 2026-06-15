@@ -253,21 +253,21 @@ export fn runFrontend() -> Comp {
     // built-in-name span cache (kwSpan): append the lang-item names at known
     // offsets so type recovery can name `String`/`U64`/`Array`/… without scanning
     // the source. Before any analysis (which calls kwSpan via exprType).
-    buildKwCache(c: inout c)
+    c.buildKwCache()
     // assoc-val reads (spec/05): rewrite `Type.NAME` (a Field on a type that owns an
     // `assoc fn NAME`) into a zero-arg assoc-fn call, before any analysis sees it.
     c.rewriteAssocValReads()
     // named factory calls (spec/05): rewrite `<Type.name attrs/>` to an assoc-fn call
     // when `name` is a named factory (not an enum variant).
-    rewriteFactoryConstruction(c: inout c)
+    c.rewriteFactoryConstruction()
     // import name aliases (spec/15): rewrite `alias(args)` to the real imported name
     // for each `with { real as alias }`, before visibility/resolution analysis.
-    rewriteImportAliases(c: inout c)
+    c.rewriteImportAliases()
     // module-level variable init order (spec/15): topologically sort globals so a
     // forward reference in an initializer reads the already-initialized value.
-    orderGlobalsByDependency(c: inout c)
+    c.orderGlobalsByDependency()
     // derive (#5): synthesize `@[Eq]`/`@[Ord]` witnesses before any analysis.
-    synthesizeDerives(c: inout c)
+    c.synthesizeDerives()
     // inter-trait conformance (spec/08,09): `impl B as A` makes every type
     // conforming to subject trait B also conform to A; copy the methods onto each
     // conforming concrete type (before provided methods, so A's own provided
@@ -284,17 +284,17 @@ export fn runFrontend() -> Comp {
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).
-    markBoxedFields(c: inout c)
+    c.markBoxedFields()
     // ownership validity (spec/03): a struct owning a unique value must be
     // `unique`; parameter access modes must match copyability. Both exit on error.
-    checkFieldContagion(c: inout c)
+    c.checkFieldContagion()
     // `deinit` only on a unique type (spec/03). (Distinct generic type-param names are
     // checked per-bracket in lowerTypeParamNames, before impl++method lists merge.)
-    checkDeinitOnlyOnUnique(c: inout c)
-    checkFieldDefaults(c: inout c)
-    checkParamDefaults(c: inout c)
-    checkAllParamModes(c: inout c)
-    checkArrayElemsNotUnique(c: inout c)
+    c.checkDeinitOnlyOnUnique()
+    c.checkFieldDefaults()
+    c.checkParamDefaults()
+    c.checkAllParamModes()
+    c.checkArrayElemsNotUnique()
     // match pattern soundness (spec/11): a variant/struct pattern must name real
     // fields (else codegen emits `_m.data.V.<missing>` -> broken C). Loud-reject.
     c.checkMatchBinds()
@@ -320,10 +320,10 @@ export fn runFrontend() -> Comp {
     // part of its module's public surface (`export`). Importing from the wrong
     // module also fails here — that module doesn't get loaded, so the name isn't
     // among the exported (loaded) declarations.
-    checkImports(c: inout c)
-    detectImportCycles(c: inout c)
-    checkUseVisibility(c: inout c)
-    checkTypeVisibility(c: inout c)
+    c.checkImports()
+    c.detectImportCycles()
+    c.checkUseVisibility()
+    c.checkTypeVisibility()
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to
     // `deriveFromSource`/`write` is exempt from import hygiene) and before
@@ -347,10 +347,10 @@ export fn runFrontend() -> Comp {
     c.checkGenericBodies()
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
-    checkGenericUniqueArgs(c: inout c)
+    c.checkGenericUniqueArgs()
     // typed-AST cache (Phase B): one type slot per expression node, filled lazily
     // by `typeOf` during non-generic emission. Built now — expr ids are stable.
-    buildExprTyTable(c: inout c)
+    c.buildExprTyTable()
     // backend-independent acceptance pass (spec/15): run the per-expr/stmt checks
     // that were historically done inline during emission (rebuilding the local
     // symbol table as it walks), so acceptance soundness does not depend on how

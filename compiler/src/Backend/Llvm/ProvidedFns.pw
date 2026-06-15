@@ -173,7 +173,7 @@ fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
     // (args = [ret, p0, …]) so a type param in the return/param position infers.
     match c.arena.exprs[argExpr] {
         Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
-            val fnB: Bind = kwSpan(c: inout c, kw: "fn", kwLen: 2U64)
+            val fnB: Bind = c.kwSpan(kw: "fn", kwLen: 2U64)
             mut val fargs: Array[U64] = []
             fargs.append(value: retTy)
             mut val pj: U64 = 0
@@ -204,7 +204,7 @@ fn llvmArgTypeRef(c: inout Comp, st: inout LlvmCtx, argExpr: U64) -> U64 {
     if si < c.arena.structs.count {
         return c.findOrAddTypeRef(nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
     }
-    val t: TypeInfo = typeOf(c: inout c, id: argExpr)
+    val t: TypeInfo = c.typeOf(id: argExpr)
     if t.kind == 0 {
         return c.findOrAddTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
     }
@@ -262,7 +262,7 @@ fn groundAssocFromExpected(c: inout Comp, st: inout LlvmCtx, recvStart: U64, rec
     if st.expectedTy == 0U64 {
         return
     }
-    if !(isGenericInst(c: inout c, ref: st.expectedTy)) {
+    if !(c.isGenericInst(ref: st.expectedTy)) {
         return
     }
     val et: TypeRef = c.arena.types[st.expectedTy]

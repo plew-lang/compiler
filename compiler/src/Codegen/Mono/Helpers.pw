@@ -3,113 +3,116 @@
 
 // Is `ref` a concrete generic instantiation (head names a generic struct OR
 // enum and it carries type arguments)?
-export fn isGenericInst(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.arena.types.count {
-        return false
-    }
-    val t: TypeRef = c.arena.types[ref]
-    if t.args.count == 0 {
-        return false
-    }
-    // `Array[U8]` stays out of the genInst machinery: its C type (`Array_U8`) and
-    // runtime are hand-written and always emitted (file paths / String.bytes need
-    // it even when no source mentions `Array[U8]`), so it must not also get a
-    // genInst typedef. Every other `Array[E]` is an ordinary genInst of the prelude
-    // `struct Array[T]`.
-    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-        val a0: TypeRef = c.arena.types[t.args[0]]
-        if rangeEquals(bytes: c.arena.bytes, start: a0.nameStart, len: a0.nameLen, kw: "U8") {
+
+pub impl Comp {
+    inout fn isGenericInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count {
             return false
         }
-    }
-    if c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.structs.count {
-        return true
-    }
-    return c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count
-}
-
-// Is `ref` a function type (head `fn`, args = [return, params...])?
-export fn isFnType(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.arena.types.count {
-        return false
-    }
-    val t: TypeRef = c.arena.types[ref]
-    return rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "fn")
-}
-
-// Is `ref` a `Ref[T]` instantiation? `Ref` is a blessed primitive (a shared
-// mutable heap box), lowered to a C `T*` — not a user struct/enum.
-export fn isRefInst(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.arena.types.count {
-        return false
-    }
-    val t: TypeRef = c.arena.types[ref]
-    if t.args.count != 1 {
-        return false
-    }
-    return rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
-}
-
-// Is `ref` a `RawBuffer[T]` instantiation? `RawBuffer` is a blessed primitive
-// (the refcounted raw buffer that Array's storage is built on), lowered like
-// `Ref` to a C `T*` (with a {rc,cap} header before data) — not a user type.
-fn isRawBufInst(c: inout Comp, ref: U64) -> Bool {
-    if ref >= c.arena.types.count {
-        return false
-    }
-    val t: TypeRef = c.arena.types[ref]
-    if t.args.count != 1 {
-        return false
-    }
-    return rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer")
-}
-
-// ── Recursive-value-type boxing (spec/03) ────────────────────────────────────
-// A field whose declared type transitively contains its own owning type forms a
-// containment cycle; emitted inline it would be an infinite C struct. We break
-// the cycle by storing such a field behind a heap pointer (`T*`). Detection is a
-// reachability walk over the *concrete* (non-generic) struct/enum graph, treating
-// `Array`/`RawBuffer`/`Ref`/`WeakRef` as cycle-breaking (already pointer-backed)
-// and `Optional`/`Result` as transparent (their payload holds the arg by value).
-
-// Does this type head name an already-indirect container (pointer-backed), so it
-// cannot transmit a by-value cycle? (Array/RawBuffer/Ref/WeakRef.)
-fn isIndirectContainer(c: inout Comp, nStart: U64, nLen: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: nStart, len: nLen, kw: "Array") {
-        return true
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nStart, len: nLen, kw: "RawBuffer") {
-        return true
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nStart, len: nLen, kw: "Ref") {
-        return true
-    }
-    return rangeEquals(bytes: c.arena.bytes, start: nStart, len: nLen, kw: "WeakRef")
-}
-
-// A transparent generic container whose type arguments are held by value
-// (Optional/Result) — the owner reaches whatever its args reach.
-fn isTransparentContainer(c: inout Comp, nStart: U64, nLen: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: nStart, len: nLen, kw: "Optional") {
-        return true
-    }
-    return rangeEquals(bytes: c.arena.bytes, start: nStart, len: nLen, kw: "Result")
-}
-
-// Index of a concrete (non-generic) enum by name, else c.arena.enums.count.
-fn concreteEnumIndex(c: inout Comp, nStart: U64, nLen: U64) -> U64 {
-    val qId: U64 = intern(c: inout c, start: nStart, len: nLen)
-    mut val i: U64 = 0
-    while i < c.arena.enums.count {
-        val e: EnumDef = c.arena.enums[i]
-        if e.typeParams.count == 0 {
-            if e.nameId == qId {
-                return i
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count == 0 {
+            return false
+        }
+        // `Array[U8]` stays out of the genInst machinery: its C type (`Array_U8`) and
+        // runtime are hand-written and always emitted (file paths / String.bytes need
+        // it even when no source mentions `Array[U8]`), so it must not also get a
+        // genInst typedef. Every other `Array[E]` is an ordinary genInst of the prelude
+        // `struct Array[T]`.
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            val a0: TypeRef = self.arena.types[t.args[0]]
+            if rangeEquals(bytes: self.arena.bytes, start: a0.nameStart, len: a0.nameLen, kw: "U8") {
+                return false
             }
         }
-        i += 1
+        if self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.structs.count {
+            return true
+        }
+        return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enums.count
     }
-    return c.arena.enums.count
+
+    // Is `ref` a function type (head `fn`, args = [return, params...])?
+    inout fn isFnType(ref: U64) -> Bool {
+        if ref >= self.arena.types.count {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "fn")
+    }
+
+    // Is `ref` a `Ref[T]` instantiation? `Ref` is a blessed primitive (a shared
+    // mutable heap box), lowered to a C `T*` — not a user struct/enum.
+    inout fn isRefInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
+    }
+
+    // Is `ref` a `RawBuffer[T]` instantiation? `RawBuffer` is a blessed primitive
+    // (the refcounted raw buffer that Array's storage is built on), lowered like
+    // `Ref` to a C `T*` (with a {rc,cap} header before data) — not a user type.
+    inout fn isRawBufInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer")
+    }
+
+    // ── Recursive-value-type boxing (spec/03) ────────────────────────────────────
+    // A field whose declared type transitively contains its own owning type forms a
+    // containment cycle; emitted inline it would be an infinite C struct. We break
+    // the cycle by storing such a field behind a heap pointer (`T*`). Detection is a
+    // reachability walk over the *concrete* (non-generic) struct/enum graph, treating
+    // `Array`/`RawBuffer`/`Ref`/`WeakRef` as cycle-breaking (already pointer-backed)
+    // and `Optional`/`Result` as transparent (their payload holds the arg by value).
+
+    // Does this type head name an already-indirect container (pointer-backed), so it
+    // cannot transmit a by-value cycle? (Array/RawBuffer/Ref/WeakRef.)
+    inout fn isIndirectContainer(nStart: U64, nLen: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Array") {
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "RawBuffer") {
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Ref") {
+            return true
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakRef")
+    }
+
+    // A transparent generic container whose type arguments are held by value
+    // (Optional/Result) — the owner reaches whatever its args reach.
+    inout fn isTransparentContainer(nStart: U64, nLen: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Optional") {
+            return true
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Result")
+    }
+
+    // Index of a concrete (non-generic) enum by name, else c.arena.enums.count.
+    inout fn concreteEnumIndex(nStart: U64, nLen: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: nStart, len: nLen)
+        mut val i: U64 = 0
+        while i < self.arena.enums.count {
+            val e: EnumDef = self.arena.enums[i]
+            if e.typeParams.count == 0 {
+                if e.nameId == qId {
+                    return i
+                }
+            }
+            i += 1
+        }
+        return self.arena.enums.count
+    }
 }
 
 fn containsU64(xs: Array[U64], v: U64) -> Bool {
@@ -123,118 +126,121 @@ fn containsU64(xs: Array[U64], v: U64) -> Bool {
     return false
 }
 
-// Does a type, named `nStart/nLen` with `args`, by-value reach the owner type
-// `tStart/tLen`? `visited` holds declaration `nameStart`s of user types already
-// entered (cycle guard). Indirect containers cut; transparent containers descend
-// into args; concrete user struct/enum descend into fields (and args).
-fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
-    if isIndirectContainer(c: inout c, nStart: nStart, nLen: nLen) {
-        return false
-    }
-    if intern(c: inout c, start: nStart, len: nLen) == intern(c: inout c, start: tStart, len: tLen) {
-        return true
-    }
-    if isTransparentContainer(c: inout c, nStart: nStart, nLen: nLen) {
-        mut val ai: U64 = 0
-        while ai < args.count {
-            if typeRefReachesOwner(c: inout c, ref: args[ai], tStart: tStart, tLen: tLen, visited: inout visited) {
-                return true
-            }
-            ai += 1
-        }
-        return false
-    }
-    // a struct head, generic OR not: scan its fields for a path back to the owner.
-    // genericStructIndex is tried too (structIndexByName skips generics) — else a
-    // MUTUALLY recursive GENERIC value type (`Foo[T]` ↔ `Bar[T]`) misses the cycle
-    // through the generic partner's fields, fails to box, and overflows at sizing.
-    mut val si: U64 = c.structIndexByName(start: nStart, len: nLen)
-    if si >= c.arena.structs.count {
-        si = c.genericStructIndex(nameStart: nStart, nameLen: nLen)
-    }
-    if si < c.arena.structs.count {
-        val key: U64 = c.arena.structs[si].nameStart
-        if containsU64(xs: visited, v: key) {
+pub impl Comp {
+
+    // Does a type, named `nStart/nLen` with `args`, by-value reach the owner type
+    // `tStart/tLen`? `visited` holds declaration `nameStart`s of user types already
+    // entered (cycle guard). Indirect containers cut; transparent containers descend
+    // into args; concrete user struct/enum descend into fields (and args).
+    inout fn nameReachesOwner(nStart: U64, nLen: U64, args: Array[U64], tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
+        if self.isIndirectContainer(nStart: nStart, nLen: nLen) {
             return false
         }
-        visited.append(key)
-        val fields: Array[FieldDef] = c.arena.structs[si].fields
-        mut val fi: U64 = 0
-        while fi < fields.count {
-            if fieldReachesOwner(c: inout c, f: fields[fi], tStart: tStart, tLen: tLen, visited: inout visited) {
-                return true
-            }
-            fi += 1
-        }
-        return false
-    }
-    // an enum head, generic OR not (genericEnumIndex too — concreteEnumIndex skips
-    // generics — so a mutually recursive generic ENUM `E1[T]` ↔ `E2[T]` boxes its
-    // cyclic variant payload instead of overflowing at sizing, mirroring the struct case).
-    mut val ei: U64 = concreteEnumIndex(c: inout c, nStart: nStart, nLen: nLen)
-    if ei >= c.arena.enums.count {
-        ei = c.genericEnumIndex(nameStart: nStart, nameLen: nLen)
-    }
-    if ei < c.arena.enums.count {
-        val key: U64 = c.arena.enums[ei].nameStart
-        if containsU64(xs: visited, v: key) {
-            return false
-        }
-        visited.append(key)
-        val vars: Array[Variant] = c.arena.enums[ei].variants
-        mut val vi: U64 = 0
-        while vi < vars.count {
-            val vf: Array[FieldDef] = vars[vi].fields
-            mut val fj: U64 = 0
-            while fj < vf.count {
-                if fieldReachesOwner(c: inout c, f: vf[fj], tStart: tStart, tLen: tLen, visited: inout visited) {
-                    return true
-                }
-                fj += 1
-            }
-            vi += 1
-        }
-        return false
-    }
-    // unknown/generic head: conservatively descend into its type arguments.
-    mut val gi: U64 = 0
-    while gi < args.count {
-        if typeRefReachesOwner(c: inout c, ref: args[gi], tStart: tStart, tLen: tLen, visited: inout visited) {
+        if intern(c: inout self, start: nStart, len: nLen) == intern(c: inout self, start: tStart, len: tLen) {
             return true
         }
-        gi += 1
-    }
-    return false
-}
-
-fn typeRefReachesOwner(c: inout Comp, ref: U64, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
-    if ref == 0 {
+        if self.isTransparentContainer(nStart: nStart, nLen: nLen) {
+            mut val ai: U64 = 0
+            while ai < args.count {
+                if self.typeRefReachesOwner(ref: args[ai], tStart: tStart, tLen: tLen, visited: inout visited) {
+                    return true
+                }
+                ai += 1
+            }
+            return false
+        }
+        // a struct head, generic OR not: scan its fields for a path back to the owner.
+        // genericStructIndex is tried too (structIndexByName skips generics) — else a
+        // MUTUALLY recursive GENERIC value type (`Foo[T]` ↔ `Bar[T]`) misses the cycle
+        // through the generic partner's fields, fails to box, and overflows at sizing.
+        mut val si: U64 = self.structIndexByName(start: nStart, len: nLen)
+        if si >= self.arena.structs.count {
+            si = self.genericStructIndex(nameStart: nStart, nameLen: nLen)
+        }
+        if si < self.arena.structs.count {
+            val key: U64 = self.arena.structs[si].nameStart
+            if containsU64(xs: visited, v: key) {
+                return false
+            }
+            visited.append(key)
+            val fields: Array[FieldDef] = self.arena.structs[si].fields
+            mut val fi: U64 = 0
+            while fi < fields.count {
+                if self.fieldReachesOwner(f: fields[fi], tStart: tStart, tLen: tLen, visited: inout visited) {
+                    return true
+                }
+                fi += 1
+            }
+            return false
+        }
+        // an enum head, generic OR not (genericEnumIndex too — concreteEnumIndex skips
+        // generics — so a mutually recursive generic ENUM `E1[T]` ↔ `E2[T]` boxes its
+        // cyclic variant payload instead of overflowing at sizing, mirroring the struct case).
+        mut val ei: U64 = self.concreteEnumIndex(nStart: nStart, nLen: nLen)
+        if ei >= self.arena.enums.count {
+            ei = self.genericEnumIndex(nameStart: nStart, nameLen: nLen)
+        }
+        if ei < self.arena.enums.count {
+            val key: U64 = self.arena.enums[ei].nameStart
+            if containsU64(xs: visited, v: key) {
+                return false
+            }
+            visited.append(key)
+            val vars: Array[Variant] = self.arena.enums[ei].variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val vf: Array[FieldDef] = vars[vi].fields
+                mut val fj: U64 = 0
+                while fj < vf.count {
+                    if self.fieldReachesOwner(f: vf[fj], tStart: tStart, tLen: tLen, visited: inout visited) {
+                        return true
+                    }
+                    fj += 1
+                }
+                vi += 1
+            }
+            return false
+        }
+        // unknown/generic head: conservatively descend into its type arguments.
+        mut val gi: U64 = 0
+        while gi < args.count {
+            if self.typeRefReachesOwner(ref: args[gi], tStart: tStart, tLen: tLen, visited: inout visited) {
+                return true
+            }
+            gi += 1
+        }
         return false
     }
-    if ref >= c.arena.types.count {
-        return false
-    }
-    val t: TypeRef = c.arena.types[ref]
-    return nameReachesOwner(c: inout c, nStart: t.nameStart, nLen: t.nameLen, args: t.args, tStart: tStart, tLen: tLen, visited: inout visited)
-}
 
-// Does field `f`'s declared type by-value reach the owner type `tStart/tLen`? An
-// array field is pointer-backed (cut). A field with a parsed TypeRef uses it
-// (carries generic args); otherwise the bare name span with no args.
-fn fieldReachesOwner(c: inout Comp, f: FieldDef, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
-    if f.tyIsArray {
-        return false
+    inout fn typeRefReachesOwner(ref: U64, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
+        if ref == 0 {
+            return false
+        }
+        if ref >= self.arena.types.count {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        return self.nameReachesOwner(nStart: t.nameStart, nLen: t.nameLen, args: t.args, tStart: tStart, tLen: tLen, visited: inout visited)
     }
-    if f.ty != 0 {
-        return typeRefReachesOwner(c: inout c, ref: f.ty, tStart: tStart, tLen: tLen, visited: inout visited)
-    }
-    val noArgs: Array[U64] = []
-    return nameReachesOwner(c: inout c, nStart: f.tyStart, nLen: f.tyLen, args: noArgs, tStart: tStart, tLen: tLen, visited: inout visited)
-}
 
-// Codegen query: is field `f` stored boxed (behind a heap pointer)?
-export fn fieldIsBoxed(c: inout Comp, f: FieldDef) -> Bool {
-    return containsU64(xs: c.monoWork.boxedFields, v: f.nameStart)
+    // Does field `f`'s declared type by-value reach the owner type `tStart/tLen`? An
+    // array field is pointer-backed (cut). A field with a parsed TypeRef uses it
+    // (carries generic args); otherwise the bare name span with no args.
+    inout fn fieldReachesOwner(f: FieldDef, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
+        if f.tyIsArray {
+            return false
+        }
+        if f.ty != 0 {
+            return self.typeRefReachesOwner(ref: f.ty, tStart: tStart, tLen: tLen, visited: inout visited)
+        }
+        val noArgs: Array[U64] = []
+        return self.nameReachesOwner(nStart: f.tyStart, nLen: f.tyLen, args: noArgs, tStart: tStart, tLen: tLen, visited: inout visited)
+    }
+
+    // Codegen query: is field `f` stored boxed (behind a heap pointer)?
+    inout fn fieldIsBoxed(f: FieldDef) -> Bool {
+        return containsU64(xs: self.monoWork.boxedFields, v: f.nameStart)
+    }
 }
 
 // The FieldDef sentinel returned when a lookup fails (nameLen == 0).
@@ -242,97 +248,99 @@ fn noField() -> FieldDef {
     return <FieldDef nameStart=0 nameLen=0 tyStart=0 tyLen=0 tyIsArray=false ty=0 isMut=false hasDefault=false defaultVal=0 vis=0 />
 }
 
-// Look up a declared field of a concrete struct (isEnum=false) or enum variant
-// (isEnum=true) by name. Returns noField() (nameLen == 0) when not found. Used at
-// construction/access sites to recover a field's boxed flag and declared type.
-fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> FieldDef {
-    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
-    if isEnum {
-        val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
-        val ei: U64 = concreteEnumIndex(c: inout c, nStart: typeStart, nLen: typeLen)
-        if ei >= c.arena.enums.count {
+pub impl Comp {
+
+    // Look up a declared field of a concrete struct (isEnum=false) or enum variant
+    // (isEnum=true) by name. Returns noField() (nameLen == 0) when not found. Used at
+    // construction/access sites to recover a field's boxed flag and declared type.
+    inout fn findFieldDef(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> FieldDef {
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        if isEnum {
+            val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
+            val ei: U64 = self.concreteEnumIndex(nStart: typeStart, nLen: typeLen)
+            if ei >= self.arena.enums.count {
+                return noField()
+            }
+            val vars: Array[Variant] = self.arena.enums[ei].variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val v: Variant = vars[vi]
+                if v.nameId == qVar {
+                    val fs: Array[FieldDef] = v.fields
+                    mut val fj: U64 = 0
+                    while fj < fs.count {
+                        if fs[fj].nameId == qField {
+                            return fs[fj]
+                        }
+                        fj += 1
+                    }
+                }
+                vi += 1
+            }
             return noField()
         }
-        val vars: Array[Variant] = c.arena.enums[ei].variants
-        mut val vi: U64 = 0
-        while vi < vars.count {
-            val v: Variant = vars[vi]
-            if v.nameId == qVar {
-                val fs: Array[FieldDef] = v.fields
-                mut val fj: U64 = 0
-                while fj < fs.count {
-                    if fs[fj].nameId == qField {
-                        return fs[fj]
-                    }
-                    fj += 1
-                }
-            }
-            vi += 1
+        val si: U64 = self.structIndexByName(start: typeStart, len: typeLen)
+        if si >= self.arena.structs.count {
+            return noField()
         }
-        return noField()
-    }
-    val si: U64 = c.structIndexByName(start: typeStart, len: typeLen)
-    if si >= c.arena.structs.count {
-        return noField()
-    }
-    val fs: Array[FieldDef] = c.arena.structs[si].fields
-    mut val fi: U64 = 0
-    while fi < fs.count {
-        if fs[fi].nameId == qField {
-            return fs[fi]
-        }
-        fi += 1
-    }
-    return noField()
-}
-
-// Pre-pass: record every concrete struct/enum field that closes a containment
-// cycle back onto its owner. Only concrete (non-generic) owners are boxed; a
-// generic type's recursion is broken at the concrete user field that points into
-// it (so Optional/Result instantiations stay inline and keep their fixed layout).
-fn markBoxedFields(c: inout Comp) {
-    // GENERIC templates are included (no `typeParams.count == 0` guard): a recursive
-    // GENERIC value type (`struct N[T] { next: Optional[N[T]] }`) must box its cyclic
-    // field too, else monomorphizing `N[I64]` builds an infinite struct layout and the
-    // compiler stack-overflows. Boxing is keyed by the field's name span, so the
-    // template's boxed field is inherited by every instance (fieldIsBoxed reads
-    // nameStart). fieldReachesOwner follows the type graph by name, so it detects the
-    // cycle through `Optional[N[T]]` (a non-recursive `Box[T]` field `v: T` does not
-    // reach its owner and stays unboxed).
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[si]
-        val fields: Array[FieldDef] = s.fields
+        val fs: Array[FieldDef] = self.arena.structs[si].fields
         mut val fi: U64 = 0
-        while fi < fields.count {
-            val f: FieldDef = fields[fi]
-            mut val visited: Array[U64] = []
-            if fieldReachesOwner(c: inout c, f: f, tStart: s.nameStart, tLen: s.nameLen, visited: inout visited) {
-                c.monoWork.boxedFields.append(f.nameStart)
+        while fi < fs.count {
+            if fs[fi].nameId == qField {
+                return fs[fi]
             }
             fi += 1
         }
-        si += 1
+        return noField()
     }
-    mut val ei: U64 = 0
-    while ei < c.arena.enums.count {
-        val e: EnumDef = c.arena.enums[ei]
-        val vars: Array[Variant] = e.variants
-        mut val vi: U64 = 0
-        while vi < vars.count {
-            val vf: Array[FieldDef] = vars[vi].fields
-            mut val fj: U64 = 0
-            while fj < vf.count {
-                val f: FieldDef = vf[fj]
+
+    // Pre-pass: record every concrete struct/enum field that closes a containment
+    // cycle back onto its owner. Only concrete (non-generic) owners are boxed; a
+    // generic type's recursion is broken at the concrete user field that points into
+    // it (so Optional/Result instantiations stay inline and keep their fixed layout).
+    inout fn markBoxedFields() {
+        // GENERIC templates are included (no `typeParams.count == 0` guard): a recursive
+        // GENERIC value type (`struct N[T] { next: Optional[N[T]] }`) must box its cyclic
+        // field too, else monomorphizing `N[I64]` builds an infinite struct layout and the
+        // compiler stack-overflows. Boxing is keyed by the field's name span, so the
+        // template's boxed field is inherited by every instance (fieldIsBoxed reads
+        // nameStart). fieldReachesOwner follows the type graph by name, so it detects the
+        // cycle through `Optional[N[T]]` (a non-recursive `Box[T]` field `v: T` does not
+        // reach its owner and stays unboxed).
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val s: StructDef = self.arena.structs[si]
+            val fields: Array[FieldDef] = s.fields
+            mut val fi: U64 = 0
+            while fi < fields.count {
+                val f: FieldDef = fields[fi]
                 mut val visited: Array[U64] = []
-                if fieldReachesOwner(c: inout c, f: f, tStart: e.nameStart, tLen: e.nameLen, visited: inout visited) {
-                    c.monoWork.boxedFields.append(f.nameStart)
+                if self.fieldReachesOwner(f: f, tStart: s.nameStart, tLen: s.nameLen, visited: inout visited) {
+                    self.monoWork.boxedFields.append(f.nameStart)
                 }
-                fj += 1
+                fi += 1
             }
-            vi += 1
+            si += 1
         }
-        ei += 1
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count {
+            val e: EnumDef = self.arena.enums[ei]
+            val vars: Array[Variant] = e.variants
+            mut val vi: U64 = 0
+            while vi < vars.count {
+                val vf: Array[FieldDef] = vars[vi].fields
+                mut val fj: U64 = 0
+                while fj < vf.count {
+                    val f: FieldDef = vf[fj]
+                    mut val visited: Array[U64] = []
+                    if self.fieldReachesOwner(f: f, tStart: e.nameStart, tLen: e.nameLen, visited: inout visited) {
+                        self.monoWork.boxedFields.append(f.nameStart)
+                    }
+                    fj += 1
+                }
+                vi += 1
+            }
+            ei += 1
+        }
     }
 }
-

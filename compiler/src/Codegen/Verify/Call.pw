@@ -17,7 +17,7 @@ pub impl Comp {
         // an import alias (`with { Real as Alias }`) denotes the same type identity as
         // `Real`: resolve so a value typed via its alias and one via the real name compare
         // equal, and so an enum match arm written with the alias name resolves (spec/15).
-        val ar: Bind = aliasReal(c: inout self, start: start, len: len)
+        val ar: Bind = self.aliasReal(start: start, len: len)
         val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         val si: U64 = self.structIndexByName(start: ar.nameStart, len: ar.nameLen)
         if si < self.arena.structs.count {
@@ -46,7 +46,7 @@ pub impl Comp {
     }
 
     inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-        val rt: TypeInfo = typeOf(c: inout self, id: recv)
+        val rt: TypeInfo = self.typeOf(id: recv)
         if rt.kind != 2 {
             return
         }
@@ -161,7 +161,7 @@ pub impl Comp {
     inout fn variantExists(enumStart: U64, enumLen: U64, variantStart: U64, variantLen: U64) -> Bool {
         // resolve an import alias (`with { Real as Alias }`) so a match arm written with the
         // enum's alias name finds the real enum's variants (spec/15).
-        val arE: Bind = aliasReal(c: inout self, start: enumStart, len: enumLen)
+        val arE: Bind = self.aliasReal(start: enumStart, len: enumLen)
         val qEnum: U64 = intern(c: inout self, start: arE.nameStart, len: arE.nameLen)
         val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
         mut val ei: U64 = 0
@@ -182,7 +182,7 @@ pub impl Comp {
     }
 
     inout fn checkMatchArmsEnum(scrut: U64, arms: Array[MatchArm]) {
-        val st0: TypeInfo = typeOf(c: inout self, id: scrut)
+        val st0: TypeInfo = self.typeOf(id: scrut)
         if st0.kind != 2 {
             return
         }
@@ -196,14 +196,14 @@ pub impl Comp {
             if !(a.isWildcard || a.isStruct || a.enumLen == 0U64) {
                 val aId: U64 = self.knownNamedTypeId(start: a.enumStart, len: a.enumLen)
                 if aId != 0U64 && aId != sId {
-                    compileErrorAt(line: lineOf(c: inout self, offset: a.enumStart), msg: "this match arm pattern is a variant of a different enum than the value being matched")
+                    compileErrorAt(line: self.lineOf(offset: a.enumStart), msg: "this match arm pattern is a variant of a different enum than the value being matched")
                 } else {
                     // the named variant must exist on the enum (`Optional.Other` is not a
                     // variant of Optional) — else the arm is unreachable and the match's
                     // exhaustiveness count is wrong.
                     if a.variantLen > 0U64 {
                         if !(self.variantExists(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)) {
-                            compileErrorAt(line: lineOf(c: inout self, offset: a.variantStart), msg: "unknown variant: this enum has no such variant")
+                            compileErrorAt(line: self.lineOf(offset: a.variantStart), msg: "unknown variant: this enum has no such variant")
                         }
                     }
                 }

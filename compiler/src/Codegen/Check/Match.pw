@@ -17,7 +17,7 @@ pub impl Comp {
             }
             return
         }
-        val ei: U64 = enumIndexByName(c: inout self, start: a.enumStart, len: a.enumLen)
+        val ei: U64 = self.enumIndexByName(start: a.enumStart, len: a.enumLen)
         if ei >= self.arena.enums.count {
             return
         }

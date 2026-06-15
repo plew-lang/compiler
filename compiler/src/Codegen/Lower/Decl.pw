@@ -8,7 +8,7 @@ pub impl Comp {
         mut val out: Array[Bind] = []
         mut val i: U64 = 0
         while i < names.count {
-            val b: Bind = internBytes(c: inout self, s: names[i])
+            val b: Bind = self.internBytes(s: names[i])
             // a generic's own bracket list must have distinct names (spec/06): `f[T, T]`
             // is ambiguous. Checked per RAW list (not the merged impl++method list, where
             // an impl param and a method param may legitimately share a name = shadowing).
@@ -16,7 +16,7 @@ pub impl Comp {
             mut val k: U64 = 0
             while k < out.count {
                 if intern(c: inout self, start: out[k].nameStart, len: out[k].nameLen) == bId {
-                    compileErrorAt(line: lineOf(c: inout self, offset: b.nameStart), msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)")
+                    compileErrorAt(line: self.lineOf(offset: b.nameStart), msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)")
                 }
                 k += 1
             }
@@ -27,13 +27,13 @@ pub impl Comp {
     }
 
     inout fn lowerFieldDef(f: FieldAst) -> FieldDef {
-        val nm: Bind = internBytes(c: inout self, s: f.name)
+        val nm: Bind = self.internBytes(s: f.name)
         mut val tyStart: U64 = 0
         mut val tyLen: U64 = 0
         mut val tyIsArray: Bool = false
         mut val tyRef: U64 = 0
         if f.ty.name.bytes.count > 0 || f.ty.isRecord {
-            val pt: PType = lowerType(c: inout self, t: f.ty)
+            val pt: PType = self.lowerType(t: f.ty)
             tyStart = pt.start
             tyLen = pt.len
             tyIsArray = pt.isArray
@@ -49,7 +49,7 @@ pub impl Comp {
     }
 
     inout fn lowerStructDecl(d: DeclAst) {
-        val nm: Bind = internBytes(c: inout self, s: d.name)
+        val nm: Bind = self.internBytes(s: d.name)
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams)
         // field types may reference `[T]` — make them the lowering-time scope so lowerType
         // marks type-parameter heads as skip (siteOffset 0). Restored at function end.
@@ -66,8 +66,8 @@ pub impl Comp {
         // fire it. Appended at the same point in self.arena.funcs as the native parser (during
         // this struct's processing), so the function stream order is preserved.
         if d.hasDeinit {
-            val deinitN: Bind = internBytes(c: inout self, s: "deinit")
-            val body: U64 = lowerBlock(c: inout self, b: d.deinitBody)
+            val deinitN: Bind = self.internBytes(s: "deinit")
+            val body: U64 = self.lowerBlock(b: d.deinitBody)
             val noParams: Array[Param] = []
             val noTypeParams: Array[Bind] = []
             self.arena.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
@@ -79,16 +79,16 @@ pub impl Comp {
         val tid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val di: U64 = 0
         while di < d.defaultExts.count {
-            val extN: Bind = internBytes(c: inout self, s: d.defaultExts[di])
+            val extN: Bind = self.internBytes(s: d.defaultExts[di])
             self.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout self, start: extN.nameStart, len: extN.nameLen) />)
             di += 1
         }
-        drainDerives(c: inout self, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
+        self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
 
     inout fn lowerEnumDecl(d: DeclAst) {
-        val nm: Bind = internBytes(c: inout self, s: d.name)
+        val nm: Bind = self.internBytes(s: d.name)
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams)
         // variant payload types may reference `[T]` — see lowerStructDecl.
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -97,7 +97,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < d.variants.count {
             val v: VariantAst = d.variants[i]
-            val vn: Bind = internBytes(c: inout self, s: v.name)
+            val vn: Bind = self.internBytes(s: v.name)
             mut val vfields: Array[FieldDef] = []
             mut val j: U64 = 0
             while j < v.fields.count {
@@ -113,11 +113,11 @@ pub impl Comp {
         val tid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val di: U64 = 0
         while di < d.defaultExts.count {
-            val extN: Bind = internBytes(c: inout self, s: d.defaultExts[di])
+            val extN: Bind = self.internBytes(s: d.defaultExts[di])
             self.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout self, start: extN.nameStart, len: extN.nameLen) />)
             di += 1
         }
-        drainDerives(c: inout self, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
+        self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
 
@@ -129,13 +129,13 @@ pub impl Comp {
         // scope so lowerType marks type-parameter heads as skip (siteOffset 0).
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = typeParams
-        val params: Array[Param] = lowerParams(c: inout self, params: d.params)
+        val params: Array[Param] = self.lowerParams(params: d.params)
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if d.hasRet {
-            val pt: PType = lowerType(c: inout self, t: d.ret)
+            val pt: PType = self.lowerType(t: d.ret)
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -143,28 +143,28 @@ pub impl Comp {
         }
         val savedRet: U64 = self.cur.lowerRetTy
         self.cur.lowerRetTy = retRef
-        val body: U64 = lowerBlock(c: inout self, b: d.body)
+        val body: U64 = self.lowerBlock(b: d.body)
         self.cur.lowerRetTy = savedRet
         self.cur.typeParams = savedTP
         val fnIdx: U64 = self.arena.funcs.count
         self.arena.funcs.append(<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false />)
         mut val wi: U64 = 0
         while wi < d.whereParams.count {
-            val pn: Bind = internBytes(c: inout self, s: d.whereParams[wi])
-            val tn: Bind = internBytes(c: inout self, s: d.whereTraits[wi])
+            val pn: Bind = self.internBytes(s: d.whereParams[wi])
+            val tn: Bind = self.internBytes(s: d.whereTraits[wi])
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
             wi += 1
         }
         // attach pending `@[...]` directives to this fn (a macro on a free function);
         // declStart/declEnd = the fn's source span for the gen harness slice.
-        drainDerives(c: inout self, typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
+        self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
     }
 
     inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String]) {
         mut val i: U64 = 0
         while i < params.count {
-            val pn: Bind = internBytes(c: inout self, s: params[i])
-            val tn: Bind = internBytes(c: inout self, s: traits[i])
+            val pn: Bind = self.internBytes(s: params[i])
+            val tn: Bind = self.internBytes(s: traits[i])
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
             i += 1
         }

@@ -28,10 +28,10 @@ fn asyncFieldTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64, ty: 
     if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Promise") {
         return st.ptrty
     }
-    if isGenericInst(c: inout c, ref: ty) {
+    if c.isGenericInst(ref: ty) {
         return llvmTypeOfRef(c: inout c, st: inout st, ref: ty)
     }
-    if isRefInst(c: inout c, ref: ty) {
+    if c.isRefInst(ref: ty) {
         return st.ptrty
     }
     return llvmScalarTy(c: inout c, st: inout st, tyStart: tyStart, tyLen: tyLen)
@@ -95,7 +95,7 @@ fn collectAsyncMatchBindTys(c: inout Comp, st: inout LlvmCtx, arm: MatchArm, tys
     if eid >= c.arena.enums.count {
         return
     }
-    val vi: U64 = variantIndex(c: inout c, enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+    val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
     val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
     val binds: Array[Bind] = arm.binds
     mut val bi: U64 = 0
@@ -117,7 +117,7 @@ fn collectAsyncMatchBindTys(c: inout Comp, st: inout LlvmCtx, arm: MatchArm, tys
             if arrayFieldElemRef(c: inout c, f: fd) != 0U64 {
                 pty = st.arrayTy
             } else {
-                if fieldIsBoxed(c: inout c, f: fd) {
+                if c.fieldIsBoxed(f: fd) {
                     pty = st.ptrty
                 } else {
                     pty = llvmScalarTy(c: inout c, st: inout st, tyStart: fd.tyStart, tyLen: fd.tyLen)
@@ -161,10 +161,10 @@ fn declareAsyncFns(c: inout Comp, st: inout LlvmCtx) {
     while fi < c.arena.funcs.count {
         if isAsyncFn(c: inout c, fi: fi) {
             if c.arena.funcs[fi].typeParams.count > 0U64 {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: generic `async fn` is not yet supported")
+                compileErrorAt(line: c.lineOf(offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: generic `async fn` is not yet supported")
             }
             if c.arena.funcs[fi].hasRecv {
-                compileErrorAt(line: lineOf(c: inout c, offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
+                compileErrorAt(line: c.lineOf(offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
             }
             val frameTy: LLVMTypeRef = buildAsyncFrameTy(c: inout c, st: inout st, fi: fi)
             // resume fn: void __af<fi>_resume(void*).
@@ -372,7 +372,7 @@ fn bindAsyncParam(c: inout Comp, st: inout LlvmCtx, p: Param, fieldIdx: U64) {
     if p.tyIsArray {
         pElem = llvmScalarTy(c: inout c, st: inout st, tyStart: p.tyStart, tyLen: p.tyLen)
     } else {
-        if isGenericInst(c: inout c, ref: p.ty) {
+        if c.isGenericInst(ref: p.ty) {
             pRef = p.ty
             val pgs: U64 = genStructSlot(c: inout c, st: inout st, ref: p.ty)
             if pgs < st.genStructRefs.count {

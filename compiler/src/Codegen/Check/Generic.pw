@@ -48,7 +48,7 @@ pub impl Comp {
                 while ri < t.reqs.count {
                     val r: Func = t.reqs[ri]
                     if r.nameId == qName {
-                        if paramsLabelsOk(c: inout self, params: r.params, args: args) {
+                        if self.paramsLabelsOk(params: r.params, args: args) {
                             return true
                         }
                     }
@@ -74,7 +74,7 @@ pub impl Comp {
             if g.hasRecv {
                 if g.recvId == traitNameId {
                     if g.nameId == qName {
-                        if paramsLabelsOk(c: inout self, params: g.params, args: args) {
+                        if self.paramsLabelsOk(params: g.params, args: args) {
                             return true
                         }
                     }
@@ -154,7 +154,7 @@ pub impl Comp {
                         val need: String = self.unOpTraitName(op: op)
                         if need.bytes.count != 0U64 {
                             if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
-                                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
+                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
                             }
                         }
                     }
@@ -188,7 +188,7 @@ pub impl Comp {
                         }
                         if need.bytes.count != 0U64 {
                             if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
-                                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
+                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                             }
                         }
                     }
@@ -203,7 +203,7 @@ pub impl Comp {
                 // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
                 // and `f`'s `x: I64`) is a type error at the definition. The callee's own
                 // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
-                val fi: U64 = resolvedCallee(c: inout self, id: exprId)
+                val fi: U64 = self.resolvedCallee(id: exprId)
                 if fi < self.arena.funcs.count {
                     val ps: Array[Param] = self.arena.funcs[fi].params
                     mut val k: U64 = 0
@@ -239,7 +239,7 @@ pub impl Comp {
                 if rt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                         if !(self.boundProvidesMethod(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
-                            compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
+                            compileErrorAt(line: self.lineOf(offset: nameStart), msg: "method not provided by the bounds of this type parameter (add a `where T: Trait` that declares it)")
                         }
                     } else {
                         if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
@@ -249,14 +249,14 @@ pub impl Comp {
                             val qm: U64 = intern(c: inout self, start: nameStart, len: nameLen)
                             val selfTraitId: U64 = intern(c: inout self, start: self.arena.funcs[self.cur.checkFn].recvStart, len: self.arena.funcs[self.cur.checkFn].recvLen)
                             if !(self.traitProvidesMember(traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64)) {
-                                compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
+                                compileErrorAt(line: self.lineOf(offset: nameStart), msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
                             }
                         } else {
                         // a CONCRETE-receiver method: a `T` value passed to a concrete-typed
                         // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
                         // generic-receiver method's grounded param types are handled by the
                         // backend; here we check the non-generic-receiver case.
-                        if !(isGenericInst(c: inout self, ref: rt.ref)) {
+                        if !(self.isGenericInst(ref: rt.ref)) {
                             val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                             if mi != self.arena.funcs.count {
                                 val mps: Array[Param] = self.arena.funcs[mi].params
@@ -283,7 +283,7 @@ pub impl Comp {
                 val bt: TypeInfo = self.exprType(id: base)
                 if bt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
+                        compileErrorAt(line: self.lineOf(offset: nameStart), msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
                     }
                 }
             }
@@ -296,7 +296,7 @@ pub impl Comp {
                 if ibt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ibt.nameStart, len: ibt.nameLen) {
                         if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {
-                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: base)), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)")
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "subscript `[]` on a type parameter needs a `where T: Index` bound (spec/12)")
                         }
                     }
                 }
@@ -374,12 +374,12 @@ pub impl Comp {
                     Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
                         if !(isBool) {
                             if tyLen == 0U64 {
-                                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
+                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
                             }
                         }
                     }
                     Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {
-                        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
+                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "cannot assign a literal to a type parameter: it is an opaque type with no numeric bound (spec/06)")
                     }
                     _ => {}
                 }
@@ -436,7 +436,7 @@ pub impl Comp {
         }
         val inferred: U64 = self.inferType(id: valueExpr)
         if !(self.typesCompatible(expected: expectedRef, inferred: inferred)) {
-            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: valueExpr)), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
+            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
         }
     }
 
@@ -486,7 +486,7 @@ pub impl Comp {
                 } else {
                     val et: TypeInfo = self.exprType(id: iter)
                     if isStruct {
-                        addForStructBinds(c: inout self, et: et, binds: binds)
+                        self.addForStructBinds(et: et, binds: binds)
                     } else {
                         if et.kind == 3 {
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)

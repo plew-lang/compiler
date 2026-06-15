@@ -20,7 +20,7 @@ fn parseAndLowerFile(c: inout Comp, fileBytes: Array[U8], fileStart: U64) -> Arr
     mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
     val items: Array[TopItemAst] = parseProgramAst(p: inout p)
     if p.hasErr {
-        compileErrorAt(line: lineOf(c: inout c, offset: p.errOff), msg: p.errMsg)
+        compileErrorAt(line: c.lineOf(offset: p.errOff), msg: p.errMsg)
     }
     mut val i: U64 = 0
     while i < items.count {

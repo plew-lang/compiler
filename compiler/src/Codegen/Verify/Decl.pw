@@ -53,17 +53,17 @@ pub impl Comp {
         }
         if self.isTraitName(start: srcStart, len: srcLen) {
             if !(self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
-                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
+                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: recv)), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
             }
             return
         }
         if self.isExtName(start: srcStart, len: srcLen) {
             if !(self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)) {
-                compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
+                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: recv)), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
             }
             return
         }
-        compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: recv)), msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
     }
 
     inout fn checkDeclShapes() {
@@ -98,7 +98,7 @@ pub impl Comp {
                     mut val vj: U64 = vi + 1U64
                     while vj < ed.variants.count {
                         if spansEqual(c: inout self, aStart: ed.variants[vi].nameStart, aLen: ed.variants[vi].nameLen, bStart: ed.variants[vj].nameStart, bLen: ed.variants[vj].nameLen) {
-                            compileErrorAt(line: lineOf(c: inout self, offset: ed.variants[vj].nameStart), msg: "duplicate enum variant name (each variant must be distinct)")
+                            compileErrorAt(line: self.lineOf(offset: ed.variants[vj].nameStart), msg: "duplicate enum variant name (each variant must be distinct)")
                         }
                         vj += 1
                     }
@@ -117,7 +117,7 @@ pub impl Comp {
             if !(cf.derived) {
                 if self.moduleOf(offset: cf.typeStart) == 0U64 {
                     if self.isBlanketConform(cf: cf) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: cf.typeStart), msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
+                        compileErrorAt(line: self.lineOf(offset: cf.typeStart), msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
                     }
                 }
             }
@@ -135,7 +135,7 @@ pub impl Comp {
                 if self.offsetIsLoaded(offset: sd.defOffset) {
                     if self.moduleOf(offset: sd.defOffset) == 0U64 {
                         if self.isAmbientInLang(start: sd.nameStart, len: sd.nameLen) {
-                            compileErrorAt(line: lineOf(c: inout self, offset: sd.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+                            compileErrorAt(line: self.lineOf(offset: sd.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
                         }
                     }
                 }
@@ -148,7 +148,7 @@ pub impl Comp {
             if self.offsetIsLoaded(offset: ed.defOffset) {
                 if self.moduleOf(offset: ed.defOffset) == 0U64 {
                     if self.isAmbientInLang(start: ed.nameStart, len: ed.nameLen) {
-                        compileErrorAt(line: lineOf(c: inout self, offset: ed.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
+                        compileErrorAt(line: self.lineOf(offset: ed.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
                     }
                 }
             }
@@ -184,7 +184,7 @@ pub impl Comp {
             mut val j: U64 = i + 1U64
             while j < names.count {
                 if names[i] == names[j] {
-                    compileErrorAt(line: lineOf(c: inout self, offset: offs[j]), msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
+                    compileErrorAt(line: self.lineOf(offset: offs[j]), msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
                 }
                 j += 1
             }
@@ -255,7 +255,7 @@ pub impl Comp {
             mut val j: U64 = i + 1U64
             while j < cand.count {
                 if self.isExactDupFn(a: self.arena.funcs[cand[i]], b: self.arena.funcs[cand[j]]) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: self.arena.funcs[cand[j]].nameStart), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
+                    compileErrorAt(line: self.lineOf(offset: self.arena.funcs[cand[j]].nameStart), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
                 }
                 j += 1
             }
@@ -276,7 +276,7 @@ pub impl Comp {
                             while j < f.params.count {
                                 if !(f.params[j].noLabel) {
                                     if f.params[i].nameId == f.params[j].nameId {
-                                        compileErrorAt(line: lineOf(c: inout self, offset: f.params[j].nameStart), msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
+                                        compileErrorAt(line: self.lineOf(offset: f.params[j].nameStart), msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
                                     }
                                 }
                                 j += 1
@@ -307,7 +307,7 @@ pub impl Comp {
             mut val j: U64 = i + 1U64
             while j < fs.count {
                 if spansEqual(c: inout self, aStart: fs[i].nameStart, aLen: fs[i].nameLen, bStart: fs[j].nameStart, bLen: fs[j].nameLen) {
-                    compileErrorAt(line: lineOf(c: inout self, offset: fs[j].nameStart), msg: "duplicate field name (each field in a struct body / variant payload must be distinct)")
+                    compileErrorAt(line: self.lineOf(offset: fs[j].nameStart), msg: "duplicate field name (each field in a struct body / variant payload must be distinct)")
                 }
                 j += 1
             }
@@ -327,13 +327,13 @@ pub impl Comp {
             val si: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if si < self.arena.structs.count {
                 if t.args.count != self.arena.structs[si].typeParams.count {
-                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
+                    compileErrorAt(line: self.lineOf(offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
                 }
             } else {
                 val ei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
                 if ei < self.arena.enums.count {
                     if t.args.count != self.arena.enums[ei].typeParams.count {
-                        compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
+                        compileErrorAt(line: self.lineOf(offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
                     }
                 }
             }

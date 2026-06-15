@@ -9,7 +9,7 @@
 fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
     // a `newtype` (spec/10) has its underlying type's representation: resolve the name
     // to the underlying before any further handling.
-    val ntu: Bind = newtypeUnderName(c: inout c, start: tyStart, len: tyLen)
+    val ntu: Bind = c.newtypeUnderName(start: tyStart, len: tyLen)
     if ntu.nameStart != tyStart || ntu.nameLen != tyLen {
         return llvmScalarTy(c: inout c, st: inout st, tyStart: ntu.nameStart, tyLen: ntu.nameLen)
     }
@@ -25,7 +25,7 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
                 // must resolve to that registered instance type — recursing on the
                 // bare name would drop the args and miss it.
                 val argRef: U64 = c.cur.typeArgs[ti]
-                if isGenericInst(c: inout c, ref: argRef) {
+                if c.isGenericInst(ref: argRef) {
                     return llvmTypeOfRef(c: inout c, st: inout st, ref: argRef)
                 }
                 val at: TypeRef = c.arena.types[argRef]
@@ -132,11 +132,11 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
         // a boxed (recursive) field is a heap pointer regardless of its pointee
         // type — always representable, and it breaks the recursion cycle (we don't
         // recurse into the pointee, so a mutually-recursive struct still terminates).
-        if fieldIsBoxed(c: inout c, f: f) {
+        if c.fieldIsBoxed(f: f) {
             i += 1
         } else {
             if f.tyIsArray {
-            } else if isGenericInst(c: inout c, ref: f.ty) {
+            } else if c.isGenericInst(ref: f.ty) {
                 // a generic-instance field (`o: Optional[I64]`, `b: Box[I32]`): its
                 // concrete instance is registered as a named tagged-union / struct type
                 // (every reached instance in c.monoWork.genInsts is registered), so the field is
@@ -185,12 +185,12 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
         val fs: Array[FieldDef] = e.variants[vi].fields
         mut val fj: U64 = 0
         while fj < fs.count {
-            if fieldIsBoxed(c: inout c, f: fs[fj]) {
+            if c.fieldIsBoxed(f: fs[fj]) {
                 fj += 1
             } else {
                 if fs[fj].tyIsArray {
                     fj += 1
-                } else if isGenericInst(c: inout c, ref: fs[fj].ty) {
+                } else if c.isGenericInst(ref: fs[fj].ty) {
                     // a generic-instance variant payload (`A(o: Optional[I64])`): its
                     // concrete instance is a registered named type (see structRegisterable).
                     fj += 1
@@ -254,7 +254,7 @@ fn registerStructBodies(c: inout Comp, st: inout LlvmCtx) {
         mut val fi: U64 = 0
         while fi < sd.fields.count {
             // a boxed (recursive) field is stored as a heap pointer.
-            if fieldIsBoxed(c: inout c, f: sd.fields[fi]) {
+            if c.fieldIsBoxed(f: sd.fields[fi]) {
                 elems.append(value: st.ptrty)
             } else {
                 elems.append(value: fieldLlvmTy(c: inout c, st: inout st, fd: sd.fields[fi]))

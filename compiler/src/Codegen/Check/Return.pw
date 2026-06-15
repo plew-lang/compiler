@@ -120,7 +120,7 @@ pub impl Comp {
                         if f.body != 0 {
                             if !(self.nameIsMain(f: f)) {
                                 if !(self.blockDiverges(blkId: f.body)) {
-                                    compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)")
+                                    compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "this function has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (Plew does not implicitly return the last expression)")
                                 }
                             }
                         }

@@ -8,7 +8,7 @@ fn localStructIdxFor(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> 
     // — then field access / method dispatch on the newtype go through the struct path
     // (e.g. `w.mark()` for `newtype Wrapped = Plain`). Mirrors kindFromTySpan's
     // newtype→underlying resolution for String/primitive underlyings.
-    val ntu: Bind = newtypeUnderName(c: inout c, start: start, len: len)
+    val ntu: Bind = c.newtypeUnderName(start: start, len: len)
     if ntu.nameStart != start || ntu.nameLen != len {
         return localStructIdxFor(c: inout c, st: inout st, start: ntu.nameStart, len: ntu.nameLen)
     }
@@ -58,7 +58,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             if !(isEnum) {
                 // a generic struct construction (`<Holder[I64] … />`): point at the
                 // generic def so field access on the binding works.
-                if isGenericInst(c: inout c, ref: ty) {
+                if c.isGenericInst(ref: ty) {
                     val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: ty)
                     if gs < st.genStructRefs.count {
                         return st.genStructDefs[gs]
@@ -92,7 +92,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                         }
                         mut val result: U64 = c.arena.structs.count
                         if g != 0U64 {
-                            if isGenericInst(c: inout c, ref: g) {
+                            if c.isGenericInst(ref: g) {
                                 val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: g)
                                 if gs < st.genStructRefs.count {
                                     result = st.genStructDefs[gs]
@@ -128,7 +128,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
             // a method/assoc-fn result used as a struct (`Vec2.add(...).sum()`,
             // `p.scaled().x`): resolve the callee's return struct.
-            val marn: Bind = assocRecvName(c: inout c, recv: mrecv)
+            val marn: Bind = c.assocRecvName(recv: mrecv)
             if marn.nameLen != 0U64 {
                 val afi: U64 = c.findAssoc(recvStart: marn.nameStart, recvLen: marn.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                 if afi < c.arena.funcs.count {
@@ -186,7 +186,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // a call result used as a struct (`firstOf(...).get()`): resolve the
             // callee's return struct, grounding a generic return under the inferred
             // type arguments.
-            val cfi: U64 = resolvedCallee(c: inout c, id: id)
+            val cfi: U64 = c.resolvedCallee(id: id)
             if cfi < c.arena.funcs.count {
                 val cf: Func = c.arena.funcs[cfi]
                 if cf.hasRet {
@@ -253,7 +253,7 @@ fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U6
                 }
                 // a generic struct element (`Array[Box[I32]]`): via the element ref.
                 if st.locElemTypeRef[li] != 0U64 {
-                    if isGenericInst(c: inout c, ref: st.locElemTypeRef[li]) {
+                    if c.isGenericInst(ref: st.locElemTypeRef[li]) {
                         val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: st.locElemTypeRef[li])
                         if gs < st.genStructRefs.count {
                             return st.genStructDefs[gs]
@@ -279,7 +279,7 @@ fn arrFieldElemStructIdx(c: inout Comp, st: inout LlvmCtx, arrayExpr: U64) -> U6
                                 val g: U64 = c.groundTypeRef(ref: ft.args[0])
                                 val gt: TypeRef = c.arena.types[g]
                                 mut val r: U64 = c.arena.structs.count
-                                if isGenericInst(c: inout c, ref: g) {
+                                if c.isGenericInst(ref: g) {
                                     val gs: U64 = genStructSlot(c: inout c, st: inout st, ref: g)
                                     if gs < st.genStructRefs.count {
                                         r = st.genStructDefs[gs]
@@ -320,7 +320,7 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            val cfi: U64 = resolvedCallee(c: inout c, id: id)
+            val cfi: U64 = c.resolvedCallee(id: id)
             if cfi < c.arena.funcs.count {
                 val cf: Func = c.arena.funcs[cfi]
                 if cf.hasRet {
@@ -345,7 +345,7 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             if c.cur.typeParams.count > 0U64 {
                 g = c.groundTypeRef(ref: ty)
             }
-            if isGenericInst(c: inout c, ref: g) {
+            if c.isGenericInst(ref: g) {
                 return g
             }
         }
@@ -390,7 +390,7 @@ fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
     if c.cur.typeParams.count > 0U64 {
         g = c.groundTypeRef(ref: fld.ty)
     }
-    if isGenericInst(c: inout c, ref: g) {
+    if c.isGenericInst(ref: g) {
         if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
             return 0U64
         }
@@ -418,7 +418,7 @@ fn fieldLlvmTy(c: inout Comp, st: inout LlvmCtx, fd: FieldDef) -> LLVMTypeRef {
         if c.cur.typeParams.count > 0U64 {
             g = c.groundTypeRef(ref: fd.ty)
         }
-        if isGenericInst(c: inout c, ref: g) {
+        if c.isGenericInst(ref: g) {
             return llvmTypeOfRef(c: inout c, st: inout st, ref: g)
         }
     }

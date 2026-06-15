@@ -9,7 +9,7 @@ pub impl Comp {
     inout fn typeInfoOfRef(ref: U64) -> TypeInfo {
         val t: TypeRef = self.arena.types[ref]
         if t.args.count == 0 {
-            val base: TypeInfo = typeInfoOfName(c: inout self, start: t.nameStart, len: t.nameLen, isArray: false)
+            val base: TypeInfo = self.typeInfoOfName(start: t.nameStart, len: t.nameLen, isArray: false)
             // carry the view (`Person#Ext` has no args but a viewExtId) so recovery is
             // not lossy; the `ref`-shape is unchanged so downstream behavior is identical.
             if t.viewExtId != 0U64 {
@@ -19,7 +19,7 @@ pub impl Comp {
         }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             val el: TypeRef = self.arena.types[t.args[0]]
-            return typeInfoOfName(c: inout self, start: el.nameStart, len: el.nameLen, isArray: true)
+            return self.typeInfoOfName(start: el.nameStart, len: el.nameLen, isArray: true)
         }
         // a compound type (`Ref[T]`, `Box[I32]`, `Optional[I32]`): keep its structured
         // ref so downstream `->`/`.field`/method resolution can recover the pointee or
@@ -31,7 +31,7 @@ pub impl Comp {
         val noArgs: Array[Arg] = []
         // Iterable: iterator() returns the iterator; bare Iterator: the iterand is the
         // iterator (so `for v in xs.filter(p)` recovers the right element type).
-        val itName: Bind = kwSpan(c: inout self, kw: "iterator", kwLen: 8)
+        val itName: Bind = self.kwSpan(kw: "iterator", kwLen: 8)
         val imi: U64 = self.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: noArgs)
         mut val itRef: U64 = et.ref
         mut val nrStart: U64 = et.nameStart
@@ -42,7 +42,7 @@ pub impl Comp {
             nrStart = imf.retStart
             nrLen = imf.retLen
         }
-        val nxName: Bind = kwSpan(c: inout self, kw: "next", kwLen: 4)
+        val nxName: Bind = self.kwSpan(kw: "next", kwLen: 4)
         val nmi: U64 = self.findMethod(recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
         if nmi == self.arena.funcs.count {
             return scalarInfo()

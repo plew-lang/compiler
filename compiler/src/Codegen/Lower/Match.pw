@@ -4,26 +4,29 @@
 // Lower match arms. Each arm's `body` is a Block index (both statement and
 // expression position). A value-match arm's block ends in `give`; a diverging arm
 // (`=> panic`/`=> return`) is flagged so the backend excludes it from the PHI.
-fn lowerMatchArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool) -> Array[MatchArm] {
-    mut val out: Array[MatchArm] = []
-    mut val i: U64 = 0
-    while i < arms.count {
-        val arm: MatchArmAst = arms[i]
-        // capture arms are desugared by lowerEnumMatchCapture{Into,Expr} before reaching
-        // here (the arm body binds the name), so any capture left is a desugar gap.
-        if arm.pattern.captureName.bytes.count > 0 {
-            compileErrorAt(line: lineOf(c: inout c, offset: arm.pattern.span.start), msg: "internal: enum-match capture binding was not desugared")
+
+pub impl Comp {
+    inout fn lowerMatchArms(arms: Array[MatchArmAst], isExpr: Bool) -> Array[MatchArm] {
+        mut val out: Array[MatchArm] = []
+        mut val i: U64 = 0
+        while i < arms.count {
+            val arm: MatchArmAst = arms[i]
+            // capture arms are desugared by lowerEnumMatchCapture{Into,Expr} before reaching
+            // here (the arm body binds the name), so any capture left is a desugar gap.
+            if arm.pattern.captureName.bytes.count > 0 {
+                compileErrorAt(line: self.lineOf(offset: arm.pattern.span.start), msg: "internal: enum-match capture binding was not desugared")
+            }
+            val pi: PatInfo = self.lowerPatternInfo(p: arm.pattern)
+            val body: U64 = self.lowerBlock(b: arm.body)
+            mut val diverge: Bool = false
+            if isExpr {
+                diverge = armBlockDiverges(b: arm.body)
+            }
+            out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
+            i += 1
         }
-        val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
-        val body: U64 = lowerBlock(c: inout c, b: arm.body)
-        mut val diverge: Bool = false
-        if isExpr {
-            diverge = armBlockDiverges(b: arm.body)
-        }
-        out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
-        i += 1
+        return out
     }
-    return out
 }
 
 // ---- scalar (literal) match desugar (spec/11) ----
@@ -50,20 +53,16 @@ fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
     return false
 }
 
-// One scalar-match arm's `if` condition. A wildcard has none (it is the terminal
-// `else`).
-struct ScalarCond {
-    pub val hasCond: Bool
-    pub val cond: U64
-}
+pub impl Comp {
 
-// Build a scalar-match arm's condition: `__mtmp == lit` for a literal arm; a wildcard
-// yields hasCond=false (it is the terminal `else`).
-fn lowerScalarArmCond(c: inout Comp, lhsStart: U64, lhsLen: U64, arm: MatchArmAst) -> ScalarCond {
-    if arm.pattern.isLiteral {
-        return <ScalarCond hasCond=true cond=lowerLitEq(c: inout c, lhsStart: lhsStart, lhsLen: lhsLen, lit: arm.pattern.lit) />
+    // Build a scalar-match arm's condition: `__mtmp == lit` for a literal arm; a wildcard
+    // yields hasCond=false (it is the terminal `else`).
+    inout fn lowerScalarArmCond(lhsStart: U64, lhsLen: U64, arm: MatchArmAst) -> ScalarCond {
+        if arm.pattern.isLiteral {
+            return <ScalarCond hasCond=true cond=self.lowerLitEq(lhsStart: lhsStart, lhsLen: lhsLen, lit: arm.pattern.lit) />
+        }
+        return <ScalarCond hasCond=false cond=0 />
     }
-    return <ScalarCond hasCond=false cond=0 />
 }
 
 // True if the arms are exactly the two boolean literals `true` and `false` (a
@@ -112,23 +111,26 @@ fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
     return emptyExpr()
 }
 
-fn blockOfStmts(c: inout Comp, stmts: Array[U64]) -> U64 {
-    val id: U64 = c.arena.blocks.count
-    c.arena.blocks.append(<Block stmts=stmts />)
-    return id
-}
+pub impl Comp {
 
-fn blockOfGive(c: inout Comp, giveExpr: U64) -> U64 {
-    mut val ss: Array[U64] = []
-    ss.append(value: c.pushStmt(s: <Stmt.Give value=giveExpr />))
-    return blockOfStmts(c: inout c, stmts: ss)
-}
+    inout fn blockOfStmts(stmts: Array[U64]) -> U64 {
+        val id: U64 = self.arena.blocks.count
+        self.arena.blocks.append(<Block stmts=stmts />)
+        return id
+    }
 
-// `<lhsIdent> == <lit>` as an arena Binary, going through the `==` operator witness.
-fn lowerLitEq(c: inout Comp, lhsStart: U64, lhsLen: U64, lit: ExprAst) -> U64 {
-    val lhs: U64 = c.pushExpr(e: <Expr.Ident start=lhsStart len=lhsLen />)
-    val rhs: U64 = c.lowerExpr(e: lit)
-    return c.pushExpr(e: <Expr.Binary op=opEq() lhs=lhs rhs=rhs />)
+    inout fn blockOfGive(giveExpr: U64) -> U64 {
+        mut val ss: Array[U64] = []
+        ss.append(value: self.pushStmt(s: <Stmt.Give value=giveExpr />))
+        return self.blockOfStmts(stmts: ss)
+    }
+
+    // `<lhsIdent> == <lit>` as an arena Binary, going through the `==` operator witness.
+    inout fn lowerLitEq(lhsStart: U64, lhsLen: U64, lit: ExprAst) -> U64 {
+        val lhs: U64 = self.pushExpr(e: <Expr.Ident start=lhsStart len=lhsLen />)
+        val rhs: U64 = self.lowerExpr(e: lit)
+        return self.pushExpr(e: <Expr.Binary op=opEq() lhs=lhs rhs=rhs />)
+    }
 }
 
 fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
@@ -142,433 +144,436 @@ fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
     return false
 }
 
-// Bind each capture pattern's name to the scrutinee value (held in the local named
-// `srcStart`/`srcLen`), appended to `stmts`. All captures alias the same scrutinee
-// value, so binding them up front makes them visible to every arm's body.
-fn bindScalarCapturesInto(c: inout Comp, arms: Array[MatchArmAst], srcStart: U64, srcLen: U64, stmts: inout Array[U64]) {
-    mut val i: U64 = 0
-    while i < arms.count {
-        val cn: String = arms[i].pattern.captureName
-        if cn.bytes.count > 0 {
-            val cap: Bind = internBytes(c: inout c, s: cn)
-            val recv: U64 = c.pushExpr(e: <Expr.Ident start=srcStart len=srcLen />)
-            stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
-        }
-        i += 1
-    }
-}
+pub impl Comp {
 
-// Find the terminal `else` arm of a scalar match: the first wildcard, or (for an
-// exhaustive Bool match) the last arm. Returns arms.count if none.
-fn scalarMatchElseIdx(c: inout Comp, arms: Array[MatchArmAst]) -> U64 {
-    mut val i: U64 = 0
-    while i < arms.count {
-        if arms[i].pattern.isWildcard {
-            return i
-        }
-        i += 1
-    }
-    if litArmsAreBoolExhaustive(arms: arms) {
-        return arms.count - 1U64
-    }
-    return arms.count
-}
-
-// Desugar a statement-position scalar (literal) match into `val __mtmp = scrut` + an
-// if/else chain, appended to `stmts`. A wildcard (or an exhaustive Bool
-// match) supplies the terminal `else`; without one a no-op else is used (a statement
-// match need not yield a value).
-fn lowerScalarMatchStmtInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
-    val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
-    val sv: U64 = c.lowerExpr(e: scrut)
-    stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-    bindScalarCapturesInto(c: inout c, arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout stmts)
-    val elseIdx: U64 = scalarMatchElseIdx(c: inout c, arms: arms)
-    mut val elseBlkId: U64 = 0
-    if elseIdx < arms.count {
-        elseBlkId = lowerBlock(c: inout c, b: arms[elseIdx].body)
-    } else {
-        // no terminal else: a literal match can't be structurally exhaustive without a
-        // wildcard `_` (spec/11 requires exhaustiveness).
-        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "this `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
-        mut val es: Array[U64] = []
-        elseBlkId = blockOfStmts(c: inout c, stmts: es)
-    }
-    mut val headStmt: U64 = 0
-    mut val haveHead: Bool = false
-    mut val k: U64 = arms.count
-    while k > 0 {
-        k -= 1
-        if k != elseIdx {
-            val sc: ScalarCond = lowerScalarArmCond(c: inout c, lhsStart: tmp.nameStart, lhsLen: tmp.nameLen, arm: arms[k])
-            if sc.hasCond {
-                val thenBlkId: U64 = lowerBlock(c: inout c, b: arms[k].body)
-                val ifStmt: U64 = c.pushStmt(s: <Stmt.If cond=sc.cond thenBlk=thenBlkId elseBlk=elseBlkId hasElse=true />)
-                mut val wrap: Array[U64] = []
-                wrap.append(value: ifStmt)
-                elseBlkId = blockOfStmts(c: inout c, stmts: wrap)
-                headStmt = ifStmt
-                haveHead = true
+    // Bind each capture pattern's name to the scrutinee value (held in the local named
+    // `srcStart`/`srcLen`), appended to `stmts`. All captures alias the same scrutinee
+    // value, so binding them up front makes them visible to every arm's body.
+    inout fn bindScalarCapturesInto(arms: Array[MatchArmAst], srcStart: U64, srcLen: U64, stmts: inout Array[U64]) {
+        mut val i: U64 = 0
+        while i < arms.count {
+            val cn: String = arms[i].pattern.captureName
+            if cn.bytes.count > 0 {
+                val cap: Bind = self.internBytes(s: cn)
+                val recv: U64 = self.pushExpr(e: <Expr.Ident start=srcStart len=srcLen />)
+                stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
             }
+            i += 1
         }
     }
-    if haveHead {
-        stmts.append(value: headStmt)
-    } else {
-        // no conditional arms (only a wildcard, `match x { _ => body }`):
-        // run the else body unconditionally via `if true { else } else {}`.
-        mut val empty: Array[U64] = []
-        val emptyBlk: U64 = blockOfStmts(c: inout c, stmts: empty)
-        stmts.append(value: c.pushStmt(s: <Stmt.If cond=c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />) thenBlk=elseBlkId elseBlk=emptyBlk hasElse=true />))
-    }
-}
 
-// Desugar an expression-position scalar (literal) match into a value. A simple `Ident`
-// scrutinee is inlined into each `==` (single-eval is free); any other scrutinee
-// is bound once in a `give`-block wrapper. Returns the arena Expr index.
-fn lowerScalarMatchExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
-    mut val scrutIsIdent: Bool = false
-    mut val lhsStart: U64 = 0
-    mut val lhsLen: U64 = 0
-    match scrut {
-        ExprAst.Ident(val name, span: _) => {
-            val nb: Bind = internBytes(c: inout c, s: name)
-            lhsStart = nb.nameStart
-            lhsLen = nb.nameLen
-            scrutIsIdent = true
-        }
-        _ => {}
-    }
-    // capture bindings need an enclosing block to bind their names, so force the
-    // __mtmp wrapper (not the inline-Ident shortcut) when any arm captures.
-    if matchHasCapture(arms: arms) {
-        scrutIsIdent = false
-    }
-    mut val tmp: Bind = internBytes(c: inout c, s: "__mtmp")
-    if !(scrutIsIdent) {
-        lhsStart = tmp.nameStart
-        lhsLen = tmp.nameLen
-    }
-    val elseIdx: U64 = scalarMatchElseIdx(c: inout c, arms: arms)
-    val haveElse: Bool = elseIdx < arms.count
-    if !(haveElse) {
-        compileErrorAt(line: lineOf(c: inout c, offset: span.start), msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
-    }
-    // a value-giving arm's give AST, re-lowered for the dead `else` of the non-Ident
-    // wrapper (any value arm has the match's result type).
-    mut val valueGive: ExprAst = emptyExpr()
-    mut val mi: U64 = 0
-    while mi < arms.count {
-        if !(armBlockDiverges(b: arms[mi].body)) {
-            valueGive = armGiveExprAst(arm: arms[mi])
-        }
-        mi += 1
-    }
-    // build the if/else chain over real arm blocks (each gives or diverges). The else
-    // chain begins as the else arm's block; each cond arm wraps the running chain.
-    mut val curElseBlk: U64 = 0
-    if haveElse {
-        curElseBlk = lowerBlock(c: inout c, b: arms[elseIdx].body)
-    } else {
-        mut val es: Array[U64] = []
-        es.append(value: c.pushStmt(s: <Stmt.Give value=c.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />))
-        curElseBlk = blockOfStmts(c: inout c, stmts: es)
-    }
-    mut val headExpr: U64 = 0
-    mut val haveHead: Bool = false
-    mut val k: U64 = arms.count
-    while k > 0 {
-        k -= 1
-        if k != elseIdx {
-            val sc: ScalarCond = lowerScalarArmCond(c: inout c, lhsStart: lhsStart, lhsLen: lhsLen, arm: arms[k])
-            if sc.hasCond {
-                val thenBlk: U64 = lowerBlock(c: inout c, b: arms[k].body)
-                val cond: U64 = sc.cond
-                val ifx: U64 = c.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=curElseBlk />)
-                headExpr = ifx
-                haveHead = true
-                curElseBlk = blockOfGive(c: inout c, giveExpr: ifx)
+    // Find the terminal `else` arm of a scalar match: the first wildcard, or (for an
+    // exhaustive Bool match) the last arm. Returns arms.count if none.
+    inout fn scalarMatchElseIdx(arms: Array[MatchArmAst]) -> U64 {
+        mut val i: U64 = 0
+        while i < arms.count {
+            if arms[i].pattern.isWildcard {
+                return i
             }
+            i += 1
         }
+        if litArmsAreBoolExhaustive(arms: arms) {
+            return arms.count - 1U64
+        }
+        return arms.count
     }
-    if !(haveHead) {
-        headExpr = c.lowerExpr(e: valueGive)
-    }
-    if scrutIsIdent {
-        return headExpr
-    }
-    // non-Ident scrutinee (or a capture binding): bind it once in a `give`-block
-    // wrapper `if true { val __mtmp = scrut; …captures…; give head } else { panic }`.
-    // The dead `else` diverges (panic), so genLlvmIfExpr excludes it from the result
-    // PHI — no dummy value is needed (and it cannot reference a capture binding).
-    val sv: U64 = c.lowerExpr(e: scrut)
-    mut val thenStmts: Array[U64] = []
-    thenStmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-    bindScalarCapturesInto(c: inout c, arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout thenStmts)
-    thenStmts.append(value: c.pushStmt(s: <Stmt.Give value=headExpr />))
-    val thenWrap: U64 = blockOfStmts(c: inout c, stmts: thenStmts)
-    val msg: Bind = internBytes(c: inout c, s: "unreachable scalar-match wrapper else")
-    val msgE: U64 = c.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
-    mut val elseStmts: Array[U64] = []
-    elseStmts.append(value: c.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
-    val elseWrap: U64 = blockOfStmts(c: inout c, stmts: elseStmts)
-    val trueCond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
-    return c.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
-}
 
-// Desugar a statement-position enum-dispatch match that has a capture arm
-// (`match e { E.A => …  val rest => … }`, spec/11) into a single-eval scrutinee
-// binding `val __scap = e` plus the same match over `__scap`, where each capture
-// arm's lowered body is prefixed (at the arena level) with `val <name> = __scap`.
-// The arm is a wildcard, so the enum emitter handles it unchanged; the prepended
-// binding makes the captured scrutinee available under the chosen name.
-fn lowerEnumMatchCaptureInto(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
-    val tmp: Bind = internBytes(c: inout c, s: "__scap")
-    val sv: U64 = c.lowerExpr(e: scrut)
-    stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-    val ma: Array[MatchArm] = lowerCaptureArms(c: inout c, arms: arms, isExpr: false, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
-    val scrutId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
-    stmts.append(value: c.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
-}
-
-// Lower enum-dispatch arms with capture support: each arm's lowered body block gets
-// `val <name> = __scap` prepended for a capture arm. `scapStart`/`scapLen` name the
-// already-bound scrutinee temp. Shared by the statement and expression capture paths.
-fn lowerCaptureArms(c: inout Comp, arms: Array[MatchArmAst], isExpr: Bool, scapStart: U64, scapLen: U64) -> Array[MatchArm] {
-    mut val ma: Array[MatchArm] = []
-    mut val i: U64 = 0
-    while i < arms.count {
-        val arm: MatchArmAst = arms[i]
-        val pi: PatInfo = lowerPatternInfo(c: inout c, p: arm.pattern)
-        mut val bodyIdx: U64 = lowerBlock(c: inout c, b: arm.body)
-        mut val diverge: Bool = false
-        if isExpr {
-            diverge = armBlockDiverges(b: arm.body)
+    // Desugar a statement-position scalar (literal) match into `val __mtmp = scrut` + an
+    // if/else chain, appended to `stmts`. A wildcard (or an exhaustive Bool
+    // match) supplies the terminal `else`; without one a no-op else is used (a statement
+    // match need not yield a value).
+    inout fn lowerScalarMatchStmtInto(scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
+        val tmp: Bind = self.internBytes(s: "__mtmp")
+        val sv: U64 = self.lowerExpr(e: scrut)
+        stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        self.bindScalarCapturesInto(arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout stmts)
+        val elseIdx: U64 = self.scalarMatchElseIdx(arms: arms)
+        mut val elseBlkId: U64 = 0
+        if elseIdx < arms.count {
+            elseBlkId = self.lowerBlock(b: arms[elseIdx].body)
+        } else {
+            // no terminal else: a literal match can't be structurally exhaustive without a
+            // wildcard `_` (spec/11 requires exhaustiveness).
+            compileErrorAt(line: self.lineOf(offset: span.start), msg: "this `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
+            mut val es: Array[U64] = []
+            elseBlkId = self.blockOfStmts(stmts: es)
         }
-        if arm.pattern.captureName.bytes.count > 0 {
-            val capN: Bind = internBytes(c: inout c, s: arm.pattern.captureName)
-            val scapId: U64 = c.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
-            val capLet: U64 = c.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
-            mut val ns: Array[U64] = []
-            ns.append(value: capLet)
-            mut val k: U64 = 0
-            while k < c.arena.blocks[bodyIdx].stmts.count {
-                ns.append(value: c.arena.blocks[bodyIdx].stmts[k])
-                k += 1
-            }
-            bodyIdx = blockOfStmts(c: inout c, stmts: ns)
-        }
-        ma.append(value: <MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
-        i += 1
-    }
-    return ma
-}
-
-// Desugar a value-position enum-dispatch match with a capture arm into a give-block
-// wrapper: `if true { val __scap = scrut; give (match __scap { … }) } else { panic }`.
-// The dead `else` diverges (panic), so genLlvmIfExpr excludes it from the result PHI
-// — no dummy value is needed. Capture arms bind `val <name> = __scap` (spec/11).
-fn lowerEnumMatchCaptureExpr(c: inout Comp, scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
-    val tmp: Bind = internBytes(c: inout c, s: "__scap")
-    val sv: U64 = c.lowerExpr(e: scrut)
-    val ma: Array[MatchArm] = lowerCaptureArms(c: inout c, arms: arms, isExpr: true, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
-    val scrutId: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
-    val matchExpr: U64 = c.pushExpr(e: <Expr.MatchExpr scrut=scrutId arms=ma />)
-    mut val thenStmts: Array[U64] = []
-    thenStmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-    thenStmts.append(value: c.pushStmt(s: <Stmt.Give value=matchExpr />))
-    val thenWrap: U64 = blockOfStmts(c: inout c, stmts: thenStmts)
-    val msg: Bind = internBytes(c: inout c, s: "unreachable capture-match wrapper else")
-    val msgE: U64 = c.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
-    mut val elseStmts: Array[U64] = []
-    elseStmts.append(value: c.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
-    val elseWrap: U64 = blockOfStmts(c: inout c, stmts: elseStmts)
-    val trueCond: U64 = c.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
-    return c.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
-}
-
-fn lowerStmt(c: inout Comp, s: StmtAst) -> U64 {
-    mut val result: U64 = 0
-    match s {
-        StmtAst.Let(val mutable, val name, val hasTy, val ty, val init, val span) => {
-            val nm: Bind = internBytes(c: inout c, s: name)
-            mut val tyStart: U64 = 0
-            mut val tyLen: U64 = 0
-            mut val tyIsArray: Bool = false
-            mut val tyRef: U64 = 0
-            if hasTy {
-                val pt: PType = lowerType(c: inout c, t: ty)
-                tyStart = pt.start
-                tyLen = pt.len
-                tyIsArray = pt.isArray
-                tyRef = pt.ref
-            }
-            val iv: U64 = c.lowerExprWithCtx(e: init, ctxRef: tyRef)
-            result = c.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
-        }
-        StmtAst.Assign(val op, val target, val value, val span) => {
-            val t: U64 = c.lowerExpr(e: target)
-            val v: U64 = c.lowerExpr(e: value)
-            result = c.pushStmt(s: <Stmt.Assign op=op target=t value=v />)
-        }
-        StmtAst.ExprStmt(val expr, val span) => {
-            val e: U64 = c.lowerExpr(e: expr)
-            result = c.pushStmt(s: <Stmt.ExprStmt expr=e />)
-        }
-        StmtAst.Return(val value, val hasValue, val span) => {
-            mut val v: U64 = 0
-            if hasValue {
-                v = c.lowerExprWithCtx(e: value, ctxRef: c.cur.lowerRetTy)
-            }
-            result = c.pushStmt(s: <Stmt.Return value=v hasValue=hasValue offset=span.start />)
-        }
-        StmtAst.If(val cond, val thenBlk, val elseBlk, val hasElse, val span) => {
-            val cnd: U64 = c.lowerExpr(e: cond)
-            val tb: U64 = lowerBlock(c: inout c, b: thenBlk)
-            mut val eb: U64 = 0
-            if hasElse {
-                eb = lowerBlock(c: inout c, b: elseBlk)
-            }
-            result = c.pushStmt(s: <Stmt.If cond=cnd thenBlk=tb elseBlk=eb hasElse=hasElse />)
-        }
-        StmtAst.While(val cond, val body, val span) => {
-            val cnd: U64 = c.lowerExpr(e: cond)
-            val bd: U64 = lowerBlock(c: inout c, b: body)
-            result = c.pushStmt(s: <Stmt.While cond=cnd body=bd />)
-        }
-        StmtAst.For(val varName, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
-            // a record loop pattern `for (val x, val y) in xs` (patType="__rec__"): bind a
-            // fresh element local `__fe` and prepend `val x = __fe.field` per bind to the
-            // body (arena-level interned names, since an AST synthetic `Ident` reads the
-            // source by span). The element's struct is tracked by the for-over-array path.
-            if patType == "__rec__" {
-                val fe: Bind = internBytes(c: inout c, s: "__fe")
-                val lo2: U64 = c.lowerExpr(e: iter)
-                val inner: U64 = lowerBlock(c: inout c, b: body)
-                mut val bstmts: Array[U64] = []
-                mut val bi: U64 = 0
-                while bi < binds.count {
-                    val fldName: Bind = internBytes(c: inout c, s: binds[bi].field)
-                    val nameB: Bind = internBytes(c: inout c, s: binds[bi].name)
-                    val recv: U64 = c.pushExpr(e: <Expr.Ident start=fe.nameStart len=fe.nameLen />)
-                    val fld: U64 = c.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
-                    bstmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
-                    bi += 1
+        mut val headStmt: U64 = 0
+        mut val haveHead: Bool = false
+        mut val k: U64 = arms.count
+        while k > 0 {
+            k -= 1
+            if k != elseIdx {
+                val sc: ScalarCond = self.lowerScalarArmCond(lhsStart: tmp.nameStart, lhsLen: tmp.nameLen, arm: arms[k])
+                if sc.hasCond {
+                    val thenBlkId: U64 = self.lowerBlock(b: arms[k].body)
+                    val ifStmt: U64 = self.pushStmt(s: <Stmt.If cond=sc.cond thenBlk=thenBlkId elseBlk=elseBlkId hasElse=true />)
+                    mut val wrap: Array[U64] = []
+                    wrap.append(value: ifStmt)
+                    elseBlkId = self.blockOfStmts(stmts: wrap)
+                    headStmt = ifStmt
+                    haveHead = true
                 }
-                mut val ob: U64 = 0
-                while ob < c.arena.blocks[inner].stmts.count {
-                    bstmts.append(value: c.arena.blocks[inner].stmts[ob])
-                    ob += 1
+            }
+        }
+        if haveHead {
+            stmts.append(value: headStmt)
+        } else {
+            // no conditional arms (only a wildcard, `match x { _ => body }`):
+            // run the else body unconditionally via `if true { else } else {}`.
+            mut val empty: Array[U64] = []
+            val emptyBlk: U64 = self.blockOfStmts(stmts: empty)
+            stmts.append(value: self.pushStmt(s: <Stmt.If cond=self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />) thenBlk=elseBlkId elseBlk=emptyBlk hasElse=true />))
+        }
+    }
+
+    // Desugar an expression-position scalar (literal) match into a value. A simple `Ident`
+    // scrutinee is inlined into each `==` (single-eval is free); any other scrutinee
+    // is bound once in a `give`-block wrapper. Returns the arena Expr index.
+    inout fn lowerScalarMatchExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
+        mut val scrutIsIdent: Bool = false
+        mut val lhsStart: U64 = 0
+        mut val lhsLen: U64 = 0
+        match scrut {
+            ExprAst.Ident(val name, span: _) => {
+                val nb: Bind = self.internBytes(s: name)
+                lhsStart = nb.nameStart
+                lhsLen = nb.nameLen
+                scrutIsIdent = true
+            }
+            _ => {}
+        }
+        // capture bindings need an enclosing block to bind their names, so force the
+        // __mtmp wrapper (not the inline-Ident shortcut) when any arm captures.
+        if matchHasCapture(arms: arms) {
+            scrutIsIdent = false
+        }
+        mut val tmp: Bind = self.internBytes(s: "__mtmp")
+        if !(scrutIsIdent) {
+            lhsStart = tmp.nameStart
+            lhsLen = tmp.nameLen
+        }
+        val elseIdx: U64 = self.scalarMatchElseIdx(arms: arms)
+        val haveElse: Bool = elseIdx < arms.count
+        if !(haveElse) {
+            compileErrorAt(line: self.lineOf(offset: span.start), msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
+        }
+        // a value-giving arm's give AST, re-lowered for the dead `else` of the non-Ident
+        // wrapper (any value arm has the match's result type).
+        mut val valueGive: ExprAst = emptyExpr()
+        mut val mi: U64 = 0
+        while mi < arms.count {
+            if !(armBlockDiverges(b: arms[mi].body)) {
+                valueGive = armGiveExprAst(arm: arms[mi])
+            }
+            mi += 1
+        }
+        // build the if/else chain over real arm blocks (each gives or diverges). The else
+        // chain begins as the else arm's block; each cond arm wraps the running chain.
+        mut val curElseBlk: U64 = 0
+        if haveElse {
+            curElseBlk = self.lowerBlock(b: arms[elseIdx].body)
+        } else {
+            mut val es: Array[U64] = []
+            es.append(value: self.pushStmt(s: <Stmt.Give value=self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />))
+            curElseBlk = self.blockOfStmts(stmts: es)
+        }
+        mut val headExpr: U64 = 0
+        mut val haveHead: Bool = false
+        mut val k: U64 = arms.count
+        while k > 0 {
+            k -= 1
+            if k != elseIdx {
+                val sc: ScalarCond = self.lowerScalarArmCond(lhsStart: lhsStart, lhsLen: lhsLen, arm: arms[k])
+                if sc.hasCond {
+                    val thenBlk: U64 = self.lowerBlock(b: arms[k].body)
+                    val cond: U64 = sc.cond
+                    val ifx: U64 = self.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=curElseBlk />)
+                    headExpr = ifx
+                    haveHead = true
+                    curElseBlk = self.blockOfGive(giveExpr: ifx)
                 }
-                val bd2: U64 = c.arena.blocks.count
-                c.arena.blocks.append(value: <Block stmts=bstmts />)
-                result = c.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
-                return result
             }
-            mut val vStart: U64 = 0
-            mut val vLen: U64 = 0
-            if varName.bytes.count > 0 {
-                val vb: Bind = internBytes(c: inout c, s: varName)
-                vStart = vb.nameStart
-                vLen = vb.nameLen
-            }
-            mut val vtStart: U64 = 0
-            mut val vtLen: U64 = 0
-            if hasVarTy {
-                val vpt: PType = lowerType(c: inout c, t: varTy)
-                vtStart = vpt.start
-                vtLen = vpt.len
-            }
-            val lo: U64 = c.lowerExpr(e: iter)
-            mut val hi: U64 = 0
-            if isRange {
-                hi = c.lowerExpr(e: rangeHi)
-            }
-            val bd: U64 = lowerBlock(c: inout c, b: body)
-            mut val pStart: U64 = 0
-            mut val pLen: U64 = 0
-            if patType.bytes.count > 0 {
-                val pb: Bind = internBytes(c: inout c, s: patType)
-                pStart = pb.nameStart
-                pLen = pb.nameLen
-            }
-            val bnds: Array[Bind] = lowerBinds(c: inout c, binds: binds)
-            result = c.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
         }
-        StmtAst.Match(val scrut, val arms, val span) => {
-            val sc: U64 = c.lowerExpr(e: scrut)
-            val ma: Array[MatchArm] = lowerMatchArms(c: inout c, arms: arms, isExpr: false)
-            result = c.pushStmt(s: <Stmt.Match scrut=sc arms=ma />)
+        if !(haveHead) {
+            headExpr = self.lowerExpr(e: valueGive)
         }
-        StmtAst.Panic(val msg, val span) => {
-            val m: U64 = c.lowerExpr(e: msg)
-            result = c.pushStmt(s: <Stmt.Panic msg=m offset=span.start />)
+        if scrutIsIdent {
+            return headExpr
         }
-        StmtAst.Give(val value, val span) => {
-            val v: U64 = c.lowerExpr(e: value)
-            result = c.pushStmt(s: <Stmt.Give value=v />)
-        }
-        StmtAst.Break(val span) => { result = c.pushStmt(s: <Stmt.Break offset=span.start />) }
-        StmtAst.Continue(val span) => { result = c.pushStmt(s: <Stmt.Continue offset=span.start />) }
-        StmtAst.Destructure(val binds, val init, val span) => {
-            // normally expanded by lowerBlock into several statements; reached only if a
-            // destructuring appears outside a statement list — lower the initializer as a
-            // plain expression statement so the value is still evaluated.
-            result = c.pushStmt(s: <Stmt.ExprStmt expr=c.lowerExpr(e: init) />)
-        }
+        // non-Ident scrutinee (or a capture binding): bind it once in a `give`-block
+        // wrapper `if true { val __mtmp = scrut; …captures…; give head } else { panic }`.
+        // The dead `else` diverges (panic), so genLlvmIfExpr excludes it from the result
+        // PHI — no dummy value is needed (and it cannot reference a capture binding).
+        val sv: U64 = self.lowerExpr(e: scrut)
+        mut val thenStmts: Array[U64] = []
+        thenStmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        self.bindScalarCapturesInto(arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout thenStmts)
+        thenStmts.append(value: self.pushStmt(s: <Stmt.Give value=headExpr />))
+        val thenWrap: U64 = self.blockOfStmts(stmts: thenStmts)
+        val msg: Bind = self.internBytes(s: "unreachable scalar-match wrapper else")
+        val msgE: U64 = self.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
+        mut val elseStmts: Array[U64] = []
+        elseStmts.append(value: self.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
+        val elseWrap: U64 = self.blockOfStmts(stmts: elseStmts)
+        val trueCond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
+        return self.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
     }
-    return result
-}
 
-// Lower a record-destructuring `(val x, val y) = init` into a temp binding plus one
-// `val` per field, appended to `stmts`: `val __dtmp = init; val x = __dtmp.x; …`. The
-// temp's struct is recovered from the initializer (records track their struct like any
-// value), so no annotation is needed; `__dtmp` is reused (later destructures shadow it,
-// harmlessly — each temp is consumed by the field reads that immediately follow).
-fn lowerDestructureInto(c: inout Comp, binds: Array[BindAst], init: ExprAst, stmts: inout Array[U64]) {
-    val tmp: Bind = internBytes(c: inout c, s: "__dtmp")
-    val iv: U64 = c.lowerExpr(e: init)
-    stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
-    mut val bi: U64 = 0
-    while bi < binds.count {
-        val fldName: Bind = internBytes(c: inout c, s: binds[bi].field)
-        val nameB: Bind = internBytes(c: inout c, s: binds[bi].name)
-        val recv: U64 = c.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
-        val fld: U64 = c.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
-        stmts.append(value: c.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
-        bi += 1
+    // Desugar a statement-position enum-dispatch match that has a capture arm
+    // (`match e { E.A => …  val rest => … }`, spec/11) into a single-eval scrutinee
+    // binding `val __scap = e` plus the same match over `__scap`, where each capture
+    // arm's lowered body is prefixed (at the arena level) with `val <name> = __scap`.
+    // The arm is a wildcard, so the enum emitter handles it unchanged; the prepended
+    // binding makes the captured scrutinee available under the chosen name.
+    inout fn lowerEnumMatchCaptureInto(scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
+        val tmp: Bind = self.internBytes(s: "__scap")
+        val sv: U64 = self.lowerExpr(e: scrut)
+        stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        val ma: Array[MatchArm] = self.lowerCaptureArms(arms: arms, isExpr: false, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
+        val scrutId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+        stmts.append(value: self.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
     }
-}
 
-fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
-    mut val stmts: Array[U64] = []
-    mut val i: U64 = 0
-    while i < b.stmts.count {
-        // a destructuring statement expands to several arena statements (temp + fields).
-        match b.stmts[i] {
-            StmtAst.Destructure(val binds, val init, val span) => {
-                lowerDestructureInto(c: inout c, binds: binds, init: init, stmts: inout stmts)
+    // Lower enum-dispatch arms with capture support: each arm's lowered body block gets
+    // `val <name> = __scap` prepended for a capture arm. `scapStart`/`scapLen` name the
+    // already-bound scrutinee temp. Shared by the statement and expression capture paths.
+    inout fn lowerCaptureArms(arms: Array[MatchArmAst], isExpr: Bool, scapStart: U64, scapLen: U64) -> Array[MatchArm] {
+        mut val ma: Array[MatchArm] = []
+        mut val i: U64 = 0
+        while i < arms.count {
+            val arm: MatchArmAst = arms[i]
+            val pi: PatInfo = self.lowerPatternInfo(p: arm.pattern)
+            mut val bodyIdx: U64 = self.lowerBlock(b: arm.body)
+            mut val diverge: Bool = false
+            if isExpr {
+                diverge = armBlockDiverges(b: arm.body)
+            }
+            if arm.pattern.captureName.bytes.count > 0 {
+                val capN: Bind = self.internBytes(s: arm.pattern.captureName)
+                val scapId: U64 = self.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
+                val capLet: U64 = self.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
+                mut val ns: Array[U64] = []
+                ns.append(value: capLet)
+                mut val k: U64 = 0
+                while k < self.arena.blocks[bodyIdx].stmts.count {
+                    ns.append(value: self.arena.blocks[bodyIdx].stmts[k])
+                    k += 1
+                }
+                bodyIdx = self.blockOfStmts(stmts: ns)
+            }
+            ma.append(value: <MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
+            i += 1
+        }
+        return ma
+    }
+
+    // Desugar a value-position enum-dispatch match with a capture arm into a give-block
+    // wrapper: `if true { val __scap = scrut; give (match __scap { … }) } else { panic }`.
+    // The dead `else` diverges (panic), so genLlvmIfExpr excludes it from the result PHI
+    // — no dummy value is needed. Capture arms bind `val <name> = __scap` (spec/11).
+    inout fn lowerEnumMatchCaptureExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
+        val tmp: Bind = self.internBytes(s: "__scap")
+        val sv: U64 = self.lowerExpr(e: scrut)
+        val ma: Array[MatchArm] = self.lowerCaptureArms(arms: arms, isExpr: true, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
+        val scrutId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+        val matchExpr: U64 = self.pushExpr(e: <Expr.MatchExpr scrut=scrutId arms=ma />)
+        mut val thenStmts: Array[U64] = []
+        thenStmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        thenStmts.append(value: self.pushStmt(s: <Stmt.Give value=matchExpr />))
+        val thenWrap: U64 = self.blockOfStmts(stmts: thenStmts)
+        val msg: Bind = self.internBytes(s: "unreachable capture-match wrapper else")
+        val msgE: U64 = self.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
+        mut val elseStmts: Array[U64] = []
+        elseStmts.append(value: self.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
+        val elseWrap: U64 = self.blockOfStmts(stmts: elseStmts)
+        val trueCond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
+        return self.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
+    }
+
+    inout fn lowerStmt(s: StmtAst) -> U64 {
+        mut val result: U64 = 0
+        match s {
+            StmtAst.Let(val mutable, val name, val hasTy, val ty, val init, val span) => {
+                val nm: Bind = self.internBytes(s: name)
+                mut val tyStart: U64 = 0
+                mut val tyLen: U64 = 0
+                mut val tyIsArray: Bool = false
+                mut val tyRef: U64 = 0
+                if hasTy {
+                    val pt: PType = self.lowerType(t: ty)
+                    tyStart = pt.start
+                    tyLen = pt.len
+                    tyIsArray = pt.isArray
+                    tyRef = pt.ref
+                }
+                val iv: U64 = self.lowerExprWithCtx(e: init, ctxRef: tyRef)
+                result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
+            }
+            StmtAst.Assign(val op, val target, val value, val span) => {
+                val t: U64 = self.lowerExpr(e: target)
+                val v: U64 = self.lowerExpr(e: value)
+                result = self.pushStmt(s: <Stmt.Assign op=op target=t value=v />)
+            }
+            StmtAst.ExprStmt(val expr, val span) => {
+                val e: U64 = self.lowerExpr(e: expr)
+                result = self.pushStmt(s: <Stmt.ExprStmt expr=e />)
+            }
+            StmtAst.Return(val value, val hasValue, val span) => {
+                mut val v: U64 = 0
+                if hasValue {
+                    v = self.lowerExprWithCtx(e: value, ctxRef: self.cur.lowerRetTy)
+                }
+                result = self.pushStmt(s: <Stmt.Return value=v hasValue=hasValue offset=span.start />)
+            }
+            StmtAst.If(val cond, val thenBlk, val elseBlk, val hasElse, val span) => {
+                val cnd: U64 = self.lowerExpr(e: cond)
+                val tb: U64 = self.lowerBlock(b: thenBlk)
+                mut val eb: U64 = 0
+                if hasElse {
+                    eb = self.lowerBlock(b: elseBlk)
+                }
+                result = self.pushStmt(s: <Stmt.If cond=cnd thenBlk=tb elseBlk=eb hasElse=hasElse />)
+            }
+            StmtAst.While(val cond, val body, val span) => {
+                val cnd: U64 = self.lowerExpr(e: cond)
+                val bd: U64 = self.lowerBlock(b: body)
+                result = self.pushStmt(s: <Stmt.While cond=cnd body=bd />)
+            }
+            StmtAst.For(val varName, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
+                // a record loop pattern `for (val x, val y) in xs` (patType="__rec__"): bind a
+                // fresh element local `__fe` and prepend `val x = __fe.field` per bind to the
+                // body (arena-level interned names, since an AST synthetic `Ident` reads the
+                // source by span). The element's struct is tracked by the for-over-array path.
+                if patType == "__rec__" {
+                    val fe: Bind = self.internBytes(s: "__fe")
+                    val lo2: U64 = self.lowerExpr(e: iter)
+                    val inner: U64 = self.lowerBlock(b: body)
+                    mut val bstmts: Array[U64] = []
+                    mut val bi: U64 = 0
+                    while bi < binds.count {
+                        val fldName: Bind = self.internBytes(s: binds[bi].field)
+                        val nameB: Bind = self.internBytes(s: binds[bi].name)
+                        val recv: U64 = self.pushExpr(e: <Expr.Ident start=fe.nameStart len=fe.nameLen />)
+                        val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
+                        bstmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+                        bi += 1
+                    }
+                    mut val ob: U64 = 0
+                    while ob < self.arena.blocks[inner].stmts.count {
+                        bstmts.append(value: self.arena.blocks[inner].stmts[ob])
+                        ob += 1
+                    }
+                    val bd2: U64 = self.arena.blocks.count
+                    self.arena.blocks.append(value: <Block stmts=bstmts />)
+                    result = self.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
+                    return result
+                }
+                mut val vStart: U64 = 0
+                mut val vLen: U64 = 0
+                if varName.bytes.count > 0 {
+                    val vb: Bind = self.internBytes(s: varName)
+                    vStart = vb.nameStart
+                    vLen = vb.nameLen
+                }
+                mut val vtStart: U64 = 0
+                mut val vtLen: U64 = 0
+                if hasVarTy {
+                    val vpt: PType = self.lowerType(t: varTy)
+                    vtStart = vpt.start
+                    vtLen = vpt.len
+                }
+                val lo: U64 = self.lowerExpr(e: iter)
+                mut val hi: U64 = 0
+                if isRange {
+                    hi = self.lowerExpr(e: rangeHi)
+                }
+                val bd: U64 = self.lowerBlock(b: body)
+                mut val pStart: U64 = 0
+                mut val pLen: U64 = 0
+                if patType.bytes.count > 0 {
+                    val pb: Bind = self.internBytes(s: patType)
+                    pStart = pb.nameStart
+                    pLen = pb.nameLen
+                }
+                val bnds: Array[Bind] = self.lowerBinds(binds: binds)
+                result = self.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
             }
             StmtAst.Match(val scrut, val arms, val span) => {
-                if matchHasEnumOrStruct(arms: arms) {
-                    if matchHasCapture(arms: arms) {
-                        lowerEnumMatchCaptureInto(c: inout c, scrut: scrut, arms: arms, span: span, stmts: inout stmts)
-                    } else {
-                        stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
-                    }
-                } else {
-                    lowerScalarMatchStmtInto(c: inout c, scrut: scrut, arms: arms, span: span, stmts: inout stmts)
-                }
+                val sc: U64 = self.lowerExpr(e: scrut)
+                val ma: Array[MatchArm] = self.lowerMatchArms(arms: arms, isExpr: false)
+                result = self.pushStmt(s: <Stmt.Match scrut=sc arms=ma />)
             }
-            _ => {
-                stmts.append(lowerStmt(c: inout c, s: b.stmts[i]))
+            StmtAst.Panic(val msg, val span) => {
+                val m: U64 = self.lowerExpr(e: msg)
+                result = self.pushStmt(s: <Stmt.Panic msg=m offset=span.start />)
+            }
+            StmtAst.Give(val value, val span) => {
+                val v: U64 = self.lowerExpr(e: value)
+                result = self.pushStmt(s: <Stmt.Give value=v />)
+            }
+            StmtAst.Break(val span) => { result = self.pushStmt(s: <Stmt.Break offset=span.start />) }
+            StmtAst.Continue(val span) => { result = self.pushStmt(s: <Stmt.Continue offset=span.start />) }
+            StmtAst.Destructure(val binds, val init, val span) => {
+                // normally expanded by lowerBlock into several statements; reached only if a
+                // destructuring appears outside a statement list — lower the initializer as a
+                // plain expression statement so the value is still evaluated.
+                result = self.pushStmt(s: <Stmt.ExprStmt expr=self.lowerExpr(e: init) />)
             }
         }
-        i += 1
+        return result
     }
-    val id: U64 = c.arena.blocks.count
-    c.arena.blocks.append(<Block stmts=stmts />)
-    return id
+
+    // Lower a record-destructuring `(val x, val y) = init` into a temp binding plus one
+    // `val` per field, appended to `stmts`: `val __dtmp = init; val x = __dtmp.x; …`. The
+    // temp's struct is recovered from the initializer (records track their struct like any
+    // value), so no annotation is needed; `__dtmp` is reused (later destructures shadow it,
+    // harmlessly — each temp is consumed by the field reads that immediately follow).
+    inout fn lowerDestructureInto(binds: Array[BindAst], init: ExprAst, stmts: inout Array[U64]) {
+        val tmp: Bind = self.internBytes(s: "__dtmp")
+        val iv: U64 = self.lowerExpr(e: init)
+        stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+        mut val bi: U64 = 0
+        while bi < binds.count {
+            val fldName: Bind = self.internBytes(s: binds[bi].field)
+            val nameB: Bind = self.internBytes(s: binds[bi].name)
+            val recv: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+            val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
+            stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+            bi += 1
+        }
+    }
+
+    inout fn lowerBlock(b: BlockAst) -> U64 {
+        mut val stmts: Array[U64] = []
+        mut val i: U64 = 0
+        while i < b.stmts.count {
+            // a destructuring statement expands to several arena statements (temp + fields).
+            match b.stmts[i] {
+                StmtAst.Destructure(val binds, val init, val span) => {
+                    self.lowerDestructureInto(binds: binds, init: init, stmts: inout stmts)
+                }
+                StmtAst.Match(val scrut, val arms, val span) => {
+                    if matchHasEnumOrStruct(arms: arms) {
+                        if matchHasCapture(arms: arms) {
+                            self.lowerEnumMatchCaptureInto(scrut: scrut, arms: arms, span: span, stmts: inout stmts)
+                        } else {
+                            stmts.append(self.lowerStmt(s: b.stmts[i]))
+                        }
+                    } else {
+                        self.lowerScalarMatchStmtInto(scrut: scrut, arms: arms, span: span, stmts: inout stmts)
+                    }
+                }
+                _ => {
+                    stmts.append(self.lowerStmt(s: b.stmts[i]))
+                }
+            }
+            i += 1
+        }
+        val id: U64 = self.arena.blocks.count
+        self.arena.blocks.append(<Block stmts=stmts />)
+        return id
+    }
 }
 
 // ---- declaration lowering (shared DeclAst value tree -> the compiler arena) ----
@@ -580,4 +585,3 @@ fn lowerBlock(c: inout Comp, b: BlockAst) -> U64 {
 // visibility-gated), so re-interning is sound here. (A *function* declaration name
 // does feed moduleOf; that path keeps the original offset — handled when free
 // functions move to this lowering.)
-

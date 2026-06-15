@@ -15,7 +15,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             if ty != 0U64 {
                 if tyLen > 0U64 {
                     if c.arena.types[ty].viewExtId != exprViewExtId(c: inout c, st: inout st, id: init) {
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: init)), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
+                        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: init)), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
                     }
                 }
             }
@@ -142,7 +142,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // a generic struct instance (Box[I32]): point at the generic def (so
             // field access works) and track the instance ref for substitution.
             mut val tref: U64 = 0
-            if isGenericInst(c: inout c, ref: ty) {
+            if c.isGenericInst(ref: ty) {
                 val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: ty)
                 if gslot < st.genStructRefs.count {
                     sidx = st.genStructDefs[gslot]
@@ -156,7 +156,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // a `Ref[T]` local: track the instance so `->` resolves the pointee
             // struct (Ref isn't a registered generic struct/enum, so isGenericInst
             // is false for it).
-            if isRefInst(c: inout c, ref: ty) {
+            if c.isRefInst(ref: ty) {
                 tref = ty
             }
             // a `RawBuffer[T]` local: track its type so the raw* intrinsics recover
@@ -168,7 +168,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             }
             // a function-value local (`val g: fn(n: I32) -> I32 = …`): track the fn
             // TypeRef so a call `g(n: 4)` resolves the closure signature.
-            if isFnType(c: inout c, ref: ty) {
+            if c.isFnType(ref: ty) {
                 tref = ty
             }
             // an un-annotated binding to a call returning a generic instance
@@ -178,7 +178,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                 if tyLen == 0U64 {
                     if !(isArr) {
                         val rref: U64 = exprResultRef(c: inout c, st: inout st, id: init)
-                        if isGenericInst(c: inout c, ref: rref) {
+                        if c.isGenericInst(ref: rref) {
                             val gslot2: U64 = genStructSlot(c: inout c, st: inout st, ref: rref)
                             if gslot2 < st.genStructRefs.count {
                                 sidx = st.genStructDefs[gslot2]
@@ -215,7 +215,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // for an unwrap re-tag `u as String` to recognise the operand is a newtype.
             if tref == 0U64 {
                 if tyLen > 0U64 {
-                    if newtypeUnderRef(c: inout c, start: tyStart, len: tyLen) != 0U64 {
+                    if c.newtypeUnderRef(start: tyStart, len: tyLen) != 0U64 {
                         tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                     }
                 }
@@ -298,7 +298,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
             // extension-view invariance (spec/09): an assignment must not implicitly
             // change a value's view — the target's and value's views must match.
             if exprViewExtId(c: inout c, st: inout st, id: target) != exprViewExtId(c: inout c, st: inout st, id: value) {
-                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
+                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: value)), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
             }
             match c.arena.exprs[target] {
                 Expr.Ident(val start, val len) => {
@@ -320,7 +320,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                         // tracked TypeRef as the expected type so an un-suffixed RHS
                         // construction (`r = <Result.Err error="x" />`) infers the
                         // instance's type args (genLlvmMakeEnum / genLlvmMake consume it).
-                        if isGenericInst(c: inout c, ref: st.locTypeRef[li]) {
+                        if c.isGenericInst(ref: st.locTypeRef[li]) {
                             st.expectedTy = st.locTypeRef[li]
                         }
                         mut val rv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
@@ -364,7 +364,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             LLVMBuildStore(st.b, nv, st.locPtr[li])
                         }
                     } else {
-                        compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "LLVM backend: assignment target must be a local (so far)")
+                        compileErrorAt(line: c.lineOf(offset: start), msg: "LLVM backend: assignment target must be a local (so far)")
                     }
                 }
                 Expr.Index(base: val ibase, index: val iindex) => {
@@ -401,7 +401,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                 return
                             }
                         }
-                        compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: ibase)), msg: "LLVM backend: user IndexSet subscript needs an `indexSet` method")
+                        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: ibase)), msg: "LLVM backend: user IndexSet subscript needs an `indexSet` method")
                         return
                     }
                     val elemTy: LLVMTypeRef = arrElemTyOf(c: inout c, st: inout st, id: ibase)
@@ -437,7 +437,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                     // FRESH cell, and repoint the field — value semantics
                                     // (a copy that still points at the old cell is unchanged).
                                     if op == opAssign() {
-                                        if fieldIsBoxed(c: inout c, f: fld) {
+                                        if c.fieldIsBoxed(f: fld) {
                                             st.expectedTy = fld.ty
                                             val bv: LLVMValueRef = genLlvmExpr(c: inout c, st: inout st, id: value)
                                             st.expectedTy = 0U64
@@ -466,7 +466,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                     return
                                 }
                             }
-                            compileErrorAt(line: lineOf(c: inout c, offset: fnameStart), msg: "LLVM backend: field assignment only on a registered struct local (so far)")
+                            compileErrorAt(line: c.lineOf(offset: fnameStart), msg: "LLVM backend: field assignment only on a registered struct local (so far)")
                         }
                         _ => {
                             // a general place base (`arr[i].field = v`, get-modify-set):
@@ -502,7 +502,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                                 }
                             }
                             if !(handled) {
-                                compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: nested place assignment not yet supported")
+                                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: target)), msg: "LLVM backend: nested place assignment not yet supported")
                             }
                         }
                     }
@@ -538,10 +538,10 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                             return
                         }
                     }
-                    compileErrorAt(line: lineOf(c: inout c, offset: ans), msg: "LLVM backend: `->` assignment only on a Ref to a registered struct (so far)")
+                    compileErrorAt(line: c.lineOf(offset: ans), msg: "LLVM backend: `->` assignment only on a Ref to a registered struct (so far)")
                 }
                 _ => {
-                    compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: target)), msg: "LLVM backend: only simple `name = …` assignment is supported so far")
+                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: target)), msg: "LLVM backend: only simple `name = …` assignment is supported so far")
                 }
             }
         }
@@ -583,7 +583,7 @@ fn genLlvmStmt(c: inout Comp, st: inout LlvmCtx, id: U64) {
                     // must match the declared return type's view.
                     if st.curRetRef != 0U64 {
                         if c.arena.types[st.curRetRef].viewExtId != exprViewExtId(c: inout c, st: inout st, id: value) {
-                            compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: value)), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
+                            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: value)), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
                         }
                     }
                     // an existential `any P` return (spec/08): box a concrete

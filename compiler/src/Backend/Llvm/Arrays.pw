@@ -8,7 +8,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
     match c.arena.exprs[id] {
         Expr.Int(value: _, offset: _, val isBool, tyStart: _, tyLen: _, isNeg: _) => {
             if isBool { return st.i1ty }
-            val t: TypeInfo = typeOf(c: inout c, id: id)
+            val t: TypeInfo = c.typeOf(id: id)
             if t.kind == 0 {
                 return llvmScalarTy(c: inout c, st: inout st, tyStart: t.nameStart, tyLen: t.nameLen)
             }
@@ -71,7 +71,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             return exprLlvmType(c: inout c, st: inout st, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            val cfi: U64 = resolvedCallee(c: inout c, id: id)
+            val cfi: U64 = c.resolvedCallee(id: id)
             if cfi < c.arena.funcs.count {
                 return llvmFnRetTy(c: inout c, st: inout st, f: c.arena.funcs[cfi])
             }
@@ -148,7 +148,7 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             // an array-returning call (`val a = mk()`): tracked as an array.
-            val cfi: U64 = resolvedCallee(c: inout c, id: id)
+            val cfi: U64 = c.resolvedCallee(id: id)
             if cfi < c.arena.funcs.count {
                 return c.arena.funcs[cfi].retIsArray
             }
@@ -212,7 +212,7 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
         Expr.Call(val nameStart, val nameLen, val args) => {
             // an array-returning call's element type (`val a = mk()` -> element of
             // mk's Array return).
-            val cfi: U64 = resolvedCallee(c: inout c, id: id)
+            val cfi: U64 = c.resolvedCallee(id: id)
             if cfi < c.arena.funcs.count {
                 if c.arena.funcs[cfi].retIsArray {
                     return llvmScalarTy(c: inout c, st: inout st, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
@@ -296,7 +296,7 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
     }
     // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
     // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
-    if fieldIsBoxed(c: inout c, f: fld) {
+    if c.fieldIsBoxed(f: fld) {
         // the boxed value is in the field's (pointee) type context, so a nested
         // un-suffixed JSX construction (`next=<Optional.Some … />`) infers its args.
         // GROUND the field type under the active instance env first, so a recursive
@@ -322,7 +322,7 @@ fn genFieldValue(c: inout Comp, st: inout LlvmCtx, valExpr: U64, fld: FieldDef) 
         if c.cur.typeParams.count > 0U64 {
             g = c.groundTypeRef(ref: fld.ty)
         }
-        if isGenericInst(c: inout c, ref: g) {
+        if c.isGenericInst(ref: g) {
             st.expectedTy = g
             return genLlvmExpr(c: inout c, st: inout st, id: valExpr)
         }
@@ -400,7 +400,7 @@ fn deepCopyStructValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: 
             val et: LLVMTypeRef = llvmTypeOfRef(c: inout c, st: inout st, ref: er)
             agg = LLVMBuildInsertValue(st.b, agg, copyArrayValue(c: inout c, st: inout st, arrVal: elem, elemTy: et), fi, anon())
         } else {
-            if fieldIsBoxed(c: inout c, f: fd) {
+            if c.fieldIsBoxed(f: fd) {
                 // a boxed (recursive) field is a shared heap pointer — leave it (deep
                 // copy of the cyclic graph is a later ARC refinement).
             } else {
@@ -495,7 +495,7 @@ fn rawbufRelease(c: inout Comp, st: inout LlvmCtx, cell: LLVMValueRef) -> LLVMVa
 // The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
 // that needs a deinit, else c.arena.structs.count.
 fn refDeinitPointeeSidx(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> U64 {
-    if isRefInst(c: inout c, ref: refTy) {
+    if c.isRefInst(ref: refTy) {
         if c.arena.types[refTy].args.count > 0U64 {
             val pt: TypeRef = c.arena.types[c.arena.types[refTy].args[0]]
             val psi: U64 = c.structIndexByName(start: pt.nameStart, len: pt.nameLen)

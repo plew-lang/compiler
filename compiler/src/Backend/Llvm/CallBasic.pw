@@ -69,7 +69,7 @@ fn genPowCall(c: inout Comp, st: inout LlvmCtx, base: U64, args: Array[Arg]) -> 
         return LLVMConstNull(st.ptrty)
     }
     val bt: TypeRef = c.arena.types[br]
-    val powN: Bind = kwSpan(c: inout c, kw: "pow", kwLen: 3U64)
+    val powN: Bind = c.kwSpan(kw: "pow", kwLen: 3U64)
     val afi: U64 = c.findAssoc(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
     if afi >= c.arena.funcs.count {
         return LLVMConstNull(st.ptrty)
@@ -96,7 +96,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
     // an indirect call: load the {fn, env} value, then call fn(env, args).
     val cli: U64 = findLocal(c: inout c, st: inout st, start: nameStart, len: nameLen)
     if cli < st.nLocals {
-        if isFnType(c: inout c, ref: st.locTypeRef[cli]) {
+        if c.isFnType(ref: st.locTypeRef[cli]) {
             return genLlvmClosureCall(c: inout c, st: inout st, li: cli, args: args)
         }
     }
@@ -503,7 +503,7 @@ fn genLlvmCall(c: inout Comp, st: inout LlvmCtx, nameStart: U64, nameLen: U64, a
             return LLVMConstInt(st.i64ty, 0U64, 0I32)
         }
     }
-    compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
+    compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
     return LLVMConstInt(st.i64ty, 0U64, 0I32)
 }
 

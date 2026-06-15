@@ -126,7 +126,7 @@ pub impl Comp {
     }
 
     inout fn checkCondBool(cond: U64) {
-        val bs: Bind = kwSpan(c: inout self, kw: "Bool", kwLen: 4U64)
+        val bs: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
         if bs.nameLen == 0U64 {
             return
         }
@@ -146,7 +146,7 @@ pub impl Comp {
     }
 
     inout fn checkIndexKeyType(base: U64, index: U64) {
-        val bt: TypeInfo = typeOf(c: inout self, id: base)
+        val bt: TypeInfo = self.typeOf(id: base)
         if bt.ref != 0U64 {
             if bt.ref < self.arena.types.count {
                 val t: TypeRef = self.arena.types[bt.ref]
@@ -165,7 +165,7 @@ pub impl Comp {
             Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
             Expr.Str(start: _, len: _) => { return true }
             _ => {
-                val it: TypeInfo = typeOf(c: inout self, id: value)
+                val it: TypeInfo = self.typeOf(id: value)
                 if it.kind == 1 {
                     return true
                 }

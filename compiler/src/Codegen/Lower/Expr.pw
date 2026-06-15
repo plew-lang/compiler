@@ -25,7 +25,7 @@ pub impl Comp {
                                 // literal field (`(a: (x:1,y:2), …)`) its own context (else the
                                 // inner literal lowers context-free and the backend can't build it).
                                 val recName: String = stringFromBytesUnchecked(b: extractSpan(buf: self.arena.bytes, start: ct.nameStart, len: ct.nameLen))
-                                val fs: Array[MakeField] = lowerMakeFields(c: inout self, fields: fields, typeName: recName, variant: "", isEnum: false)
+                                val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: recName, variant: "", isEnum: false)
                                 return self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                             }
                             _ => {}
@@ -37,16 +37,16 @@ pub impl Comp {
                         ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
                             if !(isEnum) {
                                 if typeArgs.count == 0 {
-                                    val tn: Bind = internBytes(c: inout self, s: typeName)
+                                    val tn: Bind = self.internBytes(s: typeName)
                                     if intern(c: inout self, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
-                                        val fs: Array[MakeField] = lowerMakeFields(c: inout self, fields: fields, typeName: typeName, variant: "", isEnum: false)
+                                        val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: "", isEnum: false)
                                         return self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
                                     }
                                 }
                             }
                         }
                         ExprAst.DictLit(val keys, val vals, val span) => {
-                            return lowerDictLit(c: inout self, keys: keys, vals: vals, ctxRef: ctxRef, span: span)
+                            return self.lowerDictLit(keys: keys, vals: vals, ctxRef: ctxRef, span: span)
                         }
                         _ => {}
                     }
@@ -63,18 +63,18 @@ pub impl Comp {
                 mut val sStart: U64 = 0
                 mut val sLen: U64 = 0
                 if tySuffix.bytes.count > 0 {
-                    val sf: Bind = internBytes(c: inout self, s: tySuffix)
+                    val sf: Bind = self.internBytes(s: tySuffix)
                     sStart = sf.nameStart
                     sLen = sf.nameLen
                 }
                 result = self.pushExpr(e: <Expr.Int value=value offset=span.start isBool=isBool tyStart=sStart tyLen=sLen isNeg=false />)
             }
             ExprAst.FloatLit(val text, val tySuffix, val span) => {
-                val tb: Bind = internBytes(c: inout self, s: text)
+                val tb: Bind = self.internBytes(s: text)
                 mut val sStart: U64 = 0
                 mut val sLen: U64 = 0
                 if tySuffix.bytes.count > 0 {
-                    val sf: Bind = internBytes(c: inout self, s: tySuffix)
+                    val sf: Bind = self.internBytes(s: tySuffix)
                     sStart = sf.nameStart
                     sLen = sf.nameLen
                 }
@@ -102,7 +102,7 @@ pub impl Comp {
                                 mut val sStart: U64 = 0
                                 mut val sLen: U64 = 0
                                 if tySuffix.bytes.count > 0 {
-                                    val sf: Bind = internBytes(c: inout self, s: tySuffix)
+                                    val sf: Bind = self.internBytes(s: tySuffix)
                                     sStart = sf.nameStart
                                     sLen = sf.nameLen
                                 }
@@ -125,12 +125,12 @@ pub impl Comp {
             }
             ExprAst.Call(val name, val args, val span) => {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
-                val a: Array[Arg] = lowerArgs(c: inout self, args: args, fnName: name)
+                val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
                 result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes.count args=a />)
             }
             ExprAst.Field(val base, val name, val span) => {
                 val b: U64 = self.lowerExpr(e: base)
-                val nm: Bind = internBytes(c: inout self, s: name)
+                val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.Field base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
             }
             ExprAst.Method(val recv, val name, val nameSpan, val args, val span) => {
@@ -148,26 +148,26 @@ pub impl Comp {
                     _ => {}
                 }
                 if isNsCall {
-                    val a: Array[Arg] = lowerArgs(c: inout self, args: args, fnName: name)
-                    markImport(c: inout self, segStart: nameSpan.start, segLen: name.bytes.count, nameStart: nameSpan.start, nameLen: name.bytes.count)
+                    val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
+                    self.markImport(segStart: nameSpan.start, segLen: name.bytes.count, nameStart: nameSpan.start, nameLen: name.bytes.count)
                     result = self.pushExpr(e: <Expr.Call nameStart=nameSpan.start nameLen=name.bytes.count args=a />)
                 } else {
                     val r: U64 = self.lowerExpr(e: recv)
-                    val a: Array[Arg] = lowerMethodArgs(c: inout self, args: args, methodName: name)
-                    val nm: Bind = internBytes(c: inout self, s: name)
+                    val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)
+                    val nm: Bind = self.internBytes(s: name)
                     result = self.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
                 }
             }
             ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
-                val a: Array[Arg] = lowerArgs(c: inout self, args: args, fnName: "")
-                val srcN: Bind = internBytes(c: inout self, s: src)
-                val nm: Bind = internBytes(c: inout self, s: name)
+                val a: Array[Arg] = self.lowerArgs(args: args, fnName: "")
+                val srcN: Bind = self.internBytes(s: src)
+                val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
             }
             ExprAst.ExtView(val recv, val src, val strip, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
-                val srcN: Bind = internBytes(c: inout self, s: src)
+                val srcN: Bind = self.internBytes(s: src)
                 result = self.pushExpr(e: <Expr.ExtView recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen strip=strip />)
             }
             ExprAst.Index(val base, val index, val span) => {
@@ -176,13 +176,13 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Index base=b index=idx />)
             }
             ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
-                val tn: Bind = internBytes(c: inout self, s: typeName)
+                val tn: Bind = self.internBytes(s: typeName)
                 mut val tyRef: U64 = 0
                 if typeArgs.count > 0 {
                     mut val targs: Array[U64] = []
                     mut val ti: U64 = 0
                     while ti < typeArgs.count {
-                        targs.append(lowerType(c: inout self, t: typeArgs[ti]).ref)
+                        targs.append(self.lowerType(t: typeArgs[ti]).ref)
                         ti += 1
                     }
                     tyRef = self.pushType(t: <TypeRef nameStart=tn.nameStart nameLen=tn.nameLen args=targs />)
@@ -190,11 +190,11 @@ pub impl Comp {
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
                 if isEnum {
-                    val vb: Bind = internBytes(c: inout self, s: variant)
+                    val vb: Bind = self.internBytes(s: variant)
                     vStart = vb.nameStart
                     vLen = vb.nameLen
                 }
-                val fs: Array[MakeField] = lowerMakeFields(c: inout self, fields: fields, typeName: typeName, variant: variant, isEnum: isEnum)
+                val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: variant, isEnum: isEnum)
                 result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=isEnum ty=tyRef fields=fs />)
             }
             ExprAst.ArrayLit(val elems, val span) => {
@@ -209,7 +209,7 @@ pub impl Comp {
             ExprAst.DictLit(val keys, val vals, val span) => {
                 // a bare dictionary literal with no binding/return context: K/V can't be
                 // inferred (lowerDictLit reports the error).
-                result = lowerDictLit(c: inout self, keys: keys, vals: vals, ctxRef: 0, span: span)
+                result = self.lowerDictLit(keys: keys, vals: vals, ctxRef: 0, span: span)
             }
             ExprAst.RecordLit(val fields, val span) => {
                 // a record literal reached without a context type (no annotation / return
@@ -217,36 +217,36 @@ pub impl Comp {
                 // types at codegen (the synthetic record struct keyed by those types). ty=0
                 // / no type name: the backend resolves the record struct from the values
                 // (or st.expectedTy if a construction site set one).
-                val fs: Array[MakeField] = lowerMakeFields(c: inout self, fields: fields, typeName: "", variant: "", isEnum: false)
+                val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: "", variant: "", isEnum: false)
                 result = self.pushExpr(e: <Expr.Make typeStart=0 typeLen=0 variantStart=0 variantLen=0 isEnum=false ty=0 fields=fs />)
             }
             ExprAst.Cast(val operand, val ty, val span) => {
                 val o: U64 = self.lowerExpr(e: operand)
-                val pt: PType = lowerType(c: inout self, t: ty)
+                val pt: PType = self.lowerType(t: ty)
                 result = self.pushExpr(e: <Expr.Cast operand=o tyStart=pt.start tyLen=pt.len ty=pt.ref />)
             }
             ExprAst.MatchExpr(val scrut, val arms, val span) => {
                 if matchHasEnumOrStruct(arms: arms) {
                     if matchHasCapture(arms: arms) {
-                        result = lowerEnumMatchCaptureExpr(c: inout self, scrut: scrut, arms: arms, span: span)
+                        result = self.lowerEnumMatchCaptureExpr(scrut: scrut, arms: arms, span: span)
                     } else {
                         val s: U64 = self.lowerExpr(e: scrut)
-                        val ma: Array[MatchArm] = lowerMatchArms(c: inout self, arms: arms, isExpr: true)
+                        val ma: Array[MatchArm] = self.lowerMatchArms(arms: arms, isExpr: true)
                         result = self.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
                     }
                 } else {
-                    result = lowerScalarMatchExpr(c: inout self, scrut: scrut, arms: arms, span: span)
+                    result = self.lowerScalarMatchExpr(scrut: scrut, arms: arms, span: span)
                 }
             }
             ExprAst.IfExpr(val cond, val thenBlk, val elseBlk, val span) => {
                 val cnd: U64 = self.lowerExpr(e: cond)
-                val tb: U64 = lowerBlock(c: inout self, b: thenBlk)
-                val eb: U64 = lowerBlock(c: inout self, b: elseBlk)
+                val tb: U64 = self.lowerBlock(b: thenBlk)
+                val eb: U64 = self.lowerBlock(b: elseBlk)
                 result = self.pushExpr(e: <Expr.IfExpr cond=cnd thenBlk=tb elseBlk=eb />)
             }
             ExprAst.OptChain(val base, val member, val span) => {
                 val b: U64 = self.lowerExpr(e: base)
-                val nm: Bind = internBytes(c: inout self, s: member)
+                val nm: Bind = self.internBytes(s: member)
                 result = self.pushExpr(e: <Expr.OptChain base=b memberStart=nm.nameStart memberLen=nm.nameLen />)
             }
             ExprAst.Try(val operand, val span) => {
@@ -255,17 +255,17 @@ pub impl Comp {
             }
             ExprAst.Arrow(val base, val name, val span) => {
                 val b: U64 = self.lowerExpr(e: base)
-                val nm: Bind = internBytes(c: inout self, s: name)
+                val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.Arrow base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
             }
             ExprAst.Closure(val params, val hasRet, val ret, val body, val span) => {
-                val ps: Array[Param] = lowerParams(c: inout self, params: params)
+                val ps: Array[Param] = self.lowerParams(params: params)
                 mut val rStart: U64 = 0
                 mut val rLen: U64 = 0
                 mut val rIsArray: Bool = false
                 mut val rTy: U64 = 0
                 if hasRet {
-                    val pt: PType = lowerType(c: inout self, t: ret)
+                    val pt: PType = self.lowerType(t: ret)
                     rStart = pt.start
                     rLen = pt.len
                     rIsArray = pt.isArray
@@ -273,7 +273,7 @@ pub impl Comp {
                 }
                 val savedRet: U64 = self.cur.lowerRetTy
                 self.cur.lowerRetTy = rTy
-                val bd: U64 = lowerBlock(c: inout self, b: body)
+                val bd: U64 = self.lowerBlock(b: body)
                 self.cur.lowerRetTy = savedRet
                 result = self.pushExpr(e: <Expr.Closure params=ps hasRet=hasRet retStart=rStart retLen=rLen retIsArray=rIsArray retTy=rTy body=bd />)
             }

@@ -24,16 +24,16 @@ pub impl Comp {
 
     inout fn stmtPrincipalOffset(sid: U64) -> U64 {
         match self.arena.stmts[sid] {
-            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return exprOffset(c: inout self, id: init) }
-            Stmt.Assign(op: _, val target, value: _) => { return exprOffset(c: inout self, id: target) }
-            Stmt.ExprStmt(val expr) => { return exprOffset(c: inout self, id: expr) }
-            Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { return exprOffset(c: inout self, id: value) } return 0U64 }
-            Stmt.If(val cond, thenBlk: _, elseBlk: _, hasElse: _) => { return exprOffset(c: inout self, id: cond) }
-            Stmt.While(val cond, body: _) => { return exprOffset(c: inout self, id: cond) }
-            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return exprOffset(c: inout self, id: iter) }
-            Stmt.Match(val scrut, arms: _) => { return exprOffset(c: inout self, id: scrut) }
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprOffset(id: init) }
+            Stmt.Assign(op: _, val target, value: _) => { return self.exprOffset(id: target) }
+            Stmt.ExprStmt(val expr) => { return self.exprOffset(id: expr) }
+            Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { return self.exprOffset(id: value) } return 0U64 }
+            Stmt.If(val cond, thenBlk: _, elseBlk: _, hasElse: _) => { return self.exprOffset(id: cond) }
+            Stmt.While(val cond, body: _) => { return self.exprOffset(id: cond) }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { return self.exprOffset(id: iter) }
+            Stmt.Match(val scrut, arms: _) => { return self.exprOffset(id: scrut) }
             Stmt.Panic(msg: _, val offset) => { return offset }
-            Stmt.Give(val value) => { return exprOffset(c: inout self, id: value) }
+            Stmt.Give(val value) => { return self.exprOffset(id: value) }
             _ => { return 0U64 }
         }
     }
@@ -120,9 +120,9 @@ pub impl Comp {
                 }
                 if ti.kind == 1 {
                     if effLen == 0 {
-                        val ss: Bind = stringTypeSpan(c: inout self)
+                        val ss: Bind = self.stringTypeSpan()
                         if ss.nameLen == 0 {
-                            compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: init)), msg: "cannot infer the type of this binding; add a type annotation (e.g. `: String`)")
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: init)), msg: "cannot infer the type of this binding; add a type annotation (e.g. `: String`)")
                         } else {
                             effStart = ss.nameStart
                             effLen = ss.nameLen
@@ -138,8 +138,8 @@ pub impl Comp {
         if self.moduleOf(offset: candStart) == useMod {
             return true
         }
-        if isImportedInto(c: inout self, mod: useMod, nameStart: candStart, nameLen: candLen) {
-            if isExportedName(c: inout self, nameStart: candStart, nameLen: candLen) {
+        if self.isImportedInto(mod: useMod, nameStart: candStart, nameLen: candLen) {
+            if self.isExportedName(nameStart: candStart, nameLen: candLen) {
                 return true
             }
         }
@@ -172,7 +172,7 @@ pub impl Comp {
             // named `add` from colliding with Core's `Add.add` (spec/07).
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
-                    if paramsLabelsOk(c: inout self, params: f.params, args: args) {
+                    if self.paramsLabelsOk(params: f.params, args: args) {
                         val same: Bool = self.moduleOf(offset: f.nameStart) == useMod
                         val visible: Bool = same || self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen)
                         if visible {
@@ -185,7 +185,7 @@ pub impl Comp {
                                 firstLabelSame = i
                             }
                         }
-                        if paramsTypesMatch(c: inout self, params: f.params, args: args) {
+                        if self.paramsTypesMatch(params: f.params, args: args) {
                             if visible {
                                 if typeMatch == self.arena.funcs.count {
                                     typeMatch = i
@@ -212,7 +212,7 @@ pub impl Comp {
         }
         // same-module first
         if typeMatchSame != self.arena.funcs.count {
-            checkOverloadAmbiguity(c: inout self, a: typeMatchSame, b: typeMatch2Same, args: args)
+            self.checkOverloadAmbiguity(a: typeMatchSame, b: typeMatch2Same, args: args)
             return typeMatchSame
         }
         if firstLabelSame != self.arena.funcs.count {
@@ -222,7 +222,7 @@ pub impl Comp {
         // accumulators only recorded `nameVisibleFrom` candidates, so an out-of-scope
         // cross-module fn is never returned — it simply doesn't resolve here).
         if typeMatch != self.arena.funcs.count {
-            checkOverloadAmbiguity(c: inout self, a: typeMatch, b: typeMatch2, args: args)
+            self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return typeMatch
         }
         if firstLabel != self.arena.funcs.count {
@@ -243,8 +243,8 @@ pub impl Comp {
                 val gf: Func = self.arena.funcs[gj]
                 if !(gf.hasRecv || gf.isAssoc) {
                     if gf.nameId == qId {
-                        if paramsLabelsOk(c: inout self, params: gf.params, args: args) {
-                            if paramsTypesMatch(c: inout self, params: gf.params, args: args) {
+                        if self.paramsLabelsOk(params: gf.params, args: args) {
+                            if self.paramsTypesMatch(params: gf.params, args: args) {
                                 return gj
                             }
                             if gLabel == self.arena.funcs.count {
@@ -303,7 +303,7 @@ pub impl Comp {
                 if f.recvId == qRecv {
                     if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                         if f.hasRet {
-                            return typeInfoOfName(c: inout self, start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+                            return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
                         }
                         return scalarInfo()
                     }
@@ -348,11 +348,11 @@ pub impl Comp {
                 if !(f.viewOnly) {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
-                        if paramsLabelsOk(c: inout self, params: f.params, args: args) {
+                        if self.paramsLabelsOk(params: f.params, args: args) {
                             if firstLabel == self.arena.funcs.count {
                                 firstLabel = i
                             }
-                            if paramsTypesMatch(c: inout self, params: f.params, args: args) {
+                            if self.paramsTypesMatch(params: f.params, args: args) {
                                 if typeMatch == self.arena.funcs.count {
                                     typeMatch = i
                                 } else {
@@ -379,12 +379,12 @@ pub impl Comp {
                 if self.arena.funcs[typeMatch].srcTraitId != 0U64 {
                     if self.arena.funcs[typeMatch2].srcTraitId != 0U64 {
                         if self.arena.funcs[typeMatch].srcTraitId != self.arena.funcs[typeMatch2].srcTraitId {
-                            compileErrorAt(line: lineOf(c: inout self, offset: nameStart), msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
+                            compileErrorAt(line: self.lineOf(offset: nameStart), msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
                         }
                     }
                 }
             }
-            checkOverloadAmbiguity(c: inout self, a: typeMatch, b: typeMatch2, args: args)
+            self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return typeMatch
         }
         if firstLabel != self.arena.funcs.count {
@@ -462,11 +462,11 @@ pub impl Comp {
                 if f.extId == qSrcId || f.srcTraitId == qSrcId {
                     if f.nameId == qNameId {
                         if f.recvId == qRecvId {
-                            if paramsLabelsOk(c: inout self, params: f.params, args: args) {
+                            if self.paramsLabelsOk(params: f.params, args: args) {
                                 if firstLabel == self.arena.funcs.count {
                                     firstLabel = i
                                 }
-                                if paramsTypesMatch(c: inout self, params: f.params, args: args) {
+                                if self.paramsTypesMatch(params: f.params, args: args) {
                                     return i
                                 }
                             }
@@ -486,7 +486,7 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         // a newtype inherits the underlying's assoc fns/factories (spec/10): resolve the
         // receiver name to the underlying so `Brand.checked(…)` finds Rgb's `checked`.
-        val rnu: Bind = newtypeUnderName(c: inout self, start: recvStart, len: recvLen)
+        val rnu: Bind = self.newtypeUnderName(start: recvStart, len: recvLen)
         val qRecvId: U64 = intern(c: inout self, start: rnu.nameStart, len: rnu.nameLen)
         mut val i: U64 = 0
         while i < self.arena.funcs.count {
@@ -494,11 +494,11 @@ pub impl Comp {
             if f.isAssoc {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
-                        if paramsLabelsOk(c: inout self, params: f.params, args: args) {
+                        if self.paramsLabelsOk(params: f.params, args: args) {
                             if firstLabel == self.arena.funcs.count {
                                 firstLabel = i
                             }
-                            if paramsTypesMatch(c: inout self, params: f.params, args: args) {
+                            if self.paramsTypesMatch(params: f.params, args: args) {
                                 if typeMatch == self.arena.funcs.count {
                                     typeMatch = i
                                 } else {
@@ -514,7 +514,7 @@ pub impl Comp {
             i += 1
         }
         if typeMatch != self.arena.funcs.count {
-            checkOverloadAmbiguity(c: inout self, a: typeMatch, b: typeMatch2, args: args)
+            self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return typeMatch
         }
         return firstLabel
@@ -525,7 +525,7 @@ pub impl Comp {
             return true
         }
         // an import alias (`with { Real as Alias }`) names the same type as `Real`.
-        val ar: Bind = aliasReal(c: inout self, start: start, len: len)
+        val ar: Bind = self.aliasReal(start: start, len: len)
         val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         // a newtype name is a type name too (it can be an assoc-fn/factory receiver
         // through its inherited assoc fns — `Brand.gray(…)`, spec/10).
@@ -561,7 +561,7 @@ pub impl Comp {
     inout fn typeHasAssocFn(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         // a newtype inherits the underlying type's factories/assoc fns (spec/10): resolve
         // to the underlying so `<Brand.checked …/>` finds Rgb's `checked` factory.
-        val tnu: Bind = newtypeUnderName(c: inout self, start: typeStart, len: typeLen)
+        val tnu: Bind = self.newtypeUnderName(start: typeStart, len: typeLen)
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
@@ -586,7 +586,7 @@ pub impl Comp {
         if eNameId == 0U64 {
             return false
         }
-        val fromN: Bind = internBytes(c: inout self, s: "from")
+        val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
         while i < self.arena.funcs.count {
             if self.arena.funcs[i].isAssoc {
@@ -609,7 +609,7 @@ pub impl Comp {
         if eNameId == 0U64 {
             return self.arena.funcs.count
         }
-        val fromN: Bind = internBytes(c: inout self, s: "from")
+        val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
         while i < self.arena.funcs.count {
             if self.arena.funcs[i].isAssoc {
