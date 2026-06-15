@@ -1,20 +1,222 @@
-// @Frontend — the backend-agnostic front-end of the self-hosted Plew compiler:
-// parsing (Parser), all Codegen analysis (lower / resolve / check / infer / mono /
-// verify), the file Loader, and the Driver (`runFrontend` runs load → analyze and
-// returns the populated `Comp`). It `import`s the shared IR data module `./Ir` and
-// is imported by `./Backend` (which consumes its results) and the entry `_.pw`.
+// @Frontend — the backend-agnostic front-end of the self-hosted Plew compiler. It
+// DEFINES the shared compiler state `Comp` (＋ the name interner) and all analysis
+// over it: parsing (Parser), Codegen analysis (lower / resolve / check / infer /
+// mono / verify), the file Loader, and the Driver (`runFrontend` runs load → analyze
+// and returns the populated `Comp`). It `import`s the pure IR data vocabulary `./Ir`
+// (Expr/Stmt/TypeRef/… and the arena/table sub-structs that are Comp's fields) and is
+// imported by `./Backend` (which consumes Comp) and the entry `_.pw`.
 //
-// These passes are deeply mutually recursive (resolution ↔ type recovery ↔ mono),
-// so they are one module split by `part` (spec/15 reason ②), not a DAG of imports.
+// `Comp` lives here (not in `./Ir`) because the analysis is one logical module over a
+// single shared state: its behavior is becoming `impl Comp` methods, and an anonymous
+// impl must sit in the type's defining module (spec/15). The passes are mutually
+// recursive, so they are split across `part` files of this one module.
 
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Comp, Expr, Stmt, intern, spansEqual, appendBytes }
+import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, genSiblingPath, pathSeen }
-import ./Codegen/Array with { isRawIntrinsicName, isArrayIntrinsicName }
+
+export struct Comp {
+    // the shared IR arena: source bytes + every node table (see `Arena`). The
+    // single owner of the program's data that all passes read; `c.arena.exprs`,
+    // `c.arena.funcs`, `c.arena.bytes`, etc.
+    pub mut val arena: Arena = <Arena />
+    // declaration / conformance / name side-tables built during loading & analysis
+    // (see `Decls`): traits, conformances, method aliases, default extensions,
+    // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
+    // the import-name / chain-result / keyword-span caches.
+    pub mut val decls: Decls = <Decls />
+    // parse-time scratch, reset at each impl/decl boundary (see `ParseScratch`).
+    pub mut val parseScratch: ParseScratch = <ParseScratch />
+    // the per-body codegen / lowering / verify cursor (see `Cursor`).
+    pub mut val cur: Cursor = <Cursor />
+    // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
+    // The driver then suppresses the user's own `main` and the auto-part of
+    // `<Foo>.gen.pw`, and emits a synthesized harness `main` (`genMainIdx`) that
+    // prints each user macro's generated source (captured by the runner). Off in
+    // a normal build (which instead auto-parts the already-generated `.gen.pw`).
+    pub mut val genMode: Bool = false
+    pub mut val genMainIdx: U64 = 0
+    // type-checker log mode (`plewc --tc-log <file>`): the new TypeRef-based type
+    // checker (Codegen/Infer.pw) prints every type mismatch it finds instead of
+    // rejecting, so its coverage can be developed/triaged against self-compile
+    // without breaking the build. Off in a normal build (no behavior change yet).
+    pub mut val tcLog: Bool = false
+    // name interning (Phase C): a content-keyed table mapping each name span to a
+    // stable 1-based id, so name equality is an integer compare (see `Interner`).
+    pub mut val interner: Interner = <Interner />
+    // typed-AST cache (Phase B): each expression node's recovered type, keyed by
+    // expr id (see `TypeCache`). Built by buildExprTyTable before emission.
+    pub mut val typeCache: TypeCache = <TypeCache />
+    // monomorphization work lists + derived tables (see `MonoWork`): generic
+    // instantiations, fn instances / types / thunks, closure captures, Array
+    // element types, and recursive-field boxing. Collected after parsing, used
+    // by codegen.
+    pub mut val monoWork: MonoWork = <MonoWork />
+    // module identity + cross-module visibility tables (spec/15): see `Modules`.
+    pub mut val modules: Modules = <Modules />
+}
+
+// ---- arena helpers ----
+//
+// Methods on the arena (Comp). All take `inout self`: the struct is large, so a
+// by-value receiver would copy every arena header on each call; it is always held by
+// `inout` anyway. (Source appends + node pushes used by the loader and derive
+// synthesis.)
+
+pub impl Comp {
+    // memberwise factory: `<Comp />` default-constructs the shared IR; the frontend
+    // driver builds it in another module, so the factory must be public.
+    factory
+    // Append a file's source bytes onto the arena's combined byte buffer (the loader
+    // builds it incrementally: each file's bytes are appended before its items are
+    // lowered, so original-offset name spans resolve into it).
+    inout fn appendSrc(from: Array[U8]) {
+        mut val i: U64 = 0
+        while i < from.count {
+            self.arena.bytes.append(from[i])
+            i += 1
+        }
+    }
+    // Append an expression node, returning its arena index.
+    inout fn pushExpr(e: Expr) -> U64 {
+        val id: U64 = self.arena.exprs.count
+        self.arena.exprs.append(e)
+        return id
+    }
+    // Append a statement node, returning its arena index.
+    inout fn pushStmt(s: Stmt) -> U64 {
+        val id: U64 = self.arena.stmts.count
+        self.arena.stmts.append(s)
+        return id
+    }
+    // Append a structured type reference, returning its Comp.arena.types index. This is
+    // the single interning choke point for type names (Phase D): the head name span
+    // is interned here so every TypeRef carries its `nameId`, regardless of which
+    // construction site (lowerType / Mono substitution / Self synthesis) built it.
+    inout fn pushType(t: TypeRef) -> U64 {
+        val id: U64 = self.arena.types.count
+        val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels siteOffset=t.siteOffset />)
+        return id
+    }
+}
+
+// ── name interner (Phase C) ──────────────────────────────────────────────────
+// The interner lives with the IR core: `Comp.pushType` interns every type head,
+// so the service must be reachable from inside this module (a back-edge to a pass
+// would be a cycle). `intern`/`spansEqual` are used pervasively by every pass and
+// are exported; `internHash`/`internGrow` are interner-internal.
+
+// Compare two name spans for byte equality against the shared source buffer.
+export fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
+    if aLen != bLen {
+        return false
+    }
+    mut val j: U64 = 0
+    while j < aLen {
+        if c.arena.bytes[aStart + j] != c.arena.bytes[bStart + j] {
+            return false
+        }
+        j += 1
+    }
+    return true
+}
+
+// FNV-1a hash of a name span (used to place spans into the bucket index).
+fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
+    mut val h: U64 = 14695981039346656037U64
+    mut val j: U64 = 0
+    while j < len {
+        h = h ^ (c.arena.bytes[start + j] as U64)
+        h = h.wrappingMul(by: 1099511628211U64)
+        j += 1
+    }
+    return h
+}
+
+// Grow the bucket index (double, or 8 from empty), re-placing every interned span
+// by re-hashing. The dense interner.starts/lens arrays are untouched (ids stay
+// stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
+fn internGrow(c: inout Comp) {
+    mut val newCap: U64 = 8
+    if c.interner.buckets.count > 0 {
+        newCap = c.interner.buckets.count * 2
+    }
+    mut val nb: Array[U64] = []
+    mut val k: U64 = 0
+    while k < newCap {
+        nb.append(value: 0)
+        k += 1
+    }
+    mut val i: U64 = 0
+    while i < c.interner.count {
+        val code: U64 = internHash(c: inout c, start: c.interner.starts[i], len: c.interner.lens[i])
+        mut val slot: U64 = code & (newCap - 1)
+        while nb[slot] != 0 {
+            slot = (slot + 1) & (newCap - 1)
+        }
+        nb.set(i: slot, value: i + 1)
+        i += 1
+    }
+    c.interner.buckets = nb
+}
+
+// Intern a name span to its stable 1-based id (equal content ⇒ equal id; 0 is
+// never returned, so a `nameId` field's default 0 is a pure "unfilled" sentinel).
+export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
+    if c.interner.buckets.count == 0 {
+        internGrow(c: inout c)
+    } else {
+        if (c.interner.count + 1) * 4 > c.interner.buckets.count * 3 {
+            internGrow(c: inout c)
+        }
+    }
+    val code: U64 = internHash(c: inout c, start: start, len: len)
+    val cap: U64 = c.interner.buckets.count
+    mut val slot: U64 = code & (cap - 1)
+    while true {
+        val b: U64 = c.interner.buckets[slot]
+        if b == 0 {
+            c.interner.starts.append(value: start)
+            c.interner.lens.append(value: len)
+            c.interner.count += 1
+            c.interner.buckets.set(i: slot, value: c.interner.count)
+            return c.interner.count
+        }
+        if spansEqual(c: inout c, aStart: c.interner.starts[b - 1], aLen: c.interner.lens[b - 1], bStart: start, bLen: len) {
+            return b
+        }
+        slot = (slot + 1) & (cap - 1)
+    }
+}
+
+// Intrinsic-name predicates for the array / raw-buffer floor (spec/15 core-library
+// boundary): the `extern "plew-intrinsic"` ops Core's Array/RawBuffer methods call.
+// `pub` so the (still free-function) type-recovery callers can reach them during the
+// methodization transition.
+pub impl Comp {
+    // Is `(nameStart,nameLen)` a raw-floor intrinsic name?
+    fn isRawIntrinsicName(nameStart: U64, nameLen: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") { return true }
+        return false
+    }
+    // Is `(nameStart,nameLen)` an array intrinsic name?
+    fn isArrayIntrinsicName(nameStart: U64, nameLen: U64) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayPush") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arraySet") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayLen") { return true }
+        return false
+    }
+}
 
 part ./Parser/Decl
 part ./Codegen/Emit

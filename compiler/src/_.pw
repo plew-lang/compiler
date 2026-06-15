@@ -12,8 +12,7 @@
 //   clang out.ll <runtime> $(llvm-config --ldflags --libs core) -o compiler/plewc
 
 import @Std/Process with { argCount, argAt }
-import ./Ir with { Comp }
-import ./Frontend with { runFrontend }
+import ./Frontend with { Comp, runFrontend }
 import ./Backend with { emitLlvm, emitLlvmRuntime }
 
 fn main() {

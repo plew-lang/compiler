@@ -166,7 +166,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // argument, rawCap returns U64, rawIsUnique returns Bool. rawAlloc's
             // result is always bound through an explicit RawBuffer[T] annotation, so
             // a scalar placeholder suffices here (never the source of the type).
-            if isRawIntrinsicName(c: inout c, nameStart: nameStart, nameLen: nameLen) {
+            if c.isRawIntrinsicName(nameStart: nameStart, nameLen: nameLen) {
                 if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
                     val bt: TypeInfo = exprType(c: inout c, id: args[0].expr)
                     if bt.ref < c.arena.types.count {
@@ -193,7 +193,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             }
             // array intrinsics: arrayGet returns the element type of its `Array[T]`
             // argument, arrayLen returns U64 (arrayPush/arraySet return ()).
-            if isArrayIntrinsicName(c: inout c, nameStart: nameStart, nameLen: nameLen) {
+            if c.isArrayIntrinsicName(nameStart: nameStart, nameLen: nameLen) {
                 if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") {
                     val at: TypeInfo = exprType(c: inout c, id: args[0].expr)
                     return typeInfoOfName(c: inout c, start: at.nameStart, len: at.nameLen, isArray: false)
