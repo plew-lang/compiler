@@ -73,7 +73,7 @@ fn registerGenStructBodies(c: inout Comp, st: inout LlvmCtx) {
 fn genStructSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
     mut val i: U64 = 0
     while i < st.genStructRefs.count {
-        if typeRefEq(c: inout c, a: st.genStructRefs[i], b: ref) {
+        if c.typeRefEq(a: st.genStructRefs[i], b: ref) {
             return i
         }
         i += 1
@@ -427,7 +427,7 @@ fn setStructEnv(c: inout Comp, st: inout LlvmCtx, ref: U64) -> Bool {
 fn genEnumSlot(c: inout Comp, st: inout LlvmCtx, ref: U64) -> U64 {
     mut val i: U64 = 0
     while i < st.genEnumRefs.count {
-        if typeRefEq(c: inout c, a: st.genEnumRefs[i], b: ref) {
+        if c.typeRefEq(a: st.genEnumRefs[i], b: ref) {
             return i
         }
         i += 1

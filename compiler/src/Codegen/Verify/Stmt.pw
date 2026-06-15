@@ -12,7 +12,7 @@ pub impl Comp {
                     checkLitCtx(c: inout self, id: init, eKind: 0, eBits: 0, eSgn: false)
                 }
                 // a bare unique place on the rhs is a forbidden copy (`val g = f`).
-                checkUniquePlaceCopy(c: inout self, exprId: init, inoutOk: false)
+                self.checkUniquePlaceCopy(exprId: init, inoutOk: false)
                 verifyExpr(c: inout self, id: init)
                 // an explicit annotation whose category clearly disagrees with the
                 // initializer reinterprets the bits — a hidden-meaning bug (`val x: I64 =
@@ -27,7 +27,7 @@ pub impl Comp {
                 // declared an array but initialized with a non-array (`val a: Array[I64] =
                 // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
                 if tyIsArray {
-                    if valueIsReliablyNonArray(c: inout self, value: init) {
+                    if self.valueIsReliablyNonArray(value: init) {
                         compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: init)), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
                     }
                 }
@@ -99,7 +99,7 @@ pub impl Comp {
                     // `return 5I64` from it is a type error (the value is silently dropped),
                     // unless the value is itself the unit `()` (a bare-record construction).
                     if self.cur.retVoid {
-                        if !(exprIsUnit(c: inout self, id: value)) {
+                        if !(self.exprIsUnit(id: value)) {
                             compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "a function with no return type cannot return a value (spec/04)")
                         }
                     }
@@ -107,7 +107,7 @@ pub impl Comp {
                     // returning a non-array where the declared return type IS an array
                     // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
                     if self.cur.retIsArray {
-                        if valueIsReliablyNonArray(c: inout self, value: value) {
+                        if self.valueIsReliablyNonArray(value: value) {
                             compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
                         }
                     }
@@ -133,26 +133,26 @@ pub impl Comp {
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
                 checkLitCtx(c: inout self, id: cond, eKind: 0, eBits: 0, eSgn: false)
-                checkCondBool(c: inout self, cond: cond)
+                self.checkCondBool(cond: cond)
                 verifyExpr(c: inout self, id: cond)
                 // locals already in scope are "outside" this branch (a `move` of one
                 // inside would be conditional) — mark the boundary for the move guard.
                 val savedBB: U64 = self.cur.branchBase
                 self.cur.branchBase = scopeMark(c: inout self)
-                verifyBlock(c: inout self, blockId: thenBlk)
+                self.verifyBlock(blockId: thenBlk)
                 if hasElse {
-                    verifyBlock(c: inout self, blockId: elseBlk)
+                    self.verifyBlock(blockId: elseBlk)
                 }
                 self.cur.branchBase = savedBB
             }
             Stmt.While(val cond, val body) => {
                 checkLitCtx(c: inout self, id: cond, eKind: 0, eBits: 0, eSgn: false)
-                checkCondBool(c: inout self, cond: cond)
+                self.checkCondBool(cond: cond)
                 verifyExpr(c: inout self, id: cond)
                 val savedBB: U64 = self.cur.branchBase
                 self.cur.branchBase = scopeMark(c: inout self)
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
-                verifyBlock(c: inout self, blockId: body)
+                self.verifyBlock(blockId: body)
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
                 self.cur.branchBase = savedBB
             }
@@ -228,7 +228,7 @@ pub impl Comp {
                     }
                 }
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
-                verifyBlock(c: inout self, blockId: body)
+                self.verifyBlock(blockId: body)
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
                 self.cur.branchBase = savedForBB
                 popLocals(c: inout self, mark: forMark)
@@ -246,7 +246,7 @@ pub impl Comp {
                     self.cur.branchBase = armMark
                     checkDestructureComplete(c: inout self, a: arms[ai])
                     verifyAddArmBinds(c: inout self, a: arms[ai], scrut: scrut)
-                    verifyBlock(c: inout self, blockId: arms[ai].body)
+                    self.verifyBlock(blockId: arms[ai].body)
                     self.cur.branchBase = savedArmBB
                     popLocals(c: inout self, mark: armMark)
                     ai += 1
@@ -287,7 +287,7 @@ pub impl Comp {
                 }
                 verifyExpr(c: inout self, id: base)
                 verifyExpr(c: inout self, id: index)
-                checkIndexKeyType(c: inout self, base: base, index: index)
+                self.checkIndexKeyType(base: base, index: index)
             }
             Expr.Field(base: val fbase, val nameStart, val nameLen) => {
                 // the whole place must be mutable (binding + field both `mut val`).
@@ -312,7 +312,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        checkUniquePlaceCopy(c: inout self, exprId: value, inoutOk: false)
+        self.checkUniquePlaceCopy(exprId: value, inoutOk: false)
         verifyExpr(c: inout self, id: value)
         // a plain reassignment `u = e` reinitializes `u`, so it is live again — clear any
         // use-after-move mark (the value was verified above, so a moved read in `e` is
@@ -320,7 +320,7 @@ pub impl Comp {
         if op == opAssign() {
             match self.arena.exprs[target] {
                 Expr.Ident(val start, val len) => {
-                    verifyUnmarkMoved(c: inout self, idx: localIndexByName(c: inout self, start: start, len: len))
+                    self.verifyUnmarkMoved(idx: localIndexByName(c: inout self, start: start, len: len))
                 }
                 _ => {}
             }

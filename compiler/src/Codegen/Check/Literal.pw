@@ -210,10 +210,10 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             }
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            checkCallArgs(c: inout c, id: id, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.checkCallArgs(id: id, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            checkMethodArgs(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            c.checkMethodArgs(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Cast(val operand, val tyStart, val tyLen, ty: _) => {
             // The operand has its own type; a direct-literal operand is range-
@@ -409,7 +409,7 @@ fn checkLitSpanCtx(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bo
         if !isArray {
             match c.arena.exprs[id] {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
-                    if isGenericEnumInst(c: inout c, ref: ctxRef) || isGenericInst(c: inout c, ref: ctxRef) {
+                    if c.isGenericEnumInst(ref: ctxRef) || isGenericInst(c: inout c, ref: ctxRef) {
                         checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ctxRef, fields: fields)
                         return
                     }

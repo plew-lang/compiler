@@ -25,7 +25,7 @@ fn findAdapterInst(c: inout Comp, st: inout LlvmCtx, recv: U64, headKw: String) 
             if t.args.count > 0U64 {
                 val arg0: U64 = t.args[0]
                 if recvRef != 0U64 {
-                    if typeRefEq(c: inout c, a: arg0, b: recvRef) {
+                    if c.typeRefEq(a: arg0, b: recvRef) {
                         return ref
                     }
                 } else {

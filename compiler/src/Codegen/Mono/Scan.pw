@@ -71,8 +71,8 @@ pub impl Comp {
         self.cur.typeArgs = instArgs
         val grounded: U64 = groundTypeRef(c: inout self, ref: at.args[0])
         mut val ti: TypeInfo = scalarInfo()
-        if isCompoundType(c: inout self, ref: grounded) {
-            val mn: Bind = appendMangleSpan(c: inout self, ref: grounded)
+        if self.isCompoundType(ref: grounded) {
+            val mn: Bind = self.appendMangleSpan(ref: grounded)
             ti = <TypeInfo kind=3 nameStart=mn.nameStart nameLen=mn.nameLen ref=0 />
         } else {
             val gt: TypeRef = self.arena.types[grounded]

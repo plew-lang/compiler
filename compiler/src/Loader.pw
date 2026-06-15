@@ -24,7 +24,7 @@ fn parseAndLowerFile(c: inout Comp, fileBytes: Array[U8], fileStart: U64) -> Arr
     }
     mut val i: U64 = 0
     while i < items.count {
-        lowerTopItem(c: inout c, item: items[i])
+        c.lowerTopItem(item: items[i])
         i += 1
     }
     return items

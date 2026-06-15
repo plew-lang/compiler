@@ -195,8 +195,8 @@ fn arrayElemNameForRef(c: inout Comp, elemRef: U64) -> Bind {
         // concrete lookup ref and return the template name (`Array_T_get`). Only a
         // ground stored element is a real match; the fallback below covers the rest.
         if ae.fieldStart != 0 {
-            if tyRefIsGround(c: inout c, ref: ae.fieldStart) {
-                if sameMangle(c: inout c, refA: ae.fieldStart, refB: elemRef) {
+            if c.tyRefIsGround(ref: ae.fieldStart) {
+                if c.sameMangle(refA: ae.fieldStart, refB: elemRef) {
                     return <Bind nameStart=ae.nameStart nameLen=ae.nameLen fieldStart=elemRef fieldLen=0 />
                 }
             }

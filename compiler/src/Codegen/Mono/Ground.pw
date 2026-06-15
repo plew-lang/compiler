@@ -15,7 +15,7 @@ fn ensureArrayElemDeps(c: inout Comp, elemRef: U64) {
     if elemRef == 0 {
         return
     }
-    val r: U64 = resolveTy(c: inout c, tyRef: elemRef)
+    val r: U64 = c.resolveTy(tyRef: elemRef)
     if r >= c.arena.types.count {
         return
     }
@@ -31,7 +31,7 @@ fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
     // resolve a bare type parameter (`Array[T]` inside a generic instance) to its
     // concrete argument under the active env, so the runtime is emitted for the
     // instantiation (`Array[I32]`), not the template (`PlewArray_T`).
-    val re: U64 = resolveTy(c: inout c, tyRef: elemRef)
+    val re: U64 = c.resolveTy(tyRef: elemRef)
     if re >= c.arena.types.count {
         return
     }
@@ -42,8 +42,8 @@ fn registerArrayElemRef(c: inout Comp, elemRef: U64) {
     mut val nStart: U64 = c.arena.types[re].nameStart
     mut val nLen: U64 = c.arena.types[re].nameLen
     mut val fRef: U64 = 0
-    if isCompoundType(c: inout c, ref: re) {
-        val mn: Bind = appendMangleSpan(c: inout c, ref: re)
+    if c.isCompoundType(ref: re) {
+        val mn: Bind = c.appendMangleSpan(ref: re)
         nStart = mn.nameStart
         nLen = mn.nameLen
         fRef = re
@@ -169,7 +169,7 @@ export fn groundTypeRef(c: inout Comp, ref: U64) -> U64 {
         if rg != ref {
             return rg
         }
-        return resolveTy(c: inout c, tyRef: ref)
+        return c.resolveTy(tyRef: ref)
     }
     mut val newArgs: Array[U64] = []
     mut val changed: Bool = false
@@ -306,7 +306,7 @@ fn instArgCollidesParamName(c: inout Comp, instRef: U64) -> Bool {
         // parameter — a template position, resolved by the active env, not a collision).
         val argId: U64 = arg.nameId
         if argId != 0U64 {
-            if !(isTypeParamName(c: inout c, start: arg.nameStart, len: arg.nameLen)) {
+            if !(c.isTypeParamName(start: arg.nameStart, len: arg.nameLen)) {
                 mut val pi: U64 = 0
                 while pi < params.count {
                     if params[pi].nameId == argId {
@@ -376,7 +376,7 @@ fn scanType(c: inout Comp, ref: U64) {
         mut val fj: U64 = 0
         mut val seen: Bool = false
         while fj < c.monoWork.fnTypes.count {
-            if typeRefEq(c: inout c, a: c.monoWork.fnTypes[fj], b: ref) {
+            if c.typeRefEq(a: c.monoWork.fnTypes[fj], b: ref) {
                 seen = true
             }
             fj += 1
@@ -386,10 +386,10 @@ fn scanType(c: inout Comp, ref: U64) {
         }
     }
     if isGenericInst(c: inout c, ref: ref) {
-        if tyRefIsGround(c: inout c, ref: ref) {
+        if c.tyRefIsGround(ref: ref) {
             mut val j: U64 = 0
             while j < c.monoWork.genInsts.count {
-                if typeRefEq(c: inout c, a: c.monoWork.genInsts[j], b: ref) {
+                if c.typeRefEq(a: c.monoWork.genInsts[j], b: ref) {
                     return
                 }
                 j += 1

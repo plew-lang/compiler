@@ -77,7 +77,7 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
         checkMakeFieldExists(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, mf: mf)
         // a unique field value must be moved/constructed in, not copied from a
         // place (which would double-deinit: the source and the new owner).
-        checkUniquePlaceCopy(c: inout c, exprId: mf.value, inoutOk: false)
+        c.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
         mut val ft: TypeInfo = scalarInfo()
         if isRefInst(c: inout c, ref: ty) {
             // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
@@ -85,7 +85,7 @@ fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U6
             val rt: TypeRef = c.arena.types[ty]
             ft = c.typeInfoOfRef(ref: rt.args[0])
         } else {
-            if isGenericEnumInst(c: inout c, ref: ty) {
+            if c.isGenericEnumInst(ref: ty) {
                 ft = c.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             } else {
                 if isGenericInst(c: inout c, ref: ty) {

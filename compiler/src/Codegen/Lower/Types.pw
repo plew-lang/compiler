@@ -213,8 +213,8 @@ fn lowerType(c: inout Comp, t: TypeAst) -> PType {
     mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
     if t.args.count > 0 {
         if rangeEquals(bytes: c.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
-            if isCompoundType(c: inout c, ref: args[0]) {
-                val mn: Bind = appendMangleSpan(c: inout c, ref: args[0])
+            if c.isCompoundType(ref: args[0]) {
+                val mn: Bind = c.appendMangleSpan(ref: args[0])
                 result = <PType start=mn.nameStart len=mn.nameLen isArray=true ref=ref />
             } else {
                 result = <PType start=argPtys[0].start len=argPtys[0].len isArray=true ref=ref />

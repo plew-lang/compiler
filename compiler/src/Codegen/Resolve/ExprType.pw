@@ -310,7 +310,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 // named by the mangled element name.
                 val er: U64 = arrayElemRef(c: inout c, start: bt.nameStart, len: bt.nameLen)
                 if er != 0 {
-                    val rr: U64 = resolveTy(c: inout c, tyRef: er)
+                    val rr: U64 = c.resolveTy(tyRef: er)
                     if rr < c.arena.types.count {
                         val rt: TypeRef = c.arena.types[rr]
                         if rangeEquals(bytes: c.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
@@ -324,7 +324,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                         // can recover the pointee/instantiation (typeInfoOfRef would
                         // drop the ref for a non-Array compound). Only for compound
                         // elements — a simple scalar element (`U8`) must stay scalar.
-                        if isCompoundType(c: inout c, ref: rr) {
+                        if c.isCompoundType(ref: rr) {
                             return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=rr />
                         }
                     }

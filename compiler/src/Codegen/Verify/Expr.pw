@@ -43,7 +43,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // target an enclosing loop, so reset the loop depth across its body.
             val sLoopDepth: U64 = c.cur.verifyLoopDepth
             c.cur.verifyLoopDepth = 0U64
-            verifyBlock(c: inout c, blockId: body)
+            c.verifyBlock(blockId: body)
             c.cur.verifyLoopDepth = sLoopDepth
             // a closure with a declared NON-unit return type must return on every path,
             // like a function (`fn()->I64 { }` is missing its return; `fn()->() { }` is
@@ -228,7 +228,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             verifyExpr(c: inout c, id: base)
             verifyExpr(c: inout c, id: index)
             tcCheckArrayIndex(c: inout c, base: base, index: index)
-            checkIndexKeyType(c: inout c, base: base, index: index)
+            c.checkIndexKeyType(base: base, index: index)
         }
         Expr.Array(val elems) => {
             mut val i: U64 = 0
@@ -316,20 +316,20 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 val armMark: U64 = scopeMark(c: inout c)
                 checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
-                verifyBlock(c: inout c, blockId: arms[ai].body)
+                c.verifyBlock(blockId: arms[ai].body)
                 popLocals(c: inout c, mark: armMark)
                 ai += 1
             }
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
             verifyExpr(c: inout c, id: cond)
-            verifyBlock(c: inout c, blockId: thenBlk)
-            verifyBlock(c: inout c, blockId: elseBlk)
+            c.verifyBlock(blockId: thenBlk)
+            c.verifyBlock(blockId: elseBlk)
         }
         Expr.Ident(val start, val len) => {
             // use-after-move (spec/03): reading a local whose value was `move`d away.
             if c.cur.verifyMovedIdx.count > 0U64 {
-                if verifyIsMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len)) {
+                if c.verifyIsMoved(idx: localIndexByName(c: inout c, start: start, len: len)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
                 }
             }
@@ -361,7 +361,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             if !(isBorrow) {
                 match c.arena.exprs[operand] {
                     Expr.Ident(val start, val len) => {
-                        verifyMarkMoved(c: inout c, idx: localIndexByName(c: inout c, start: start, len: len))
+                        c.verifyMarkMoved(idx: localIndexByName(c: inout c, start: start, len: len))
                     }
                     _ => {}
                 }

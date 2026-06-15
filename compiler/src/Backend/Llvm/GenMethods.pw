@@ -13,7 +13,7 @@ fn genMethSlotFor(c: inout Comp, st: inout LlvmCtx, mfi: U64, instRef: U64, ownA
     mut val i: U64 = 0
     while i < st.genMethK.count {
         if st.genMethK[i] == mfi {
-            if typeRefEq(c: inout c, a: st.genMethInst[i], b: instRef) {
+            if c.typeRefEq(a: st.genMethInst[i], b: instRef) {
                 // a method-own-param terminal (`fold[B]`) is keyed by its own args too,
                 // so the same receiver instance folding into different accumulators maps
                 // to distinct slots.
@@ -175,7 +175,7 @@ fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
     }
     mut val i: U64 = 0
     while i < a.count {
-        if !(typeRefEq(c: inout c, a: a[i], b: b[i])) {
+        if !(c.typeRefEq(a: a[i], b: b[i])) {
             return false
         }
         i += 1

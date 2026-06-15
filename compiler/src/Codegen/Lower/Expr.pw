@@ -139,7 +139,7 @@ fn lowerExpr(c: inout Comp, e: ExprAst) -> U64 {
             mut val isNsCall: Bool = false
             match recv {
                 ExprAst.Ident(name: val rname, span: _) => {
-                    if isNamespaceName(c: inout c, name: rname) {
+                    if c.isNamespaceName(name: rname) {
                         isNsCall = true
                     }
                 }

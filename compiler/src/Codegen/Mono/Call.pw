@@ -392,7 +392,7 @@ fn scanAddArmBinds(c: inout Comp, a: MatchArm, scrutTi: TypeInfo) {
         addForStructBinds(c: inout c, et: scrutTi, binds: a.binds)
         return
     }
-    val genericMatch: Bool = isGenericEnumInst(c: inout c, ref: scrutTi.ref)
+    val genericMatch: Bool = c.isGenericEnumInst(ref: scrutTi.ref)
     mut val bi: U64 = 0
     while bi < a.binds.count {
         val bd: Bind = a.binds[bi]
