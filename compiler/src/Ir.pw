@@ -1027,6 +1027,17 @@ pub impl Func { factory }
 pub impl Global { factory }
 pub impl NewtypeDef { factory }
 
+// Append every byte of `from` onto `into`. A generic byte-buffer primitive used
+// across the whole compiler (path building, LLVM string emission, …), so it lives
+// in the shared IR leaf rather than any one pass.
+export fn appendBytes(into: inout Array[U8], from: Array[U8]) {
+    mut val i: U64 = 0
+    while i < from.count {
+        into.append(from[i])
+        i += 1
+    }
+}
+
 // ── name interner (Phase C) ──────────────────────────────────────────────────
 // The interner lives with the IR core: `Comp.pushType` interns every type head,
 // so the service must be reachable from inside this module (a back-edge to a pass
