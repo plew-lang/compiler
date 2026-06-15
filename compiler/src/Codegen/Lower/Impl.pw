@@ -6,6 +6,25 @@
 // less, before the body), then either a `via` alias (no body/func) or the real
 // method appended to c.arena.funcs with its `where`-bounds (method-own then impl-level).
 // `recvN` is the (re-interned) receiver type name; `implParamBinds` the impl's `[T]`.
+// Append the associated-type binders of the trait named by `nameId` (if such a trait is
+// loaded) to `scope`. Associated types (`type Item`) are binders, not module-scoped types,
+// so a method/req signature naming one (`-> Optional[Item]`) must skip it in the type-
+// visibility walk (siteOffset 0). Used to seed an impl/extension's lowering-time skip scope.
+fn appendTraitAssocTypes(c: inout Comp, scope: inout Array[Bind], nameId: U64) {
+    mut val ti: U64 = 0
+    while ti < c.decls.traits.count {
+        val td: TraitDef = c.decls.traits[ti]
+        if td.nameId == nameId {
+            mut val ai: U64 = 0
+            while ai < td.assocTypes.count {
+                scope.append(td.assocTypes[ai])
+                ai += 1
+            }
+        }
+        ti += 1
+    }
+}
+
 fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
     val nameN: Bind = internBytes(c: inout c, s: m.name)
     // typeParams = impl's `[T]` (in scope for every member) ++ the method's own.
@@ -21,6 +40,20 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
         typeParams.append(ownParams[opi])
         opi += 1
     }
+    // lowering-time skip scope for lowerType = the impl's scope already on c.cur.typeParams
+    // (impl `[T]` ++ the implemented/extended trait's associated types, set by lowerImpl) ++
+    // this method's own `[U]`. The associated types matter for a provided method like
+    // `Iterator.map` whose signature names `Item` — a binder, not a module type. (`typeParams`
+    // above, stored on the Func for codegen, stays impl ++ method; assoc types aren't generic
+    // substitution params, only skip-scope.)
+    val savedTP: Array[Bind] = c.cur.typeParams
+    mut val skipScope: Array[Bind] = savedTP
+    mut val ski: U64 = 0
+    while ski < ownParams.count {
+        skipScope.append(ownParams[ski])
+        ski += 1
+    }
+    c.cur.typeParams = skipScope
     val params: Array[Param] = lowerParams(c: inout c, params: m.params)
     mut val retStart: U64 = 0
     mut val retLen: U64 = 0
@@ -74,6 +107,7 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
             val realN: Bind = internBytes(c: inout c, s: m.viaName)
             c.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout c, start: realN.nameStart, len: realN.nameLen) />)
             witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+            c.cur.typeParams = savedTP
             return
         }
         witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
@@ -93,6 +127,7 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
     c.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout c, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
     appendFuncBounds(c: inout c, fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
+    c.cur.typeParams = savedTP
 }
 
 // Lower an `impl` block (spec/07,08): each member becomes a method / assoc-fn Func
@@ -103,6 +138,24 @@ fn lowerMethodMember(c: inout Comp, im: ImplAst, m: MemberAst, recvN: Bind, impl
 fn lowerImpl(c: inout Comp, im: ImplAst) {
     val recvN: Bind = internBytes(c: inout c, s: im.recvType.name)
     val implParamBinds: Array[Bind] = lowerTypeParamNames(c: inout c, names: im.implParams)
+    // the impl's lowering-time skip scope: its `[T]`, plus the associated types of the trait
+    // it implements/extends — both a bare `impl Iterator` (recv IS the trait, its provided
+    // methods name `Item`) and `impl T as Tr` (the witnessed signatures name `Tr`'s assoc
+    // types). In scope for assoc-type bindings, trait args, deinit bodies, and every method
+    // (each method then adds its own `[U]` in lowerMethodMember, restoring to this).
+    mut val implScope: Array[Bind] = []
+    mut val ipb: U64 = 0
+    while ipb < implParamBinds.count {
+        implScope.append(implParamBinds[ipb])
+        ipb += 1
+    }
+    appendTraitAssocTypes(c: inout c, scope: inout implScope, nameId: intern(c: inout c, start: recvN.nameStart, len: recvN.nameLen))
+    if im.isTraitImpl {
+        val trN: Bind = internBytes(c: inout c, s: im.traitName)
+        appendTraitAssocTypes(c: inout c, scope: inout implScope, nameId: intern(c: inout c, start: trN.nameStart, len: trN.nameLen))
+    }
+    val savedTP: Array[Bind] = c.cur.typeParams
+    c.cur.typeParams = implScope
     mut val witnessed: Array[Func] = []
     mut val mi: U64 = 0
     while mi < im.members.count {
@@ -161,6 +214,7 @@ fn lowerImpl(c: inout Comp, im: ImplAst) {
     // attach pending `@[...]` directives to this impl block (a macro on an impl);
     // declStart/declEnd = the impl block's source span for the gen harness slice.
     drainDerives(c: inout c, typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: im.span.start, declEnd: im.span.end)
+    c.cur.typeParams = savedTP
 }
 
 // Lower a body-less signature (trait requirement / extern decl) to a Func. The
@@ -171,6 +225,16 @@ fn lowerSigToFunc(c: inout Comp, sig: SigAst, isExtern: Bool, isCExtern: Bool) -
     val nameStart: U64 = sig.nameSpan.start
     val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
     val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: sig.typeParams)
+    // a requirement signature's `[U]` (and the trait's own params, kept in c.cur.typeParams
+    // by lowerTrait) are in scope for its param/return types — skip those heads in lowerType.
+    val savedTP: Array[Bind] = c.cur.typeParams
+    mut val scopeTP: Array[Bind] = savedTP
+    mut val stpi: U64 = 0
+    while stpi < typeParams.count {
+        scopeTP.append(typeParams[stpi])
+        stpi += 1
+    }
+    c.cur.typeParams = scopeTP
     val params: Array[Param] = lowerParams(c: inout c, params: sig.params)
     mut val retStart: U64 = 0
     mut val retLen: U64 = 0
@@ -183,6 +247,7 @@ fn lowerSigToFunc(c: inout Comp, sig: SigAst, isExtern: Bool, isCExtern: Bool) -
         retIsArray = pt.isArray
         retRef = pt.ref
     }
+    c.cur.typeParams = savedTP
     return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern />
 }
 
@@ -198,12 +263,10 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
         supertraits.append(internBytes(c: inout c, s: t.supertraits[si]))
         si += 1
     }
-    mut val reqs: Array[Func] = []
-    mut val ri: U64 = 0
-    while ri < t.reqs.count {
-        reqs.append(lowerSigToFunc(c: inout c, sig: t.reqs[ri], isExtern: false, isCExtern: false))
-        ri += 1
-    }
+    // collect the trait's binders BEFORE lowering reqs: its type params `[Rhs]` AND its
+    // associated types `Item` are both in scope inside the requirement signatures (`-> Item`,
+    // `(rhs: Rhs)`) and are binders, not module-scoped types — put them in the lowering-time
+    // scope so lowerType skips those heads. (`Self` has no global decl, so it self-skips.)
     mut val assocTypes: Array[Bind] = []
     mut val ai: U64 = 0
     while ai < t.assocTypes.count {
@@ -211,6 +274,26 @@ fn lowerTrait(c: inout Comp, t: TraitAst) {
         ai += 1
     }
     val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: t.typeParams)
+    val savedTP: Array[Bind] = c.cur.typeParams
+    mut val scopeTP: Array[Bind] = []
+    mut val stpi: U64 = 0
+    while stpi < typeParams.count {
+        scopeTP.append(typeParams[stpi])
+        stpi += 1
+    }
+    mut val sai: U64 = 0
+    while sai < assocTypes.count {
+        scopeTP.append(assocTypes[sai])
+        sai += 1
+    }
+    c.cur.typeParams = scopeTP
+    mut val reqs: Array[Func] = []
+    mut val ri: U64 = 0
+    while ri < t.reqs.count {
+        reqs.append(lowerSigToFunc(c: inout c, sig: t.reqs[ri], isExtern: false, isCExtern: false))
+        ri += 1
+    }
+    c.cur.typeParams = savedTP
     c.decls.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
     // attach pending `@[...]` directives to this trait (a macro on a trait);
     // declStart/declEnd = the trait's source span for the gen harness slice.

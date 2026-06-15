@@ -113,6 +113,22 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 **実装で判明した罠（M5 完了済）**：①**型注釈スパンは再 intern**（Phase D・ソース offset でない）ので `moduleOf(型スパン)` は使えない ── use-site module は**包含 decl の実 offset**（func `nameStart`・struct/enum `defOffset`）から、型の定義モジュールも `defOffset` から取る。②`NewtypeDef` に `defOffset` を追加（StructDef/EnumDef と同型）＝cross-module newtype が解決。③型パラメータは**包含 decl の `typeParams`** と照合して skip（グローバル `isTypeParamName` は単一大文字 struct `P` 等で破れる ── `FilterIter[I,P,E]`）。④循環検出は import 名→`definingModuleOfName` で module 辺を作り DFS color。⑤backend は `array[i].field` チェーン読みを未対応 ── 中間値をローカル束縛して回避。
 
+### M5 後続：型可視性をチョークポイント検査へ根治（siteOffset モデル）
+
+**問題**：上記の罠①③に引きずられ、当初の `checkTypeVisibility` は**型注釈サイトを手で列挙**（func の param/ret・struct/enum field）していた。これは**列挙漏れが構造的に起こる**（local `val x: T`／newtype underlying／trait 要求シグネチャ／式中の `as`・明示型引数・closure sig が素通り）。罠①の本質は「`lowerType` が `TypeAst.span`（実ソース offset）を捨て、`internBytes(name)` の再 intern スパンに差し替えている」こと ── これが defOffset proxy と手列挙の両方を強いていた**設計の誤り**。
+
+**根治**：`TypeRef` に `siteOffset`（実ソース offset）を持たせ、唯一のチョークポイント `lowerType` で `t.span.start` を刻む。`checkTypeVisibility` は **`c.arena.types` を一様走査**する単一パスにする。プログラム中の**あらゆる書かれた型**（param/field/local/newtype/trait req/`as`/明示型引数/将来の新文法）は必ず `lowerType` を通るので、**サイト列挙漏れが原理的に起こらない**（チョークポイント検査）。
+- **合成 TypeRef の除外**＝`siteOffset` の既定は 0。`lowerType` の通常 push（名前付き型）でのみ `t.span.start` を刻み、record-struct push やその他の合成 `pushType` 呼び出しは 0（=skip）のまま。offset 0 は実注釈には決して現れない（注釈は decl 内部にあり offset 0 は entry ファイル先頭）。`StructDef.defOffset != 0` 慣習と同じ。
+- **型パラメータ skip**＝`lowerType` で head が in-scope 型パラメータなら `siteOffset=0`。スコープは `c.cur.typeParams`（cursor の generic 置換環＝意味的に正しい住処）を**lowering 中も**設定して供給する。各 decl-lowering 関数（struct/enum/func/method/impl/trait req）で save/restore、`lowerTopItem` で `[]` リセット（staleness 防止のセーフティネット）。
+- **検査の単純化**＝型パラメータは事前 skip 済なので、`checkTypeName` から `typeParams`／`nameInTypeParams`／`isTypeParamName` を落とせる。`Self`・関連型は「グローバル decl が無い」で自然に skip。`checkTypeArgs`（配列だけ head に要素を持つ特例の再帰 walk）は不要化＝args も各々 arena の TypeRef なので同じ一様走査が拾う。
+- **副産物**＝エラー行が decl 名でなく**注釈そのもの**を指す（正直な provenance）。式中の型注釈（`as`・明示型引数・closure sig）も新たに被覆（従来は素通り）。
+- **検証**＝コンパイラ自身が generics の塊なので、型パラメータ scope の配線漏れ・衝突は self-host で露見する（fixpoint が実テスト）。残る理論的偽陽性は「型パラメータ名が実在の型名と衝突」のみ＝稀・loud・リネームで回避（単一大文字 struct 衝突と同根）。
+
+**チョークポイント化が炙り出した健全な churn**（従来は未 walk ゆえ素通りしていた・移行で顕在化＝正しい挙動）：
+- **prelude 型は ambient**＝`std/Prelude.pw`／`@Std/Core` は auto-load で import パスを持たず常時 in-scope（`SipHasher.new()` 等が bare で解決する de-facto ambient）。`Modules.preludeModule`（id）を記録し `defModuleVisible` が同モジュール同様に許可。lang-item 型（`isLangItemTypeName`）と同じ ambient 軸の一般化。
+- **alias を型位置で解決**＝`import M with { Real as Alias }` の `Alias` を型注釈に書く use を `realTypeNameInModule`（use-site module scope）で real 名へ解決してから可視性判定（imports/exports は real 名 keyed）。従来 alias は param 位置に現れず未検証だった。
+- **トレイト関連型を impl の skip scope へ**＝`pub impl Iterator { fn map(...) -> ...[Item] }` 等、提供メソッドが書く関連型 `Item` は binder。`lowerImpl` が実装/拡張するトレイトの `assocTypes` を `appendTraitAssocTypes` で skip scope に積む（`lowerMethodMember` はそれ＋メソッド own `[U]` を継ぐ）。ユーザが `struct Item` を定義した時のみ衝突として顕在化＝関連型 scope の必要性を示す実例。
+
 ### M2 の前提：ネスト place 変異（backend 機能・解決済）
 
 `c.exprs`→`c.arena.exprs` は **読み取りは元から動くが、変異（`c.arena.exprs.append`／`c.arena.exprs[i]=v`／`inout c.arena.exprs`／ネスト scalar field 代入）は backend が未対応だった**（lvalue ポインタ計算が一段＝local/直下フィールド止まり）。`placePtrStrict`（再帰的 lvalue ポインタ＝Ident／ネスト Field を GEP／array Index 要素）を入れ、`placePtrOf`・`arrStoragePtr`・index/field 代入をそれ経由にして解決（generic ネスト place は従来どおり未対応）。**M2 はこの backend 拡張が前提**。

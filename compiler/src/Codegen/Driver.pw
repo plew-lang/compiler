@@ -215,6 +215,7 @@ fn runFrontend() -> Comp {
         val prelStart: U64 = c.arena.bytes.count
         c.appendSrc(from: prelSrc.bytes)
         c.modules.ranges.append(<Bind nameStart=prelStart nameLen=c.arena.bytes.count - prelStart fieldStart=nextModuleId fieldLen=0 />)
+        c.modules.preludeModule = nextModuleId
         nextModuleId = nextModuleId + 1
         val items: Array[TopItemAst] = parseAndLowerFile(c: inout c, fileBytes: prelSrc.bytes, fileStart: prelStart)
     }

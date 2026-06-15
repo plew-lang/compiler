@@ -196,7 +196,20 @@ fn lowerType(c: inout Comp, t: TypeAst) -> PType {
         }
         li += 1
     }
-    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels />)
+    // The REAL source offset of this annotation (TypeAst.span.start), for scoped
+    // type-visibility (Check/Visibility.pw walks c.arena.types by siteOffset). 0 = skip:
+    // a head naming an in-scope type parameter (c.cur.typeParams, set during lowering) is
+    // a binder, not a module-scoped type — exclude it from the visibility walk.
+    mut val site: U64 = t.span.start
+    mut val tpi: U64 = 0
+    while tpi < c.cur.typeParams.count {
+        val tp: Bind = c.cur.typeParams[tpi]
+        if spansEqual(c: inout c, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
+            site = 0U64
+        }
+        tpi += 1
+    }
+    val ref: U64 = c.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels siteOffset=site />)
     mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
     if t.args.count > 0 {
         if rangeEquals(bytes: c.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

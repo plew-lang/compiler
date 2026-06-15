@@ -52,6 +52,13 @@ struct TypeRef {
     // (spec/08,12). Empty for ordinary generic args. Resolved against the trait's
     // type params + associated types when building the existential's dispatch thunks.
     pub val argLabels: Array[U64] = []
+    // the REAL source offset where this type was written (TypeAst.span.start), stamped by
+    // `lowerType` for scoped type-visibility (Check/Visibility.pw). Unlike nameStart (which
+    // is re-interned and so unusable for `moduleOf`), this is a genuine source coordinate:
+    // `moduleOf(siteOffset)` is the module the annotation lives in. 0 = a synthetic TypeRef
+    // (compiler-built: record struct, Optional/Result wrappers, …) or a type-parameter head
+    // — both excluded from the visibility walk. A real annotation never sits at offset 0.
+    pub val siteOffset: U64 = 0
 }
 
 // A variable binding in scope during codegen (param, let, or match bind), used
@@ -764,6 +771,12 @@ struct Modules {
     pub mut val ranges: Array[Bind] = []
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
+    // the module id of the auto-loaded implicit prelude (std/Prelude.pw), or the
+    // "no prelude" sentinel 4_000_000_000 when none was loaded (a freshly-seeded
+    // compiler). The prelude is ambient — its types are in scope everywhere without an
+    // `import` (it has no import path), like the lang-item types — so scoped type
+    // visibility (Check/Visibility.pw) treats a type defined here as visible from any module.
+    pub mut val preludeModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 
@@ -958,7 +971,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.arena.types.count
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels siteOffset=t.siteOffset />)
         return id
     }
 }

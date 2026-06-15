@@ -55,6 +55,10 @@ fn lowerFieldDef(c: inout Comp, f: FieldAst) -> FieldDef {
 fn lowerStructDecl(c: inout Comp, d: DeclAst) {
     val nm: Bind = internBytes(c: inout c, s: d.name)
     val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: d.typeParams)
+    // field types may reference `[T]` — make them the lowering-time scope so lowerType
+    // marks type-parameter heads as skip (siteOffset 0). Restored at function end.
+    val savedTP: Array[Bind] = c.cur.typeParams
+    c.cur.typeParams = typeParams
     mut val fields: Array[FieldDef] = []
     mut val i: U64 = 0
     while i < d.fields.count {
@@ -84,6 +88,7 @@ fn lowerStructDecl(c: inout Comp, d: DeclAst) {
         di += 1
     }
     drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
+    c.cur.typeParams = savedTP
 }
 
 // Lower an `enum` DeclAst: append an EnumDef, then drain pending derives. Mirrors
@@ -91,6 +96,9 @@ fn lowerStructDecl(c: inout Comp, d: DeclAst) {
 fn lowerEnumDecl(c: inout Comp, d: DeclAst) {
     val nm: Bind = internBytes(c: inout c, s: d.name)
     val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: d.typeParams)
+    // variant payload types may reference `[T]` — see lowerStructDecl.
+    val savedTP: Array[Bind] = c.cur.typeParams
+    c.cur.typeParams = typeParams
     mut val variants: Array[Variant] = []
     mut val i: U64 = 0
     while i < d.variants.count {
@@ -116,6 +124,7 @@ fn lowerEnumDecl(c: inout Comp, d: DeclAst) {
         di += 1
     }
     drainDerives(c: inout c, typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
+    c.cur.typeParams = savedTP
 }
 
 // Lower a free function DeclAst: append a Func, then a FuncBound per `where` atom.
@@ -127,6 +136,10 @@ fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
     val nameStart: U64 = d.nameSpan.start
     val nameLen: U64 = d.nameSpan.end - d.nameSpan.start
     val typeParams: Array[Bind] = lowerTypeParamNames(c: inout c, names: d.typeParams)
+    // param / return / body-local types may reference `[T]` — make them the lowering-time
+    // scope so lowerType marks type-parameter heads as skip (siteOffset 0).
+    val savedTP: Array[Bind] = c.cur.typeParams
+    c.cur.typeParams = typeParams
     val params: Array[Param] = lowerParams(c: inout c, params: d.params)
     mut val retStart: U64 = 0
     mut val retLen: U64 = 0
@@ -143,6 +156,7 @@ fn lowerFuncDecl(c: inout Comp, d: DeclAst) {
     c.cur.lowerRetTy = retRef
     val body: U64 = lowerBlock(c: inout c, b: d.body)
     c.cur.lowerRetTy = savedRet
+    c.cur.typeParams = savedTP
     val fnIdx: U64 = c.arena.funcs.count
     c.arena.funcs.append(<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false />)
     mut val wi: U64 = 0

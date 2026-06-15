@@ -1,0 +1,9 @@
+// Scoped resolution (spec/15), newtype-underlying site: the underlying type of a
+// `newtype` must be in scope. `Tok` (@Std/Syntax) is loaded via `kindCode` but not
+// imported as a type, so naming it as the underlying must be rejected.
+import @Std/Syntax with { kindCode }
+
+newtype WrappedTok = Tok
+
+fn main() {
+}

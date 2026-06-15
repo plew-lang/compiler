@@ -92,13 +92,25 @@ fn checkUseVisibility(c: inout Comp) {
 // its `defOffset` (a real source offset) — its `nameStart` is re-interned (module 0)
 // and cannot serve `moduleOf`. The import side is keyed by the name text (the use-site
 // span and the import record share it), independent of which decl matched.
+// Is a type declaration whose own module is `moduleOf(defOffset)` visible to a use in
+// module `useMod` on the same-module / ambient-prelude axes? Same module is trivially
+// visible. The auto-loaded prelude (Driver: std/Prelude.pw) is ambient — its types are in
+// scope everywhere without an `import` (it has no import path), like the lang-item types —
+// so a type defined in the prelude module is visible from any module.
+fn defModuleVisible(c: inout Comp, defOffset: U64, useMod: U64) -> Bool {
+    val dm: U64 = moduleOf(c: inout c, offset: defOffset)
+    if dm == useMod { return true }
+    if dm == c.modules.preludeModule { return true }
+    return false
+}
+
 fn typeDeclVisibleFrom(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bool {
     val qId: U64 = intern(c: inout c, start: start, len: len)
     mut val i: U64 = 0
     while i < c.arena.structs.count {
         val sd: StructDef = c.arena.structs[i]
         if sd.nameId == qId {
-            if moduleOf(c: inout c, offset: sd.defOffset) == useMod { return true }
+            if defModuleVisible(c: inout c, defOffset: sd.defOffset, useMod: useMod) { return true }
         }
         i += 1
     }
@@ -106,7 +118,7 @@ fn typeDeclVisibleFrom(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bool
     while i < c.arena.enums.count {
         val ed: EnumDef = c.arena.enums[i]
         if ed.nameId == qId {
-            if moduleOf(c: inout c, offset: ed.defOffset) == useMod { return true }
+            if defModuleVisible(c: inout c, defOffset: ed.defOffset, useMod: useMod) { return true }
         }
         i += 1
     }
@@ -114,7 +126,7 @@ fn typeDeclVisibleFrom(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bool
     while i < c.decls.traits.count {
         val td: TraitDef = c.decls.traits[i]
         if td.nameId == qId {
-            if moduleOf(c: inout c, offset: td.nameStart) == useMod { return true }
+            if defModuleVisible(c: inout c, defOffset: td.nameStart, useMod: useMod) { return true }
         }
         i += 1
     }
@@ -122,7 +134,7 @@ fn typeDeclVisibleFrom(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bool
     while i < c.arena.newtypes.count {
         val nt: NewtypeDef = c.arena.newtypes[i]
         if spansEqual(c: inout c, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
-            if moduleOf(c: inout c, offset: nt.defOffset) == useMod { return true }
+            if defModuleVisible(c: inout c, defOffset: nt.defOffset, useMod: useMod) { return true }
         }
         i += 1
     }
@@ -155,122 +167,64 @@ fn typeDeclExistsGlobally(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
-// Does the name (start,len) match one of `typeParams` (the containing declaration's
-// generic parameters)? Such a reference is the type parameter, not a module-scoped type
-// (this is precise where the global isTypeParamName heuristic fails — e.g. a single
-// uppercase param `FilterIter[I, P, E]` whose `P` collides with a struct named `P`).
-fn nameInTypeParams(c: inout Comp, typeParams: Array[Bind], start: U64, len: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < typeParams.count {
-        val b: Bind = typeParams[i]
-        if spansEqual(c: inout c, aStart: b.nameStart, aLen: b.nameLen, bStart: start, bLen: len) { return true }
-        i += 1
+// Check one user-written type name (head span start,len) written at real source offset
+// `siteOffset`. It must resolve to a declaration in scope of `siteOffset`'s module (same
+// module, or imported+exported). Lang-item types are ambient. A type-parameter head was
+// already excluded at lowering (its TypeRef carries siteOffset 0, so the walk never reaches
+// here); `Self` / associated types have no global declaration, so the existence gate skips
+// them silently. A genuine out-of-scope type — one that exists in another module but isn't
+// imported — is the loud error.
+// Resolve a module-local import alias `import M with { Real as Alias }` to `Real`, scoped
+// to module `useMod` (the use site's module from its real siteOffset — the type-name span is
+// re-interned, so the alias's own moduleOf must be compared against useMod). Returns the real
+// name span, or the input unchanged when no alias of this module matches. c.modules.imports /
+// exports are keyed by the REAL name, so resolving first lets the ordinary visibility check
+// (imported + exported) succeed for an aliased type use.
+fn realTypeNameInModule(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bind {
+    mut val ai: U64 = 0
+    while ai < c.decls.importAliases.count {
+        val al: Bind = c.decls.importAliases[ai]
+        if spansEqual(c: inout c, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
+            if moduleOf(c: inout c, offset: al.nameStart) == useMod {
+                return <Bind nameStart=al.fieldStart nameLen=al.fieldLen fieldStart=al.fieldStart fieldLen=al.fieldLen />
+            }
+        }
+        ai += 1
     }
-    return false
+    return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
 }
 
-// Check one user-written type name (head span start,len) used from module `useMod`,
-// inside a declaration carrying `typeParams`. It must resolve to a declaration in scope
-// (same module, or imported+exported). Lang-item types are ambient; a name matching the
-// declaration's own type parameters is that parameter, not a type; other type
-// parameters / Self / associated types have no global declaration so they are skipped.
-// NOTE: type-annotation spans are re-interned (not source offsets), so the use-site
-// module comes from the CONTAINING declaration, not from `start`; the span is used only
-// for the name text (intern matches by content).
-fn checkTypeName(c: inout Comp, siteOffset: U64, typeParams: Array[Bind], start: U64, len: U64) {
+fn checkTypeName(c: inout Comp, siteOffset: U64, start: U64, len: U64) {
     if len == 0 { return }
     if isLangItemTypeName(c: inout c, start: start, len: len) { return }
-    if nameInTypeParams(c: inout c, typeParams: typeParams, start: start, len: len) { return }
-    if isTypeParamName(c: inout c, start: start, len: len) { return }
     val useMod: U64 = moduleOf(c: inout c, offset: siteOffset)
-    if typeDeclVisibleFrom(c: inout c, useMod: useMod, start: start, len: len) { return }
-    if typeDeclExistsGlobally(c: inout c, start: start, len: len) {
+    // a `Real as Alias` use resolves to Real (imports/exports are keyed by the real name).
+    val real: Bind = realTypeNameInModule(c: inout c, useMod: useMod, start: start, len: len)
+    if typeDeclVisibleFrom(c: inout c, useMod: useMod, start: real.nameStart, len: real.nameLen) { return }
+    if typeDeclExistsGlobally(c: inout c, start: real.nameStart, len: real.nameLen) {
         compileErrorAt(line: lineOf(c: inout c, offset: siteOffset), msg: "use of a type from another module without importing it (add `import … with { … }`)")
     }
 }
 
-// Recurse into a structured type's generic arguments (c.arena.types[tyIdx].args),
-// checking each in scope. The annotation HEAD is checked by the caller via checkTypeName;
-// its bare span doesn't reach the args (`Optional[Widget]` has head `Optional` but
-// `Widget` lives in args), so non-array generic arguments need this walk. (An array's
-// element type is stored as the head, so it is already covered.)
-fn checkTypeArgs(c: inout Comp, siteOffset: U64, typeParams: Array[Bind], tyIdx: U64) {
-    if tyIdx >= c.arena.types.count { return }
-    val t: TypeRef = c.arena.types[tyIdx]
-    mut val k: U64 = 0
-    while k < t.args.count {
-        val argIdx: U64 = t.args[k]
-        if argIdx < c.arena.types.count {
-            val at: TypeRef = c.arena.types[argIdx]
-            checkTypeName(c: inout c, siteOffset: siteOffset, typeParams: typeParams, start: at.nameStart, len: at.nameLen)
-            checkTypeArgs(c: inout c, siteOffset: siteOffset, typeParams: typeParams, tyIdx: argIdx)
-        }
-        k += 1
-    }
-}
-
-// Type-side diagnostic arm of scoped resolution (spec/15): every user-written type
-// name in a declaration (function param / return, struct & enum fields) must resolve
-// to a type in scope. The use-site module is the containing declaration's module
-// (moduleOf its name, a real source offset); synthesized declarations (whose name
-// isn't in a loaded source range) are skipped.
+// Type-side diagnostic arm of scoped resolution (spec/15), as a single choke-point pass:
+// EVERY user-written type annotation in the program is one TypeRef in c.arena.types,
+// stamped by the sole lowering choke point `lowerType` with its real source offset
+// (siteOffset). So one uniform walk covers every site — function params/returns, struct &
+// enum fields, local `val x: T`, newtype underlyings, trait requirement signatures, `as`
+// casts, explicit type arguments, closure signatures, and any future syntax — with no site
+// left to enumerate by hand. Generic arguments need no special recursion: each is itself a
+// TypeRef in the arena, visited by the same loop. siteOffset 0 marks a synthetic TypeRef
+// (compiler-built) or a type-parameter head — both skipped.
 fn checkTypeVisibility(c: inout Comp) {
-    mut val fi: U64 = 0
-    while fi < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[fi]
-        if offsetIsLoaded(c: inout c, offset: f.nameStart) {
-            if f.hasRet {
-                checkTypeName(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, start: f.retStart, len: f.retLen)
-                checkTypeArgs(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, tyIdx: f.retTy)
-            }
-            mut val pi: U64 = 0
-            while pi < f.params.count {
-                val prm: Param = f.params[pi]
-                checkTypeName(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, start: prm.tyStart, len: prm.tyLen)
-                checkTypeArgs(c: inout c, siteOffset: f.nameStart, typeParams: f.typeParams, tyIdx: prm.ty)
-                pi += 1
+    mut val i: U64 = 0
+    while i < c.arena.types.count {
+        val t: TypeRef = c.arena.types[i]
+        if t.siteOffset != 0U64 {
+            if offsetIsLoaded(c: inout c, offset: t.siteOffset) {
+                checkTypeName(c: inout c, siteOffset: t.siteOffset, start: t.nameStart, len: t.nameLen)
             }
         }
-        fi += 1
-    }
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[si]
-        // a struct's own module is moduleOf(defOffset); nameStart is re-interned. A
-        // synthetic struct (record/closure env) has defOffset 0 → skip.
-        if s.defOffset != 0U64 {
-            if offsetIsLoaded(c: inout c, offset: s.defOffset) {
-                mut val di: U64 = 0
-                while di < s.fields.count {
-                    val fld: FieldDef = s.fields[di]
-                    checkTypeName(c: inout c, siteOffset: s.defOffset, typeParams: s.typeParams, start: fld.tyStart, len: fld.tyLen)
-                    checkTypeArgs(c: inout c, siteOffset: s.defOffset, typeParams: s.typeParams, tyIdx: fld.ty)
-                    di += 1
-                }
-            }
-        }
-        si += 1
-    }
-    mut val ei: U64 = 0
-    while ei < c.arena.enums.count {
-        val e: EnumDef = c.arena.enums[ei]
-        if e.defOffset != 0U64 {
-        if offsetIsLoaded(c: inout c, offset: e.defOffset) {
-            mut val vi: U64 = 0
-            while vi < e.variants.count {
-                val vr: Variant = e.variants[vi]
-                mut val di2: U64 = 0
-                while di2 < vr.fields.count {
-                    val fld2: FieldDef = vr.fields[di2]
-                    checkTypeName(c: inout c, siteOffset: e.defOffset, typeParams: e.typeParams, start: fld2.tyStart, len: fld2.tyLen)
-                    checkTypeArgs(c: inout c, siteOffset: e.defOffset, typeParams: e.typeParams, tyIdx: fld2.ty)
-                    di2 += 1
-                }
-                vi += 1
-            }
-        }
-        }
-        ei += 1
+        i += 1
     }
 }
 

@@ -182,6 +182,11 @@ fn lowerExportItem(c: inout Comp, inner: TopItemAst) {
 // `parseProgram` parses a file with the shared `parseProgramAst` and lowers each item
 // through here.
 fn lowerTopItem(c: inout Comp, item: TopItemAst) {
+    // reset the lowering-time type-parameter scope at every top-level item boundary, so a
+    // generic decl's `[T]` can never leak into a sibling (siteOffset stamping in lowerType
+    // reads c.cur.typeParams to skip type-parameter heads). Each generic decl-lowering
+    // function then sets/restores its own scope around its signature + body.
+    c.cur.typeParams = []
     match item {
         TopItemAst.Decl(val d) => { lowerDecl(c: inout c, d: d) }
         TopItemAst.Impl(val im) => { lowerImpl(c: inout c, im: im) }
