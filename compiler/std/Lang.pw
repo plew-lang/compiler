@@ -10,6 +10,11 @@
 // flip, ambient is still keyed by `isLangItemTypeName` — these types stay ambient by
 // name regardless of which module declares them, so the move is behaviour-neutral.)
 
+// The `Dictionary` lang item (below) is built on hashing, which is NOT a language item
+// (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash, so this module
+// imports it like any non-ambient dependency.
+import @Std/Hash with { Hash, Hasher, SipHasher }
+
 // An optional value: `Some` holds a `T`, `None` holds nothing.
 enum Optional[T] {
     Some(v: T)
@@ -95,3 +100,176 @@ pub impl[T, E] Result[T, E] {
 }
 
 export enum Ordering { Less  Equal  Greater }
+
+// `Array[T]` is a value-semantics (CoW) struct over the `RawBuffer[T]` floor: the
+// growable buffer (whose `[cap][rc]` header carries capacity and the CoW
+// refcount) plus the live element `count`. This is the type literals `[…]`,
+// indexing `[i]`, and `for` lower to; the compiler still special-cases that lang
+// syntax and Array's value semantics (deep, count+element-aware), while the C
+// struct shape comes from this declaration (spec/02,05). `pub(get)` exposes
+// `.count` for reading while keeping it module-writable.
+struct Array[T] {
+    mut val data: RawBuffer[T]
+    pub(get) mut val count: U64
+}
+
+// The array intrinsic floor (spec/02): lowered by the compiler to the per-element
+// runtime `Array_<E>_<op>` / inline buffer ops. The element type E is recovered
+// from the first `Array[T]` argument (the compiler knows these names).
+extern "plew-intrinsic" {
+    fn arrayPush[T](a: inout Array[T], v: T)
+    fn arrayGet[T](a: Array[T], i: U64) -> T
+    fn arraySet[T](a: inout Array[T], i: U64, v: T)
+    fn arrayLen[T](a: Array[T]) -> U64
+}
+
+// Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
+// per element type and dispatched by name (emitArrayMethods).
+pub impl[T] Array[T] {
+    // Append `value` to the end (growing the storage as needed).
+    inout fn append(value~: T) {
+        arrayPush(a: inout self, v: value)
+    }
+    // The element at `i` (panics when out of range — same as `xs[i]`).
+    fn get(i: U64) -> T {
+        return arrayGet(a: self, i: i)
+    }
+    // Replace the element at `i` (panics when out of range).
+    inout fn set(i: U64, value: T) {
+        arraySet(a: inout self, i: i, v: value)
+    }
+}
+
+// --- Dictionary[K, V] (spec/02): a CoW value-semantics hash map, ambient lang
+// item (the `[k: v]` / `[:]` literals lower to it). Built on `Array` (so CoW +
+// value semantics come for free via Array's buffer sharing): parallel `keys`/
+// `vals`/`hashes` hold the entries densely, and `buckets` is an open-addressing
+// index map (slot -> entry index + 1; 0 = empty) for O(1) lookup. Keys need
+// `Hash` (to place) and `Eq` (to resolve collisions). Algorithm = linear
+// probing, growing at load 0.75. Seed is fixed for now (see worklog RNG TODO).
+// `get(key:) -> Optional[V]` is the safe lookup; `getOr`/`contains`/the
+// missing-key-panicking `at` (what `dict[k]` lowers to) round out the surface.
+struct Dictionary[K, V] {
+    mut val keys: Array[K]
+    mut val vals: Array[V]
+    mut val hashes: Array[U64]
+    mut val buckets: Array[U64]
+    pub(get) mut val count: U64
+}
+pub impl[K, V] Dictionary[K, V] {
+    // SipHash digest of a key (fixed seed for now — see worklog RNG TODO).
+    fn hashOf(key: K) -> U64 where K: Hash {
+        mut val h: SipHasher = SipHasher.new()
+        key.hash(hasher: inout h)
+        return h.finish()
+    }
+    // Resize the bucket index (double, or 8 from empty) and re-place every entry
+    // by its stored hash. Entry order is preserved (dense arrays untouched).
+    inout fn grow() where K: Hash {
+        mut val newCap: U64 = 8U64
+        if self.buckets.count > 0U64 {
+            newCap = self.buckets.count * 2U64
+        }
+        mut val nb: Array[U64] = []
+        mut val j: U64 = 0
+        while j < newCap {
+            nb.append(value: 0U64)
+            j = j + 1U64
+        }
+        mut val i: U64 = 0
+        while i < self.keys.count {
+            val code: U64 = self.hashes[i]
+            mut val slot: U64 = code & (newCap - 1U64)
+            while nb[slot] != 0U64 {
+                slot = (slot + 1U64) & (newCap - 1U64)
+            }
+            nb.set(i: slot, value: i + 1U64)
+            i = i + 1U64
+        }
+        self.buckets = nb
+    }
+    // Insert or update `key -> value`.
+    inout fn insert(key: K, value: V) where K: Hash, K: Eq {
+        if self.buckets.count == 0U64 {
+            self.grow()
+        } else {
+            if (self.count + 1U64) * 4U64 > self.buckets.count * 3U64 {
+                self.grow()
+            }
+        }
+        val code: U64 = self.hashOf(key: key)
+        val cap: U64 = self.buckets.count
+        mut val slot: U64 = code & (cap - 1U64)
+        while true {
+            val b: U64 = self.buckets[slot]
+            if b == 0U64 {
+                self.keys.append(value: key)
+                self.vals.append(value: value)
+                self.hashes.append(value: code)
+                self.buckets.set(i: slot, value: self.keys.count)
+                self.count = self.count + 1U64
+                return
+            }
+            val idx: U64 = b - 1U64
+            if self.hashes[idx] == code {
+                if self.keys[idx] == key {
+                    self.vals.set(i: idx, value: value)
+                    return
+                }
+            }
+            slot = (slot + 1U64) & (cap - 1U64)
+        }
+    }
+    // Entry index + 1 for `key` (0 = absent).
+    fn find(key: K) -> U64 where K: Hash, K: Eq {
+        if self.buckets.count == 0U64 {
+            return 0U64
+        }
+        val code: U64 = self.hashOf(key: key)
+        val cap: U64 = self.buckets.count
+        mut val slot: U64 = code & (cap - 1U64)
+        while true {
+            val b: U64 = self.buckets[slot]
+            if b == 0U64 {
+                return 0U64
+            }
+            val idx: U64 = b - 1U64
+            if self.hashes[idx] == code {
+                if self.keys[idx] == key {
+                    return b
+                }
+            }
+            slot = (slot + 1U64) & (cap - 1U64)
+        }
+        return 0U64
+    }
+    // Whether `key` is present.
+    fn contains(key: K) -> Bool where K: Hash, K: Eq {
+        return self.find(key: key) != 0U64
+    }
+    // The value for `key` as `Some(v)`, or `None` if absent (spec/02 — the safe,
+    // non-panicking lookup; `dict[key]` panics on a missing key, `get` does not).
+    fn get(key: K) -> Optional[V] where K: Hash, K: Eq {
+        val b: U64 = self.find(key: key)
+        if b == 0U64 {
+            return <Optional.None />
+        }
+        return <Optional.Some v=self.vals[b - 1U64] />
+    }
+    // The value for `key`, or `fallback` if absent (non-panicking lookup).
+    fn getOr(key: K, fallback: V) -> V where K: Hash, K: Eq {
+        val b: U64 = self.find(key: key)
+        if b == 0U64 {
+            return fallback
+        }
+        return self.vals[b - 1U64]
+    }
+    // The value for `key`; panics if absent (what `dict[key]` lowers to — spec/02).
+    fn at(key: K) -> V where K: Hash, K: Eq {
+        val b: U64 = self.find(key: key)
+        if b == 0U64 {
+            panic "dictionary: key not found"
+        }
+        return self.vals[b - 1U64]
+    }
+}
