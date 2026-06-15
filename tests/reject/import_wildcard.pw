@@ -1,0 +1,9 @@
+// Wildcard import `with *` is intentionally not supported (spec/15): it hides
+// provenance (names enter the scope bare, and the set changes silently as the
+// source's exports change). Use a namespace import `import @Std/Io` (then
+// `Io.print`) for broad access, or `with { … }` to select names. The parser must
+// reject `with *`.
+import @Std/Io with *
+
+fn main() {
+}

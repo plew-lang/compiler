@@ -125,7 +125,8 @@ import ./Models with { User as Account }  // 選択的インポート
 - `import ./Foo` — モジュールを**名前空間 `Foo`**（パスの末尾要素）として束縛し、`Foo.Bar` でアクセス。`import @Std/Http` なら名前空間は `Http`。
 - `import ./Foo as F` — 名前空間を `F` に。
 - `import ./Foo with { Bar, Baz as Q }` — 選択したものを**フラットに**現スコープへ（`as` で別名可）。
-- `import ./Foo with *` — 公開物を**全てフラットに**取り込む。
+- **`import` にワイルドカード `with *` は無い**（意図的）。`with *` は名前を列挙せず全 export を裸で取り込み、元モジュールが export を増やすと取り込み側のスコープが黙って変わる ── provenance（出どころ）を曖昧にし「明示 > 暗黙」に反する。広く使いたいなら**名前空間 import**（`import ./Foo` → `Foo.Bar`、各使用点に出どころが見える）、特定名だけなら `with { … }`。`with *` がやれることは両者でより正直に書ける（＝上位互換の代替がある）。`import ./Foo with *` はコンパイルエラー。
+  - （再エクスポート `export ./Foo with *` は別構文＝バレルが子を全公開する用途で残置。）
 
 ### ファイル名・ディレクトリ名の制約
 

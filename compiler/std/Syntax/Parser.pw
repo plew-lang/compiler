@@ -1419,14 +1419,14 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
 fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
     val startOff: U64 = p.base + p.curTok().start
     p.advance()
-    return parseImportTail(p: inout p, isImport: isImport, startOff: startOff)
+    return parseImportTail(p: inout p, isImport: isImport, reExport: false, startOff: startOff)
 }
 
 // The path + `with { names }` body of an `import`/`part`/re-export, with the cursor
 // already past the leading keyword (`import`/`part`/`export`). `startOff` is the
 // keyword's offset (for the item span). Shared so a re-export (`export <path> with
 // { … }`) parses its path/names with the exact same machinery as `import`.
-fn parseImportTail(p: inout P, isImport: Bool, startOff: U64) -> ImportAst {
+fn parseImportTail(p: inout P, isImport: Bool, reExport: Bool, startOff: U64) -> ImportAst {
     // the path = contiguous tokens (`@`/`.`/`..`/`/` markers + segments), stopping
     // before a space-separated `with`, a `{`, or a newline.
     mut val pathStart: U64 = p.base + p.curTok().start
@@ -1434,6 +1434,7 @@ fn parseImportTail(p: inout P, isImport: Bool, startOff: U64) -> ImportAst {
     mut val segStartAbs: U64 = pathStart
     mut val segLen: U64 = 0
     mut val firstPath: Bool = true
+    mut val sawWith: Bool = false
     while true {
         match p.curKind() {
             Kind.Newline => { break }
@@ -1442,6 +1443,7 @@ fn parseImportTail(p: inout P, isImport: Bool, startOff: U64) -> ImportAst {
             _ => {
                 if curIs(p: inout p, kw: "with") {
                     p.advance()
+                    sawWith = true
                     break
                 }
                 val t: Tok = p.curTok()
@@ -1481,6 +1483,7 @@ fn parseImportTail(p: inout P, isImport: Bool, startOff: U64) -> ImportAst {
                 Kind.Ident => {
                     if curIs(p: inout p, kw: "with") {
                         p.advance()
+                        sawWith = true
                     }
                 }
                 _ => {}
@@ -1491,6 +1494,18 @@ fn parseImportTail(p: inout P, isImport: Bool, startOff: U64) -> ImportAst {
     mut val names: Array[String] = []
     mut val nameSpans: Array[Span] = []
     mut val nameAliasSpans: Array[Span] = []
+    // `with` must be followed by a `{ … }` selection. Wildcard `import … with *` is
+    // intentionally not supported (spec/15): it hides provenance — use a namespace
+    // import `import <path>` (then `Ns.name`) for broad access, or `with { … }`.
+    if sawWith {
+        if !reExport {
+            match p.curKind() {
+                Kind.LBrace => {}
+                Kind.Star => { p.fail(off: p.base + p.curTok().start, msg: "wildcard import `with *` is not supported (spec/15): use a namespace import `import <path>` (then refer to `Ns.name`) for broad access, or `with { … }` to select names") }
+                _ => { p.fail(off: p.base + p.curTok().start, msg: "expected `{ … }` after `with` in an import") }
+            }
+        }
+    }
     match p.curKind() {
         Kind.LBrace => {
             p.advance()
@@ -1631,9 +1646,9 @@ fn parseExportAst(p: inout P) -> TopItemAst {
             if curIs(p: inout p, kw: "newtype") {
                 return <TopItemAst.Export inner=parseNewtypeAst(p: inout p, isPub: false) />
             }
-            return <TopItemAst.ReExport imp=parseImportTail(p: inout p, isImport: true, startOff: startOff) />
+            return <TopItemAst.ReExport imp=parseImportTail(p: inout p, isImport: true, reExport: true, startOff: startOff) />
         }
-        _ => { return <TopItemAst.ReExport imp=parseImportTail(p: inout p, isImport: true, startOff: startOff) /> }
+        _ => { return <TopItemAst.ReExport imp=parseImportTail(p: inout p, isImport: true, reExport: true, startOff: startOff) /> }
     }
 }
 
