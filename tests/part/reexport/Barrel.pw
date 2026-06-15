@@ -1,0 +1,3 @@
+// Barrel: re-exports Defs' items as its own public surface (forwarding only —
+// no local binding). A consumer importing from Barrel resolves to Defs.
+export ./Defs with { addOne, Box }

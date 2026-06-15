@@ -1,0 +1,9 @@
+// Consumer: imports the forwarded names FROM the barrel (never names Defs).
+import @Std/Io with { print }
+import ./Barrel with { addOne, Box }
+
+fn main() {
+    print(addOne(n: 41I64))        // 42
+    val b: Box = <Box v=7I64 />
+    print(b.v)                     // 7
+}

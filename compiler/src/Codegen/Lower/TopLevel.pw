@@ -94,6 +94,33 @@ fn lowerImport(c: inout Comp, imp: ImportAst) {
     }
 }
 
+// Lower a re-export `export <path> with { A, B as C }` (spec/15): republish the named
+// items as THIS module's public surface, forwarding to the module at <path>. Unlike
+// `import` it binds nothing locally (no `markImport`, no namespace) — it only widens
+// the export set. The exposed name (the alias `C` when present, else `A`) is recorded
+// as exported BY THIS module (`recordExport` keys it by `moduleOf(exposedSpan)` = the
+// re-exporting module), so a third module importing it from here resolves to the
+// origin's declaration (name-text-keyed visibility) and ambient-surface queries
+// (spec/15 lang items = @Std/Lang's export surface) see it under the re-exporting
+// module. The loader (Driver) follows the path so the origin module is loaded.
+fn lowerReExport(c: inout Comp, imp: ImportAst) {
+    mut val i: U64 = 0
+    while i < imp.names.count {
+        val nspan: Span = imp.nameSpans[i]
+        mut val exStart: U64 = nspan.start
+        mut val exLen: U64 = nspan.end - nspan.start
+        if i < imp.nameAliasSpans.count {
+            val al: Span = imp.nameAliasSpans[i]
+            if al.end > al.start {
+                exStart = al.start
+                exLen = al.end - al.start
+            }
+        }
+        recordExport(c: inout c, nameStart: exStart, nameLen: exLen)
+        i += 1
+    }
+}
+
 // True if `name` (a bare identifier) was bound as a namespace by a `with`-less import.
 fn isNamespaceName(c: inout Comp, name: String) -> Bool {
     val nb: Bind = internBytes(c: inout c, s: name)
@@ -194,7 +221,7 @@ fn lowerTopItem(c: inout Comp, item: TopItemAst) {
         TopItemAst.Extern(val e) => { lowerExtern(c: inout c, e: e) }
         TopItemAst.Import(val imp) => { lowerImport(c: inout c, imp: imp) }
         TopItemAst.Export(val inner) => { lowerExportItem(c: inout c, inner: inner) }
-        TopItemAst.ReExport(val pathSpan) => {}
+        TopItemAst.ReExport(val imp) => { lowerReExport(c: inout c, imp: imp) }
         TopItemAst.Directive(val dir) => { lowerDirective(c: inout c, dir: dir) }
         TopItemAst.GlobalVal(val s) => { lowerGlobalVal(c: inout c, s: s) }
         TopItemAst.NewType(val name, val ty, val isPub, val span) => { lowerNewtype(c: inout c, name: name, ty: ty, defOffset: span.start) }

@@ -1,0 +1,9 @@
+// Origin module: defines + exports the items a barrel will forward.
+export fn addOne(n: I64) -> I64 {
+    return n + 1
+}
+export struct Box {
+    pub val v: I64
+}
+// public factory so a consumer (reached via the barrel) can construct it (spec/05).
+pub impl Box { factory }

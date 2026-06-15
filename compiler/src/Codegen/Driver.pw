@@ -187,6 +187,23 @@ fn runFrontend() -> Comp {
                             }
                         }
                     }
+                    TopItemAst.ReExport(val imp) => {
+                        // a re-export (`export <path> with { … }`, spec/15) forwards another
+                        // module's names; follow its path so that origin module is LOADED
+                        // (its declarations + own exports must exist for the forward to
+                        // resolve). It always starts a fresh module (like an import). Binds
+                        // nothing locally — that's lowerReExport's job (export surface only).
+                        val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        if rePath.count != 0 {
+                            if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
+                                val rm: U64 = nextModuleId
+                                nextModuleId = nextModuleId + 1
+                                val rs: U64 = pathBuf.count
+                                appendBytes(into: inout pathBuf, from: rePath)
+                                loaded.append(<Bind nameStart=rs nameLen=rePath.count fieldStart=rm fieldLen=rePath.count />)
+                            }
+                        }
+                    }
                     TopItemAst.Directive(val dir) => { sawDirective = true }
                     TopItemAst.Extern(val e) => {
                         // a `@[...]` derive on an opaque extern lang-item (spec/15,16:

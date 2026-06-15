@@ -315,8 +315,12 @@ export struct DirectiveAst {
 // A top-level item of a program (spec/15). The shared `parseProgramAst` returns a
 // list of these; the compiler frontend lowers each (Codegen/Lower.pw) into its arena
 // or Comp state, and follows `Import` nodes to load further files. `Export` wraps the
-// exported inner item (recursive — auto-boxed); `ReExport` is an `export <path>` (a
-// pure forwarding re-export, recorded as nothing for now).
+// exported inner item (recursive — auto-boxed); `ReExport` is an `export <path> with
+// { … }` (a pure forwarding re-export, spec/15): it carries the same `ImportAst` an
+// `import` would (path + selected names + aliases) so the loader can load the
+// forwarded module and the frontend can republish its names — but unlike `import` it
+// binds NOTHING locally (forwarding only). `imp.isImport` is true (it resolves a fresh
+// module like an import); the `ReExport` wrapper is what marks it as forward-only.
 export enum TopItemAst {
     Decl(d: DeclAst)
     Impl(im: ImplAst)
@@ -324,7 +328,7 @@ export enum TopItemAst {
     Extern(e: ExternAst)
     Import(imp: ImportAst)
     Export(inner: TopItemAst)
-    ReExport(pathSpan: Span)
+    ReExport(imp: ImportAst)
     Directive(dir: DirectiveAst)
     // a module-level variable (spec/15): `val x = e` / `mut val x = e`. The payload
     // is the same `StmtAst.Let` the local-binding parser produces (name / optional

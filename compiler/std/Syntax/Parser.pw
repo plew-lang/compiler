@@ -1419,6 +1419,14 @@ export fn parseExternDecl(p: inout P) -> ExternAst {
 fn parseImportAst(p: inout P, isImport: Bool) -> ImportAst {
     val startOff: U64 = p.base + p.curTok().start
     p.advance()
+    return parseImportTail(p: inout p, isImport: isImport, startOff: startOff)
+}
+
+// The path + `with { names }` body of an `import`/`part`/re-export, with the cursor
+// already past the leading keyword (`import`/`part`/`export`). `startOff` is the
+// keyword's offset (for the item span). Shared so a re-export (`export <path> with
+// { … }`) parses its path/names with the exact same machinery as `import`.
+fn parseImportTail(p: inout P, isImport: Bool, startOff: U64) -> ImportAst {
     // the path = contiguous tokens (`@`/`.`/`..`/`/` markers + segments), stopping
     // before a space-separated `with`, a `{`, or a newline.
     mut val pathStart: U64 = p.base + p.curTok().start
@@ -1598,51 +1606,10 @@ fn parseDirectiveAst(p: inout P) -> DirectiveAst {
 fn parseExportAst(p: inout P) -> TopItemAst {
     val startOff: U64 = p.base + p.curTok().start
     p.advance()
-    // re-export: a `./`, `../`, or `/` path follows (the `@…` form is unused).
-    mut val isPath: Bool = false
-    match p.curKind() {
-        Kind.Dot => { isPath = true }
-        Kind.Slash => { isPath = true }
-        _ => {}
-    }
-    if isPath {
-        val pStart: U64 = p.base + p.curTok().start
-        mut val pEndSlice: U64 = p.curTok().start
-        mut val go: Bool = true
-        while go {
-            match p.curKind() {
-                Kind.Eof => { go = false }
-                Kind.LBrace => { go = false }
-                _ => {
-                    if curIs(p: inout p, kw: "with") {
-                        p.advance()
-                        go = false
-                    } else {
-                        pEndSlice = p.curTok().start + p.curTok().len
-                        p.advance()
-                    }
-                }
-            }
-        }
-        match p.curKind() {
-            Kind.LBrace => {
-                p.advance()
-                mut val g2: Bool = true
-                while g2 {
-                    match p.curKind() {
-                        Kind.RBrace => {
-                            p.advance()
-                            g2 = false
-                        }
-                        Kind.Eof => { g2 = false }
-                        _ => { p.advance() }
-                    }
-                }
-            }
-            _ => {}
-        }
-        return <TopItemAst.ReExport pathSpan=<Span start=pStart end=p.base + pEndSlice /> />
-    }
+    // A declaration keyword (or contextual `trait`/`newtype`) → `export <decl>`. Anything
+    // else is a re-export path (`export ./X` / `export @Std/X` / `export /X` [with { … }]),
+    // parsed with the shared import-tail machinery (spec/15). The `@…` form is supported:
+    // the `@` lexes as Unknown and is consumed as a contiguous path token like any other.
     match p.curKind() {
         Kind.KwExtern => { return <TopItemAst.Export inner=<TopItemAst.Extern e=parseExternDecl(p: inout p) /> /> }
         Kind.KwFn => { return <TopItemAst.Export inner=<TopItemAst.Decl d=parseDecl(p: inout p) /> /> }
@@ -1664,9 +1631,9 @@ fn parseExportAst(p: inout P) -> TopItemAst {
             if curIs(p: inout p, kw: "newtype") {
                 return <TopItemAst.Export inner=parseNewtypeAst(p: inout p, isPub: false) />
             }
-            return <TopItemAst.ReExport pathSpan=<Span start=startOff end=startOff /> />
+            return <TopItemAst.ReExport imp=parseImportTail(p: inout p, isImport: true, startOff: startOff) />
         }
-        _ => { return <TopItemAst.ReExport pathSpan=<Span start=startOff end=startOff /> /> }
+        _ => { return <TopItemAst.ReExport imp=parseImportTail(p: inout p, isImport: true, startOff: startOff) /> }
     }
 }
 
