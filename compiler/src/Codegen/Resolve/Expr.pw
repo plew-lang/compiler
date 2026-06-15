@@ -17,8 +17,43 @@ fn buildExprTyTable(c: inout Comp) {
         c.typeCache.len.append(0)
         c.typeCache.ref.append(0)
         c.typeCache.intCtx.append(0)
+        c.typeCache.callee.append(calleeUnfilled())
         i += 1
     }
+}
+
+// Sentinel `typeCache.callee` value marking an uncomputed callee slot. U64 max can
+// never be a real `arena.funcs` index nor the `funcs.count` not-found marker.
+fn calleeUnfilled() -> U64 {
+    return 18446744073709551615U64
+}
+
+// Pre-resolved free-function callee for the call expression `id`: the `findFunc`
+// result (`funcs.count` if it resolves to no declared function), memoized in
+// `typeCache.callee`. The single choke point through which every pass reads call
+// resolution — the first pass to ask fills the slot, the rest read it, so the
+// backend stops re-running overload resolution during emission. The result is
+// stable per call-expr id (overloads can't be selected via opaque type-parameter
+// args, spec/06), so the memo is sound and never cleared. A non-call id (or an id
+// past the table, i.e. a node synthesized after buildExprTyTable) resolves directly
+// without caching.
+fn resolvedCallee(c: inout Comp, id: U64) -> U64 {
+    if id < c.typeCache.callee.count {
+        if c.typeCache.callee[id] != calleeUnfilled() {
+            return c.typeCache.callee[id]
+        }
+    }
+    mut val r: U64 = c.arena.funcs.count
+    match c.arena.exprs[id] {
+        Expr.Call(val nameStart, val nameLen, val args) => {
+            r = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
+        _ => {}
+    }
+    if id < c.typeCache.callee.count {
+        c.typeCache.callee.set(i: id, value: r)
+    }
+    return r
 }
 
 // The kw name for a recorded int-context code (1..8 -> I8..U64).

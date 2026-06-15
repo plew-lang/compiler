@@ -71,7 +71,7 @@ fn exprLlvmType(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
             return exprLlvmType(c: inout c, st: inout st, id: recv)
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val cfi: U64 = resolvedCallee(c: inout c, id: id)
             if cfi < c.arena.funcs.count {
                 return llvmFnRetTy(c: inout c, st: inout st, f: c.arena.funcs[cfi])
             }
@@ -148,7 +148,7 @@ fn exprIsArray(c: inout Comp, st: inout LlvmCtx, id: U64) -> Bool {
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
             // an array-returning call (`val a = mk()`): tracked as an array.
-            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val cfi: U64 = resolvedCallee(c: inout c, id: id)
             if cfi < c.arena.funcs.count {
                 return c.arena.funcs[cfi].retIsArray
             }
@@ -212,7 +212,7 @@ fn arrElemTyOf(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMTypeRef {
         Expr.Call(val nameStart, val nameLen, val args) => {
             // an array-returning call's element type (`val a = mk()` -> element of
             // mk's Array return).
-            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val cfi: U64 = resolvedCallee(c: inout c, id: id)
             if cfi < c.arena.funcs.count {
                 if c.arena.funcs[cfi].retIsArray {
                     return llvmScalarTy(c: inout c, st: inout st, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)

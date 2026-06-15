@@ -313,7 +313,7 @@ fn valueKind(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
                 }
             }
             // a regular function call: the callee's return-type kind.
-            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val cfi: U64 = resolvedCallee(c: inout c, id: id)
             if cfi < c.arena.funcs.count {
                 if c.arena.funcs[cfi].hasRet {
                     return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)

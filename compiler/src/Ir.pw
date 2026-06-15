@@ -819,6 +819,16 @@ export struct TypeCache {
     pub mut val ref: Array[U64] = []
     pub mut val filled: Array[U64] = []
     pub mut val intCtx: Array[U64] = []
+    // resolved free-function callee per call-expr id (the `findFunc` result), the
+    // first step of pre-resolving the IR so the backend reads decisions instead of
+    // re-running overload resolution at emit time. PERSISTENT (unlike kind/…, never
+    // cleared per body): which decl a call resolves to is instantiation-invariant —
+    // a type parameter is opaque (spec/06), so an overload can never be selected via
+    // a type-parameter arg, hence the result is stable per call-expr id. Sentinel
+    // `calleeUnfilled()` marks an uncomputed slot; a filled slot may legitimately
+    // hold `funcs.count` ("resolves to no declared function" — a call through a fn
+    // value/local), which is itself stable, so it is cached too.
+    pub mut val callee: Array[U64] = []
 }
 pub impl TypeCache { factory }
 

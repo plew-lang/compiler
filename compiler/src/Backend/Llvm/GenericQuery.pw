@@ -186,7 +186,7 @@ fn exprStructIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // a call result used as a struct (`firstOf(...).get()`): resolve the
             // callee's return struct, grounding a generic return under the inferred
             // type arguments.
-            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val cfi: U64 = resolvedCallee(c: inout c, id: id)
             if cfi < c.arena.funcs.count {
                 val cf: Func = c.arena.funcs[cfi]
                 if cf.hasRet {
@@ -320,7 +320,7 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
         }
         Expr.Call(val nameStart, val nameLen, val args) => {
-            val cfi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val cfi: U64 = resolvedCallee(c: inout c, id: id)
             if cfi < c.arena.funcs.count {
                 val cf: Func = c.arena.funcs[cfi]
                 if cf.hasRet {

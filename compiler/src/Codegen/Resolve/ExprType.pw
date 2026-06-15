@@ -210,7 +210,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // so their return type comes from the resolved Func below — no special
             // cases here.)
             // resolve the right overload (by labels + arg types) for its return.
-            val fi: U64 = findFunc(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+            val fi: U64 = resolvedCallee(c: inout c, id: id)
             if fi < c.arena.funcs.count {
                 val f: Func = c.arena.funcs[fi]
                 if f.hasRet {
