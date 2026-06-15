@@ -4,7 +4,7 @@
 
 // Index into st.enum* for a registered enum named (start,len), or st.enumIdxs.count.
 fn enumRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
-    val eid: U64 = enumIdxByName(c: inout c, start: start, len: len)
+    val eid: U64 = c.enumIdxByName(start: start, len: len)
     if eid < c.arena.enums.count {
         mut val i: U64 = 0
         while i < st.enumIdxs.count {
@@ -59,7 +59,7 @@ fn fieldWords(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> U64
     // which undersized any enum/struct-with-enum payload field and overflowed the
     // enclosing enum's payload area, corrupting adjacent fields). Non-boxed value
     // cycles are a front-end error, so the recursion terminates (boxed = 1).
-    val ereg: U64 = enumIdxByName(c: inout c, start: tyStart, len: tyLen)
+    val ereg: U64 = c.enumIdxByName(start: tyStart, len: tyLen)
     if ereg < c.arena.enums.count {
         return 1U64 + enumPayloadWords(c: inout c, st: inout st, eid: ereg)
     }

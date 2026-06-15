@@ -18,7 +18,7 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
 fn anyRecvTraitIdx(c: inout Comp, st: inout LlvmCtx, recv: U64) -> U64 {
     val r: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
     if refIsAny(c: inout c, ref: r) {
-        return findTraitIdxByName(c: inout c, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
+        return c.findTraitIdxByName(start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
     }
     return c.decls.traits.count
 }

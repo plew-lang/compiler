@@ -498,7 +498,7 @@ fn refDeinitPointeeSidx(c: inout Comp, st: inout LlvmCtx, refTy: U64) -> U64 {
     if isRefInst(c: inout c, ref: refTy) {
         if c.arena.types[refTy].args.count > 0U64 {
             val pt: TypeRef = c.arena.types[c.arena.types[refTy].args[0]]
-            val psi: U64 = structIndexByName(c: inout c, start: pt.nameStart, len: pt.nameLen)
+            val psi: U64 = c.structIndexByName(start: pt.nameStart, len: pt.nameLen)
             if psi < c.arena.structs.count {
                 if structNeedsDeinit(c: inout c, st: inout st, sidx: psi) {
                     return psi

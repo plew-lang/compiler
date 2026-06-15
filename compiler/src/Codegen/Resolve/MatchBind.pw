@@ -44,7 +44,7 @@ pub impl Comp {
                         while fi < fs.count {
                             val f: FieldDef = fs[fi]
                             if f.nameId == qField {
-                                addLocalCn(c: inout self, nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false, cnum: cnum)
+                                self.addLocalCn(nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false, cnum: cnum)
                                 return
                             }
                             fi += 1

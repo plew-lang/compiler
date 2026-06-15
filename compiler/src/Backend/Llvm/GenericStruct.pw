@@ -349,7 +349,7 @@ fn optChainResultRefLL(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart:
     }
     if bt.args.count < 1U64 { return 0U64 }
     val tName: TypeRef = c.arena.types[bt.args[0]]
-    val tSidx: U64 = structIndexByName(c: inout c, start: tName.nameStart, len: tName.nameLen)
+    val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
     if tSidx >= c.arena.structs.count {
         return 0U64
     }

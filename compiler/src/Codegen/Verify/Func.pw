@@ -55,13 +55,13 @@ pub impl Comp {
         self.cur.branchBase = 0
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
-        seedGlobalLocals(c: inout self)
+        self.seedGlobalLocals()
         self.checkGenericArity(ref: f.retTy, offset: f.nameStart)
         mut val pi: U64 = 0
         while pi < f.params.count {
             val p: Param = f.params[pi]
             self.checkGenericArity(ref: p.ty, offset: p.nameStart)
-            addLocal(c: inout self, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
+            self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
             pi += 1
         }
         self.verifyBlock(blockId: f.body)
@@ -114,14 +114,14 @@ pub impl Comp {
     }
 
     inout fn verifyBlock(blockId: U64) {
-        val mark: U64 = scopeMark(c: inout self)
+        val mark: U64 = self.scopeMark()
         val b: Block = self.arena.blocks[blockId]
         mut val i: U64 = 0
         while i < b.stmts.count {
             self.verifyStmt(stmtId: b.stmts[i])
             i += 1
         }
-        popLocals(c: inout self, mark: mark)
+        self.popLocals(mark: mark)
         self.verifyDropMovedAbove(mark: mark)
     }
 

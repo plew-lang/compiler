@@ -39,7 +39,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             return <TypeInfo kind=1 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
         }
         Expr.Ident(val start, val len) => {
-            if isSelfRef(c: inout c, start: start, len: len) {
+            if c.isSelfRef(start: start, len: len) {
                 if c.cur.recvInstRef != 0 {
                     val rt: TypeRef = c.arena.types[c.cur.recvInstRef]
                     // self inside an `impl Array[T]` method types as an array (kind 3,
@@ -251,7 +251,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
             // function type's return (args[0] of the `fn` TypeRef). Without this a
             // generic call like `print(closure(x))` can't recover the arg type and
             // misses its instantiation (and `val r = closure(x)` mis-infers r).
-            val lvi: U64 = localIndexByName(c: inout c, start: nameStart, len: nameLen)
+            val lvi: U64 = c.localIndexByName(start: nameStart, len: nameLen)
             if lvi < c.cur.locals.count {
                 val lty: U64 = c.cur.locals[lvi].ty
                 if isFnType(c: inout c, ref: lty) {
@@ -291,7 +291,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 return c.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
             }
             if bt.kind == 2 {
-                return fieldType(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+                return c.fieldType(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
             }
             return scalarInfo()
         }
@@ -612,7 +612,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
         }
         Expr.OptChain(val base, val memberStart, val memberLen) => {
             // `base?.member` : Optional[U] where U is `member`'s type on the element.
-            val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
+            val rr: U64 = c.optChainResultRef(base: base, memberStart: memberStart, memberLen: memberLen)
             if rr == 0 {
                 return scalarInfo()
             }
@@ -636,7 +636,7 @@ fn exprType(c: inout Comp, id: U64) -> TypeInfo {
                 val inst: TypeRef = c.arena.types[bt.ref]
                 val pt: TypeInfo = c.typeInfoOfRef(ref: inst.args[0])
                 if pt.kind == 2 {
-                    return fieldType(c: inout c, structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+                    return c.fieldType(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
                 }
             }
             return scalarInfo()

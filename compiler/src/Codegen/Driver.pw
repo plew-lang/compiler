@@ -273,10 +273,10 @@ export fn runFrontend() -> Comp {
     // conforming concrete type (before provided methods, so A's own provided
     // methods also reach the newly-conforming types). The headless form
     // `impl[T] T as A where T: B` is rejected separately (Verify.checkBlanketHeadless).
-    instantiateTraitSubjectConforms(c: inout c)
+    c.instantiateTraitSubjectConforms()
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
-    instantiateProvidedMethods(c: inout c)
+    c.instantiateProvidedMethods()
     // defaultExtension collisions (spec/09): a default extension's method must not
     // share a selector with the type's own / provided / another default extension's
     // method (they would both join bare resolution). Loud at the declaration.
@@ -337,7 +337,7 @@ export fn runFrontend() -> Comp {
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     c.collectFnInsts()
     // discover bare function-value references (need a closure-ABI thunk each).
-    collectFnThunks(c: inout c)
+    c.collectFnThunks()
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.
     c.checkFnBounds()

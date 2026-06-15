@@ -91,7 +91,7 @@ fn collectAsyncFieldTys(c: inout Comp, st: inout LlvmCtx, blockId: U64, tys: ino
 // bindMatchPayload's per-field type recovery: array -> {ptr,i64}, boxed -> ptr,
 // else the field's scalar type), in bind order.
 fn collectAsyncMatchBindTys(c: inout Comp, st: inout LlvmCtx, arm: MatchArm, tys: inout Array[LLVMTypeRef]) {
-    val eid: U64 = enumIdxByName(c: inout c, start: arm.enumStart, len: arm.enumLen)
+    val eid: U64 = c.enumIdxByName(start: arm.enumStart, len: arm.enumLen)
     if eid >= c.arena.enums.count {
         return
     }
@@ -181,7 +181,7 @@ fn declareAsyncFns(c: inout Comp, st: inout LlvmCtx) {
             st.asyncFrameTy.append(value: frameTy)
             st.asyncResumeFn.append(value: resumeFn)
             // entry symbol (non-main): params -> ptr (Promise).
-            if !(nameIsMain(c: inout c, f: c.arena.funcs[fi])) {
+            if !(c.nameIsMain(f: c.arena.funcs[fi])) {
                 mut val ptys: Array[LLVMTypeRef] = []
                 mut val pi: U64 = 0
                 while pi < c.arena.funcs[fi].params.count {
@@ -397,7 +397,7 @@ fn genLlvmAsyncFunc(c: inout Comp, st: inout LlvmCtx, fi: U64) {
     val f: Func = c.arena.funcs[fi]
     val frameTy: LLVMTypeRef = st.asyncFrameTy[slot]
     val resumeFn: LLVMValueRef = st.asyncResumeFn[slot]
-    val isMain: Bool = nameIsMain(c: inout c, f: f)
+    val isMain: Bool = c.nameIsMain(f: f)
     // ---- entry function ----
     mut val entryFn: LLVMValueRef = resumeFn
     if isMain {

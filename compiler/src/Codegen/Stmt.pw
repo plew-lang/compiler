@@ -368,7 +368,7 @@ fn forBindFieldType(c: inout Comp, et: TypeInfo, bd: Bind) -> TypeInfo {
     if isGenericInst(c: inout c, ref: et.ref) {
         return c.genericFieldTypeInfo(instRef: et.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
     }
-    return fieldType(c: inout c, structStart: et.nameStart, structLen: et.nameLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+    return c.fieldType(structStart: et.nameStart, structLen: et.nameLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
 }
 
 // Add a for-loop struct-destructure's binds as locals (element type `et`), so the
@@ -379,7 +379,7 @@ fn addForStructBinds(c: inout Comp, et: TypeInfo, binds: Array[Bind]) {
     while bi < binds.count {
         val bd: Bind = binds[bi]
         val ft: TypeInfo = forBindFieldType(c: inout c, et: et, bd: bd)
-        addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+        c.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
         bi += 1
     }
 }

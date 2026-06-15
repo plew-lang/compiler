@@ -1,613 +1,490 @@
-export fn nameIsMain(c: inout Comp, f: Func) -> Bool {
-    if f.hasRecv {
-        return false
-    }
-    return rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
-}
 
-// Whether (start,len) names a declared trait (spec/08). Distinguishes a bare
-// `impl Trait { }` provided-method block (receiver = a trait) from an inherent
-// `impl Type { }`.
-export fn isTraitName(c: inout Comp, start: U64, len: U64) -> Bool {
-    val qId: U64 = intern(c: inout c, start: start, len: len)
-    mut val i: U64 = 0
-    while i < c.decls.traits.count {
-        val t: TraitDef = c.decls.traits[i]
-        if t.nameId == qId {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
 
-// Whether a function is a provided-method template: a method whose receiver is a
-// trait (from a bare `impl Trait { }`). These are not emitted directly (the
-// receiver is not a concrete C type); instantiateProvidedMethods copies them
-// onto each conforming type instead.
-fn methodRecvIsTrait(c: inout Comp, f: Func) -> Bool {
-    if f.hasRecv {
-        return isTraitName(c: inout c, start: f.recvStart, len: f.recvLen)
-    }
-    return false
-}
-
-// Instantiate each trait's provided methods onto every conforming type (spec/08:
-// a conformance gains the trait's provided methods on its bare surface). For each
-// Conform(Type, Trait) and each provided method of Trait (a method with receiver
-// = the trait), append a copy with receiver = Type, sharing the same body — so
-// codegen emits `Type_p`, whose `self.req()` resolves to Type's witness. Runs
-// once after parsing, before instantiation discovery and codegen.
-// Whether a method named (nameStart,nameLen) on receiver (recvStart,recvLen)
-// exists in c.arena.funcs[lo..hi). Used to detect provided-method shadowing/collision.
-fn methodInRange(c: inout Comp, lo: U64, hi: U64, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    mut val i: U64 = lo
-    while i < hi {
-        val f: Func = c.arena.funcs[i]
+pub impl Comp {
+    inout fn nameIsMain(f: Func) -> Bool {
         if f.hasRecv {
-            if f.recvId == qRecv {
-                if f.nameId == qName {
-                    return true
-                }
-            }
+            return false
         }
-        i += 1
+        return rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: "main")
     }
-    return false
-}
 
-// The type params for a provided method copied onto a conformer named
-// (recvStart,recvLen): the conformer's own type params (so the copy is emitted per
-// receiver instantiation), followed by the provided method's own params. Empty for
-// a non-generic conformer (returns the method's own params unchanged).
-fn providedCopyTypeParams(c: inout Comp, recvStart: U64, recvLen: U64, ownParams: Array[Bind]) -> Array[Bind] {
-    mut val out: Array[Bind] = []
-    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        if c.arena.structs[si].typeParams.count > 0 {
-            if c.arena.structs[si].nameId == qRecv {
-                mut val k: U64 = 0
-                while k < c.arena.structs[si].typeParams.count {
-                    out.append(c.arena.structs[si].typeParams[k])
-                    k += 1
-                }
-            }
-        }
-        si += 1
-    }
-    mut val oi: U64 = 0
-    while oi < ownParams.count {
-        out.append(ownParams[oi])
-        oi += 1
-    }
-    return out
-}
-
-// Whether a conformance's subject is a type *parameter* of the impl — i.e. a
-// blanket impl `impl[T] T as Trait where T: Bound` — rather than a concrete
-// type. Detected structurally: some method of the conformance has the subject
-// name both as its receiver and as one of its own type params.
-fn isBlanketConform(c: inout Comp, cf: Conform) -> Bool {
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv {
-            if f.recvId == cf.typeId {
-                mut val tp: U64 = 0
-                while tp < f.typeParams.count {
-                    if f.typeParams[tp].nameId == cf.typeId {
-                        return true
-                    }
-                    tp += 1
-                }
-            }
-        }
-        i += 1
-    }
-    return false
-}
-
-// Whether a BARE conformance of `typeId` to `traitId` is recorded. A view-rooted
-// conform (viewRootId != 0, spec/09 chain conflict) does NOT count: the type only
-// conforms through a `value#root` view, not bare — so a bare `where _: traitId` is
-// ambiguous and must pick a path. (Also used to avoid registering a duplicate.)
-fn conformExists(c: inout Comp, typeId: U64, traitId: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.decls.conforms.count {
-        if c.decls.conforms[i].typeId == typeId {
-            if c.decls.conforms[i].traitId == traitId {
-                if c.decls.conforms[i].viewRootId == 0U64 {
-                    return true
-                }
-            }
-        }
-        i += 1
-    }
-    // a `newtype` inherits the underlying type's trait conformances automatically
-    // (spec/10: methods, conformances, operators, factories). So `UserId = String`
-    // satisfies `where T: Format` because String does — `print(u)` type-checks and
-    // dispatches to String's witness (the newtype shares String's representation).
-    mut val ni: U64 = 0
-    while ni < c.arena.newtypes.count {
-        if c.arena.newtypes[ni].nameId == typeId {
-            val underId: U64 = intern(c: inout c, start: c.arena.newtypes[ni].underStart, len: c.arena.newtypes[ni].underLen)
-            return conformExists(c: inout c, typeId: underId, traitId: traitId)
-        }
-        ni += 1
-    }
-    return false
-}
-
-// Whether `nameStart`/`nameLen` names an extension (some method is tagged with
-// it via Func.extId). Used to classify a `#X` view as extension vs trait so the
-// view-validity check (spec/09) can give the right diagnostic.
-fn isExtName(c: inout Comp, start: U64, len: U64) -> Bool {
-    val qId: U64 = intern(c: inout c, start: start, len: len)
-    if qId == 0U64 {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        if c.arena.funcs[i].extId == qId {
-            return true
-        }
-        i += 1
-    }
-    return false
-}
-
-// Whether the extension named `extStart`/`extLen` has an `impl` for the type named
-// `typeStart`/`typeLen` (some extension method tagged extId == ext, recvId == type).
-// A `value#Ext` view is only valid when the extension actually applies (spec/09).
-fn extAppliesToType(c: inout Comp, extStart: U64, extLen: U64, typeStart: U64, typeLen: U64) -> Bool {
-    val qExt: U64 = intern(c: inout c, start: extStart, len: extLen)
-    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        if c.arena.funcs[i].extId == qExt {
-            if c.arena.funcs[i].recvId == qType {
+    inout fn isTraitName(start: U64, len: U64) -> Bool {
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = 0
+        while i < self.decls.traits.count {
+            val t: TraitDef = self.decls.traits[i]
+            if t.nameId == qId {
                 return true
             }
+            i += 1
         }
-        i += 1
-    }
-    // a newtype inherits the underlying type's extensions (spec/10).
-    mut val ni: U64 = 0
-    while ni < c.arena.newtypes.count {
-        if c.arena.newtypes[ni].nameId == qType {
-            return extAppliesToType(c: inout c, extStart: extStart, extLen: extLen, typeStart: c.arena.newtypes[ni].underStart, typeLen: c.arena.newtypes[ni].underLen)
-        }
-        ni += 1
-    }
-    return false
-}
-
-// Number of distinct subject traits `B` such that an inter-trait conformance
-// `impl B as A` (A = aTraitId) exists and the concrete type `tId` conforms to `B`.
-// Used to detect an ambiguous inter-trait conformance (a type reaching the same
-// trait through two different subject traits). Counts only original (non-derived,
-// trait-subject) conforms, so it is stable as conferred conforms are appended.
-fn subjectPathCount(c: inout Comp, tId: U64, aTraitId: U64) -> U64 {
-    mut val count: U64 = 0
-    mut val i: U64 = 0
-    while i < c.decls.conforms.count {
-        val cf: Conform = c.decls.conforms[i]
-        if !(cf.derived) && cf.extId == 0U64 {
-            if cf.traitId == aTraitId {
-                if isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
-                    // cf is `impl B as A`; does tId conform to the subject trait B?
-                    if conformExists(c: inout c, typeId: tId, traitId: cf.typeId) {
-                        count += 1
-                    }
-                }
-            }
-        }
-        i += 1
-    }
-    return count
-}
-
-// Whether the view `typeName#viewId` conforms to `targetTrait` (spec/09): a value
-// re-viewed with `#X` satisfies `where _: A` when X is a trait-subject conformance
-// path `impl B as A` reaching the trait — either a bare inter-trait conform whose
-// subject trait B is the view (viewId == B), or an extension conform tagged extId ==
-// viewId — and the underlying type conforms to that subject trait B. This is how a
-// multi-path `s#P` (which does not conform bare) and an extension `x#Ext` (view-
-// gated) satisfy a generic bound (`f(a: s#P)` / `g(x#Ext)`, spec/09:269).
-fn viewConformsTo(c: inout Comp, typeStart: U64, typeLen: U64, viewId: U64, traitStart: U64, traitLen: U64) -> Bool {
-    if viewId == 0U64 {
         return false
     }
-    val typeId: U64 = intern(c: inout c, start: typeStart, len: typeLen)
-    val targetId: U64 = intern(c: inout c, start: traitStart, len: traitLen)
-    mut val i: U64 = 0
-    while i < c.decls.conforms.count {
-        val cf: Conform = c.decls.conforms[i]
-        if cf.traitId == targetId {
-            // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
-            // a bare inter-trait conform whose subject trait is the view, or an
-            // extension conform whose extId is the view.
-            if isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
-                mut val viaView: Bool = false
-                if cf.extId == 0U64 {
-                    if cf.typeId == viewId {
-                        viaView = true
-                    }
-                } else {
-                    if cf.extId == viewId {
-                        viaView = true
-                    }
-                }
-                if viaView {
-                    // does the underlying type conform to the subject trait B?
-                    if conformExists(c: inout c, typeId: typeId, traitId: cf.typeId) {
+
+    inout fn methodRecvIsTrait(f: Func) -> Bool {
+        if f.hasRecv {
+            return self.isTraitName(start: f.recvStart, len: f.recvLen)
+        }
+        return false
+    }
+
+    inout fn methodInRange(lo: U64, hi: U64, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = lo
+        while i < hi {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
+                if f.recvId == qRecv {
+                    if f.nameId == qName {
                         return true
                     }
                 }
             }
+            i += 1
         }
-        i += 1
+        return false
     }
-    return false
-}
 
-// Inter-trait conformance (spec/08,09): `impl B as A { fn … }` makes every type
-// conforming to the subject trait `B` also conform to `A`, witnessing A's
-// requirements in B's vocabulary. For each such conform and each concrete type T
-// that conforms to B, copy the impl's methods onto T (receiver = T) and record the
-// conferred conformance — so they ride the ordinary provided-method emission path.
-// Runs before instantiateProvidedMethods so A's own provided methods also reach the
-// new types. The headless form `impl[T] T as A where T: B` is rejected (spec/09:
-// 頭なし Self の blanket は禁止 — see Verify.checkBlanketHeadless); the legal subject
-// is the trait B itself, which anchors the conformance and keeps bare-method
-// surfaces enumerable.
-//
-// CHAINS (spec/09): conformance is transitive — `impl C as B` + `impl B as A` makes
-// every C-conformer also conform to A (S: C → B → A). This is computed as a FIXPOINT:
-// each pass scans the LIVE conform list (so a conformance conferred this pass, e.g.
-// `S as B`, becomes a candidate for the next hop `impl B as A`), repeating until no
-// new conformance is recorded. The set of (type, trait) pairs is finite and only
-// grows, so it terminates. applyBlanketTo is idempotent (conformExists / methodInRange
-// guards), so re-scanning already-conferred pairs is a no-op.
-fn instantiateTraitSubjectConforms(c: inout Comp) {
-    // snapshot before any conferral: the dup guard and source-method scan must see
-    // only originals, so sibling conferred copies coexist (multi-path ambiguity).
-    val guardHi: U64 = c.arena.funcs.count
-    mut val changed: Bool = true
-    while changed {
-        val before: U64 = c.decls.conforms.count
-        // re-read the live count each pass: a conformance conferred earlier this pass
-        // is a valid candidate for a later hop (transitivity).
-        mut val ci: U64 = 0
-        while ci < c.decls.conforms.count {
-            val cf: Conform = c.decls.conforms[ci]
-            // a trait-subject conform: subject (typeStart,typeLen) names a trait B.
-            // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
-            // those stay view-gated (`value#Ext`), handled by the extension machinery —
-            // only an owner-module bare `impl B as A` auto-confers onto the bare surface.
-            if cf.extId == 0U64 && isTraitName(c: inout c, start: cf.typeStart, len: cf.typeLen) {
-                // candidate concrete types: those conforming to the subject trait B.
-                mut val cj: U64 = 0
-                while cj < c.decls.conforms.count {
-                    val cand: Conform = c.decls.conforms[cj]
-                    if cand.traitId == cf.typeId {
-                        if !(isTraitName(c: inout c, start: cand.typeStart, len: cand.typeLen)) {
-                            // the view-root under which we confer A on T via this impl
-                            // (spec/09 chain conflict). If the candidate conformance to B
-                            // is already view-rooted (T reaches B only via #root), the
-                            // chain stays rooted there — propagate it. Otherwise (T
-                            // bare-conforms to B) a NEW root is born iff A is reached by T
-                            // through more than one subject trait (multi-path): the root
-                            // is THIS impl's subject. A single bare path → root 0 (bare).
-                            mut val vr: U64 = cand.viewRootId
-                            if vr == 0U64 {
-                                if subjectPathCount(c: inout c, tId: cand.typeId, aTraitId: cf.traitId) > 1U64 {
-                                    vr = cf.typeId
-                                }
-                            }
-                            applyBlanketTo(c: inout c, blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, viewRoot: vr)
-                        }
-                    }
-                    cj += 1
-                }
-            }
-            ci += 1
-        }
-        changed = c.decls.conforms.count > before
-    }
-}
-
-// Confer trait-subject conformance `blanket` (`impl B as A`, blanket.typeId = the
-// subject trait B) onto concrete type (recvStart,recvLen) that conforms to B: copy
-// A's witness methods (recvId == B) onto the type, tagged with srcTraitId = B so
-// `value#B.m()` selects this conformance path (spec/09). The dup guard scans only
-// originals [0,guardHi) — sibling paths (`impl P as A`, `impl Q as A`) coexist
-// rather than the first shadowing the second, so a multi-path bare call surfaces as
-// a findMethod ambiguity (resolved with `value#P.m()`). When recordConform, also
-// record the conferred conformance so it rides bare resolution / `where T: A`
-// (only the single-path case does this; a multi-path type does not conform bare).
-// Whether a conferred copy of method (nameId) on receiver (recvId) tagged with this
-// source path (srcTraitId) already exists — so the fixpoint can re-scan an already-
-// conferred (impl, type) pair idempotently without copying the witness twice. Keyed
-// on srcTraitId so distinct multi-paths (same name, different subject) still coexist.
-fn conferredCopyExists(c: inout Comp, recvId: U64, nameId: U64, srcTraitId: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv {
-            if f.recvId == recvId {
-                if f.nameId == nameId {
-                    if f.srcTraitId == srcTraitId {
-                        return true
+    inout fn providedCopyTypeParams(recvStart: U64, recvLen: U64, ownParams: Array[Bind]) -> Array[Bind] {
+        mut val out: Array[Bind] = []
+        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            if self.arena.structs[si].typeParams.count > 0 {
+                if self.arena.structs[si].nameId == qRecv {
+                    mut val k: U64 = 0
+                    while k < self.arena.structs[si].typeParams.count {
+                        out.append(self.arena.structs[si].typeParams[k])
+                        k += 1
                     }
                 }
             }
+            si += 1
         }
-        i += 1
-    }
-    return false
-}
-
-// Whether a conform of (typeId -> traitId) with this exact view-root is already
-// recorded — the per-path guard for the fixpoint (a view-rooted multi-path records a
-// separate conform per root, so the plain conformExists/bare guard would wrongly
-// block the 2nd path).
-fn conformWithRootExists(c: inout Comp, typeId: U64, traitId: U64, viewRootId: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.decls.conforms.count {
-        if c.decls.conforms[i].typeId == typeId {
-            if c.decls.conforms[i].traitId == traitId {
-                if c.decls.conforms[i].viewRootId == viewRootId {
-                    return true
-                }
-            }
+        mut val oi: U64 = 0
+        while oi < ownParams.count {
+            out.append(ownParams[oi])
+            oi += 1
         }
-        i += 1
+        return out
     }
-    return false
-}
 
-// Confer trait-subject conformance `blanket` (`impl B as A`) onto concrete type
-// (recvStart,recvLen) under view-root `viewRoot` (0 = a bare, single-path conferral;
-// non-0 = a chain-conflict path rooted at that trait — spec/09). Copy A's witness
-// methods (recvId == B) onto the type and record the conferred conformance. A
-// view-rooted conferral is reachable only via `value#root`: its methods are tagged
-// srcTraitId = root (so `#root` selects them) + selfViewId = root (so internal
-// `self.m()` in the witness body resolves through the SAME root) + viewOnly (excluded
-// from bare resolution); its conform carries viewRootId = root (excluded from bare
-// `where _: A`). A bare conferral (root 0) tags srcTraitId = the direct subject B and
-// rides the bare surface like an ordinary provided method. The dup guard scans only
-// originals [0,guardHi) so sibling paths coexist; conferredCopyExists (keyed on the
-// source tag) makes the fixpoint re-scan idempotent.
-fn applyBlanketTo(c: inout Comp, blanket: Conform, recvStart: U64, recvLen: U64, guardHi: U64, viewRoot: U64) {
-    val recvId: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    mut val srcTag: U64 = blanket.typeId
-    if viewRoot != 0U64 {
-        srcTag = viewRoot
-    }
-    mut val fi: U64 = 0
-    while fi < guardHi {
-        val f: Func = c.arena.funcs[fi]
-        if f.hasRecv {
-            if f.recvId == blanket.typeId {
-                // skip if the type already has an inherent method of this name
-                // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
-                // not block, so multiple paths' methods coexist. Also skip if this
-                // exact path was already conferred (idempotent fixpoint re-scan).
-                if !(methodInRange(c: inout c, lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(conferredCopyExists(c: inout c, recvId: recvId, nameId: f.nameId, srcTraitId: srcTag)) {
-                    // drop the subject param from the method's type params (none for a
-                    // trait subject), keep the method-own params.
-                    mut val copiedTP: Array[Bind] = []
+    inout fn isBlanketConform(cf: Conform) -> Bool {
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
+                if f.recvId == cf.typeId {
                     mut val tp: U64 = 0
                     while tp < f.typeParams.count {
-                        if f.typeParams[tp].nameId != blanket.typeId {
-                            copiedTP.append(f.typeParams[tp])
+                        if f.typeParams[tp].nameId == cf.typeId {
+                            return true
                         }
                         tp += 1
                     }
-                    c.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag viewOnly=(viewRoot != 0U64) selfViewId=viewRoot />)
                 }
             }
+            i += 1
         }
-        fi += 1
+        return false
     }
-    if !(conformWithRootExists(c: inout c, typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-        c.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot />)
-    }
-}
 
-fn instantiateProvidedMethods(c: inout Comp) {
-    val nFuncs: U64 = c.arena.funcs.count
-    mut val ci: U64 = 0
-    while ci < c.decls.conforms.count {
-        val cf: Conform = c.decls.conforms[ci]
-        // a view-rooted conform (spec/09 chain conflict) is reached only via
-        // `value#root`; its trait's provided methods must not land on the bare
-        // surface. The witness methods are already conferred (applyBlanketTo, tagged
-        // for the view); skip the bare provided-method copy here.
-        if cf.viewRootId != 0U64 {
-            ci += 1
-            continue
+    inout fn conformExists(typeId: U64, traitId: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count {
+            if self.decls.conforms[i].typeId == typeId {
+                if self.decls.conforms[i].traitId == traitId {
+                    if self.decls.conforms[i].viewRootId == 0U64 {
+                        return true
+                    }
+                }
+            }
+            i += 1
+        }
+        // a `newtype` inherits the underlying type's trait conformances automatically
+        // (spec/10: methods, conformances, operators, factories). So `UserId = String`
+        // satisfies `where T: Format` because String does — `print(u)` type-checks and
+        // dispatches to String's witness (the newtype shares String's representation).
+        mut val ni: U64 = 0
+        while ni < self.arena.newtypes.count {
+            if self.arena.newtypes[ni].nameId == typeId {
+                val underId: U64 = intern(c: inout self, start: self.arena.newtypes[ni].underStart, len: self.arena.newtypes[ni].underLen)
+                return self.conformExists(typeId: underId, traitId: traitId)
+            }
+            ni += 1
+        }
+        return false
+    }
+
+    inout fn isExtName(start: U64, len: U64) -> Bool {
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        if qId == 0U64 {
+            return false
+        }
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            if self.arena.funcs[i].extId == qId {
+                return true
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn extAppliesToType(extStart: U64, extLen: U64, typeStart: U64, typeLen: U64) -> Bool {
+        val qExt: U64 = intern(c: inout self, start: extStart, len: extLen)
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            if self.arena.funcs[i].extId == qExt {
+                if self.arena.funcs[i].recvId == qType {
+                    return true
+                }
+            }
+            i += 1
+        }
+        // a newtype inherits the underlying type's extensions (spec/10).
+        mut val ni: U64 = 0
+        while ni < self.arena.newtypes.count {
+            if self.arena.newtypes[ni].nameId == qType {
+                return self.extAppliesToType(extStart: extStart, extLen: extLen, typeStart: self.arena.newtypes[ni].underStart, typeLen: self.arena.newtypes[ni].underLen)
+            }
+            ni += 1
+        }
+        return false
+    }
+
+    inout fn subjectPathCount(tId: U64, aTraitId: U64) -> U64 {
+        mut val count: U64 = 0
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count {
+            val cf: Conform = self.decls.conforms[i]
+            if !(cf.derived) && cf.extId == 0U64 {
+                if cf.traitId == aTraitId {
+                    if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
+                        // cf is `impl B as A`; does tId conform to the subject trait B?
+                        if self.conformExists(typeId: tId, traitId: cf.typeId) {
+                            count += 1
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        return count
+    }
+
+    inout fn viewConformsTo(typeStart: U64, typeLen: U64, viewId: U64, traitStart: U64, traitLen: U64) -> Bool {
+        if viewId == 0U64 {
+            return false
+        }
+        val typeId: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        val targetId: U64 = intern(c: inout self, start: traitStart, len: traitLen)
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count {
+            val cf: Conform = self.decls.conforms[i]
+            if cf.traitId == targetId {
+                // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
+                // a bare inter-trait conform whose subject trait is the view, or an
+                // extension conform whose extId is the view.
+                if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
+                    mut val viaView: Bool = false
+                    if cf.extId == 0U64 {
+                        if cf.typeId == viewId {
+                            viaView = true
+                        }
+                    } else {
+                        if cf.extId == viewId {
+                            viaView = true
+                        }
+                    }
+                    if viaView {
+                        // does the underlying type conform to the subject trait B?
+                        if self.conformExists(typeId: typeId, traitId: cf.typeId) {
+                            return true
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn instantiateTraitSubjectConforms() {
+        // snapshot before any conferral: the dup guard and source-method scan must see
+        // only originals, so sibling conferred copies coexist (multi-path ambiguity).
+        val guardHi: U64 = self.arena.funcs.count
+        mut val changed: Bool = true
+        while changed {
+            val before: U64 = self.decls.conforms.count
+            // re-read the live count each pass: a conformance conferred earlier this pass
+            // is a valid candidate for a later hop (transitivity).
+            mut val ci: U64 = 0
+            while ci < self.decls.conforms.count {
+                val cf: Conform = self.decls.conforms[ci]
+                // a trait-subject conform: subject (typeStart,typeLen) names a trait B.
+                // Skip extension conforms (`extension Ext { impl B as A }`, extId != 0):
+                // those stay view-gated (`value#Ext`), handled by the extension machinery —
+                // only an owner-module bare `impl B as A` auto-confers onto the bare surface.
+                if cf.extId == 0U64 && self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
+                    // candidate concrete types: those conforming to the subject trait B.
+                    mut val cj: U64 = 0
+                    while cj < self.decls.conforms.count {
+                        val cand: Conform = self.decls.conforms[cj]
+                        if cand.traitId == cf.typeId {
+                            if !(self.isTraitName(start: cand.typeStart, len: cand.typeLen)) {
+                                // the view-root under which we confer A on T via this impl
+                                // (spec/09 chain conflict). If the candidate conformance to B
+                                // is already view-rooted (T reaches B only via #root), the
+                                // chain stays rooted there — propagate it. Otherwise (T
+                                // bare-conforms to B) a NEW root is born iff A is reached by T
+                                // through more than one subject trait (multi-path): the root
+                                // is THIS impl's subject. A single bare path → root 0 (bare).
+                                mut val vr: U64 = cand.viewRootId
+                                if vr == 0U64 {
+                                    if self.subjectPathCount(tId: cand.typeId, aTraitId: cf.traitId) > 1U64 {
+                                        vr = cf.typeId
+                                    }
+                                }
+                                self.applyBlanketTo(blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, viewRoot: vr)
+                            }
+                        }
+                        cj += 1
+                    }
+                }
+                ci += 1
+            }
+            changed = self.decls.conforms.count > before
+        }
+    }
+
+    inout fn conferredCopyExists(recvId: U64, nameId: U64, srcTraitId: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
+                if f.recvId == recvId {
+                    if f.nameId == nameId {
+                        if f.srcTraitId == srcTraitId {
+                            return true
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn conformWithRootExists(typeId: U64, traitId: U64, viewRootId: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count {
+            if self.decls.conforms[i].typeId == typeId {
+                if self.decls.conforms[i].traitId == traitId {
+                    if self.decls.conforms[i].viewRootId == viewRootId {
+                        return true
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn applyBlanketTo(blanket: Conform, recvStart: U64, recvLen: U64, guardHi: U64, viewRoot: U64) {
+        val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        mut val srcTag: U64 = blanket.typeId
+        if viewRoot != 0U64 {
+            srcTag = viewRoot
         }
         mut val fi: U64 = 0
-        while fi < nFuncs {
-            val f: Func = c.arena.funcs[fi]
+        while fi < guardHi {
+            val f: Func = self.arena.funcs[fi]
             if f.hasRecv {
-                // match the conformance to the right same-name trait by arity (spec/08:
-                // trait names share a flat namespace — a user `trait Sub` vs Core's
-                // operator `Sub[Rhs]`). Without the arity gate a provided method on the
-                // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
-                if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count {
-                    // shadowing/collision (spec/08): an inherent method of the same
-                    // name on the type wins (skip the provided copy). Two conformed
-                    // traits providing the same name both copy here, each tagged with
-                    // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
-                    // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
-                    // the source trait (findExtMethod). spec/08,09.
-                    if !(methodInRange(c: inout c, lo: 0, hi: nFuncs, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
-                        // a provided method copied onto a *generic* conformer inherits
-                        // the conformer's type params (prepended), so methodMatchesInst
-                        // emits it per receiver instantiation (`MapIter[Counter,…]`) like
-                        // an inherent method. Onto a non-generic conformer this is a
-                        // no-op (the conformer has no params).
-                        val copiedTP: Array[Bind] = providedCopyTypeParams(c: inout c, recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: f.typeParams)
-                        // preserve extId: a trait-subject extension method (spec/09
-                        // `extension Ext { impl Trait { … } }`) stays view-gated on the
-                        // conformer, reached via `value#Ext.m()` not a bare call.
-                        c.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout c, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId extId=f.extId />)
+                if f.recvId == blanket.typeId {
+                    // skip if the type already has an inherent method of this name
+                    // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
+                    // not block, so multiple paths' methods coexist. Also skip if this
+                    // exact path was already conferred (idempotent fixpoint re-scan).
+                    if !(self.methodInRange(lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(self.conferredCopyExists(recvId: recvId, nameId: f.nameId, srcTraitId: srcTag)) {
+                        // drop the subject param from the method's type params (none for a
+                        // trait subject), keep the method-own params.
+                        mut val copiedTP: Array[Bind] = []
+                        mut val tp: U64 = 0
+                        while tp < f.typeParams.count {
+                            if f.typeParams[tp].nameId != blanket.typeId {
+                                copiedTP.append(f.typeParams[tp])
+                            }
+                            tp += 1
+                        }
+                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag viewOnly=(viewRoot != 0U64) selfViewId=viewRoot />)
                     }
                 }
             }
             fi += 1
         }
-        ci += 1
+        if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
+            self.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot />)
+        }
     }
-}
 
-// Index of a non-generic struct named (start,len), or c.arena.structs.count if none.
-export fn structIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
-    // a use of an import alias (`with { Real as Alias }`) resolves to the real name.
-    val ar: Bind = aliasReal(c: inout c, start: start, len: len)
-    val qId: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[i]
-        if s.typeParams.count == 0 {
-            if s.nameId == qId {
+    inout fn instantiateProvidedMethods() {
+        val nFuncs: U64 = self.arena.funcs.count
+        mut val ci: U64 = 0
+        while ci < self.decls.conforms.count {
+            val cf: Conform = self.decls.conforms[ci]
+            // a view-rooted conform (spec/09 chain conflict) is reached only via
+            // `value#root`; its trait's provided methods must not land on the bare
+            // surface. The witness methods are already conferred (applyBlanketTo, tagged
+            // for the view); skip the bare provided-method copy here.
+            if cf.viewRootId != 0U64 {
+                ci += 1
+                continue
+            }
+            mut val fi: U64 = 0
+            while fi < nFuncs {
+                val f: Func = self.arena.funcs[fi]
+                if f.hasRecv {
+                    // match the conformance to the right same-name trait by arity (spec/08:
+                    // trait names share a flat namespace — a user `trait Sub` vs Core's
+                    // operator `Sub[Rhs]`). Without the arity gate a provided method on the
+                    // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
+                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count {
+                        // shadowing/collision (spec/08): an inherent method of the same
+                        // name on the type wins (skip the provided copy). Two conformed
+                        // traits providing the same name both copy here, each tagged with
+                        // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
+                        // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
+                        // the source trait (findExtMethod). spec/08,09.
+                        if !(self.methodInRange(lo: 0, hi: nFuncs, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
+                            // a provided method copied onto a *generic* conformer inherits
+                            // the conformer's type params (prepended), so methodMatchesInst
+                            // emits it per receiver instantiation (`MapIter[Counter,…]`) like
+                            // an inherent method. Onto a non-generic conformer this is a
+                            // no-op (the conformer has no params).
+                            val copiedTP: Array[Bind] = self.providedCopyTypeParams(recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: f.typeParams)
+                            // preserve extId: a trait-subject extension method (spec/09
+                            // `extension Ext { impl Trait { … } }`) stays view-gated on the
+                            // conformer, reached via `value#Ext.m()` not a bare call.
+                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId extId=f.extId />)
+                        }
+                    }
+                }
+                fi += 1
+            }
+            ci += 1
+        }
+    }
+
+    inout fn structIndexByName(start: U64, len: U64) -> U64 {
+        // a use of an import alias (`with { Real as Alias }`) resolves to the real name.
+        val ar: Bind = aliasReal(c: inout self, start: start, len: len)
+        val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.structs.count {
+            val s: StructDef = self.arena.structs[i]
+            if s.typeParams.count == 0 {
+                if s.nameId == qId {
+                    return i
+                }
+            }
+            i += 1
+        }
+        return self.arena.structs.count
+    }
+
+    inout fn enumIdxByName(start: U64, len: U64) -> U64 {
+        // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
+        val ar: Bind = aliasReal(c: inout self, start: start, len: len)
+        val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.enums.count {
+            if self.arena.enums[i].nameId == q {
                 return i
             }
+            i += 1
         }
-        i += 1
+        return self.arena.enums.count
     }
-    return c.arena.structs.count
-}
 
-// The c.arena.enums index of the enum named (start,len), or c.arena.enums.count.
-// (The enum analog of structIndexByName; a pure name lookup used by analysis and
-// codegen alike, so it lives in the front-end with the other decl-table queries.)
-export fn enumIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
-    // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
-    val ar: Bind = aliasReal(c: inout c, start: start, len: len)
-    val q: U64 = intern(c: inout c, start: ar.nameStart, len: ar.nameLen)
-    mut val i: U64 = 0
-    while i < c.arena.enums.count {
-        if c.arena.enums[i].nameId == q {
-            return i
+    inout fn findTraitIdxByName(start: U64, len: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        mut val ti: U64 = 0
+        while ti < self.decls.traits.count {
+            if self.decls.traits[ti].nameId == qId {
+                return ti
+            }
+            ti += 1
         }
-        i += 1
+        return self.decls.traits.count
     }
-    return c.arena.enums.count
-}
 
-// Trait def index for the trait named (start,len), or c.decls.traits.count if none.
-export fn findTraitIdxByName(c: inout Comp, start: U64, len: U64) -> U64 {
-    val qId: U64 = intern(c: inout c, start: start, len: len)
-    mut val ti: U64 = 0
-    while ti < c.decls.traits.count {
-        if c.decls.traits[ti].nameId == qId {
-            return ti
+    inout fn addFnThunk(fi: U64) {
+        mut val i: U64 = 0
+        while i < self.monoWork.fnThunks.count {
+            if self.monoWork.fnThunks[i] == fi {
+                return
+            }
+            i += 1
         }
-        ti += 1
+        self.monoWork.fnThunks.append(fi)
     }
-    return c.decls.traits.count
-}
 
-// ── value-semantics ARC for enums & recursive boxes (spec/03) ────────────────
-// Mirrors the struct copy/share/release machinery onto enums (concrete + mono)
-// and onto boxed (recursive) fields. A boxed field is a refcounted heap cell
-// (plew_arc_alloc header): copy/share retain it, release drops the refcount and,
-// at zero, recursively releases the pointee and frees the cell.
-
-// ---- dependency-ordered emission of concrete nominal bodies ----
-//
-// A type's C body must appear after every type it holds BY VALUE (a by-value
-// field needs the complete type). The old order ("all enums, then all structs in
-// source order") only works when no enum holds a struct by value and structs are
-// already source-ordered by dependency. emitNominalBodiesTopo lifts both: it emits
-// concrete (non-generic, non-extern) struct/enum bodies in a post-order DFS over
-// the by-value containment graph, so an enum may hold a struct payload by value
-// (e.g. value-tree ASTs) and structs may be defined in any order.
-//
-// Edges exclude indirection — boxed (recursive), Array, Ref/WeakRef, RawBuffer,
-// and monomorphized generic fields are all behind a pointer/emitted elsewhere, so
-// they impose no completeness constraint. By-value containment is therefore a DAG
-// (mutual by-value recursion is impossible — the compiler boxes one side), so the
-// DFS terminates.
-
-// Record that free function `fi` is used as a bare value (needs a thunk).
-fn addFnThunk(c: inout Comp, fi: U64) {
-    mut val i: U64 = 0
-    while i < c.monoWork.fnThunks.count {
-        if c.monoWork.fnThunks[i] == fi {
-            return
-        }
-        i += 1
-    }
-    c.monoWork.fnThunks.append(fi)
-}
-
-// Pre-pass: every bare identifier that names a (non-generic, non-method) free
-// function is a function-as-value use (calls carry the name on Expr.Call, not an
-// Ident), so it needs a thunk to reach the uniform closure ABI. Over-approx is
-// safe: an unused thunk is harmless (and generated C is compiled with -w).
-fn collectFnThunks(c: inout Comp) {
-    mut val i: U64 = 0
-    while i < c.arena.exprs.count {
-        match c.arena.exprs[i] {
-            Expr.Ident(val start, val len) => {
-                val fvi: U64 = firstFuncByName(c: inout c, nameStart: start, nameLen: len)
-                if fvi < c.arena.funcs.count {
-                    val f: Func = c.arena.funcs[fvi]
-                    if !(f.hasRecv) {
-                        if !(f.isAssoc) {
-                            if f.typeParams.count > 0 {
-                                // a generic free fn has no bare symbol (it is emitted
-                                // per instantiation) — not supported as a value yet.
-                            } else {
-                                addFnThunk(c: inout c, fi: fvi)
+    inout fn collectFnThunks() {
+        mut val i: U64 = 0
+        while i < self.arena.exprs.count {
+            match self.arena.exprs[i] {
+                Expr.Ident(val start, val len) => {
+                    val fvi: U64 = firstFuncByName(c: inout self, nameStart: start, nameLen: len)
+                    if fvi < self.arena.funcs.count {
+                        val f: Func = self.arena.funcs[fvi]
+                        if !(f.hasRecv) {
+                            if !(f.isAssoc) {
+                                if f.typeParams.count > 0 {
+                                    // a generic free fn has no bare symbol (it is emitted
+                                    // per instantiation) — not supported as a value yet.
+                                } else {
+                                    self.addFnThunk(fi: fvi)
+                                }
                             }
                         }
                     }
                 }
+                _ => {}
             }
-            _ => {}
+            i += 1
         }
-        i += 1
     }
-}
 
-// Is (start,len) a boxed (mutable, reference) capture of closure `closureId`?
-fn isBoxedCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
-        val e: CaptureEntry = c.monoWork.captures[i]
-        if e.closureId == closureId {
-            if e.boxed {
-                if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+    inout fn isBoxedCaptureOf(closureId: U64, start: U64, len: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.monoWork.captures.count {
+            val e: CaptureEntry = self.monoWork.captures[i]
+            if e.closureId == closureId {
+                if e.boxed {
+                    if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
+                        return true
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn isCaptureOf(closureId: U64, start: U64, len: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.monoWork.captures.count {
+            val e: CaptureEntry = self.monoWork.captures[i]
+            if e.closureId == closureId {
+                if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
                     return true
                 }
             }
+            i += 1
         }
-        i += 1
+        return false
     }
-    return false
 }
-
-// Is (start,len) the name of one of closure `closureId`'s captures?
-fn isCaptureOf(c: inout Comp, closureId: U64, start: U64, len: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
-        val e: CaptureEntry = c.monoWork.captures[i]
-        if e.closureId == closureId {
-            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) {
-                return true
-            }
-        }
-        i += 1
-    }
-    return false
-}
-

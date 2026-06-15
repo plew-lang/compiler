@@ -605,7 +605,7 @@ export fn findAssoc(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64,
 // Whether (start,len) names a struct or enum type (used to detect an assoc-fn
 // call `Type.name(args)`, where the receiver is a bare type name, not a value).
 fn isTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if structIndexByName(c: inout c, start: start, len: len) < c.arena.structs.count {
+    if c.structIndexByName(start: start, len: len) < c.arena.structs.count {
         return true
     }
     // an import alias (`with { Real as Alias }`) names the same type as `Real`.

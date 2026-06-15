@@ -70,7 +70,7 @@ pub impl Comp {
                     val srcId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
                     if srcId != 0U64 {
                         val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
-                        if !(conformExists(c: inout self, typeId: srcId, traitId: traitId)) {
+                        if !(self.conformExists(typeId: srcId, traitId: traitId)) {
                             return false
                         }
                     }

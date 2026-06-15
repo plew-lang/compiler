@@ -148,7 +148,7 @@ fn nameReachesOwner(c: inout Comp, nStart: U64, nLen: U64, args: Array[U64], tSt
     // genericStructIndex is tried too (structIndexByName skips generics) — else a
     // MUTUALLY recursive GENERIC value type (`Foo[T]` ↔ `Bar[T]`) misses the cycle
     // through the generic partner's fields, fails to box, and overflows at sizing.
-    mut val si: U64 = structIndexByName(c: inout c, start: nStart, len: nLen)
+    mut val si: U64 = c.structIndexByName(start: nStart, len: nLen)
     if si >= c.arena.structs.count {
         si = c.genericStructIndex(nameStart: nStart, nameLen: nLen)
     }
@@ -271,7 +271,7 @@ fn findFieldDef(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, 
         }
         return noField()
     }
-    val si: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
+    val si: U64 = c.structIndexByName(start: typeStart, len: typeLen)
     if si >= c.arena.structs.count {
         return noField()
     }

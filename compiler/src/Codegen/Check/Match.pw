@@ -11,7 +11,7 @@ pub impl Comp {
             return
         }
         if a.isStruct {
-            val si: U64 = structIndexByName(c: inout self, start: a.enumStart, len: a.enumLen)
+            val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
             if si < self.arena.structs.count {
                 checkBindsInFields(c: inout self, binds: a.binds, fields: self.arena.structs[si].fields)
             }

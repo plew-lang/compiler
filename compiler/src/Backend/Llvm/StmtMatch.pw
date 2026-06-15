@@ -43,7 +43,7 @@ fn genLlvmMatch(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[MatchA
         if !(arms[ai0].isWildcard) {
             if !(arms[ai0].isStruct) {
                 if eid == c.arena.enums.count {
-                    eid = enumIdxByName(c: inout c, start: arms[ai0].enumStart, len: arms[ai0].enumLen)
+                    eid = c.enumIdxByName(start: arms[ai0].enumStart, len: arms[ai0].enumLen)
                 }
             }
         }

@@ -243,7 +243,7 @@ fn emitIterNextLoop(c: inout Comp, st: inout LlvmCtx, iterVal: LLVMValueRef, opt
 // dynamically dispatching `next()` on the any value (the box's iterator state
 // advances in place), binding `x` to each `Some` payload until `None`.
 fn genLlvmForAnyIter(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64, iter: U64, anyRef: U64, body: U64) {
-    val traitIdx: U64 = findTraitIdxByName(c: inout c, start: c.arena.types[anyRef].nameStart, len: c.arena.types[anyRef].nameLen)
+    val traitIdx: U64 = c.findTraitIdxByName(start: c.arena.types[anyRef].nameStart, len: c.arena.types[anyRef].nameLen)
     if traitIdx >= c.decls.traits.count {
         compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
         return
@@ -350,7 +350,7 @@ fn genLlvmForArray(c: inout Comp, st: inout LlvmCtx, varStart: U64, varLen: U64,
                     // only a backend-registered struct (not a primitive / String): gate on
                     // structRegSlot so an `Array[I32]` element stays a plain scalar.
                     if structRegSlot(c: inout c, st: inout st, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen) < st.structIdxs.count {
-                        elemSidx = structIndexByName(c: inout c, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen)
+                        elemSidx = c.structIndexByName(start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen)
                     }
                 }
             }

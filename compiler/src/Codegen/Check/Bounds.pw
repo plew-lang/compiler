@@ -183,7 +183,7 @@ pub impl Comp {
         while ti < self.arena.types.count {
             val t: TypeRef = self.arena.types[ti]
             if t.isAny {
-                val tri: U64 = findTraitIdxByName(c: inout self, start: t.nameStart, len: t.nameLen)
+                val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
                 if tri < self.decls.traits.count {
                     val tr: TraitDef = self.decls.traits[tri]
                     // count positional bindings (argLabels entry 0 / absent).
@@ -397,7 +397,7 @@ pub impl Comp {
                                 // view selects, even when the bare type does not conform.
                                 mut val ok: Bool = self.typeConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)
                                 if !ok && at.viewExtId != 0U64 {
-                                    ok = viewConformsTo(c: inout self, typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                                    ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
                                 }
                                 if !ok {
                                     compileErrorAt(line: lineOf(c: inout self, offset: fb.paramStart), msg: "type argument does not conform to the trait required by `where`")

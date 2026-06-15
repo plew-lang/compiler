@@ -97,7 +97,7 @@ pub impl Comp {
     inout fn argArrayElemRef(argExpr: U64) -> U64 {
         match self.arena.exprs[argExpr] {
             Expr.Ident(val start, val len) => {
-                val li: U64 = localIndexByName(c: inout self, start: start, len: len)
+                val li: U64 = self.localIndexByName(start: start, len: len)
                 if li < self.cur.locals.count {
                     val lo: Local = self.cur.locals[li]
                     if lo.ty < self.arena.types.count {

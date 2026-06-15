@@ -23,7 +23,7 @@ fn captureSupported(c: inout Comp, lo: Local) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: lo.tyStart, len: lo.tyLen, kw: "Ref") {
         return true
     }
-    val si: U64 = structIndexByName(c: inout c, start: lo.tyStart, len: lo.tyLen)
+    val si: U64 = c.structIndexByName(start: lo.tyStart, len: lo.tyLen)
     if si < c.arena.structs.count {
         if c.arena.structs[si].isUnique {
             return false
@@ -145,7 +145,7 @@ fn registerChainResultInsts(c: inout Comp, exprId: U64, baseRef: U64, memberStar
     }
     val vRef: U64 = c.arena.types[baseRef].args[0]
     val vInfo: TypeInfo = c.typeInfoOfRef(ref: vRef)
-    val uInfo: TypeInfo = fieldType(c: inout c, structStart: vInfo.nameStart, structLen: vInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
+    val uInfo: TypeInfo = c.fieldType(structStart: vInfo.nameStart, structLen: vInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
     mut val uRef: U64 = uInfo.ref
     if uRef == 0 {
         val noTArgs: Array[U64] = []
@@ -225,7 +225,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             // capture detection: inside a closure, an identifier that resolves to
             // a local below the closure's entry mark is an enclosing capture.
             if c.cur.inClosure {
-                val li: U64 = localIndexByName(c: inout c, start: start, len: len)
+                val li: U64 = c.localIndexByName(start: start, len: len)
                 if li < c.cur.captureMark {
                     // a module-level variable (spec/15) seeded at the locals base
                     // (index < globals.count) is globally accessible — not a capture.
@@ -248,18 +248,18 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             val savedId: U64 = c.cur.closureId
             val savedIn: Bool = c.cur.inClosure
             val savedMark: U64 = c.cur.captureMark
-            val enclMark: U64 = scopeMark(c: inout c)
+            val enclMark: U64 = c.scopeMark()
             c.cur.closureId = exprId
             c.cur.inClosure = true
             c.cur.captureMark = enclMark
             mut val pi: U64 = 0
             while pi < params.count {
                 val p: Param = params[pi]
-                addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                c.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                 pi += 1
             }
             scanBlockInsts(c: inout c, blkId: body)
-            popLocals(c: inout c, mark: enclMark)
+            c.popLocals(mark: enclMark)
             c.cur.closureId = savedId
             c.cur.inClosure = savedIn
             c.cur.captureMark = savedMark
@@ -339,7 +339,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             if bt.kind == 2 {
                 if !(rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
                     val chN: Bind = internBytes(c: inout c, s: "chain")
-                    if typeHasMethodNamed(c: inout c, recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
+                    if c.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
                         rewriteOptChainToChainMatch(c: inout c, exprId: exprId, base: base, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
                         scanExprInsts(c: inout c, exprId: exprId)
                         // the result `Head[U]` and the no-arg `empty()` factory's
@@ -353,7 +353,7 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
                 }
             }
             // register the Optional[U] result so its C struct is emitted.
-            val rr: U64 = optChainResultRef(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
+            val rr: U64 = c.optChainResultRef(base: base, memberStart: memberStart, memberLen: memberLen)
             if rr != 0 {
                 c.scanType(ref: rr)
             }
@@ -370,10 +370,10 @@ fn scanExprInsts(c: inout Comp, exprId: U64) {
             mut val ai: U64 = 0
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
-                val mark: U64 = scopeMark(c: inout c)
+                val mark: U64 = c.scopeMark()
                 scanAddArmBinds(c: inout c, a: a, scrutTi: typeOf(c: inout c, id: scrut))
                 scanBlockInsts(c: inout c, blkId: a.body)
-                popLocals(c: inout c, mark: mark)
+                c.popLocals(mark: mark)
                 ai += 1
             }
         }
@@ -398,7 +398,7 @@ fn scanAddArmBinds(c: inout Comp, a: MatchArm, scrutTi: TypeInfo) {
         val bd: Bind = a.binds[bi]
         if genericMatch {
             val bti: TypeInfo = c.genericEnumFieldTypeInfo(instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
+            c.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
         } else {
             c.addBindLocal(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen)
         }
@@ -417,7 +417,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             // inferred-typed `val p = <P …/>` can't recover its type, so a generic
             // call like `print(p.x + p.y)` fails to discover its instantiation.
             val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-            addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
+            c.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
         }
         Stmt.Assign(val op, val target, val value) => {
             scanExprInsts(c: inout c, exprId: target)
@@ -441,7 +441,7 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
             scanBlockInsts(c: inout c, blkId: body)
         }
         Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
-            val forMark: U64 = scopeMark(c: inout c)
+            val forMark: U64 = c.scopeMark()
             scanExprInsts(c: inout c, exprId: iter)
             if isRange {
                 scanExprInsts(c: inout c, exprId: rangeHi)
@@ -456,32 +456,32 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
                         rtL = bt.nameLen
                     }
                 }
-                addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: rtS, tyLen: rtL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                c.addLocal(nameStart: varStart, nameLen: varLen, tyStart: rtS, tyLen: rtL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
             } else {
                 val et: TypeInfo = typeOf(c: inout c, id: iter)
                 if isStruct {
                     addForStructBinds(c: inout c, et: et, binds: binds)
                 } else {
                     if et.kind == 3 {
-                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                        c.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                     } else {
                         val elemTi: TypeInfo = c.iterableItemInfo(et: et)
-                        addLocal(c: inout c, nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
+                        c.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                     }
                 }
             }
             scanBlockInsts(c: inout c, blkId: body)
-            popLocals(c: inout c, mark: forMark)
+            c.popLocals(mark: forMark)
         }
         Stmt.Match(val scrut, val arms) => {
             scanExprInsts(c: inout c, exprId: scrut)
             mut val ai: U64 = 0
             while ai < arms.count {
                 val a: MatchArm = arms[ai]
-                val mark: U64 = scopeMark(c: inout c)
+                val mark: U64 = c.scopeMark()
                 scanAddArmBinds(c: inout c, a: a, scrutTi: typeOf(c: inout c, id: scrut))
                 scanBlockInsts(c: inout c, blkId: a.body)
-                popLocals(c: inout c, mark: mark)
+                c.popLocals(mark: mark)
                 ai += 1
             }
         }
@@ -494,14 +494,14 @@ fn scanStmtInsts(c: inout Comp, stmtId: U64) {
 
 // Walk a block (its own local scope), registering generic free function calls.
 fn scanBlockInsts(c: inout Comp, blkId: U64) {
-    val mark: U64 = scopeMark(c: inout c)
+    val mark: U64 = c.scopeMark()
     val stmts: Array[U64] = c.arena.blocks[blkId].stmts
     mut val i: U64 = 0
     while i < stmts.count {
         scanStmtInsts(c: inout c, stmtId: stmts[i])
         i += 1
     }
-    popLocals(c: inout c, mark: mark)
+    c.popLocals(mark: mark)
 }
 
 // Discover concrete instantiations of generic free functions by walking each
@@ -533,7 +533,7 @@ fn scanGenInstMethodBodies(c: inout Comp) {
                     if !(mf.isProvided) {
                         if mf.body != 0 {
                             c.cur.locals = []
-                            seedGlobalLocals(c: inout c)
+                            c.seedGlobalLocals()
                             c.cur.hasRecv = true
                             c.cur.recvStart = mf.recvStart
                             c.cur.recvLen = mf.recvLen
@@ -545,7 +545,7 @@ fn scanGenInstMethodBodies(c: inout Comp) {
                             mut val pi: U64 = 0
                             while pi < mf.params.count {
                                 val p: Param = mf.params[pi]
-                                addLocal(c: inout c, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                                c.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                                 pi += 1
                             }
                             scanBlockInsts(c: inout c, blkId: mf.body)

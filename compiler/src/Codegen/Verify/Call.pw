@@ -19,7 +19,7 @@ pub impl Comp {
         // equal, and so an enum match arm written with the alias name resolves (spec/15).
         val ar: Bind = aliasReal(c: inout self, start: start, len: len)
         val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
-        val si: U64 = structIndexByName(c: inout self, start: ar.nameStart, len: ar.nameLen)
+        val si: U64 = self.structIndexByName(start: ar.nameStart, len: ar.nameLen)
         if si < self.arena.structs.count {
             if self.arena.structs[si].isCExtern {
                 return 0U64

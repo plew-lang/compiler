@@ -33,7 +33,7 @@ fn makeFieldType(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64,
         }
         return scalarInfo()
     }
-    return fieldType(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: fieldStart, fieldLen: fieldLen)
+    return c.fieldType(structStart: typeStart, structLen: typeLen, fieldStart: fieldStart, fieldLen: fieldLen)
 }
 
 // Acceptance soundness: a `<Type field=… />` / `<E.V field=… />` field must exist on
@@ -49,7 +49,7 @@ fn checkMakeFieldExists(c: inout Comp, typeStart: U64, typeLen: U64, variantStar
             return
         }
     } else {
-        val si: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
+        val si: U64 = c.structIndexByName(start: typeStart, len: typeLen)
         if si >= c.arena.structs.count {
             return
         }

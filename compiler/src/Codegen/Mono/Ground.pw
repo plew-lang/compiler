@@ -100,7 +100,7 @@ pub impl Comp {
         if self.arena.bytes[t.nameStart] != 40U8 {
             return ref
         }
-        val si: U64 = structIndexByName(c: inout self, start: t.nameStart, len: t.nameLen)
+        val si: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)
         if si >= self.arena.structs.count {
             return ref
         }
@@ -448,7 +448,7 @@ pub impl Comp {
             // params, not concrete), emitted per receiver instantiation — scanning it as
             // concrete would register garbage like `FilterIter[MapIter, fn, B]`.
             mut val skipProvidedTemplate: Bool = false
-            if methodRecvIsTrait(c: inout self, f: f) {
+            if self.methodRecvIsTrait(f: f) {
                 skipProvidedTemplate = true
             }
             if f.isProvided {

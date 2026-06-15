@@ -13,7 +13,7 @@ pub impl Comp {
             return false
         }
         val f: Func = self.arena.funcs[self.cur.checkFn]
-        if !(methodRecvIsTrait(c: inout self, f: f)) {
+        if !(self.methodRecvIsTrait(f: f)) {
             return false
         }
         return spansEqual(c: inout self, aStart: start, aLen: len, bStart: f.recvStart, bLen: f.recvLen)
@@ -340,10 +340,10 @@ pub impl Comp {
                 mut val ai: U64 = 0
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
-                    val mark: U64 = scopeMark(c: inout self)
+                    val mark: U64 = self.scopeMark()
                     scanAddArmBinds(c: inout self, a: a, scrutTi: exprType(c: inout self, id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
-                    popLocals(c: inout self, mark: mark)
+                    self.popLocals(mark: mark)
                     ai += 1
                 }
             }
@@ -448,7 +448,7 @@ pub impl Comp {
                     // checkGenericTypeMatch recurses into an array literal against Array[E].
                     self.checkGenericTypeMatch(expectedRef: ty, valueExpr: init)
                 }
-                addLocal(c: inout self, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
+                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val op, val target, val value) => {
                 self.checkBoundsExpr(exprId: target)
@@ -478,37 +478,37 @@ pub impl Comp {
                 self.checkBoundsBlock(blkId: body)
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
-                val forMark: U64 = scopeMark(c: inout self)
+                val forMark: U64 = self.scopeMark()
                 self.checkBoundsExpr(exprId: iter)
                 if isRange {
                     self.checkBoundsExpr(exprId: rangeHi)
-                    addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
                     val et: TypeInfo = exprType(c: inout self, id: iter)
                     if isStruct {
                         addForStructBinds(c: inout self, et: et, binds: binds)
                     } else {
                         if et.kind == 3 {
-                            addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                         } else {
                             // a general Iterable: the loop var is the iterator's Item type.
                             val elemTi: TypeInfo = self.iterableItemInfo(et: et)
-                            addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
+                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
                         }
                     }
                 }
                 self.checkBoundsBlock(blkId: body)
-                popLocals(c: inout self, mark: forMark)
+                self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
                 self.checkBoundsExpr(exprId: scrut)
                 mut val ai: U64 = 0
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
-                    val mark: U64 = scopeMark(c: inout self)
+                    val mark: U64 = self.scopeMark()
                     scanAddArmBinds(c: inout self, a: a, scrutTi: exprType(c: inout self, id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
-                    popLocals(c: inout self, mark: mark)
+                    self.popLocals(mark: mark)
                     ai += 1
                 }
             }
@@ -520,14 +520,14 @@ pub impl Comp {
     }
 
     inout fn checkBoundsBlock(blkId: U64) {
-        val mark: U64 = scopeMark(c: inout self)
+        val mark: U64 = self.scopeMark()
         val stmts: Array[U64] = self.arena.blocks[blkId].stmts
         mut val i: U64 = 0
         while i < stmts.count {
             self.checkBoundsStmt(stmtId: stmts[i])
             i += 1
         }
-        popLocals(c: inout self, mark: mark)
+        self.popLocals(mark: mark)
     }
 
     inout fn checkGenericBodies() {
@@ -547,7 +547,7 @@ pub impl Comp {
             if f.typeParams.count > 0 {
                 shouldCheck = true
             }
-            if methodRecvIsTrait(c: inout self, f: f) {
+            if self.methodRecvIsTrait(f: f) {
                 if methodInEntryModule(c: inout self, f: f) {
                     shouldCheck = true
                 }
@@ -556,7 +556,7 @@ pub impl Comp {
                 val noParams: Array[Bind] = []
                 val noArgs: Array[U64] = []
                 self.cur.locals = []
-                seedGlobalLocals(c: inout self)
+                self.seedGlobalLocals()
                 self.cur.hasRecv = f.hasRecv
                 self.cur.recvStart = f.recvStart
                 self.cur.recvLen = f.recvLen
@@ -568,7 +568,7 @@ pub impl Comp {
                 mut val pi: U64 = 0
                 while pi < f.params.count {
                     val p: Param = f.params[pi]
-                    addLocal(c: inout self, nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                    self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                     pi += 1
                 }
                 self.checkBoundsBlock(blkId: f.body)

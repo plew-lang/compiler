@@ -59,7 +59,7 @@ fn synthParam(c: inout Comp, nameSpan: Bind, tyStart: U64, tyLen: U64) -> Param 
 // struct), plus a derived `Conform(T, Eq)`. Each field `==` lowers per its own
 // type (scalar/String built-in; a struct field needs its own Eq).
 fn synthStructEq(c: inout Comp, d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, boolN: Bind, eqTrait: Bind) {
-    val si: U64 = structIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
+    val si: U64 = c.structIndexByName(start: d.typeStart, len: d.typeLen)
     if si >= c.arena.structs.count {
         return
     }
@@ -244,7 +244,7 @@ fn synthReturnBlock(c: inout Comp, value: U64) -> U64 {
 // field's type (scalar built-in; an Ord-bearing field via its compare). Plus a
 // derived Conform(T, Ord). Requires `enum Ordering` in scope.
 fn synthStructOrd(c: inout Comp, d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind, ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind, ordTrait: Bind) {
-    val si: U64 = structIndexByName(c: inout c, start: d.typeStart, len: d.typeLen)
+    val si: U64 = c.structIndexByName(start: d.typeStart, len: d.typeLen)
     if si >= c.arena.structs.count {
         return
     }

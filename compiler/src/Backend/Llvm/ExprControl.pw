@@ -111,7 +111,7 @@ fn genLlvmMatchExpr(c: inout Comp, st: inout LlvmCtx, scrut: U64, arms: Array[Ma
         if !(arms[ai0].isWildcard) {
             if !(arms[ai0].isStruct) {
                 if eid == c.arena.enums.count {
-                    eid = enumIdxByName(c: inout c, start: arms[ai0].enumStart, len: arms[ai0].enumLen)
+                    eid = c.enumIdxByName(start: arms[ai0].enumStart, len: arms[ai0].enumLen)
                 }
             }
         }
@@ -217,7 +217,7 @@ fn genLlvmOptChain(c: inout Comp, st: inout LlvmCtx, base: U64, memberStart: U64
     // the inner element struct (Optional's arg0) and the member field index.
     val tRef: U64 = c.arena.types[baseRef].args[0]
     val tName: TypeRef = c.arena.types[tRef]
-    val tSidx: U64 = structIndexByName(c: inout c, start: tName.nameStart, len: tName.nameLen)
+    val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
     if tSidx >= c.arena.structs.count {
         compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: base)), msg: "LLVM backend: `?.` element must be a registered struct")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)

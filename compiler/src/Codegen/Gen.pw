@@ -72,7 +72,7 @@ pub impl Comp {
         mut val ai: U64 = 0
         while ai < d.args.count {
             val mf: MakeField = d.args[ai]
-            val v: U64 = fieldVis(c: inout self, structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+            val v: U64 = self.fieldVis(structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             if v == 0U64 {
                 compileErrorAt(line: lineOf(c: inout self, offset: mf.nameStart), msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
             }

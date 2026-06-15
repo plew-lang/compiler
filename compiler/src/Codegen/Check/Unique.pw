@@ -7,10 +7,10 @@
 // are acyclic, so this terminates. (Array-of-unique is unsupported in v1, so
 // array fields are not followed here.)
 fn typeIsTransitivelyUnique(c: inout Comp, start: U64, len: U64) -> Bool {
-    if typeIsUnique(c: inout c, start: start, len: len) {
+    if c.typeIsUnique(start: start, len: len) {
         return true
     }
-    val si: U64 = structIndexByName(c: inout c, start: start, len: len)
+    val si: U64 = c.structIndexByName(start: start, len: len)
     if si >= c.arena.structs.count {
         return false
     }
@@ -206,8 +206,8 @@ fn checkDeinitOnlyOnUnique(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.decls.deinits.count {
         val d: Bind = c.decls.deinits[i]
-        if !(typeIsUnique(c: inout c, start: d.nameStart, len: d.nameLen)) {
-            val si: U64 = structIndexByName(c: inout c, start: d.nameStart, len: d.nameLen)
+        if !(c.typeIsUnique(start: d.nameStart, len: d.nameLen)) {
+            val si: U64 = c.structIndexByName(start: d.nameStart, len: d.nameLen)
             mut val off: U64 = d.nameStart
             if si < c.arena.structs.count {
                 off = c.arena.structs[si].defOffset
@@ -260,7 +260,7 @@ fn checkParamModes(c: inout Comp, params: Array[Param]) {
     while i < params.count {
         val p: Param = params[i]
         if !(p.tyIsArray) {
-            if typeIsUnique(c: inout c, start: p.tyStart, len: p.tyLen) {
+            if c.typeIsUnique(start: p.tyStart, len: p.tyLen) {
                 val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
                 if !(hasMode) {
                     compileErrorAt(line: lineOf(c: inout c, offset: p.nameStart), msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
@@ -287,7 +287,7 @@ fn checkArrayElemsNotUnique(c: inout Comp) {
     mut val i: U64 = 0
     while i < c.monoWork.arrayElems.count {
         val ae: Bind = c.monoWork.arrayElems[i]
-        if typeIsUnique(c: inout c, start: ae.nameStart, len: ae.nameLen) {
+        if c.typeIsUnique(start: ae.nameStart, len: ae.nameLen) {
             compileErrorAt(line: lineOf(c: inout c, offset: ae.nameStart), msg: "a unique type cannot be stored in an Array; wrap it in Ref[T]")
         }
         i += 1
@@ -310,7 +310,7 @@ fn checkGenericUniqueArgs(c: inout Comp) {
                 while j < t.args.count {
                     val ai: TypeInfo = c.typeInfoOfRef(ref: t.args[j])
                     if ai.kind == 2 {
-                        if typeIsUnique(c: inout c, start: ai.nameStart, len: ai.nameLen) {
+                        if c.typeIsUnique(start: ai.nameStart, len: ai.nameLen) {
                             compileErrorAt(line: lineOf(c: inout c, offset: ai.nameStart), msg: "a unique type cannot be a generic type argument; wrap it in Ref[T]")
                         }
                     }

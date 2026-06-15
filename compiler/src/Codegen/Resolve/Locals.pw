@@ -1,467 +1,390 @@
 // Part of name/type resolution (root: _.pw): local scopes and field /
 // method / construct visibility checks.
 
-fn addLocal(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool) {
-    addLocalCn(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0)
-}
+pub impl Comp {
+    inout fn addLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool) {
+        self.addLocalCn(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: isArray, ty: ty, isInout: isInout, isMut: isMut, owned: owned, cnum: 0)
+    }
 
-// Like addLocal but with an explicit C-name disambiguator (see Local.cnum).
-fn addLocalCn(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64) {
-    c.cur.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout c, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout c, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
-}
+    inout fn addLocalCn(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, isArray: Bool, ty: U64, isInout: Bool, isMut: Bool, owned: Bool, cnum: U64) {
+        self.cur.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
+    }
 
-// Seed every module-level variable (spec/15) into the locals stack at the base of a
-// function-body walk, so the front-end (typeOf / operator-witness / visibility /
-// monomorphization) resolves a bare global reference like any local. Called after the
-// `c.cur.locals = []` reset and BEFORE params, so a same-named param/local shadows the
-// global (resolution scans most-recent-first). `owned=false` keeps the scope-exit drop
-// machinery from treating a global as a body-local to deinit.
-fn seedGlobalLocals(c: inout Comp) {
-    mut val gi: U64 = 0
-    while gi < c.arena.globals.count {
-        match c.arena.stmts[c.arena.globals[gi].letStmt] {
-            Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                val le: LetEff = inferLetType(c: inout c, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                addLocal(c: inout c, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
-            }
-            _ => {}
-        }
-        gi += 1
-    }
-}
-
-// --- scope frames (the ARC drop backbone) ---
-//
-// Locals live in a flat stack (`c.cur.locals`). A lexical block owns the bindings
-// pushed after its entry high-water mark; on exit we (1) drop them — ARC
-// release / `deinit`, currently a no-op while everything leaks — and (2) pop
-// them so a sibling or enclosing scope cannot resolve a name that has left
-// scope. C variable names are emitted verbatim (writeSpan of the source name),
-// so popping only tightens name resolution; it never renames anything.
-
-// Record the locals high-water mark to restore at scope exit.
-fn scopeMark(c: inout Comp) -> U64 {
-    return c.cur.locals.count
-}
-
-// Pop the locals stack back to `mark` (Array has no truncate, so rebuild the
-// kept prefix — scopes are small and this is codegen, not a hot path).
-fn popLocals(c: inout Comp, mark: U64) {
-    mut val kept: Array[Local] = []
-    mut val i: U64 = 0
-    while i < mark {
-        kept.append(c.cur.locals[i])
-        i += 1
-    }
-    c.cur.locals = kept
-}
-
-// Whether the binding named (start,len) — most recent in scope — may be assigned
-// to: `mut val` locals and `inout` params. Unknown names default to assignable
-// (the C compile catches genuinely undeclared identifiers).
-fn localIsMutable(c: inout Comp, start: U64, len: U64) -> Bool {
-    if isSelfRef(c: inout c, start: start, len: len) {
-        // `self` is assignable only through an `inout fn` receiver.
-        return c.cur.selfInout
-    }
-    // inside a closure, a capture is assignable only if it is a boxed (`mut val`)
-    // reference capture; a by-value (`val`) capture is immutable.
-    if c.cur.inClosure {
-        if isCaptureOf(c: inout c, closureId: c.cur.closureId, start: start, len: len) {
-            return isBoxedCaptureOf(c: inout c, closureId: c.cur.closureId, start: start, len: len)
-        }
-    }
-    val qId: U64 = intern(c: inout c, start: start, len: len)
-    mut val i: U64 = c.cur.locals.count
-    while i > 0 {
-        i -= 1
-        val lo: Local = c.cur.locals[i]
-        if lo.nameId == qId {
-            if lo.isMut {
-                return true
-            }
-            return lo.isInout
-        }
-    }
-    return true
-}
-
-// Whether `name` refers to an `inout` parameter of the current function (so its
-// uses must be dereferenced as `(*name)`).
-fn isSelfRef(c: inout Comp, start: U64, len: U64) -> Bool {
-    if c.cur.hasRecv {
-        return rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "self")
-    }
-    return false
-}
-
-// Whether the type named (start,len) is a `unique struct` (spec/03).
-fn typeIsUnique(c: inout Comp, start: U64, len: U64) -> Bool {
-    // a newtype over a unique type is itself unique (spec/10: uniqueness propagates —
-    // else the newtype could be copied to dodge the underlying's single-ownership and
-    // break resource safety). Resolve to the underlying before the struct lookup.
-    val ntu: Bind = newtypeUnderName(c: inout c, start: start, len: len)
-    mut val rStart: U64 = start
-    mut val rLen: U64 = len
-    if ntu.nameStart != start || ntu.nameLen != len {
-        rStart = ntu.nameStart
-        rLen = ntu.nameLen
-    }
-    val si: U64 = structIndexByName(c: inout c, start: rStart, len: rLen)
-    if si >= c.arena.structs.count {
-        return false
-    }
-    return c.arena.structs[si].isUnique
-}
-
-// Index of the innermost local named (start,len), or c.cur.locals.count if none.
-fn localIndexByName(c: inout Comp, start: U64, len: U64) -> U64 {
-    val qId: U64 = intern(c: inout c, start: start, len: len)
-    mut val i: U64 = c.cur.locals.count
-    while i > 0 {
-        i -= 1
-        val lo: Local = c.cur.locals[i]
-        if lo.nameId == qId {
-            return i
-        }
-    }
-    return c.cur.locals.count
-}
-
-// Type of field `fieldName` declared in struct `structName` (else scalar).
-// The result type ref of `base?.member` (spec/12): `base: Optional[T]` and `member`
-// a field of `T` typed `U` give `Optional[U]`. Returns 0 if `base` is not a ground
-// `Optional[T]` (the `?.` is then a loud error). Concrete `T`/`U` only for now —
-// a generic element/field would need env substitution (deferred).
-fn optChainResultRef(c: inout Comp, base: U64, memberStart: U64, memberLen: U64) -> U64 {
-    val bt: TypeInfo = typeOf(c: inout c, id: base)
-    if bt.kind != 2 {
-        return 0
-    }
-    if bt.ref >= c.arena.types.count {
-        return 0
-    }
-    val ot: TypeRef = c.arena.types[bt.ref]
-    if !(rangeEquals(bytes: c.arena.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
-        return 0
-    }
-    if ot.args.count < 1 {
-        return 0
-    }
-    val tInfo: TypeInfo = c.typeInfoOfRef(ref: ot.args[0])
-    val uInfo: TypeInfo = fieldType(c: inout c, structStart: tInfo.nameStart, structLen: tInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
-    mut val uRef: U64 = uInfo.ref
-    if uRef == 0 {
-        val noArgs: Array[U64] = []
-        uRef = c.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noArgs />)
-    }
-    mut val args: Array[U64] = []
-    args.append(uRef)
-    return c.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args />)
-}
-
-fn fieldType(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-    // resolve an import alias (`with { Real as Alias }`) so a field access on a value
-    // typed by its alias finds the real struct's fields (spec/15).
-    val arS: Bind = aliasReal(c: inout c, start: structStart, len: structLen)
-    mut val qStruct: U64 = intern(c: inout c, start: arS.nameStart, len: arS.nameLen)
-    // a newtype inherits the underlying struct's fields (spec/10): resolve to the
-    // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
-    mut val ntI: U64 = 0
-    while ntI < c.arena.newtypes.count {
-        if c.arena.newtypes[ntI].nameId == qStruct {
-            qStruct = intern(c: inout c, start: c.arena.newtypes[ntI].underStart, len: c.arena.newtypes[ntI].underLen)
-            ntI = c.arena.newtypes.count
-        } else {
-            ntI += 1
-        }
-    }
-    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[si]
-        if s.nameId == qStruct {
-            val fs: Array[FieldDef] = s.fields
-            mut val fi: U64 = 0
-            while fi < fs.count {
-                val f: FieldDef = fs[fi]
-                if f.nameId == qField {
-                    // a generic-instantiation field type (`Optional[Node]`) carries its
-                    // structured ref, so a match/dispatch on the field recovers the
-                    // mangled C name (`Optional_Node`) and substitutes payload types.
-                    if !(f.tyIsArray) {
-                        if isGenericInst(c: inout c, ref: f.ty) {
-                            return <TypeInfo kind=2 nameStart=f.tyStart nameLen=f.tyLen ref=f.ty />
-                        }
-                    }
-                    return typeInfoOfName(c: inout c, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
+    inout fn seedGlobalLocals() {
+        mut val gi: U64 = 0
+        while gi < self.arena.globals.count {
+            match self.arena.stmts[self.arena.globals[gi].letStmt] {
+                Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                    val le: LetEff = inferLetType(c: inout self, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
                 }
-                fi += 1
+                _ => {}
+            }
+            gi += 1
+        }
+    }
+
+    inout fn scopeMark() -> U64 {
+        return self.cur.locals.count
+    }
+
+    inout fn popLocals(mark: U64) {
+        mut val kept: Array[Local] = []
+        mut val i: U64 = 0
+        while i < mark {
+            kept.append(self.cur.locals[i])
+            i += 1
+        }
+        self.cur.locals = kept
+    }
+
+    inout fn localIsMutable(start: U64, len: U64) -> Bool {
+        if self.isSelfRef(start: start, len: len) {
+            // `self` is assignable only through an `inout fn` receiver.
+            return self.cur.selfInout
+        }
+        // inside a closure, a capture is assignable only if it is a boxed (`mut val`)
+        // reference capture; a by-value (`val`) capture is immutable.
+        if self.cur.inClosure {
+            if self.isCaptureOf(closureId: self.cur.closureId, start: start, len: len) {
+                return self.isBoxedCaptureOf(closureId: self.cur.closureId, start: start, len: len)
             }
         }
-        si += 1
-    }
-    return scalarInfo()
-}
-
-// Whether a struct field is declared `mut val` (assignable). Unknown struct or
-// field defaults to true (don't reject what we can't resolve).
-fn fieldDeclaredMut(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> Bool {
-    val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
-    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[si]
-        if s.nameId == qStruct {
-            val fs: Array[FieldDef] = s.fields
-            mut val fi: U64 = 0
-            while fi < fs.count {
-                val f: FieldDef = fs[fi]
-                if f.nameId == qField {
-                    return f.isMut
-                }
-                fi += 1
-            }
-        }
-        si += 1
-    }
-    return true
-}
-
-// Member visibility (spec/05). A field's visibility 0=private / 1=pub(get) / 2=pub,
-// or 3 when the struct/field isn't found (e.g. String's special `.bytes` view, or a
-// scalar) — then visibility is not enforced.
-fn fieldVis(c: inout Comp, structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
-    val qStruct: U64 = intern(c: inout c, start: structStart, len: structLen)
-    val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
-    mut val si: U64 = 0
-    while si < c.arena.structs.count {
-        val s: StructDef = c.arena.structs[si]
-        if s.nameId == qStruct {
-            val fs: Array[FieldDef] = s.fields
-            mut val fi: U64 = 0
-            while fi < fs.count {
-                val f: FieldDef = fs[fi]
-                if f.nameId == qField {
-                    return f.vis
-                }
-                fi += 1
-            }
-        }
-        si += 1
-    }
-    return 3U64
-}
-
-// Whether type (recvStart,recvLen) has any method named (nameStart,nameLen),
-// regardless of signature. Used to reject method-value expressions `obj.method`
-// (spec/07: a method cannot be bound to a value — wrap it in a closure).
-export fn typeHasMethodNamed(c: inout Comp, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
-    val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    val qRecv: U64 = intern(c: inout c, start: recvStart, len: recvLen)
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.hasRecv {
-            if f.nameId == qName {
-                if f.recvId == qRecv {
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = self.cur.locals.count
+        while i > 0 {
+            i -= 1
+            val lo: Local = self.cur.locals[i]
+            if lo.nameId == qId {
+                if lo.isMut {
                     return true
                 }
+                return lo.isInout
             }
         }
-        i += 1
+        return true
     }
-    return false
-}
 
-// Are we lowering code inside the type `(ownerStart,ownerLen)`'s own anonymous impl
-// (the only place its non-public members are visible — spec/05)? True when the
-// current function is a method OR an associated function whose receiver/owner head
-// names that type — both are part of the type's impl, so they see its private
-// fields (this is what lets derived `eq`/`compare` read private fields). A free
-// function has no owner (recvStart 0). Extensions (`#Ext`) aren't implemented, so
-// any such context is an anonymous impl.
-fn inAnonImplOf(c: inout Comp, ownerStart: U64, ownerLen: U64) -> Bool {
-    if c.cur.hasRecv {
-        return spansEqual(c: inout c, aStart: c.cur.recvStart, aLen: c.cur.recvLen, bStart: ownerStart, bLen: ownerLen)
-    }
-    if c.cur.recvStart != 0 {
-        return spansEqual(c: inout c, aStart: c.cur.recvStart, aLen: c.cur.recvLen, bStart: ownerStart, bLen: ownerLen)
-    }
-    return false
-}
-
-// Reading `base.field` (spec/05): a private field (vis 0) is visible only inside its
-// type's anonymous impl. pub(get)/pub are readable anywhere the type is.
-fn checkFieldReadVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
-    val v: U64 = fieldVis(c: inout c, structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
-    if v == 0U64 {
-        if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
-            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is private (visible only in its type's anonymous impl)")
+    inout fn isSelfRef(start: U64, len: U64) -> Bool {
+        if self.cur.hasRecv {
+            return rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "self")
         }
+        return false
     }
-}
 
-// Writing `base.field = …` (spec/05): both a private field (vis 0) and a `pub(get)`
-// field (vis 1) are writable only inside the type's anonymous impl; only `pub`
-// (vis 2) is externally writable.
-fn checkFieldWriteVis(c: inout Comp, ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
-    val v: U64 = fieldVis(c: inout c, structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
-    if v == 0U64 {
-        if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
-            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is private (writable only in its type's anonymous impl)")
+    inout fn typeIsUnique(start: U64, len: U64) -> Bool {
+        // a newtype over a unique type is itself unique (spec/10: uniqueness propagates —
+        // else the newtype could be copied to dodge the underlying's single-ownership and
+        // break resource safety). Resolve to the underlying before the struct lookup.
+        val ntu: Bind = newtypeUnderName(c: inout self, start: start, len: len)
+        mut val rStart: U64 = start
+        mut val rLen: U64 = len
+        if ntu.nameStart != start || ntu.nameLen != len {
+            rStart = ntu.nameStart
+            rLen = ntu.nameLen
         }
-    } else {
-        if v == 1U64 {
-            if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
-                compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl")
+        val si: U64 = self.structIndexByName(start: rStart, len: rLen)
+        if si >= self.arena.structs.count {
+            return false
+        }
+        return self.arena.structs[si].isUnique
+    }
+
+    inout fn localIndexByName(start: U64, len: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = self.cur.locals.count
+        while i > 0 {
+            i -= 1
+            val lo: Local = self.cur.locals[i]
+            if lo.nameId == qId {
+                return i
             }
         }
+        return self.cur.locals.count
     }
-}
 
-// Calling `recv.method(…)` (spec/05): a method in a bare `impl` block (Func.isPub
-// false) is private — visible only inside the type's anonymous impl. `pub impl`
-// methods are callable wherever the type is. `ownerStart/Len` names the receiver
-// type head (so generic receivers match by name).
-fn checkMethodVis(c: inout Comp, ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
-    if !(mf.isPub) {
-        if !(inAnonImplOf(c: inout c, ownerStart: ownerStart, ownerLen: ownerLen)) {
-            compileErrorAt(line: lineOf(c: inout c, offset: offset), msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
+    inout fn optChainResultRef(base: U64, memberStart: U64, memberLen: U64) -> U64 {
+        val bt: TypeInfo = typeOf(c: inout self, id: base)
+        if bt.kind != 2 {
+            return 0
         }
+        if bt.ref >= self.arena.types.count {
+            return 0
+        }
+        val ot: TypeRef = self.arena.types[bt.ref]
+        if !(rangeEquals(bytes: self.arena.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
+            return 0
+        }
+        if ot.args.count < 1 {
+            return 0
+        }
+        val tInfo: TypeInfo = self.typeInfoOfRef(ref: ot.args[0])
+        val uInfo: TypeInfo = self.fieldType(structStart: tInfo.nameStart, structLen: tInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
+        mut val uRef: U64 = uInfo.ref
+        if uRef == 0 {
+            val noArgs: Array[U64] = []
+            uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noArgs />)
+        }
+        mut val args: Array[U64] = []
+        args.append(uRef)
+        return self.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args />)
     }
-}
 
-// Construction visibility — the field gate of spec/05. The default memberwise
-// factory builds a value field-by-field; a field set from OUTSIDE the type's
-// defining module must be `pub` (vis 2). A private (vis 0) or `pub(get)` (vis 1)
-// field is writable only inside its own module, so naming it in a cross-module
-// `<Type field=…/>` is an encapsulation violation — reject it. Same-module
-// construction is unrestricted (the memberwise factory is module-private but freely
-// usable within the module). enum payloads, records (all-pub synthetic structs),
-// and extern lang-items are not gated; compiler-synthesized field names (a
-// dictionary literal's `keys`/`vals`/…, which are not real source) are skipped via
-// offsetIsLoaded so desugarings keep working. (The public-FACTORY gate — requiring
-// `pub impl Type { factory }` even for all-pub fields — lands with `factory`.)
-fn checkConstructVis(c: inout Comp, typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField]) {
-    if isEnum {
-        return
+    inout fn fieldType(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+        // resolve an import alias (`with { Real as Alias }`) so a field access on a value
+        // typed by its alias finds the real struct's fields (spec/15).
+        val arS: Bind = aliasReal(c: inout self, start: structStart, len: structLen)
+        mut val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
+        // a newtype inherits the underlying struct's fields (spec/10): resolve to the
+        // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
+        mut val ntI: U64 = 0
+        while ntI < self.arena.newtypes.count {
+            if self.arena.newtypes[ntI].nameId == qStruct {
+                qStruct = intern(c: inout self, start: self.arena.newtypes[ntI].underStart, len: self.arena.newtypes[ntI].underLen)
+                ntI = self.arena.newtypes.count
+            } else {
+                ntI += 1
+            }
+        }
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val s: StructDef = self.arena.structs[si]
+            if s.nameId == qStruct {
+                val fs: Array[FieldDef] = s.fields
+                mut val fi: U64 = 0
+                while fi < fs.count {
+                    val f: FieldDef = fs[fi]
+                    if f.nameId == qField {
+                        // a generic-instantiation field type (`Optional[Node]`) carries its
+                        // structured ref, so a match/dispatch on the field recovers the
+                        // mangled C name (`Optional_Node`) and substitutes payload types.
+                        if !(f.tyIsArray) {
+                            if isGenericInst(c: inout self, ref: f.ty) {
+                                return <TypeInfo kind=2 nameStart=f.tyStart nameLen=f.tyLen ref=f.ty />
+                            }
+                        }
+                        return typeInfoOfName(c: inout self, start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
+                    }
+                    fi += 1
+                }
+            }
+            si += 1
+        }
+        return scalarInfo()
     }
-    if typeLen == 0U64 {
-        return
+
+    inout fn fieldDeclaredMut(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> Bool {
+        val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val s: StructDef = self.arena.structs[si]
+            if s.nameId == qStruct {
+                val fs: Array[FieldDef] = s.fields
+                mut val fi: U64 = 0
+                while fi < fs.count {
+                    val f: FieldDef = fs[fi]
+                    if f.nameId == qField {
+                        return f.isMut
+                    }
+                    fi += 1
+                }
+            }
+            si += 1
+        }
+        return true
     }
-    // a record's canonical name begins '(' — its fields are structurally public.
-    if c.arena.bytes[typeStart] == '(' {
-        return
+
+    inout fn fieldVis(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
+        val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count {
+            val s: StructDef = self.arena.structs[si]
+            if s.nameId == qStruct {
+                val fs: Array[FieldDef] = s.fields
+                mut val fi: U64 = 0
+                while fi < fs.count {
+                    val f: FieldDef = fs[fi]
+                    if f.nameId == qField {
+                        return f.vis
+                    }
+                    fi += 1
+                }
+            }
+            si += 1
+        }
+        return 3U64
     }
-    mut val sidx: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
-    if sidx >= c.arena.structs.count {
-        sidx = c.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
-    }
-    if sidx >= c.arena.structs.count {
-        return
-    }
-    val sd: StructDef = c.arena.structs[sidx]
-    if sd.isExtern {
-        return
-    }
-    val defMod: U64 = moduleOf(c: inout c, offset: sd.defOffset)
-    mut val i: U64 = 0
-    while i < fields.count {
-        val v: U64 = fieldVis(c: inout c, structStart: typeStart, structLen: typeLen, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
-        if v == 0U64 || v == 1U64 {
-            // gate by the field's ORIGINAL source offset (nameStart is re-interned and
-            // does not map to a module); synthesized constructions carry an unloaded
-            // offset (the dict literal's `keys`/… use the interned span) and are skipped.
-            if offsetIsLoaded(c: inout c, offset: fields[i].offset) {
-                if moduleOf(c: inout c, offset: fields[i].offset) != defMod {
-                    if v == 0U64 {
-                        compileErrorAt(line: lineOf(c: inout c, offset: fields[i].offset), msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
-                    } else {
-                        compileErrorAt(line: lineOf(c: inout c, offset: fields[i].offset), msg: "cannot set a `pub(get)` field when constructing from another module (it is read-only outside its module)")
+
+    inout fn typeHasMethodNamed(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
+                if f.nameId == qName {
+                    if f.recvId == qRecv {
+                        return true
                     }
                 }
             }
+            i += 1
         }
-        i += 1U64
+        return false
     }
-    // factory publication gate (spec/05): even with all fields `pub`, the default
-    // memberwise factory is module-private — constructing `<T …/>` from ANOTHER module
-    // requires `T` to declare a public factory (`pub impl T { factory }`). Find a
-    // representative construction-site offset (a loaded field) to locate its module.
-    mut val ci: U64 = 0
-    while ci < fields.count {
-        if offsetIsLoaded(c: inout c, offset: fields[ci].offset) {
-            if moduleOf(c: inout c, offset: fields[ci].offset) != defMod {
-                if !(structHasPubFactory(c: inout c, nameId: sd.nameId)) {
-                    compileErrorAt(line: lineOf(c: inout c, offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
-                }
+
+    inout fn inAnonImplOf(ownerStart: U64, ownerLen: U64) -> Bool {
+        if self.cur.hasRecv {
+            return spansEqual(c: inout self, aStart: self.cur.recvStart, aLen: self.cur.recvLen, bStart: ownerStart, bLen: ownerLen)
+        }
+        if self.cur.recvStart != 0 {
+            return spansEqual(c: inout self, aStart: self.cur.recvStart, aLen: self.cur.recvLen, bStart: ownerStart, bLen: ownerLen)
+        }
+        return false
+    }
+
+    inout fn checkFieldReadVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
+        val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
+        if v == 0U64 {
+            if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
+                compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "field is private (visible only in its type's anonymous impl)")
             }
-            ci = fields.count
+        }
+    }
+
+    inout fn checkFieldWriteVis(ownerStart: U64, ownerLen: U64, fieldStart: U64, fieldLen: U64, offset: U64) {
+        val v: U64 = self.fieldVis(structStart: ownerStart, structLen: ownerLen, fieldStart: fieldStart, fieldLen: fieldLen)
+        if v == 0U64 {
+            if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
+                compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "field is private (writable only in its type's anonymous impl)")
+            }
         } else {
-            ci += 1U64
-        }
-    }
-}
-
-// Whether struct name id `nameId` declared a public `factory` (spec/05).
-fn structHasPubFactory(c: inout Comp, nameId: U64) -> Bool {
-    mut val i: U64 = 0
-    while i < c.decls.pubFactories.count {
-        if c.decls.pubFactories[i] == nameId {
-            return true
-        }
-        i += 1U64
-    }
-    return false
-}
-
-// Whether an assignment target is a mutable *place* (spec: composite mutability).
-// A bare binding must be `mut val`/`inout`; a field access additionally needs the
-// field declared `mut val` and its base to be a mutable place; an index follows
-// its array binding. Unresolved cases default to mutable (the C compile still
-// catches genuinely undeclared names).
-// Whether `id` denotes a PLACE (an assignable/addressable location) rather than a
-// temporary value (spec/03). Only a place can be passed `inout`: a local binding, a
-// field/subscript of a place, or a `Ref` pointee (`->`). A literal, call result,
-// arithmetic expression, etc. is a value, not a place — `inout 5` / `inout f()` is
-// rejected. (placeIsMutable defaults non-place forms to mutable for leniency, so the
-// inout check needs this stricter predicate first.)
-fn exprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: _, len: _) => { return true }
-        Expr.Field(val base, nameStart: _, nameLen: _) => { return exprIsPlace(c: inout c, id: base) }
-        Expr.Index(val base, index: _) => { return exprIsPlace(c: inout c, id: base) }
-        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
-        _ => { return false }
-    }
-}
-
-fn placeIsMutable(c: inout Comp, id: U64) -> Bool {
-    val e: Expr = c.arena.exprs[id]
-    match e {
-        Expr.Ident(val start, val len) => {
-            return localIsMutable(c: inout c, start: start, len: len)
-        }
-        Expr.Field(val base, val nameStart, val nameLen) => {
-            val bt: TypeInfo = exprType(c: inout c, id: base)
-            if bt.kind == 2 {
-                if fieldDeclaredMut(c: inout c, structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
-                    return placeIsMutable(c: inout c, id: base)
+            if v == 1U64 {
+                if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
+                    compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "field is `pub(get)` — readable but writable only in its type's anonymous impl")
                 }
-                return false
             }
-            return placeIsMutable(c: inout c, id: base)
         }
-        Expr.Index(val base, val index) => {
-            return placeIsMutable(c: inout c, id: base)
+    }
+
+    inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
+        if !(mf.isPub) {
+            if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
+                compileErrorAt(line: lineOf(c: inout self, offset: offset), msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
+            }
         }
-        Expr.Arrow(val base, val nameStart, val nameLen) => {
-            // a Ref's pointee is mutable even through a `val` Ref binding (spec:
-            // `->` is not gated by val/mut; sharing is the Ref's purpose).
-            return true
+    }
+
+    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField]) {
+        if isEnum {
+            return
         }
-        _ => { return true }
+        if typeLen == 0U64 {
+            return
+        }
+        // a record's canonical name begins '(' — its fields are structurally publiself.
+        if self.arena.bytes[typeStart] == '(' {
+            return
+        }
+        mut val sidx: U64 = self.structIndexByName(start: typeStart, len: typeLen)
+        if sidx >= self.arena.structs.count {
+            sidx = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
+        }
+        if sidx >= self.arena.structs.count {
+            return
+        }
+        val sd: StructDef = self.arena.structs[sidx]
+        if sd.isExtern {
+            return
+        }
+        val defMod: U64 = moduleOf(c: inout self, offset: sd.defOffset)
+        mut val i: U64 = 0
+        while i < fields.count {
+            val v: U64 = self.fieldVis(structStart: typeStart, structLen: typeLen, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
+            if v == 0U64 || v == 1U64 {
+                // gate by the field's ORIGINAL source offset (nameStart is re-interned and
+                // does not map to a module); synthesized constructions carry an unloaded
+                // offset (the dict literal's `keys`/… use the interned span) and are skipped.
+                if offsetIsLoaded(c: inout self, offset: fields[i].offset) {
+                    if moduleOf(c: inout self, offset: fields[i].offset) != defMod {
+                        if v == 0U64 {
+                            compileErrorAt(line: lineOf(c: inout self, offset: fields[i].offset), msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
+                        } else {
+                            compileErrorAt(line: lineOf(c: inout self, offset: fields[i].offset), msg: "cannot set a `pub(get)` field when constructing from another module (it is read-only outside its module)")
+                        }
+                    }
+                }
+            }
+            i += 1U64
+        }
+        // factory publication gate (spec/05): even with all fields `pub`, the default
+        // memberwise factory is module-private — constructing `<T …/>` from ANOTHER module
+        // requires `T` to declare a public factory (`pub impl T { factory }`). Find a
+        // representative construction-site offset (a loaded field) to locate its module.
+        mut val ci: U64 = 0
+        while ci < fields.count {
+            if offsetIsLoaded(c: inout self, offset: fields[ci].offset) {
+                if moduleOf(c: inout self, offset: fields[ci].offset) != defMod {
+                    if !(self.structHasPubFactory(nameId: sd.nameId)) {
+                        compileErrorAt(line: lineOf(c: inout self, offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
+                    }
+                }
+                ci = fields.count
+            } else {
+                ci += 1U64
+            }
+        }
+    }
+
+    inout fn structHasPubFactory(nameId: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.decls.pubFactories.count {
+            if self.decls.pubFactories[i] == nameId {
+                return true
+            }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn exprIsPlace(id: U64) -> Bool {
+        match self.arena.exprs[id] {
+            Expr.Ident(start: _, len: _) => { return true }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprIsPlace(id: base) }
+            Expr.Index(val base, index: _) => { return self.exprIsPlace(id: base) }
+            Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
+            _ => { return false }
+        }
+    }
+
+    inout fn placeIsMutable(id: U64) -> Bool {
+        val e: Expr = self.arena.exprs[id]
+        match e {
+            Expr.Ident(val start, val len) => {
+                return self.localIsMutable(start: start, len: len)
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                val bt: TypeInfo = exprType(c: inout self, id: base)
+                if bt.kind == 2 {
+                    if self.fieldDeclaredMut(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
+                        return self.placeIsMutable(id: base)
+                    }
+                    return false
+                }
+                return self.placeIsMutable(id: base)
+            }
+            Expr.Index(val base, val index) => {
+                return self.placeIsMutable(id: base)
+            }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                // a Ref's pointee is mutable even through a `val` Ref binding (spec:
+                // `->` is not gated by val/mut; sharing is the Ref's purpose).
+                return true
+            }
+            _ => { return true }
+        }
     }
 }
-

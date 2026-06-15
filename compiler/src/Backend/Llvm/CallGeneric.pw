@@ -215,7 +215,7 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
     if isPrimType(c: inout c, start: start, len: len) {
         return true
     }
-    if structIndexByName(c: inout c, start: start, len: len) < c.arena.structs.count {
+    if c.structIndexByName(start: start, len: len) < c.arena.structs.count {
         return true
     }
     if isEnumName(c: inout c, start: start, len: len) {

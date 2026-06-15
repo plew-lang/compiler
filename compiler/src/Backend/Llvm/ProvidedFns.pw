@@ -75,7 +75,7 @@ fn ensureFreeFnDeclared(c: inout Comp, st: inout LlvmCtx, fi: U64) -> U64 {
         }
     }
     if f.isExtern { return st.fnIdx.count }
-    if nameIsMain(c: inout c, f: f) { return st.fnIdx.count }
+    if c.nameIsMain(f: f) { return st.fnIdx.count }
     mut val ptys: Array[LLVMTypeRef] = []
     mut val pi: U64 = 0
     while pi < f.params.count {

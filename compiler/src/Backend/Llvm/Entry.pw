@@ -102,7 +102,7 @@ export fn emitLlvm(c: inout Comp) {
         // `genMainIdx`; the user's own `main` is dead (it calls macro-generated
         // functions that don't exist in this build), so it is neither the entry
         // main nor a plain fn. Treat only genMainIdx as main here.
-        mut val isMainFn: Bool = nameIsMain(c: inout c, f: c.arena.funcs[fi])
+        mut val isMainFn: Bool = c.nameIsMain(f: c.arena.funcs[fi])
         if c.genMode {
             if isMainFn {
                 if fi != c.genMainIdx {
@@ -118,7 +118,7 @@ export fn emitLlvm(c: inout Comp) {
             }
             foundMain = true
         } else {
-            if c.genMode && nameIsMain(c: inout c, f: c.arena.funcs[fi]) {
+            if c.genMode && c.nameIsMain(f: c.arena.funcs[fi]) {
                 // the dead user main: skip entirely.
             } else {
                 if isPlainUserFn(c: inout c, st: inout st, fi: fi) {

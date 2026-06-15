@@ -62,7 +62,7 @@ pub impl Comp {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 if f.selfMove {
-                    if !(typeIsUnique(c: inout self, start: f.recvStart, len: f.recvLen)) {
+                    if !(self.typeIsUnique(start: f.recvStart, len: f.recvLen)) {
                         compileErrorAt(line: lineOf(c: inout self, offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
                     }
                 }

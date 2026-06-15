@@ -25,7 +25,7 @@ pub impl Comp {
                     // backend-independent pass covers non-generic bodies (where the
                     // reject-test surface lives) without a substitution env.
                 } else {
-                if methodRecvIsTrait(c: inout self, f: f) {
+                if self.methodRecvIsTrait(f: f) {
                     // a trait provided-method template — checked per conforming type
                     // (its concrete copies are ordinary funcs and get verified).
                 } else {
@@ -51,14 +51,14 @@ pub impl Comp {
         if rt.nameLen == 0U64 {
             return
         }
-        if isTraitName(c: inout self, start: srcStart, len: srcLen) {
+        if self.isTraitName(start: srcStart, len: srcLen) {
             if !(self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
                 compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
             }
             return
         }
-        if isExtName(c: inout self, start: srcStart, len: srcLen) {
-            if !(extAppliesToType(c: inout self, extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)) {
+        if self.isExtName(start: srcStart, len: srcLen) {
+            if !(self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)) {
                 compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: recv)), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
             }
             return
@@ -116,7 +116,7 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) {
                 if moduleOf(c: inout self, offset: cf.typeStart) == 0U64 {
-                    if isBlanketConform(c: inout self, cf: cf) {
+                    if self.isBlanketConform(cf: cf) {
                         compileErrorAt(line: lineOf(c: inout self, offset: cf.typeStart), msg: "a blanket impl over a bare type parameter (`impl[T] T as Trait where T: Bound`) is not allowed: the subject must be a concrete type or a trait. To make every conformer of one trait conform to another, use `impl B as A` (subject = the trait, spec/09)")
                     }
                 }

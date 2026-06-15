@@ -89,7 +89,7 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
     // backend's `typedef void* <Name>` — is an opaque pointer. The LLVM root
     // (`_llvm.pw`) passes these (LLVMValueRef/LLVMTypeRef/…) pervasively, so the
     // backend must lower them to `ptr` to self-compile.
-    val cxi: U64 = structIndexByName(c: inout c, start: tyStart, len: tyLen)
+    val cxi: U64 = c.structIndexByName(start: tyStart, len: tyLen)
     if cxi < c.arena.structs.count {
         if c.arena.structs[cxi].isCExtern {
             return st.ptrty
@@ -101,7 +101,7 @@ fn llvmScalarTy(c: inout Comp, st: inout LlvmCtx, tyStart: U64, tyLen: U64) -> L
 // Index into st.struct* for a registered struct named (start,len), or
 // st.structIdxs.count if the type is not a registered struct.
 fn structRegSlot(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> U64 {
-    val sidx: U64 = structIndexByName(c: inout c, start: start, len: len)
+    val sidx: U64 = c.structIndexByName(start: start, len: len)
     if sidx < c.arena.structs.count {
         mut val i: U64 = 0
         while i < st.structIdxs.count {
@@ -147,13 +147,13 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
                 // value — OK if the enum is itself representable (pure predicate, so
                 // registration order doesn't matter; non-boxed value cycles are a
                 // front-end error, so the mutual recursion terminates).
-                val feid: U64 = enumIdxByName(c: inout c, start: f.tyStart, len: f.tyLen)
+                val feid: U64 = c.enumIdxByName(start: f.tyStart, len: f.tyLen)
                 if feid < c.arena.enums.count {
                     if !(enumRepresentable(c: inout c, eid: feid)) {
                         return false
                     }
                 } else {
-                    val fsi: U64 = structIndexByName(c: inout c, start: f.tyStart, len: f.tyLen)
+                    val fsi: U64 = c.structIndexByName(start: f.tyStart, len: f.tyLen)
                     if fsi < c.arena.structs.count {
                         // an extern struct field is a primitive lang-item (ok); a real
                         // nested struct must itself be registerable (recursively).
@@ -195,13 +195,13 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
                     // concrete instance is a registered named type (see structRegisterable).
                     fj += 1
                 } else {
-                    val peid: U64 = enumIdxByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
+                    val peid: U64 = c.enumIdxByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
                     if peid < c.arena.enums.count {
                         if !(enumRepresentable(c: inout c, eid: peid)) {
                             return false
                         }
                     } else {
-                        val si: U64 = structIndexByName(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
+                        val si: U64 = c.structIndexByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
                         if si < c.arena.structs.count {
                             if !(c.arena.structs[si].isExtern) {
                                 if !(structRegisterable(c: inout c, sidx: si)) {

@@ -349,7 +349,7 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
         return LLVMConstNull(st.ptrty)
     }
     val tr: TypeRef = c.arena.types[targetRef]
-    val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
+    val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
     if traitIdx >= c.decls.traits.count {
         return LLVMConstNull(st.ptrty)
     }
@@ -367,7 +367,7 @@ fn coerceToAnyIfNeeded(c: inout Comp, st: inout LlvmCtx, targetRef: U64, valueEx
 // requirements have no vtable slot (anyMethodSlot returns 0) and are rejected.
 fn genLlvmAnyDispatch(c: inout Comp, st: inout LlvmCtx, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
     val tr: TypeRef = c.arena.types[anyRef]
-    val traitIdx: U64 = findTraitIdxByName(c: inout c, start: tr.nameStart, len: tr.nameLen)
+    val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
     if traitIdx >= c.decls.traits.count {
         compileErrorAt(line: lineOf(c: inout c, offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
         return LLVMConstInt(st.i64ty, 0U64, 0I32)

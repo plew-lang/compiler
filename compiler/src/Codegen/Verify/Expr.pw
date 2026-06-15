@@ -32,11 +32,11 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 c.cur.retIsArray = false
                 c.cur.retTy = 0
             }
-            val cmark: U64 = scopeMark(c: inout c)
+            val cmark: U64 = c.scopeMark()
             mut val cpi: U64 = 0
             while cpi < params.count {
                 val cp: Param = params[cpi]
-                addLocal(c: inout c, nameStart: cp.nameStart, nameLen: cp.nameLen, tyStart: cp.tyStart, tyLen: cp.tyLen, isArray: cp.tyIsArray, ty: cp.ty, isInout: cp.isInout, isMut: false, owned: cp.isMove)
+                c.addLocal(nameStart: cp.nameStart, nameLen: cp.nameLen, tyStart: cp.tyStart, tyLen: cp.tyLen, isArray: cp.tyIsArray, ty: cp.ty, isInout: cp.isInout, isMut: false, owned: cp.isMove)
                 cpi += 1U64
             }
             // a closure is a function boundary: `break`/`continue` inside it do not
@@ -59,7 +59,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                     }
                 }
             }
-            popLocals(c: inout c, mark: cmark)
+            c.popLocals(mark: cmark)
             c.cur.retVoid = sRV
             c.cur.retStart = sRS
             c.cur.retLen = sRL
@@ -95,7 +95,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // silently constructed with garbage (spec/05). (Struct construction is
             // covered by the backend missing-field check plus field defaults.)
             if isEnum {
-                mut val cei: U64 = enumIdxByName(c: inout c, start: typeStart, len: typeLen)
+                mut val cei: U64 = c.enumIdxByName(start: typeStart, len: typeLen)
                 if cei >= c.arena.enums.count {
                     cei = c.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
                 }
@@ -173,7 +173,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             mut val nonGenSidx: U64 = c.arena.structs.count
             if !(isEnum) {
                 if ty == 0U64 || c.arena.types[ty].args.count == 0U64 {
-                    val sidxC: U64 = structIndexByName(c: inout c, start: typeStart, len: typeLen)
+                    val sidxC: U64 = c.structIndexByName(start: typeStart, len: typeLen)
                     if sidxC < c.arena.structs.count {
                         if c.arena.structs[sidxC].typeParams.count == 0U64 && !c.arena.structs[sidxC].isExtern {
                             nonGenSidx = sidxC
@@ -182,7 +182,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
                 }
             }
             // field gate (spec/05): a non-`pub` field cannot be set from another module.
-            checkConstructVis(c: inout c, typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
+            c.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
             mut val i: U64 = 0
             while i < fields.count {
                 verifyExpr(c: inout c, id: fields[i].value)
@@ -266,7 +266,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             // `unwrapOr` / `?.` / `match` instead.
             val tti: TypeInfo = typeOf(c: inout c, id: expr)
             if tti.nameLen > 0U64 {
-                mut val isEnum: Bool = enumIdxByName(c: inout c, start: tti.nameStart, len: tti.nameLen) < c.arena.enums.count
+                mut val isEnum: Bool = c.enumIdxByName(start: tti.nameStart, len: tti.nameLen) < c.arena.enums.count
                 if !(isEnum) {
                     isEnum = c.genericEnumIndex(nameStart: tti.nameStart, nameLen: tti.nameLen) < c.arena.enums.count
                 }
@@ -313,11 +313,11 @@ fn verifyExpr(c: inout Comp, id: U64) {
             }
             mut val ai: U64 = 0
             while ai < arms.count {
-                val armMark: U64 = scopeMark(c: inout c)
+                val armMark: U64 = c.scopeMark()
                 checkDestructureComplete(c: inout c, a: arms[ai])
                 verifyAddArmBinds(c: inout c, a: arms[ai], scrut: scrut)
                 c.verifyBlock(blockId: arms[ai].body)
-                popLocals(c: inout c, mark: armMark)
+                c.popLocals(mark: armMark)
                 ai += 1
             }
         }
@@ -329,7 +329,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
         Expr.Ident(val start, val len) => {
             // use-after-move (spec/03): reading a local whose value was `move`d away.
             if c.cur.verifyMovedIdx.count > 0U64 {
-                if c.verifyIsMoved(idx: localIndexByName(c: inout c, start: start, len: len)) {
+                if c.verifyIsMoved(idx: c.localIndexByName(start: start, len: len)) {
                     compileErrorAt(line: lineOf(c: inout c, offset: start), msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
                 }
             }
@@ -342,10 +342,10 @@ fn verifyExpr(c: inout Comp, id: U64) {
             if !(isBorrow) {
                 match c.arena.exprs[operand] {
                     Expr.Ident(val start, val len) => {
-                        if isSelfRef(c: inout c, start: start, len: len) {
+                        if c.isSelfRef(start: start, len: len) {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "moving `self` is not yet supported")
                         }
-                        if localIndexByName(c: inout c, start: start, len: len) < c.cur.branchBase {
+                        if c.localIndexByName(start: start, len: len) < c.cur.branchBase {
                             compileErrorAt(line: lineOf(c: inout c, offset: exprOffset(c: inout c, id: operand)), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
                         }
                     }
@@ -361,7 +361,7 @@ fn verifyExpr(c: inout Comp, id: U64) {
             if !(isBorrow) {
                 match c.arena.exprs[operand] {
                     Expr.Ident(val start, val len) => {
-                        c.verifyMarkMoved(idx: localIndexByName(c: inout c, start: start, len: len))
+                        c.verifyMarkMoved(idx: c.localIndexByName(start: start, len: len))
                     }
                     _ => {}
                 }
@@ -421,7 +421,7 @@ fn bindsCoverField(c: inout Comp, binds: Array[Bind], fieldStart: U64, fieldLen:
 // (`Box[I32] { … }`) resolve fields via the generic def.
 fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
     if a.isStruct {
-        mut val si: U64 = structIndexByName(c: inout c, start: a.enumStart, len: a.enumLen)
+        mut val si: U64 = c.structIndexByName(start: a.enumStart, len: a.enumLen)
         if si >= c.arena.structs.count {
             si = c.genericStructIndex(nameStart: a.enumStart, nameLen: a.enumLen)
         }
@@ -443,7 +443,7 @@ fn checkDestructureComplete(c: inout Comp, a: MatchArm) {
     if a.binds.count == 0U64 {
         return
     }
-    val ei: U64 = enumIdxByName(c: inout c, start: a.enumStart, len: a.enumLen)
+    val ei: U64 = c.enumIdxByName(start: a.enumStart, len: a.enumLen)
     if ei < c.arena.enums.count {
         val vi: U64 = variantIndex(c: inout c, enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)
         if vi < c.arena.enums[ei].variants.count {
@@ -481,9 +481,9 @@ fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
             if generic {
                 ft = c.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
             } else {
-                ft = fieldType(c: inout c, structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                ft = c.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
             }
-            addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+            c.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
             bi += 1
         }
     } else {
@@ -491,7 +491,7 @@ fn verifyAddArmBinds(c: inout Comp, a: MatchArm, scrut: U64) {
             val bd: Bind = a.binds[bi]
             if generic {
                 val bti: TypeInfo = c.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-                addLocal(c: inout c, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
+                c.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
             } else {
                 c.addBindLocalCn(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)
             }

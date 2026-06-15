@@ -196,7 +196,7 @@ fn collectReachableAssoc(c: inout Comp, st: inout LlvmCtx) {
 
 fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
     val f: Func = c.arena.funcs[fi]
-    if nameIsMain(c: inout c, f: f) { return false }
+    if c.nameIsMain(f: f) { return false }
     if f.isExtern { return false }
     // an `async fn` is lowered to a state machine (entry + resume), not a plain
     // body — declared/emitted by declareAsyncFns / emitAsyncFns.
@@ -217,7 +217,7 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         if !(inReachAssoc(st: inout st, fi: fi)) {
             return false
         }
-        if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
+        if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
         if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) < st.structIdxs.count {
             return methodInEntryModule(c: inout c, f: f)
         }
@@ -232,7 +232,7 @@ fn isPlainUserFn(c: inout Comp, st: inout LlvmCtx, fi: U64) -> Bool {
         // it is unreliable; use the body's first statement, whose exprs keep their
         // original source offsets, to recover the defining module — this keeps std
         // struct methods, full of not-yet-supported constructs, from being emitted.)
-        if isTraitName(c: inout c, start: f.recvStart, len: f.recvLen) { return false }
+        if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
         if structRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.structIdxs.count {
             if enumRegSlot(c: inout c, st: inout st, start: f.recvStart, len: f.recvLen) >= st.enumIdxs.count {
                 return false

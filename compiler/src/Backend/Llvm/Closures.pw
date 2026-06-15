@@ -247,7 +247,7 @@ fn scanBlockClosures(c: inout Comp, st: inout LlvmCtx, id: U64) {
 fn collectClosures(c: inout Comp, st: inout LlvmCtx) {
     mut val fi: U64 = 0
     while fi < c.arena.funcs.count {
-        if nameIsMain(c: inout c, f: c.arena.funcs[fi]) || isPlainUserFn(c: inout c, st: inout st, fi: fi) {
+        if c.nameIsMain(f: c.arena.funcs[fi]) || isPlainUserFn(c: inout c, st: inout st, fi: fi) {
             scanBlockClosures(c: inout c, st: inout st, id: c.arena.funcs[fi].body)
         }
         fi += 1

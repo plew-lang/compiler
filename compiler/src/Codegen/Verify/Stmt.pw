@@ -84,7 +84,7 @@ pub impl Comp {
                 // register the binding (after the init, so it can't see itself) with its
                 // effective type and mutability, so later places resolve / check.
                 val le: LetEff = inferLetType(c: inout self, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                addLocal(c: inout self, nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
+                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val op, val target, val value) => {
                 self.verifyAssign(op: op, target: target, value: value)
@@ -138,7 +138,7 @@ pub impl Comp {
                 // locals already in scope are "outside" this branch (a `move` of one
                 // inside would be conditional) — mark the boundary for the move guard.
                 val savedBB: U64 = self.cur.branchBase
-                self.cur.branchBase = scopeMark(c: inout self)
+                self.cur.branchBase = self.scopeMark()
                 self.verifyBlock(blockId: thenBlk)
                 if hasElse {
                     self.verifyBlock(blockId: elseBlk)
@@ -150,7 +150,7 @@ pub impl Comp {
                 self.checkCondBool(cond: cond)
                 verifyExpr(c: inout self, id: cond)
                 val savedBB: U64 = self.cur.branchBase
-                self.cur.branchBase = scopeMark(c: inout self)
+                self.cur.branchBase = self.scopeMark()
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
                 self.verifyBlock(blockId: body)
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
@@ -191,7 +191,7 @@ pub impl Comp {
                     }
                 }
                 // scope the loop binding(s) to the body, mirroring genStmt's For.
-                val forMark: U64 = scopeMark(c: inout self)
+                val forMark: U64 = self.scopeMark()
                 val savedForBB: U64 = self.cur.branchBase
                 self.cur.branchBase = forMark
                 if isRange {
@@ -205,7 +205,7 @@ pub impl Comp {
                             ltL = bt2.nameLen
                         }
                     }
-                    addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                    self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: ltS, tyLen: ltL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
                     val et: TypeInfo = typeOf(c: inout self, id: iter)
                     if et.kind == 3 {
@@ -218,12 +218,12 @@ pub impl Comp {
                             while bi < binds.count {
                                 val bd: Bind = binds[bi]
                                 val ft: TypeInfo = forBindFieldType(c: inout self, et: et, bd: bd)
-                                addLocal(c: inout self, nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
+                                self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
                                 bi += 1
                             }
                         } else {
                             // single binding to the element type (`for val b in bs` -> U8).
-                            addLocal(c: inout self, nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                         }
                     }
                 }
@@ -231,7 +231,7 @@ pub impl Comp {
                 self.verifyBlock(blockId: body)
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth - 1U64
                 self.cur.branchBase = savedForBB
-                popLocals(c: inout self, mark: forMark)
+                self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
                 verifyExpr(c: inout self, id: scrut)
@@ -241,14 +241,14 @@ pub impl Comp {
                 }
                 mut val ai: U64 = 0
                 while ai < arms.count {
-                    val armMark: U64 = scopeMark(c: inout self)
+                    val armMark: U64 = self.scopeMark()
                     val savedArmBB: U64 = self.cur.branchBase
                     self.cur.branchBase = armMark
                     checkDestructureComplete(c: inout self, a: arms[ai])
                     verifyAddArmBinds(c: inout self, a: arms[ai], scrut: scrut)
                     self.verifyBlock(blockId: arms[ai].body)
                     self.cur.branchBase = savedArmBB
-                    popLocals(c: inout self, mark: armMark)
+                    self.popLocals(mark: armMark)
                     ai += 1
                 }
             }
@@ -260,7 +260,7 @@ pub impl Comp {
                 // (per-path move/drop handling); mirrors genStmt's Give guard.
                 val gvt: TypeInfo = typeOf(c: inout self, id: value)
                 if gvt.kind == 2 {
-                    if typeIsUnique(c: inout self, start: gvt.nameStart, len: gvt.nameLen) {
+                    if self.typeIsUnique(start: gvt.nameStart, len: gvt.nameLen) {
                         compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
                     }
                 }
@@ -282,7 +282,7 @@ pub impl Comp {
     inout fn verifyAssign(op: I64, target: U64, value: U64) {
         match self.arena.exprs[target] {
             Expr.Index(val base, val index) => {
-                if !(placeIsMutable(c: inout self, id: base)) {
+                if !(self.placeIsMutable(id: base)) {
                     compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
                 }
                 verifyExpr(c: inout self, id: base)
@@ -291,18 +291,18 @@ pub impl Comp {
             }
             Expr.Field(base: val fbase, val nameStart, val nameLen) => {
                 // the whole place must be mutable (binding + field both `mut val`).
-                if !(placeIsMutable(c: inout self, id: target)) {
+                if !(self.placeIsMutable(id: target)) {
                     compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
                 }
                 // field-write visibility on the base's owner type.
                 val bt: TypeInfo = typeOf(c: inout self, id: fbase)
                 if bt.kind == 2 {
-                    checkFieldWriteVis(c: inout self, ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                    self.checkFieldWriteVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
                 }
                 verifyExpr(c: inout self, id: fbase)
             }
             Expr.Ident(val start, val len) => {
-                if !(placeIsMutable(c: inout self, id: target)) {
+                if !(self.placeIsMutable(id: target)) {
                     compileErrorAt(line: lineOf(c: inout self, offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
                 }
             }
@@ -320,7 +320,7 @@ pub impl Comp {
         if op == opAssign() {
             match self.arena.exprs[target] {
                 Expr.Ident(val start, val len) => {
-                    self.verifyUnmarkMoved(idx: localIndexByName(c: inout self, start: start, len: len))
+                    self.verifyUnmarkMoved(idx: self.localIndexByName(start: start, len: len))
                 }
                 _ => {}
             }

@@ -19,7 +19,7 @@ fn structNeedsDeinit(c: inout Comp, st: inout LlvmCtx, sidx: U64) -> Bool {
     while i < sd.fields.count {
         val fd: FieldDef = sd.fields[i]
         if !(fd.tyIsArray) {
-            val fsi: U64 = structIndexByName(c: inout c, start: fd.tyStart, len: fd.tyLen)
+            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
             if fsi < c.arena.structs.count {
                 if !(c.arena.structs[fsi].isExtern) {
                     if structNeedsDeinit(c: inout c, st: inout st, sidx: fsi) {
@@ -50,7 +50,7 @@ fn emitDeinitValue(c: inout Comp, st: inout LlvmCtx, v: LLVMValueRef, sidx: U64)
     while i < sd.fields.count {
         val fd: FieldDef = sd.fields[i]
         if !(fd.tyIsArray) {
-            val fsi: U64 = structIndexByName(c: inout c, start: fd.tyStart, len: fd.tyLen)
+            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
             if fsi < c.arena.structs.count {
                 if !(c.arena.structs[fsi].isExtern) {
                     if structNeedsDeinit(c: inout c, st: inout st, sidx: fsi) {

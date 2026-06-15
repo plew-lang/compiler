@@ -338,7 +338,7 @@ fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     match c.arena.exprs[id] {
         Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
             if isEnum {
-                return enumIdxByName(c: inout c, start: typeStart, len: typeLen)
+                return c.enumIdxByName(start: typeStart, len: typeLen)
             }
         }
         _ => {}
@@ -347,14 +347,14 @@ fn exprEnumIdx(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
     val tr: U64 = exprTypeRef(c: inout c, st: inout st, id: id)
     if tr != 0U64 {
         val tt: TypeRef = c.arena.types[tr]
-        val ei: U64 = enumIdxByName(c: inout c, start: tt.nameStart, len: tt.nameLen)
+        val ei: U64 = c.enumIdxByName(start: tt.nameStart, len: tt.nameLen)
         if ei < c.arena.enums.count {
             return ei
         }
     }
     val t: TypeInfo = typeOf(c: inout c, id: id)
     if t.kind == 2 {
-        return enumIdxByName(c: inout c, start: t.nameStart, len: t.nameLen)
+        return c.enumIdxByName(start: t.nameStart, len: t.nameLen)
     }
     return c.arena.enums.count
 }

@@ -15,7 +15,7 @@ pub impl Comp {
         if isPlaceExpr(c: inout self, id: exprId) {
             val ti: TypeInfo = exprType(c: inout self, id: exprId)
             if ti.kind == 2 {
-                if typeIsUnique(c: inout self, start: ti.nameStart, len: ti.nameLen) {
+                if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
                     compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: exprId)), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
                 }
             }
@@ -69,10 +69,10 @@ pub impl Comp {
                 // `inout` writes through the place, so the argument must (a) BE a place —
                 // a local/field/subscript/Ref-pointee, not a literal or call result — and
                 // (b) be mutable (spec/03: `inc(x: inout n)` needs `mut val n`).
-                if !(exprIsPlace(c: inout self, id: arg.expr)) {
+                if !(self.exprIsPlace(id: arg.expr)) {
                     compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: arg.expr)), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
                 }
-                if !(placeIsMutable(c: inout self, id: arg.expr)) {
+                if !(self.placeIsMutable(id: arg.expr)) {
                     compileErrorAt(line: lineOf(c: inout self, offset: exprOffset(c: inout self, id: arg.expr)), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
                 }
             } else {

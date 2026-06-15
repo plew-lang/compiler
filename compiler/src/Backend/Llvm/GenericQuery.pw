@@ -26,7 +26,7 @@ fn localStructIdxFor(c: inout Comp, st: inout LlvmCtx, start: U64, len: U64) -> 
         }
     }
     if structRegSlot(c: inout c, st: inout st, start: start, len: len) < st.structIdxs.count {
-        return structIndexByName(c: inout c, start: start, len: len)
+        return c.structIndexByName(start: start, len: len)
     }
     return c.arena.structs.count
 }
