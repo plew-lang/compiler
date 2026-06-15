@@ -771,12 +771,6 @@ struct Modules {
     pub mut val ranges: Array[Bind] = []
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
-    // the module id of the auto-loaded implicit prelude (std/Prelude.pw), or the
-    // "no prelude" sentinel 4_000_000_000 when none was loaded (a freshly-seeded
-    // compiler). The prelude is ambient — its types are in scope everywhere without an
-    // `import` (it has no import path), like the lang-item types — so scoped type
-    // visibility (Check/Visibility.pw) treats a type defined here as visible from any module.
-    pub mut val preludeModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 

@@ -93,15 +93,12 @@ fn checkUseVisibility(c: inout Comp) {
 // and cannot serve `moduleOf`. The import side is keyed by the name text (the use-site
 // span and the import record share it), independent of which decl matched.
 // Is a type declaration whose own module is `moduleOf(defOffset)` visible to a use in
-// module `useMod` on the same-module / ambient-prelude axes? Same module is trivially
-// visible. The auto-loaded prelude (Driver: std/Prelude.pw) is ambient — its types are in
-// scope everywhere without an `import` (it has no import path), like the lang-item types —
-// so a type defined in the prelude module is visible from any module.
+// module `useMod`? Only the same module is visible on this axis; cross-module visibility
+// goes through the import side (`isImportedInto` + `isExportedName`) in the caller. Ambient
+// lang-item TYPES (the language's built-in types) are handled separately by
+// `isLangItemTypeName` at the type site — no module is "ambient" as a whole (spec/15).
 fn defModuleVisible(c: inout Comp, defOffset: U64, useMod: U64) -> Bool {
-    val dm: U64 = moduleOf(c: inout c, offset: defOffset)
-    if dm == useMod { return true }
-    if dm == c.modules.preludeModule { return true }
-    return false
+    return moduleOf(c: inout c, offset: defOffset) == useMod
 }
 
 fn typeDeclVisibleFrom(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bool {

@@ -5,6 +5,7 @@
 // scanGenInstMethodBodies + the block-0 "no body" sentinel reservation. This is
 // the Dictionary `hashOf` pattern in miniature.
 import @Std/Io with { print }
+import @Std/Hash with { Hash, SipHasher }
 
 struct Hasher1[K] {
     pub(get) mut val seed: U64

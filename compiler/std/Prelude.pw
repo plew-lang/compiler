@@ -3,6 +3,11 @@
 // Keeping them here (not in `@Std/Core`) preserves their ambience: `xs.append(v)`
 // / `xs.get(i: …)` need no import, just like the `Array` type and `[…]` literals.
 
+// The `Dictionary` lang item is built on hashing, which is NOT a language item (spec/15):
+// the `[k:v]` machinery's `K: Hash` bound and its `SipHasher` resolve from @Std/Hash, so
+// the prelude imports it like any non-ambient dependency.
+import @Std/Hash with { Hash, Hasher, SipHasher }
+
 // `Array[T]` is a value-semantics (CoW) struct over the `RawBuffer[T]` floor: the
 // growable buffer (whose `[cap][rc]` header carries capacity and the CoW
 // refcount) plus the live element `count`. This is the type literals `[…]`,
@@ -23,15 +28,6 @@ extern "plew-intrinsic" {
     fn arrayGet[T](a: Array[T], i: U64) -> T
     fn arraySet[T](a: inout Array[T], i: U64, v: T)
     fn arrayLen[T](a: Array[T]) -> U64
-    // The per-process dictionary hash seed: a random value chosen once per run (lazily,
-    // from the OS), stable thereafter. Keys SipHash so a map's layout is unpredictable
-    // across runs (DoS resistance) yet consistent within a run. Internal to the dict
-    // lang item (`entropyU64` in @Std/Random is the user-facing entropy source).
-    fn __dictSeed() -> U64
-    // Reinterpret a signed integer's two's-complement bits as U64 (for hashing signed
-    // keys: `as U64` is lossless-only and rejects negatives). A no-op at the machine
-    // level — I64 and U64 share a representation.
-    fn bitCastU64(n: I64) -> U64
 }
 
 // Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
@@ -48,166 +44,6 @@ pub impl[T] Array[T] {
     // Replace the element at `i` (panics when out of range).
     inout fn set(i: U64, value: T) {
         arraySet(a: inout self, i: i, v: value)
-    }
-}
-
-// --- Hashing (spec/02): `Hash`/`Hasher` are referenced by the `[k:v]` dictionary
-// literal's key bound (`K: Hash`), so they live in the ambient prelude like
-// `Array`/`Dictionary`. Algorithm = SipHash-1-3 (same as Rust's default), with a
-// FIXED key for now — Plew has no RNG yet; switch to a per-map random seed once
-// `Random` lands (worklog 🔴 TODO). Until then hashing is deterministic (harmless:
-// iteration order is unspecified, and compiler-internal maps want determinism).
-
-// A streaming hasher absorbs U64 words and finalizes to a U64 digest.
-trait Hasher {
-    inout fn writeU64(n: U64)
-    fn finish() -> U64
-}
-
-// A type is hashable by feeding its value into a hasher (generic over the hasher
-// `H`, so a map picks the algorithm). The `@[Hash]` derive synthesizes this for a
-// struct/enum by hashing each field; primitives and `String` are hand-written below.
-trait Hash {
-    fn hash[H](hasher: inout H) where H: Hasher
-}
-
-// Rotate-left for U64 (shifts don't overflow-panic; b is always in 1..63 here).
-fn rotlU64(x: U64, b: U64) -> U64 {
-    return (x << b) | (x >> (64U64 - b))
-}
-
-// SipHash-1-3 state (four 64-bit words). Fixed key k0=k1=0 → the standard init
-// constants below. `new()` seeds it; `round()` is one SipRound mixing step.
-struct SipHasher {
-    mut val v0: U64
-    mut val v1: U64
-    mut val v2: U64
-    mut val v3: U64
-}
-pub impl SipHasher {
-    // Keyed init: the standard SipHash base constants XOR the per-process random key
-    // (`k0 = k1 = __dictSeed()`), so the digest stream differs per run. A zero seed
-    // (the lazy init never ran) reproduces the unkeyed standard constants — the prior
-    // deterministic behavior, a safe fallback.
-    assoc fn new() -> SipHasher {
-        val k: U64 = __dictSeed()
-        return <SipHasher v0=(8317987319222330741U64 ^ k) v1=(7237128888997146477U64 ^ k) v2=(7816392313619706465U64 ^ k) v3=(8387220255154660723U64 ^ k) />
-    }
-    inout fn round() {
-        self.v0 = self.v0.wrappingAdd(by: self.v1)
-        self.v1 = rotlU64(x: self.v1, b: 13U64)
-        self.v1 = self.v1 ^ self.v0
-        self.v0 = rotlU64(x: self.v0, b: 32U64)
-        self.v2 = self.v2.wrappingAdd(by: self.v3)
-        self.v3 = rotlU64(x: self.v3, b: 16U64)
-        self.v3 = self.v3 ^ self.v2
-        self.v0 = self.v0.wrappingAdd(by: self.v3)
-        self.v3 = rotlU64(x: self.v3, b: 21U64)
-        self.v3 = self.v3 ^ self.v0
-        self.v2 = self.v2.wrappingAdd(by: self.v1)
-        self.v1 = rotlU64(x: self.v1, b: 17U64)
-        self.v1 = self.v1 ^ self.v2
-        self.v2 = rotlU64(x: self.v2, b: 32U64)
-    }
-}
-pub impl SipHasher as Hasher {
-    // SipHash-1-3: 1 compression round per absorbed word.
-    inout fn writeU64(n: U64) {
-        self.v3 = self.v3 ^ n
-        self.round()
-        self.v0 = self.v0 ^ n
-    }
-    // SipHash-1-3: 3 finalization rounds (on a copy — `finish` doesn't consume).
-    fn finish() -> U64 {
-        mut val s: SipHasher = self
-        s.v2 = s.v2 ^ 255U64
-        s.round()
-        s.round()
-        s.round()
-        return ((s.v0 ^ s.v1) ^ s.v2) ^ s.v3
-    }
-}
-
-// Primitive + String conformances (the leaves a derived struct/enum hash bottoms
-// out at). Unsigned integers narrower than 64 bits widen losslessly to U64 via `as`,
-// so they hash through `writeU64`. Signed integers await a bit-reinterpret (`as` is
-// lossless-only, so a negative value can't be retagged to U64) — added when needed.
-pub impl U64 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: self)
-    }
-}
-pub impl U32 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: self as U64)
-    }
-}
-pub impl U16 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: self as U64)
-    }
-}
-pub impl U8 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: self as U64)
-    }
-}
-// Signed integer keys hash their two's-complement bit pattern: sign-extend to I64
-// (lossless), then reinterpret as U64 (`bitCastU64`) — `as U64` is lossless-only and
-// would reject negatives. Distinct values keep distinct bit patterns, so the hash
-// stays collision-free over the key space.
-pub impl I64 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: bitCastU64(n: self))
-    }
-}
-pub impl I32 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: bitCastU64(n: self as I64))
-    }
-}
-pub impl I16 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: bitCastU64(n: self as I64))
-    }
-}
-pub impl I8 as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        hasher.writeU64(n: bitCastU64(n: self as I64))
-    }
-}
-// `Bool` hashes as 1 (true) / 0 (false). No cast — `as` rejects Bool↔numeric — so the
-// two cases write the constant directly.
-pub impl Bool as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        if self {
-            hasher.writeU64(n: 1U64)
-        } else {
-            hasher.writeU64(n: 0U64)
-        }
-    }
-}
-pub impl String as Hash {
-    fn hash[H](hasher: inout H) where H: Hasher {
-        val bs: Array[U8] = self.bytes
-        val n: U64 = bs.count
-        mut val i: U64 = 0
-        mut val word: U64 = 0
-        mut val shift: U64 = 0
-        while i < n {
-            word = word | ((bs[i] as U64) << shift)
-            shift = shift + 8U64
-            if shift == 64U64 {
-                hasher.writeU64(n: word)
-                word = 0U64
-                shift = 0U64
-            }
-            i = i + 1
-        }
-        if shift > 0U64 {
-            hasher.writeU64(n: word)
-        }
-        hasher.writeU64(n: n)
     }
 }
 
