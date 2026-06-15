@@ -14,87 +14,89 @@
 // Find the registered adapter instance (head `headKw`, e.g. "MapIter") whose
 // inner (arg0) is the receiver's type, or 0 if none (the receiver isn't a known
 // Iterator feeding this combinator). Couples to the @Std/Core adapter names.
-fn findAdapterInst(c: inout Comp, st: inout LlvmCtx, recv: U64, headKw: String) -> U64 {
-    val recvRef: U64 = exprTypeRef(c: inout c, st: inout st, id: recv)
-    val recvSidx: U64 = exprStructIdx(c: inout c, st: inout st, id: recv)
-    mut val gi: U64 = 0
-    while gi < c.monoWork.genInsts.count {
-        val ref: U64 = c.monoWork.genInsts[gi]
-        val t: TypeRef = c.arena.types[ref]
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: headKw) {
-            if t.args.count > 0U64 {
-                val arg0: U64 = t.args[0]
-                if recvRef != 0U64 {
-                    if c.typeRefEq(a: arg0, b: recvRef) {
-                        return ref
-                    }
-                } else {
-                    if recvSidx < c.arena.structs.count {
-                        val a0: TypeRef = c.arena.types[arg0]
-                        if a0.args.count == 0U64 {
-                            if spansEqual(c: inout c, aStart: a0.nameStart, aLen: a0.nameLen, bStart: c.arena.structs[recvSidx].nameStart, bLen: c.arena.structs[recvSidx].nameLen) {
-                                return ref
+
+pub impl LlvmCtx {
+    inout fn findAdapterInst(c: inout Comp, recv: U64, headKw: String) -> U64 {
+        val recvRef: U64 = exprTypeRef(c: inout c, st: inout self, id: recv)
+        val recvSidx: U64 = exprStructIdx(c: inout c, st: inout self, id: recv)
+        mut val gi: U64 = 0
+        while gi < c.monoWork.genInsts.count {
+            val ref: U64 = c.monoWork.genInsts[gi]
+            val t: TypeRef = c.arena.types[ref]
+            if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: headKw) {
+                if t.args.count > 0U64 {
+                    val arg0: U64 = t.args[0]
+                    if recvRef != 0U64 {
+                        if c.typeRefEq(a: arg0, b: recvRef) {
+                            return ref
+                        }
+                    } else {
+                        if recvSidx < c.arena.structs.count {
+                            val a0: TypeRef = c.arena.types[arg0]
+                            if a0.args.count == 0U64 {
+                                if spansEqual(c: inout c, aStart: a0.nameStart, aLen: a0.nameLen, bStart: c.arena.structs[recvSidx].nameStart, bLen: c.arena.structs[recvSidx].nameLen) {
+                                    return ref
+                                }
                             }
                         }
                     }
                 }
             }
+            gi += 1
         }
-        gi += 1
+        return 0U64
     }
-    return 0U64
-}
 
-// If `recv.name(args)` is a known iterator combinator (`map`/`filter`), the
-// registered adapter instance it produces, else 0. (The head names couple to
-// @Std/Core's MapIter / FilterIter.)
-fn adapterCallResultInst(c: inout Comp, st: inout LlvmCtx, recv: U64, nameStart: U64, nameLen: U64) -> U64 {
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "map") {
-        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "MapIter")
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "filter") {
-        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "FilterIter")
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "take") {
-        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "TakeIter")
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "skip") {
-        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "SkipIter")
-    }
-    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "enumerate") {
-        return findAdapterInst(c: inout c, st: inout st, recv: recv, headKw: "EnumerateIter")
-    }
-    return 0U64
-}
-
-// Build the adapter struct value inline: field 0 (the inner) = the receiver, the
-// remaining fields = the method args in order (map's `f`, filter's `p`), under the
-// adapter instance's substitution env. Mirrors the provided method's one-line body
-// `<MapIter inner=self f=f />` with `self` = the receiver.
-fn genLlvmAdapterWrap(c: inout Comp, st: inout LlvmCtx, recv: U64, args: Array[Arg], adapterRef: U64) -> LLVMValueRef {
-    val gslot: U64 = genStructSlot(c: inout c, st: inout st, ref: adapterRef)
-    if gslot >= st.genStructRefs.count {
-        compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
-        return LLVMConstInt(st.i64ty, 0U64, 0I32)
-    }
-    val sd: StructDef = c.arena.structs[st.genStructDefs[gslot]]
-    mut val fields: Array[MakeField] = []
-    // field 0 = inner = the receiver expression.
-    fields.append(value: <MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv />)
-    mut val i: U64 = 1
-    while i < sd.fields.count {
-        if i - 1U64 < args.count {
-            fields.append(value: <MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=args[i - 1U64].expr />)
+    // If `recv.name(args)` is a known iterator combinator (`map`/`filter`), the
+    // registered adapter instance it produces, else 0. (The head names couple to
+    // @Std/Core's MapIter / FilterIter.)
+    inout fn adapterCallResultInst(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64) -> U64 {
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "map") {
+            return self.findAdapterInst(c: inout c, recv: recv, headKw: "MapIter")
         }
-        i += 1
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "filter") {
+            return self.findAdapterInst(c: inout c, recv: recv, headKw: "FilterIter")
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "take") {
+            return self.findAdapterInst(c: inout c, recv: recv, headKw: "TakeIter")
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "skip") {
+            return self.findAdapterInst(c: inout c, recv: recv, headKw: "SkipIter")
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "enumerate") {
+            return self.findAdapterInst(c: inout c, recv: recv, headKw: "EnumerateIter")
+        }
+        return 0U64
     }
-    val savedP: Array[Bind] = c.cur.typeParams
-    val savedA: Array[U64] = c.cur.typeArgs
-    c.cur.typeParams = sd.typeParams
-    c.cur.typeArgs = c.arena.types[adapterRef].args
-    val v: LLVMValueRef = buildStructValue(c: inout c, st: inout st, sd: sd, sty: st.genStructTys[gslot], fields: fields, errOffset: c.exprOffset(id: recv))
-    c.cur.typeParams = savedP
-    c.cur.typeArgs = savedA
-    return v
-}
 
+    // Build the adapter struct value inline: field 0 (the inner) = the receiver, the
+    // remaining fields = the method args in order (map's `f`, filter's `p`), under the
+    // adapter instance's substitution env. Mirrors the provided method's one-line body
+    // `<MapIter inner=self f=f />` with `self` = the receiver.
+    inout fn genLlvmAdapterWrap(c: inout Comp, recv: U64, args: Array[Arg], adapterRef: U64) -> LLVMValueRef {
+        val gslot: U64 = genStructSlot(c: inout c, st: inout self, ref: adapterRef)
+        if gslot >= self.genStructRefs.count {
+            compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val sd: StructDef = c.arena.structs[self.genStructDefs[gslot]]
+        mut val fields: Array[MakeField] = []
+        // field 0 = inner = the receiver expression.
+        fields.append(value: <MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv />)
+        mut val i: U64 = 1
+        while i < sd.fields.count {
+            if i - 1U64 < args.count {
+                fields.append(value: <MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=args[i - 1U64].expr />)
+            }
+            i += 1
+        }
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        c.cur.typeParams = sd.typeParams
+        c.cur.typeArgs = c.arena.types[adapterRef].args
+        val v: LLVMValueRef = buildStructValue(c: inout c, st: inout self, sd: sd, sty: self.genStructTys[gslot], fields: fields, errOffset: c.exprOffset(id: recv))
+        c.cur.typeParams = savedP
+        c.cur.typeArgs = savedA
+        return v
+    }
+}

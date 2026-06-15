@@ -50,7 +50,7 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
             val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
             if fvi < c.arena.funcs.count {
-                val ts: U64 = thunkSlot(st: inout st, fi: fvi)
+                val ts: U64 = st.thunkSlot(fi: fvi)
                 if ts < st.thunkIdx.count {
                     mut val cv: LLVMValueRef = LLVMGetUndef(st.closureTy)
                     cv = LLVMBuildInsertValue(st.b, cv, st.thunkVal[ts], 0U64, anon())
@@ -300,10 +300,10 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return genLlvmCall(c: inout c, st: inout st, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-            return genLlvmMethod(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            return st.genLlvmMethod(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-            return genLlvmExtMethod(c: inout c, st: inout st, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            return st.genLlvmExtMethod(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
         }
         Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
             // a value re-view is zero-cost: the value is unchanged (the view only
@@ -311,16 +311,16 @@ fn genLlvmExpr(c: inout Comp, st: inout LlvmCtx, id: U64) -> LLVMValueRef {
             return genLlvmExpr(c: inout c, st: inout st, id: recv)
         }
         Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-            return genLlvmIfExpr(c: inout c, st: inout st, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
+            return st.genLlvmIfExpr(c: inout c, cond: cond, thenBlk: thenBlk, elseBlk: elseBlk)
         }
         Expr.MatchExpr(val scrut, val arms) => {
-            return genLlvmMatchExpr(c: inout c, st: inout st, scrut: scrut, arms: arms, exprId: id)
+            return st.genLlvmMatchExpr(c: inout c, scrut: scrut, arms: arms, exprId: id)
         }
         Expr.OptChain(val base, val memberStart, val memberLen) => {
-            return genLlvmOptChain(c: inout c, st: inout st, base: base, memberStart: memberStart, memberLen: memberLen)
+            return st.genLlvmOptChain(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
         }
         Expr.Try(val expr) => {
-            return genLlvmTry(c: inout c, st: inout st, expr: expr)
+            return st.genLlvmTry(c: inout c, expr: expr)
         }
         Expr.Move(val operand, val isBorrow) => {
             // `move x` / `borrow x` lower to the operand's value; `move` additionally

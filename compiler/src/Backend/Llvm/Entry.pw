@@ -86,7 +86,7 @@ export fn emitLlvm(c: inout Comp) {
     // reference exist), so a closure literal can build its {fn, env} value.
     collectClosures(c: inout c, st: inout st)
     // declare function-value thunks (a bare function reference -> {thunk, null}).
-    collectThunks(c: inout c, st: inout st)
+    st.collectThunks(c: inout c)
 
     // module-level variables (spec/15): emit `plew_init_globals` (one body that runs
     // every global's initializer once) and record each global's metadata, BEFORE any
@@ -135,7 +135,7 @@ export fn emitLlvm(c: inout Comp) {
     emitGenMethods(c: inout c, st: inout st)
     // lambda-lifted closure bodies + function-value thunks.
     emitClosures(c: inout c, st: inout st)
-    emitThunks(c: inout c, st: inout st)
+    st.emitThunks(c: inout c)
     // provided trait methods + lazily-declared std/generic methods reached during
     // the passes above. Both queues can grow as bodies emit (a provided body calls
     // a std generic method, a generic body reaches a provided one), so drain to a
@@ -205,7 +205,7 @@ fn genLlvmInitGlobals(c: inout Comp, st: inout LlvmCtx) {
     st.locMoved = []
     mut val gi: U64 = 0
     while gi < c.arena.globals.count {
-        genLlvmStmt(c: inout c, st: inout st, id: c.arena.globals[gi].letStmt)
+        st.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
         val li: U64 = st.nLocals - 1U64
         val lty: LLVMTypeRef = st.locTy[li]
         val gv: LLVMValueRef = LLVMAddGlobal(st.mod, lty, cstr(s: globalSymbol(idx: gi)))

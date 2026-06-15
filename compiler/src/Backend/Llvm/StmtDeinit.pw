@@ -126,7 +126,7 @@ fn genLlvmBlock(c: inout Comp, st: inout LlvmCtx, id: U64) {
             st.nLocals = mark
             return
         }
-        genLlvmStmt(c: inout c, st: inout st, id: blk.stmts[i])
+        st.genLlvmStmt(c: inout c, id: blk.stmts[i])
         i += 1
     }
     // fall-through exit: run scope-exit deinits for this block's locals (a return

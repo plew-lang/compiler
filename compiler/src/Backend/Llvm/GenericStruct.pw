@@ -260,7 +260,7 @@ fn exprTypeRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             }
             // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
             // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
-            val adp: U64 = adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
+            val adp: U64 = st.adapterCallResultInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen)
             if adp != 0U64 {
                 return adp
             }

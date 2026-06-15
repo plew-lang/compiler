@@ -355,7 +355,7 @@ fn exprResultRef(c: inout Comp, st: inout LlvmCtx, id: U64) -> U64 {
             // lazy-adapter instance, else the grounded generic return — so `it`'s type
             // is tracked and a later `it.count()` / `it.next()` dispatches. Mirrors the
             // exprTypeRef Method arm (the let-binding tref recovery routes through here).
-            val adp: U64 = adapterCallResultInst(c: inout c, st: inout st, recv: recv, nameStart: nameStart, nameLen: nameLen)
+            val adp: U64 = st.adapterCallResultInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen)
             if adp != 0U64 {
                 return adp
             }
