@@ -92,6 +92,14 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 各段 dev-rebuild→test→reseed→不動点→tag。M5 の循環検出が「分割境界が DAG か」を実際に検査する。
 
+#### 努力目標（後で言語制約化）：part 内は `impl` のみ
+
+**方針（ユーザー・enforcement は後）**：part のベストプラクティスを構造で強制するため、最終的に **part に書けるのは `impl` だけ**にする（自由関数・型・top-level val を part に置けない）。コンパイラをまずその状態へ寄せ、達成後に言語制約として実装する。
+- **狙い**：spec/15 の part 正当理由①（無名 impl の配置）に part 用途を縛り、「関連が近い/大きいから part」の濫用を言語レベルで不能にする。
+- **含意（理由②＝相互再帰モジュール）**：自由関数を part 分割できなくなるので、(a) モジュール root に置く（巨大化）か (b) **メソッド化**（`fn f(c: inout Comp,…)` → `impl Comp { fn f(…) }`）して impl として分割。本コンパイラは解析がほぼ `fn(c: inout Comp,…)`＝実質 Comp メソッドゆえ (b) が機械的に可能。
+- **再評価する緊張**：メソッド化で Comp の API 面が再増殖（M2/M3 の状態削減とは別軸だが意識）／どの型のメソッドでもない純ユーティリティ（`spansEqual` 的）はモジュール root 行き。到達後に enforcement の是非・緩和（part-local private 自由関数を許すか等）を判断。
+- **段取り上の位置**：まず import 層化（Ir/Frontend/Backend/entry）を緑に。その後段に「各モジュールの part を impl のみへ寄せるメソッド化フェーズ」が乗る（長い裾・北極星）。
+
 **済んだ予備作業**＝`findFunc` の解決を単一チョークポイント `resolvedCallee`（exprId キー永続 memo `TypeCache.callee`）へ集約済（13 site 中 12・tag `refactor-m4-b1` 他）。下記 typed IR トラックの一部だが、Backend の findFunc 呼びを memo 読みに替えて結合を薄くする副次効果もある。
 
 ### 別トラック（後段・任意）：型回復統一＝typed IR（根①）
