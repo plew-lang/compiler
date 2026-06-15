@@ -3,6 +3,7 @@
 // dropping of the binding that was appended (no use-after-free), and a CoW copy
 // of the array shares the boxes safely (no double-free). Verified ASan-clean.
 import @Std/Io with { print }
+import @Std/Core with { Ref }
 
 struct Cell {
     val v: I32

@@ -83,6 +83,8 @@ fn main() -> Result[(), AppError] {   // Result を返すと main 内で try が
 
 **固定された小さな一覧**で、**ここに無いものはすべて通常のライブラリ＝明示 `import` が要ります**（`Random`・`Set`・`print` などは `@Std/…` から import。`Set` はリテラルを持たず辞書 `Dictionary` と対照的で、構文が参照しない＝言語アイテムではない）。判定基準は「構文が参照するか」で sharp です。
 
+> **組み込みに見えるが import 必須なもの**（基準の帰結・混同しやすいので明示）：`Ordering`（`< > <= >=` は脱糖表を介すが結果は `Bool`・`Ordering` 値を生む構文は無い＝Rust の `std::cmp::Ordering` と同じく import。三方比較を名指すときだけ要）／`Ref`・`WeakRef`（汎用 factory `<Ref value=…/>` で**名指す**だけで専用リテラルが無い＝表現が祝福プリミティブでも ambient ではない）／`RawBuffer`（`Array` の内部床・利用者が直接使うときは import）。いずれも `@Std/Core` から import。
+
 > 言語アイテムは**言語が提供する唯一の ambient な名前**で、キーワードと同じくユーザーがこれに足したり別の ambient を作ったりはできません（自前定義は必ずモジュールスコープ）。出どころは「ローカル束縛 → ファイルの `import` → 言語アイテム」で常に辿れ、言語アイテム名はローカル再宣言（[shadowing](../01-basics/03-values.md#再宣言shadowing)）で覆えます。
 
 ## インポート

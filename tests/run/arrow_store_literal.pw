@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { Ref }
 // Storing a bare integer literal through a Ref arrow place (`r->field = 42`) takes
 // its type from the pointee field — no suffix needed.
 struct Box { pub(get) mut val v: I32 }

@@ -2,6 +2,7 @@
 // per instantiation — `Holder[I32]` -> `PlewArray_I32`, `Holder[Ref[Cell]]` ->
 // `PlewArray_Ref_Cell` — instead of emitting the broken `PlewArray_T` template.
 import @Std/Io with { print }
+import @Std/Core with { Ref }
 
 struct Cell {
     pub mut val v: I32

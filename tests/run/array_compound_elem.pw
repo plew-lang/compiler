@@ -3,6 +3,7 @@
 // (a generic-struct element). The element type is mangled (`PlewArray_Ref_Cell`)
 // so the runtime/use-sites agree; the C type and ARC come from the element ref.
 import @Std/Io with { print }
+import @Std/Core with { Ref }
 
 struct Cell {
     pub mut val v: I32

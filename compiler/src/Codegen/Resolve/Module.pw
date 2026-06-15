@@ -20,10 +20,17 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     return 0
 }
 
-// Whether (start,len) names a lang-item type (spec/15): the ambient types the
-// language/std owns (numeric, Bool, String, the containers, Optional/Result, ranges,
-// Ref/WeakRef, the concurrency handles). Used to reject a user REDEFINITION of one
-// (`enum Optional { … }`) — these names are reserved by the language.
+// Whether (start,len) names a lang-item type (spec/15): the AMBIENT types — exactly the
+// ones syntax references as its meaning, so they must be in scope without an `import`:
+// numeric, Bool, String, the literal containers (Array/Dictionary), Optional/Result,
+// the range types (`a..<b`/`a...b`), and the async/spawn handles (`async fn … ->
+// Promise[T]` / `spawn` → JoinHandle). This is the spec/15 list EXACTLY. Notably NOT
+// ambient (import-required, by the same criterion): `Ordering` (only `<`/`>` desugar
+// touches it — they return `Bool`; naming it for a three-way compare needs an import,
+// like Rust's `std::cmp::Ordering`), `Ref`/`WeakRef` (named via the generic `<Ref …/>`
+// factory, no dedicated literal — a blessed *representation*, not ambient), and the
+// internal `RawBuffer` (the Array floor; users never name it). Also used to reject a
+// user REDEFINITION of an ambient name (`enum Optional { … }`).
 fn isLangItemTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
@@ -41,14 +48,10 @@ fn isLangItemTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Dictionary") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Optional") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Result") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Ordering") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "HalfOpenRange") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "ClosedRange") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Promise") { return true }
     if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "JoinHandle") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Ref") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "WeakRef") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "RawBuffer") { return true }
     return false
 }
 

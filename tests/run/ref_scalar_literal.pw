@@ -4,6 +4,7 @@
 // (Reading a scalar pointee via `->` is a separate, unsupported thing; this
 // exercises construction, copy/retain and scope-drop.)
 import @Std/Io with { print }
+import @Std/Core with { Ref }
 
 fn main() {
     val r: Ref[I32] = <Ref[I32] value=7 />

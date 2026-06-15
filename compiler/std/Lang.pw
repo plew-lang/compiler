@@ -5,11 +5,11 @@
 // import-required. Force-loaded first (Driver), so the foundational types resolve for
 // Core/Hash/Prelude; its module id is the ambient axis of type visibility.
 //
-// (Holds Optional/Result/Ordering, Array/Dictionary, and the primitive scalar types;
-// the synthesized intrinsic types move here in a following increment. Until the
-// visibility flip, ambient is still keyed by `isLangItemTypeName` — these types stay
-// ambient by name regardless of which module declares them, so the move is
-// behaviour-neutral.)
+// (Holds Optional/Result, Array/Dictionary, and the primitive scalar types. `Ordering`,
+// `Ref`/`WeakRef`, and the `RawBuffer` floor are NOT ambient by the spec/15 criterion —
+// they live in @Std/Core and are import-required (this module imports `RawBuffer` for
+// `Array`). Ambient is still keyed by `isLangItemTypeName`, which now matches the spec/15
+// list exactly.)
 
 // The `Dictionary` lang item (below) is built on hashing, which is NOT a language item
 // (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash, so this module
@@ -19,7 +19,7 @@ import @Std/Hash with { Hash, Hasher, SipHasher }
 // Lang.gen.pw, which names `TryFrom`/`RangeError` (the conversion protocol, owned by Core
 // — non-ambient, import-required). Importing them here is not a cycle: Core uses Lang's
 // ambient types (primitives, Optional, Array) without importing Lang.
-import @Std/Core with { TryFrom, RangeError }
+import @Std/Core with { TryFrom, RangeError, RawBuffer }
 
 // --- lang-item primitive type declarations (spec/15 core-library boundary) ---
 // Opaque intrinsic types (representation is the compiler's int*_t / PlewString mapping):
@@ -133,9 +133,8 @@ pub impl[T, E] Result[T, E] {
     }
 }
 
-export enum Ordering { Less  Equal  Greater }
-
-// `Array[T]` is a value-semantics (CoW) struct over the `RawBuffer[T]` floor: the
+// `Array[T]` is a value-semantics (CoW) struct over the `RawBuffer[T]` floor (`RawBuffer`
+// is a non-ambient floor primitive imported from @Std/Core above): the
 // growable buffer (whose `[cap][rc]` header carries capacity and the CoW
 // refcount) plus the live element `count`. This is the type literals `[…]`,
 // indexing `[i]`, and `for` lower to; the compiler still special-cases that lang

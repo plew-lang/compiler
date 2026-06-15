@@ -3,6 +3,7 @@
 // `PlewArray_Ref_Cell` from the argument's element type (previously the array
 // runtime / selector mangled with the literal `T`, so nothing linked).
 import @Std/Io with { print }
+import @Std/Core with { Ref }
 
 struct Cell {
     mut val v: I32

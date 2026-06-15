@@ -1,4 +1,5 @@
 import @Std/Io with { write, print }
+import @Std/Core with { Ref }
 
 // The spec-blessed way to share/store a unique value is to wrap it in Ref[T]
 // (unique values cannot go in generics/arrays directly). The last Ref to drop

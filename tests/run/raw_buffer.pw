@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { RawBuffer }
 extern "plew-intrinsic" {
     fn rawAlloc[T](cap: U64, of: T) -> RawBuffer[T]
     fn rawLoad[T](b: RawBuffer[T], i: U64) -> T

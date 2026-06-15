@@ -34,7 +34,14 @@ fn lowerExtern(c: inout Comp, e: ExternAst) {
         val nm: Bind = internBytes(c: inout c, s: e.structNames[si])
         val noTP: Array[Bind] = []
         val noFields: Array[FieldDef] = []
-        c.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=noFields isUnique=false isExtern=true isCExtern=e.abiC />)
+        // defOffset = the struct's REAL source offset (its `struct Name` span), so type
+        // visibility can locate the declaring module. Without it (defOffset 0) a
+        // non-ambient extern type — e.g. the internal `RawBuffer`, or imported `Ref`
+        // from @Std/Core — would fail `moduleOf(0)` and read as out-of-scope; it only
+        // ever worked because the whole compiler is module 0 and `moduleOf(0)==0`.
+        mut val defOff: U64 = 0
+        if si < e.structSpans.count { defOff = e.structSpans[si].start }
+        c.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout c, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=noFields isUnique=false isExtern=true isCExtern=e.abiC defOffset=defOff />)
         // a `@[...]` derive on this opaque extern type (spec/16): lower its directive to
         // pending derives and drain them onto this type, with the `struct Name` span as
         // the item source so the harness `parseItem` recovers a `Decl` (name = the type).

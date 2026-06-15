@@ -1,5 +1,6 @@
 // spec/03: Ref[T]'s `value` field is T, so `<Ref[I64] value=true/>` would box a
 // Bool as an I64 — a type error.
+import @Std/Core with { Ref }
 fn main() {
     val r: Ref[I64] = <Ref[I64] value=true />
 }
