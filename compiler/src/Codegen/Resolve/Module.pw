@@ -20,38 +20,55 @@ fn moduleOf(c: inout Comp, offset: U64) -> U64 {
     return 0
 }
 
-// Whether (start,len) names a lang-item type (spec/15): the AMBIENT types — exactly the
-// ones syntax references as its meaning, so they must be in scope without an `import`:
-// numeric, Bool, String, the literal containers (Array/Dictionary), Optional/Result,
-// the range types (`a..<b`/`a...b`), and the async/spawn handles (`async fn … ->
-// Promise[T]` / `spawn` → JoinHandle). This is the spec/15 list EXACTLY. Notably NOT
-// ambient (import-required, by the same criterion): `Ordering` (only `<`/`>` desugar
-// touches it — they return `Bool`; naming it for a three-way compare needs an import,
-// like Rust's `std::cmp::Ordering`), `Ref`/`WeakRef` (named via the generic `<Ref …/>`
-// factory, no dedicated literal — a blessed *representation*, not ambient), and the
-// internal `RawBuffer` (the Array floor; users never name it). Also used to reject a
-// user REDEFINITION of an ambient name (`enum Optional { … }`).
-fn isLangItemTypeName(c: inout Comp, start: U64, len: U64) -> Bool {
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "I64") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U8") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U16") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "U64") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F32") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "F64") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Bool") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "String") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Array") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Dictionary") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Optional") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Result") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "HalfOpenRange") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "ClosedRange") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "Promise") { return true }
-    if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "JoinHandle") { return true }
+// Whether (start,len) names an AMBIENT lang-item type (spec/15): one in scope without an
+// `import`. The authoritative ambient set IS @Std/Lang's export surface — there is no
+// hardcoded name list. A type is ambient iff @Std/Lang either DECLARES it (a struct/enum
+// whose declaration offset is in the Lang module: Optional/Result/Array/Dictionary and
+// the opaque synthesized intrinsics Promise/JoinHandle/range types) or RE-EXPORTS it (the
+// primitive scalars, defined in @Std/Core with their witnesses and forwarded here via
+// `export @Std/Core with { … }`). Everything else (Ordering, Ref/WeakRef, RawBuffer, all
+// traits, SipHasher, …) is NOT in Lang's surface → import-required. Replaces the old
+// hardcoded `isLangItemTypeName` list: the manifest is the single source of truth. Also
+// used to reject a user REDEFINITION of an ambient name. Lang not loaded (sentinel) → no
+// ambient types (a freshly-seeded compiler always has std/Lang.pw next to it).
+fn isAmbientInLang(c: inout Comp, start: U64, len: U64) -> Bool {
+    val lm: U64 = c.modules.langModule
+    if lm == 4000000000U64 { return false }
+    val qId: U64 = intern(c: inout c, start: start, len: len)
+    // declared in @Std/Lang (its declaration offset falls in the Lang module). The scan
+    // looks for a LANG-owned declaration specifically (not the first match), so a user's
+    // own `enum Optional` in module 0 does not mask Lang's ownership (→ redefinition gate).
+    mut val i: U64 = 0
+    while i < c.arena.structs.count {
+        val sd: StructDef = c.arena.structs[i]
+        if sd.nameId == qId {
+            if sd.defOffset != 0U64 {
+                if moduleOf(c: inout c, offset: sd.defOffset) == lm { return true }
+            }
+        }
+        i += 1
+    }
+    i = 0
+    while i < c.arena.enums.count {
+        val ed: EnumDef = c.arena.enums[i]
+        if ed.nameId == qId {
+            if ed.defOffset != 0U64 {
+                if moduleOf(c: inout c, offset: ed.defOffset) == lm { return true }
+            }
+        }
+        i += 1
+    }
+    // re-exported by @Std/Lang (the primitives — defined in @Std/Core). A re-export
+    // records the forwarded name as exported by Lang (`fieldStart` = the Lang module),
+    // using the name's span in Lang's own source (so `moduleOf` is reliable).
+    i = 0
+    while i < c.modules.exports.count {
+        val e: Bind = c.modules.exports[i]
+        if e.fieldStart == lm {
+            if spansEqual(c: inout c, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) { return true }
+        }
+        i += 1
+    }
     return false
 }
 
@@ -125,8 +142,8 @@ fn inferLetType(c: inout Comp, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U6
 // a module that exports it. This single predicate is what makes resolution *scoped*:
 // instead of scanning the whole arena globally and then second-guessing with a
 // post-hoc import gate, lookups consider only in-scope candidates. (Lang-item types
-// are handled separately at type sites via `isLangItemTypeName` — they are always
-// ambient; this predicate covers user/std declarations.)
+// are handled separately at type sites via `isAmbientInLang` — @Std/Lang's export
+// surface is always ambient; this predicate covers user/std declarations.)
 fn nameVisibleFrom(c: inout Comp, useMod: U64, candStart: U64, candLen: U64) -> Bool {
     if moduleOf(c: inout c, offset: candStart) == useMod {
         return true

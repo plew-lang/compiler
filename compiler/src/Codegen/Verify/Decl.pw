@@ -165,7 +165,7 @@ fn checkLangItemRedef(c: inout Comp) {
         if !(sd.isExtern) {
             if offsetIsLoaded(c: inout c, offset: sd.defOffset) {
                 if moduleOf(c: inout c, offset: sd.defOffset) == 0U64 {
-                    if isLangItemTypeName(c: inout c, start: sd.nameStart, len: sd.nameLen) {
+                    if isAmbientInLang(c: inout c, start: sd.nameStart, len: sd.nameLen) {
                         compileErrorAt(line: lineOf(c: inout c, offset: sd.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
                     }
                 }
@@ -178,7 +178,7 @@ fn checkLangItemRedef(c: inout Comp) {
         val ed: EnumDef = c.arena.enums[ei]
         if offsetIsLoaded(c: inout c, offset: ed.defOffset) {
             if moduleOf(c: inout c, offset: ed.defOffset) == 0U64 {
-                if isLangItemTypeName(c: inout c, start: ed.nameStart, len: ed.nameLen) {
+                if isAmbientInLang(c: inout c, start: ed.nameStart, len: ed.nameLen) {
                     compileErrorAt(line: lineOf(c: inout c, offset: ed.defOffset), msg: "cannot redefine a built-in lang-item type (this name is reserved by the language)")
                 }
             }

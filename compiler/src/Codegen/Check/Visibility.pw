@@ -95,8 +95,8 @@ fn checkUseVisibility(c: inout Comp) {
 // Is a type declaration whose own module is `moduleOf(defOffset)` visible to a use in
 // module `useMod`? Only the same module is visible on this axis; cross-module visibility
 // goes through the import side (`isImportedInto` + `isExportedName`) in the caller. Ambient
-// lang-item TYPES (the language's built-in types) are handled separately by
-// `isLangItemTypeName` at the type site — no module is "ambient" as a whole (spec/15).
+// lang-item TYPES are handled separately by `isAmbientInLang` at the type site (= @Std/Lang's
+// export surface) — no OTHER module is "ambient" as a whole (spec/15).
 fn defModuleVisible(c: inout Comp, defOffset: U64, useMod: U64) -> Bool {
     return moduleOf(c: inout c, offset: defOffset) == useMod
 }
@@ -193,7 +193,7 @@ fn realTypeNameInModule(c: inout Comp, useMod: U64, start: U64, len: U64) -> Bin
 
 fn checkTypeName(c: inout Comp, siteOffset: U64, start: U64, len: U64) {
     if len == 0 { return }
-    if isLangItemTypeName(c: inout c, start: start, len: len) { return }
+    if isAmbientInLang(c: inout c, start: start, len: len) { return }
     val useMod: U64 = moduleOf(c: inout c, offset: siteOffset)
     // a `Real as Alias` use resolves to Real (imports/exports are keyed by the real name).
     val real: Bind = realTypeNameInModule(c: inout c, useMod: useMod, start: start, len: len)
