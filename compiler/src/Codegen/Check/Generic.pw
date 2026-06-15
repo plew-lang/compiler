@@ -308,7 +308,7 @@ pub impl Comp {
                     // a `T` value placed into a CONCRETE-typed field (`<S a=valueT/>` where
                     // S.a: I64) is a type error at the definition. The field type comes from
                     // the (concrete) owner decl; a generic owner's type-param field is lenient.
-                    val ft: TypeInfo = makeFieldType(c: inout self, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
+                    val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
                     if ft.nameLen > 0U64 {
                         mut val fref: U64 = ft.ref
                         if fref == 0U64 {
@@ -341,7 +341,7 @@ pub impl Comp {
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    scanAddArmBinds(c: inout self, a: a, scrutTi: self.exprType(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.exprType(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -506,7 +506,7 @@ pub impl Comp {
                 while ai < arms.count {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    scanAddArmBinds(c: inout self, a: a, scrutTi: self.exprType(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.exprType(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1

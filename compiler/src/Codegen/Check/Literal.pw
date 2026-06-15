@@ -232,7 +232,7 @@ fn checkLitCtx(c: inout Comp, id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
             checkLitCtx(c: inout c, id: index, eKind: 1, eBits: 64, eSgn: false)
         }
         Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-            checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
+            c.checkMakeFields(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
         }
         Expr.Array(val elems) => {
             mut val i: U64 = 0
@@ -410,7 +410,7 @@ fn checkLitSpanCtx(c: inout Comp, id: U64, tyStart: U64, tyLen: U64, isArray: Bo
             match c.arena.exprs[id] {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                     if c.isGenericEnumInst(ref: ctxRef) || isGenericInst(c: inout c, ref: ctxRef) {
-                        checkMakeFields(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ctxRef, fields: fields)
+                        c.checkMakeFields(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ctxRef, fields: fields)
                         return
                     }
                 }

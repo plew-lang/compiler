@@ -89,11 +89,21 @@ open(path, "w").write(newfile)
 # rewrite call sites repo-wide (INCLUDING the transformed file itself — its own
 # intra-file calls, now `NAME(c: inout self, …)`, must become `self.NAME(…)`).
 names = [n for n, _ in methodized]
+_defline = re.compile(r'^(export )?fn ')
 for f in glob.glob(SRC + "/**/*.pw", recursive=True):
     s = open(f).read(); orig = s
-    for n in names:
-        s = re.sub(r'\b' + n + r'\(c: inout (\w+)\)', r'\1.' + n + r'()', s)
-        s = re.sub(r'\b' + n + r'\(c: inout (\w+), ', r'\1.' + n + r'(', s)
+    # rewrite call sites line-by-line, but NEVER a `fn NAME(c: inout Comp, …)`
+    # DEFINITION line — a twin overload of NAME living in another (mixed) file would
+    # otherwise be mangled into `fn Comp.NAME(…)`. Such a partner must be methodized
+    # by hand; leave its signature intact.
+    out_lines = []
+    for ln in s.split("\n"):
+        if not _defline.match(ln):
+            for n in names:
+                ln = re.sub(r'\b' + n + r'\(c: inout (\w+)\)', r'\1.' + n + r'()', ln)
+                ln = re.sub(r'\b' + n + r'\(c: inout (\w+), ', r'\1.' + n + r'(', ln)
+        out_lines.append(ln)
+    s = "\n".join(out_lines)
     if s != orig:
         open(f, "w").write(s)
 

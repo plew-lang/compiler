@@ -123,21 +123,23 @@ fn compareNeedsTrait(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
 // Index of an assoc fn named `name` on type (typeStart,typeLen), or c.arena.funcs.count.
 // (A by-name lookup for the operator witnesses Eq.eq / Ord.compare, which have a
 // single witness per type.)
-export fn findAssocByName(c: inout Comp, typeStart: U64, typeLen: U64, name: String) -> U64 {
-    val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
-    mut val i: U64 = 0
-    while i < c.arena.funcs.count {
-        val f: Func = c.arena.funcs[i]
-        if f.isAssoc {
-            if f.recvId == qType {
-                if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                    return i
+pub impl Comp {
+    inout fn findAssocByName(typeStart: U64, typeLen: U64, name: String) -> U64 {
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.isAssoc {
+                if f.recvId == qType {
+                    if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                        return i
+                    }
                 }
             }
+            i += 1
         }
-        i += 1
+        return self.arena.funcs.count
     }
-    return c.arena.funcs.count
 }
 
 // Whether the operand type carries the witness an operator needs: Eq's `eq` for
@@ -163,7 +165,7 @@ fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
         if op >= 52 {
             if op <= 55 {
                 if c.typeConformsToName(typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: "Ord") {
-                    return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < c.arena.funcs.count
+                    return c.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: "compare") < c.arena.funcs.count
                 }
             }
         }
@@ -174,7 +176,7 @@ fn hasCompareWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
 // Whether the operand type both conforms to Eq and carries the `eq` witness.
 fn eqWitnessReady(c: inout Comp, ti: TypeInfo) -> Bool {
     if c.typeConformsToName(typeStart: ti.nameStart, typeLen: ti.nameLen, traitName: "Eq") {
-        return findAssocByName(c: inout c, typeStart: ti.nameStart, typeLen: ti.nameLen, name: "eq") < c.arena.funcs.count
+        return c.findAssocByName(typeStart: ti.nameStart, typeLen: ti.nameLen, name: "eq") < c.arena.funcs.count
     }
     return false
 }
@@ -326,7 +328,7 @@ fn hasBinTraitWitness(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> Bool {
     if lt.kind == 2 || lt.kind == 0 {
         if lt.nameLen > 0 {
             if c.typeConformsToName(typeStart: lt.nameStart, typeLen: lt.nameLen, traitName: binTraitName(op: op)) {
-                return findAssocByName(c: inout c, typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < c.arena.funcs.count
+                return c.findAssocByName(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) < c.arena.funcs.count
             }
         }
     }

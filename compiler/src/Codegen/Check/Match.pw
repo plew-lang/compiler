@@ -13,7 +13,7 @@ pub impl Comp {
         if a.isStruct {
             val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
             if si < self.arena.structs.count {
-                checkBindsInFields(c: inout self, binds: a.binds, fields: self.arena.structs[si].fields)
+                self.checkBindsInFields(binds: a.binds, fields: self.arena.structs[si].fields)
             }
             return
         }
@@ -26,7 +26,7 @@ pub impl Comp {
         mut val vi: U64 = 0
         while vi < variants.count {
             if variants[vi].nameId == qVar {
-                checkBindsInFields(c: inout self, binds: a.binds, fields: variants[vi].fields)
+                self.checkBindsInFields(binds: a.binds, fields: variants[vi].fields)
                 return
             }
             vi += 1

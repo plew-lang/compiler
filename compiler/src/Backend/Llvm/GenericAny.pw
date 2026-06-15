@@ -433,11 +433,11 @@ fn binWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, lhs: U64, rhs: U64) -
 fn unaryWitnessFn(c: inout Comp, st: inout LlvmCtx, op: I64, operand: U64) -> U64 {
     val sidx: U64 = exprStructIdx(c: inout c, st: inout st, id: operand)
     if sidx < c.arena.structs.count {
-        return findAssocByName(c: inout c, typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
+        return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
     }
     val eid: U64 = exprEnumIdx(c: inout c, st: inout st, id: operand)
     if eid < c.arena.enums.count {
-        return findAssocByName(c: inout c, typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
+        return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
     }
     return c.arena.funcs.count
 }

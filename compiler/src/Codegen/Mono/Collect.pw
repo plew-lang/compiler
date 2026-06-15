@@ -25,14 +25,14 @@ pub impl Comp {
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                     pi += 1
                 }
-                scanBlockInsts(c: inout self, blkId: f.body)
+                self.scanBlockInsts(blkId: f.body)
             }
             fi += 1
         }
         // generic-receiver method bodies: walk them under the receiver env so a nested
         // generic call (`key.hash[H]` -> `String.hash[SipHasher]`) registers its instance
         // before the transitive worklist below scans it.
-        scanGenInstMethodBodies(c: inout self)
+        self.scanGenInstMethodBodies()
         // transitive instantiation: walk each generic free function instance's body
         // with its type-parameter env active (so type-parameter-typed args resolve to
         // concrete types), registering the instances it calls. The loop re-reads
@@ -66,7 +66,7 @@ pub impl Comp {
                 self.addLocal(nameStart: gp.nameStart, nameLen: gp.nameLen, tyStart: gp.tyStart, tyLen: gp.tyLen, isArray: gp.tyIsArray, ty: gp.ty, isInout: gp.isInout, isMut: false, owned: false)
                 gpi += 1
             }
-            scanBlockInsts(c: inout self, blkId: gf.body)
+            self.scanBlockInsts(blkId: gf.body)
             if gf.hasRecv {
                 self.clearSelfItemEnv()
             }

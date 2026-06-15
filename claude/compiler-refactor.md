@@ -120,7 +120,7 @@ Backend/  _.pw = バレル；leaf ヘルパ(import) ＋ codegen Core(impl LlvmCt
 
 #### メソッド化の手順（確定レシピ・増分で各段不動点）
 
-進捗：keystone（Comp を Frontend へ）済。methodize 済ファイル＝Codegen/Expr（pilot）・Resolve/Locals・Codegen/Decl・**Resolve/Module（全24・`struct LetEff` を Frontend root へ退避）**・**Resolve/ExprType（`exprType`）**・**Lower/Expr（`lowerExpr`/`lowerExprWithCtx`）**。残 all-c-ready＝Check/Make・Mono/Call（両方とも双子を含むので相方と同時 methodize 待ち）。残は MIXED 多数（手動）。1 ファイルずつ機械的に：
+進捗：keystone（Comp を Frontend へ）済。methodize 済ファイル＝Codegen/Expr（pilot）・Resolve/Locals・Codegen/Decl・**Resolve/Module（全24・`struct LetEff` を Frontend root へ退避）**・**Resolve/ExprType（`exprType`）**・**Lower/Expr（`lowerExpr`/`lowerExprWithCtx`）**・**Check/Make（双子 `makeFieldType` 含む4）**＋相方 **Lower/Types の `makeFieldType` overload を手動メソッド化**・**Mono/Call（双子 `findAssocByName` 含む11）**＋相方 **Stmt の `findAssocByName` overload を手動メソッド化**。残 all-c-ready なし。残は MIXED 多数（手動・部分メソッド化）。双子の手順＝all-c 側を script で methodize（call 書き換えは相方 def 行をスキップするよう改修済）→ 相方 overload（混在ファイル内）を手で `pub impl Comp` へ移す（call site は既に書き換わっている）→ build。1 ファイルずつ機械的に：
 
 1. **定義**：`fn NAME(c: inout Comp, REST) -> R {` を `pub impl Comp { … }` で包み `inout fn NAME(REST) -> R {` へ。本体は `c.X`→`self.X`、まだ自由関数のままの被呼 `g(c: inout c, …)`→`g(c: inout self, …)`、bare `c`→`self`（ラベル `c:` は触らない）。
    - **一律 `inout fn`**：全自由関数が `c: inout Comp` を取る＝呼び手は常に可変、かつ inout self を他の自由関数へ渡せる（`pushType`→`intern` で実証済）。read-only でも inout self を下流へ渡すため inout fn が無難。

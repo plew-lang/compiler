@@ -2,136 +2,125 @@
 // field checking.
 
 // Declared type of a Make field (struct field or enum variant field).
-fn makeFieldType(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-    if isEnum {
-        val qType: U64 = intern(c: inout c, start: typeStart, len: typeLen)
-        val qVar: U64 = intern(c: inout c, start: variantStart, len: variantLen)
-        val qField: U64 = intern(c: inout c, start: fieldStart, len: fieldLen)
-        mut val ei: U64 = 0
-        while ei < c.arena.enums.count {
-            val en: EnumDef = c.arena.enums[ei]
-            if en.nameId == qType {
-                val vars: Array[Variant] = en.variants
-                mut val vi: U64 = 0
-                while vi < vars.count {
-                    val v: Variant = vars[vi]
-                    if v.nameId == qVar {
-                        val fs: Array[FieldDef] = v.fields
-                        mut val fj: U64 = 0
-                        while fj < fs.count {
-                            val fd: FieldDef = fs[fj]
-                            if fd.nameId == qField {
-                                return typeInfoOfName(c: inout c, start: fd.tyStart, len: fd.tyLen, isArray: fd.tyIsArray)
+
+pub impl Comp {
+    inout fn makeFieldType(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+        if isEnum {
+            val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+            val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
+            val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+            mut val ei: U64 = 0
+            while ei < self.arena.enums.count {
+                val en: EnumDef = self.arena.enums[ei]
+                if en.nameId == qType {
+                    val vars: Array[Variant] = en.variants
+                    mut val vi: U64 = 0
+                    while vi < vars.count {
+                        val v: Variant = vars[vi]
+                        if v.nameId == qVar {
+                            val fs: Array[FieldDef] = v.fields
+                            mut val fj: U64 = 0
+                            while fj < fs.count {
+                                val fd: FieldDef = fs[fj]
+                                if fd.nameId == qField {
+                                    return typeInfoOfName(c: inout self, start: fd.tyStart, len: fd.tyLen, isArray: fd.tyIsArray)
+                                }
+                                fj += 1
                             }
-                            fj += 1
                         }
+                        vi += 1
                     }
-                    vi += 1
                 }
+                ei += 1
             }
-            ei += 1
+            return scalarInfo()
         }
-        return scalarInfo()
+        return self.fieldType(structStart: typeStart, structLen: typeLen, fieldStart: fieldStart, fieldLen: fieldLen)
     }
-    return c.fieldType(structStart: typeStart, structLen: typeLen, fieldStart: fieldStart, fieldLen: fieldLen)
-}
 
-// Acceptance soundness: a `<Type field=… />` / `<E.V field=… />` field must exist on
-// the struct / variant. Otherwise codegen emits a non-existent C member (broken C, or
-// — for a bare-literal value — a misleading "literal has no type" since makeFieldType
-// falls back to scalarInfo). Only validated when the type IS a known struct/enum
-// (Ref / Box / RawBuffer / extern lang-items / type params are special — skip, like
-// checkMatchBinds). The field name is re-interned in lowering, so the line is
-// approximate.
-fn checkMakeFieldExists(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, mf: MakeField) {
-    if isEnum {
-        if concreteEnumIndex(c: inout c, nStart: typeStart, nLen: typeLen) >= c.arena.enums.count {
-            return
-        }
-    } else {
-        val si: U64 = c.structIndexByName(start: typeStart, len: typeLen)
-        if si >= c.arena.structs.count {
-            return
-        }
-        if c.arena.structs[si].isExtern {
-            return
-        }
-    }
-    val fd: FieldDef = findFieldDef(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
-    if fd.nameLen == 0 {
-        // mf.offset is the field name's original source offset (mf.nameStart is
-        // re-interned, so it maps to a bogus line); fall back to nameStart if 0.
-        mut val off: U64 = mf.offset
-        if off == 0 {
-            off = mf.nameStart
-        }
-        compileErrorAt(line: lineOf(c: inout c, offset: off), msg: "no such field on this struct/variant (check the field name)")
-    }
-}
-
-// Check each provided Make field value against its declared field type.
-fn checkMakeFields(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) {
-    mut val i: U64 = 0
-    while i < fields.count {
-        val mf: MakeField = fields[i]
-        checkMakeFieldExists(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, mf: mf)
-        // a unique field value must be moved/constructed in, not copied from a
-        // place (which would double-deinit: the source and the new owner).
-        c.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
-        mut val ft: TypeInfo = scalarInfo()
-        if isRefInst(c: inout c, ref: ty) {
-            // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
-            // a literal (`value=7`) types from T (else "no type from context").
-            val rt: TypeRef = c.arena.types[ty]
-            ft = c.typeInfoOfRef(ref: rt.args[0])
+    inout fn checkMakeFieldExists(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, mf: MakeField) {
+        if isEnum {
+            if concreteEnumIndex(c: inout self, nStart: typeStart, nLen: typeLen) >= self.arena.enums.count {
+                return
+            }
         } else {
-            if c.isGenericEnumInst(ref: ty) {
-                ft = c.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
-            } else {
-                if isGenericInst(c: inout c, ref: ty) {
-                    ft = c.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
-                } else {
-                    ft = makeFieldType(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
-                }
+            val si: U64 = self.structIndexByName(start: typeStart, len: typeLen)
+            if si >= self.arena.structs.count {
+                return
+            }
+            if self.arena.structs[si].isExtern {
+                return
             }
         }
-        if ft.kind == 3 {
-            checkLitArray(c: inout c, id: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
-        } else {
-            checkLitTi(c: inout c, id: mf.value, ti: ft)
-        }
-        i += 1
-    }
-}
-
-// Acceptance soundness: a variant/struct match pattern binds fields BY NAME, and
-// codegen emits `_m.data.<Variant>.<field>` (or `scrut.<field>` for a struct), so a
-// pattern that names a field the variant/struct does not have would produce broken
-// C (a clang error). Reject it loudly in Plew instead. (The reported line uses the
-// bind's original-source offset, `Bind.offset`, since fieldStart is re-interned.)
-fn checkBindsInFields(c: inout Comp, binds: Array[Bind], fields: Array[FieldDef]) {
-    mut val i: U64 = 0
-    while i < binds.count {
-        val bd: Bind = binds[i]
-        val qBd: U64 = intern(c: inout c, start: bd.fieldStart, len: bd.fieldLen)
-        mut val found: Bool = false
-        mut val fj: U64 = 0
-        while fj < fields.count {
-            if fields[fj].nameId == qBd {
-                found = true
-            }
-            fj += 1
-        }
-        if !(found) {
-            // bd.offset is the field name's original source offset (bd.fieldStart is
-            // re-interned and maps to a bogus line); fall back to fieldStart if 0.
-            mut val off: U64 = bd.offset
+        val fd: FieldDef = findFieldDef(c: inout self, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+        if fd.nameLen == 0 {
+            // mf.offset is the field name's original source offset (mf.nameStart is
+            // re-interned, so it maps to a bogus line); fall back to nameStart if 0.
+            mut val off: U64 = mf.offset
             if off == 0 {
-                off = bd.fieldStart
+                off = mf.nameStart
             }
-            compileErrorAt(line: lineOf(c: inout c, offset: off), msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
+            compileErrorAt(line: lineOf(c: inout self, offset: off), msg: "no such field on this struct/variant (check the field name)")
         }
-        i += 1
+    }
+
+    inout fn checkMakeFields(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) {
+        mut val i: U64 = 0
+        while i < fields.count {
+            val mf: MakeField = fields[i]
+            self.checkMakeFieldExists(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, mf: mf)
+            // a unique field value must be moved/constructed in, not copied from a
+            // place (which would double-deinit: the source and the new owner).
+            self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
+            mut val ft: TypeInfo = scalarInfo()
+            if isRefInst(c: inout self, ref: ty) {
+                // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
+                // a literal (`value=7`) types from T (else "no type from context").
+                val rt: TypeRef = self.arena.types[ty]
+                ft = self.typeInfoOfRef(ref: rt.args[0])
+            } else {
+                if self.isGenericEnumInst(ref: ty) {
+                    ft = self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                } else {
+                    if isGenericInst(c: inout self, ref: ty) {
+                        ft = self.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    } else {
+                        ft = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                    }
+                }
+            }
+            if ft.kind == 3 {
+                checkLitArray(c: inout self, id: mf.value, elemStart: ft.nameStart, elemLen: ft.nameLen)
+            } else {
+                checkLitTi(c: inout self, id: mf.value, ti: ft)
+            }
+            i += 1
+        }
+    }
+
+    inout fn checkBindsInFields(binds: Array[Bind], fields: Array[FieldDef]) {
+        mut val i: U64 = 0
+        while i < binds.count {
+            val bd: Bind = binds[i]
+            val qBd: U64 = intern(c: inout self, start: bd.fieldStart, len: bd.fieldLen)
+            mut val found: Bool = false
+            mut val fj: U64 = 0
+            while fj < fields.count {
+                if fields[fj].nameId == qBd {
+                    found = true
+                }
+                fj += 1
+            }
+            if !(found) {
+                // bd.offset is the field name's original source offset (bd.fieldStart is
+                // re-interned and maps to a bogus line); fall back to fieldStart if 0.
+                mut val off: U64 = bd.offset
+                if off == 0 {
+                    off = bd.fieldStart
+                }
+                compileErrorAt(line: lineOf(c: inout self, offset: off), msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
+            }
+            i += 1
+        }
     }
 }
-
