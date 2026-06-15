@@ -81,8 +81,8 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 - **増分手順**：① arena に `callCallee: Array[U64]`（exprId キー・sentinel=funcs.count）と memo 化 `resolvedCallee(c, id)` を追加。② フロントの解決パスで `Expr.Call` を見たとき findFunc 結果を記録（or lazy memo）。③ 13 箇所を `resolvedCallee` 読みに置換。各ステップ dev-rebuild→test→不動点。
 - **view-aware refinement の正しい扱い（決定）**：`findFuncViewAware`（CallExt・1 箇所）は backend が引数 view を見てオーバーロードを精緻化する＝唯一 backend に残る「決定」。だが **view は静的な型レベルのプロパティ**（`TypeRef.viewExtId`・spec/09＝`Person` と `Person#Ext` は別型）で、解決＝意味決定だからフロントに属する。今 backend に残るのは「型回復の `TypeInfo` が `TypeRef` の `viewExtId` を落としている lossy さ」が原因＝根①の一症状。
   - **二重化しない**：フロントに 2 つ目の view 追跡を足すのは負債の温存ゆえ不可。正しい設計は `resolvedCallee` と同じ「**一度計算し両者が読む**」＝view 回復を `st` 非依存にして単一チョークポイント＋per-exprId キャッシュへ集約し、追跡を**増やさず減らす**。
-  - **成立根拠＝view はインスタンス不変**：`viewExtId` は拡張名 `Ext` の interned id（型パラメータでない・`T#Ext` でも Ext は固定）。だから callee と同様 per-exprId 永続キャッシュ可。**型（インスタンス依存・body ごとリセット）と違い、view/callee はインスタンス不変なので型回復全体の統一を待たず単独で de-dup できる**（型回復がフロント `exprType`/`TypeInfo` と backend `exprTypeRef`/`st` で二重なのは根①のより深い負債で別件）。
-  - **唯一潰す点**＝`exprViewExtId` の `st` 依存分岐（plain expr＝local の宣言 view を `exprTypeRef(c, st, id)` で取る所）を **`st` 無しの静的情報**（local の宣言型）から取れるようにする。ここが外れれば view 回復は完全フェーズ中立な共有関数になり、二重化ゼロで view-aware も前計算できる。`ExtView`/`Call`（callee 戻り型）分岐は既に静的。
+  - **訂正（実コード精査で判明）＝view-aware は型回復統一と不可分**：当初「view はインスタンス不変ゆえ型回復統一を待たず単独 de-dup 可」と書いたが楽観的すぎた。`exprViewExtId` の view 計算は `ExtView`/`Call`（callee 戻り型）こそ静的・`Ident` も `c.cur.locals[].ty`（`localTypeRefByName`＝st 非依存）で取れるが、**`Field`/`Index` は `exprTypeRef(c, st, id)`（backend 局所表＋生成中 env で grounding）に依存**＝「その式がどの型か」を知る部分が、フロント（`exprType`→lossy `TypeInfo`）と backend（`exprTypeRef`+`st`）で**二重**になっている根①の本体に触れる。view は grounding 不変だが「式の型を知る」部分が二重化の核心。Field/Index を近似すると fixpoint が割れ、フロントに型回復を別途書けば二重化（不可）。
+  - **∴ view-aware を単独で綺麗に前計算する道は無い**。「inherently codegen」ではなく「**型回復統一に blocked**」が正しい理解。型回復統一（下記）と一体で行えば view-aware は自然に前計算に落ちる。それまでは backend の原理的残留として保持（統一待ちタグ）。
 
 **B の残り**：findFunc 以外の「決定」（`structIndexByName` 等は純粋ルックアップ＝B 対象外で A 行き／Check・Verify の解決呼びは個別精査）も同じ「フロントで決定→arena 記録→読むだけ」で順次消す。Backend の外向き「決定」依存がゼロになった時点で、A（Sema 抽出）＋Backend/Frontend モジュール昇格を pure-move で実施。
 
@@ -91,6 +91,23 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 | **M4-1** | **IR をデータモジュール `Ir.pw` へ昇格**（完了・tag `refactor-m4-1`）。旧 `Ast.pw`＝コンパイラ IR 語彙＋共有 `Comp` を `export`、pub factory、interner 同梱。root が `import ./Ir`＝初の cross-module 共有可変 `Comp`。 | 低 | モジュール昇格の足場 |
 | **M4-B** | **解決の前計算（典型 IR 化）**：findFunc 系の「決定」をフロントで確定し arena へ記録、Backend は読むだけに。単一モジュール内・不動点で挙動を固定。 | 中（挙動依存） | **「根① 型付き IR が無い」の解消** |
 | **M4-2** | **A＋モジュール昇格**：純粋クエリを共有 `Sema` 層へ、Backend/Frontend を独立モジュール化（B 完了後の pure-move）。 | 低 | 理想像の完成 |
+
+### M4-B 型回復統一（根①の本丸・決定）
+
+findFunc の前計算（callee チョークポイント）の後、残る backend の「決定」は view-aware だけで、それは**式の型回復がフロント／backend で二重**なことに起因。これを統一するのが根①の本丸。**実コード精査で確定した事実と方針**：
+
+- **二重実装**：`exprType(c,id)->TypeInfo`（フロント・`Resolve/ExprType.pw`・33+ arm・全式）と `exprTypeRef(c,st,id)->TypeRef index`（backend・`Backend/Llvm/GenericStruct.pw:138`・6 arm・place 式のみ）が「この式の型は？」を別実装で答える。クロス呼びは `valueKind`→`typeOf`（kind だけフロントへ委譲）の1本のみ。
+- **表現ギャップ**：`TypeInfo`（lossy＝kind/nameStart/nameLen/ref）vs `TypeRef`（完全＝+viewExtId/isAny/argLabels）。view-aware が backend に残るのは TypeInfo が view を落とすから（＝根①の症状）。
+- **局所型の二重管理（linchpin）**：フロント `c.cur.locals[].ty`（テンプレ型・スコープ push/pop）vs backend `st.locTypeRef[]`（**grounded 型**・body 入口 reset・emission 中に `groundTypeRef` で構築）。
+- **検証で判明した制約**：①フロントの型付けは **lazy・非網羅**（専用 walk なし）かつ generic 本体はインスタンス依存で毎回再導出 ⇒「フロントが全式を1回記録」は不可。②**grounding は backend の正当な仕事**（インスタンス固有・前計算不可）。
+
+**∴ あるべき形**：消すべき二重化は **(a) 回復ロジックの二重実装** と **(b) lossy 表現**。grounding は backend に残す（正当）。単一グローバル型キャッシュは不要（インスタンス差は grounding が担う）。局所型は **(B) backend が `c.cur.locals` を可変保持＝意味の再導出ゆえ却下**。正しくは「**テンプレ型を単一の回復ロジックで出し、backend はそれを ground して読む**」。
+
+**段取り（各段 fixpoint 緑・linchpin は局所型）**：
+1. **表現統一**：回復が完全 `TypeRef`（view 込み）を出せるように（`TypeInfo` 拡張 or `typeOf` が TypeRef index も返す）。foundation・additive。
+2. **局所テンプレ型の単一出所（linchpin）**：local のテンプレ型を宣言時に1回記録し、フロントはそのまま・backend は ground して読む（backend 専用の grounded キャッシュ `st.locTypeRef` は codegen 用に残してよいが、出所＝テンプレは単一に）。最難関・要詳細設計。
+3. **回復ロジックの単一化**：backend `exprTypeRef` の各 arm を、統一回復（テンプレ TypeRef を返す）＋ backend 側 grounding に置換、重複 match を削除。
+4. **view-aware が落ちる**：`exprViewExtId` が回復済み TypeRef の view を読む薄い reader になり、view-aware 解決が前計算化＝backend 最後の「決定」撤去。
 
 ## scoped resolution への移行（M5・resolver の理想化）
 
