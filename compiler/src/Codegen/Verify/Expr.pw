@@ -318,6 +318,7 @@ pub impl Comp {
                     val armMark: U64 = self.scopeMark()
                     self.checkDestructureComplete(a: arms[ai])
                     self.verifyAddArmBinds(a: arms[ai], scrut: scrut)
+                    self.checkBranchYieldsValue(blkId: arms[ai].body, offset: self.exprOffset(id: id))
                     self.verifyBlock(blockId: arms[ai].body)
                     self.popLocals(mark: armMark)
                     ai += 1
@@ -325,6 +326,8 @@ pub impl Comp {
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 self.verifyExpr(id: cond)
+                self.checkBranchYieldsValue(blkId: thenBlk, offset: self.exprOffset(id: id))
+                self.checkBranchYieldsValue(blkId: elseBlk, offset: self.exprOffset(id: id))
                 self.verifyBlock(blockId: thenBlk)
                 self.verifyBlock(blockId: elseBlk)
             }
@@ -441,6 +444,20 @@ pub impl Comp {
                     fi += 1
                 }
             }
+        }
+    }
+
+    // A value-position `if`/`match` branch must yield a value. A block yields via `give`
+    // (the bare-expr arm `=> e` desugars to one); a block with no `give` yields `()`, so
+    // consuming it where a value is expected silently produced 0 / a confusing "literal
+    // has no type from context". Reject it with a clear message. A branch that always
+    // diverges (return/panic/…) needs no give.
+    inout fn checkBranchYieldsValue(blkId: U64, offset: U64) {
+        if self.blockDiverges(blkId: blkId) {
+            return
+        }
+        if self.blockGiveExpr(blkId: blkId) >= self.arena.exprs.count {
+            compileErrorAt(line: self.lineOf(offset: offset), msg: "a value-position `if`/`match` branch must end with `give` to yield a value (a block with no `give` yields `()` — spec/11)")
         }
     }
 

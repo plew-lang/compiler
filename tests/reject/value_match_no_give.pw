@@ -1,0 +1,9 @@
+// A value-position `match` arm with a block body must `give` (spec/11). The bare-expr
+// arm `=> 4` yields, but `=> { 4 }` (a block) without `give` yields `()` — rejected.
+import @Std/Io with { print }
+enum E { A B }
+fn main() {
+    val e = <E.A />
+    val x: U32 = match e { E.A => { 4 }  E.B => { 5 } }
+    print(x as I64)
+}

@@ -1,0 +1,9 @@
+// A value-position `if` whose branches are blocks must yield via `give` (spec/11): a
+// block with no `give` yields `()`, so `val x: U32 = if … { 4 } else { 5 }` was either a
+// confusing "literal has no type from context" or (suffixed) a silent 0. Now it is a
+// clear error — write `give 4` / `give 5`, or use the bare-expr `match` arm form.
+import @Std/Io with { print }
+fn main() {
+    val x: U32 = if true { 4 } else { 5 }
+    print(x as I64)
+}
