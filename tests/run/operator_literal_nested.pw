@@ -1,0 +1,47 @@
+import @Std/Io with { print }
+
+// Nested / mixed operator-literal inference (spec/12). A bare literal takes its type
+// from the typed operand — across precedence boundaries and through deep subtrees —
+// or from the surrounding context when every operand is a literal. These are the
+// shapes most likely to break inference, so they are pinned end-to-end (value, not
+// just acceptance): unsigned vs signed must pick the right machine op, and a float
+// context must reach literals buried under `*`/`/`.
+enum E { A B }
+
+fn main() {
+    // precedence: `*` binds first, but the typed sibling `1U32` still types the whole
+    // `2 * 3` subtree (U32). Same result with the literal subtree on either side.
+    print((1U32 + 2 * 3) as I64)        // 7
+    print((2 * 3 + 1U32) as I64)        // 7
+
+    // a typed variable on either side governs a literal subtree.
+    val big: I32 = 5
+    print((2 * 3 + big) as I64)         // 11
+    print((big * 2 + 3) as I64)         // 13
+
+    // deep mixed chain, all typed from the one suffix.
+    print(1U64 + 2 * 3 - 4 / 2)         // 5  (U64)
+
+    // unsigned division with a NESTED literal divisor: the high-half value forces the
+    // signed/unsigned split, and `(1 + 1)` must be U64 (from the annotation) so this is
+    // udiv, not sdiv.
+    val hi: U64 = 18446744073709551614 / (1 + 1)
+    print(hi)                           // 9223372036854775807
+    val annotated: U64 = 100 / (2 + 1)
+    print(annotated)                    // 33
+
+    // float context flows into integer literals buried under `*`.
+    val f: F64 = 1 + 2 * 3
+    if f > 6.5 { print(1I64) } else { print(0I64) }   // 1
+
+    // comparison over two nested arithmetic operands (the literals type from `1U32`).
+    if 1U32 + 2 > 2 * 3 { print(1I64) } else { print(0I64) }   // 0  (3 > 6 is false)
+
+    // a value-position if / match as an operand: context reaches each branch's value,
+    // then the `+ 2 * 3` shares that type.
+    val viaIf: I64 = (if true { give 4 } else { give 5 }) + 2 * 3   // 10
+    print(viaIf)
+    val e = <E.A />
+    val viaMatch: U32 = match e { E.A => 4  E.B => 5 } + 2 * 3      // 10
+    print(viaMatch as I64)
+}

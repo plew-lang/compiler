@@ -1,0 +1,16 @@
+// A NESTED bare-literal right operand is range-checked at the witness's Rhs type, even
+// through `*` (spec/12): `impl Vec2 as Add[I8]` makes `b + 100 * 3` fold 100*3 = 300 at
+// I8, which overflows — rejected (the operand is typed by the witness's Rhs, not by the
+// result type, so the constant fold catches it rather than truncating to i8).
+import @Std/Io with { print }
+trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
+struct Vec2 { pub val x: I64  pub val y: I64 }
+impl Vec2 as Add[I8] {
+    type Output = Vec2
+    assoc fn add(lhs: Vec2, rhs: I8) -> Vec2 { return <Vec2 x=lhs.x y=lhs.y /> }
+}
+fn main() {
+    val b = <Vec2 x=1 y=2 />
+    val c = b + 100 * 3
+    print(c.x)
+}

@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// A heterogeneous operator trait (`impl Vec2 as Add[I64]`, spec/12) with a NESTED
+// literal right operand: `b + 2 * 3` must fold `2 * 3` at the witness's Rhs type (I64)
+// and pass 6 to `add`. The result type is the witness's Output (Vec2), independent of
+// the operands.
+trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
+trait Mul[Rhs] { type Output  assoc fn mul(lhs: Self, rhs: Rhs) -> Output }
+struct Vec2 { pub val x: I64  pub val y: I64 }
+
+impl Vec2 as Add[I64] {
+    type Output = Vec2
+    assoc fn add(lhs: Vec2, rhs: I64) -> Vec2 { return <Vec2 x=lhs.x + rhs y=lhs.y + rhs /> }
+}
+
+fn main() {
+    val b = <Vec2 x=10 y=20 />
+    val c = b + 2 * 3        // rhs = 6 (I64), Add[I64]
+    print(c.x)               // 16
+    print(c.y)               // 26
+    val d = b + 5            // a plain literal rhs still types as I64
+    print(d.x)               // 15
+}
