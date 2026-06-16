@@ -14,7 +14,7 @@
 
 **実装済みの主要能力の正典地図は [provisional.md](provisional.md)**（spec 章ごとに「✅＝完了／✅でない＝残作業」を列挙）。ここでは再掲しない。大物の経緯は git タグ。
 
-**コンパイラ構造リファクタ**（`Comp` god-object 解体＋巨大ファイル分割＋モジュール化）の到達点・理想形・残り・自動化ツール（`tools/methodize.py` 等）・解決済みの罠は [compiler-refactor.md](compiler-refactor.md)。現状＝モジュール DAG 確立（上記）・**`part`=impl-only 達成＋コンパイラで強制済**（loader が「module id 既出＝part」と判定し `checkPartImplOnly` で impl/`import`/`part`/`@[...]` 以外＝自由関数・型・extern・top-level val・re-export を reject）・`Comp` は 83→11 フィールドへ縮小・解析核を `impl Comp`／`impl LlvmCtx` へメソッド化中（残りはメソッド化の裾）。引数名/ラベルは [spec/04 規約](../spec/01-basics/04-functions.md#引数名とラベルの指針規約) に揃える。
+**コンパイラ構造リファクタ**（`Comp` god-object 解体＋巨大ファイル分割＋モジュール化）＝**リファクタとしては打ち止め**（残るは理想形の裾＝任意）。到達点＝モジュール DAG 確立（上記）・**`part`=impl-only 達成＋コンパイラで強制済**（loader が「module id 既出＝part」と判定し `checkPartImplOnly` で impl/`import`/`part`/`@[...]` 以外＝自由関数・型・extern・top-level val・re-export を reject）・`Comp` は 83→11 フィールドへ縮小・解析核を `impl Comp`／`impl LlvmCtx` へメソッド化（残りはメソッド化の裾＝任意）。残ギャップ（loader が part 済ファイルの独立 import を未検出）は [provisional.md](provisional.md)「可視性・モジュール・import」へ。リファクタ時の心構えは下記「リファクタの心構え」。引数名/ラベルは [spec/04 規約](../spec/01-basics/04-functions.md#引数名とラベルの指針規約) に揃える。
 
 ## 🎯 ゴール＝「3 大機能を除く spec 完全準拠」
 
@@ -49,6 +49,28 @@ hidden-meaning 穴は概ね閉じた（ユーザー確認済）。閉じたも�
 ### C. hidden cost（leak・観測挙動は正しい・最後）
 
 - **backend 全体の ARC drop**＝array/String/any box・closure 一時・Ref pointee 深い release・mono struct/enum の share/release を scope-exit で。観測挙動不変ゆえテストしにくい＝`leaks`/ASan で検証。**3 大機能の循環回収（要ユーザー確認）が次の主戦場候補**。
+
+### リファクタの心構え：legacy workaround を現代の Plew へ
+
+コンパイラは Plew の文法がまだ貧弱だった頃から育っているので、**今の言語機能なら素直に書ける箇所を、当時の回りくどい workaround のまま**抱えている。リファクタは「コードを移動するだけ」ではなく、**触る箇所すべてで『今の Plew でもっと良く書けないか』を能動的に問う**。
+
+> ⚠ **周囲の（古い）書き方に引きずられない。** LLM は周辺コードのスタイルを模倣しがちだが、ここでは周辺こそが負債。各片について「これは workaround か？ 今の機能で直せるか？」を**毎回・強く**問う。
+
+典型パターン（非網羅・見たら直す）：
+
+- `if foo { } else { BODY }`（空の then）→ `if !foo { BODY }`（下記「コード整理 TODO」の既知項）。
+- Optional を手で `match` → `?.`（Chain）・`unwrapOr`・`if`/`while`-let・`guard`。
+- フラグ変数＋後段 `if` → `guard`／早期 `return` でネスト削減。
+- 多値返却を `inout` out-param や「並列スカラ配列＋第二の戻り値もどき」で代用（例：`curWhereTraits` ＝ "a second return value without a tuple type"）→ ラベル付きレコード `(a:, b:)` 返却。
+- 値位置の `if`/`match` を一時変数＋代入で代用 → `give` 値ブロック・value-position match。
+- 文字列の手組み連結 → 補間 `"{x}"`。
+- enum/primitive のディスパッチを自由関数で代用 → メソッド（今は enum/primitive メソッドが動く）。
+- `assoc fn` を生成に流用 → named/fallible factory。
+- 引数名・ラベルは [spec/04 規約](../spec/01-basics/04-functions.md#引数名とラベルの指針規約)・factory 名は [spec/05 規約](../spec/02-type-system/05-structs-enums.md#ファクトリ名の指針規約) に揃える。
+
+**ただし「今は直せない workaround」と「今なら直せる workaround」を見分ける**：一部の並列スカラ配列は**まだ存在しない機能**の代用（例：`exprTy*` の 4 並列配列＝「struct-array の `IndexSet` が self-host サブセットに無い」ため）。**機能がまだ無いものは無理に直さない**。問うのは「今の機能で直せるか？」で、直せる箇所だけ直す。
+
+**安全規律**：これらは**意味を変えない idiomatic 書き換え**だが純粋な move ではない。だから **pure move のコミットと idiomatic rewrite のコミットは可能なら分ける**（不動点が割れたとき bisect しやすい）。各書き換えは test＋不動点で守る。意味論を変える整理だけは仰ぐ（[CLAUDE.md](../CLAUDE.md) 方針）。
 
 ### コード整理 TODO（純リファクタ・観測挙動不変）
 

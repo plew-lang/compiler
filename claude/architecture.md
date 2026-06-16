@@ -121,7 +121,7 @@ spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様�
 claude/*.md           本ガイドからリンクする実装ドキュメント
 ```
 
-> **stage0（Rust 製・使い捨て）は self-host 達成後に退役・削除済み**（種ベースのブートストラップへ移行・Rust/cargo 不要）。Rust stage0 が要るときは `git checkout stage0-final -- bootstrap` で復旧（タグ `stage0-final`）。コンパイラの構造リファクタ（モジュール化・巨大ファイル分割・`Comp` god-object の解体）の到達点と残りは [compiler-refactor.md](compiler-refactor.md)。
+> **stage0（Rust 製・使い捨て）は self-host 達成後に退役・削除済み**（種ベースのブートストラップへ移行・Rust/cargo 不要）。Rust stage0 が要るときは `git checkout stage0-final -- bootstrap` で復旧（タグ `stage0-final`）。
 
 ## ビルド／開発ワークフロー
 

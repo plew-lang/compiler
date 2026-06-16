@@ -25,7 +25,6 @@
 - **[claude/design-decisions.md](claude/design-decisions.md)** — 各判断の**根拠・却下案・経緯・未決事項**（「なぜ」専門）。**実装前に未決を確認**。
 - **[claude/provisional.md](claude/provisional.md)** — spec から意図的に剥離している箇所のカタログ＝残作業の地図。
 - **[claude/metaprogramming-architecture.md](claude/metaprogramming-architecture.md)** — メタプロ（`plew gen`・共有 `@Std/Syntax`・`Derive`）の段取り・実行系。
-- **[claude/compiler-refactor.md](claude/compiler-refactor.md)** — コンパイラ構造リファクタの計画（`Comp` god-object 解体・巨大ファイル/モジュール分割）。
 - **[claude/grammar.md](claude/grammar.md)** — 構文 × spec 索引。
 - **`note/*.md`** — 設計の元になった ChatGPT 会話ログ（一次資料・記法は変遷あり・矛盾したら spec 優先）。
 
@@ -52,12 +51,12 @@ spec を**再掲せずリンク**し役割で書き分ける。**残す**＝設�
 
 - **判断を仰ぐときは「選択肢＋トレードオフ＋推奨（理由）」を簡潔に**。決定の含意を最後まで追い、他所に生じる矛盾・抜け（呼び出し側の整合・既存規則との衝突）を**先回りで指摘**する。ユーザーは納得すれば即決する。
 - **実装の順序・段取りは全面委任**（どの機能から・増分の切り方は確認不要で自走）。一方で**言語表面の設計判断・後戻りが重い分岐（spec 未記載の構文/意味論）と大物アーキ判断（バックエンド方式・バイナリ構成・ブートストラップ戦略）は自走せず一旦止まって確認**する。明白に不要なファイルは消してよい。迷ったら突き進まず仰ぐ。
-- **リファクタは随時・委任**：観測挙動（テスト・不動点）を変えない純リファクタは確認不要・意味論を変える整理だけ仰ぐ。**周囲の古い書き方に引きずられず、触る箇所すべてで「今の Plew でもっと良く書けないか」を毎回・強く問う**（例＝空 then の `if foo {} else { f() }`→`if !foo { f() }`・手 match の Optional→`?.`/`unwrapOr`/`guard`）。ただし「今は直せない workaround（まだ無い機能の代用）」は無理に直さない。詳細・watch-list は [compiler-refactor.md](claude/compiler-refactor.md)「リファクタの心構え」。
+- **リファクタは随時・委任**：観測挙動（テスト・不動点）を変えない純リファクタは確認不要・意味論を変える整理だけ仰ぐ。**周囲の古い書き方に引きずられず、触る箇所すべてで「今の Plew でもっと良く書けないか」を毎回・強く問う**（例＝空 then の `if foo {} else { f() }`→`if !foo { f() }`・手 match の Optional→`?.`/`unwrapOr`/`guard`）。ただし「今は直せない workaround（まだ無い機能の代用）」は無理に直さない。詳細・watch-list は [worklog.md](claude/worklog.md)「リファクタの心構え」。
 - **明示 > 暗黙・便利**（意味/出どころは明示・コスト/機構は隠す＝CoW/ARC を隠すことと矛盾しない）。冗長でも追跡可能を好み、ambient（Swift 的「どこからでも見える」）を嫌い provenance を重視。**単純 > 強力だが紛らわしい**（使いこなしにくい機能は切る・暗黙ルールは最小）。
 - **主張は根拠で・誇張しない**。ユーザーは通説や私の主張を検証してくる。間違えたら素直に撤回・再評価し守りに入らない。避けられないトレードオフは欠点を隠さず明示する。
 - **根本方針も再考し得る**：下流の歪み（演算子・変換の不自然さ等）が積もれば、一度決めた前提でも巻き戻す。決定の含意を追い「この方針だとここが歪む」を早めに可視化する。
 - **決定したら即同期**：spec（正典）＋`claude/*.md` を更新し grep で陳腐化を点検（章の改番時は相対リンクも sed 一括）。大きな巻き戻しの後は spec を通し読みして齟齬を点検する。
 - **commit & push はキリごとに**（大きな塊を溜めない）。コミットメッセージは**英語**で追える粒度。正常動作の区切りでは**記述的 git タグ**（例 `self-host`・`metaprogramming-m1`）。
 - **作業ログをこまめに更新**（[worklog.md](claude/worklog.md)）。**メモはすべて repo 内（`CLAUDE.md`／`claude/`）に置き、外部 memory は使わない**。
-- **コンパイラの分割は `import` 子モジュール（DAG）が既定**（境界を `import` で切れる塊＝module・過度な細分化は避ける）。**`part` は型の `impl` を定義モジュールに置くためだけ**（part 内は impl のみ・自由関数/型/top-level val は root か別モジュール・相互再帰は型の impl メソッド化で 1 モジュール内に収める・循環 import は常に回避可能＝設計誤り）→ [compiler-refactor.md](claude/compiler-refactor.md)。
+- **コンパイラの分割は `import` 子モジュール（DAG）が既定**（境界を `import` で切れる塊＝module・過度な細分化は避ける）。**`part` は型の `impl` を定義モジュールに置くためだけ**（part 内は impl のみ・自由関数/型/top-level val は root か別モジュール・相互再帰は型の impl メソッド化で 1 モジュール内に収める・循環 import は常に回避可能＝設計誤り）。
 - **日本語でやり取りする**。
