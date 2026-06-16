@@ -1,0 +1,71 @@
+// @Diag — compiler diagnostics + decimal formatting, a dependency-free leaf module
+// (imports only @Std). Both ./Frontend and ./Backend import it, so it sits below
+// both in the module DAG (@Std ← Diag ← { Frontend, Backend }). These are ordinary
+// module functions, NOT ambient builtins, so the compiler source stays spec-valid:
+// they report on stderr via @Std/Io `eprint` and stop via @Std/Process `exit`.
+
+import @Std/Io with { eprint }
+import @Std/Process with { exit }
+
+// A decimal digit (0-9) as its glyph String.
+export fn digitStr(d: I64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// U64 digit (0-9) -> its glyph. A U64 twin of digitStr: with no implicit
+// conversions and `as` restricted to lossless, an I64 digitStr cannot serve a
+// U64 caller (U64->I64 is not lossless), so unsigned printing needs its own.
+export fn digitStrU(d: U64) -> String {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// Print a signed integer to stderr (recursive decimal).
+export fn eprintInt(n: I64) {
+    if n >= 10 {
+        eprintInt(n: n / 10)
+    }
+    eprint(text: digitStr(d: n % 10))
+}
+
+// Report a compile error at a source line and stop (exit 1).
+export fn compileErrorAt(line: I64, msg: String) {
+    eprint(text: "plewc: error: line ")
+    eprintInt(n: line)
+    eprint(text: ": ")
+    eprint(text: msg)
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
+// A decimal digit (0-9) as its ASCII byte. (`48 + d` would need a U64->U8 cast,
+// which the lossless-`as` discipline forbids, so spell it out.)
+export fn digitByte(d: U64) -> U8 {
+    if d == 0 { return 48 }
+    if d == 1 { return 49 }
+    if d == 2 { return 50 }
+    if d == 3 { return 51 }
+    if d == 4 { return 52 }
+    if d == 5 { return 53 }
+    if d == 6 { return 54 }
+    if d == 7 { return 55 }
+    if d == 8 { return 56 }
+    return 57
+}

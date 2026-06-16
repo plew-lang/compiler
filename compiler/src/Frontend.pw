@@ -18,6 +18,7 @@ import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, genSiblingPath, pathSeen }
+import ./Diag with { compileErrorAt, eprintInt, digitByte }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, opAddAssign, opSubAssign, opMulAssign, opDivAssign, opRemAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 export struct Comp {
@@ -733,55 +734,6 @@ export fn runFrontend() -> Comp {
     c.verifyProgram()
     return c
 }
-
-fn digitStr(d: I64) -> String {
-    if d == 0 { return "0" }
-    if d == 1 { return "1" }
-    if d == 2 { return "2" }
-    if d == 3 { return "3" }
-    if d == 4 { return "4" }
-    if d == 5 { return "5" }
-    if d == 6 { return "6" }
-    if d == 7 { return "7" }
-    if d == 8 { return "8" }
-    return "9"
-}
-
-// U64 digit (0-9) -> its glyph. A U64 twin of digitStr: with no implicit
-// conversions and `as` restricted to lossless, an I64 digitStr cannot serve a
-// U64 caller (U64->I64 is not lossless), so unsigned printing needs its own.
-export fn digitStrU(d: U64) -> String {
-    if d == 0 { return "0" }
-    if d == 1 { return "1" }
-    if d == 2 { return "2" }
-    if d == 3 { return "3" }
-    if d == 4 { return "4" }
-    if d == 5 { return "5" }
-    if d == 6 { return "6" }
-    if d == 7 { return "7" }
-    if d == 8 { return "8" }
-    return "9"
-}
-
-// Compiler diagnostics. Ordinary module functions (not ambient builtins) so the
-// compiler source stays spec-valid: they report on stderr via @Std/Io `eprint`
-// and stop via @Std/Process `exit`. `compileErrorAt` includes a source line.
-fn eprintInt(n: I64) {
-    if n >= 10 {
-        eprintInt(n: n / 10)
-    }
-    eprint(text: digitStr(d: n % 10))
-}
-
-export fn compileErrorAt(line: I64, msg: String) {
-    eprint(text: "plewc: error: line ")
-    eprintInt(n: line)
-    eprint(text: ": ")
-    eprint(text: msg)
-    eprint(text: "\n")
-    exit(code: 1)
-}
-
 // Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
 // an integer type of the given width and signedness. Span-free core of
 // litFitsType, so synthetic contexts (index = U64, print = I64) can range-check
@@ -992,19 +944,4 @@ fn armDiagOffset(a: MatchArm) -> U64 {
         }
     }
     return a.enumStart
-}
-
-// A decimal digit (0-9) as its ASCII byte. (`48 + d` would need a U64->U8 cast,
-// which the lossless-`as` discipline forbids, so spell it out.)
-fn digitByte(d: U64) -> U8 {
-    if d == 0 { return 48 }
-    if d == 1 { return 49 }
-    if d == 2 { return 50 }
-    if d == 3 { return 51 }
-    if d == 4 { return 52 }
-    if d == 5 { return 53 }
-    if d == 6 { return 54 }
-    if d == 7 { return 55 }
-    if d == 8 { return 56 }
-    return 57
 }
