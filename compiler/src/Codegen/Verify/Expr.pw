@@ -448,18 +448,32 @@ pub impl Comp {
         if a.isWildcard {
             return
         }
-        val st: TypeInfo = self.typeOf(id: scrut)
-        val generic: Bool = self.isGenericInst(ref: st.ref)
-        mut val bi: U64 = 0
         if a.isStruct {
             // a struct destructure requires a scrutinee OF that struct type (spec/11). A
             // mismatched / non-struct scrutinee (`match anI64 { P { … } }`, or an unknown
             // `P`) used to crash the field lookup (out-of-bounds) — reject cleanly.
+            val st: TypeInfo = self.typeOf(id: scrut)
             if st.nameLen > 0U64 {
                 if !(spansEqual(c: inout self, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
                     compileErrorAt(line: self.lineOf(offset: armDiagOffset(a: a)), msg: "struct destructure pattern type does not match the scrutinee type")
                 }
             }
+        }
+        self.addArmBinds(a: a, scrut: scrut)
+    }
+
+    // Bring an arm's payload binds into scope (no diagnostics) — the bind-registration
+    // half of verifyAddArmBinds, also used by the literal-typing walk (checkLitCtx),
+    // which must see a give-value's payload binds at their real type but must not
+    // re-emit verifyAddArmBinds's destructure diagnostic (that walk runs first).
+    inout fn addArmBinds(a: MatchArm, scrut: U64) {
+        if a.isWildcard {
+            return
+        }
+        val st: TypeInfo = self.typeOf(id: scrut)
+        val generic: Bool = self.isGenericInst(ref: st.ref)
+        mut val bi: U64 = 0
+        if a.isStruct {
             while bi < a.binds.count {
                 val bd: Bind = a.binds[bi]
                 mut val ft: TypeInfo = scalarInfo()

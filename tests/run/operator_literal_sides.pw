@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+// A bare integer literal takes its type from the typed operand on EITHER side (spec/12:
+// homogeneous numerics share one type) — `5 + big` types `5` from `big`, just like
+// `big + 5`. Neither needs an annotation or a suffix.
+fn main() {
+    val big: I32 = 100
+    print((5 + big) as I64)      // 105 — literal on the LEFT
+    print((big + 5) as I64)      // 105 — literal on the RIGHT
+    val u: U32 = 7
+    print((u - 3) as I64)        // 4  — unsigned, literal right
+    print((10 - u) as I64)       // 3  — unsigned, literal left
+}

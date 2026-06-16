@@ -1,0 +1,17 @@
+// A heterogeneous operator trait (`impl Money as Add[I8] { type Output = U64 }`,
+// spec/12) keeps Self / Rhs / Output independent. So a bare-literal rhs is range-checked
+// against the witness's Rhs (I8), NOT against the result/annotation type (U64): the
+// surrounding U64 context types the RESULT, never the operand. `200` fits U64 but not I8,
+// so this is rejected (else the backend would silently truncate it to i8).
+import @Std/Io with { print }
+trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
+struct Money { pub val cents: I64 }
+impl Money as Add[I8] {
+    type Output = U64
+    assoc fn add(lhs: Money, rhs: I8) -> U64 { return 0U64 }
+}
+fn main() {
+    val m: Money = <Money cents=5 />
+    val r: U64 = m + 200
+    print(r)
+}

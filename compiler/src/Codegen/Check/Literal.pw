@@ -142,23 +142,58 @@ pub impl Comp {
                 if op >= 56 { if op <= 60 { isArith = true } }
                 if op >= 74 { if op <= 78 { isArith = true } }
                 if isArith {
-                    if eKind == 1 {
-                        val cf: ConstInt = self.foldConst(id: id)
-                        if cf.isConst {
-                            if !(litFitsBits(value: cf.value, neg: cf.neg, bits: eBits, sgn: eSgn)) {
-                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "constant expression is out of range for its type")
+                    if eKind == 2 {
+                        // float CONTEXT (`val x: F64 = 1 + 2`) flows into both operands.
+                        self.checkLitCtx(id: lhs, eKind: 2, eBits: eBits, eSgn: false)
+                        self.checkLitCtx(id: rhs, eKind: 2, eBits: eBits, eSgn: false)
+                    } else {
+                        // eKind 0 (no context) or 1 (an int context O is available). One unified
+                        // rule (spec/12): the operator's type is set by whichever operand carries
+                        // a concrete type — left OR right (homogeneous numerics share one type) —
+                        // or, for a heterogeneous operator-trait witness, by the witness; only when
+                        // NEITHER operand has a type does the surrounding context O stand in (and
+                        // with no O it is ambiguous → error). The context never overrides a
+                        // concretely-typed operand, so `val r: U64 = money + 200` checks 200 against
+                        // the witness's Rhs (I8), not U64.
+                        mut val handled: Bool = false
+                        // (1) a float operand on either side makes the op float (homogeneous).
+                        if self.exprIsFloat(id: lhs) || self.exprIsFloat(id: rhs) {
+                            self.checkArithNoCtx(lhs: lhs, rhs: rhs)
+                            handled = true
+                        }
+                        // (2) a NON-numeric concrete lhs (struct/newtype kind 2, String kind 1)
+                        // can carry a heterogeneous trait: type the rhs from the witness's Rhs
+                        // param, the lhs from its own type. (exprType is non-caching, so a
+                        // payload bind resolved here does not poison the typeOf cache.)
+                        if !handled {
+                            val lt: TypeInfo = self.exprType(id: lhs)
+                            if lt.kind == 1 || lt.kind == 2 {
+                                if self.checkBinTraitRhs(op: op, lhs: lhs, rhs: rhs) {
+                                    self.checkLitCtx(id: lhs, eKind: 0, eBits: 0, eSgn: false)
+                                    handled = true
+                                }
                             }
                         }
-                        self.checkLitCtx(id: lhs, eKind: eKind, eBits: eBits, eSgn: eSgn)
-                        self.checkLitCtx(id: rhs, eKind: eKind, eBits: eBits, eSgn: eSgn)
-                    } else {
-                        if eKind == 2 {
-                            // float context flows into both operands (`val x: F64 = 1.5 + 2`).
-                            self.checkLitCtx(id: lhs, eKind: 2, eBits: eBits, eSgn: false)
-                            self.checkLitCtx(id: rhs, eKind: 2, eBits: eBits, eSgn: false)
-                        } else {
-                            if self.checkBinTraitRhs(op: op, lhs: lhs, rhs: rhs) {
-                                self.checkLitCtx(id: lhs, eKind: 0, eBits: 0, eSgn: false)
+                        // (3) homogeneous integer: a typed operand on EITHER side fixes the shared
+                        // type (so `5 + big` types 5 from big, not just `big + 5`).
+                        if !handled {
+                            if self.exprIntTy(id: lhs).known || self.exprIntTy(id: rhs).known {
+                                self.checkArithNoCtx(lhs: lhs, rhs: rhs)
+                                handled = true
+                            }
+                        }
+                        // (4) both operands are bare literals (no own type): use the context O if
+                        // present (eKind 1), else it is genuinely untyped → checkArithNoCtx errors.
+                        if !handled {
+                            if eKind == 1 {
+                                val cf: ConstInt = self.foldConst(id: id)
+                                if cf.isConst {
+                                    if !(litFitsBits(value: cf.value, neg: cf.neg, bits: eBits, sgn: eSgn)) {
+                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "constant expression is out of range for its type")
+                                    }
+                                }
+                                self.checkLitCtx(id: lhs, eKind: 1, eBits: eBits, eSgn: eSgn)
+                                self.checkLitCtx(id: rhs, eKind: 1, eBits: eBits, eSgn: eSgn)
                             } else {
                                 self.checkArithNoCtx(lhs: lhs, rhs: rhs)
                             }
@@ -221,7 +256,14 @@ pub impl Comp {
                     if !(arms[i].isDiverge) {
                         val g: U64 = self.blockGiveExpr(blkId: arms[i].body)
                         if g < self.arena.exprs.count {
+                            // bring the arm's payload binds into scope so a give-value that
+                            // references them (`Shape.Square(val s) => s * s`) resolves to
+                            // their real type, not a shadowing outer name — the operator /
+                            // literal typing below reads operand types.
+                            val armMark: U64 = self.scopeMark()
+                            self.addArmBinds(a: arms[i], scrut: scrut)
                             self.checkLitCtx(id: g, eKind: eKind, eBits: eBits, eSgn: eSgn)
+                            self.popLocals(mark: armMark)
                         }
                     }
                     i += 1
