@@ -5,16 +5,29 @@
 # header, and `import`/`part` lines stay put. Same-module scope, so call sites are
 # unchanged. Run per file; build + fixpoint after a batch.
 #
-# Usage: relocate_free.py [--root <module-root.pw>] <part-file.pw> [<part-file.pw> ...]
-# --root defaults to the Frontend module root.
+# Usage: relocate_free.py [--root <module-root.pw>] [--types] <part-file.pw> [...]
+# --root  defaults to the Frontend module root.
+# --types also relocate top-level TYPE decls (struct/enum/trait/newtype/extern),
+#         not just free `fn` — for a module whose parts still hold types (e.g.
+#         @Std/Syntax's AST). Both fns and types are brace-balanced so `consume`
+#         segments them identically.
 import re, sys
 
 ROOT = "compiler/src/Frontend.pw"
 argv = sys.argv[1:]
-if argv and argv[0] == "--root":
-    ROOT = argv[1]
-    argv = argv[2:]
-fn_start = re.compile(r'^(export )?fn ')
+MOVE_TYPES = False
+while argv and argv[0].startswith("--"):
+    if argv[0] == "--root":
+        ROOT = argv[1]; argv = argv[2:]
+    elif argv[0] == "--types":
+        MOVE_TYPES = True; argv = argv[1:]
+    else:
+        sys.exit("unknown flag: " + argv[0])
+if MOVE_TYPES:
+    movable_start = re.compile(r'^(export )?(fn|struct|enum|trait|newtype|extern) ')
+else:
+    movable_start = re.compile(r'^(export )?fn ')
+fn_start = movable_start
 impl_start = re.compile(r'^(pub )?impl ')
 
 def consume(lines, i):

@@ -41,6 +41,119 @@ extern "plew-intrinsic" {
 // TYPES (above) and the operator traits (`Add`/`Sub`/…) both live in this module, so
 // these witnesses (`impl I32 as Add[I32]`) are coherent type-owned impls in the type's
 // own module (no orphan). @Std/Lang re-exports the types to make them ambient.
+extern "plew-intrinsic" {
+    fn i8Add(a: I8, b: I8) -> I8
+    fn i8Sub(a: I8, b: I8) -> I8
+    fn i8Mul(a: I8, b: I8) -> I8
+    fn i8Div(a: I8, b: I8) -> I8
+    fn i8Rem(a: I8, b: I8) -> I8
+    fn i8BitAnd(a: I8, b: I8) -> I8
+    fn i8BitOr(a: I8, b: I8) -> I8
+    fn i8BitXor(a: I8, b: I8) -> I8
+    fn i8Shl(a: I8, b: I8) -> I8
+    fn i8Shr(a: I8, b: I8) -> I8
+    fn i8BitNot(a: I8) -> I8
+    fn i8Neg(a: I8) -> I8
+    fn i8Eq(a: I8, b: I8) -> Bool
+    fn i8Lt(a: I8, b: I8) -> Bool
+    fn i16Add(a: I16, b: I16) -> I16
+    fn i16Sub(a: I16, b: I16) -> I16
+    fn i16Mul(a: I16, b: I16) -> I16
+    fn i16Div(a: I16, b: I16) -> I16
+    fn i16Rem(a: I16, b: I16) -> I16
+    fn i16BitAnd(a: I16, b: I16) -> I16
+    fn i16BitOr(a: I16, b: I16) -> I16
+    fn i16BitXor(a: I16, b: I16) -> I16
+    fn i16Shl(a: I16, b: I16) -> I16
+    fn i16Shr(a: I16, b: I16) -> I16
+    fn i16BitNot(a: I16) -> I16
+    fn i16Neg(a: I16) -> I16
+    fn i16Eq(a: I16, b: I16) -> Bool
+    fn i16Lt(a: I16, b: I16) -> Bool
+    fn i32Add(a: I32, b: I32) -> I32
+    fn i32Sub(a: I32, b: I32) -> I32
+    fn i32Mul(a: I32, b: I32) -> I32
+    fn i32Div(a: I32, b: I32) -> I32
+    fn i32Rem(a: I32, b: I32) -> I32
+    fn i32BitAnd(a: I32, b: I32) -> I32
+    fn i32BitOr(a: I32, b: I32) -> I32
+    fn i32BitXor(a: I32, b: I32) -> I32
+    fn i32Shl(a: I32, b: I32) -> I32
+    fn i32Shr(a: I32, b: I32) -> I32
+    fn i32BitNot(a: I32) -> I32
+    fn i32Neg(a: I32) -> I32
+    fn i32Eq(a: I32, b: I32) -> Bool
+    fn i32Lt(a: I32, b: I32) -> Bool
+    fn i64Add(a: I64, b: I64) -> I64
+    fn i64Sub(a: I64, b: I64) -> I64
+    fn i64Mul(a: I64, b: I64) -> I64
+    fn i64Div(a: I64, b: I64) -> I64
+    fn i64Rem(a: I64, b: I64) -> I64
+    fn i64BitAnd(a: I64, b: I64) -> I64
+    fn i64BitOr(a: I64, b: I64) -> I64
+    fn i64BitXor(a: I64, b: I64) -> I64
+    fn i64Shl(a: I64, b: I64) -> I64
+    fn i64Shr(a: I64, b: I64) -> I64
+    fn i64BitNot(a: I64) -> I64
+    fn i64Neg(a: I64) -> I64
+    fn i64Eq(a: I64, b: I64) -> Bool
+    fn i64Lt(a: I64, b: I64) -> Bool
+    fn u8Add(a: U8, b: U8) -> U8
+    fn u8Sub(a: U8, b: U8) -> U8
+    fn u8Mul(a: U8, b: U8) -> U8
+    fn u8Div(a: U8, b: U8) -> U8
+    fn u8Rem(a: U8, b: U8) -> U8
+    fn u8BitAnd(a: U8, b: U8) -> U8
+    fn u8BitOr(a: U8, b: U8) -> U8
+    fn u8BitXor(a: U8, b: U8) -> U8
+    fn u8Shl(a: U8, b: U8) -> U8
+    fn u8Shr(a: U8, b: U8) -> U8
+    fn u8BitNot(a: U8) -> U8
+    fn u8Eq(a: U8, b: U8) -> Bool
+    fn u8Lt(a: U8, b: U8) -> Bool
+    fn u16Add(a: U16, b: U16) -> U16
+    fn u16Sub(a: U16, b: U16) -> U16
+    fn u16Mul(a: U16, b: U16) -> U16
+    fn u16Div(a: U16, b: U16) -> U16
+    fn u16Rem(a: U16, b: U16) -> U16
+    fn u16BitAnd(a: U16, b: U16) -> U16
+    fn u16BitOr(a: U16, b: U16) -> U16
+    fn u16BitXor(a: U16, b: U16) -> U16
+    fn u16Shl(a: U16, b: U16) -> U16
+    fn u16Shr(a: U16, b: U16) -> U16
+    fn u16BitNot(a: U16) -> U16
+    fn u16Eq(a: U16, b: U16) -> Bool
+    fn u16Lt(a: U16, b: U16) -> Bool
+    fn u32Add(a: U32, b: U32) -> U32
+    fn u32Sub(a: U32, b: U32) -> U32
+    fn u32Mul(a: U32, b: U32) -> U32
+    fn u32Div(a: U32, b: U32) -> U32
+    fn u32Rem(a: U32, b: U32) -> U32
+    fn u32BitAnd(a: U32, b: U32) -> U32
+    fn u32BitOr(a: U32, b: U32) -> U32
+    fn u32BitXor(a: U32, b: U32) -> U32
+    fn u32Shl(a: U32, b: U32) -> U32
+    fn u32Shr(a: U32, b: U32) -> U32
+    fn u32BitNot(a: U32) -> U32
+    fn u32Eq(a: U32, b: U32) -> Bool
+    fn u32Lt(a: U32, b: U32) -> Bool
+    fn u64Add(a: U64, b: U64) -> U64
+    fn u64Sub(a: U64, b: U64) -> U64
+    fn u64Mul(a: U64, b: U64) -> U64
+    fn u64Div(a: U64, b: U64) -> U64
+    fn u64Rem(a: U64, b: U64) -> U64
+    fn u64BitAnd(a: U64, b: U64) -> U64
+    fn u64BitOr(a: U64, b: U64) -> U64
+    fn u64BitXor(a: U64, b: U64) -> U64
+    fn u64Shl(a: U64, b: U64) -> U64
+    fn u64Shr(a: U64, b: U64) -> U64
+    fn u64BitNot(a: U64) -> U64
+    fn u64Eq(a: U64, b: U64) -> Bool
+    fn u64Lt(a: U64, b: U64) -> Bool
+    fn boolNot(a: Bool) -> Bool
+    fn boolEq(a: Bool, b: Bool) -> Bool
+}
+
 part ./Core/Num
 
 // The iteration protocol (spec/02,11). `Iterator` produces values one at a

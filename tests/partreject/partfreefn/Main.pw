@@ -1,0 +1,9 @@
+// spec/15: a `part` file may contain only `impl` blocks. Helper.pw is parted into
+// this module but declares a FREE FUNCTION — the front-end must reject it.
+import @Std/Io with { print }
+
+part ./Helper
+
+fn main() {
+    print(triple(n: 7))
+}

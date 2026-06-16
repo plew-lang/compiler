@@ -30,4 +30,45 @@ pub impl Comp {
         }
         return items
     }
+
+    // spec/15 ("part の唯一の用途＝無名 impl の配置・part に書けるのは impl だけ"): a
+    // `part` file may contain only `impl` blocks plus the structural directives
+    // `import`/`part`/`@[...]`. A free function, type (struct/enum/trait/newtype),
+    // `extern` block, top-level `val`, or re-export belongs at the module root or
+    // another module — reject it so `part` cannot be abused as a generic "split a big
+    // module across files" mechanism (the role split is `import`=layer, `part`=impl).
+    inout fn checkPartImplOnly(items: Array[TopItemAst]) {
+        mut val i: U64 = 0
+        while i < items.count {
+            self.rejectNonImplPartItem(item: items[i])
+            i += 1
+        }
+    }
+
+    inout fn rejectNonImplPartItem(item: TopItemAst) {
+        match item {
+            // allowed in a part: anonymous-impl placement + structural directives.
+            TopItemAst.Impl(im: _) => {}
+            TopItemAst.Import(imp: _) => {}
+            TopItemAst.Directive(dir: _) => {}
+            // `export <item>`: legal only if the wrapped item is itself part-legal.
+            TopItemAst.Export(val inner) => { self.rejectNonImplPartItem(item: inner) }
+            // forbidden: definitions that belong at the module root or another module.
+            TopItemAst.Decl(val d) => { self.partItemError(offset: d.nameSpan.start) }
+            TopItemAst.Trait(val t) => { self.partItemError(offset: t.nameSpan.start) }
+            TopItemAst.Extern(val e) => { self.partItemError(offset: e.abiSpan.start) }
+            TopItemAst.ReExport(val imp) => { self.partItemError(offset: imp.pathSpan.start) }
+            TopItemAst.NewType(name: _, ty: _, isPub: _, val span) => { self.partItemError(offset: span.start) }
+            TopItemAst.GlobalVal(val s) => {
+                match s {
+                    StmtAst.Let(mutable: _, name: _, hasTy: _, ty: _, init: _, val span) => { self.partItemError(offset: span.start) }
+                    _ => { self.partItemError(offset: 0) }
+                }
+            }
+        }
+    }
+
+    inout fn partItemError(offset: U64) {
+        compileErrorAt(line: self.lineOf(offset: offset), msg: "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module")
+    }
 }

@@ -1,0 +1,4 @@
+// A free function in a `part` file — illegal (spec/15: parts hold only `impl`).
+fn triple(n: I64) -> I64 {
+    return n * 3
+}

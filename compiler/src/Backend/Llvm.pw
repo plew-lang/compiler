@@ -25,8 +25,6 @@
 // The emitter is split across `Llvm/` for readability (one concern per file);
 // all parts share the module scope, so the split is purely organizational.
 
-part ./Llvm/Bindings
-part ./Llvm/State
 part ./Llvm/Types
 part ./Llvm/Enums
 part ./Llvm/GenericStruct
@@ -56,4 +54,3 @@ part ./Llvm/StmtFor
 part ./Llvm/StmtDeinit
 part ./Llvm/Entry
 part ./Llvm/Async
-part ./Llvm/Runtime

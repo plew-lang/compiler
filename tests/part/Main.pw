@@ -1,10 +1,15 @@
-// Multi-file module: Main.pw stitches in Helper.pw via `part`, then calls a
-// function defined there (shared scope, no namespace).
+// Multi-file module: Main.pw stitches in Helper.pw via `part`. Helper holds an
+// `impl` on `N` (declared here) — spec/15: a part contains only impl blocks, and
+// the shared module scope lets that impl see the root's type.
 import @Std/Io with { print }
 
 part ./Helper
 
+struct N {
+    pub val v: I64
+}
+
 fn main() {
-    print(triple(n: 7))
-    print(square(n: 5))
+    print((<N v=7 />).triple())
+    print((<N v=5 />).square())
 }

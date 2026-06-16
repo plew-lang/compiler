@@ -488,6 +488,11 @@ export fn runFrontend() -> Comp {
                 }
             }
         }
+        // module ids whose ROOT file has been processed. A module's root is loaded
+        // before any of its parts (parts are discovered while processing the root), so
+        // the FIRST file seen for a module id is its root and every later file with the
+        // same id is a `part` — used to enforce the spec/15 "part = impl only" rule.
+        mut val rootSeen: Array[U64] = []
         mut val qi: U64 = 0
         while qi < loaded.count {
             val ent: Bind = loaded[qi]
@@ -504,6 +509,13 @@ export fn runFrontend() -> Comp {
             c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count - fileStart fieldStart=moduleId fieldLen=0 />)
             // parse the file and lower its items; the returned tree drives discovery.
             val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: sb, fileStart: fileStart)
+            // spec/15: a `part` file (a non-root file of an already-seen module) may
+            // contain only `impl` blocks — reject any free fn / type / extern / val.
+            if u64ArrayHas(a: rootSeen, v: moduleId) {
+                c.checkPartImplOnly(items: items)
+            } else {
+                rootSeen.append(value: moduleId)
+            }
             val baseLen: U64 = dirPrefixLen(path: path)
             // follow `import`/`part` nodes to child files (in source order); note a
             // `@[...]` directive so the generated sibling can be auto-parted.

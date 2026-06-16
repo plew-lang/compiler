@@ -1,7 +1,10 @@
-fn triple(n: I64) -> I64 {
-    return n * 3
-}
-
-fn square(n: I64) -> I64 {
-    return n * n
+// part of Main's module — methods on `N` live here (impl-only part, spec/15: a
+// `part` file may contain only `impl` blocks).
+pub impl N {
+    fn triple() -> I64 {
+        return self.v * 3
+    }
+    fn square() -> I64 {
+        return self.v * self.v
+    }
 }
