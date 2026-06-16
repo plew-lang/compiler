@@ -1,0 +1,14 @@
+// Cross-module double `part`: Main parts Shared, and the imported module Other
+// also parts Shared. A file belongs to exactly one module — rejected.
+import @Std/Io with { print }
+import ./Other with { other }
+
+part ./Shared
+
+struct Z {
+    pub val v: I64
+}
+
+fn main() {
+    print(other())
+}

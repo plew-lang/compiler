@@ -1,0 +1,5 @@
+export fn other() -> I64 {
+    return 7
+}
+
+part ./Shared

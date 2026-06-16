@@ -1,0 +1,9 @@
+// A `part` whose target file does not exist — the loader must reject it (no
+// silent skip).
+import @Std/Io with { print }
+
+part ./DoesNotExist
+
+fn main() {
+    print(1)
+}

@@ -1,0 +1,14 @@
+// Diamond `part` within one module: Main parts A and B, and both A and B part C.
+// A file may be parted by at most one parent — the second `part ./C` is rejected.
+import @Std/Io with { print }
+
+part ./A
+part ./B
+
+struct Z {
+    pub val v: I64
+}
+
+fn main() {
+    print(1)
+}

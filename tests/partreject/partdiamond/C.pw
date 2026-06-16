@@ -1,0 +1,5 @@
+pub impl Z {
+    fn z() -> I64 {
+        return self.v
+    }
+}
