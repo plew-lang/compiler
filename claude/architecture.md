@@ -1,6 +1,6 @@
 # コンパイラ アーキテクチャ
 
-Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝正典コンパイラは Plew 製のパッケージ `compiler/src/`（root `_.pw` が `part` で全パート〔Loader/Ast/`Parser/Decl`/`Codegen/`〕を綴じ込む 1 モジュール・part はサブディレクトリ可・自分を不動点までコンパイル）。**構文解析（レクサ・式/文/宣言/トップレベルパーサ）は共有 `@Std/Syntax` に統合済**（コンパイラもマクロも同一パーサ＝真の 1 AST＝A フロントエンド統合・[metaprogramming-architecture.md](metaprogramming-architecture.md)）＝本体は共有経路で parse→`Codegen/Lower.pw` で arena へ lower→`Backend/Llvm.pw` で LLVM IR→clang。本書はパイプライン設計と、**そこへ至るブートストラップの経緯**（使い捨て Rust stage0→退役）を残す。現在地・次の一歩は [worklog.md](worklog.md)。
+Plew コンパイラの実装方針。**🎉 セルフホスト達成済み**＝正典コンパイラは Plew 製のパッケージ `compiler/src/`（`Ir ← Frontend ← Backend ← entry` の一方向モジュール DAG＋共有 leaf〔Path/Ops/Diag〕・各 root が `Codegen/*`／`Backend/Llvm/*` を part で綴じる・自分を不動点までコンパイル）。**構文解析（レクサ・式/文/宣言/トップレベルパーサ）は共有 `@Std/Syntax` に統合済**（コンパイラもマクロも同一パーサ＝真の 1 AST＝A フロントエンド統合・[metaprogramming-architecture.md](metaprogramming-architecture.md)）＝本体は共有経路で parse→`Codegen/Lower.pw` で arena へ lower→`Backend/Llvm.pw` で LLVM IR→clang。本書はパイプライン設計と、**そこへ至るブートストラップの経緯**（使い捨て Rust stage0→退役）を残す。現在地・次の一歩は [worklog.md](worklog.md)。
 
 ## ゴールと第一目標
 
@@ -101,15 +101,18 @@ tests/
   panic/<name>.pw     コンパイル&リンク成功・実行は非ゼロ＋`.panic` stderr 部分一致（overflow/0除算等）
   gen/<name>/App.pw   メタプロ（マクロ＋`@[...]`）→ gen→auto-part→実行→App.out 照合
 compiler/             ★ 正典のコンパイラ＝Plew パッケージ（今後の機能はここに Plew で）
-  src/                ★ フロントエンド part 群＋root `_.pw`（LLVM backend）
-    _.pw              root＝import＋part マニフェスト＋`main`（`runFrontend()+emitLlvm()`・libLLVM をリンク）
-    Loader.pw         モジュールローダ＝パース駆動（各ファイルを parse→木の import/part ノードを辿る・dedup・パス解決）
+  src/                ★ コンパイラ＝3 層モジュール DAG（Ir ← Frontend ← Backend ← entry）＋共有 leaf
+    _.pw              entry＝`./Frontend`・`./Backend` を import し `main` のみ（`runFrontend()→emitLlvm()`・libLLVM をリンク）
+    Ir.pw             純データ leaf＝arena ノード型（Expr/Stmt/TypeRef…）＋`Comp`/`LlvmCtx` 等の状態型＋arena ヘルパ
+    Frontend.pw       解析核（root）＝`impl Comp`・`runFrontend()`。`Loader`/`Parser/Decl`/`Codegen/*` を part で綴じる
+    Backend.pw        LLVM エミッタ（root）＝`impl LlvmCtx`・`emitLlvm()`。`Backend/Llvm/*` を part で綴じる（libLLVM-C を呼ぶ唯一の層）
+    Path.pw Ops.pw Diag.pw   Frontend・Backend 双方が import する純 leaf＝import パス計算／演算子オペコード（`opEq`/`opAdd`…）／診断＋十進整形
+    Loader.pw         モジュールローダ（Frontend の part）＝パース駆動（各ファイルを parse→木の import/part ノードを辿る・dedup・パス解決・part=impl-only と missing/duplicate part を reject）
                       （レクサ・パーサは src になく `@Std/Syntax` に移設＝本体も共有経路で parse・メタプロと共有）
-    Ast.pw            arena ノード型（Expr/Stmt 等）＋Comp 状態＋arena ヘルパ
     Parser/Decl.pw    コンパイラ frontend driver＝module-tag helper（markImport/recordExport）＋derive 合成（synth*）。宣言パーサは持たない（共有 @Std/Syntax へ）
-    Codegen/          共有フロントエンド＝AST→arena lower＋名前/型解決＋軽量型復元＋受理健全性検査＋mono 探索＝Resolve/Ops/Check/Expr/Stmt/Decl/Mono/Array/Emit/Gen/Lower/Driver/Verify/Infer（Lower＝共有 AST→arena・Driver＝`runFrontend`・Verify＝emission 非依存の受理検査パス `verifyProgram`・Infer＝TypeRef ベース型チェッカ・Emit＝共有 codegen ユーティリティ〔interning/span/型述語/行追跡〕・Gen＝`plewc --gen` の harness 合成）
-    Backend/Llvm.pw   LLVM IR エミッタ（`emitLlvm`・libLLVM-C を呼ぶ＝`compiler/plewc` が libLLVM をリンクする唯一の part）
-  std/                言語標準ライブラリ＝Lang/Core/Hash/Io/Process/Async/Ffi/Random/Syntax（Lang＝ambient マニフェスト＝import 不要面の唯一の正本〔`Optional`/`Result`/`Array`/`Dictionary`＋合成 intrinsic を宣言・プリミティブを Core から再エクスポート〕・Core＝import 必須の trait/プリミティブ定義＋witness／Hash＝`Hash`/`SipHasher`／Lang・Core・Hash・Syntax は起動時 force-load／Syntax＝メタプロ＆コンパイラ共有の構文層 `@Std/Syntax`＝`Syntax/`〔Lexer/Ast/Trees/Parser/ParseBody/Build〕）
+    Codegen/*         解析サブパス（Frontend の part 群）＝Resolve/Lower/Mono/Infer/Check/Verify/Emit/Decl/Expr/Stmt/Gen/Ops（Lower＝共有 AST→arena・Verify＝emission 非依存の受理検査パス `verifyProgram`・Infer＝TypeRef ベース型チェッカ・Emit＝共有 codegen ユーティリティ〔interning/span/型述語/行追跡〕・Gen＝`plewc --gen` の harness 合成）
+    Backend/Llvm/*    LLVM IR エミッタ（Backend の part 群）＝機能別に分割（Stmt/Expr/Arith/Enums/Arrays/Closures/Async/Types… 等）
+  std/                言語標準ライブラリ＝Lang/Core/Hash/Io/Process/Async/Ffi/Random/Syntax（Lang＝ambient マニフェスト＝import 不要面の唯一の正本〔`Optional`/`Result`/`Array`/`Dictionary`＋合成 intrinsic を宣言・プリミティブを Core から再エクスポート〕・Core＝import 必須の trait/プリミティブ定義＋witness／Hash＝`Hash`/`SipHasher`／Lang・Core・Hash・Syntax は起動時 force-load／Syntax＝メタプロ＆コンパイラ共有の構文層 `@Std/Syntax`＝`Syntax/`〔Lexer/Parser/Build〕）
   plewc.seed.ll       ブートストラップ種＝`_.pw` の LLVM IR（＋`plewc.seed.runtime.c`＝随伴ランタイム・チェックイン）
   (plewc / plewc0 / plewc.ll / plewc.runtime.c   ビルド生成物・gitignore。plewc バイナリ自体は追跡)
 examples/             実証用 Plew プログラム（hello.pw＋self-host 途上の小コンパイラ群）
@@ -118,7 +121,7 @@ spec/<部>/NN-*.md     4 部サブディレクトリに分割した言語仕様�
 claude/*.md           本ガイドからリンクする実装ドキュメント
 ```
 
-> **stage0（Rust 製・使い捨て）は self-host 達成後に退役・削除済み**（種ベースのブートストラップへ移行・Rust/cargo 不要）。Rust stage0 が要るときは `git checkout stage0-final -- bootstrap` で復旧（タグ `stage0-final`）。コンパイラの構造リファクタ計画（root `_.pw` の巨大 part 羅列・`Comp` god-object の解体）は [compiler-refactor.md](compiler-refactor.md)。
+> **stage0（Rust 製・使い捨て）は self-host 達成後に退役・削除済み**（種ベースのブートストラップへ移行・Rust/cargo 不要）。Rust stage0 が要るときは `git checkout stage0-final -- bootstrap` で復旧（タグ `stage0-final`）。コンパイラの構造リファクタ（モジュール化・巨大ファイル分割・`Comp` god-object の解体）の到達点と残りは [compiler-refactor.md](compiler-refactor.md)。
 
 ## ビルド／開発ワークフロー
 

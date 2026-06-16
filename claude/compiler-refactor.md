@@ -94,7 +94,7 @@ a/b は「結合のため」でなく**可読性のため**カテゴリ別子構
 
 #### 到達状態と理想形への地図（依存グラフ実測＋方針改定 2026-06）
 
-**cross-module 構造は DAG 達成**（`Ir ← Frontend ← Backend ← entry`）。だが理想＝**part 内は `impl` のみ**（[spec/15](../spec/04-execution/15-modules.md) 改定で part の唯一の用途＝無名 impl の配置に確定）には**未到達**：残 91 part は全て自由関数を抱える＝違反。**方針改定で旧 reason②（相互再帰は part で綴じてよい）を撤去**：相互再帰は「型の `impl` メソッド化で 1 モジュール内に収める」で表現し、part に自由関数を逃がさない（[design-decisions.md](design-decisions.md) DAG 項・spec/15 循環依存節と同期）。
+**cross-module 構造は DAG 達成**（`Ir ← Frontend ← Backend ← entry`）。理想＝**part 内は `impl` のみ**（[spec/15](../spec/04-execution/15-modules.md) 改定で part の唯一の用途＝無名 impl の配置に確定）も**達成済＋コンパイラで強制**（下記「part=impl-only」節）。**方針改定で旧 reason②（相互再帰は part で綴じてよい）を撤去**：相互再帰は「型の `impl` メソッド化で 1 モジュール内に収める」で表現し、part に自由関数を逃がさない（[design-decisions.md](design-decisions.md) DAG 項・spec/15 循環依存節と同期）。
 
 依存グラフ実測（`fn` 定義元→呼出元の area/function 間エッジ）で確定した構造：
 - **Frontend の解析核は area レベルで 1 つの強連結成分**＝`Resolve/Check/Mono/Infer/Lower/Stmt/Verify/Decl/Ops/Emit/Expr/Parser` が密に相互再帰（関数 28 本を共有下層へ移しても area サイクルは解けない＝三角・長サイクルが多数。関数レベル SCC は小さい〔最大 18〕が area は 1 つの塊）。**これは「論理的に 1 モジュール」**＝`Comp` を共有状態とする一群。理想形では**自由関数 `fn(c: inout Comp,…)` を `impl Comp` へメソッド化**し（Comp 定義モジュール内の part-impl）、相互再帰をモジュール内に収める。

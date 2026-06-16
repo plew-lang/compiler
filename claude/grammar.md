@@ -49,16 +49,17 @@
 | 単項 `!` と `~`（[12](../spec/03-expressions/12-operators.md)） | `!`＝Bool 専用 Not／`~`＝整数 BitNot（別演算子） | 仕様先行（`UNARY_PREFIX_OP` は `-`/`!` のみ・`~` なし） |
 | 複合代入演算子（[12](../spec/03-expressions/12-operators.md)） | `ASSIGN_OP` に `%=` ＋ビット系 `&= ^= \|= <<= >>=`（脱糖 `a OP= b`⟺`a = a OP b`・専用トレイトなし） | 仕様先行（現行 `ASSIGN_OP` は `= += -= *= /=` のみ・`%=`/ビット系を欠く） |
 | 場所（place）越しの変更（[03](../spec/01-basics/03-values.md)） | 代入左辺・`inout` レシーバ/引数は place（`mut val` 根＋フィールド/添字パス）。`arr[i].field=x`・`arr[i].inoutMethod()`・`a.b[i].c=x` | 意味論層（get-modify-set 脱糖・in-place 最適化・重なり inout 検査＝静的エラー/lint/限定ランタイム panic はすべて型検査・codegen 層） |
-| 条件チェーン（[11](../spec/03-expressions/11-control-flow.md)） | `if`/`while`/`guard` 条件に `PAT = expr` の `&&` 連結（`else if` は `else`＋ネスト `if`・`elif` 廃止） | 仕様先行（単一式想定・要拡張） |
+| 条件チェーン（[11](../spec/03-expressions/11-control-flow.md)） | `if`/`while`/`guard` 条件に `PAT = expr` の `&&` 連結（`else if` は `else`＋ネスト `if`・`elif` 廃止） | 一致（実装済） |
 | 浮動小数 NaN（[12](../spec/03-expressions/12-operators.md)） | （比較で panic・算術は IEEE） | 意味論層（実行時） |
 | 整数オーバーフロー/0 除算（[12](../spec/03-expressions/12-operators.md)） | （全ビルドで panic） | 意味論層（codegen） |
 | `panic` 文（[11](../spec/03-expressions/11-control-flow.md)） | `panic "msg"` キーワード（発散する文） | 仕様先行（トークン/規則なし） |
+| `give` 文（[11](../spec/03-expressions/11-control-flow.md)） | `give expr` キーワード（ブロック/値位置 `if`/`match` アームから値を返す・値位置で必須・コンパイラ強制） | 仕様先行（規則なし） |
 | match アーム右辺（[11](../spec/03-expressions/11-control-flow.md)） | ベア式 `=> expr`／ブロック／発散ブロック | 仕様先行（要確認） |
 | ローカル再宣言（[03](../spec/01-basics/03-values.md)） | 同名 `val`（名前解決は意味論層） | 一致（意味論層） |
 | 文字列・配列の型意味論（[02](../spec/01-basics/02-basic-types.md)） | （不変・UTF-8 妥当・`bytes` 公開・整数添字なし・配列添字/`count`/レンジ要素は `U64` 固定 等） | 意味論層（型検査/codegen） |
 | 文字列補間・複数行（[02](../spec/01-basics/02-basic-types.md)） | 補間 `{式}`・深さ 0 の `:` 境界・`{{`/`}}`・行末 `\` 継続 | 仕様先行（単一 `{`/`:`・エスケープ/継続なし） |
 | ラベル付きタプル（[02](../spec/01-basics/02-basic-types.md)） | `(x: I32)` 型／`(x: 1)` 生成／`.x`／`(val x)=e` 分解 | 仕様先行（位置タプル `(e, e)`） |
-| 辞書・集合型（[02](../spec/01-basics/02-basic-types.md)） | `Dictionary[K, V]` リテラル `[k: v]`/`[:]`（`K: Hash`・`dict[k]->V` 欠落 panic）・`Set[E]` | 一致（`dictionary_literal` あり）／型名・`Hash` 境界・lang item 化・`Set` は意味論層 |
+| 辞書・集合型（[02](../spec/01-basics/02-basic-types.md)） | `Dictionary[K, V]` リテラル `[k: v]`/`[:]`（空辞書は `[:]` のみ・`[]` は配列で辞書位置はエラー・`K: Hash`・`dict[k]->V` 欠落 panic）・`Set[E]` | 一致（`dictionary_literal` あり）／型名・`Hash` 境界・lang item 化・`[]`-as-dict reject・`Set` は意味論層 |
 | 変数束縛 `val`/bare・punning（[03](../spec/01-basics/03-values.md)） | `val`＝新規・bare＝既存／`for val i`／punning | 仕様先行 |
 | ワイルドカード `_`（[11](../spec/03-expressions/11-control-flow.md)） | 一般パターンの葉（破棄・パターン位置ならどこでも・値式不可） | 仕様先行（現行は `match_case` の `'_'` 特例のみ＝ネスト/分解での `_`・統一パターン規則は未整備） |
 | 全フィールド明示・`..` なし（[11](../spec/03-expressions/11-control-flow.md)） | 分解パターンは全フィールド列挙（束縛 or `_`）・残り無視 `..` を持たない | 意味論層（フィールド網羅検査）＋仕様先行（`enum_assign_left` は enum 限定で構造体/レコード分解の規則なし） |
