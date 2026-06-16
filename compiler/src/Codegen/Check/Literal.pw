@@ -292,9 +292,48 @@ pub impl Comp {
     // from the conformance's rhs (e.g. `Add[I64]`) instead of failing "no type from
     // context". Returns false when lhs has no operator-trait witness (caller falls back
     // to the ordinary same-type arithmetic rule).
+    // Count the DISTINCT integer right-operand types among `name` witnesses on a type
+    // (`impl T as Add[I32]` + `Add[I64]` -> 2). Lets the checker reject a bare-literal
+    // rhs that could fit more than one (ambiguous), instead of silently picking the
+    // first-declared overload.
+    inout fn intRhsWitnessCount(typeStart: U64, typeLen: U64, name: String) -> U64 {
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val seen: Array[U64] = []
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.isAssoc {
+                if f.recvId == qType {
+                    if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                        if f.params.count >= 2 {
+                            if self.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                                if !(u64ArrayHas(a: seen, v: f.params[1].tyNameId)) {
+                                    seen.append(value: f.params[1].tyNameId)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        return seen.count
+    }
+
     inout fn checkBinTraitRhs(op: I64, lhs: U64, rhs: U64) -> Bool {
         if self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs) {
             val lt: TypeInfo = self.binWitnessType(lhs: lhs, rhs: rhs)
+            // a bare-literal rhs that could fit MULTIPLE integer right-operand overloads
+            // (`impl T as Add[I32]` and `Add[I64]`) is ambiguous — no silent pick by
+            // declaration order (spec: 曖昧はエラー). Demand a suffix (`a + 10I64`).
+            val rt: TypeInfo = self.typeOf(id: rhs)
+            if rt.kind == 0 {
+                if rt.nameLen == 0 {
+                    if self.intRhsWitnessCount(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) >= 2U64 {
+                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: rhs)), msg: "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)")
+                    }
+                }
+            }
             val fi: U64 = self.findBinTraitWitness(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs)
             if fi < self.arena.funcs.count {
                 val f: Func = self.arena.funcs[fi]
