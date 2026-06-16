@@ -29,7 +29,8 @@
 - [非同期処理とメモリ管理](04-execution/14-concurrency.md)
 - [モジュールシステム](04-execution/15-modules.md)
 - [メタプログラミング](04-execution/16-metaprogramming.md)
+- [パッケージ](04-execution/17-packages.md)
 
 # 付録
 
-- [サンプルコード](05-appendix/17-examples.md)
+- [サンプルコード](05-appendix/18-examples.md)

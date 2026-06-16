@@ -237,17 +237,17 @@ import ./Models/User   // Models/User.pw（こちらは別モジュール）
 
 ## パッケージ
 
-パッケージは **TOML マニフェスト**（暫定名 `Plew.toml`）を持つディレクトリです。マニフェストに依存を記述し、依存は **git リポジトリ または ローカルパス**で指定します（中央レジストリは持たない＝ Go modules / SwiftPM と同じ分散思想）。
+パッケージは **TOML マニフェスト `Plew.toml`** を持つディレクトリです。依存は **git リポジトリ／ローカルパス**で指定します（中央レジストリは持たない＝ Go modules / SwiftPM と同じ分散思想）。マニフェストの全項目・依存表記・バージョン・依存解決・ロック・配布・ネイティブ依存は [パッケージ](17-packages.md) を正典とし、本節はモジュール解決の文脈（ローカル名・公開と外部到達）に限ります。
 
 ### 依存とローカル名
 
-依存はマニフェストで**ローカル名**に束縛し、コードからはその名前で `import @Name` します。
+依存はコードから `import @Name` で使い、その**ローカル名は依存先マニフェストの `name` から自動**で決まります（衝突する時だけ `as` で rename）。
 
 ```toml
-# 暫定形式
-[dependencies]
-Json  = { git = "https://example.com/json.git", tag = "v1.2.0" }
-Utils = { path = "../Utils" }
+dependencies = [
+    "https://example.com/json.git",                       # 束縛名 @Json（依存先の name）
+    { git = "https://example.com/u.git", as = "Utils" },  # rename
+]
 ```
 
 ```plew
@@ -255,8 +255,8 @@ import @Json with { encode }
 import @Utils
 ```
 
-- ローカル名は消費側が決めるので、**上流パッケージの名前衝突はローカル名で解決**できる（同名の依存に別ローカル名を振る）。
-- 推移依存で同一パッケージの複数バージョンが現れた場合は **共存を許す方針**（依存解決の詳細は別途）。
+- ローカル名は消費側が決められるので、**上流パッケージの名前衝突はローカル名で解決**できます（`as` で別名）。
+- 推移依存で同一パッケージの複数バージョンが現れた場合は **共存を許します**（メジャー違いは共存・同メジャーは最新へ統合・`@Std`／コアは単一版 → [依存解決](17-packages.md#依存解決)）。**間接依存は import できません**（phantom dependency の禁止 ── import できるのは直接依存と `@Std` のみ）。
 - **`@Std` は予約名**で、標準ライブラリを指します。ローカル名に `Std` は使えず、マニフェストへの記述なしに常に `import @Std/…` できます（言語が公開集合を宣言済みのパッケージ＝唯一マニフェスト束縛不要の `@`）。
 
 ### 公開モジュールと外部到達
@@ -563,20 +563,13 @@ val m = LLVMModuleCreateWithNameInContext(cname.ptr, ctx)  // 呼び出し中有
 
 ### 外部 C ライブラリのリンク
 
-- **Plew は自己完結 C を吐く**：`extern(c) { type/fn }`・`repr(c) struct` から **C のプロトタイプ/typedef/struct を Plew 自身が生成**する（宣言の正本は Plew 側＝bindgen が `.h` から写した extern 宣言をそのまま C へ再 emit）。ゆえに**外部ヘッダの `#include` は不要**で、必要なのは**リンクだけ**（Plew の extern 宣言と実体の ABI 一致は FFI 本来の前提＝宣言＝プロトタイプ）。
-- **リンク＝ビルド/マニフェスト関心（ソース構文でない）**：`extern(c)` ブロックは純粋な宣言に保ち、リンクするライブラリと探索は**パッケージマニフェスト**でネイティブ依存として宣言（`pkg-config`/`llvm-config` で `-I`/`-L`/`-l` を解決）。`plewc` がビルドを駆動するとき clang にフラグを渡す。
-- **当面（pipe-to-clang）**：現行ワークフローのまま手でフラグを渡す ──
-  ```sh
-  plewc app.pw | clang -x c - $(llvm-config --ldflags --libs core) -o app && ./app
-  ```
-  リンクは「clang に渡すフラグ」に過ぎず、`#include` 不要なので追加の include パスも基本不要。
-- **C++ シムが要る場合**（libLLVM-C で足りず C++ API を使う時・rustc の `llvm-wrapper` と同型）：`extern "C"` を露出する `.cpp` を 1 枚書き、clang++ で別途コンパイルして libLLVM/libc++ とリンク。**Plew 側の言語機能は `extern(c)` のまま**（C++ には触れない）。シム source とコンパイル/リンク指定はマニフェストに列挙（後続）。
-
-> **決定済み／先送りの線引き**：①自己完結 C 出力（`#include` 不要）②リンクはソース構文でない（`extern(c)` は純粋宣言）③手フラグでの interim リンクは**今すぐ可能** ── ここは確定。**先送りは「宣言的/自動なリンク」だけ**（manifest のネイティブ依存スキーマ・`pkg-config`/`llvm-config` 探索・`plewc` による clang 駆動・C++ シム統合＝パッケージ管理 M3 と地続き）。**外部ライブラリと実際にリンクする手段は interim で確保済みなので、FFI も LLVM バックエンドもこの上に構築でき、進行はブロックされない**（manifest 化は後追いで非破壊に被せる）。
+- **Plew は自己完結 C を吐く**：`extern(c) { type/fn }`・`repr(c) struct` から **C のプロトタイプ/typedef/struct を Plew 自身が生成**する（宣言の正本は Plew 側）。ゆえに**外部ヘッダの `#include` は不要**で、必要なのは**リンクだけ**（Plew の extern 宣言と実体の ABI 一致は FFI 本来の前提）。
+- **どのライブラリをどうリンク／ビルドするか**（`c`/`rust`/`pkg-config` の祝福・ターゲット別宣言・ビルド駆動）は [パッケージ章「ネイティブ依存」](17-packages.md#ネイティブ依存c--rust--system-ライブラリ)を正典とします。`extern(c)` ブロックは純粋な宣言に保ち、**リンクはソース構文でなくマニフェスト関心**です。
+- **当面（pipe-to-clang）**：マニフェスト駆動の前は手でフラグを渡せます ── `plewc app.pw | clang -x c - $(llvm-config --ldflags --libs core) -o app`。
+- **C++ シムが要る場合**（libLLVM-C で足りず C++ API を使う時）：`extern "C"` を露出する `.cpp` を clang++ で別途コンパイルしてリンク。**Plew 側の言語機能は `extern(c)` のまま**（C++ には触れない）。シムのビルド指定はマニフェスト（パッケージ章）。
 
 ### 未決
 
-- **リンクのマニフェスト・スキーマ**：ネイティブ依存のキー（`link`/`pkg-config`/探索コマンド）・C++ シムのビルド統合。**パッケージ管理（M3）と地続き**ゆえそこで確定。
 - **プラットフォーム幅型の変換規則**：`as`（無損失）と `TryFrom`（可謬）の閾値の厳密化・`CSize`↔`USize`↔`U64` の関係。
 - **ハンドルの等価**：ポインタ同一性で `Eq` を提供するか。当面は非提供で開始し additive 可。
 - **spawn/local**：生ハンドル/ポインタを `local`（`Ref` 同様 spawn 不可・保守的）とするか、コピー可能な 1 語として spawn 越境を許す（正直に危険・race-free 保証は境界で切れると明記）か。

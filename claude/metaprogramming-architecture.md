@@ -78,6 +78,7 @@ spec/16 は **入力＝TokenStream（span 付き）＋ヘルパで TokenStream�
   - **残（マクロ機能の additive）**：authoring 層（ハイライト対応テンプレート/quote）は future・additive（コアは String 出力のまま）。**arena→`DeclAst` 変換のショートカットは採らない**（1 AST 原則）。
 - **M2＝コアライブラリのマクロを dogfood＝✅達成**：Eq/Ord トレイト＋`@[Eq]`/`@[Ord]` derive・Hash/Hasher＋SipHash-1-3＋`@[Hash]` dogfood・**`Dictionary[K,V]` lang item**（`[k:v]` リテラル・添字・メソッド）まで land 済。組み込み Eq/Ord/Hash は当面コンパイラ特権合成と並行（dogfood が deriver 経由）。
 - **M3＝パッケージ管理導入後に切り出し（未着手）**：`@Std/Syntax`（lexer+parser+AST）を独立した**外部共有パッケージ**へ昇格。コンパイラもマクロツールも同一パッケージ版に依存する構成へ。
+  - **越境 derive の実行モデル（パッケージ管理実装方針・決定）**：依存 `@A` が公開する `Derive` を消費側の型に当てる場合も `plew gen` モデルそのまま＝生成は**消費側**で起き `.gen.pw` は**消費側にコミット**（`@A` は derive 実装をソース提供するだけ）。derive ハーネスは**その derive が依存する `@Std/Syntax` 版で隔離コンパイル**し、入出力は String だけ（既述のランナーが版非依存な所以）＝**`@Std/Syntax` の複数バージョン共存と両立**（特権的単一版は不要・各 derive が自分の版で動き出力 String を消費側現行コンパイラがパース）。**derive はホスト実行**（ターゲット非依存・WASM 向けでもネイティブ実行）。stale 検出は `Plew.lock` に *(対象型 source hash, derive 解決版)* を記録して loud fail。根拠と却下案は [design-decisions.md](design-decisions.md)「パッケージ」。
 
 > 当初の理想順は「ライブラリ切り出し → その上に機構」だったが、入れ物（パッケージ管理）が無いので**機構を in-tree（`@Std/Syntax`）で先に作り、外部切り出しは最後**に倒した。各段階で実利（コンパイラが綺麗になる／Dictionary が進む）が出る。**Phase C（名前 interning・宣言名）→ Phase D（型 interning・型 span/型パラメータ照合を整数比較へ）まで済**（経緯は worklog）。**重い D'（legacy 型 triple `(start,len,isArray)+ref` の構造的 ref 一本化／パーサの codegen 仕事）はこの後**＝Phase D は id を載せて照合を整数化した段で、triple そのものの構造的撤去は別。
 
