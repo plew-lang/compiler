@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+// An un-suffixed integer literal takes its type from context (spec/02,12): a typed
+// sibling (`1U64 + 2`) or an annotation (`val x: U64 = ...`). That context must reach
+// the BACKEND's signed-vs-unsigned op choice, not just the checker's range check —
+// otherwise a bare literal in a U64 binding would pick signed div/rem/cmp (a
+// miscompilation). High-half values make the signed/unsigned split observable.
+fn main() {
+    // div: signed sdiv of (2^64-2)/2 would be the wrong, near-max value; udiv = 2^63-1.
+    val viaAnnot: U64 = 18446744073709551614 / 2     // 9223372036854775807
+    val viaSuffix: U64 = 18446744073709551614U64 / 2  // same — must match
+    print(viaAnnot)
+    print(viaSuffix)
+
+    // rem: 2^64-1 mod 10 = 5 unsigned (signed srem of the same bits would differ).
+    val r: U64 = 18446744073709551615 % 10
+    print(r)                                          // 5
+
+    // comparison: 2^63 > 1 holds unsigned; signed it would read as negative (< 1).
+    val big: U64 = 9223372036854775808
+    if big > 1 { print(1U64) } else { print(0U64) }   // 1
+}

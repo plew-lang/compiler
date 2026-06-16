@@ -73108,14 +73108,14 @@ body0:                                            ; preds = %entry
   %95 = icmp eq i64 %94, 8
   br i1 %95, label %arm, label %match.next
 
-match.end:                                        ; preds = %arm115, %endif90, %endif74, %endif66, %endif38, %endif18
+match.end:                                        ; preds = %arm117, %endif92, %endif76, %endif68, %endif40, %endif20
   %96 = load i64, ptr %3, align 4
   %97 = call %st73 @pf894(ptr %1, i64 %96)
   store %st73 %97, ptr %84, align 4
   %98 = load %st73, ptr %84, align 4
   %99 = extractvalue %st73 %98, 0
   %100 = icmp eq i64 %99, 1
-  br i1 %100, label %then116, label %endif117
+  br i1 %100, label %then118, label %endif119
 
 arm:                                              ; preds = %body0
   %101 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
@@ -73188,7 +73188,7 @@ arm5:                                             ; preds = %match.next4
 
 match.next6:                                      ; preds = %match.next4
   %133 = icmp eq i64 %94, 2
-  br i1 %133, label %arm15, label %match.next16
+  br i1 %133, label %arm17, label %match.next18
 
 then:                                             ; preds = %arm5
   ret i64 2
@@ -73229,1113 +73229,1125 @@ then11:                                           ; preds = %endif8
   %150 = icmp ne i1 %149, false
   br i1 %150, label %then13, label %endif14
 
-endif12:                                          ; preds = %endif14, %endif8
+endif12:                                          ; preds = %endif16, %endif8
   ret i64 0
 
 then13:                                           ; preds = %then11
   ret i64 4
 
 endif14:                                          ; preds = %then11
+  %151 = load %st73, ptr %21, align 4
+  %152 = extractvalue %st73 %151, 1
+  %153 = load %st73, ptr %21, align 4
+  %154 = extractvalue %st73 %153, 2
+  %155 = call i1 @pf404(ptr %1, i64 %152, i64 %154)
+  %156 = icmp ne i1 %155, false
+  br i1 %156, label %then15, label %endif16
+
+then15:                                           ; preds = %endif14
+  ret i64 3
+
+endif16:                                          ; preds = %endif14
   br label %endif12
 
-arm15:                                            ; preds = %match.next6
-  %151 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %152 = load { i64, i64 }, ptr %151, align 4
-  %153 = extractvalue { i64, i64 } %152, 0
-  store i64 %153, ptr %22, align 4
-  %154 = extractvalue { i64, i64 } %152, 1
-  store i64 %154, ptr %23, align 4
-  %155 = load i64, ptr %22, align 4
-  %156 = load i64, ptr %23, align 4
-  %157 = call i64 @pf1246(ptr %0, ptr %1, i64 %155, i64 %156)
-  store i64 %157, ptr %24, align 4
-  %158 = load i64, ptr %24, align 4
-  %159 = load %st36, ptr %0, align 8
-  %160 = extractvalue %st36 %159, 54
-  %161 = icmp ult i64 %158, %160
-  br i1 %161, label %then17, label %endif18
+arm17:                                            ; preds = %match.next6
+  %157 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %158 = load { i64, i64 }, ptr %157, align 4
+  %159 = extractvalue { i64, i64 } %158, 0
+  store i64 %159, ptr %22, align 4
+  %160 = extractvalue { i64, i64 } %158, 1
+  store i64 %160, ptr %23, align 4
+  %161 = load i64, ptr %22, align 4
+  %162 = load i64, ptr %23, align 4
+  %163 = call i64 @pf1246(ptr %0, ptr %1, i64 %161, i64 %162)
+  store i64 %163, ptr %24, align 4
+  %164 = load i64, ptr %24, align 4
+  %165 = load %st36, ptr %0, align 8
+  %166 = extractvalue %st36 %165, 54
+  %167 = icmp ult i64 %164, %166
+  br i1 %167, label %then19, label %endif20
 
-match.next16:                                     ; preds = %match.next6
-  %162 = icmp eq i64 %94, 3
-  br i1 %162, label %arm19, label %match.next20
+match.next18:                                     ; preds = %match.next6
+  %168 = icmp eq i64 %94, 3
+  br i1 %168, label %arm21, label %match.next22
 
-then17:                                           ; preds = %arm15
-  %163 = load %st36, ptr %0, align 8
-  %164 = extractvalue %st36 %163, 59
-  %165 = extractvalue { ptr, i64 } %164, 0
-  %166 = extractvalue { ptr, i64 } %164, 1
-  %167 = load i64, ptr %24, align 4
-  call void @plew_bounds(i64 %167, i64 %166)
-  %168 = getelementptr i64, ptr %165, i64 %167
-  %169 = load i64, ptr %168, align 4
-  ret i64 %169
+then19:                                           ; preds = %arm17
+  %169 = load %st36, ptr %0, align 8
+  %170 = extractvalue %st36 %169, 59
+  %171 = extractvalue { ptr, i64 } %170, 0
+  %172 = extractvalue { ptr, i64 } %170, 1
+  %173 = load i64, ptr %24, align 4
+  call void @plew_bounds(i64 %173, i64 %172)
+  %174 = getelementptr i64, ptr %171, i64 %173
+  %175 = load i64, ptr %174, align 4
+  ret i64 %175
 
-endif18:                                          ; preds = %arm15
+endif20:                                          ; preds = %arm17
   br label %match.end
 
-arm19:                                            ; preds = %match.next16
-  %170 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %171 = load { i64, i64 }, ptr %170, align 4
-  %172 = extractvalue { i64, i64 } %171, 0
-  store i64 %172, ptr %25, align 4
-  %173 = extractvalue { i64, i64 } %171, 1
-  store i64 %173, ptr %26, align 4
-  %174 = load i64, ptr %25, align 4
-  %175 = call i64 @pf698()
-  %176 = icmp eq i64 %174, %175
-  br i1 %176, label %then21, label %endif22
+arm21:                                            ; preds = %match.next18
+  %176 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %177 = load { i64, i64 }, ptr %176, align 4
+  %178 = extractvalue { i64, i64 } %177, 0
+  store i64 %178, ptr %25, align 4
+  %179 = extractvalue { i64, i64 } %177, 1
+  store i64 %179, ptr %26, align 4
+  %180 = load i64, ptr %25, align 4
+  %181 = call i64 @pf698()
+  %182 = icmp eq i64 %180, %181
+  br i1 %182, label %then23, label %endif24
 
-match.next20:                                     ; preds = %match.next16
-  %177 = icmp eq i64 %94, 4
-  br i1 %177, label %arm23, label %match.next24
+match.next22:                                     ; preds = %match.next18
+  %183 = icmp eq i64 %94, 4
+  br i1 %183, label %arm25, label %match.next26
 
-then21:                                           ; preds = %arm19
+then23:                                           ; preds = %arm21
   ret i64 2
 
-endif22:                                          ; preds = %arm19
-  %178 = load i64, ptr %26, align 4
-  %179 = call i64 @pf1245(ptr %0, ptr %1, i64 %178)
-  ret i64 %179
+endif24:                                          ; preds = %arm21
+  %184 = load i64, ptr %26, align 4
+  %185 = call i64 @pf1245(ptr %0, ptr %1, i64 %184)
+  ret i64 %185
 
-arm23:                                            ; preds = %match.next20
-  %180 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %181 = load { i64, i64, i64 }, ptr %180, align 4
-  %182 = extractvalue { i64, i64, i64 } %181, 0
-  store i64 %182, ptr %27, align 4
-  %183 = extractvalue { i64, i64, i64 } %181, 1
-  store i64 %183, ptr %28, align 4
-  %184 = extractvalue { i64, i64, i64 } %181, 2
-  store i64 %184, ptr %29, align 4
-  %185 = load i64, ptr %27, align 4
-  %186 = call i64 @pf685()
-  %187 = icmp eq i64 %185, %186
-  br i1 %187, label %sc.cont, label %sc.rhs
+arm25:                                            ; preds = %match.next22
+  %186 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %187 = load { i64, i64, i64 }, ptr %186, align 4
+  %188 = extractvalue { i64, i64, i64 } %187, 0
+  store i64 %188, ptr %27, align 4
+  %189 = extractvalue { i64, i64, i64 } %187, 1
+  store i64 %189, ptr %28, align 4
+  %190 = extractvalue { i64, i64, i64 } %187, 2
+  store i64 %190, ptr %29, align 4
+  %191 = load i64, ptr %27, align 4
+  %192 = call i64 @pf685()
+  %193 = icmp eq i64 %191, %192
+  br i1 %193, label %sc.cont, label %sc.rhs
 
-match.next24:                                     ; preds = %match.next20
-  %188 = icmp eq i64 %94, 6
-  br i1 %188, label %arm35, label %match.next36
+match.next26:                                     ; preds = %match.next22
+  %194 = icmp eq i64 %94, 6
+  br i1 %194, label %arm37, label %match.next38
 
-sc.rhs:                                           ; preds = %arm23
-  %189 = load i64, ptr %27, align 4
-  %190 = call i64 @pf686()
-  %191 = icmp eq i64 %189, %190
+sc.rhs:                                           ; preds = %arm25
+  %195 = load i64, ptr %27, align 4
+  %196 = call i64 @pf686()
+  %197 = icmp eq i64 %195, %196
   br label %sc.cont
 
-sc.cont:                                          ; preds = %sc.rhs, %arm23
-  %192 = phi i1 [ true, %arm23 ], [ %191, %sc.rhs ]
-  %193 = icmp ne i1 %192, false
-  br i1 %193, label %sc.cont26, label %sc.rhs25
+sc.cont:                                          ; preds = %sc.rhs, %arm25
+  %198 = phi i1 [ true, %arm25 ], [ %197, %sc.rhs ]
+  %199 = icmp ne i1 %198, false
+  br i1 %199, label %sc.cont28, label %sc.rhs27
 
-sc.rhs25:                                         ; preds = %sc.cont
-  %194 = load i64, ptr %27, align 4
-  %195 = call i64 @pf687()
-  %196 = icmp eq i64 %194, %195
-  br label %sc.cont26
-
-sc.cont26:                                        ; preds = %sc.rhs25, %sc.cont
-  %197 = phi i1 [ true, %sc.cont ], [ %196, %sc.rhs25 ]
-  %198 = icmp ne i1 %197, false
-  br i1 %198, label %sc.cont28, label %sc.rhs27
-
-sc.rhs27:                                         ; preds = %sc.cont26
-  %199 = load i64, ptr %27, align 4
-  %200 = call i64 @pf688()
-  %201 = icmp eq i64 %199, %200
+sc.rhs27:                                         ; preds = %sc.cont
+  %200 = load i64, ptr %27, align 4
+  %201 = call i64 @pf687()
+  %202 = icmp eq i64 %200, %201
   br label %sc.cont28
 
-sc.cont28:                                        ; preds = %sc.rhs27, %sc.cont26
-  %202 = phi i1 [ true, %sc.cont26 ], [ %201, %sc.rhs27 ]
-  %203 = icmp ne i1 %202, false
-  br i1 %203, label %sc.cont30, label %sc.rhs29
+sc.cont28:                                        ; preds = %sc.rhs27, %sc.cont
+  %203 = phi i1 [ true, %sc.cont ], [ %202, %sc.rhs27 ]
+  %204 = icmp ne i1 %203, false
+  br i1 %204, label %sc.cont30, label %sc.rhs29
 
 sc.rhs29:                                         ; preds = %sc.cont28
-  %204 = load i64, ptr %27, align 4
-  %205 = call i64 @pf689()
-  %206 = icmp eq i64 %204, %205
+  %205 = load i64, ptr %27, align 4
+  %206 = call i64 @pf688()
+  %207 = icmp eq i64 %205, %206
   br label %sc.cont30
 
 sc.cont30:                                        ; preds = %sc.rhs29, %sc.cont28
-  %207 = phi i1 [ true, %sc.cont28 ], [ %206, %sc.rhs29 ]
-  %208 = icmp ne i1 %207, false
-  br i1 %208, label %sc.cont32, label %sc.rhs31
+  %208 = phi i1 [ true, %sc.cont28 ], [ %207, %sc.rhs29 ]
+  %209 = icmp ne i1 %208, false
+  br i1 %209, label %sc.cont32, label %sc.rhs31
 
 sc.rhs31:                                         ; preds = %sc.cont30
-  %209 = load i64, ptr %27, align 4
-  %210 = call i64 @pf690()
-  %211 = icmp eq i64 %209, %210
+  %210 = load i64, ptr %27, align 4
+  %211 = call i64 @pf689()
+  %212 = icmp eq i64 %210, %211
   br label %sc.cont32
 
 sc.cont32:                                        ; preds = %sc.rhs31, %sc.cont30
-  %212 = phi i1 [ true, %sc.cont30 ], [ %211, %sc.rhs31 ]
-  %213 = icmp ne i1 %212, false
-  br i1 %213, label %then33, label %endif34
+  %213 = phi i1 [ true, %sc.cont30 ], [ %212, %sc.rhs31 ]
+  %214 = icmp ne i1 %213, false
+  br i1 %214, label %sc.cont34, label %sc.rhs33
 
-then33:                                           ; preds = %sc.cont32
+sc.rhs33:                                         ; preds = %sc.cont32
+  %215 = load i64, ptr %27, align 4
+  %216 = call i64 @pf690()
+  %217 = icmp eq i64 %215, %216
+  br label %sc.cont34
+
+sc.cont34:                                        ; preds = %sc.rhs33, %sc.cont32
+  %218 = phi i1 [ true, %sc.cont32 ], [ %217, %sc.rhs33 ]
+  %219 = icmp ne i1 %218, false
+  br i1 %219, label %then35, label %endif36
+
+then35:                                           ; preds = %sc.cont34
   ret i64 2
 
-endif34:                                          ; preds = %sc.cont32
-  %214 = load i64, ptr %28, align 4
-  %215 = call i64 @pf1245(ptr %0, ptr %1, i64 %214)
-  ret i64 %215
+endif36:                                          ; preds = %sc.cont34
+  %220 = load i64, ptr %28, align 4
+  %221 = call i64 @pf1245(ptr %0, ptr %1, i64 %220)
+  ret i64 %221
 
-arm35:                                            ; preds = %match.next24
-  %216 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %217 = load { i64, i64, i64 }, ptr %216, align 4
-  %218 = extractvalue { i64, i64, i64 } %217, 0
-  store i64 %218, ptr %30, align 4
-  %219 = extractvalue { i64, i64, i64 } %217, 1
-  store i64 %219, ptr %31, align 4
-  %220 = extractvalue { i64, i64, i64 } %217, 2
-  store i64 %220, ptr %32, align 4
-  %221 = load i64, ptr %30, align 4
-  %222 = call i64 @pf1216(ptr %0, ptr %1, i64 %221)
-  store i64 %222, ptr %33, align 4
-  %223 = load i64, ptr %33, align 4
-  %224 = load %st31, ptr %1, align 8
-  %225 = extractvalue %st31 %224, 0
-  %226 = extractvalue %st96 %225, 5
-  %227 = extractvalue { ptr, i64 } %226, 1
-  %228 = icmp ult i64 %223, %227
-  br i1 %228, label %then37, label %endif38
+arm37:                                            ; preds = %match.next26
+  %222 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %223 = load { i64, i64, i64 }, ptr %222, align 4
+  %224 = extractvalue { i64, i64, i64 } %223, 0
+  store i64 %224, ptr %30, align 4
+  %225 = extractvalue { i64, i64, i64 } %223, 1
+  store i64 %225, ptr %31, align 4
+  %226 = extractvalue { i64, i64, i64 } %223, 2
+  store i64 %226, ptr %32, align 4
+  %227 = load i64, ptr %30, align 4
+  %228 = call i64 @pf1216(ptr %0, ptr %1, i64 %227)
+  store i64 %228, ptr %33, align 4
+  %229 = load i64, ptr %33, align 4
+  %230 = load %st31, ptr %1, align 8
+  %231 = extractvalue %st31 %230, 0
+  %232 = extractvalue %st96 %231, 5
+  %233 = extractvalue { ptr, i64 } %232, 1
+  %234 = icmp ult i64 %229, %233
+  br i1 %234, label %then39, label %endif40
 
-match.next36:                                     ; preds = %match.next24
-  %229 = icmp eq i64 %94, 11
-  br i1 %229, label %arm47, label %match.next48
+match.next38:                                     ; preds = %match.next26
+  %235 = icmp eq i64 %94, 11
+  br i1 %235, label %arm49, label %match.next50
 
-then37:                                           ; preds = %arm35
-  %230 = load i64, ptr %33, align 4
-  %231 = load i64, ptr %31, align 4
-  %232 = load i64, ptr %32, align 4
-  %233 = call i64 @pf405(ptr %1, i64 %230, i64 %231, i64 %232)
-  store i64 %233, ptr %34, align 4
-  %234 = load i64, ptr %34, align 4
-  %235 = load %st31, ptr %1, align 8
-  %236 = extractvalue %st31 %235, 0
-  %237 = extractvalue %st96 %236, 5
-  %238 = extractvalue { ptr, i64 } %237, 0
-  %239 = extractvalue { ptr, i64 } %237, 1
-  %240 = load i64, ptr %33, align 4
-  call void @plew_bounds(i64 %240, i64 %239)
-  %241 = getelementptr %st82, ptr %238, i64 %240
-  %242 = load %st82, ptr %241, align 8
-  %243 = extractvalue %st82 %242, 4
-  %244 = extractvalue { ptr, i64 } %243, 1
-  %245 = icmp ult i64 %234, %244
-  br i1 %245, label %then39, label %endif40
+then39:                                           ; preds = %arm37
+  %236 = load i64, ptr %33, align 4
+  %237 = load i64, ptr %31, align 4
+  %238 = load i64, ptr %32, align 4
+  %239 = call i64 @pf405(ptr %1, i64 %236, i64 %237, i64 %238)
+  store i64 %239, ptr %34, align 4
+  %240 = load i64, ptr %34, align 4
+  %241 = load %st31, ptr %1, align 8
+  %242 = extractvalue %st31 %241, 0
+  %243 = extractvalue %st96 %242, 5
+  %244 = extractvalue { ptr, i64 } %243, 0
+  %245 = extractvalue { ptr, i64 } %243, 1
+  %246 = load i64, ptr %33, align 4
+  call void @plew_bounds(i64 %246, i64 %245)
+  %247 = getelementptr %st82, ptr %244, i64 %246
+  %248 = load %st82, ptr %247, align 8
+  %249 = extractvalue %st82 %248, 4
+  %250 = extractvalue { ptr, i64 } %249, 1
+  %251 = icmp ult i64 %240, %250
+  br i1 %251, label %then41, label %endif42
 
-endif38:                                          ; preds = %endif40, %arm35
+endif40:                                          ; preds = %endif42, %arm37
   br label %match.end
-
-then39:                                           ; preds = %then37
-  %246 = load %st31, ptr %1, align 8
-  %247 = extractvalue %st31 %246, 0
-  %248 = extractvalue %st96 %247, 5
-  %249 = extractvalue { ptr, i64 } %248, 0
-  %250 = extractvalue { ptr, i64 } %248, 1
-  %251 = load i64, ptr %33, align 4
-  call void @plew_bounds(i64 %251, i64 %250)
-  %252 = getelementptr %st82, ptr %249, i64 %251
-  %253 = load %st82, ptr %252, align 8
-  %254 = extractvalue %st82 %253, 4
-  %255 = extractvalue { ptr, i64 } %254, 0
-  %256 = extractvalue { ptr, i64 } %254, 1
-  %257 = load i64, ptr %34, align 4
-  call void @plew_bounds(i64 %257, i64 %256)
-  %258 = getelementptr %st81, ptr %255, i64 %257
-  %259 = load %st81, ptr %258, align 4
-  store %st81 %259, ptr %35, align 4
-  %260 = load %st81, ptr %35, align 4
-  %261 = extractvalue %st81 %260, 7
-  %262 = icmp ne i64 %261, 0
-  br i1 %262, label %then41, label %endif42
-
-endif40:                                          ; preds = %then37
-  br label %endif38
 
 then41:                                           ; preds = %then39
-  %263 = load i64, ptr %30, align 4
-  %264 = call i64 @pf1209(ptr %0, ptr %1, i64 %263)
-  store i64 %264, ptr %36, align 4
-  %265 = load %st31, ptr %1, align 8
-  %266 = extractvalue %st31 %265, 3
-  %267 = extractvalue %st103 %266, 18
-  %268 = extractvalue { ptr, i64 } %267, 0
-  %269 = extractvalue { ptr, i64 } %267, 1
-  %270 = call ptr @plew_arr_copy(ptr %268, i64 ptrtoint (ptr getelementptr (%st75, ptr null, i32 1) to i64), i64 %269)
-  %271 = insertvalue { ptr, i64 } undef, ptr %270, 0
-  %272 = insertvalue { ptr, i64 } %271, i64 %269, 1
-  store { ptr, i64 } %272, ptr %37, align 8
-  %273 = load %st31, ptr %1, align 8
-  %274 = extractvalue %st31 %273, 3
-  %275 = extractvalue %st103 %274, 19
-  %276 = extractvalue { ptr, i64 } %275, 0
-  %277 = extractvalue { ptr, i64 } %275, 1
-  %278 = call ptr @plew_arr_copy(ptr %276, i64 ptrtoint (ptr getelementptr (i64, ptr null, i32 1) to i64), i64 %277)
-  %279 = insertvalue { ptr, i64 } undef, ptr %278, 0
-  %280 = insertvalue { ptr, i64 } %279, i64 %277, 1
-  store { ptr, i64 } %280, ptr %38, align 8
-  %281 = load i64, ptr %36, align 4
-  %282 = call i1 @pf1213(ptr %0, ptr %1, i64 %281)
-  store i1 %282, ptr %39, align 1
-  %283 = load %st81, ptr %35, align 4
-  %284 = extractvalue %st81 %283, 7
-  store i64 %284, ptr %40, align 4
-  %285 = load %st31, ptr %1, align 8
-  %286 = extractvalue %st31 %285, 3
-  %287 = extractvalue %st103 %286, 18
-  %288 = extractvalue { ptr, i64 } %287, 1
-  %289 = icmp ugt i64 %288, 0
-  br i1 %289, label %then43, label %endif44
+  %252 = load %st31, ptr %1, align 8
+  %253 = extractvalue %st31 %252, 0
+  %254 = extractvalue %st96 %253, 5
+  %255 = extractvalue { ptr, i64 } %254, 0
+  %256 = extractvalue { ptr, i64 } %254, 1
+  %257 = load i64, ptr %33, align 4
+  call void @plew_bounds(i64 %257, i64 %256)
+  %258 = getelementptr %st82, ptr %255, i64 %257
+  %259 = load %st82, ptr %258, align 8
+  %260 = extractvalue %st82 %259, 4
+  %261 = extractvalue { ptr, i64 } %260, 0
+  %262 = extractvalue { ptr, i64 } %260, 1
+  %263 = load i64, ptr %34, align 4
+  call void @plew_bounds(i64 %263, i64 %262)
+  %264 = getelementptr %st81, ptr %261, i64 %263
+  %265 = load %st81, ptr %264, align 4
+  store %st81 %265, ptr %35, align 4
+  %266 = load %st81, ptr %35, align 4
+  %267 = extractvalue %st81 %266, 7
+  %268 = icmp ne i64 %267, 0
+  br i1 %268, label %then43, label %endif44
 
 endif42:                                          ; preds = %then39
-  %290 = load %st81, ptr %35, align 4
-  %291 = extractvalue %st81 %290, 3
-  %292 = load %st81, ptr %35, align 4
-  %293 = extractvalue %st81 %292, 4
-  %294 = call i64 @pf410(ptr %1, i64 %291, i64 %293)
-  ret i64 %294
+  br label %endif40
 
 then43:                                           ; preds = %then41
-  %295 = load %st81, ptr %35, align 4
-  %296 = extractvalue %st81 %295, 7
-  %297 = call i64 @pf1030(ptr %1, i64 %296)
-  store i64 %297, ptr %40, align 4
-  br label %endif44
+  %269 = load i64, ptr %30, align 4
+  %270 = call i64 @pf1209(ptr %0, ptr %1, i64 %269)
+  store i64 %270, ptr %36, align 4
+  %271 = load %st31, ptr %1, align 8
+  %272 = extractvalue %st31 %271, 3
+  %273 = extractvalue %st103 %272, 18
+  %274 = extractvalue { ptr, i64 } %273, 0
+  %275 = extractvalue { ptr, i64 } %273, 1
+  %276 = call ptr @plew_arr_copy(ptr %274, i64 ptrtoint (ptr getelementptr (%st75, ptr null, i32 1) to i64), i64 %275)
+  %277 = insertvalue { ptr, i64 } undef, ptr %276, 0
+  %278 = insertvalue { ptr, i64 } %277, i64 %275, 1
+  store { ptr, i64 } %278, ptr %37, align 8
+  %279 = load %st31, ptr %1, align 8
+  %280 = extractvalue %st31 %279, 3
+  %281 = extractvalue %st103 %280, 19
+  %282 = extractvalue { ptr, i64 } %281, 0
+  %283 = extractvalue { ptr, i64 } %281, 1
+  %284 = call ptr @plew_arr_copy(ptr %282, i64 ptrtoint (ptr getelementptr (i64, ptr null, i32 1) to i64), i64 %283)
+  %285 = insertvalue { ptr, i64 } undef, ptr %284, 0
+  %286 = insertvalue { ptr, i64 } %285, i64 %283, 1
+  store { ptr, i64 } %286, ptr %38, align 8
+  %287 = load i64, ptr %36, align 4
+  %288 = call i1 @pf1213(ptr %0, ptr %1, i64 %287)
+  store i1 %288, ptr %39, align 1
+  %289 = load %st81, ptr %35, align 4
+  %290 = extractvalue %st81 %289, 7
+  store i64 %290, ptr %40, align 4
+  %291 = load %st31, ptr %1, align 8
+  %292 = extractvalue %st31 %291, 3
+  %293 = extractvalue %st103 %292, 18
+  %294 = extractvalue { ptr, i64 } %293, 1
+  %295 = icmp ugt i64 %294, 0
+  br i1 %295, label %then45, label %endif46
 
-endif44:                                          ; preds = %then43, %then41
-  %298 = load %st31, ptr %1, align 8
-  %299 = extractvalue %st31 %298, 0
-  %300 = extractvalue %st96 %299, 7
-  %301 = extractvalue { ptr, i64 } %300, 0
-  %302 = extractvalue { ptr, i64 } %300, 1
-  %303 = load i64, ptr %40, align 4
-  call void @plew_bounds(i64 %303, i64 %302)
-  %304 = getelementptr %st70, ptr %301, i64 %303
-  %305 = load %st70, ptr %304, align 8
-  %306 = extractvalue %st70 %305, 0
-  %307 = load %st31, ptr %1, align 8
-  %308 = extractvalue %st31 %307, 0
-  %309 = extractvalue %st96 %308, 7
-  %310 = extractvalue { ptr, i64 } %309, 0
-  %311 = extractvalue { ptr, i64 } %309, 1
-  %312 = load i64, ptr %40, align 4
-  call void @plew_bounds(i64 %312, i64 %311)
-  %313 = getelementptr %st70, ptr %310, i64 %312
-  %314 = load %st70, ptr %313, align 8
-  %315 = extractvalue %st70 %314, 1
-  %316 = call i64 @pf410(ptr %1, i64 %306, i64 %315)
-  store i64 %316, ptr %41, align 4
-  %317 = load i1, ptr %39, align 1
-  %318 = icmp ne i1 %317, false
-  br i1 %318, label %then45, label %endif46
+endif44:                                          ; preds = %then41
+  %296 = load %st81, ptr %35, align 4
+  %297 = extractvalue %st81 %296, 3
+  %298 = load %st81, ptr %35, align 4
+  %299 = extractvalue %st81 %298, 4
+  %300 = call i64 @pf410(ptr %1, i64 %297, i64 %299)
+  ret i64 %300
 
-then45:                                           ; preds = %endif44
-  %319 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
-  %320 = getelementptr inbounds nuw %st103, ptr %319, i32 0, i32 18
-  %321 = load { ptr, i64 }, ptr %37, align 8
-  store { ptr, i64 } %321, ptr %320, align 8
-  %322 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
-  %323 = getelementptr inbounds nuw %st103, ptr %322, i32 0, i32 19
-  %324 = load { ptr, i64 }, ptr %38, align 8
-  store { ptr, i64 } %324, ptr %323, align 8
+then45:                                           ; preds = %then43
+  %301 = load %st81, ptr %35, align 4
+  %302 = extractvalue %st81 %301, 7
+  %303 = call i64 @pf1030(ptr %1, i64 %302)
+  store i64 %303, ptr %40, align 4
   br label %endif46
 
-endif46:                                          ; preds = %then45, %endif44
-  %325 = load i64, ptr %41, align 4
-  ret i64 %325
+endif46:                                          ; preds = %then45, %then43
+  %304 = load %st31, ptr %1, align 8
+  %305 = extractvalue %st31 %304, 0
+  %306 = extractvalue %st96 %305, 7
+  %307 = extractvalue { ptr, i64 } %306, 0
+  %308 = extractvalue { ptr, i64 } %306, 1
+  %309 = load i64, ptr %40, align 4
+  call void @plew_bounds(i64 %309, i64 %308)
+  %310 = getelementptr %st70, ptr %307, i64 %309
+  %311 = load %st70, ptr %310, align 8
+  %312 = extractvalue %st70 %311, 0
+  %313 = load %st31, ptr %1, align 8
+  %314 = extractvalue %st31 %313, 0
+  %315 = extractvalue %st96 %314, 7
+  %316 = extractvalue { ptr, i64 } %315, 0
+  %317 = extractvalue { ptr, i64 } %315, 1
+  %318 = load i64, ptr %40, align 4
+  call void @plew_bounds(i64 %318, i64 %317)
+  %319 = getelementptr %st70, ptr %316, i64 %318
+  %320 = load %st70, ptr %319, align 8
+  %321 = extractvalue %st70 %320, 1
+  %322 = call i64 @pf410(ptr %1, i64 %312, i64 %321)
+  store i64 %322, ptr %41, align 4
+  %323 = load i1, ptr %39, align 1
+  %324 = icmp ne i1 %323, false
+  br i1 %324, label %then47, label %endif48
 
-arm47:                                            ; preds = %match.next36
-  %326 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %327 = load { i64, i64, i64, { ptr, i64 } }, ptr %326, align 8
-  %328 = extractvalue { i64, i64, i64, { ptr, i64 } } %327, 0
-  store i64 %328, ptr %42, align 4
-  %329 = extractvalue { i64, i64, i64, { ptr, i64 } } %327, 1
-  store i64 %329, ptr %43, align 4
-  %330 = extractvalue { i64, i64, i64, { ptr, i64 } } %327, 2
-  store i64 %330, ptr %44, align 4
-  %331 = extractvalue { i64, i64, i64, { ptr, i64 } } %327, 3
-  store { ptr, i64 } %331, ptr %45, align 8
-  %332 = load i64, ptr %42, align 4
-  %333 = call i64 @pf1221(ptr %0, ptr %1, i64 %332)
-  store i64 %333, ptr %46, align 4
-  %334 = load i64, ptr %46, align 4
-  %335 = load %st31, ptr %1, align 8
-  %336 = extractvalue %st31 %335, 1
-  %337 = extractvalue %st97 %336, 0
-  %338 = extractvalue { ptr, i64 } %337, 1
-  %339 = icmp ult i64 %334, %338
-  br i1 %339, label %then49, label %endif50
+then47:                                           ; preds = %endif46
+  %325 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
+  %326 = getelementptr inbounds nuw %st103, ptr %325, i32 0, i32 18
+  %327 = load { ptr, i64 }, ptr %37, align 8
+  store { ptr, i64 } %327, ptr %326, align 8
+  %328 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
+  %329 = getelementptr inbounds nuw %st103, ptr %328, i32 0, i32 19
+  %330 = load { ptr, i64 }, ptr %38, align 8
+  store { ptr, i64 } %330, ptr %329, align 8
+  br label %endif48
 
-match.next48:                                     ; preds = %match.next36
-  %340 = icmp eq i64 %94, 12
-  br i1 %340, label %arm71, label %match.next72
+endif48:                                          ; preds = %then47, %endif46
+  %331 = load i64, ptr %41, align 4
+  ret i64 %331
 
-then49:                                           ; preds = %arm47
-  %341 = load i64, ptr %42, align 4
-  %342 = call i64 @pf1209(ptr %0, ptr %1, i64 %341)
-  %343 = load i64, ptr %46, align 4
-  %344 = load i64, ptr %43, align 4
-  %345 = load i64, ptr %44, align 4
-  %346 = load { ptr, i64 }, ptr %45, align 8
-  %347 = call i64 @pf402(ptr %1, i64 %342, i64 %343, i64 %344, i64 %345, { ptr, i64 } %346)
-  store i64 %347, ptr %47, align 4
-  %348 = load i64, ptr %47, align 4
-  %349 = icmp ne i64 %348, 0
-  br i1 %349, label %then51, label %endif52
+arm49:                                            ; preds = %match.next38
+  %332 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %333 = load { i64, i64, i64, { ptr, i64 } }, ptr %332, align 8
+  %334 = extractvalue { i64, i64, i64, { ptr, i64 } } %333, 0
+  store i64 %334, ptr %42, align 4
+  %335 = extractvalue { i64, i64, i64, { ptr, i64 } } %333, 1
+  store i64 %335, ptr %43, align 4
+  %336 = extractvalue { i64, i64, i64, { ptr, i64 } } %333, 2
+  store i64 %336, ptr %44, align 4
+  %337 = extractvalue { i64, i64, i64, { ptr, i64 } } %333, 3
+  store { ptr, i64 } %337, ptr %45, align 8
+  %338 = load i64, ptr %42, align 4
+  %339 = call i64 @pf1221(ptr %0, ptr %1, i64 %338)
+  store i64 %339, ptr %46, align 4
+  %340 = load i64, ptr %46, align 4
+  %341 = load %st31, ptr %1, align 8
+  %342 = extractvalue %st31 %341, 1
+  %343 = extractvalue %st97 %342, 0
+  %344 = extractvalue { ptr, i64 } %343, 1
+  %345 = icmp ult i64 %340, %344
+  br i1 %345, label %then51, label %endif52
 
-endif50:                                          ; preds = %endif52, %arm47
-  %350 = load i64, ptr %42, align 4
-  %351 = call i64 @pf1216(ptr %0, ptr %1, i64 %350)
-  store i64 %351, ptr %48, align 4
-  %352 = load i64, ptr %48, align 4
-  %353 = load %st31, ptr %1, align 8
-  %354 = extractvalue %st31 %353, 0
-  %355 = extractvalue %st96 %354, 5
-  %356 = extractvalue { ptr, i64 } %355, 1
-  %357 = icmp ult i64 %352, %356
-  br i1 %357, label %then53, label %endif54
+match.next50:                                     ; preds = %match.next38
+  %346 = icmp eq i64 %94, 12
+  br i1 %346, label %arm73, label %match.next74
 
-then51:                                           ; preds = %then49
-  %358 = load %st31, ptr %1, align 8
-  %359 = extractvalue %st31 %358, 0
-  %360 = extractvalue %st96 %359, 7
-  %361 = extractvalue { ptr, i64 } %360, 0
-  %362 = extractvalue { ptr, i64 } %360, 1
-  %363 = load i64, ptr %47, align 4
-  call void @plew_bounds(i64 %363, i64 %362)
-  %364 = getelementptr %st70, ptr %361, i64 %363
-  %365 = load %st70, ptr %364, align 8
-  %366 = extractvalue %st70 %365, 0
-  %367 = load %st31, ptr %1, align 8
-  %368 = extractvalue %st31 %367, 0
-  %369 = extractvalue %st96 %368, 7
-  %370 = extractvalue { ptr, i64 } %369, 0
-  %371 = extractvalue { ptr, i64 } %369, 1
-  %372 = load i64, ptr %47, align 4
-  call void @plew_bounds(i64 %372, i64 %371)
-  %373 = getelementptr %st70, ptr %370, i64 %372
-  %374 = load %st70, ptr %373, align 8
-  %375 = extractvalue %st70 %374, 1
-  %376 = call i64 @pf410(ptr %1, i64 %366, i64 %375)
-  ret i64 %376
+then51:                                           ; preds = %arm49
+  %347 = load i64, ptr %42, align 4
+  %348 = call i64 @pf1209(ptr %0, ptr %1, i64 %347)
+  %349 = load i64, ptr %46, align 4
+  %350 = load i64, ptr %43, align 4
+  %351 = load i64, ptr %44, align 4
+  %352 = load { ptr, i64 }, ptr %45, align 8
+  %353 = call i64 @pf402(ptr %1, i64 %348, i64 %349, i64 %350, i64 %351, { ptr, i64 } %352)
+  store i64 %353, ptr %47, align 4
+  %354 = load i64, ptr %47, align 4
+  %355 = icmp ne i64 %354, 0
+  br i1 %355, label %then53, label %endif54
 
-endif52:                                          ; preds = %then49
-  br label %endif50
+endif52:                                          ; preds = %endif54, %arm49
+  %356 = load i64, ptr %42, align 4
+  %357 = call i64 @pf1216(ptr %0, ptr %1, i64 %356)
+  store i64 %357, ptr %48, align 4
+  %358 = load i64, ptr %48, align 4
+  %359 = load %st31, ptr %1, align 8
+  %360 = extractvalue %st31 %359, 0
+  %361 = extractvalue %st96 %360, 5
+  %362 = extractvalue { ptr, i64 } %361, 1
+  %363 = icmp ult i64 %358, %362
+  br i1 %363, label %then55, label %endif56
 
-then53:                                           ; preds = %endif50
-  %377 = load %st31, ptr %1, align 8
-  %378 = extractvalue %st31 %377, 0
-  %379 = extractvalue %st96 %378, 5
-  %380 = extractvalue { ptr, i64 } %379, 0
-  %381 = extractvalue { ptr, i64 } %379, 1
-  %382 = load i64, ptr %48, align 4
-  call void @plew_bounds(i64 %382, i64 %381)
-  %383 = getelementptr %st82, ptr %380, i64 %382
-  %384 = load %st82, ptr %383, align 8
-  %385 = extractvalue %st82 %384, 0
-  %386 = load %st31, ptr %1, align 8
-  %387 = extractvalue %st31 %386, 0
-  %388 = extractvalue %st96 %387, 5
-  %389 = extractvalue { ptr, i64 } %388, 0
-  %390 = extractvalue { ptr, i64 } %388, 1
-  %391 = load i64, ptr %48, align 4
-  call void @plew_bounds(i64 %391, i64 %390)
-  %392 = getelementptr %st82, ptr %389, i64 %391
-  %393 = load %st82, ptr %392, align 8
-  %394 = extractvalue %st82 %393, 1
-  %395 = load i64, ptr %43, align 4
-  %396 = load i64, ptr %44, align 4
-  %397 = load { ptr, i64 }, ptr %45, align 8
-  %398 = call i64 @pf834(ptr %1, i64 %385, i64 %394, i64 %395, i64 %396, { ptr, i64 } %397)
-  store i64 %398, ptr %49, align 4
-  %399 = load i64, ptr %49, align 4
-  %400 = load %st31, ptr %1, align 8
-  %401 = extractvalue %st31 %400, 0
-  %402 = extractvalue %st96 %401, 4
-  %403 = extractvalue { ptr, i64 } %402, 1
-  %404 = icmp ult i64 %399, %403
-  br i1 %404, label %then55, label %endif56
+then53:                                           ; preds = %then51
+  %364 = load %st31, ptr %1, align 8
+  %365 = extractvalue %st31 %364, 0
+  %366 = extractvalue %st96 %365, 7
+  %367 = extractvalue { ptr, i64 } %366, 0
+  %368 = extractvalue { ptr, i64 } %366, 1
+  %369 = load i64, ptr %47, align 4
+  call void @plew_bounds(i64 %369, i64 %368)
+  %370 = getelementptr %st70, ptr %367, i64 %369
+  %371 = load %st70, ptr %370, align 8
+  %372 = extractvalue %st70 %371, 0
+  %373 = load %st31, ptr %1, align 8
+  %374 = extractvalue %st31 %373, 0
+  %375 = extractvalue %st96 %374, 7
+  %376 = extractvalue { ptr, i64 } %375, 0
+  %377 = extractvalue { ptr, i64 } %375, 1
+  %378 = load i64, ptr %47, align 4
+  call void @plew_bounds(i64 %378, i64 %377)
+  %379 = getelementptr %st70, ptr %376, i64 %378
+  %380 = load %st70, ptr %379, align 8
+  %381 = extractvalue %st70 %380, 1
+  %382 = call i64 @pf410(ptr %1, i64 %372, i64 %381)
+  ret i64 %382
 
-endif54:                                          ; preds = %endif56, %endif50
-  %405 = load i64, ptr %42, align 4
-  %406 = call i64 @pf1209(ptr %0, ptr %1, i64 %405)
-  store i64 %406, ptr %50, align 4
-  %407 = load i64, ptr %50, align 4
-  %408 = icmp ne i64 %407, 0
-  br i1 %408, label %then59, label %endif60
+endif54:                                          ; preds = %then51
+  br label %endif52
 
-then55:                                           ; preds = %then53
-  %409 = load %st31, ptr %1, align 8
-  %410 = extractvalue %st31 %409, 0
-  %411 = extractvalue %st96 %410, 4
-  %412 = extractvalue { ptr, i64 } %411, 0
-  %413 = extractvalue { ptr, i64 } %411, 1
-  %414 = load i64, ptr %49, align 4
-  call void @plew_bounds(i64 %414, i64 %413)
-  %415 = getelementptr %st93, ptr %412, i64 %414
-  %416 = load %st93, ptr %415, align 8
-  %417 = extractvalue %st93 %416, 6
-  %418 = icmp ne i1 %417, false
-  br i1 %418, label %then57, label %endif58
+then55:                                           ; preds = %endif52
+  %383 = load %st31, ptr %1, align 8
+  %384 = extractvalue %st31 %383, 0
+  %385 = extractvalue %st96 %384, 5
+  %386 = extractvalue { ptr, i64 } %385, 0
+  %387 = extractvalue { ptr, i64 } %385, 1
+  %388 = load i64, ptr %48, align 4
+  call void @plew_bounds(i64 %388, i64 %387)
+  %389 = getelementptr %st82, ptr %386, i64 %388
+  %390 = load %st82, ptr %389, align 8
+  %391 = extractvalue %st82 %390, 0
+  %392 = load %st31, ptr %1, align 8
+  %393 = extractvalue %st31 %392, 0
+  %394 = extractvalue %st96 %393, 5
+  %395 = extractvalue { ptr, i64 } %394, 0
+  %396 = extractvalue { ptr, i64 } %394, 1
+  %397 = load i64, ptr %48, align 4
+  call void @plew_bounds(i64 %397, i64 %396)
+  %398 = getelementptr %st82, ptr %395, i64 %397
+  %399 = load %st82, ptr %398, align 8
+  %400 = extractvalue %st82 %399, 1
+  %401 = load i64, ptr %43, align 4
+  %402 = load i64, ptr %44, align 4
+  %403 = load { ptr, i64 }, ptr %45, align 8
+  %404 = call i64 @pf834(ptr %1, i64 %391, i64 %400, i64 %401, i64 %402, { ptr, i64 } %403)
+  store i64 %404, ptr %49, align 4
+  %405 = load i64, ptr %49, align 4
+  %406 = load %st31, ptr %1, align 8
+  %407 = extractvalue %st31 %406, 0
+  %408 = extractvalue %st96 %407, 4
+  %409 = extractvalue { ptr, i64 } %408, 1
+  %410 = icmp ult i64 %405, %409
+  br i1 %410, label %then57, label %endif58
 
-endif56:                                          ; preds = %endif58, %then53
-  br label %endif54
+endif56:                                          ; preds = %endif58, %endif52
+  %411 = load i64, ptr %42, align 4
+  %412 = call i64 @pf1209(ptr %0, ptr %1, i64 %411)
+  store i64 %412, ptr %50, align 4
+  %413 = load i64, ptr %50, align 4
+  %414 = icmp ne i64 %413, 0
+  br i1 %414, label %then61, label %endif62
 
 then57:                                           ; preds = %then55
-  %419 = load i64, ptr %42, align 4
+  %415 = load %st31, ptr %1, align 8
+  %416 = extractvalue %st31 %415, 0
+  %417 = extractvalue %st96 %416, 4
+  %418 = extractvalue { ptr, i64 } %417, 0
+  %419 = extractvalue { ptr, i64 } %417, 1
   %420 = load i64, ptr %49, align 4
-  %421 = call i64 @pf1244(ptr %0, ptr %1, i64 %419, i64 %420)
-  ret i64 %421
+  call void @plew_bounds(i64 %420, i64 %419)
+  %421 = getelementptr %st93, ptr %418, i64 %420
+  %422 = load %st93, ptr %421, align 8
+  %423 = extractvalue %st93 %422, 6
+  %424 = icmp ne i1 %423, false
+  br i1 %424, label %then59, label %endif60
 
-endif58:                                          ; preds = %then55
+endif58:                                          ; preds = %endif60, %then55
   br label %endif56
 
-then59:                                           ; preds = %endif54
-  %422 = load %st31, ptr %1, align 8
-  %423 = extractvalue %st31 %422, 0
-  %424 = extractvalue %st96 %423, 7
-  %425 = extractvalue { ptr, i64 } %424, 0
-  %426 = extractvalue { ptr, i64 } %424, 1
-  %427 = load i64, ptr %50, align 4
-  call void @plew_bounds(i64 %427, i64 %426)
-  %428 = getelementptr %st70, ptr %425, i64 %427
-  %429 = load %st70, ptr %428, align 8
-  store %st70 %429, ptr %51, align 8
-  %430 = load %st70, ptr %51, align 8
-  %431 = extractvalue %st70 %430, 0
-  %432 = load %st70, ptr %51, align 8
-  %433 = extractvalue %st70 %432, 1
-  %434 = load i64, ptr %43, align 4
-  %435 = load i64, ptr %44, align 4
-  %436 = load { ptr, i64 }, ptr %45, align 8
-  %437 = call i64 @pf834(ptr %1, i64 %431, i64 %433, i64 %434, i64 %435, { ptr, i64 } %436)
-  store i64 %437, ptr %52, align 4
-  %438 = load i64, ptr %52, align 4
-  %439 = load %st31, ptr %1, align 8
-  %440 = extractvalue %st31 %439, 0
-  %441 = extractvalue %st96 %440, 4
-  %442 = extractvalue { ptr, i64 } %441, 1
-  %443 = icmp ult i64 %438, %442
-  br i1 %443, label %then61, label %endif62
+then59:                                           ; preds = %then57
+  %425 = load i64, ptr %42, align 4
+  %426 = load i64, ptr %49, align 4
+  %427 = call i64 @pf1244(ptr %0, ptr %1, i64 %425, i64 %426)
+  ret i64 %427
 
-endif60:                                          ; preds = %endif62, %endif54
-  %444 = load i64, ptr %42, align 4
-  %445 = call %st75 @pf1320(ptr %0, ptr %1, i64 %444)
-  store %st75 %445, ptr %53, align 4
-  %446 = load %st75, ptr %53, align 4
-  %447 = extractvalue %st75 %446, 1
-  %448 = icmp ne i64 %447, 0
-  br i1 %448, label %then65, label %endif66
+endif60:                                          ; preds = %then57
+  br label %endif58
 
-then61:                                           ; preds = %then59
-  %449 = load %st31, ptr %1, align 8
-  %450 = extractvalue %st31 %449, 0
-  %451 = extractvalue %st96 %450, 4
-  %452 = extractvalue { ptr, i64 } %451, 0
-  %453 = extractvalue { ptr, i64 } %451, 1
-  %454 = load i64, ptr %52, align 4
-  call void @plew_bounds(i64 %454, i64 %453)
-  %455 = getelementptr %st93, ptr %452, i64 %454
-  %456 = load %st93, ptr %455, align 8
-  %457 = extractvalue %st93 %456, 6
-  %458 = icmp ne i1 %457, false
-  br i1 %458, label %then63, label %endif64
+then61:                                           ; preds = %endif56
+  %428 = load %st31, ptr %1, align 8
+  %429 = extractvalue %st31 %428, 0
+  %430 = extractvalue %st96 %429, 7
+  %431 = extractvalue { ptr, i64 } %430, 0
+  %432 = extractvalue { ptr, i64 } %430, 1
+  %433 = load i64, ptr %50, align 4
+  call void @plew_bounds(i64 %433, i64 %432)
+  %434 = getelementptr %st70, ptr %431, i64 %433
+  %435 = load %st70, ptr %434, align 8
+  store %st70 %435, ptr %51, align 8
+  %436 = load %st70, ptr %51, align 8
+  %437 = extractvalue %st70 %436, 0
+  %438 = load %st70, ptr %51, align 8
+  %439 = extractvalue %st70 %438, 1
+  %440 = load i64, ptr %43, align 4
+  %441 = load i64, ptr %44, align 4
+  %442 = load { ptr, i64 }, ptr %45, align 8
+  %443 = call i64 @pf834(ptr %1, i64 %437, i64 %439, i64 %440, i64 %441, { ptr, i64 } %442)
+  store i64 %443, ptr %52, align 4
+  %444 = load i64, ptr %52, align 4
+  %445 = load %st31, ptr %1, align 8
+  %446 = extractvalue %st31 %445, 0
+  %447 = extractvalue %st96 %446, 4
+  %448 = extractvalue { ptr, i64 } %447, 1
+  %449 = icmp ult i64 %444, %448
+  br i1 %449, label %then63, label %endif64
 
-endif62:                                          ; preds = %endif64, %then59
-  br label %endif60
+endif62:                                          ; preds = %endif64, %endif56
+  %450 = load i64, ptr %42, align 4
+  %451 = call %st75 @pf1320(ptr %0, ptr %1, i64 %450)
+  store %st75 %451, ptr %53, align 4
+  %452 = load %st75, ptr %53, align 4
+  %453 = extractvalue %st75 %452, 1
+  %454 = icmp ne i64 %453, 0
+  br i1 %454, label %then67, label %endif68
 
 then63:                                           ; preds = %then61
-  %459 = load i64, ptr %42, align 4
+  %455 = load %st31, ptr %1, align 8
+  %456 = extractvalue %st31 %455, 0
+  %457 = extractvalue %st96 %456, 4
+  %458 = extractvalue { ptr, i64 } %457, 0
+  %459 = extractvalue { ptr, i64 } %457, 1
   %460 = load i64, ptr %52, align 4
-  %461 = call i64 @pf1244(ptr %0, ptr %1, i64 %459, i64 %460)
-  ret i64 %461
+  call void @plew_bounds(i64 %460, i64 %459)
+  %461 = getelementptr %st93, ptr %458, i64 %460
+  %462 = load %st93, ptr %461, align 8
+  %463 = extractvalue %st93 %462, 6
+  %464 = icmp ne i1 %463, false
+  br i1 %464, label %then65, label %endif66
 
-endif64:                                          ; preds = %then61
+endif64:                                          ; preds = %endif66, %then61
   br label %endif62
 
-then65:                                           ; preds = %endif60
-  %462 = load %st75, ptr %53, align 4
-  %463 = extractvalue %st75 %462, 0
-  %464 = load %st75, ptr %53, align 4
-  %465 = extractvalue %st75 %464, 1
-  %466 = load i64, ptr %43, align 4
-  %467 = load i64, ptr %44, align 4
-  %468 = load { ptr, i64 }, ptr %45, align 8
-  %469 = call i64 @pf834(ptr %1, i64 %463, i64 %465, i64 %466, i64 %467, { ptr, i64 } %468)
-  store i64 %469, ptr %54, align 4
-  %470 = load i64, ptr %54, align 4
-  %471 = load %st31, ptr %1, align 8
-  %472 = extractvalue %st31 %471, 0
-  %473 = extractvalue %st96 %472, 4
-  %474 = extractvalue { ptr, i64 } %473, 1
-  %475 = icmp ult i64 %470, %474
-  br i1 %475, label %then67, label %endif68
+then65:                                           ; preds = %then63
+  %465 = load i64, ptr %42, align 4
+  %466 = load i64, ptr %52, align 4
+  %467 = call i64 @pf1244(ptr %0, ptr %1, i64 %465, i64 %466)
+  ret i64 %467
 
-endif66:                                          ; preds = %endif68, %endif60
+endif66:                                          ; preds = %then63
+  br label %endif64
+
+then67:                                           ; preds = %endif62
+  %468 = load %st75, ptr %53, align 4
+  %469 = extractvalue %st75 %468, 0
+  %470 = load %st75, ptr %53, align 4
+  %471 = extractvalue %st75 %470, 1
+  %472 = load i64, ptr %43, align 4
+  %473 = load i64, ptr %44, align 4
+  %474 = load { ptr, i64 }, ptr %45, align 8
+  %475 = call i64 @pf834(ptr %1, i64 %469, i64 %471, i64 %472, i64 %473, { ptr, i64 } %474)
+  store i64 %475, ptr %54, align 4
+  %476 = load i64, ptr %54, align 4
+  %477 = load %st31, ptr %1, align 8
+  %478 = extractvalue %st31 %477, 0
+  %479 = extractvalue %st96 %478, 4
+  %480 = extractvalue { ptr, i64 } %479, 1
+  %481 = icmp ult i64 %476, %480
+  br i1 %481, label %then69, label %endif70
+
+endif68:                                          ; preds = %endif70, %endif62
   br label %match.end
 
-then67:                                           ; preds = %then65
-  %476 = load %st31, ptr %1, align 8
-  %477 = extractvalue %st31 %476, 0
-  %478 = extractvalue %st96 %477, 4
-  %479 = extractvalue { ptr, i64 } %478, 0
-  %480 = extractvalue { ptr, i64 } %478, 1
-  %481 = load i64, ptr %54, align 4
-  call void @plew_bounds(i64 %481, i64 %480)
-  %482 = getelementptr %st93, ptr %479, i64 %481
-  %483 = load %st93, ptr %482, align 8
-  %484 = extractvalue %st93 %483, 6
-  %485 = icmp ne i1 %484, false
-  br i1 %485, label %then69, label %endif70
-
-endif68:                                          ; preds = %endif70, %then65
-  br label %endif66
-
 then69:                                           ; preds = %then67
-  %486 = load %st31, ptr %1, align 8
-  %487 = extractvalue %st31 %486, 0
-  %488 = extractvalue %st96 %487, 4
-  %489 = extractvalue { ptr, i64 } %488, 0
-  %490 = extractvalue { ptr, i64 } %488, 1
-  %491 = load i64, ptr %54, align 4
-  call void @plew_bounds(i64 %491, i64 %490)
-  %492 = getelementptr %st93, ptr %489, i64 %491
-  %493 = load %st93, ptr %492, align 8
-  %494 = extractvalue %st93 %493, 7
-  %495 = load %st31, ptr %1, align 8
-  %496 = extractvalue %st31 %495, 0
-  %497 = extractvalue %st96 %496, 4
-  %498 = extractvalue { ptr, i64 } %497, 0
-  %499 = extractvalue { ptr, i64 } %497, 1
-  %500 = load i64, ptr %54, align 4
-  call void @plew_bounds(i64 %500, i64 %499)
-  %501 = getelementptr %st93, ptr %498, i64 %500
-  %502 = load %st93, ptr %501, align 8
-  %503 = extractvalue %st93 %502, 8
-  %504 = call i64 @pf410(ptr %1, i64 %494, i64 %503)
-  ret i64 %504
+  %482 = load %st31, ptr %1, align 8
+  %483 = extractvalue %st31 %482, 0
+  %484 = extractvalue %st96 %483, 4
+  %485 = extractvalue { ptr, i64 } %484, 0
+  %486 = extractvalue { ptr, i64 } %484, 1
+  %487 = load i64, ptr %54, align 4
+  call void @plew_bounds(i64 %487, i64 %486)
+  %488 = getelementptr %st93, ptr %485, i64 %487
+  %489 = load %st93, ptr %488, align 8
+  %490 = extractvalue %st93 %489, 6
+  %491 = icmp ne i1 %490, false
+  br i1 %491, label %then71, label %endif72
 
-endif70:                                          ; preds = %then67
+endif70:                                          ; preds = %endif72, %then67
   br label %endif68
 
-arm71:                                            ; preds = %match.next48
-  %505 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %506 = load { i64, i64, i64, i64, i64, { ptr, i64 } }, ptr %505, align 8
-  %507 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %506, 0
-  store i64 %507, ptr %55, align 4
-  %508 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %506, 1
-  store i64 %508, ptr %56, align 4
-  %509 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %506, 2
-  store i64 %509, ptr %57, align 4
-  %510 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %506, 3
-  store i64 %510, ptr %58, align 4
-  %511 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %506, 4
-  store i64 %511, ptr %59, align 4
-  %512 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %506, 5
-  store { ptr, i64 } %512, ptr %60, align 8
-  %513 = load i64, ptr %55, align 4
-  %514 = call i64 @pf1216(ptr %0, ptr %1, i64 %513)
-  store i64 %514, ptr %61, align 4
-  %515 = load i64, ptr %61, align 4
-  %516 = load %st31, ptr %1, align 8
-  %517 = extractvalue %st31 %516, 0
-  %518 = extractvalue %st96 %517, 5
-  %519 = extractvalue { ptr, i64 } %518, 1
-  %520 = icmp ult i64 %515, %519
-  br i1 %520, label %then73, label %endif74
+then71:                                           ; preds = %then69
+  %492 = load %st31, ptr %1, align 8
+  %493 = extractvalue %st31 %492, 0
+  %494 = extractvalue %st96 %493, 4
+  %495 = extractvalue { ptr, i64 } %494, 0
+  %496 = extractvalue { ptr, i64 } %494, 1
+  %497 = load i64, ptr %54, align 4
+  call void @plew_bounds(i64 %497, i64 %496)
+  %498 = getelementptr %st93, ptr %495, i64 %497
+  %499 = load %st93, ptr %498, align 8
+  %500 = extractvalue %st93 %499, 7
+  %501 = load %st31, ptr %1, align 8
+  %502 = extractvalue %st31 %501, 0
+  %503 = extractvalue %st96 %502, 4
+  %504 = extractvalue { ptr, i64 } %503, 0
+  %505 = extractvalue { ptr, i64 } %503, 1
+  %506 = load i64, ptr %54, align 4
+  call void @plew_bounds(i64 %506, i64 %505)
+  %507 = getelementptr %st93, ptr %504, i64 %506
+  %508 = load %st93, ptr %507, align 8
+  %509 = extractvalue %st93 %508, 8
+  %510 = call i64 @pf410(ptr %1, i64 %500, i64 %509)
+  ret i64 %510
 
-match.next72:                                     ; preds = %match.next48
-  %521 = icmp eq i64 %94, 13
-  br i1 %521, label %arm79, label %match.next80
+endif72:                                          ; preds = %then69
+  br label %endif70
 
-then73:                                           ; preds = %arm71
+arm73:                                            ; preds = %match.next50
+  %511 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %512 = load { i64, i64, i64, i64, i64, { ptr, i64 } }, ptr %511, align 8
+  %513 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %512, 0
+  store i64 %513, ptr %55, align 4
+  %514 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %512, 1
+  store i64 %514, ptr %56, align 4
+  %515 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %512, 2
+  store i64 %515, ptr %57, align 4
+  %516 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %512, 3
+  store i64 %516, ptr %58, align 4
+  %517 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %512, 4
+  store i64 %517, ptr %59, align 4
+  %518 = extractvalue { i64, i64, i64, i64, i64, { ptr, i64 } } %512, 5
+  store { ptr, i64 } %518, ptr %60, align 8
+  %519 = load i64, ptr %55, align 4
+  %520 = call i64 @pf1216(ptr %0, ptr %1, i64 %519)
+  store i64 %520, ptr %61, align 4
+  %521 = load i64, ptr %61, align 4
   %522 = load %st31, ptr %1, align 8
   %523 = extractvalue %st31 %522, 0
   %524 = extractvalue %st96 %523, 5
-  %525 = extractvalue { ptr, i64 } %524, 0
-  %526 = extractvalue { ptr, i64 } %524, 1
-  %527 = load i64, ptr %61, align 4
-  call void @plew_bounds(i64 %527, i64 %526)
-  %528 = getelementptr %st82, ptr %525, i64 %527
-  %529 = load %st82, ptr %528, align 8
-  %530 = extractvalue %st82 %529, 0
-  %531 = load %st31, ptr %1, align 8
-  %532 = extractvalue %st31 %531, 0
-  %533 = extractvalue %st96 %532, 5
-  %534 = extractvalue { ptr, i64 } %533, 0
-  %535 = extractvalue { ptr, i64 } %533, 1
-  %536 = load i64, ptr %61, align 4
-  call void @plew_bounds(i64 %536, i64 %535)
-  %537 = getelementptr %st82, ptr %534, i64 %536
-  %538 = load %st82, ptr %537, align 8
-  %539 = extractvalue %st82 %538, 1
-  %540 = load i64, ptr %56, align 4
-  %541 = load i64, ptr %57, align 4
-  %542 = load i64, ptr %58, align 4
-  %543 = load i64, ptr %59, align 4
-  %544 = load { ptr, i64 }, ptr %60, align 8
-  %545 = call i64 @pf835(ptr %1, i64 %530, i64 %539, i64 %540, i64 %541, i64 %542, i64 %543, { ptr, i64 } %544)
-  store i64 %545, ptr %62, align 4
-  %546 = load i64, ptr %62, align 4
-  %547 = load %st31, ptr %1, align 8
-  %548 = extractvalue %st31 %547, 0
-  %549 = extractvalue %st96 %548, 4
-  %550 = extractvalue { ptr, i64 } %549, 1
-  %551 = icmp ult i64 %546, %550
-  br i1 %551, label %then75, label %endif76
+  %525 = extractvalue { ptr, i64 } %524, 1
+  %526 = icmp ult i64 %521, %525
+  br i1 %526, label %then75, label %endif76
 
-endif74:                                          ; preds = %endif76, %arm71
+match.next74:                                     ; preds = %match.next50
+  %527 = icmp eq i64 %94, 13
+  br i1 %527, label %arm81, label %match.next82
+
+then75:                                           ; preds = %arm73
+  %528 = load %st31, ptr %1, align 8
+  %529 = extractvalue %st31 %528, 0
+  %530 = extractvalue %st96 %529, 5
+  %531 = extractvalue { ptr, i64 } %530, 0
+  %532 = extractvalue { ptr, i64 } %530, 1
+  %533 = load i64, ptr %61, align 4
+  call void @plew_bounds(i64 %533, i64 %532)
+  %534 = getelementptr %st82, ptr %531, i64 %533
+  %535 = load %st82, ptr %534, align 8
+  %536 = extractvalue %st82 %535, 0
+  %537 = load %st31, ptr %1, align 8
+  %538 = extractvalue %st31 %537, 0
+  %539 = extractvalue %st96 %538, 5
+  %540 = extractvalue { ptr, i64 } %539, 0
+  %541 = extractvalue { ptr, i64 } %539, 1
+  %542 = load i64, ptr %61, align 4
+  call void @plew_bounds(i64 %542, i64 %541)
+  %543 = getelementptr %st82, ptr %540, i64 %542
+  %544 = load %st82, ptr %543, align 8
+  %545 = extractvalue %st82 %544, 1
+  %546 = load i64, ptr %56, align 4
+  %547 = load i64, ptr %57, align 4
+  %548 = load i64, ptr %58, align 4
+  %549 = load i64, ptr %59, align 4
+  %550 = load { ptr, i64 }, ptr %60, align 8
+  %551 = call i64 @pf835(ptr %1, i64 %536, i64 %545, i64 %546, i64 %547, i64 %548, i64 %549, { ptr, i64 } %550)
+  store i64 %551, ptr %62, align 4
+  %552 = load i64, ptr %62, align 4
+  %553 = load %st31, ptr %1, align 8
+  %554 = extractvalue %st31 %553, 0
+  %555 = extractvalue %st96 %554, 4
+  %556 = extractvalue { ptr, i64 } %555, 1
+  %557 = icmp ult i64 %552, %556
+  br i1 %557, label %then77, label %endif78
+
+endif76:                                          ; preds = %endif78, %arm73
   br label %match.end
-
-then75:                                           ; preds = %then73
-  %552 = load %st31, ptr %1, align 8
-  %553 = extractvalue %st31 %552, 0
-  %554 = extractvalue %st96 %553, 4
-  %555 = extractvalue { ptr, i64 } %554, 0
-  %556 = extractvalue { ptr, i64 } %554, 1
-  %557 = load i64, ptr %62, align 4
-  call void @plew_bounds(i64 %557, i64 %556)
-  %558 = getelementptr %st93, ptr %555, i64 %557
-  %559 = load %st93, ptr %558, align 8
-  %560 = extractvalue %st93 %559, 6
-  %561 = icmp ne i1 %560, false
-  br i1 %561, label %then77, label %endif78
-
-endif76:                                          ; preds = %endif78, %then73
-  br label %endif74
 
 then77:                                           ; preds = %then75
-  %562 = load %st31, ptr %1, align 8
-  %563 = extractvalue %st31 %562, 0
-  %564 = extractvalue %st96 %563, 4
-  %565 = extractvalue { ptr, i64 } %564, 0
-  %566 = extractvalue { ptr, i64 } %564, 1
-  %567 = load i64, ptr %62, align 4
-  call void @plew_bounds(i64 %567, i64 %566)
-  %568 = getelementptr %st93, ptr %565, i64 %567
-  %569 = load %st93, ptr %568, align 8
-  %570 = extractvalue %st93 %569, 7
-  %571 = load %st31, ptr %1, align 8
-  %572 = extractvalue %st31 %571, 0
-  %573 = extractvalue %st96 %572, 4
-  %574 = extractvalue { ptr, i64 } %573, 0
-  %575 = extractvalue { ptr, i64 } %573, 1
-  %576 = load i64, ptr %62, align 4
-  call void @plew_bounds(i64 %576, i64 %575)
-  %577 = getelementptr %st93, ptr %574, i64 %576
-  %578 = load %st93, ptr %577, align 8
-  %579 = extractvalue %st93 %578, 8
-  %580 = call i64 @pf410(ptr %1, i64 %570, i64 %579)
-  ret i64 %580
+  %558 = load %st31, ptr %1, align 8
+  %559 = extractvalue %st31 %558, 0
+  %560 = extractvalue %st96 %559, 4
+  %561 = extractvalue { ptr, i64 } %560, 0
+  %562 = extractvalue { ptr, i64 } %560, 1
+  %563 = load i64, ptr %62, align 4
+  call void @plew_bounds(i64 %563, i64 %562)
+  %564 = getelementptr %st93, ptr %561, i64 %563
+  %565 = load %st93, ptr %564, align 8
+  %566 = extractvalue %st93 %565, 6
+  %567 = icmp ne i1 %566, false
+  br i1 %567, label %then79, label %endif80
 
-endif78:                                          ; preds = %then75
+endif78:                                          ; preds = %endif80, %then75
   br label %endif76
 
-arm79:                                            ; preds = %match.next72
-  %581 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %582 = load { i64, i64, i64, i1 }, ptr %581, align 4
-  %583 = extractvalue { i64, i64, i64, i1 } %582, 0
-  store i64 %583, ptr %63, align 4
-  %584 = extractvalue { i64, i64, i64, i1 } %582, 1
-  store i64 %584, ptr %64, align 4
-  %585 = extractvalue { i64, i64, i64, i1 } %582, 2
-  store i64 %585, ptr %65, align 4
-  %586 = extractvalue { i64, i64, i64, i1 } %582, 3
-  store i1 %586, ptr %66, align 1
-  %587 = load i64, ptr %63, align 4
-  %588 = call i64 @pf1245(ptr %0, ptr %1, i64 %587)
-  ret i64 %588
+then79:                                           ; preds = %then77
+  %568 = load %st31, ptr %1, align 8
+  %569 = extractvalue %st31 %568, 0
+  %570 = extractvalue %st96 %569, 4
+  %571 = extractvalue { ptr, i64 } %570, 0
+  %572 = extractvalue { ptr, i64 } %570, 1
+  %573 = load i64, ptr %62, align 4
+  call void @plew_bounds(i64 %573, i64 %572)
+  %574 = getelementptr %st93, ptr %571, i64 %573
+  %575 = load %st93, ptr %574, align 8
+  %576 = extractvalue %st93 %575, 7
+  %577 = load %st31, ptr %1, align 8
+  %578 = extractvalue %st31 %577, 0
+  %579 = extractvalue %st96 %578, 4
+  %580 = extractvalue { ptr, i64 } %579, 0
+  %581 = extractvalue { ptr, i64 } %579, 1
+  %582 = load i64, ptr %62, align 4
+  call void @plew_bounds(i64 %582, i64 %581)
+  %583 = getelementptr %st93, ptr %580, i64 %582
+  %584 = load %st93, ptr %583, align 8
+  %585 = extractvalue %st93 %584, 8
+  %586 = call i64 @pf410(ptr %1, i64 %576, i64 %585)
+  ret i64 %586
 
-match.next80:                                     ; preds = %match.next72
-  %589 = icmp eq i64 %94, 5
-  br i1 %589, label %arm81, label %match.next82
+endif80:                                          ; preds = %then77
+  br label %endif78
 
-arm81:                                            ; preds = %match.next80
-  %590 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %591 = load { i64, i64, { ptr, i64 } }, ptr %590, align 8
-  %592 = extractvalue { i64, i64, { ptr, i64 } } %591, 0
-  store i64 %592, ptr %67, align 4
-  %593 = extractvalue { i64, i64, { ptr, i64 } } %591, 1
-  store i64 %593, ptr %68, align 4
-  %594 = extractvalue { i64, i64, { ptr, i64 } } %591, 2
-  store { ptr, i64 } %594, ptr %69, align 8
-  %595 = load i64, ptr %67, align 4
-  %596 = load i64, ptr %68, align 4
-  %597 = call i64 @pf1246(ptr %0, ptr %1, i64 %595, i64 %596)
-  store i64 %597, ptr %70, align 4
-  %598 = load i64, ptr %70, align 4
-  %599 = load %st36, ptr %0, align 8
-  %600 = extractvalue %st36 %599, 54
-  %601 = icmp ult i64 %598, %600
-  br i1 %601, label %then83, label %endif84
+arm81:                                            ; preds = %match.next74
+  %587 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %588 = load { i64, i64, i64, i1 }, ptr %587, align 4
+  %589 = extractvalue { i64, i64, i64, i1 } %588, 0
+  store i64 %589, ptr %63, align 4
+  %590 = extractvalue { i64, i64, i64, i1 } %588, 1
+  store i64 %590, ptr %64, align 4
+  %591 = extractvalue { i64, i64, i64, i1 } %588, 2
+  store i64 %591, ptr %65, align 4
+  %592 = extractvalue { i64, i64, i64, i1 } %588, 3
+  store i1 %592, ptr %66, align 1
+  %593 = load i64, ptr %63, align 4
+  %594 = call i64 @pf1245(ptr %0, ptr %1, i64 %593)
+  ret i64 %594
 
-match.next82:                                     ; preds = %match.next80
-  %602 = icmp eq i64 %94, 10
-  br i1 %602, label %arm93, label %match.next94
+match.next82:                                     ; preds = %match.next74
+  %595 = icmp eq i64 %94, 5
+  br i1 %595, label %arm83, label %match.next84
 
-then83:                                           ; preds = %arm81
-  %603 = load %st36, ptr %0, align 8
-  %604 = extractvalue %st36 %603, 64
-  %605 = extractvalue { ptr, i64 } %604, 0
-  %606 = extractvalue { ptr, i64 } %604, 1
-  %607 = load i64, ptr %70, align 4
-  call void @plew_bounds(i64 %607, i64 %606)
-  %608 = getelementptr i64, ptr %605, i64 %607
-  %609 = load i64, ptr %608, align 4
-  %610 = call i1 @pf1005(ptr %1, i64 %609)
-  %611 = icmp ne i1 %610, false
-  br i1 %611, label %then85, label %endif86
+arm83:                                            ; preds = %match.next82
+  %596 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %597 = load { i64, i64, { ptr, i64 } }, ptr %596, align 8
+  %598 = extractvalue { i64, i64, { ptr, i64 } } %597, 0
+  store i64 %598, ptr %67, align 4
+  %599 = extractvalue { i64, i64, { ptr, i64 } } %597, 1
+  store i64 %599, ptr %68, align 4
+  %600 = extractvalue { i64, i64, { ptr, i64 } } %597, 2
+  store { ptr, i64 } %600, ptr %69, align 8
+  %601 = load i64, ptr %67, align 4
+  %602 = load i64, ptr %68, align 4
+  %603 = call i64 @pf1246(ptr %0, ptr %1, i64 %601, i64 %602)
+  store i64 %603, ptr %70, align 4
+  %604 = load i64, ptr %70, align 4
+  %605 = load %st36, ptr %0, align 8
+  %606 = extractvalue %st36 %605, 54
+  %607 = icmp ult i64 %604, %606
+  br i1 %607, label %then85, label %endif86
 
-endif84:                                          ; preds = %endif86, %arm81
-  %612 = load i64, ptr %3, align 4
-  %613 = call i64 @pf891(ptr %1, i64 %612)
-  store i64 %613, ptr %73, align 4
-  %614 = load i64, ptr %73, align 4
-  %615 = load %st31, ptr %1, align 8
-  %616 = extractvalue %st31 %615, 0
-  %617 = extractvalue %st96 %616, 4
-  %618 = extractvalue { ptr, i64 } %617, 1
-  %619 = icmp ult i64 %614, %618
-  br i1 %619, label %then89, label %endif90
+match.next84:                                     ; preds = %match.next82
+  %608 = icmp eq i64 %94, 10
+  br i1 %608, label %arm95, label %match.next96
 
-then85:                                           ; preds = %then83
-  %620 = load %st31, ptr %1, align 8
-  %621 = extractvalue %st31 %620, 0
-  %622 = extractvalue %st96 %621, 7
-  %623 = extractvalue { ptr, i64 } %622, 0
-  %624 = extractvalue { ptr, i64 } %622, 1
-  %625 = load %st36, ptr %0, align 8
-  %626 = extractvalue %st36 %625, 64
-  %627 = extractvalue { ptr, i64 } %626, 0
-  %628 = extractvalue { ptr, i64 } %626, 1
-  %629 = load i64, ptr %70, align 4
-  call void @plew_bounds(i64 %629, i64 %628)
-  %630 = getelementptr i64, ptr %627, i64 %629
-  %631 = load i64, ptr %630, align 4
-  call void @plew_bounds(i64 %631, i64 %624)
-  %632 = getelementptr %st70, ptr %623, i64 %631
-  %633 = load %st70, ptr %632, align 8
-  store %st70 %633, ptr %71, align 8
-  %634 = load %st70, ptr %71, align 8
-  %635 = extractvalue %st70 %634, 3
-  %636 = extractvalue { ptr, i64 } %635, 1
-  %637 = icmp ugt i64 %636, 0
-  br i1 %637, label %then87, label %endif88
+then85:                                           ; preds = %arm83
+  %609 = load %st36, ptr %0, align 8
+  %610 = extractvalue %st36 %609, 64
+  %611 = extractvalue { ptr, i64 } %610, 0
+  %612 = extractvalue { ptr, i64 } %610, 1
+  %613 = load i64, ptr %70, align 4
+  call void @plew_bounds(i64 %613, i64 %612)
+  %614 = getelementptr i64, ptr %611, i64 %613
+  %615 = load i64, ptr %614, align 4
+  %616 = call i1 @pf1005(ptr %1, i64 %615)
+  %617 = icmp ne i1 %616, false
+  br i1 %617, label %then87, label %endif88
 
-endif86:                                          ; preds = %endif88, %then83
-  br label %endif84
+endif86:                                          ; preds = %endif88, %arm83
+  %618 = load i64, ptr %3, align 4
+  %619 = call i64 @pf891(ptr %1, i64 %618)
+  store i64 %619, ptr %73, align 4
+  %620 = load i64, ptr %73, align 4
+  %621 = load %st31, ptr %1, align 8
+  %622 = extractvalue %st31 %621, 0
+  %623 = extractvalue %st96 %622, 4
+  %624 = extractvalue { ptr, i64 } %623, 1
+  %625 = icmp ult i64 %620, %624
+  br i1 %625, label %then91, label %endif92
 
 then87:                                           ; preds = %then85
-  %638 = load %st31, ptr %1, align 8
-  %639 = extractvalue %st31 %638, 0
-  %640 = extractvalue %st96 %639, 7
-  %641 = extractvalue { ptr, i64 } %640, 0
-  %642 = extractvalue { ptr, i64 } %640, 1
-  %643 = load %st70, ptr %71, align 8
-  %644 = extractvalue %st70 %643, 3
-  %645 = extractvalue { ptr, i64 } %644, 0
-  %646 = extractvalue { ptr, i64 } %644, 1
-  call void @plew_bounds(i64 0, i64 %646)
-  %647 = getelementptr i64, ptr %645, i64 0
-  %648 = load i64, ptr %647, align 4
-  call void @plew_bounds(i64 %648, i64 %642)
-  %649 = getelementptr %st70, ptr %641, i64 %648
-  %650 = load %st70, ptr %649, align 8
-  store %st70 %650, ptr %72, align 8
-  %651 = load %st70, ptr %72, align 8
-  %652 = extractvalue %st70 %651, 0
-  %653 = load %st70, ptr %72, align 8
-  %654 = extractvalue %st70 %653, 1
-  %655 = call i64 @pf410(ptr %1, i64 %652, i64 %654)
-  ret i64 %655
+  %626 = load %st31, ptr %1, align 8
+  %627 = extractvalue %st31 %626, 0
+  %628 = extractvalue %st96 %627, 7
+  %629 = extractvalue { ptr, i64 } %628, 0
+  %630 = extractvalue { ptr, i64 } %628, 1
+  %631 = load %st36, ptr %0, align 8
+  %632 = extractvalue %st36 %631, 64
+  %633 = extractvalue { ptr, i64 } %632, 0
+  %634 = extractvalue { ptr, i64 } %632, 1
+  %635 = load i64, ptr %70, align 4
+  call void @plew_bounds(i64 %635, i64 %634)
+  %636 = getelementptr i64, ptr %633, i64 %635
+  %637 = load i64, ptr %636, align 4
+  call void @plew_bounds(i64 %637, i64 %630)
+  %638 = getelementptr %st70, ptr %629, i64 %637
+  %639 = load %st70, ptr %638, align 8
+  store %st70 %639, ptr %71, align 8
+  %640 = load %st70, ptr %71, align 8
+  %641 = extractvalue %st70 %640, 3
+  %642 = extractvalue { ptr, i64 } %641, 1
+  %643 = icmp ugt i64 %642, 0
+  br i1 %643, label %then89, label %endif90
 
-endif88:                                          ; preds = %then85
+endif88:                                          ; preds = %endif90, %then85
   br label %endif86
 
-then89:                                           ; preds = %endif84
-  %656 = load %st31, ptr %1, align 8
-  %657 = extractvalue %st31 %656, 0
-  %658 = extractvalue %st96 %657, 4
-  %659 = extractvalue { ptr, i64 } %658, 0
-  %660 = extractvalue { ptr, i64 } %658, 1
-  %661 = load i64, ptr %73, align 4
-  call void @plew_bounds(i64 %661, i64 %660)
-  %662 = getelementptr %st93, ptr %659, i64 %661
-  %663 = load %st93, ptr %662, align 8
-  %664 = extractvalue %st93 %663, 6
-  %665 = icmp ne i1 %664, false
-  br i1 %665, label %then91, label %endif92
+then89:                                           ; preds = %then87
+  %644 = load %st31, ptr %1, align 8
+  %645 = extractvalue %st31 %644, 0
+  %646 = extractvalue %st96 %645, 7
+  %647 = extractvalue { ptr, i64 } %646, 0
+  %648 = extractvalue { ptr, i64 } %646, 1
+  %649 = load %st70, ptr %71, align 8
+  %650 = extractvalue %st70 %649, 3
+  %651 = extractvalue { ptr, i64 } %650, 0
+  %652 = extractvalue { ptr, i64 } %650, 1
+  call void @plew_bounds(i64 0, i64 %652)
+  %653 = getelementptr i64, ptr %651, i64 0
+  %654 = load i64, ptr %653, align 4
+  call void @plew_bounds(i64 %654, i64 %648)
+  %655 = getelementptr %st70, ptr %647, i64 %654
+  %656 = load %st70, ptr %655, align 8
+  store %st70 %656, ptr %72, align 8
+  %657 = load %st70, ptr %72, align 8
+  %658 = extractvalue %st70 %657, 0
+  %659 = load %st70, ptr %72, align 8
+  %660 = extractvalue %st70 %659, 1
+  %661 = call i64 @pf410(ptr %1, i64 %658, i64 %660)
+  ret i64 %661
 
-endif90:                                          ; preds = %endif92, %endif84
+endif90:                                          ; preds = %then87
+  br label %endif88
+
+then91:                                           ; preds = %endif86
+  %662 = load %st31, ptr %1, align 8
+  %663 = extractvalue %st31 %662, 0
+  %664 = extractvalue %st96 %663, 4
+  %665 = extractvalue { ptr, i64 } %664, 0
+  %666 = extractvalue { ptr, i64 } %664, 1
+  %667 = load i64, ptr %73, align 4
+  call void @plew_bounds(i64 %667, i64 %666)
+  %668 = getelementptr %st93, ptr %665, i64 %667
+  %669 = load %st93, ptr %668, align 8
+  %670 = extractvalue %st93 %669, 6
+  %671 = icmp ne i1 %670, false
+  br i1 %671, label %then93, label %endif94
+
+endif92:                                          ; preds = %endif94, %endif86
   br label %match.end
 
-then91:                                           ; preds = %then89
-  %666 = load %st31, ptr %1, align 8
-  %667 = extractvalue %st31 %666, 0
-  %668 = extractvalue %st96 %667, 4
-  %669 = extractvalue { ptr, i64 } %668, 0
-  %670 = extractvalue { ptr, i64 } %668, 1
-  %671 = load i64, ptr %73, align 4
-  call void @plew_bounds(i64 %671, i64 %670)
-  %672 = getelementptr %st93, ptr %669, i64 %671
-  %673 = load %st93, ptr %672, align 8
-  %674 = extractvalue %st93 %673, 7
-  %675 = load %st31, ptr %1, align 8
-  %676 = extractvalue %st31 %675, 0
-  %677 = extractvalue %st96 %676, 4
-  %678 = extractvalue { ptr, i64 } %677, 0
-  %679 = extractvalue { ptr, i64 } %677, 1
-  %680 = load i64, ptr %73, align 4
-  call void @plew_bounds(i64 %680, i64 %679)
-  %681 = getelementptr %st93, ptr %678, i64 %680
-  %682 = load %st93, ptr %681, align 8
-  %683 = extractvalue %st93 %682, 8
-  %684 = call i64 @pf410(ptr %1, i64 %674, i64 %683)
-  ret i64 %684
+then93:                                           ; preds = %then91
+  %672 = load %st31, ptr %1, align 8
+  %673 = extractvalue %st31 %672, 0
+  %674 = extractvalue %st96 %673, 4
+  %675 = extractvalue { ptr, i64 } %674, 0
+  %676 = extractvalue { ptr, i64 } %674, 1
+  %677 = load i64, ptr %73, align 4
+  call void @plew_bounds(i64 %677, i64 %676)
+  %678 = getelementptr %st93, ptr %675, i64 %677
+  %679 = load %st93, ptr %678, align 8
+  %680 = extractvalue %st93 %679, 7
+  %681 = load %st31, ptr %1, align 8
+  %682 = extractvalue %st31 %681, 0
+  %683 = extractvalue %st96 %682, 4
+  %684 = extractvalue { ptr, i64 } %683, 0
+  %685 = extractvalue { ptr, i64 } %683, 1
+  %686 = load i64, ptr %73, align 4
+  call void @plew_bounds(i64 %686, i64 %685)
+  %687 = getelementptr %st93, ptr %684, i64 %686
+  %688 = load %st93, ptr %687, align 8
+  %689 = extractvalue %st93 %688, 8
+  %690 = call i64 @pf410(ptr %1, i64 %680, i64 %689)
+  ret i64 %690
 
-endif92:                                          ; preds = %then89
-  br label %endif90
+endif94:                                          ; preds = %then91
+  br label %endif92
 
-arm93:                                            ; preds = %match.next82
-  %685 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
-  %686 = load { i64, i64 }, ptr %685, align 4
-  %687 = extractvalue { i64, i64 } %686, 0
-  store i64 %687, ptr %74, align 4
-  %688 = extractvalue { i64, i64 } %686, 1
-  store i64 %688, ptr %75, align 4
-  %689 = load %st31, ptr %1, align 8
-  %690 = extractvalue %st31 %689, 0
-  %691 = extractvalue %st96 %690, 1
-  %692 = extractvalue { ptr, i64 } %691, 0
-  %693 = extractvalue { ptr, i64 } %691, 1
-  %694 = load i64, ptr %74, align 4
-  call void @plew_bounds(i64 %694, i64 %693)
-  %695 = getelementptr %en9, ptr %692, i64 %694
-  %696 = load %en9, ptr %695, align 4
-  store %en9 %696, ptr %76, align 4
-  %697 = getelementptr inbounds nuw %en9, ptr %76, i32 0, i32 0
-  %698 = load i64, ptr %697, align 4
-  %699 = icmp eq i64 %698, 2
-  br i1 %699, label %arm96, label %match.next97
-
-match.next94:                                     ; preds = %match.next82
-  br label %arm115
-
-match.end95:                                      ; preds = %arm102, %endif99
+arm95:                                            ; preds = %match.next84
+  %691 = getelementptr inbounds nuw %en9, ptr %4, i32 0, i32 1
+  %692 = load { i64, i64 }, ptr %691, align 4
+  %693 = extractvalue { i64, i64 } %692, 0
+  store i64 %693, ptr %74, align 4
+  %694 = extractvalue { i64, i64 } %692, 1
+  store i64 %694, ptr %75, align 4
+  %695 = load %st31, ptr %1, align 8
+  %696 = extractvalue %st31 %695, 0
+  %697 = extractvalue %st96 %696, 1
+  %698 = extractvalue { ptr, i64 } %697, 0
+  %699 = extractvalue { ptr, i64 } %697, 1
   %700 = load i64, ptr %74, align 4
-  %701 = call i64 @pf1216(ptr %0, ptr %1, i64 %700)
-  store i64 %701, ptr %80, align 4
-  %702 = load i64, ptr %80, align 4
-  %703 = load %st31, ptr %1, align 8
-  %704 = extractvalue %st31 %703, 0
-  %705 = extractvalue %st96 %704, 5
-  %706 = extractvalue { ptr, i64 } %705, 1
-  %707 = icmp ult i64 %702, %706
-  br i1 %707, label %then103, label %endif104
+  call void @plew_bounds(i64 %700, i64 %699)
+  %701 = getelementptr %en9, ptr %698, i64 %700
+  %702 = load %en9, ptr %701, align 4
+  store %en9 %702, ptr %76, align 4
+  %703 = getelementptr inbounds nuw %en9, ptr %76, i32 0, i32 0
+  %704 = load i64, ptr %703, align 4
+  %705 = icmp eq i64 %704, 2
+  br i1 %705, label %arm98, label %match.next99
 
-arm96:                                            ; preds = %arm93
-  %708 = getelementptr inbounds nuw %en9, ptr %76, i32 0, i32 1
-  %709 = load { i64, i64 }, ptr %708, align 4
-  %710 = extractvalue { i64, i64 } %709, 0
-  store i64 %710, ptr %77, align 4
-  %711 = extractvalue { i64, i64 } %709, 1
-  store i64 %711, ptr %78, align 4
-  %712 = load i64, ptr %77, align 4
-  %713 = load i64, ptr %78, align 4
-  %714 = call i64 @pf1246(ptr %0, ptr %1, i64 %712, i64 %713)
-  store i64 %714, ptr %79, align 4
-  %715 = load i64, ptr %79, align 4
-  %716 = load %st36, ptr %0, align 8
-  %717 = extractvalue %st36 %716, 54
-  %718 = icmp ult i64 %715, %717
-  br i1 %718, label %then98, label %endif99
+match.next96:                                     ; preds = %match.next84
+  br label %arm117
 
-match.next97:                                     ; preds = %arm93
-  br label %arm102
+match.end97:                                      ; preds = %arm104, %endif101
+  %706 = load i64, ptr %74, align 4
+  %707 = call i64 @pf1216(ptr %0, ptr %1, i64 %706)
+  store i64 %707, ptr %80, align 4
+  %708 = load i64, ptr %80, align 4
+  %709 = load %st31, ptr %1, align 8
+  %710 = extractvalue %st31 %709, 0
+  %711 = extractvalue %st96 %710, 5
+  %712 = extractvalue { ptr, i64 } %711, 1
+  %713 = icmp ult i64 %708, %712
+  br i1 %713, label %then105, label %endif106
 
-then98:                                           ; preds = %arm96
-  %719 = load %st36, ptr %0, align 8
-  %720 = extractvalue %st36 %719, 61
-  %721 = extractvalue { ptr, i64 } %720, 0
-  %722 = extractvalue { ptr, i64 } %720, 1
-  %723 = load i64, ptr %79, align 4
-  call void @plew_bounds(i64 %723, i64 %722)
-  %724 = getelementptr i1, ptr %721, i64 %723
-  %725 = load i1, ptr %724, align 1
-  %726 = icmp ne i1 %725, false
-  br i1 %726, label %then100, label %endif101
+arm98:                                            ; preds = %arm95
+  %714 = getelementptr inbounds nuw %en9, ptr %76, i32 0, i32 1
+  %715 = load { i64, i64 }, ptr %714, align 4
+  %716 = extractvalue { i64, i64 } %715, 0
+  store i64 %716, ptr %77, align 4
+  %717 = extractvalue { i64, i64 } %715, 1
+  store i64 %717, ptr %78, align 4
+  %718 = load i64, ptr %77, align 4
+  %719 = load i64, ptr %78, align 4
+  %720 = call i64 @pf1246(ptr %0, ptr %1, i64 %718, i64 %719)
+  store i64 %720, ptr %79, align 4
+  %721 = load i64, ptr %79, align 4
+  %722 = load %st36, ptr %0, align 8
+  %723 = extractvalue %st36 %722, 54
+  %724 = icmp ult i64 %721, %723
+  br i1 %724, label %then100, label %endif101
 
-endif99:                                          ; preds = %endif101, %arm96
-  br label %match.end95
+match.next99:                                     ; preds = %arm95
+  br label %arm104
 
-then100:                                          ; preds = %then98
-  %727 = load %st36, ptr %0, align 8
-  %728 = extractvalue %st36 %727, 63
-  %729 = extractvalue { ptr, i64 } %728, 0
-  %730 = extractvalue { ptr, i64 } %728, 1
-  %731 = load i64, ptr %79, align 4
-  call void @plew_bounds(i64 %731, i64 %730)
-  %732 = getelementptr i64, ptr %729, i64 %731
-  %733 = load i64, ptr %732, align 4
-  ret i64 %733
+then100:                                          ; preds = %arm98
+  %725 = load %st36, ptr %0, align 8
+  %726 = extractvalue %st36 %725, 61
+  %727 = extractvalue { ptr, i64 } %726, 0
+  %728 = extractvalue { ptr, i64 } %726, 1
+  %729 = load i64, ptr %79, align 4
+  call void @plew_bounds(i64 %729, i64 %728)
+  %730 = getelementptr i1, ptr %727, i64 %729
+  %731 = load i1, ptr %730, align 1
+  %732 = icmp ne i1 %731, false
+  br i1 %732, label %then102, label %endif103
 
-endif101:                                         ; preds = %then98
-  br label %endif99
+endif101:                                         ; preds = %endif103, %arm98
+  br label %match.end97
 
-arm102:                                           ; preds = %match.next97
-  br label %match.end95
+then102:                                          ; preds = %then100
+  %733 = load %st36, ptr %0, align 8
+  %734 = extractvalue %st36 %733, 63
+  %735 = extractvalue { ptr, i64 } %734, 0
+  %736 = extractvalue { ptr, i64 } %734, 1
+  %737 = load i64, ptr %79, align 4
+  call void @plew_bounds(i64 %737, i64 %736)
+  %738 = getelementptr i64, ptr %735, i64 %737
+  %739 = load i64, ptr %738, align 4
+  ret i64 %739
 
-then103:                                          ; preds = %match.end95
-  %734 = load %st31, ptr %1, align 8
-  %735 = extractvalue %st31 %734, 0
-  %736 = extractvalue %st96 %735, 0
-  %737 = load %st31, ptr %1, align 8
-  %738 = extractvalue %st31 %737, 0
-  %739 = extractvalue %st96 %738, 5
-  %740 = extractvalue { ptr, i64 } %739, 0
-  %741 = extractvalue { ptr, i64 } %739, 1
-  %742 = load i64, ptr %80, align 4
-  call void @plew_bounds(i64 %742, i64 %741)
-  %743 = getelementptr %st82, ptr %740, i64 %742
-  %744 = load %st82, ptr %743, align 8
-  %745 = extractvalue %st82 %744, 0
-  %746 = load %st31, ptr %1, align 8
-  %747 = extractvalue %st31 %746, 0
-  %748 = extractvalue %st96 %747, 5
-  %749 = extractvalue { ptr, i64 } %748, 0
-  %750 = extractvalue { ptr, i64 } %748, 1
-  %751 = load i64, ptr %80, align 4
-  call void @plew_bounds(i64 %751, i64 %750)
-  %752 = getelementptr %st82, ptr %749, i64 %751
-  %753 = load %st82, ptr %752, align 8
-  %754 = extractvalue %st82 %753, 1
-  %755 = call i1 @pf579({ ptr, i64 } %736, i64 %745, i64 %754, { ptr, i64 } { ptr @587, i64 10 })
-  %756 = icmp ne i1 %755, false
-  br i1 %756, label %then105, label %endif106
+endif103:                                         ; preds = %then100
+  br label %endif101
 
-endif104:                                         ; preds = %endif108, %match.end95
-  %757 = load i64, ptr %74, align 4
-  %758 = call ptr @pf1289(ptr %0, ptr %1, i64 %757)
-  store ptr %758, ptr %83, align 8
-  %759 = load ptr, ptr %83, align 8
-  %760 = call i32 @LLVMGetTypeKind(ptr %759)
-  %761 = icmp eq i32 %760, 10
-  br i1 %761, label %then109, label %endif110
+arm104:                                           ; preds = %match.next99
+  br label %match.end97
 
-then105:                                          ; preds = %then103
-  %762 = load i64, ptr %74, align 4
-  %763 = load i64, ptr %75, align 4
-  %764 = call i64 @pf757(ptr %1, i64 %762, { ptr, i64 } { ptr @588, i64 2 }, { ptr, i64 } { ptr @589, i64 3 }, i64 %763, i1 false, { ptr, i64 } { ptr @590, i64 0 }, i64 0)
-  store i64 %764, ptr %81, align 4
-  %765 = load i64, ptr %81, align 4
-  %766 = call i64 @pf1245(ptr %0, ptr %1, i64 %765)
-  ret i64 %766
+then105:                                          ; preds = %match.end97
+  %740 = load %st31, ptr %1, align 8
+  %741 = extractvalue %st31 %740, 0
+  %742 = extractvalue %st96 %741, 0
+  %743 = load %st31, ptr %1, align 8
+  %744 = extractvalue %st31 %743, 0
+  %745 = extractvalue %st96 %744, 5
+  %746 = extractvalue { ptr, i64 } %745, 0
+  %747 = extractvalue { ptr, i64 } %745, 1
+  %748 = load i64, ptr %80, align 4
+  call void @plew_bounds(i64 %748, i64 %747)
+  %749 = getelementptr %st82, ptr %746, i64 %748
+  %750 = load %st82, ptr %749, align 8
+  %751 = extractvalue %st82 %750, 0
+  %752 = load %st31, ptr %1, align 8
+  %753 = extractvalue %st31 %752, 0
+  %754 = extractvalue %st96 %753, 5
+  %755 = extractvalue { ptr, i64 } %754, 0
+  %756 = extractvalue { ptr, i64 } %754, 1
+  %757 = load i64, ptr %80, align 4
+  call void @plew_bounds(i64 %757, i64 %756)
+  %758 = getelementptr %st82, ptr %755, i64 %757
+  %759 = load %st82, ptr %758, align 8
+  %760 = extractvalue %st82 %759, 1
+  %761 = call i1 @pf579({ ptr, i64 } %742, i64 %751, i64 %760, { ptr, i64 } { ptr @587, i64 10 })
+  %762 = icmp ne i1 %761, false
+  br i1 %762, label %then107, label %endif108
 
-endif106:                                         ; preds = %then103
-  %767 = load %st31, ptr %1, align 8
-  %768 = extractvalue %st31 %767, 0
-  %769 = extractvalue %st96 %768, 5
-  %770 = extractvalue { ptr, i64 } %769, 0
-  %771 = extractvalue { ptr, i64 } %769, 1
-  %772 = load i64, ptr %80, align 4
-  call void @plew_bounds(i64 %772, i64 %771)
-  %773 = getelementptr %st82, ptr %770, i64 %772
-  %774 = load %st82, ptr %773, align 8
-  %775 = extractvalue %st82 %774, 0
-  %776 = load %st31, ptr %1, align 8
-  %777 = extractvalue %st31 %776, 0
-  %778 = extractvalue %st96 %777, 5
-  %779 = extractvalue { ptr, i64 } %778, 0
-  %780 = extractvalue { ptr, i64 } %778, 1
-  %781 = load i64, ptr %80, align 4
-  call void @plew_bounds(i64 %781, i64 %780)
-  %782 = getelementptr %st82, ptr %779, i64 %781
-  %783 = load %st82, ptr %782, align 8
-  %784 = extractvalue %st82 %783, 1
-  %785 = call i1 @pf756(ptr %1, i64 %775, i64 %784, { ptr, i64 } { ptr @591, i64 5 })
-  %786 = icmp ne i1 %785, false
-  br i1 %786, label %then107, label %endif108
+endif106:                                         ; preds = %endif110, %match.end97
+  %763 = load i64, ptr %74, align 4
+  %764 = call ptr @pf1289(ptr %0, ptr %1, i64 %763)
+  store ptr %764, ptr %83, align 8
+  %765 = load ptr, ptr %83, align 8
+  %766 = call i32 @LLVMGetTypeKind(ptr %765)
+  %767 = icmp eq i32 %766, 10
+  br i1 %767, label %then111, label %endif112
 
-then107:                                          ; preds = %endif106
-  %787 = load i64, ptr %74, align 4
-  %788 = load i64, ptr %75, align 4
-  %789 = call i64 @pf757(ptr %1, i64 %787, { ptr, i64 } { ptr @592, i64 5 }, { ptr, i64 } { ptr @593, i64 3 }, i64 %788, i1 false, { ptr, i64 } { ptr @594, i64 0 }, i64 0)
-  store i64 %789, ptr %82, align 4
-  %790 = load i64, ptr %82, align 4
-  %791 = call i64 @pf1245(ptr %0, ptr %1, i64 %790)
-  ret i64 %791
+then107:                                          ; preds = %then105
+  %768 = load i64, ptr %74, align 4
+  %769 = load i64, ptr %75, align 4
+  %770 = call i64 @pf757(ptr %1, i64 %768, { ptr, i64 } { ptr @588, i64 2 }, { ptr, i64 } { ptr @589, i64 3 }, i64 %769, i1 false, { ptr, i64 } { ptr @590, i64 0 }, i64 0)
+  store i64 %770, ptr %81, align 4
+  %771 = load i64, ptr %81, align 4
+  %772 = call i64 @pf1245(ptr %0, ptr %1, i64 %771)
+  ret i64 %772
 
-endif108:                                         ; preds = %endif106
-  br label %endif104
+endif108:                                         ; preds = %then105
+  %773 = load %st31, ptr %1, align 8
+  %774 = extractvalue %st31 %773, 0
+  %775 = extractvalue %st96 %774, 5
+  %776 = extractvalue { ptr, i64 } %775, 0
+  %777 = extractvalue { ptr, i64 } %775, 1
+  %778 = load i64, ptr %80, align 4
+  call void @plew_bounds(i64 %778, i64 %777)
+  %779 = getelementptr %st82, ptr %776, i64 %778
+  %780 = load %st82, ptr %779, align 8
+  %781 = extractvalue %st82 %780, 0
+  %782 = load %st31, ptr %1, align 8
+  %783 = extractvalue %st31 %782, 0
+  %784 = extractvalue %st96 %783, 5
+  %785 = extractvalue { ptr, i64 } %784, 0
+  %786 = extractvalue { ptr, i64 } %784, 1
+  %787 = load i64, ptr %80, align 4
+  call void @plew_bounds(i64 %787, i64 %786)
+  %788 = getelementptr %st82, ptr %785, i64 %787
+  %789 = load %st82, ptr %788, align 8
+  %790 = extractvalue %st82 %789, 1
+  %791 = call i1 @pf756(ptr %1, i64 %781, i64 %790, { ptr, i64 } { ptr @591, i64 5 })
+  %792 = icmp ne i1 %791, false
+  br i1 %792, label %then109, label %endif110
 
-then109:                                          ; preds = %endif104
+then109:                                          ; preds = %endif108
+  %793 = load i64, ptr %74, align 4
+  %794 = load i64, ptr %75, align 4
+  %795 = call i64 @pf757(ptr %1, i64 %793, { ptr, i64 } { ptr @592, i64 5 }, { ptr, i64 } { ptr @593, i64 3 }, i64 %794, i1 false, { ptr, i64 } { ptr @594, i64 0 }, i64 0)
+  store i64 %795, ptr %82, align 4
+  %796 = load i64, ptr %82, align 4
+  %797 = call i64 @pf1245(ptr %0, ptr %1, i64 %796)
+  ret i64 %797
+
+endif110:                                         ; preds = %endif108
+  br label %endif106
+
+then111:                                          ; preds = %endif106
   ret i64 1
 
-endif110:                                         ; preds = %endif104
-  %792 = load ptr, ptr %83, align 8
-  %793 = call i32 @LLVMGetTypeKind(ptr %792)
-  %794 = icmp eq i32 %793, 8
-  br i1 %794, label %then111, label %endif112
+endif112:                                         ; preds = %endif106
+  %798 = load ptr, ptr %83, align 8
+  %799 = call i32 @LLVMGetTypeKind(ptr %798)
+  %800 = icmp eq i32 %799, 8
+  br i1 %800, label %then113, label %endif114
 
-then111:                                          ; preds = %endif110
-  %795 = load ptr, ptr %83, align 8
-  %796 = call i32 @LLVMGetIntTypeWidth(ptr %795)
-  %797 = icmp eq i32 %796, 1
-  br i1 %797, label %then113, label %endif114
+then113:                                          ; preds = %endif112
+  %801 = load ptr, ptr %83, align 8
+  %802 = call i32 @LLVMGetIntTypeWidth(ptr %801)
+  %803 = icmp eq i32 %802, 1
+  br i1 %803, label %then115, label %endif116
 
-endif112:                                         ; preds = %endif114, %endif110
+endif114:                                         ; preds = %endif116, %endif112
   ret i64 0
 
-then113:                                          ; preds = %then111
+then115:                                          ; preds = %then113
   ret i64 2
 
-endif114:                                         ; preds = %then111
-  br label %endif112
+endif116:                                         ; preds = %then113
+  br label %endif114
 
-arm115:                                           ; preds = %match.next94
+arm117:                                           ; preds = %match.next96
   br label %match.end
 
-then116:                                          ; preds = %match.end
+then118:                                          ; preds = %match.end
   ret i64 1
 
-endif117:                                         ; preds = %match.end
-  %798 = load %st73, ptr %84, align 4
-  %799 = extractvalue %st73 %798, 0
-  %800 = icmp eq i64 %799, 0
-  br i1 %800, label %then118, label %endif119
-
-then118:                                          ; preds = %endif117
-  %801 = load %st31, ptr %1, align 8
-  %802 = extractvalue %st31 %801, 0
-  %803 = extractvalue %st96 %802, 0
+endif119:                                         ; preds = %match.end
   %804 = load %st73, ptr %84, align 4
-  %805 = extractvalue %st73 %804, 1
-  %806 = load %st73, ptr %84, align 4
-  %807 = extractvalue %st73 %806, 2
-  %808 = call i1 @pf579({ ptr, i64 } %803, i64 %805, i64 %807, { ptr, i64 } { ptr @595, i64 4 })
-  %809 = icmp ne i1 %808, false
-  br i1 %809, label %then120, label %endif121
+  %805 = extractvalue %st73 %804, 0
+  %806 = icmp eq i64 %805, 0
+  br i1 %806, label %then120, label %endif121
 
-endif119:                                         ; preds = %endif123, %endif117
-  ret i64 0
-
-then120:                                          ; preds = %then118
-  ret i64 2
-
-endif121:                                         ; preds = %then118
+then120:                                          ; preds = %endif119
+  %807 = load %st31, ptr %1, align 8
+  %808 = extractvalue %st31 %807, 0
+  %809 = extractvalue %st96 %808, 0
   %810 = load %st73, ptr %84, align 4
   %811 = extractvalue %st73 %810, 1
   %812 = load %st73, ptr %84, align 4
   %813 = extractvalue %st73 %812, 2
-  %814 = call i1 @pf404(ptr %1, i64 %811, i64 %813)
+  %814 = call i1 @pf579({ ptr, i64 } %809, i64 %811, i64 %813, { ptr, i64 } { ptr @595, i64 4 })
   %815 = icmp ne i1 %814, false
   br i1 %815, label %then122, label %endif123
 
-then122:                                          ; preds = %endif121
+endif121:                                         ; preds = %endif125, %endif119
+  ret i64 0
+
+then122:                                          ; preds = %then120
+  ret i64 2
+
+endif123:                                         ; preds = %then120
+  %816 = load %st73, ptr %84, align 4
+  %817 = extractvalue %st73 %816, 1
+  %818 = load %st73, ptr %84, align 4
+  %819 = extractvalue %st73 %818, 2
+  %820 = call i1 @pf404(ptr %1, i64 %817, i64 %819)
+  %821 = icmp ne i1 %820, false
+  br i1 %821, label %then124, label %endif125
+
+then124:                                          ; preds = %endif123
   ret i64 3
 
-endif123:                                         ; preds = %endif121
-  br label %endif119
+endif125:                                         ; preds = %endif123
+  br label %endif121
 }
 
 declare ptr @LLVMBuildZExt(ptr, ptr, ptr, ptr)

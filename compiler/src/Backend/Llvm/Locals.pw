@@ -167,11 +167,15 @@ pub impl LlvmCtx {
                     if isUnsignedName(c: inout c, start: tyStart, len: tyLen) { return 3U64 }
                     return 0U64
                 }
-                // an untyped literal in a float context (recorded in typeCache.intCtx) is a
-                // float literal — `val x: F64 = 10 / 4` routes through the float binop.
+                // an untyped literal types from its recorded context (typeCache.intCtx):
+                // a float context makes it a float literal (`val x: F64 = 10 / 4` routes
+                // through the float binop), an unsigned context makes it unsigned so the op
+                // picks udiv/urem/ult (`val x: U64 = a / b`). Without the unsigned arm a bare
+                // literal in a U64 binding would default to signed ops — a miscompilation.
                 val t: TypeInfo = c.typeOf(id: id)
                 if t.kind == 0 {
                     if c.isFloatType(start: t.nameStart, len: t.nameLen) { return 4U64 }
+                    if isUnsignedName(c: inout c, start: t.nameStart, len: t.nameLen) { return 3U64 }
                 }
                 return 0U64
             }
