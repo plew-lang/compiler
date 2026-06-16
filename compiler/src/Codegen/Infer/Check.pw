@@ -18,6 +18,23 @@ pub impl Comp {
             }
             return
         }
+        // an array literal (`[]` / `[a, b]`) in a Dictionary-typed position: `[]` is ALWAYS
+        // an empty array, never a dict — `[:]` is the empty-dictionary literal (spec/02). An
+        // empty `[]` here used to coincidentally read count 0 in a let binding yet reinterpret
+        // to garbage as an argument; reject it with a clear pointer to `[:]`.
+        if expectedRef < self.arena.types.count {
+            if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen, kw: "Dictionary") {
+                match self.arena.exprs[valueExpr] {
+                    Expr.Array(elems: _) => {
+                        if !(self.tcLog) {
+                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "a dictionary value cannot be an array literal — use `[:]` for an empty dictionary, or `[k: v]` for entries (`[]` is an array literal; spec/02)")
+                        }
+                        return
+                    }
+                    _ => {}
+                }
+            }
+        }
         // a generic construction in a typed position (`val o: Optional[I64] = <Optional.Some
         // v="x"/>`): recurse into its fields, grounding each declared field type under the
         // EXPECTED instance's type arguments, and check the field value. This is the
