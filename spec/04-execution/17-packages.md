@@ -25,24 +25,25 @@ plew = "0.3"              # 対象とする Plew バージョン（後方互換�
 
 ```toml
 dependencies = [
-    "https://github.com/foo/http.git",                          # これだけで可
-    { git = "https://github.com/bar/json.git", version = "3" }, # 制約する時だけ table
-    { git = "https://github.com/x/db.git",    rev = "abc123ef" },# commit 固定
-    { git = "https://github.com/x/edge.git",  branch = "main" }, # branch 追跡
-    { path = "../local-lib" },                                  # ローカルパス
-    { git = "https://github.com/y/z.git",     as = "MyZ" },     # 束縛名を rename
-    { git = "https://github.com/x/mono.git", version = "3",     # ワークスペース（複数メンバ）
-      members = [
-        "Http",                          # repo 内 Http/ に依存（Http/Plew.toml の name で束縛）
-        { path = "Json", as = "MyJson" } # repo 内 Json/ に依存（束縛名を上書き）
+    "https://github.com/foo/http.git",                              # これだけで可（ルートを name で束縛）
+    { git = "https://github.com/bar/json.git", version = "3" },     # 制約する時だけ table
+    { git = "https://github.com/x/db.git",    commit = "abc123ef" },# commit 固定
+    { git = "https://github.com/x/edge.git",  branch = "main" },    # branch 追跡
+    { path = "../local-lib" },                                      # ローカルパス
+    { git = "https://github.com/y/z.git", members = [               # 単一パッケージの rename
+        { path = "/", as = "MyZ" }                                  # ルート（/）を MyZ で束縛
+    ] },
+    { git = "https://github.com/x/mono.git", version = "3", members = [  # ワークスペース（複数メンバ）
+        "/Http",                          # repo の /Http に依存（Http/Plew.toml の name で束縛）
+        { path = "/Json", as = "MyJson" } # repo の /Json に依存（束縛名を上書き）
     ] },
 ]
 ```
 
-- **束縛名は依存先マニフェストの `name` から自動**で決まります（`@Http` 等）。衝突する時だけ `as` で rename します。これにより**消費側は URL だけ書けば束縛名もバージョンも要りません**。
-- 指定は `git` に対して `version` / `tag` / `rev` / `branch` の**いずれか 1 つ**、または `path` 単独です。複数併記はエラー（曖昧はエラー）。
+- **束縛名は依存先マニフェストの `name` から自動**で決まります（`@Http` 等）。これにより**消費側は URL だけ書けば束縛名もバージョンも要りません**。**rename は member の `as` だけ**（下記）。
+- 指定は `git` に対して `version` / `tag` / `commit` / `branch` の**いずれか 1 つ**、または `path` 単独です。複数併記はエラー（曖昧はエラー）。
 - **`.git` は省略しません**（git リポジトリ URL を明示）。**短縮形は持ちません** ── レジストリ前提の裸バージョン（`"3" だけ`）も、ホスト短縮（`foo/http`）も無し。URL/path が常に可視で出どころが分かること（provenance）を優先します。
-- **`members`（ワークスペース）**：1 つの git が複数パッケージを含むリポジトリ（ワークスペース）のとき、`members` で**使うメンバをサブディレクトリのパスで選びます**。要素は「パス文字列 | `{ path, as }`」（トップレベルが「URL | テーブル」なのを 1 段下で踏襲）。**束縛名は各メンバの `name` から自動**（`as` で上書き）。version/tag/rev は外側 git に**1 回だけ**書け、メンバ側には書けません ── **1 ワークスペース 1 バージョン**を構文で担保（→ [ワークスペース](#ワークスペース複数パッケージのリポジトリ)）。列挙したメンバだけが import 可（phantom 禁止）。
+- **`members`（メンバ選択＋rename）**：`members` で**使うメンバを repo ルート起点の `/` パスで選びます**（`/Http`・`/` は repo ルートのパッケージ ── 自前ルート絶対 `import /Models/User` と同じ「ルートからの絶対」記法）。要素は「パス文字列 | `{ path, as }`」（トップレベルが「URL | テーブル」なのを 1 段下で踏襲）。**束縛名は各メンバの `name` から自動・rename は `as`（rename はここだけ）**。version/tag/commit は外側 git に**1 回だけ**書け、メンバ側には書けません ── **1 ワークスペース 1 バージョン**を構文で担保（→ [ワークスペース](#ワークスペース複数パッケージのリポジトリ)）。列挙したメンバだけが import 可（phantom 禁止）。**単一パッケージは `members` 省略（＝ルート `/` を name で束縛）の退化形**で、rename したいときだけ `members = [{ path = "/", as = … }]` と書きます。
 
 ### バージョン指定（桁数モデル）
 
@@ -78,7 +79,7 @@ git tag を semver として解釈します。**書いた桁が固定・書か�
 ワークスペースは**複数のメンバパッケージ（各サブディレクトリの `Plew.toml`）を含む単一 git リポジトリ**です。**repo 側に `members` を列挙する root manifest（Cargo 流の手書き第二真実源）も「ワークスペース」専用の別概念も持ちません** ── メンバはサブディレクトリに `Plew.toml` で在るだけで、消費側が依存の `members` で必要なものを選びます（→ [依存](#依存dependencies)・消費側の選択は repo 側の真実源とは別物）。
 
 - **1 ワークスペース 1 バージョン**：version は git tag で、タグはリポジトリ全体に 1 つ打たれます。ゆえにメンバを跨いだ独立バージョンは**構造的に存在しえません**（lockstep＝1 つを上げれば全メンバが同じタグで上がる）。「リポジトリが複数バージョンを持つ」状態を最初から表現不可能にしています（不正を構造で排除）。消費側も version を外側 git に 1 回しか書けないので、メンバ間で食い違うバージョン指定も書けません。
-- **メンバ選択はパス・束縛は `name`**：`members` はサブディレクトリのパスでメンバを指し、束縛名は各メンバの `name`（`as` で上書き）。トップレベルが「git URL（場所）を指して `name` で束縛」なのと同型で、メンバは「サブパス（場所）を指して `name` で束縛」。解決はその 1 リポジトリ内に限定（暗黙のスコープ公開ではない）で、列挙したメンバだけが import 可。
+- **メンバ選択は `/` パス・束縛は `name`**：`members` は**repo ルート起点の `/` パス**でメンバを指し（`/Http`・`/` は repo ルートのパッケージ＝自前ルート絶対 `import /Models/User` と同じ記法）、束縛名は各メンバの `name`（`as` で上書き）。トップレベルが「git URL（場所）を指して `name` で束縛」なのと同型で、メンバは「`/` パス（場所）を指して `name` で束縛」。**rename（`as`）はこの member 内だけ**＝単一パッケージの改名も `members = [{ path = "/", as = … }]`（`as` の置き場が 1 つに収束・単一は「ルート member 1 つ」の退化形）。解決はその 1 リポジトリ内に限定（暗黙のスコープ公開ではない）で、列挙したメンバだけが import 可。
 
 ### 共有ロックで版を統一
 

@@ -246,7 +246,9 @@ import ./Models/User   // Models/User.pw（こちらは別モジュール）
 ```toml
 dependencies = [
     "https://example.com/json.git",                       # 束縛名 @Json（依存先の name）
-    { git = "https://example.com/u.git", as = "Utils" },  # rename
+    { git = "https://example.com/u.git", members = [      # rename は member の as で
+        { path = "/", as = "Utils" }
+    ] },
 ]
 ```
 
@@ -255,7 +257,7 @@ import @Json with { encode }
 import @Utils
 ```
 
-- ローカル名は消費側が決められるので、**上流パッケージの名前衝突はローカル名で解決**できます（`as` で別名）。
+- ローカル名は消費側が決められるので、**上流パッケージの名前衝突はローカル名で解決**できます（member の `as` で別名・→ [パッケージ](17-packages.md#依存dependencies)）。
 - 推移依存で同一パッケージの複数バージョンが現れた場合は **共存を許します**（メジャー違いは共存・同メジャーは最新へ統合・`@Std`／コアは単一版 → [依存解決](17-packages.md#依存解決)）。**間接依存は import できません**（phantom dependency の禁止 ── import できるのは直接依存と `@Std` のみ）。
 - **ワークスペース（複数メンバを持つ単一リポジトリ）**は 1 つの git エントリの `members` でメンバを選びます（束縛名は各メンバの `name`・`as` で上書き可）。列挙したメンバだけが import 可（phantom 禁止）。記法と挙動は → [パッケージ](17-packages.md#ワークスペース複数パッケージのリポジトリ)。
 - **第一成分が `Std` の名前は予約**で、標準ライブラリを指します。ローカル名に `Std/…` は使えず、マニフェストへの記述なしに常に `import @Std/…` できます（言語が公開集合を宣言済みのパッケージ＝唯一マニフェスト束縛不要の `@`）。
