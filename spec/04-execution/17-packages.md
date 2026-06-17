@@ -117,15 +117,16 @@ sources = ["src/engine.cpp"]
 std = "c++17"
 
 [[native.rust]]
-path = "rust/mycrypto"                    # crate ディレクトリ（staticlib + extern "C"）
-link = "static"
-target.wasm32 = { unsupported = true }    # ターゲット別の上書き／封印
+path = "rust/mycrypto"                    # crate ディレクトリ（staticlib + extern "C"）・これだけ
 
 [[native.system]]
 pkg-config = "llvm"                       # system ライブラリ（identity は値 "llvm"）
+link = "static"                           # 外部 lib を静/動どちらで繋ぐか（system のみ）
 ```
 
-- **kind はテーブルヘッダ**＝`[[native.c]]` / `[[native.cpp]]` / `[[native.rust]]` / `[[native.system]]`。**ヘッダ自体が判別子**なので各ブロックは**固定スキーマ 1 つ**＝判別子フィールド不要・スキーマ補完が確実に効き、**kind 外のフィールドはそもそも書けない**（illegal state を構造で排除）。`link`（`"static" | "dynamic"`）と `target.<triple>` は各ブロック共通。
+- **kind はテーブルヘッダ**＝`[[native.c]]` / `[[native.cpp]]` / `[[native.rust]]` / `[[native.system]]`。**ヘッダ自体が判別子**なので各ブロックは**固定スキーマ 1 つ**＝判別子フィールド不要・スキーマ補完が確実に効き、**kind 外のフィールドはそもそも書けない**（illegal state を構造で排除）。
+- **`link`（`"static" | "dynamic"`）は `[[native.system]]` 専用**＝外部システムライブラリを静的/動的どちらで繋ぐかの選択。バンドルした C/C++・Rust crate は「自分のプログラムに組み込む＝常に static」で選択肢がなく `link` を持ちません（crate の静/動は `Cargo.toml` の `crate-type` が決め、Plew は出た成果物を読んでリンク）。
+- **ターゲット条件付け（per-target の `unsupported`/差し替え）は現状持ちません**。「native の一部がターゲット非対応のときプログラムがどうフォールバックするか」は**パッケージの target サポート行列＝トップレベルの関心**で、per-dep のブール値では解けないため、入れるなら正しい階層で（additive）。Rust は `Cargo.toml` の `[target.'cfg()']`/`#[cfg]` で crate 内に条件分岐を持てます。
 - **C/C++・Rust・system(pkg-config) を祝福**（名指しサポート）。これ以外（cmake の巨大プロジェクト・Go 等）は **Rust ラッパクレート**か**プリビルドバンドル**で取り込みます（下記「巨大ライブラリ」）。
 - **任意コマンド実行を持たない**ことで Plew が起動するのは clang/cargo だけと分かり、サンドボックスのポリシーが書けます（任意コマンドのサンドボックスは原理的に困難＝SwiftPM も自動ビルドから締め出している）。
 
