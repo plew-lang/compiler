@@ -568,7 +568,7 @@ val m = LLVMModuleCreateWithNameInContext(cname.ptr, ctx)  // 呼び出し中有
 ### 外部 C ライブラリのリンク
 
 - **Plew は自己完結 C を吐く**：`extern(c) { type/fn }`・`repr(c) struct` から **C のプロトタイプ/typedef/struct を Plew 自身が生成**する（宣言の正本は Plew 側）。ゆえに**外部ヘッダの `#include` は不要**で、必要なのは**リンクだけ**（Plew の extern 宣言と実体の ABI 一致は FFI 本来の前提）。
-- **どのライブラリをどうリンク／ビルドするか**（`c`/`rust`/`pkg-config` の祝福・ターゲット別宣言・ビルド駆動）は [パッケージ章「ネイティブ依存」](17-packages.md#ネイティブ依存c--rust--system-ライブラリ)を正典とします。`extern(c)` ブロックは純粋な宣言に保ち、**リンクはソース構文でなくマニフェスト関心**です。
+- **どのライブラリをどうリンク／ビルドするか**（`c`/`cpp`/`rust`/`pkg-config` の祝福・ターゲット別宣言・ビルド駆動）は [パッケージ章「ネイティブ依存」](17-packages.md#ネイティブ依存c--c--rust--system-ライブラリ)を正典とします。`extern(c)` ブロックは純粋な宣言に保ち、**リンクはソース構文でなくマニフェスト関心**です。
 - **当面（pipe-to-clang）**：マニフェスト駆動の前は手でフラグを渡せます ── `plewc app.pw | clang -x c - $(llvm-config --ldflags --libs core) -o app`。
 - **C++ シムが要る場合**（libLLVM-C で足りず C++ API を使う時）：`extern "C"` を露出する `.cpp` を clang++ で別途コンパイルしてリンク。**Plew 側の言語機能は `extern(c)` のまま**（C++ には触れない）。シムのビルド指定はマニフェスト（パッケージ章）。
 
