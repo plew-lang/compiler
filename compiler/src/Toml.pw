@@ -1,0 +1,378 @@
+// @Toml — a small, shared TOML reader for the package toolchain (manifest +
+// lockfile). Used by BOTH the compiler's loader (`@Manifest`) and the separate
+// dependency resolver, so it depends only on byte buffers (no compiler arena).
+//
+// It parses a deliberate SUBSET — the shape Plew.toml / Plew.lock actually use —
+// into a bounded (non-recursive) document tree, and rejects nothing here: callers
+// validate. Supported: `# comments`, blank lines, `[table]` and `[[array.of.table]]`
+// headers, `key = value` where value is a quoted string, a bare token (integer /
+// bool), an array of scalars `[ … ]`, or an inline table of scalars `{ k = v, … }`.
+// Scalars are kept as their raw bytes (quotes stripped) — callers interpret. NOT
+// supported (out of scope on purpose): dates, floats, multi-line / literal strings,
+// dotted keys, nested arrays/tables inside arrays — the resolver writes the lock
+// itself, so the emitted shape stays inside this subset.
+
+// One `key = scalar` pair inside an inline table (scalar kept as raw bytes).
+export struct KV {
+    pub val key: Array[U8]
+    pub val str: Array[U8]
+}
+
+// A field value: a scalar (raw bytes), an array of scalars, or an inline table of
+// scalars. Bounded depth (no value contains another Value) — enough for the
+// manifest + lock subset.
+export enum Value {
+    SVal(s: Array[U8])
+    Arr(items: Array[KV])
+    Inline(kvs: Array[KV])
+}
+
+// One `key = value` line under a section.
+export struct Field {
+    pub val key: Array[U8]
+    pub val value: Value
+}
+
+// A table: its header (`""` = the top-level table before any `[…]`), whether it
+// came from a `[[array-of-table]]` header, and its fields. Repeated `[[x]]`
+// headers each produce their own Section with the same header + isArrayElem.
+export struct Section {
+    pub val header: Array[U8]
+    pub val isArrayElem: Bool
+    pub val fields: Array[Field]
+}
+
+// A parsed document: an ordered list of sections (top-level first).
+export struct TomlDoc {
+    pub val sections: Array[Section]
+}
+
+// A (value, next-index) cursor result for the byte scanners.
+struct Scan {
+    pub val text: Array[U8]
+    pub val next: U64
+}
+
+// Whether `a` equals the byte span `src[start .. start+len]`.
+export fn spanEqArr(a: Array[U8], src: Array[U8], start: U64, len: U64) -> Bool {
+    if a.count != len {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < len {
+        if a[i] != src[start + i] {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether two byte arrays are equal.
+export fn bytesEq(a: Array[U8], b: Array[U8]) -> Bool {
+    return spanEqArr(a: a, src: b, start: 0, len: b.count)
+}
+
+fn skipWs(bytes: Array[U8], p: U64, to: U64) -> U64 {
+    mut val i: U64 = p
+    mut val go: Bool = true
+    while go {
+        if i < to {
+            val c: U8 = bytes[i]
+            if c == 32 {
+                i += 1
+            } else {
+                if c == 9 {
+                    i += 1
+                } else {
+                    go = false
+                }
+            }
+        } else {
+            go = false
+        }
+    }
+    return i
+}
+
+// Read a double-quoted string at `p` (bytes[p] == '"'); contents + index past the
+// closing quote.
+fn readQuoted(bytes: Array[U8], p: U64, to: U64) -> Scan {
+    mut val out: Array[U8] = []
+    mut val i: U64 = p + 1
+    mut val go: Bool = true
+    while go {
+        if i < to {
+            if bytes[i] == 34 {
+                go = false
+                i += 1
+            } else {
+                out.append(bytes[i])
+                i += 1
+            }
+        } else {
+            go = false
+        }
+    }
+    return <Scan text=out next=i />
+}
+
+// Read a bare token at `p`, stopping at whitespace or `= , } ] \r`.
+fn readBare(bytes: Array[U8], p: U64, to: U64) -> Scan {
+    mut val out: Array[U8] = []
+    mut val i: U64 = p
+    mut val go: Bool = true
+    while go {
+        if i < to {
+            val c: U8 = bytes[i]
+            if c == 32 {
+                go = false
+            } else {
+                if c == 9 {
+                    go = false
+                } else {
+                    if c == 61 {
+                        go = false
+                    } else {
+                        if c == 44 {
+                            go = false
+                        } else {
+                            if c == 125 {
+                                go = false
+                            } else {
+                                if c == 93 {
+                                    go = false
+                                } else {
+                                    if c == 13 {
+                                        go = false
+                                    } else {
+                                        out.append(c)
+                                        i += 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            go = false
+        }
+    }
+    return <Scan text=out next=i />
+}
+
+// Read a key — quoted (`"a/b"`) or bare (`name`).
+fn readKey(bytes: Array[U8], p: U64, to: U64) -> Scan {
+    if p < to {
+        if bytes[p] == 34 {
+            return readQuoted(bytes: bytes, p: p, to: to)
+        }
+    }
+    return readBare(bytes: bytes, p: p, to: to)
+}
+
+// Read a scalar at `p` — quoted string (contents) or a bare token — as raw bytes.
+fn readScalar(bytes: Array[U8], p: U64, to: U64) -> Scan {
+    if p < to {
+        if bytes[p] == 34 {
+            return readQuoted(bytes: bytes, p: p, to: to)
+        }
+    }
+    return readBare(bytes: bytes, p: p, to: to)
+}
+
+// Read up to (not including) the byte `stop`, returning the span and the index of
+// `stop` (or `to`).
+fn readUntil(bytes: Array[U8], p: U64, to: U64, stop: U8) -> Scan {
+    mut val out: Array[U8] = []
+    mut val i: U64 = p
+    mut val go: Bool = true
+    while go {
+        if i < to {
+            if bytes[i] == stop {
+                go = false
+            } else {
+                out.append(bytes[i])
+                i += 1
+            }
+        } else {
+            go = false
+        }
+    }
+    return <Scan text=out next=i />
+}
+
+// Parse the value after `=` at [p, to): scalar, array of scalars `[ … ]`, or
+// inline table `{ … }`. Array elements are stored as KV with an empty key.
+fn readValue(bytes: Array[U8], p: U64, to: U64) -> Value {
+    if p >= to {
+        return <Value.SVal s="".bytes />
+    }
+    val c: U8 = bytes[p]
+    if c == 91 {
+        mut val items: Array[KV] = []
+        mut val i: U64 = p + 1
+        mut val go: Bool = true
+        while go {
+            i = skipWs(bytes: bytes, p: i, to: to)
+            if i < to {
+                val d: U8 = bytes[i]
+                if d == 93 {
+                    go = false
+                } else {
+                    if d == 44 {
+                        i += 1
+                    } else {
+                        val ss: Scan = readScalar(bytes: bytes, p: i, to: to)
+                        items.append(<KV key="".bytes str=ss.text />)
+                        i = ss.next
+                    }
+                }
+            } else {
+                go = false
+            }
+        }
+        return <Value.Arr items=items />
+    }
+    if c == 123 {
+        mut val kvs: Array[KV] = []
+        mut val i: U64 = p + 1
+        mut val go: Bool = true
+        while go {
+            i = skipWs(bytes: bytes, p: i, to: to)
+            if i < to {
+                val d: U8 = bytes[i]
+                if d == 125 {
+                    go = false
+                } else {
+                    if d == 44 {
+                        i += 1
+                    } else {
+                        val k: Scan = readKey(bytes: bytes, p: i, to: to)
+                        mut val j: U64 = skipWs(bytes: bytes, p: k.next, to: to)
+                        if j < to {
+                            if bytes[j] == 61 {
+                                j += 1
+                            }
+                        }
+                        j = skipWs(bytes: bytes, p: j, to: to)
+                        val ss: Scan = readScalar(bytes: bytes, p: j, to: to)
+                        kvs.append(<KV key=k.text str=ss.text />)
+                        i = ss.next
+                    }
+                }
+            } else {
+                go = false
+            }
+        }
+        return <Value.Inline kvs=kvs />
+    }
+    val ss: Scan = readScalar(bytes: bytes, p: p, to: to)
+    return <Value.SVal s=ss.text />
+}
+
+// Parse a TOML byte buffer into a bounded document tree.
+export fn parseToml(bytes: Array[U8]) -> TomlDoc {
+    mut val sections: Array[Section] = []
+    mut val curHeader: Array[U8] = []
+    mut val curIsArr: Bool = false
+    mut val curFields: Array[Field] = []
+    val n: U64 = bytes.count
+    mut val i: U64 = 0
+    while i < n {
+        mut val e: U64 = i
+        mut val sg: Bool = true
+        while sg {
+            if e < n {
+                if bytes[e] == 10 {
+                    sg = false
+                } else {
+                    e += 1
+                }
+            } else {
+                sg = false
+            }
+        }
+        mut val p: U64 = skipWs(bytes: bytes, p: i, to: e)
+        if p < e {
+            val c0: U8 = bytes[p]
+            if c0 == 35 {
+                // comment
+            } else {
+                if c0 == 13 {
+                    // bare CR
+                } else {
+                    if c0 == 91 {
+                        // section header — flush the current section first
+                        sections.append(<Section header=curHeader isArrayElem=curIsArr fields=curFields />)
+                        mut val isArr: Bool = false
+                        mut val hs: U64 = p + 1
+                        if hs < e {
+                            if bytes[hs] == 91 {
+                                isArr = true
+                                hs += 1
+                            }
+                        }
+                        val hdr: Scan = readUntil(bytes: bytes, p: hs, to: e, stop: 93)
+                        curHeader = hdr.text
+                        curIsArr = isArr
+                        curFields = []
+                    } else {
+                        val k: Scan = readKey(bytes: bytes, p: p, to: e)
+                        mut val q: U64 = skipWs(bytes: bytes, p: k.next, to: e)
+                        if q < e {
+                            if bytes[q] == 61 {
+                                q += 1
+                            }
+                        }
+                        q = skipWs(bytes: bytes, p: q, to: e)
+                        val v: Value = readValue(bytes: bytes, p: q, to: e)
+                        curFields.append(<Field key=k.text value=v />)
+                    }
+                }
+            }
+        }
+        i = e + 1
+    }
+    sections.append(<Section header=curHeader isArrayElem=curIsArr fields=curFields />)
+    return <TomlDoc sections=sections />
+}
+
+// ---- query helpers ----
+
+// The string value of `key` in an inline table's KV list (empty if absent).
+export fn inlineGet(kvs: Array[KV], key: Array[U8]) -> Array[U8] {
+    mut val i: U64 = 0
+    while i < kvs.count {
+        val kv: KV = kvs[i]
+        if bytesEq(a: kv.key, b: key) {
+            return kv.str
+        }
+        i += 1
+    }
+    return []
+}
+
+// The string value of a top-level (header "") field `key`, empty if absent.
+export fn topStr(doc: TomlDoc, key: Array[U8]) -> Array[U8] {
+    mut val si: U64 = 0
+    while si < doc.sections.count {
+        val sec: Section = doc.sections[si]
+        if sec.header.count == 0 {
+            mut val fi: U64 = 0
+            while fi < sec.fields.count {
+                val f: Field = sec.fields[fi]
+                if bytesEq(a: f.key, b: key) {
+                    match f.value {
+                        Value.SVal(val s) => { return s }
+                        _ => {}
+                    }
+                }
+                fi += 1
+            }
+        }
+        si += 1
+    }
+    return []
+}

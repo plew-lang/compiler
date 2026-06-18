@@ -1,10 +1,11 @@
-// @Manifest — package-manifest (`Plew.toml`) parsing and `@dep` import resolution.
+// @Manifest — package-manifest (`Plew.toml`) reading and `@dep` import resolution.
 //
-// A DAG-bottom leaf (`Ir ← Manifest`): it operates only on byte buffers (the
-// manifest's bytes, file paths) plus file existence, so the front-end loader can
-// import it alongside @Path. Dependency RESOLUTION lives here: parse the consuming
-// package's `[dependencies]`, then turn a non-`@Std` `@<name>` import into the file
-// that backs that dependency's lib face (`<dep>/src/_.pw`).
+// A DAG-bottom leaf (`Ir ← Manifest`, plus the shared `@Toml` reader): it operates
+// only on byte buffers (the manifest's bytes, file paths) plus file existence, so
+// the front-end loader can import it alongside @Path. Dependency RESOLUTION lives
+// here: read the consuming package's `[dependencies]`, then turn a non-`@Std`
+// `@<name>` import into the file that backs that dependency's lib face
+// (`<dep>/src/_.pw`).
 //
 // Package model (spec/17): packages are FLAT — `@Acme/Http` names ONE package whose
 // name is the literal string `Acme/Http` (the `/` is a name character, not submodule
@@ -14,6 +15,7 @@
 
 import @Std/Io with { fileExists, readFileBytes }
 import ./Ir with { appendBytes }
+import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr }
 
 // One declared dependency from `[dependencies]`. `key` is the binding name the
 // consumer writes after `@` (it may contain `/`). `kind`: 0 = path, 1 = git.
@@ -32,268 +34,38 @@ export struct Manifest {
     pub val deps: Array[Dep]
 }
 
-// A small (value, next-index) cursor result for the byte scanners below.
-struct Scan {
-    pub val text: Array[U8]
-    pub val next: U64
-}
-
-// The fields an inline-table dependency entry can carry (key is supplied by the
-// caller). `kind`: 0 = path, 1 = git.
-struct TableVals {
-    pub val kind: U8
-    pub val loc: Array[U8]
-    pub val version: Array[U8]
-}
-
-// Whether `a` equals the byte span `src[start .. start+len]`.
-export fn spanEqArr(a: Array[U8], src: Array[U8], start: U64, len: U64) -> Bool {
-    if a.count != len {
-        return false
-    }
-    mut val i: U64 = 0
-    while i < len {
-        if a[i] != src[start + i] {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
-
-// Advance over spaces/tabs within [p, to).
-fn skipWs(bytes: Array[U8], p: U64, to: U64) -> U64 {
-    mut val i: U64 = p
-    mut val go: Bool = true
-    while go {
-        if i < to {
-            val c: U8 = bytes[i]
-            if c == 32 {
-                i += 1
-            } else {
-                if c == 9 {
-                    i += 1
-                } else {
-                    go = false
-                }
-            }
-        } else {
-            go = false
-        }
-    }
-    return i
-}
-
-// Read a double-quoted string starting at `p` (bytes[p] == '"'); returns the
-// unescaped-as-is contents (no escapes in our manifest subset) and the index just
-// past the closing quote. If unterminated, `next` = `to`.
-fn readQuoted(bytes: Array[U8], p: U64, to: U64) -> Scan {
-    mut val out: Array[U8] = []
-    mut val i: U64 = p + 1
-    mut val go: Bool = true
-    while go {
-        if i < to {
-            if bytes[i] == 34 {
-                go = false
-                i += 1
-            } else {
-                out.append(bytes[i])
-                i += 1
-            }
-        } else {
-            go = false
-        }
-    }
-    return <Scan text=out next=i />
-}
-
-// Read a bare key/identifier starting at `p`, stopping at whitespace or any of
-// `= , } ] \r \n`. Returns the key bytes and the stop index.
-fn readBareKey(bytes: Array[U8], p: U64, to: U64) -> Scan {
-    mut val out: Array[U8] = []
-    mut val i: U64 = p
-    mut val go: Bool = true
-    while go {
-        if i < to {
-            val c: U8 = bytes[i]
-            if c == 32 {
-                go = false
-            } else {
-                if c == 9 {
-                    go = false
-                } else {
-                    if c == 61 {
-                        go = false
-                    } else {
-                        if c == 44 {
-                            go = false
-                        } else {
-                            if c == 125 {
-                                go = false
-                            } else {
-                                if c == 93 {
-                                    go = false
-                                } else {
-                                    if c == 13 {
-                                        go = false
-                                    } else {
-                                        out.append(c)
-                                        i += 1
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            go = false
-        }
-    }
-    return <Scan text=out next=i />
-}
-
-// Read a key at `p` — quoted (`"a/b"`) or bare (`name`) — returning its text.
-fn readKey(bytes: Array[U8], p: U64, to: U64) -> Scan {
-    if p < to {
-        if bytes[p] == 34 {
-            return readQuoted(bytes: bytes, p: p, to: to)
-        }
-    }
-    return readBareKey(bytes: bytes, p: p, to: to)
-}
-
-// Parse one inline table `{ key = "v", ... }` occupying [p, to) (p just past `{`)
-// into the dependency fields. All values are quoted strings in this subset.
-fn parseInlineTable(bytes: Array[U8], p: U64, to: U64) -> TableVals {
-    mut val kind: U8 = 0
-    mut val loc: Array[U8] = []
-    mut val version: Array[U8] = []
-    mut val i: U64 = p
-    mut val go: Bool = true
-    while go {
-        i = skipWs(bytes: bytes, p: i, to: to)
-        // skip separators / closing brace
-        if i < to {
-            val c: U8 = bytes[i]
-            if c == 44 {
-                i += 1
-            } else {
-                if c == 125 {
-                    go = false
-                } else {
-                    val k: Scan = readKey(bytes: bytes, p: i, to: to)
-                    i = skipWs(bytes: bytes, p: k.next, to: to)
-                    // expect '='
-                    if i < to {
-                        if bytes[i] == 61 {
-                            i += 1
-                        }
-                    }
-                    i = skipWs(bytes: bytes, p: i, to: to)
-                    mut val v: Array[U8] = []
-                    if i < to {
-                        if bytes[i] == 34 {
-                            val s: Scan = readQuoted(bytes: bytes, p: i, to: to)
-                            v = s.text
-                            i = s.next
-                        }
-                    }
-                    if spanEqArr(a: "path".bytes, src: k.text, start: 0, len: k.text.count) {
-                        kind = 0
-                        loc = v
-                    } else {
-                        if spanEqArr(a: "git".bytes, src: k.text, start: 0, len: k.text.count) {
-                            kind = 1
-                            loc = v
-                        } else {
-                            if spanEqArr(a: "version".bytes, src: k.text, start: 0, len: k.text.count) {
-                                version = v
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            go = false
-        }
-    }
-    return <TableVals kind=kind loc=loc version=version />
-}
-
-// Parse a `Plew.toml` byte buffer into a Manifest (name + dependency list). A
-// line-oriented subset: blank/`#` lines are skipped, `[section]` headers switch
-// context (only `[dependencies]` is read), top-level `name = "..."` sets the name,
-// and each `Key = { ... }` under `[dependencies]` becomes a Dep.
+// Parse a `Plew.toml` byte buffer into a Manifest (name + dependency list) via the
+// shared @Toml reader. Each `[dependencies]` field is `Key = { path | git, version }`.
 export fn parseManifest(bytes: Array[U8]) -> Manifest {
-    mut val name: Array[U8] = []
+    val doc: TomlDoc = parseToml(bytes: bytes)
+    val name: Array[U8] = topStr(doc: doc, key: "name".bytes)
     mut val deps: Array[Dep] = []
-    mut val inDeps: Bool = false
-    val n: U64 = bytes.count
-    mut val i: U64 = 0
-    while i < n {
-        // find the end of this line
-        mut val e: U64 = i
-        mut val sg: Bool = true
-        while sg {
-            if e < n {
-                if bytes[e] == 10 {
-                    sg = false
-                } else {
-                    e += 1
-                }
-            } else {
-                sg = false
-            }
-        }
-        // process the line bytes[p .. e]
-        mut val p: U64 = skipWs(bytes: bytes, p: i, to: e)
-        if p < e {
-            val c0: U8 = bytes[p]
-            if c0 == 35 {
-                // comment — skip
-            } else {
-                if c0 == 13 {
-                    // bare CR — skip
-                } else {
-                    if c0 == 91 {
-                        // section header `[name]`
-                        val sk: Scan = readBareKey(bytes: bytes, p: p + 1, to: e)
-                        inDeps = spanEqArr(a: "dependencies".bytes, src: sk.text, start: 0, len: sk.text.count)
-                    } else {
-                        // key = value
-                        val k: Scan = readKey(bytes: bytes, p: p, to: e)
-                        mut val q: U64 = skipWs(bytes: bytes, p: k.next, to: e)
-                        if q < e {
-                            if bytes[q] == 61 {
-                                q += 1
-                            }
+    mut val si: U64 = 0
+    while si < doc.sections.count {
+        val sec: Section = doc.sections[si]
+        if bytesEq(a: sec.header, b: "dependencies".bytes) {
+            mut val fi: U64 = 0
+            while fi < sec.fields.count {
+                val f: Field = sec.fields[fi]
+                match f.value {
+                    Value.Inline(val kvs) => {
+                        val path: Array[U8] = inlineGet(kvs: kvs, key: "path".bytes)
+                        val git: Array[U8] = inlineGet(kvs: kvs, key: "git".bytes)
+                        val version: Array[U8] = inlineGet(kvs: kvs, key: "version".bytes)
+                        mut val kind: U8 = 0
+                        mut val loc: Array[U8] = path
+                        if path.count == 0 {
+                            kind = 1
+                            loc = git
                         }
-                        q = skipWs(bytes: bytes, p: q, to: e)
-                        if q < e {
-                            if bytes[q] == 34 {
-                                // quoted string value
-                                val s: Scan = readQuoted(bytes: bytes, p: q, to: e)
-                                if !inDeps {
-                                    if spanEqArr(a: "name".bytes, src: k.text, start: 0, len: k.text.count) {
-                                        name = s.text
-                                    }
-                                }
-                            } else {
-                                if bytes[q] == 123 {
-                                    // inline table = a dependency entry
-                                    if inDeps {
-                                        val tv: TableVals = parseInlineTable(bytes: bytes, p: q + 1, to: e)
-                                        deps.append(<Dep key=k.text kind=tv.kind loc=tv.loc version=tv.version />)
-                                    }
-                                }
-                            }
-                        }
+                        deps.append(<Dep key=f.key kind=kind loc=loc version=version />)
                     }
+                    _ => {}
                 }
+                fi += 1
             }
         }
-        i = e + 1
+        si += 1
     }
     return <Manifest name=name deps=deps />
 }
@@ -332,7 +104,6 @@ export fn isExternalDepImport(src: Array[U8], pStart: U64, pLen: U64) -> Bool {
         if src[pStart + 1] == 83 {
             if src[pStart + 2] == 116 {
                 if src[pStart + 3] == 100 {
-                    // followed by end or '/'
                     if pLen == 4 {
                         return false
                     }

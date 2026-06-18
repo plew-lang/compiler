@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <sys/wait.h>
 void plew_exit(long long code){ exit((int)code); }
 void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }
 void plew_eprint_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stderr); }
@@ -80,6 +81,9 @@ static PlewStrR plew_readPath(const char* path){ FILE* f=fopen(path,"rb"); PlewS
 PlewStrR plew_readFile(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR r=plew_readPath(p); free(p); return r; }
 PlewStrR plew_readFileBytes(char* d, long long n){ return plew_readFile(d,n); }
 long long plew_fileExists(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; FILE* f=fopen(p,"rb"); free(p); if(f){ fclose(f); return 1; } return 0; }
+static long long plew_last_exit = 0;
+PlewStrR plew_execOut(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR s; s.d=(char*)""; s.n=0; FILE* f=popen(p,"r"); free(p); if(!f){ plew_last_exit=-1; return s; } size_t cap=4096,len=0; char* buf=(char*)malloc(cap); size_t r; while((r=fread(buf+len,1,cap-len,f))>0){ len+=r; if(len==cap){ cap*=2; buf=(char*)realloc(buf,cap); } } int st=pclose(f); plew_last_exit=(long long)(WIFEXITED(st)?WEXITSTATUS(st):-1); buf=(char*)realloc(buf,len+1); buf[len]=0; s.d=buf; s.n=(long long)len; return s; }
+long long plew_execCode(void){ return plew_last_exit; }
 typedef struct PlewPromise PlewPromise;
 typedef void (*PlewResumeFn)(void*);
 struct PlewPromise { int done; long long value; PlewResumeFn k; void* kframe; };
