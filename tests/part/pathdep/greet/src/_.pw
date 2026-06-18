@@ -1,0 +1,3 @@
+// The lib face of the Acme/Greet package: its exports are its public surface.
+export fn hello() -> I64 { return 7I64 }
+export fn greetCount() -> I64 { return 3I64 }

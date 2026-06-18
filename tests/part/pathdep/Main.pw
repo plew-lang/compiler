@@ -1,0 +1,10 @@
+// A path dependency: `@Acme/Greet` resolves (via [dependencies] in Plew.toml) to
+// the greet/ package's lib face (src/_.pw). The package name may contain `/` as a
+// literal char — packages are flat, so the whole `@Acme/Greet` names one package.
+import @Std/Io with { print }
+import @Acme/Greet with { hello, greetCount }
+
+fn main() {
+    print(hello())          // 7
+    print(greetCount())     // 3
+}

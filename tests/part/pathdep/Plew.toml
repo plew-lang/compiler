@@ -1,0 +1,5 @@
+# Consumer package: declares a local path dependency `Acme/Greet`.
+name = "pathdep"
+
+[dependencies]
+"Acme/Greet" = { path = "greet" }

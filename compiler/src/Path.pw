@@ -174,12 +174,12 @@ export fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
     return out
 }
 
-// Find the package source root for `/…` absolute imports: walk up from the
-// entry file's directory to the nearest ancestor containing `Plew.toml` (the
-// manifest), and return `<that dir>/src/`. Empty if no manifest is found (then
-// `/…` imports are unresolved). spec: sources live under `src/` (manifest may
-// override later); only the manifest's *location* is used for now.
-export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
+// Find the package directory: walk up from the entry file's directory to the
+// nearest ancestor containing `Plew.toml` (the manifest) and return that dir
+// (with its trailing `/`). Empty if no manifest is found. Used both for `/…`
+// absolute imports (→ `<pkgDir>src/`) and for parsing `<pkgDir>Plew.toml` to
+// resolve `@dep` imports.
+export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
     mut val dirLen: U64 = dirPrefixLen(path: entry)
     mut val go: Bool = true
     while go {
@@ -192,15 +192,13 @@ export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
         val mn: Array[U8] = "Plew.toml".bytes
         appendBytes(into: inout mani, from: mn)
         if fileExists(path: mani) {
-            mut val sr: Array[U8] = []
+            mut val dir: Array[U8] = []
             mut val j: U64 = 0
             while j < dirLen {
-                sr.append(entry[j])
+                dir.append(entry[j])
                 j += 1
             }
-            val sx: Array[U8] = "src/".bytes
-            appendBytes(into: inout sr, from: sx)
-            return sr
+            return dir
         }
         if dirLen == 0 {
             go = false
@@ -215,6 +213,20 @@ export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     }
     mut val empty: Array[U8] = []
     return empty
+}
+
+// The package source root for `/…` absolute imports: `<pkgDir>src/`. Empty if no
+// manifest is found (then `/…` imports are unresolved). spec: sources live under
+// `src/` (manifest may override later); only the manifest's *location* is used.
+export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
+    val dir: Array[U8] = findPkgDir(entry: entry)
+    if dir.count == 0 {
+        return dir
+    }
+    mut val sr: Array[U8] = []
+    appendBytes(into: inout sr, from: dir)
+    appendBytes(into: inout sr, from: "src/".bytes)
+    return sr
 }
 
 // `<path>.pw` -> `<path>.gen.pw` (the auto-parted generated sibling). Empty if

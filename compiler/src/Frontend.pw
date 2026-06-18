@@ -17,7 +17,8 @@ import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
-import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, genSiblingPath, pathSeen }
+import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen }
+import ./Manifest with { Dep, Manifest, parseManifest, resolveDepImport }
 import ./Diag with { compileErrorAt, eprintInt, digitByte }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, opAddAssign, opSubAssign, opMulAssign, opDivAssign, opRemAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
@@ -409,6 +410,21 @@ export fn runFrontend() -> Comp {
         // package src root for `/…` absolute imports (from the Plew.toml walk-up;
         // empty if no manifest is found, in which case `/…` imports are skipped).
         val srcRoot: Array[U8] = findSrcRoot(entry: entryBytes)
+        // package dir (holds Plew.toml) for resolving `@dep` imports: parse the
+        // manifest's `[dependencies]` so a non-`@Std` `@<name>` import resolves to
+        // that dependency's lib face. Empty deps when there is no manifest.
+        val pkgDir: Array[U8] = findPkgDir(entry: entryBytes)
+        mut val deps: Array[Dep] = []
+        if pkgDir.count > 0 {
+            mut val maniPath: Array[U8] = []
+            appendBytes(into: inout maniPath, from: pkgDir)
+            appendBytes(into: inout maniPath, from: "Plew.toml".bytes)
+            if fileExists(path: maniPath) {
+                val maniSrc: String = readFileBytes(path: maniPath)
+                val mani: Manifest = parseManifest(bytes: maniSrc.bytes)
+                deps = mani.deps
+            }
+        }
         // std library root for `@Std/…`: the `std/` directory next to the plewc
         // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
         val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes)
@@ -525,7 +541,12 @@ export fn runFrontend() -> Comp {
             while ii < items.count {
                 match items[ii] {
                     TopItemAst.Import(val imp) => {
-                        val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        // a non-`@Std` `@dep` import is unresolved by @Path (returns
+                        // empty); resolve it against the manifest's [dependencies].
+                        if childPath.count == 0 {
+                            childPath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: deps, pkgDir: pkgDir)
+                        }
                         if childPath.count != 0 {
                             val seen: Bool = pathSeen(buf: pathBuf, loaded: loaded, path: childPath)
                             // a `part` link must reach a NOT-yet-loaded file: a file is
