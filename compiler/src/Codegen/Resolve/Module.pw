@@ -134,6 +134,22 @@ pub impl Comp {
         return <LetEff start=effStart len=effLen arr=effArr ty=effTy />
     }
 
+    // Does module `useMod` have a direct import edge to `targetMod` (it did
+    // `import <path>` resolving to that module)? Drives the coexistence tiebreak.
+    inout fn hasImportEdge(useMod: U64, targetMod: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.modules.importEdges.count {
+            val e: Bind = self.modules.importEdges[i]
+            if e.fieldStart == useMod {
+                if e.fieldLen == targetMod {
+                    return true
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
     inout fn nameVisibleFrom(useMod: U64, candStart: U64, candLen: U64) -> Bool {
         if self.moduleOf(offset: candStart) == useMod {
             return true
@@ -162,6 +178,10 @@ pub impl Comp {
         mut val firstLabelSame: U64 = self.arena.funcs.count
         mut val typeMatchSame: U64 = self.arena.funcs.count
         mut val typeMatch2Same: U64 = self.arena.funcs.count
+        // candidates whose module the use's module DIRECTLY imported — preferred over a
+        // merely name-visible one so coexisting versions bind their own export.
+        mut val firstLabelEdge: U64 = self.arena.funcs.count
+        mut val typeMatchEdge: U64 = self.arena.funcs.count
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
         while i < self.arena.funcs.count {
@@ -175,9 +195,15 @@ pub impl Comp {
                     if self.paramsLabelsOk(params: f.params, args: args) {
                         val same: Bool = self.moduleOf(offset: f.nameStart) == useMod
                         val visible: Bool = same || self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen)
+                        val edged: Bool = visible && self.hasImportEdge(useMod: useMod, targetMod: self.moduleOf(offset: f.nameStart))
                         if visible {
                             if firstLabel == self.arena.funcs.count {
                                 firstLabel = i
+                            }
+                        }
+                        if edged {
+                            if firstLabelEdge == self.arena.funcs.count {
+                                firstLabelEdge = i
                             }
                         }
                         if same {
@@ -204,6 +230,11 @@ pub impl Comp {
                                     }
                                 }
                             }
+                            if edged {
+                                if typeMatchEdge == self.arena.funcs.count {
+                                    typeMatchEdge = i
+                                }
+                            }
                         }
                     }
                 }
@@ -217,6 +248,14 @@ pub impl Comp {
         }
         if firstLabelSame != self.arena.funcs.count {
             return firstLabelSame
+        }
+        // then a DIRECTLY-imported module's candidate (prefer the version this module
+        // actually imported when a name is shared across coexisting versions).
+        if typeMatchEdge != self.arena.funcs.count {
+            return typeMatchEdge
+        }
+        if firstLabelEdge != self.arena.funcs.count {
+            return firstLabelEdge
         }
         // no same-module candidate: fall back to an in-scope imported one (the general
         // accumulators only recorded `nameVisibleFrom` candidates, so an out-of-scope

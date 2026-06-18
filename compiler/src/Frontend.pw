@@ -17,7 +17,7 @@ import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
-import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen }
+import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
 import ./Cache with { cacheRoot }
@@ -593,6 +593,16 @@ export fn runFrontend() -> Comp {
                                 val cs: U64 = pathBuf.count
                                 appendBytes(into: inout pathBuf, from: childPath)
                                 loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=childModule fieldLen=childPath.count />)
+                            }
+                            // record the import edge (this module -> the module the path
+                            // resolved to), whether the target is newly loaded or deduped,
+                            // so name resolution can prefer a directly-imported module when
+                            // a name is shared by coexisting package versions.
+                            if imp.isImport {
+                                val tgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: childPath)
+                                if tgt != 4000000000U64 {
+                                    c.modules.importEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)
+                                }
                             }
                         }
                     }

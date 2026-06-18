@@ -91,5 +91,40 @@ rm -f "$A3/Plew.lock"
 check "driver auto-resolves on run" "42" "$("$ROOT/plew" run "$A3/Main.pw" 2>/dev/null)"
 check "auto-resolve wrote the lock" "1" "$([ -f "$A3/Plew.lock" ] && echo 1 || echo 0)"
 
+# --- multi-major coexistence: two versions of one lib in a single build ---
+# leaf2 has a v1 (leafval->1) and a v2 (leafval->100); MidA pins "1", MidB pins "2";
+# the app uses both, so each must bind ITS OWN leaf version (1 + 100 = 101).
+L2="$WORK/leaf2"; mkdir -p "$L2/src"
+printf 'name = "L2"\n' > "$L2/Plew.toml"
+printf 'export fn leafval() -> I64 { return 1I64 }\n' > "$L2/src/_.pw"
+gitinit "$L2"; git -C "$L2" tag -a -m t 1.2.0
+printf 'export fn leafval() -> I64 { return 100I64 }\n' > "$L2/src/_.pw"
+git -C "$L2" add -A && git -C "$L2" -c user.email=t@t -c user.name=t commit -qm v2; git -C "$L2" tag -a -m t 2.0.0
+mkmid() { # name dir leafconstraint exportfn
+    mkdir -p "$2/src"
+    cat > "$2/Plew.toml" <<EOF
+name = "$1"
+[dependencies]
+"L2" = { git = "$L2", version = "$3" }
+EOF
+    printf 'import @L2 with { leafval }\nexport fn %s() -> I64 { return leafval() }\n' "$4" > "$2/src/_.pw"
+    gitinit "$2"; git -C "$2" tag -a -m t 1.0.0
+}
+mkmid MidA "$WORK/mida" 1 va
+mkmid MidB "$WORK/midb" 2 vb
+A4="$WORK/app4"; mkdir -p "$A4"
+cat > "$A4/Plew.toml" <<EOF
+name = "app4"
+[dependencies]
+"MidA" = { git = "$WORK/mida", version = "1" }
+"MidB" = { git = "$WORK/midb", version = "1" }
+EOF
+printf 'import @Std/Io with { print }\nimport @MidA with { va }\nimport @MidB with { vb }\nfn main() { print(va() + vb()) }\n' > "$A4/Main.pw"
+( cd "$A4" && "$WORK/plew-resolve" ) > "$A4/Plew.lock"
+check "lock holds both L2 versions" "2" "$(grep -c "git = \"$L2\"" "$A4/Plew.lock")"
+"$PLEWC" "$A4/Main.pw" > "$WORK/a4.ll"
+"$CC" -w "$WORK/a4.ll" "$WORK/rt.c" -o "$WORK/a4"
+check "coexisting versions each bind own export" "101" "$("$WORK/a4")"
+
 echo "----"
 if [ "$fail" = 0 ]; then echo "test-deps: all green"; else echo "test-deps: FAILURES"; exit 1; fi

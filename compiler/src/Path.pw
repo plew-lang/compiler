@@ -249,6 +249,31 @@ export fn genSiblingPath(path: Array[U8]) -> Array[U8] {
     return out
 }
 
+// The module id (a loaded Bind's `fieldStart`) for the file `path`, or the sentinel
+// 4_000_000_000 when `path` is not in the loaded set. Lets the loader record an
+// import edge to the specific module a path resolved to.
+export fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> U64 {
+    mut val i: U64 = 0
+    while i < loaded.count {
+        val b: Bind = loaded[i]
+        if b.nameLen == path.count {
+            mut val eq: Bool = true
+            mut val j: U64 = 0
+            while j < path.count {
+                if buf[b.nameStart + j] != path[j] {
+                    eq = false
+                }
+                j += 1
+            }
+            if eq {
+                return b.fieldStart
+            }
+        }
+        i += 1
+    }
+    return 4000000000U64
+}
+
 // Whether `path` is already in the loaded set (each Bind is a span into `buf`).
 // Dedup keeps a module included once and makes import cycles terminate.
 export fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {
