@@ -123,6 +123,7 @@ hidden-meaning 穴は概ね閉じた（ユーザー確認済）。閉じたも�
 ### LLVM backend（`Backend/Llvm.pw`・ヘッダ＋コメントに詳細）
 
 - **ディスパッチ**：ユーザー関数/メソッドは合成名 `pf<idx>`／generic は `gm<mfi>_<instRef>`＋index→キャッシュ `LLVMValueRef`。`c.locals` 非投入なので env に locKind/locStructIdx/locTypeRef を持たせて型判定。
+- **マングリングは全部アリーナ index 基準**（`pf<idx>`/`st<idx>`/`gf<k>`/`gs<k>`/`plew.g.<idx>`…）＝パッケージ名・version・モジュールパスを**一切エンコードしない**。**多版共存（同一パッケージの version 違いを 1 binary に）は今のままで OK**＝ソース配布＋whole-program 単一アリーナゆえ v1/v2 は別ソース＝別 index＝別シンボルで自然に分かれる（衝突するのは別コンパイル＆リンク方式＝Plew は採らない・前提は loader/resolver が v1≠v2 を別モジュールツリーで load すること）。**変更を迫るのは衝突でなくキャッシュ粒度**＝index は build グローバル（load 順依存）で content-stable でないため、whole-program 粒度キャッシュは可だが**パッケージ粒度のクロスプロジェクト再利用には mangle に「パッケージ content-hash＋version＋安定シンボルキー」が要る**（実装フェーズ・キャッシュ置き場決定と同時）。
 - **narrowing `as` 不在**ゆえ LLVM API の count/index/aggregate-index 系 U32 パラメータは**バインディングで U64 宣言**。
 - **match payload bind はフィールド名で punning**＝`val x` は「フィールド x を束縛」・別名は `field: val local`（bare `val fbase` は非存在フィールド punning で self-compile を壊す）。
 - **aggregate（struct/enum/array）に icmp/extractvalue を非 aggregate へ誤適用すると LLVM builder が SEGV**＝必ず `LLVMGetTypeKind==10/exprIsArray` でガード。null sentinel は `LLVMIsNull`。
