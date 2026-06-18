@@ -1,17 +1,14 @@
-# mdBook output
-book/
-
 # bootstrap intermediates (bootstrap.sh emits these; the .seed.ll /
-# .seed.runtime.c + src are tracked). compiler/plewc itself is tracked.
-/compiler/plewc0
-/compiler/plewc.ll
-/compiler/plewc.runtime.c
-/compiler/plewc.check.ll
-/compiler/plewc.check.runtime.c
+# .seed.runtime.c + src are tracked). plewc itself is tracked.
+/plewc0
+/plewc.ll
+/plewc.runtime.c
+/plewc.check.ll
+/plewc.check.runtime.c
 
 # the dependency resolver binary (built on demand by `plew`; the source
-# compiler/resolve/_.pw is tracked).
-/compiler/plew-resolve
+# resolve/_.pw is tracked).
+/plew-resolve
 
 # scratch dir for local experiments (gen-harness builds, self-host checks, etc.)
 /tmp/

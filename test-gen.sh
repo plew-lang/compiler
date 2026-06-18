@@ -14,7 +14,7 @@
 # must be rejected by `plewc --gen`.
 #
 # All scratch lives under ./tmp (gitignored); cleanup is encapsulated here so the
-# caller never types `rm`. Prereq: ./bootstrap.sh (-> compiler/plewc).
+# caller never types `rm`. Prereq: ./bootstrap.sh (-> plewc).
 set -e
 cd "$(dirname "$0")"
 
@@ -22,7 +22,7 @@ LC="${LLVM_CONFIG:-llvm-config}"
 command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
 }
-PLEWC=compiler/plewc
+PLEWC=plewc
 [ -x "$PLEWC" ] || { echo "run ./bootstrap.sh first" >&2; exit 1; }
 
 mkdir -p tmp

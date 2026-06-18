@@ -7,7 +7,7 @@
 # does not exercise. Exits non-zero on the first mismatch.
 set -e
 ROOT=$(cd "$(dirname "$0")" && pwd)
-PLEWC="$ROOT/compiler/plewc"
+PLEWC="$ROOT/plewc"
 CC=${CC:-clang}
 [ -x "$PLEWC" ] || { echo "test-deps: $PLEWC missing — run ./bootstrap.sh" >&2; exit 1; }
 
@@ -16,7 +16,7 @@ export PLEW_CACHE="$WORK/cache"
 trap 'rm -rf "$WORK"' EXIT
 
 # Build the resolver binary (libc only, like any compiled program).
-"$PLEWC" "$ROOT/compiler/resolve/_.pw" > "$WORK/resolve.ll"
+"$PLEWC" "$ROOT/resolve/_.pw" > "$WORK/resolve.ll"
 "$PLEWC" --runtime > "$WORK/rt.c"
 "$CC" -w "$WORK/resolve.ll" "$WORK/rt.c" -o "$WORK/plew-resolve"
 

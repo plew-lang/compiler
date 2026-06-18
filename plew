@@ -1,7 +1,7 @@
 #!/bin/sh
 # plew — the Plew CLI. Compile a .pw file to a native binary, run it, or run the
 # derive-macro generator — all from a single relocatable binary: `plewc` resolves
-# @Std from the compiler binary's own directory (compiler/std), not from the
+# @Std from the compiler binary's own directory (std), not from the
 # source, so the source location is irrelevant. Compiled programs and the gen
 # harness link only libc (libLLVM is the compiler's concern, not the program's),
 # so no llvm-config flags are needed and the tool works from any path.
@@ -16,14 +16,14 @@
 set -e
 
 # Resolve this script's real directory even when invoked via a PATH symlink,
-# so we always find the sibling compiler/plewc (whose dir holds std/).
+# so we always find the sibling plewc (whose dir holds std/).
 self=$0
 while [ -h "$self" ]; do
     link=$(readlink "$self")
     case "$link" in /*) self=$link ;; *) self=$(dirname "$self")/$link ;; esac
 done
 ROOT=$(cd "$(dirname "$self")" && pwd)
-PLEWC="$ROOT/compiler/plewc"
+PLEWC="$ROOT/plewc"
 CC=${CC:-clang}
 
 [ -x "$PLEWC" ] || { echo "plew: $PLEWC not found — run ./bootstrap.sh first" >&2; exit 1; }
@@ -50,9 +50,9 @@ mkdir -p "$tmp"
 trap 'rm -rf "$tmp"' EXIT
 
 # ── dependency resolution (spec/17). The resolver is a SEPARATE Plew binary
-# (compiler/resolve/_.pw); build it on demand (libc only) next to plewc. ──
-RESOLVER="$ROOT/compiler/plew-resolve"
-RESOLVER_SRC="$ROOT/compiler/resolve/_.pw"
+# (resolve/_.pw); build it on demand (libc only) next to plewc. ──
+RESOLVER="$ROOT/plew-resolve"
+RESOLVER_SRC="$ROOT/resolve/_.pw"
 ensure_resolver() {
     if [ ! -x "$RESOLVER" ] || [ "$RESOLVER_SRC" -nt "$RESOLVER" ]; then
         "$PLEWC" "$RESOLVER_SRC" > "$tmp/resolve.ll"

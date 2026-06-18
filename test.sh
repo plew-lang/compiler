@@ -6,7 +6,7 @@
 # acceptance soundness, incl. the shared verifyProgram pass), and part/
 # (multi-file modules). Metaprogramming (gen/) is in ./test-gen.sh.
 #
-# Prereq: ./bootstrap.sh  (-> compiler/plewc).
+# Prereq: ./bootstrap.sh  (-> plewc).
 set -e
 cd "$(dirname "$0")"
 
@@ -14,7 +14,7 @@ LC="${LLVM_CONFIG:-llvm-config}"
 command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
 }
-PLEWC=compiler/plewc
+PLEWC=plewc
 [ -x "$PLEWC" ] || { echo "run ./bootstrap.sh first" >&2; exit 1; }
 
 RT=/tmp/plew_rt.c

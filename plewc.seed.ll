@@ -86895,8 +86895,8 @@ body0:                                            ; preds = %entry
 then:                                             ; preds = %body0
   store { ptr, i64 } zeroinitializer, ptr %2, align 8
   %7 = load { ptr, i64 }, ptr %1, align 8
-  call void @pf672(ptr %2, { ptr, i64 } %7)
-  call void @pf672(ptr %2, { ptr, i64 } { ptr @686, i64 9 })
+  call void @pf851(ptr %2, { ptr, i64 } %7)
+  call void @pf851(ptr %2, { ptr, i64 } { ptr @686, i64 9 })
   %8 = load { ptr, i64 }, ptr %2, align 8
   %9 = extractvalue { ptr, i64 } %8, 0
   %10 = extractvalue { ptr, i64 } %8, 1
@@ -87498,8 +87498,8 @@ then:                                             ; preds = %body0
 endif:                                            ; preds = %body0
   store { ptr, i64 } zeroinitializer, ptr %3, align 8
   %15 = load { ptr, i64 }, ptr %1, align 8
-  call void @pf672(ptr %3, { ptr, i64 } %15)
-  call void @pf672(ptr %3, { ptr, i64 } { ptr @689, i64 9 })
+  call void @pf851(ptr %3, { ptr, i64 } %15)
+  call void @pf851(ptr %3, { ptr, i64 } { ptr @689, i64 9 })
   %16 = load { ptr, i64 }, ptr %3, align 8
   %17 = extractvalue { ptr, i64 } %16, 0
   %18 = extractvalue { ptr, i64 } %16, 1
@@ -87963,11 +87963,11 @@ endif4:                                           ; preds = %while.body
 
 then5:                                            ; preds = %then3
   %68 = load { ptr, i64 }, ptr %9, align 8
-  call void @pf672(ptr %10, { ptr, i64 } %68)
+  call void @pf851(ptr %10, { ptr, i64 } %68)
   %69 = load %st104, ptr %14, align 8
   %70 = extractvalue %st104 %69, 2
-  call void @pf672(ptr %10, { ptr, i64 } %70)
-  call void @pf672(ptr %10, { ptr, i64 } { ptr @692, i64 9 })
+  call void @pf851(ptr %10, { ptr, i64 } %70)
+  call void @pf851(ptr %10, { ptr, i64 } { ptr @692, i64 9 })
   %71 = load { ptr, i64 }, ptr %10, align 8
   %72 = extractvalue { ptr, i64 } %71, 0
   %73 = extractvalue { ptr, i64 } %71, 1
@@ -88136,8 +88136,8 @@ endif8:                                           ; preds = %then5
   %94 = extractvalue %st104 %93, 2
   %95 = load { ptr, i64 }, ptr %17, align 8
   %96 = call { ptr, i64 } @pf706({ ptr, i64 } %92, { ptr, i64 } %94, { ptr, i64 } %95)
-  call void @pf672(ptr %12, { ptr, i64 } %96)
-  call void @pf672(ptr %12, { ptr, i64 } { ptr @693, i64 9 })
+  call void @pf851(ptr %12, { ptr, i64 } %96)
+  call void @pf851(ptr %12, { ptr, i64 } { ptr @693, i64 9 })
   %97 = load { ptr, i64 }, ptr %12, align 8
   %98 = extractvalue { ptr, i64 } %97, 0
   %99 = extractvalue { ptr, i64 } %97, 1
@@ -127491,6 +127491,51 @@ while.end12:                                      ; preds = %while.cond10
   ret { ptr, i64 } %55
 }
 
+define void @pf851(ptr %0, { ptr, i64 } %1) {
+entry:
+  %2 = alloca { ptr, i64 }, align 8
+  %3 = alloca i64, align 8
+  br label %body0
+
+body0:                                            ; preds = %entry
+  store { ptr, i64 } %1, ptr %2, align 8
+  store i64 0, ptr %3, align 4
+  br label %while.cond
+
+while.cond:                                       ; preds = %while.body, %body0
+  %4 = load i64, ptr %3, align 4
+  %5 = load { ptr, i64 }, ptr %2, align 8
+  %6 = extractvalue { ptr, i64 } %5, 1
+  %7 = icmp ult i64 %4, %6
+  br i1 %7, label %while.body, label %while.end
+
+while.body:                                       ; preds = %while.cond
+  %8 = getelementptr inbounds nuw { ptr, i64 }, ptr %0, i32 0, i32 0
+  %9 = getelementptr inbounds nuw { ptr, i64 }, ptr %0, i32 0, i32 1
+  %10 = load ptr, ptr %8, align 8
+  %11 = load i64, ptr %9, align 4
+  %12 = call ptr @plew_arr_grow(ptr %10, i64 ptrtoint (ptr getelementptr (i8, ptr null, i32 1) to i64), i64 %11)
+  store ptr %12, ptr %8, align 8
+  %13 = load { ptr, i64 }, ptr %2, align 8
+  %14 = extractvalue { ptr, i64 } %13, 0
+  %15 = extractvalue { ptr, i64 } %13, 1
+  %16 = load i64, ptr %3, align 4
+  call void @plew_bounds(i64 %16, i64 %15)
+  %17 = getelementptr i8, ptr %14, i64 %16
+  %18 = load i8, ptr %17, align 1
+  %19 = getelementptr i8, ptr %12, i64 %11
+  store i8 %18, ptr %19, align 1
+  %20 = add i64 %11, 1
+  store i64 %20, ptr %9, align 4
+  %21 = load i64, ptr %3, align 4
+  %22 = call i64 @plew_u64Add(i64 %21, i64 1)
+  store i64 %22, ptr %3, align 4
+  br label %while.cond
+
+while.end:                                        ; preds = %while.cond
+  ret void
+}
+
 define %st108 @pf693({ ptr, i64 } %0) {
 entry:
   %1 = alloca { ptr, i64 }, align 8
@@ -128396,14 +128441,14 @@ body0:                                            ; preds = %entry
   store { ptr, i64 } %2, ptr %5, align 8
   store { ptr, i64 } zeroinitializer, ptr %6, align 8
   %7 = load { ptr, i64 }, ptr %3, align 8
-  call void @pf672(ptr %6, { ptr, i64 } %7)
-  call void @pf672(ptr %6, { ptr, i64 } { ptr @1023, i64 5 })
+  call void @pf851(ptr %6, { ptr, i64 } %7)
+  call void @pf851(ptr %6, { ptr, i64 } { ptr @1023, i64 5 })
   %8 = load { ptr, i64 }, ptr %4, align 8
   %9 = call { ptr, i64 } @pf704({ ptr, i64 } %8)
-  call void @pf672(ptr %6, { ptr, i64 } %9)
-  call void @pf672(ptr %6, { ptr, i64 } { ptr @1024, i64 1 })
+  call void @pf851(ptr %6, { ptr, i64 } %9)
+  call void @pf851(ptr %6, { ptr, i64 } { ptr @1024, i64 1 })
   %10 = load { ptr, i64 }, ptr %5, align 8
-  call void @pf672(ptr %6, { ptr, i64 } %10)
+  call void @pf851(ptr %6, { ptr, i64 } %10)
   %11 = load { ptr, i64 }, ptr %6, align 8
   %12 = extractvalue { ptr, i64 } %11, 0
   %13 = extractvalue { ptr, i64 } %11, 1
