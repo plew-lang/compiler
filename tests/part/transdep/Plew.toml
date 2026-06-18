@@ -1,0 +1,4 @@
+name = "transdep"
+
+[dependencies]
+"Mid" = { path = "mid" }

@@ -12,7 +12,7 @@
 // is special (resolved against the bundled std dir by @Path) — every other `@name`
 // is looked up whole in the dependency table.
 
-import @Std/Io with { fileExists }
+import @Std/Io with { fileExists, readFileBytes }
 import ./Ir with { appendBytes }
 
 // One declared dependency from `[dependencies]`. `key` is the binding name the
@@ -296,6 +296,54 @@ export fn parseManifest(bytes: Array[U8]) -> Manifest {
         i = e + 1
     }
     return <Manifest name=name deps=deps />
+}
+
+// Read and parse `<pkgDir>Plew.toml` into its dependency list (empty when pkgDir
+// is empty or carries no manifest). The loader calls this PER package so each
+// file resolves its `@dep` imports against its own manifest.
+export fn loadManifestDeps(pkgDir: Array[U8]) -> Array[Dep] {
+    mut val deps: Array[Dep] = []
+    if pkgDir.count == 0 {
+        return deps
+    }
+    mut val maniPath: Array[U8] = []
+    appendBytes(into: inout maniPath, from: pkgDir)
+    appendBytes(into: inout maniPath, from: "Plew.toml".bytes)
+    if !(fileExists(path: maniPath)) {
+        return deps
+    }
+    val src: String = readFileBytes(path: maniPath)
+    val mani: Manifest = parseManifest(bytes: src.bytes)
+    return mani.deps
+}
+
+// Whether the import path bytes src[pStart .. pStart+pLen] are an external
+// package import (`@<name>`) other than `@Std/…` — i.e. one that must be backed
+// by a declared dependency. Used to enforce the phantom-dependency rule (spec/17).
+export fn isExternalDepImport(src: Array[U8], pStart: U64, pLen: U64) -> Bool {
+    if pLen < 2 {
+        return false
+    }
+    if src[pStart] != 64 {
+        return false
+    }
+    // `@Std/…` (or bare `@Std`) is the bundled std, not an external dependency.
+    if pLen >= 4 {
+        if src[pStart + 1] == 83 {
+            if src[pStart + 2] == 116 {
+                if src[pStart + 3] == 100 {
+                    // followed by end or '/'
+                    if pLen == 4 {
+                        return false
+                    }
+                    if src[pStart + 4] == 47 {
+                        return false
+                    }
+                }
+            }
+        }
+    }
+    return true
 }
 
 // Resolve a non-`@Std` `@<name>` import (path bytes src[pStart .. pStart+pLen],

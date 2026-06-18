@@ -1,0 +1,1 @@
+export fn helperVal() -> I64 { return 11I64 }

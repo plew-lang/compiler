@@ -1,0 +1,9 @@
+// Transitive + per-package resolution: Main depends on @Mid; Mid depends on @Leaf
+// AND uses its own internal `/Helper` import — both resolved against MID's own
+// Plew.toml / src root, not the consumer's.
+import @Std/Io with { print }
+import @Mid with { combined }
+
+fn main() {
+    print(combined())   // leaf(100) + helper(11) = 111
+}

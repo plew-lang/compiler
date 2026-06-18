@@ -1,0 +1,8 @@
+// spec/17 phantom-dependency rule: `@Acme/Missing` is imported but NOT declared
+// in [dependencies] (this manifest has none) — the front-end must reject it.
+import @Std/Io with { print }
+import @Acme/Missing with { thing }
+
+fn main() {
+    print(thing())
+}

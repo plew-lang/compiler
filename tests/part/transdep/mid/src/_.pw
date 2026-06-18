@@ -1,0 +1,4 @@
+import @Leaf with { leafVal }
+import /Helper with { helperVal }
+
+export fn combined() -> I64 { return leafVal() + helperVal() }

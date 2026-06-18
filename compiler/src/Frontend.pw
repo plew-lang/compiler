@@ -18,7 +18,7 @@ import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen }
-import ./Manifest with { Dep, Manifest, parseManifest, resolveDepImport }
+import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, isExternalDepImport }
 import ./Diag with { compileErrorAt, eprintInt, digitByte }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, opAddAssign, opSubAssign, opMulAssign, opDivAssign, opRemAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
@@ -407,24 +407,11 @@ export fn runFrontend() -> Comp {
         mut val pathBuf: Array[U8] = []
         mut val loaded: Array[Bind] = []
         // `loaded[i].fieldStart` carries each queued file's module id.
-        // package src root for `/…` absolute imports (from the Plew.toml walk-up;
-        // empty if no manifest is found, in which case `/…` imports are skipped).
-        val srcRoot: Array[U8] = findSrcRoot(entry: entryBytes)
-        // package dir (holds Plew.toml) for resolving `@dep` imports: parse the
-        // manifest's `[dependencies]` so a non-`@Std` `@<name>` import resolves to
-        // that dependency's lib face. Empty deps when there is no manifest.
-        val pkgDir: Array[U8] = findPkgDir(entry: entryBytes)
-        mut val deps: Array[Dep] = []
-        if pkgDir.count > 0 {
-            mut val maniPath: Array[U8] = []
-            appendBytes(into: inout maniPath, from: pkgDir)
-            appendBytes(into: inout maniPath, from: "Plew.toml".bytes)
-            if fileExists(path: maniPath) {
-                val maniSrc: String = readFileBytes(path: maniPath)
-                val mani: Manifest = parseManifest(bytes: maniSrc.bytes)
-                deps = mani.deps
-            }
-        }
+        // `/…` absolute imports and `@dep` imports resolve PER PACKAGE: each loaded
+        // file walks up to its own Plew.toml (findPkgDir/findSrcRoot) and parses its
+        // own `[dependencies]` (loadManifestDeps), computed inside the loop below. So
+        // a dependency package resolves its own `/…` and `@dep` against its manifest,
+        // not the entry's — the right foundation for transitive resolution.
         // std library root for `@Std/…`: the `std/` directory next to the plewc
         // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
         val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes)
@@ -534,6 +521,12 @@ export fn runFrontend() -> Comp {
                 rootSeen.append(value: moduleId)
             }
             val baseLen: U64 = dirPrefixLen(path: path)
+            // per-package resolution context for THIS file's imports: its own package
+            // dir / src root (`/…` imports) and its own declared dependencies (`@dep`
+            // imports). A dependency package thus resolves against its own manifest.
+            val fPkgDir: Array[U8] = findPkgDir(entry: path)
+            val fSrcRoot: Array[U8] = findSrcRoot(entry: path)
+            val fDeps: Array[Dep] = loadManifestDeps(pkgDir: fPkgDir)
             // follow `import`/`part` nodes to child files (in source order); note a
             // `@[...]` directive so the generated sibling can be auto-parted.
             mut val sawDirective: Bool = false
@@ -541,11 +534,19 @@ export fn runFrontend() -> Comp {
             while ii < items.count {
                 match items[ii] {
                     TopItemAst.Import(val imp) => {
-                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
                         // a non-`@Std` `@dep` import is unresolved by @Path (returns
-                        // empty); resolve it against the manifest's [dependencies].
+                        // empty); resolve it against this package's [dependencies].
                         if childPath.count == 0 {
-                            childPath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: deps, pkgDir: pkgDir)
+                            childPath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
+                        }
+                        // phantom-dependency rule (spec/17): an external `@<name>` import
+                        // that no declared dependency backs is a loud error (provenance:
+                        // you may only import what the manifest declares + `@Std`).
+                        if childPath.count == 0 {
+                            if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
+                                compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)")
+                            }
                         }
                         if childPath.count != 0 {
                             val seen: Bool = pathSeen(buf: pathBuf, loaded: loaded, path: childPath)
@@ -586,7 +587,17 @@ export fn runFrontend() -> Comp {
                         // (its declarations + own exports must exist for the forward to
                         // resolve). It always starts a fresh module (like an import). Binds
                         // nothing locally — that's lowerReExport's job (export surface only).
-                        val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: srcRoot, srcRootLen: srcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        // a re-export may forward a dependency's lib face (`export @Dep
+                        // with { … }`); resolve `@dep` the same way as an import.
+                        if rePath.count == 0 {
+                            rePath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
+                        }
+                        if rePath.count == 0 {
+                            if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
+                                compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)")
+                            }
+                        }
                         if rePath.count != 0 {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
                                 if !(fileExists(path: rePath)) {
