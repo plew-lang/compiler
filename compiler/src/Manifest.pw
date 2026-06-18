@@ -15,7 +15,7 @@
 
 import @Std/Io with { fileExists, readFileBytes }
 import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr, appendBytes }
-import ./Lock with { Lock, lockCommitFor, parseLock, emptyLock }
+import ./Lock with { Lock, lockCommitForConstraint, parseLock, emptyLock }
 import ./Cache with { srcDir }
 
 // One declared dependency from `[dependencies]`. `key` is the binding name the
@@ -169,7 +169,7 @@ export fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Arra
         val d: Dep = deps[i]
         if spanEqArr(a: d.key, src: src, start: nameStart, len: nameLen) {
             if d.kind == 1 {
-                val commit: Array[U8] = lockCommitFor(lock: lock, git: d.loc)
+                val commit: Array[U8] = lockCommitForConstraint(lock: lock, git: d.loc, constraint: d.version)
                 if commit.count == 0 {
                     return out
                 }

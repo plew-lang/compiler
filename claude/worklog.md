@@ -90,7 +90,9 @@ hidden-meaning 穴は概ね閉じた（ユーザー確認済）。閉じたも�
     - **解決ツール＝別バイナリ `compiler/resolve/_.pw`**（`../src/*` を相対 import で共有）＝root `Plew.toml`→git dep を BFS で fetch/最新 tag→commit/materialize→推移 manifest を辿る→`Plew.lock` を stdout へ（driver がリダイレクト）。
     - **Loader（plewc）**＝エントリの `Plew.lock` を 1 回読み（spec/17「lock はビルド対象のみ有効」＝深い依存の git `@dep` も**トップレベル lock の commit**で解決・per-package manifest は URL＋phantom のみ）、git `@dep` を cache 源へ解決。各ファイルは自分の manifest で `@dep`/`/…`・phantom を解決（per-package）。
     - **exec intrinsic**＝`@Std/Process.execOut`/`execCode`（`sh -c`・popen 捕捉）。テスト＝`test-deps.sh`（ローカル git repo を立て resolver→lock→build を検証・simple＋transitive）。
-  - **残**＝複数メジャー共存（現状 URL 単一版に dedup）・`plew` driver が build 前に resolver 自動起動（今は手動 `plew-resolve > Plew.lock`）・members/workspace・native(`[[native.*]]`)/tools/bin/`plew install`・URL のシェル安全性 hardening（現状 single-quote のみ）・manifest を毎ファイル再 parse（pkgDir キャッシュ未）。
+  - **`plew` driver 統合済**＝`plew resolve [dir|file]`（明示・lock 生成）＋build/run は **lock 欠如かつ git dep 宣言時に 1 回 auto-resolve**（stderr に通知＝fetch を可視化・再解決は明示）。resolver バイナリ `compiler/plew-resolve` はオンデマンドビルド（libc のみ・gitignore）。
+  - **複数メジャー共存＝resolver/lock/loader 層は実装済・コンパイラ frontend 束縛が残課題**：resolver は **(url, major) で dedup**（同 major は最新へ統合・異 major は別エントリ＝lock に同 url 複数版）、loader は `lockCommitForConstraint`（`Version.satisfies` で**インポータの制約に一致する版**の commit を選ぶ）。**単独では正しく解決**（MidA→1.x・MidB→2.x を実証）。**ただし両版を 1 ビルドに同時ロードすると同名 export が先勝ち束縛**（`findFunc`/`nameVisibleFrom` が name-based ＝どの leaf 版の `leafval` も「見える」で arena 順先頭を採る）＝1+100 が 1+1 に。**真の共存には import-`with` 束縛を「解決先モジュール限定」にする module-system 改修が要る**（architecture.md「renovation が届かない唯一＝ソース連結モジュールモデル」の領域・spec も「異バージョン同名**型**を API 境界に晒す＝別型エラー」と既述）。＝**依存解決（fetch/版解決/lock/loader）本体は完成・共存の最終 1 マイルは frontend 名前解決**。
+  - **残**＝上記の共存 frontend 束縛・members/workspace・native(`[[native.*]]`)/tools/bin/`plew install`・URL のシェル安全性 hardening（現状 single-quote のみ）・manifest を毎ファイル再 parse（pkgDir キャッシュ未）。
 - **spec 自身が将来送り**＝固定長配列 `[E; N]`・const generics・`Slice`・部分文字列・`USize`/`ISize`。
 
 ## 再利用資産・罠（git で拾いにくい知見）

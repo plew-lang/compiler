@@ -18,17 +18,48 @@ import ../src/Cache with { srcDir, cacheRoot }
 import ../src/Fetch with { ensureMirror, listTags, resolveCommit, materialize }
 import ../src/Toml with { appendBytes, bytesEq }
 
-// Whether `url` is already among the resolved packages (dedup by URL — a first cut;
-// multi-major coexistence is a later refinement).
-fn hasUrl(resolved: Array[Name], url: Array[U8]) -> Bool {
+// Whether `b` is already in the list of seen byte-strings.
+fn hasName(seen: Array[Name], b: Array[U8]) -> Bool {
     mut val i: U64 = 0
-    while i < resolved.count {
-        if bytesEq(a: resolved[i].s, b: url) {
+    while i < seen.count {
+        if bytesEq(a: seen[i].s, b: b) {
             return true
         }
         i += 1
     }
     return false
+}
+
+// The major component of a version tag (bytes before the first '.', or the whole
+// tag if it has none). Drives multi-major coexistence: one resolved entry per
+// (url, major).
+fn majorOf(tag: Array[U8]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    mut val i: U64 = 0
+    mut val go: Bool = true
+    while go {
+        if i < tag.count {
+            if tag[i] == 46U8 {
+                go = false
+            } else {
+                out.append(tag[i])
+                i += 1
+            }
+        } else {
+            go = false
+        }
+    }
+    return out
+}
+
+// The dedup key for a resolved package: `<url>#<major>`. Same url + same major
+// unify (one entry, latest of that major); different majors coexist.
+fn verKey(url: Array[U8], tag: Array[U8]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    appendBytes(into: inout out, from: url)
+    out.append(35U8)
+    appendBytes(into: inout out, from: majorOf(tag: tag))
+    return out
 }
 
 // The binding-name edges of a manifest's dependencies (for the lock's provenance).
@@ -74,23 +105,30 @@ fn main() {
         di += 1
     }
 
-    mut val resolvedUrls: Array[Name] = []
+    mut val mirrored: Array[Name] = []     // urls whose mirror is up to date
+    mut val resolvedKeys: Array[Name] = []  // <url>#<major> already resolved
     mut val lockPkgs: Array[LockPkg] = []
     mut val wi: U64 = 0
     while wi < work.count {
         val dep: Dep = work[wi]
         wi += 1
         val url: Array[U8] = dep.loc
-        if !(hasUrl(resolved: resolvedUrls, url: url)) {
-            resolvedUrls.append(<Name s=url />)
+        // fetch the mirror once per URL, then pick the latest tag for THIS
+        // constraint (cheap, local) and dedup by (url, major).
+        if !(hasName(seen: mirrored, b: url)) {
+            mirrored.append(<Name s=url />)
             if ensureMirror(cacheRoot: cr, url: url) != 0I64 {
                 fail(msg: url)
             }
-            val tags: Array[U8] = listTags(cacheRoot: cr, url: url)
-            val tag: Array[U8] = pickLatest(constraint: dep.version, tagsBlob: tags)
-            if tag.count == 0 {
-                fail(msg: url)
-            }
+        }
+        val tags: Array[U8] = listTags(cacheRoot: cr, url: url)
+        val tag: Array[U8] = pickLatest(constraint: dep.version, tagsBlob: tags)
+        if tag.count == 0 {
+            fail(msg: url)
+        }
+        val key: Array[U8] = verKey(url: url, tag: tag)
+        if !(hasName(seen: resolvedKeys, b: key)) {
+            resolvedKeys.append(<Name s=key />)
             val commit: Array[U8] = resolveCommit(cacheRoot: cr, url: url, ref: tag)
             if commit.count == 0 {
                 fail(msg: url)

@@ -5,6 +5,7 @@
 // control. Pure byte logic (no compiler arena) so both binaries can share it.
 
 import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, bytesEq, appendBytes }
+import ./Version with { satisfies }
 
 // A byte-string wrapped for use in arrays (avoids Array[Array[U8]]).
 export struct Name {
@@ -111,6 +112,25 @@ export fn lockCommitFor(lock: Lock, git: Array[U8]) -> Array[U8] {
         val p: LockPkg = lock.pkgs[i]
         if bytesEq(a: p.git, b: git) {
             return p.commit
+        }
+        i += 1
+    }
+    return []
+}
+
+// Look up a package by git URL whose resolved version satisfies `constraint`, and
+// return its commit (empty if none). With multi-major coexistence the lock can
+// hold several entries for one URL (e.g. 1.x and 2.x); this picks the one the
+// importing package asked for (spec/17). Falls back to any entry for the URL when
+// the constraint is empty.
+export fn lockCommitForConstraint(lock: Lock, git: Array[U8], constraint: Array[U8]) -> Array[U8] {
+    mut val i: U64 = 0
+    while i < lock.pkgs.count {
+        val p: LockPkg = lock.pkgs[i]
+        if bytesEq(a: p.git, b: git) {
+            if satisfies(constraint: constraint, candidate: p.version) {
+                return p.commit
+            }
         }
         i += 1
     }
