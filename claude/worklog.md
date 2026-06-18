@@ -84,7 +84,7 @@ hidden-meaning 穴は概ね閉じた（ユーザー確認済）。閉じたも�
 
 - **`spawn`/`JoinHandle`/チャネル**（async 安定後・実スレッド pthread・境界で CoW eager 実体化・`Ref` 不可・`local` 伝染解析・言語仕様判断あり・spec/14）。
 - **循環回収**（Ref グラフ限定サイクルコレクタ・Bacon–Rajan trial deletion・設計は design-decisions 済）。
-- **M3 パッケージ管理**：仕様確定＝[spec/17-packages](../spec/04-execution/17-packages.md)＋design-decisions「パッケージ」（manifest 3 項目／`/` は名前の字面・公開面はフラット（ルート `export`）／依存表記（members を `/` パスで選択・`as` は member 内のみ・`commit`）／桁数バージョン／最新互換・複数版共存・phantom 禁止／lock・ワークスペース＝複数メンバ単一 repo・1 バージョン／ソース配布／ネイティブ依存＝`[[native.<kind>]]`（ヘッダ判別・c/cpp/rust/system）・C/C++ は `sources`/`include`/`defines`/`std` 構造化（生フラグ＝ACE ゆえ不可・codegen/target は Plew 所有）・Rust は `path` で crate dir（staticlib+extern"C"・cargo 駆動）・ビルドスクリプトなし）。実装は未着手（導入後に `@Std/Syntax` を in-tree→外部共有パッケージへ昇格）。
+- **M3 パッケージ管理**：仕様確定＝[spec/17-packages](../spec/04-execution/17-packages.md)＋design-decisions「パッケージ」（manifest 3 項目／`/` は名前の字面・公開面はフラット（ルート `export`）／依存表記（members を `/` パスで選択・`as` は member 内のみ・`commit`）／桁数バージョン／最新互換・複数版共存・phantom 禁止／lock・ワークスペース＝複数メンバ単一 repo・1 バージョン／ソース配布／ネイティブ依存＝`[[native.<kind>]]`（ヘッダ判別・c/cpp/rust/system）・C/C++ は `sources`/`include`/`defines`/`std` 構造化（生フラグ＝ACE ゆえ不可・codegen/target は Plew 所有）・Rust は `path` で crate dir（staticlib+extern"C"・cargo 駆動）・ビルドスクリプトなし／**bin**＝公開実行ファイルを `bin` で列挙（1 lib+N bin・`/` パス・`as`・`plew run @Pkg:Name`・全 bin install 可）／**`[tools]`**＝import せず run する外部実行ファイル（プロジェクトローカル＋キャッシュ共有）／**`dev-dependencies` なし**＝tree shake で含有判定・到達駆動解決）。実装は未着手（導入後に `@Std/Syntax` を in-tree→外部共有パッケージへ昇格）。
 - **spec 自身が将来送り**＝固定長配列 `[E; N]`・const generics・`Slice`・部分文字列・`USize`/`ISize`。
 
 ## 再利用資産・罠（git で拾いにくい知見）

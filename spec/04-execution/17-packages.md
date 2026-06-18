@@ -16,7 +16,8 @@ plew = "0.3"              # 対象とする Plew バージョン（後方互換�
 - **version / license / repository / description は持ちません**。それぞれ唯一の真実源を参照します ── version は **git tag**、license は `LICENSE` ファイル、repository は git remote、description は `README`。マニフェストに重複させない（単一真実源・DRY）。
 - `name` は**グローバル一意 ID ではなく、消費側が `@Http` で参照するデフォルトの束縛名**です。**`/` を含められます**（`Acme/Http`・`Std/Http`）が、これは**名前の字面**で、パッケージ内へ潜る経路ではありません（外部 API はフラット）── 関連パッケージを `Acme/…` で揃える組織的命名や std の分割に使います（**第一成分 `Std` は予約**）。パッケージの同一性の基礎は依存指定の git URL（衝突は消費側のローカル名で解決 → [モジュール章](15-modules.md#依存とローカル名)）。
 - **`plew` は「対象とする Plew バージョン」**（要求最低版ではありません）。Plew は当面（0.x）**後方互換を保証しない**ため、`plew = "0.3"` は「このソースは Plew 0.3 でコンパイルされる前提」を意味し、**コンパイラがその版を受理できなければ loud fail**（「この依存は Plew 0.3 用・非互換」と早期に告げ、意味不明なコンパイルエラーの山を避ける）。ソース配布＋消費側ビルドゆえ全依存が現コンパイラで通る必要があり、`plew` はその**非互換の早期検出**を担います。将来「ここから後方互換を維持する」宣言（1.0 的なコミット・edition 的な互換機構）は additive です。
-- **公開面はマニフェストで宣言しません**。パッケージが外部に見せるのは**ルート `_.pw` が `export` したものだけ＝フラット**（`import @Name`／`with` で使い・パッケージ内へは潜れない）。lib は構造的に 1 つで、bin か lib かはルートの `main` の有無で決まる → [モジュール章「公開面と外部到達」](15-modules.md#公開面と外部到達)。
+- **lib の公開面はマニフェストで宣言しません**（ルート `_.pw` の `export` だけ＝フラット・`import @Name`／`with`・パッケージ内へは潜れない → [モジュール章「公開面と外部到達」](15-modules.md#公開面と外部到達)）。**lib は 1 つ＋bin は複数**＝公開する実行ファイルは [`bin`](#bin公開する実行ファイル)（任意）で列挙します。
+- **依存は 3 種**（いずれも任意）＝`[dependencies]`（import する runtime/公開依存・tree shake で含有判定）／`[tools]`（import せず run するだけの外部実行ファイル → [tools](#tools開発時に-run-する外部実行ファイル)）／ネイティブ依存 `[[native.<kind>]]`（下記）。**`dev-dependencies` は持ちません**（理由は下記「依存の含有＝tree shake」）。
 - **`lockfile`（任意・既定 `"./Plew.lock"`）**でロックファイルの位置を指せます。複数パッケージで依存版を統一したいとき各 `Plew.toml` が同じ lock を指す（下記「ロックファイル」）。
 
 ## 依存（`dependencies`）
@@ -68,6 +69,14 @@ git tag を semver として解釈します。**書いた桁が固定・書か�
   - **異なるバージョンの同名型を API 境界で晒すと別型として扱われ、コンパイルエラー**になります（hidden にしない）。共存が安全なのは、型・トレイトを境界で晒さないライブラリです。
 - **間接依存は import できません（phantom dependency の禁止）**：パッケージ内のコードが `import @Name` できるのは、**自身の `dependencies` に書いた直接依存と `@Std` のみ**です。推移依存はビルドには使われますが import できません（依存先が `export` で再公開した面を経由する場合を除く）。`dependencies` に無い `@Name` の import はコンパイルエラーです。
 
+### 依存の含有＝tree shake（`dev-dependencies` を持たない）
+
+**`dev-dependencies` という区分は持ちません。** ライブラリ依存はすべて `[dependencies]` に置き、**何が成果物に入るかは whole-program tree shake（到達可能性）が決めます**。テストからしか到達しない依存は prod ビルドから自動で落ち、テスト依存を「dev」とラベルする必要はありません。
+
+- **「dev か runtime か」は宣言でなく到達可能性から創発**します（正直）。`dev-dependencies` は「import できるが使ってよい文脈はテスト関数の中だけ」という**暗黙の文脈ルール**を生むので採りません ── どこで使ってもよく、到達した所にだけ含まれる。
+- **`derive` は `[dependencies]`**：`@[Derive(...)]` で**シンボルを import して参照する**ので依存。「`plew gen` で run される」は宣言区分と直交し、生成 `.gen.pw` が提供元 runtime を参照すれば成果物に入り、自己完結なら tree shake で落ちる。区分は **import するか（→ `[dependencies]`）／import せず run するだけか（→ [`[tools]`](#tools開発時に-run-する外部実行ファイル)）** で割れます。
+- **消費側の解決は到達駆動**：consumer は自分の entry から辿った import だけを解決します。あなたのテストからしか参照されない依存は consumer の到達範囲外ゆえ解決されません（Cargo が manifest 駆動ゆえ `dev-dependencies` で枝刈りした問題を、whole-program from source の到達駆動で構造的に消す）。
+
 ## ロックファイル（`Plew.lock`）
 
 - 解決結果（**git URL + 確定 commit + content hash**）を固定し、再現ビルドを保証します。
@@ -93,6 +102,35 @@ lockfile = "../Plew.lock"     # 既定は "./Plew.lock"（自分の隣）
 - **「1 個」も「n 個」も `lockfile` パスの違いだけ**＝仕組みが 1 つ。複数のビルドルート（各メンバを単独ビルド/テスト）が同じ lock を共有するので、**「単独テストで通った版＝app に組んでも同じ版」**が保たれます。
 - **lock は完全な導出物**：共有 lock を指すパッケージ群を統一解決し、lock は**使われた参照元（各メンバの `Plew.toml` パス）を記録**します。解決時にその参照元を辿り、**今も this lock を指すものだけ**をメンバとして再解決し、指さなくなった/消えたものは記録から落とします（**真実源は各 `Plew.toml`**・lock は自己修復するキャッシュ）。
 - **統一は累積的**：lock が知るメンバは「一度でも解決されて記録されたもの」です。新メンバは**初回ビルドで記録されるまで**統一に入りません（その後は収束）。「手動列挙の事前性」より「自動記録の自己修復」を取る設計です。
+
+## bin（公開する実行ファイル）
+
+パッケージは **1 つの lib（`_.pw` の export 面）＋ 複数の bin**（実行可能エントリ）を持てます（Rust の lib+bin モデル）。公開する bin は `bin` で列挙します ── **lib 面は `_.pw` で表す（列挙しない）が、bin は複数あり消費者が発見する必要があるので列挙する**（発見性のための明示・lib の単一根とは事情が違う）。
+
+```toml
+bin = [
+    "/Cli",                                     # bin "Cli"（src/Cli.pw・main 必須）
+    "/Server",                                  # bin "Server"
+    { path = "/Tools/Migrate", as = "migrate" } # rename した bin "migrate"
+]
+```
+
+- 要素は「**`/` ルート起点のエントリモジュールパス** | `{ path, as }`」（`dependencies`/`members` と同じ string|table・`[[bin]]` ブロック記法でも書ける）。**名前 = パス末尾**（`Cli`・`Server`）が既定、`as` で rename（path=file の正直さは既定で保つ）。
+- 列挙したファイルは **`main` 必須**。`main` を持つが `bin` 未列挙のファイルは公開 bin ではありません（**偶発的な `main` が公開 bin になる穴を塞ぐ**）。`_.pw` が `main` を持てば**パッケージ名の既定 bin**（`plew run @Pkg`・無セレクタ）。
+- **呼び出しは `plew run @Pkg:Name`**（bin セレクタ `:`・`/` はパッケージ名の字面ゆえ不可）。**全 bin が install 対象**で特権はなく（`plew install @Pkg` で全 bin・`--bin` で選択＝`cargo install` 流）、自分／ワークスペースは `plew run :Name` → [モジュール章「ビルド・実行」](15-modules.md#ビルド実行)。
+
+## tools（開発時に run する外部実行ファイル）
+
+`[tools]` は **import せず run するだけの外部実行ファイル**（migration CLI・linter・自前でない codegen 等）。`[dependencies]`（import するライブラリ）とは「**import するか／run するだけか**」で分かれます。
+
+```toml
+[tools]
+"https://github.com/x/migrate.git" = "3"      # plew run @migrate で実行
+```
+
+- 表記は `[dependencies]` と同じ（git URL・members・`commit` 等）。**この repo の開発でだけ使い・consumer に伝播しない・runtime グラフ外**。
+- **プロジェクトローカルに宣言**するが、**ビルド実体は content-addressed キャッシュで全プロジェクト共有**＝Node/Go 流のローカルツールを、Rust の「ローカル化＝再コンパイル重複」コスト無しで持てる（[配布とビルド](#配布とビルドソース配布消費側ビルドキャッシュ)）。
+- グローバルに入れたい公開ツールは `[tools]` でなく `plew install`（`cargo install` 流）。
 
 ## 配布とビルド（ソース配布＋消費側ビルド＋キャッシュ）
 

@@ -62,7 +62,7 @@ fn main() -> Result[(), AppError] {   // Result を返すと main 内で try が
 - **戻り値は `()` か `Result[(), E]`**。`Result` を返すと **`main` 内で [`try`](../03-expressions/13-error-handling.md) が使え**、`Err` のときランタイムが**エラーを表示して非ゼロ終了**します（`Termination` 相当の lang トレイト経由）。明示的な終了コードは標準ライブラリの `Process.exit(code:)`（発散）。
 - **引数・環境は `main` の仮引数では受け取らず、標準ライブラリ経由**で取ります（`import @Std/Process` して `Process.args() -> Array[String]`／`Process.env` 等）。`print`/`Random` と同じく「ambient なプロセス能力を import 越しに明示取得」する形に揃え、出どころを可視に保つ（`main` のシグネチャを単一にし、ランタイムが複数 main 形を魔法認識しなくて済む）。`Process` は lang item ではないので import が要る。
 - **ランタイムの寿命**：`main` が返り、**かつイベントループが drain した**（保留タスク・タイマ・登録リスナ・未 join の [`spawn`](14-concurrency.md) スレッドがいずれも無い）ときにプロセスは終了します（Node/ブラウザと同じ）。よって UI アプリの `main` は「DOM にマウントして return」でよく、イベント待ちでループが生き続けます。CLI は仕事して return → ループ空 → 終了。サーバは listen して return → 接続待ちで生存。
-- **`main` は実行可能ビルドのときだけ必須**。ライブラリ（他パッケージや JS から呼ぶ WASM）には `main` は不要で、export 面だけを晒します（→ [エクスポート](#エクスポート)）。
+- **パッケージは lib 面（`_.pw` の export）を常に持ち、`main` を持つ各ファイルが bin**（実行可能エントリ）＝**1 パッケージ＝1 lib ＋ N bin**（Rust の lib+bin モデル）。公開する bin は manifest の [`bin`](17-packages.md#bin公開する実行ファイル) で列挙し、`plew run @Pkg:Name` で呼びます（→ [ビルド・実行](#ビルド実行)）。ライブラリ（他パッケージや JS から呼ぶ WASM）は bin ゼロ＝export 面だけを晒します。**複数 lib が要るならワークスペースの members**（bin は 1 パッケージ内に複数置ける）。
 
 ### 言語アイテムは常にスコープにある（import 不要）
 
@@ -281,19 +281,24 @@ import @A/Connection            // ❌ パッケージ内へは潜れない（Co
 
 - **公開面はフラット＝ルートの `export`**。「複数の公開エントリ」「サブモジュール公開」を表現する形（旧 `public` フィールド・`export ./Http` でのサブパス公開）は**持ちません** ── パッケージは 1 つの lib（Rust の lib.rs モデル）で、サブ領域を外に見せたいなら**別パッケージ**（`/` を含む名前＝ワークスペースのメンバ）として publish します。encapsulation は ファイル→モジュールが [`part`](#part--モジュールの分割)、モジュール→公開面が [`export`](#エクスポート) の 2 層。
 - **`@A/Foo` はパッケージ内のサブモジュールではない**。外部 `@…` の `/` は名前の字面なので、`@Acme/Http` は「`Acme` の `Http` サブ」ではなく `Acme/Http` という 1 パッケージ。サブ領域を `/` で見せたいときは、それを**独立したメンバパッケージ**にする（→ [ワークスペース](17-packages.md#ワークスペース複数パッケージのリポジトリ)）。
-- **bin（実行可能）か lib か**は**ルートに `main` があるか**で決まります（→ [実行エントリ](#実行エントリmain)）。`main` を持つパッケージは bin（`plew run @A`）、持たなければ lib（`import @A`）。専用フィールドは増やしません。
+- **パッケージは常に lib 面（`_.pw` の export）を持ち、bin は `main` を持つファイル**を manifest の [`bin`](17-packages.md#bin公開する実行ファイル) で公開列挙したもの（1 lib ＋ N bin・Rust の lib+bin モデル）。`_.pw` が `main` を持てばパッケージ名の既定 bin。`plew run @A:Name`（無セレクタは既定 bin）→ [実行エントリ](#実行エントリmain)。複数 lib が要るならワークスペースの members。
 - **自前（`/`・`./`／`../`）は自パッケージのファイル木**（`public` ゲートのような外部到達制限を受けず、どのモジュールにも届く）。外部 `@…` だけがルートの `export` 公開面に絞られます。違いは「自前はファイルパスで潜れる／外部は名前でフラットに使う」点。
 
-### ビルド
+### ビルド・実行
 
-**エントリは「ファイルを明示選択」＋「その中の `fn main` が開始点」**の 2 段で、プロジェクト全体から "the main" を自動探索したり `bin/` のような特別ディレクトリを設けたりはしません。実行可能ビルドは、名指ししたファイルが定義する [`main`](#実行エントリmain) をエントリにします：
+実行可能エントリは **`main` を持つファイル**で、パッケージが公開する bin は manifest の [`bin`](17-packages.md#bin公開する実行ファイル) に列挙します（`/` ルート起点パス・名前はパス末尾・`as` で rename）。プロジェクト全体から "the main" を自動探索したり `bin/` のような特別ディレクトリを設けたりはしません。
 
 ```sh
-plew build ./src/client.pw    # その file の fn main がエントリ（例：WASM 出力）
-plew build ./src/server.pw    # 別エントリ＝別ターゲット（例：native 出力）
+plew run @App             # 既定 bin（_.pw の main・無セレクタ）
+plew run @App:Server      # 名前付き bin（: セレクタ ── / は名前の字面ゆえ使えない）
+plew run :Client          # 自分／ワークスペースの bin
+plew build ./src/Client.pw  # ファイル直指定の低レベルビルド（例：WASM 出力）
+plew install @Tool        # 外部パッケージの bin をインストール（既定で全 bin・--bin で選択）
 ```
 
-これにより**モノレポで複数エントリ**（クライアント／サーバ）が同じモデルモジュールを共有しつつ別々にビルドできます。`main` を持たないファイルはライブラリとしてビルドされ、`main` は不要です。
+- **bin セレクタは `:`**（`@Pkg:Name`）。`/` はパッケージ名の字面なので使えません。無セレクタ（`@Pkg`）は `_.pw` の `main`＝既定 bin。
+- **複数エントリ**（クライアント／サーバ）は別 bin として `bin` に並べ、同じ lib・モデルモジュールを共有しつつ別ターゲットにビルドできます（モノレポフルスタック）。
+- **外部の実行物**は用途で分かれます ── 公開ツールをグローバルに入れるなら `plew install`（`cargo install` 流）、この repo の開発でだけ run する外部実行ファイルは [`[tools]`](17-packages.md#tools開発時に-run-する外部実行ファイル)。
 
 ## テスト
 
