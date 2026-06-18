@@ -161,6 +161,7 @@ bin = [
 - 配布物は **Plew ソース**です（precompiled lib のリンクは一次手段にしない）。
 - ビルドは**消費側の `plewc` が fetch 済みソースから whole-program** で行います。
 - 速度は**ビルドキャッシュ**で回収します（hidden cost は可・hidden meaning は不可）。キーは **`compiler version × target × flags`** に、**不変な fetched 依存は lock の commit SHA・編集中の局所コード/`path` 依存は content/mtime** を掛けたハイブリッド（commit がある依存は content hash を別途計算しない＝[ロックファイル](#ロックファイルplewlock)と同じ姿勢）。
+- **置き場は Cargo 流**＝**fetch ソースはグローバル一元 cache**（commit キーで content-addressed・read-only・同 commit を二度落とさない）、**コンパイル成果物は per-project**（whole-program 粒度。クロスプロジェクト共有はシンボルの content 安定化を要する将来課題）。`[tools]` の実体だけはグローバル content-addressed 共有（[tools](#tools開発時に-run-する外部実行ファイル)）。
 - 実行可能ビルドのエントリ選択は → [モジュール章「ビルド・実行」](15-modules.md#ビルド実行)。
 
 ## ネイティブ依存（C / C++ / Rust / system ライブラリ）
