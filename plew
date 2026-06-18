@@ -31,23 +31,66 @@ CC=${CC:-clang}
 usage() {
     echo "usage: plew <file.pw> [-o <out>]   |   plew build <file.pw> [-o <out>]" >&2
     echo "       plew run <file.pw> [args...] |   plew gen <file.pw> [<file.pw>…]" >&2
+    echo "       plew resolve [dir|file]      (resolve deps -> Plew.lock)" >&2
     exit 1
 }
 
-# Subcommand dispatch. A leading verb (build/run/gen) selects the mode; a bare
-# first argument that is a .pw file defaults to build (back-compat).
+# Subcommand dispatch. A leading verb (build/run/gen/resolve) selects the mode; a
+# bare first argument that is a .pw file defaults to build (back-compat).
 mode=build
 case "$1" in
-    run)   mode=run;   shift ;;
-    build) mode=build; shift ;;
-    gen)   mode=gen;   shift ;;
+    run)     mode=run;     shift ;;
+    build)   mode=build;   shift ;;
+    gen)     mode=gen;     shift ;;
+    resolve) mode=resolve; shift ;;
 esac
-
-[ -n "$1" ] || usage
 
 tmp="${TMPDIR:-/tmp}/plew-$$"
 mkdir -p "$tmp"
 trap 'rm -rf "$tmp"' EXIT
+
+# ── dependency resolution (spec/17). The resolver is a SEPARATE Plew binary
+# (compiler/resolve/_.pw); build it on demand (libc only) next to plewc. ──
+RESOLVER="$ROOT/compiler/plew-resolve"
+RESOLVER_SRC="$ROOT/compiler/resolve/_.pw"
+ensure_resolver() {
+    if [ ! -x "$RESOLVER" ] || [ "$RESOLVER_SRC" -nt "$RESOLVER" ]; then
+        "$PLEWC" "$RESOLVER_SRC" > "$tmp/resolve.ll"
+        "$PLEWC" --runtime > "$tmp/rrt.c"
+        "$CC" -w "$tmp/resolve.ll" "$tmp/rrt.c" -o "$RESOLVER"
+    fi
+}
+# Walk up from a path's directory to the nearest ancestor holding Plew.toml.
+find_pkg_dir() {
+    d=$(cd "$(dirname "$1")" 2>/dev/null && pwd) || return 1
+    while :; do
+        [ -f "$d/Plew.toml" ] && { printf '%s\n' "$d"; return 0; }
+        [ "$d" = "/" ] && return 1
+        d=$(dirname "$d")
+    done
+}
+# Resolve the package dir $1's dependencies -> $1/Plew.lock (atomic via a temp).
+do_resolve() {
+    ensure_resolver
+    if ( cd "$1" && "$RESOLVER" ) > "$tmp/lock.out"; then
+        mv "$tmp/lock.out" "$1/Plew.lock"
+    else
+        echo "plew: dependency resolution failed" >&2
+        exit 1
+    fi
+}
+
+# ── resolve: (re)resolve dependencies for a package, writing Plew.lock. ──
+if [ "$mode" = resolve ]; then
+    target=${1:-.}
+    if [ -f "$target" ]; then pkg=$(find_pkg_dir "$target"); else pkg=$(cd "$target" 2>/dev/null && pwd); fi
+    [ -n "$pkg" ] && [ -f "$pkg/Plew.toml" ] || { echo "plew resolve: no Plew.toml found from $target" >&2; exit 1; }
+    do_resolve "$pkg"
+    echo "plew: resolved -> $pkg/Plew.lock" >&2
+    exit 0
+fi
+
+[ -n "$1" ] || usage
 
 # ── gen: run derive macros (spec/16). Version-agnostic String→String step —
 # `plewc --gen` emits the harness IR, clang builds it (libc only), running it
@@ -75,6 +118,15 @@ fi
 src=$1; shift
 case "$src" in *.pw) ;; *) echo "plew: not a .pw file: $src" >&2; exit 1 ;; esac
 [ -f "$src" ] || { echo "plew: no such file: $src" >&2; exit 1; }
+
+# Auto-resolve once when the package declares git dependencies but has no lock
+# (spec/17: the lock is required to back git `@dep` imports). Announced on stderr —
+# fetching is a visible step, not hidden. Re-resolution is explicit (`plew resolve`).
+pkg=$(find_pkg_dir "$src" 2>/dev/null || true)
+if [ -n "$pkg" ] && [ ! -f "$pkg/Plew.lock" ] && grep -q 'git[[:space:]]*=' "$pkg/Plew.toml" 2>/dev/null; then
+    echo "plew: resolving dependencies (no Plew.lock)..." >&2
+    do_resolve "$pkg"
+fi
 
 out=""
 if [ "$mode" = build ]; then

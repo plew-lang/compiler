@@ -9,5 +9,9 @@ book/
 /compiler/plewc.check.ll
 /compiler/plewc.check.runtime.c
 
+# the dependency resolver binary (built on demand by `plew`; the source
+# compiler/resolve/_.pw is tracked).
+/compiler/plew-resolve
+
 # scratch dir for local experiments (gen-harness builds, self-host checks, etc.)
 /tmp/

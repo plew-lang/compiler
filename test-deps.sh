@@ -74,5 +74,22 @@ check "transitive lock has 2 pkgs" "2" "$(grep -c '\[\[package\]\]' "$A2/Plew.lo
 "$CC" -w "$WORK/a2.ll" "$WORK/rt.c" -o "$WORK/a2"
 check "transitive git dep runs" "43" "$("$WORK/a2")"
 
+# --- the `plew` driver: explicit resolve + auto-resolve on a fresh consumer ---
+A3="$WORK/app3"; mkdir -p "$A3"
+cat > "$A3/Plew.toml" <<EOF
+name = "app3"
+[dependencies]
+"Acme/Greet" = { git = "$LEAF", version = "1.0" }
+EOF
+printf 'import @Std/Io with { print }\nimport @Acme/Greet with { hello }\nfn main() { print(hello()) }\n' > "$A3/Main.pw"
+# explicit resolve (version "1.0" pins 1.0.x -> 1.0.0)
+"$ROOT/plew" resolve "$A3" >/dev/null 2>&1
+check "driver resolve pins 1.0.0" "1.0.0" "$(grep 'version = "' "$A3/Plew.lock" | head -1 | sed 's/.*"\(.*\)".*/\1/')"
+check "driver run after resolve" "42" "$("$ROOT/plew" run "$A3/Main.pw" 2>/dev/null)"
+# auto-resolve: remove the lock, a bare run must regenerate it and still work
+rm -f "$A3/Plew.lock"
+check "driver auto-resolves on run" "42" "$("$ROOT/plew" run "$A3/Main.pw" 2>/dev/null)"
+check "auto-resolve wrote the lock" "1" "$([ -f "$A3/Plew.lock" ] && echo 1 || echo 0)"
+
 echo "----"
 if [ "$fail" = 0 ]; then echo "test-deps: all green"; else echo "test-deps: FAILURES"; exit 1; fi
