@@ -456,8 +456,14 @@ pub impl LlvmCtx {
                                                 return
                                             }
                                         }
-                                        val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                        mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                         if op == opAssign() {
+                                            // value semantics (spec/03): assigning an array/struct
+                                            // PLACE into a field copies, so the field and the RHS
+                                            // binding stay independent (`s.xs = a` then `a[0]=…`
+                                            // must leave `s.xs` unchanged) — the Ident-target path
+                                            // already does this; a field target must too.
+                                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                                             LLVMBuildStore(self.b, rv, gep)
                                         } else {
                                             val ftype: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
@@ -490,8 +496,11 @@ pub impl LlvmCtx {
                                                 LLVMBuildStore(self.b, gv2, gep)
                                                 return
                                             }
-                                            val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                            mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                             if op == opAssign() {
+                                                // value semantics: copy an array/struct PLACE RHS
+                                                // (`arr[i].xs = a`) so the field stays independent.
+                                                rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                                                 LLVMBuildStore(self.b, rv, gep)
                                             } else {
                                                 val ftype: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
@@ -528,8 +537,12 @@ pub impl LlvmCtx {
                                     LLVMBuildStore(self.b, gv3, gep)
                                     return
                                 }
-                                val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                 if op == opAssign() {
+                                    // value semantics: copy an array/struct PLACE RHS so the
+                                    // pointee field is independent of the source binding (the
+                                    // Ref aliasing is about the cell, not the assigned value).
+                                    rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                                     LLVMBuildStore(self.b, rv, gep)
                                 } else {
                                     val ftype: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)

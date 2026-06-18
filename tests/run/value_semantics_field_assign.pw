@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// Assigning an array PLACE into a struct field copies (spec/03 value semantics):
+// the field and the source binding must stay independent. Covers a `self.f = a`
+// assignment inside an `inout` method (the Dictionary.grow shape) and a bare
+// `s.f = a` on a local struct.
+struct Bag { pub mut val items: Array[I32] }
+pub impl Bag {
+    inout fn put(ys: Array[I32]) {
+        self.items = ys
+    }
+}
+
+fn main() {
+    mut val a: Array[I32] = [1, 2, 3]
+    mut val s: Bag = <Bag items=[0] />
+    s.put(ys: a)
+    a[0] = 99
+    print(s.items[0])
+
+    mut val b: Array[I32] = [10, 20]
+    mut val t: Bag = <Bag items=[0] />
+    t.items = b
+    b[1] = 88
+    print(t.items[1])
+}
