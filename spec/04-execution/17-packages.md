@@ -79,9 +79,33 @@ git tag を semver として解釈します。**書いた桁が固定・書か�
 
 ## ロックファイル（`Plew.lock`）
 
-- 解決結果（**git URL + 確定 commit + content hash**）を固定し、再現ビルドを保証します。
+解決結果を固定して再現ビルドを保証します。形式は **TOML**（`Plew.toml` と同形・Cargo/uv と同じ現代的選択・git merge しやすい）で、**解決した各パッケージを `[[package]]` で 1 ブロック**ずつ並べます：
+
+```toml
+version = 1                           # スキーマ版（将来の形式変更用）
+
+[[package]]
+git = "https://github.com/foo/http.git"
+version = "3.2.1"                     # 解決した tag
+commit = "abc123ef…"                 # 確定 commit SHA（fetch ターゲット兼整合性）
+dependencies = ["Json", "Url"]        # 解決済みの直接依存（辺）
+
+[[package]]                           # 多版共存は同名で複数エントリ
+git = "https://github.com/bar/json.git"
+version = "2.0.0"
+commit = "…"
+
+[[referrer]]                          # 共有 lock のとき：この lock を指す Plew.toml（自己修復用・下記ワークスペース）
+path = "../app/Plew.toml"
+```
+
+- **整合性は commit SHA で足り、別の content hash は持ちません**。git の commit は木に暗号学的にコミットしている（fetch した commit を git が検証）ので、Cargo の git 依存と同じく **commit だけが整合性の保証**。path 依存は自分が握るローカルゆえ整合性ハッシュ不要。
+- **`commit` は fetch ターゲット兼同一性**。`version`（tag）は人間可読の参照・`commit` が真の固定。
+- **依存の辺（`dependencies`）を記録**します（provenance＝「なぜこの版が居るか」が追え、再解決の検証に使える）。
+- **決定的ソート**（git URL → version）で merge 競合を最小化（Cargo が[同じ理由](https://github.com/rust-lang/cargo/pull/7070)で 1 パッケージ 1 ブロック・ソート形に）。
 - **ライブラリ・アプリともコミット推奨**です。ただし **lock が効くのはトップレベル（ビルド対象）のみ** ── 依存ライブラリ同梱の lock は**無視**され、利用側は依存の**制約（マニフェスト）だけ**を見て自分のグラフを再解決し、自分の lock を書きます。
 - バージョンの更新は **`update` コマンドで明示的に**行います（ビルドが暗黙に上げることはしない）。
+- ネイティブの **Rust 依存（cargo ビルド＝ビルド時にホストでコード実行）は lock に記録し初回承認**を求めます（→ [ネイティブ依存](#ネイティブ依存c--c--rust--system-ライブラリ)）。
 
 ## ワークスペース（複数パッケージのリポジトリ）
 
@@ -136,8 +160,8 @@ bin = [
 
 - 配布物は **Plew ソース**です（precompiled lib のリンクは一次手段にしない）。
 - ビルドは**消費側の `plewc` が fetch 済みソースから whole-program** で行います。
-- 速度は **content-addressed なビルドキャッシュ**（`source hash × compiler version × target × flags` でキー）で回収します（hidden cost は可・hidden meaning は不可）。
-- 実行可能ビルドのエントリ選択は → [モジュール章「ビルド」](15-modules.md#ビルド)。
+- 速度は**ビルドキャッシュ**で回収します（hidden cost は可・hidden meaning は不可）。キーは **`compiler version × target × flags`** に、**不変な fetched 依存は lock の commit SHA・編集中の局所コード/`path` 依存は content/mtime** を掛けたハイブリッド（commit がある依存は content hash を別途計算しない＝[ロックファイル](#ロックファイルplewlock)と同じ姿勢）。
+- 実行可能ビルドのエントリ選択は → [モジュール章「ビルド・実行」](15-modules.md#ビルド実行)。
 
 ## ネイティブ依存（C / C++ / Rust / system ライブラリ）
 
