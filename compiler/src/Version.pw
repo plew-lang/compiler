@@ -1,0 +1,166 @@
+// @Version — the digit-model version constraints (spec/17 / design-decisions
+// "バージョン＝桁数モデル"). A constraint pins the digits it WRITES and leaves the
+// rest free: "3" matches any 3.x.y, "3.2" any 3.2.x, "3.2.1" exactly 3.2.1. No
+// `^`/`~`/`=`, no `v` prefix in the spec (but tag parsing here is lenient about a
+// leading `v` / `refs/tags/` so real git tags resolve). Pure byte logic — shared by
+// the resolver (selecting the latest compatible tag) with no compiler-arena deps.
+
+// Parse a version string into its numeric dot-components. Non-digit, non-`.` bytes
+// are ignored (so a leading `v` is tolerated); each `.` starts a new component.
+export fn parseVer(s: Array[U8]) -> Array[U64] {
+    mut val comps: Array[U64] = []
+    mut val cur: U64 = 0
+    mut val i: U64 = 0
+    while i < s.count {
+        val c: U8 = s[i]
+        if c == 46U8 {
+            comps.append(value: cur)
+            cur = 0
+        } else {
+            if c >= 48U8 {
+                if c <= 57U8 {
+                    cur = cur * 10U64 + ((c - 48U8) as U64)
+                }
+            }
+        }
+        i += 1
+    }
+    comps.append(value: cur)
+    return comps
+}
+
+// The i-th component of a parsed version, or 0 if it has fewer components.
+fn compAt(comps: Array[U64], i: U64) -> U64 {
+    if i < comps.count {
+        return comps[i]
+    }
+    return 0
+}
+
+// Compare two version strings numerically component-by-component: -1 if a < b,
+// 0 if equal, 1 if a > b (missing components count as 0).
+export fn compareVer(a: Array[U8], b: Array[U8]) -> I64 {
+    val ca: Array[U64] = parseVer(s: a)
+    val cb: Array[U64] = parseVer(s: b)
+    mut val n: U64 = ca.count
+    if cb.count > n {
+        n = cb.count
+    }
+    mut val i: U64 = 0
+    while i < n {
+        val x: U64 = compAt(comps: ca, i: i)
+        val y: U64 = compAt(comps: cb, i: i)
+        if x < y {
+            return 0I64 - 1I64
+        }
+        if x > y {
+            return 1I64
+        }
+        i += 1
+    }
+    return 0I64
+}
+
+// Whether `candidate` satisfies the digit-model `constraint`: every component the
+// constraint WRITES must equal the candidate's same-position component. An empty
+// constraint matches anything (free version).
+export fn satisfies(constraint: Array[U8], candidate: Array[U8]) -> Bool {
+    if constraint.count == 0 {
+        return true
+    }
+    val cc: Array[U64] = parseVer(s: constraint)
+    val cv: Array[U64] = parseVer(s: candidate)
+    mut val i: U64 = 0
+    while i < cc.count {
+        if compAt(comps: cc, i: i) != compAt(comps: cv, i: i) {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// The version token of a tag line: strip a `refs/tags/` (or any) leading path so
+// `refs/tags/3.2.1` / `v3.2.1` / `3.2.1` all reduce to the comparable tail. Also
+// drops a trailing `^{}` (git's dereferenced-tag marker) and CR.
+export fn tagName(line: Array[U8]) -> Array[U8] {
+    // take the substring after the last '/'
+    mut val start: U64 = 0
+    mut val i: U64 = 0
+    while i < line.count {
+        if line[i] == 47U8 {
+            start = i + 1
+        }
+        i += 1
+    }
+    mut val out: Array[U8] = []
+    mut val j: U64 = start
+    mut val go: Bool = true
+    while go {
+        if j < line.count {
+            val c: U8 = line[j]
+            if c == 13U8 {
+                go = false
+            } else {
+                if c == 94U8 {
+                    // '^' begins git's `^{}` peeled-tag marker — stop
+                    go = false
+                } else {
+                    out.append(c)
+                    j += 1
+                }
+            }
+        } else {
+            go = false
+        }
+    }
+    return out
+}
+
+// From a newline-separated blob of candidate tags (e.g. `git ls-remote --tags`
+// output, or one tag per line), pick the LATEST tag whose version satisfies the
+// constraint. Returns the chosen tag's cleaned name (via tagName), or empty if
+// none match.
+export fn pickLatest(constraint: Array[U8], tagsBlob: Array[U8]) -> Array[U8] {
+    mut val best: Array[U8] = []
+    mut val haveBest: Bool = false
+    mut val i: U64 = 0
+    val n: U64 = tagsBlob.count
+    while i < n {
+        // line [i, e)
+        mut val e: U64 = i
+        mut val sg: Bool = true
+        while sg {
+            if e < n {
+                if tagsBlob[e] == 10U8 {
+                    sg = false
+                } else {
+                    e += 1
+                }
+            } else {
+                sg = false
+            }
+        }
+        mut val line: Array[U8] = []
+        mut val k: U64 = i
+        while k < e {
+            line.append(tagsBlob[k])
+            k += 1
+        }
+        val name: Array[U8] = tagName(line: line)
+        if name.count > 0 {
+            if satisfies(constraint: constraint, candidate: name) {
+                if !haveBest {
+                    best = name
+                    haveBest = true
+                } else {
+                    if compareVer(a: name, b: best) > 0I64 {
+                        best = name
+                    }
+                }
+            }
+        }
+        i = e + 1
+    }
+    return best
+}

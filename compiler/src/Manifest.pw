@@ -14,8 +14,9 @@
 // is looked up whole in the dependency table.
 
 import @Std/Io with { fileExists, readFileBytes }
-import ./Ir with { appendBytes }
-import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr }
+import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr, appendBytes }
+import ./Lock with { Lock, lockCommitFor, parseLock, emptyLock }
+import ./Cache with { srcDir }
 
 // One declared dependency from `[dependencies]`. `key` is the binding name the
 // consumer writes after `@` (it may contain `/`). `kind`: 0 = path, 1 = git.
@@ -146,4 +147,54 @@ export fn resolveDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[D
         i += 1
     }
     return out
+}
+
+// Resolve a non-`@Std` `@<name>` import to a GIT dependency's cached lib face: find
+// the declared dep, look up its pinned commit in the lock, and point at
+// `<cacheRoot>/src/<url>/<commit>/src/_.pw`. Empty when the name is not a git dep
+// or is not yet locked (then the loader reports a phantom / unresolved import — the
+// resolver must run first).
+export fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[Dep], cacheRoot: Array[U8], lock: Lock) -> Array[U8] {
+    mut val out: Array[U8] = []
+    if pLen < 2 {
+        return out
+    }
+    if src[pStart] != 64 {
+        return out
+    }
+    val nameStart: U64 = pStart + 1
+    val nameLen: U64 = pLen - 1
+    mut val i: U64 = 0
+    while i < deps.count {
+        val d: Dep = deps[i]
+        if spanEqArr(a: d.key, src: src, start: nameStart, len: nameLen) {
+            if d.kind == 1 {
+                val commit: Array[U8] = lockCommitFor(lock: lock, git: d.loc)
+                if commit.count == 0 {
+                    return out
+                }
+                appendBytes(into: inout out, from: srcDir(cacheRoot: cacheRoot, url: d.loc, commit: commit))
+                appendBytes(into: inout out, from: "/src/_.pw".bytes)
+                return out
+            }
+            return out
+        }
+        i += 1
+    }
+    return out
+}
+
+// Read and parse `<pkgDir>Plew.lock` (empty lock when absent). The loader reads it
+// per package to back git `@dep` imports with their pinned commits.
+export fn loadLock(pkgDir: Array[U8]) -> Lock {
+    if pkgDir.count > 0 {
+        mut val lockPath: Array[U8] = []
+        appendBytes(into: inout lockPath, from: pkgDir)
+        appendBytes(into: inout lockPath, from: "Plew.lock".bytes)
+        if fileExists(path: lockPath) {
+            val src: String = readFileBytes(path: lockPath)
+            return parseLock(bytes: src.bytes)
+        }
+    }
+    return emptyLock()
 }

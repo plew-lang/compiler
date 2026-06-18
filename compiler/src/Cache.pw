@@ -1,0 +1,118 @@
+// @Cache — global package-cache path layout (spec/17 / design-decisions: fetch
+// sources live in a global content-addressed cache, commit-keyed). Pure path math
+// shared by the resolver (which fetches into the cache) and the compiler's loader
+// (which reads a git dependency's source from it). The cache root itself
+// (`$PLEW_CACHE` or `$HOME/.plew/cache`) is obtained by the caller at runtime and
+// passed in, so this module stays free of the environment + compiler arena.
+
+import @Std/Process with { execOut }
+import @Std/Core with { stringFromBytesUnchecked }
+import ./Toml with { appendBytes }
+
+// Trim trailing spaces / CR / LF from a byte buffer.
+export fn trimEnd(b: Array[U8]) -> Array[U8] {
+    mut val n: U64 = b.count
+    mut val go: Bool = true
+    while go {
+        if n > 0 {
+            val c: U8 = b[n - 1]
+            if c == 10U8 {
+                n -= 1
+            } else {
+                if c == 13U8 {
+                    n -= 1
+                } else {
+                    if c == 32U8 {
+                        n -= 1
+                    } else {
+                        go = false
+                    }
+                }
+            }
+        } else {
+            go = false
+        }
+    }
+    mut val out: Array[U8] = []
+    mut val i: U64 = 0
+    while i < n {
+        out.append(b[i])
+        i += 1
+    }
+    return out
+}
+
+// The global cache root: `$PLEW_CACHE`, else `$HOME/.plew/cache`. Resolved at
+// runtime via the shell (no env intrinsic needed). Both the resolver (fetching
+// into it) and the compiler's loader (reading from it) compute it the same way.
+export fn cacheRoot() -> Array[U8] {
+    val out: String = execOut(cmd: "printf %s \"${PLEW_CACHE:-$HOME/.plew/cache}\"")
+    return trimEnd(b: out.bytes)
+}
+
+// Turn a git URL into a single filesystem-safe path component: every byte that is
+// not [A-Za-z0-9._-] becomes '_'. So `https://github.com/foo/http.git` →
+// `https___github.com_foo_http.git` (collisions are not a correctness concern — the
+// commit subdir disambiguates, and the URL is recorded verbatim in the lock).
+export fn sanitizeUrl(url: Array[U8]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    mut val i: U64 = 0
+    while i < url.count {
+        val c: U8 = url[i]
+        mut val ok: Bool = false
+        if c >= 65U8 {
+            if c <= 90U8 {
+                ok = true
+            }
+        }
+        if c >= 97U8 {
+            if c <= 122U8 {
+                ok = true
+            }
+        }
+        if c >= 48U8 {
+            if c <= 57U8 {
+                ok = true
+            }
+        }
+        if c == 46U8 {
+            ok = true
+        }
+        if c == 45U8 {
+            ok = true
+        }
+        if c == 95U8 {
+            ok = true
+        }
+        if ok {
+            out.append(c)
+        } else {
+            out.append(95U8)
+        }
+        i += 1
+    }
+    return out
+}
+
+// The bare mirror clone directory for a repo: `<cacheRoot>/repos/<sanitized-url>`.
+// The resolver clones/fetches here once; tags + commits are read from it.
+export fn repoDir(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    appendBytes(into: inout out, from: cacheRoot)
+    appendBytes(into: inout out, from: "/repos/".bytes)
+    appendBytes(into: inout out, from: sanitizeUrl(url: url))
+    return out
+}
+
+// The materialized source directory for a resolved commit:
+// `<cacheRoot>/src/<sanitized-url>/<commit>`. The package source (its `src/…`)
+// lives directly under here; read-only after the resolver writes it.
+export fn srcDir(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    appendBytes(into: inout out, from: cacheRoot)
+    appendBytes(into: inout out, from: "/src/".bytes)
+    appendBytes(into: inout out, from: sanitizeUrl(url: url))
+    appendBytes(into: inout out, from: "/".bytes)
+    appendBytes(into: inout out, from: commit)
+    return out
+}

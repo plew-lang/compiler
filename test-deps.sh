@@ -1,0 +1,78 @@
+#!/bin/sh
+# test-deps.sh — end-to-end test of package dependency resolution (spec/17).
+# Builds the standalone resolver, sets up throwaway local git repos with tags,
+# runs the resolver to produce Plew.lock, and builds+runs consumers whose `@dep`
+# imports are backed by the lock + global cache. Covers @Manifest/@Version/@Lock/
+# @Cache/@Fetch and the resolver, which the main test.sh (single-file programs)
+# does not exercise. Exits non-zero on the first mismatch.
+set -e
+ROOT=$(cd "$(dirname "$0")" && pwd)
+PLEWC="$ROOT/compiler/plewc"
+CC=${CC:-clang}
+[ -x "$PLEWC" ] || { echo "test-deps: $PLEWC missing — run ./bootstrap.sh" >&2; exit 1; }
+
+WORK=$(mktemp -d /tmp/plew-deptest.XXXXXX)
+export PLEW_CACHE="$WORK/cache"
+trap 'rm -rf "$WORK"' EXIT
+
+# Build the resolver binary (libc only, like any compiled program).
+"$PLEWC" "$ROOT/compiler/resolve/_.pw" > "$WORK/resolve.ll"
+"$PLEWC" --runtime > "$WORK/rt.c"
+"$CC" -w "$WORK/resolve.ll" "$WORK/rt.c" -o "$WORK/plew-resolve"
+
+gitinit() { git -C "$1" init -q && git -C "$1" add -A && git -C "$1" -c user.email=t@t -c user.name=t commit -qm init; }
+
+# --- leaf git library, two tags ---
+LEAF="$WORK/leaf"; mkdir -p "$LEAF/src"
+printf 'name = "Acme/Greet"\n' > "$LEAF/Plew.toml"
+printf 'export fn hello() -> I64 { return 42I64 }\n' > "$LEAF/src/_.pw"
+gitinit "$LEAF"
+git -C "$LEAF" tag -a -m v1 1.0.0
+git -C "$LEAF" tag -a -m v1 1.2.0
+
+# --- mid git library depending on leaf ---
+MID="$WORK/mid"; mkdir -p "$MID/src"
+cat > "$MID/Plew.toml" <<EOF
+name = "Mid"
+[dependencies]
+"Acme/Greet" = { git = "$LEAF", version = "1" }
+EOF
+printf 'import @Acme/Greet with { hello }\nexport fn midVal() -> I64 { return hello() + 1I64 }\n' > "$MID/src/_.pw"
+gitinit "$MID"
+git -C "$MID" tag -a -m v2 2.0.0
+
+fail=0
+check() { # name expected actual
+    if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: expected [$2] got [$3]"; fail=1; fi
+}
+
+# --- consumer 1: direct git dep, version "1" -> latest 1.x = 1.2.0 ---
+A1="$WORK/app1"; mkdir -p "$A1"
+cat > "$A1/Plew.toml" <<EOF
+name = "app1"
+[dependencies]
+"Acme/Greet" = { git = "$LEAF", version = "1" }
+EOF
+printf 'import @Std/Io with { print }\nimport @Acme/Greet with { hello }\nfn main() { print(hello()) }\n' > "$A1/Main.pw"
+( cd "$A1" && "$WORK/plew-resolve" ) > "$A1/Plew.lock"
+check "lock picks 1.2.0" "1.2.0" "$(grep -A2 '\[\[package\]\]' "$A1/Plew.lock" | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/')"
+"$PLEWC" "$A1/Main.pw" > "$WORK/a1.ll"
+"$CC" -w "$WORK/a1.ll" "$WORK/rt.c" -o "$WORK/a1"
+check "direct git dep runs" "42" "$("$WORK/a1")"
+
+# --- consumer 2: transitive git dep (app2 -> Mid -> Acme/Greet) ---
+A2="$WORK/app2"; mkdir -p "$A2"
+cat > "$A2/Plew.toml" <<EOF
+name = "app2"
+[dependencies]
+"Mid" = { git = "$MID", version = "2" }
+EOF
+printf 'import @Std/Io with { print }\nimport @Mid with { midVal }\nfn main() { print(midVal()) }\n' > "$A2/Main.pw"
+( cd "$A2" && "$WORK/plew-resolve" ) > "$A2/Plew.lock"
+check "transitive lock has 2 pkgs" "2" "$(grep -c '\[\[package\]\]' "$A2/Plew.lock")"
+"$PLEWC" "$A2/Main.pw" > "$WORK/a2.ll"
+"$CC" -w "$WORK/a2.ll" "$WORK/rt.c" -o "$WORK/a2"
+check "transitive git dep runs" "43" "$("$WORK/a2")"
+
+echo "----"
+if [ "$fail" = 0 ]; then echo "test-deps: all green"; else echo "test-deps: FAILURES"; exit 1; fi

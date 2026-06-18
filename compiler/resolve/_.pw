@@ -1,0 +1,115 @@
+// plew-resolve — the standalone dependency resolver (spec/17). A separate Plew
+// binary (NOT the compiler): it reads the consuming package's Plew.toml, fetches
+// each git dependency into the global cache, resolves the digit-model version
+// constraint to the latest matching tag → commit, follows transitive manifests,
+// and prints the resulting Plew.lock to stdout (the `plew` driver redirects it to
+// Plew.lock). The compiler then reads that lock to back its `@dep` git imports.
+//
+// It shares the package-toolchain modules with the compiler by relative import
+// (`../src/…`) — Manifest/Version/Lock/Cache/Fetch/Toml are arena-free leaves.
+
+import @Std/Io with { write, eprint, readFileBytes }
+import @Std/Process with { exit }
+import @Std/Core with { stringFromBytesUnchecked }
+import ../src/Manifest with { Manifest, Dep, parseManifest }
+import ../src/Version with { pickLatest }
+import ../src/Lock with { LockPkg, Name, writeLock }
+import ../src/Cache with { srcDir, cacheRoot }
+import ../src/Fetch with { ensureMirror, listTags, resolveCommit, materialize }
+import ../src/Toml with { appendBytes, bytesEq }
+
+// Whether `url` is already among the resolved packages (dedup by URL — a first cut;
+// multi-major coexistence is a later refinement).
+fn hasUrl(resolved: Array[Name], url: Array[U8]) -> Bool {
+    mut val i: U64 = 0
+    while i < resolved.count {
+        if bytesEq(a: resolved[i].s, b: url) {
+            return true
+        }
+        i += 1
+    }
+    return false
+}
+
+// The binding-name edges of a manifest's dependencies (for the lock's provenance).
+fn depEdges(deps: Array[Dep]) -> Array[Name] {
+    mut val out: Array[Name] = []
+    mut val i: U64 = 0
+    while i < deps.count {
+        out.append(<Name s=deps[i].key />)
+        i += 1
+    }
+    return out
+}
+
+// Read the package materialized at <cacheRoot>/src/<url>/<commit>/Plew.toml.
+fn readCachedManifest(cr: Array[U8], url: Array[U8], commit: Array[U8]) -> Manifest {
+    mut val p: Array[U8] = []
+    appendBytes(into: inout p, from: srcDir(cacheRoot: cr, url: url, commit: commit))
+    appendBytes(into: inout p, from: "/Plew.toml".bytes)
+    val src: String = readFileBytes(path: p)
+    return parseManifest(bytes: src.bytes)
+}
+
+fn fail(msg: Array[U8]) {
+    eprint(text: "plew-resolve: error: ")
+    eprint(text: stringFromBytesUnchecked(msg))
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
+fn main() {
+    val cr: Array[U8] = cacheRoot()
+    // root manifest from the current directory.
+    val rootSrc: String = readFileBytes(path: "Plew.toml".bytes)
+    val root: Manifest = parseManifest(bytes: rootSrc.bytes)
+
+    // BFS worklist of git dependencies (path deps are local — not fetched/locked).
+    mut val work: Array[Dep] = []
+    mut val di: U64 = 0
+    while di < root.deps.count {
+        if root.deps[di].kind == 1U8 {
+            work.append(value: root.deps[di])
+        }
+        di += 1
+    }
+
+    mut val resolvedUrls: Array[Name] = []
+    mut val lockPkgs: Array[LockPkg] = []
+    mut val wi: U64 = 0
+    while wi < work.count {
+        val dep: Dep = work[wi]
+        wi += 1
+        val url: Array[U8] = dep.loc
+        if !(hasUrl(resolved: resolvedUrls, url: url)) {
+            resolvedUrls.append(<Name s=url />)
+            if ensureMirror(cacheRoot: cr, url: url) != 0I64 {
+                fail(msg: url)
+            }
+            val tags: Array[U8] = listTags(cacheRoot: cr, url: url)
+            val tag: Array[U8] = pickLatest(constraint: dep.version, tagsBlob: tags)
+            if tag.count == 0 {
+                fail(msg: url)
+            }
+            val commit: Array[U8] = resolveCommit(cacheRoot: cr, url: url, ref: tag)
+            if commit.count == 0 {
+                fail(msg: url)
+            }
+            if materialize(cacheRoot: cr, url: url, commit: commit) != 0I64 {
+                fail(msg: url)
+            }
+            // follow transitive git dependencies.
+            val tm: Manifest = readCachedManifest(cr: cr, url: url, commit: commit)
+            mut val ti: U64 = 0
+            while ti < tm.deps.count {
+                if tm.deps[ti].kind == 1U8 {
+                    work.append(value: tm.deps[ti])
+                }
+                ti += 1
+            }
+            lockPkgs.append(<LockPkg git=url version=tag commit=commit deps=depEdges(deps: tm.deps) />)
+        }
+    }
+
+    write(s: stringFromBytesUnchecked(writeLock(pkgs: lockPkgs, referrers: [])))
+}

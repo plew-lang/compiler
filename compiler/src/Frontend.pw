@@ -18,7 +18,9 @@ import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen }
-import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, isExternalDepImport }
+import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
+import ./Lock with { Lock }
+import ./Cache with { cacheRoot }
 import ./Diag with { compileErrorAt, eprintInt, digitByte }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, opAddAssign, opSubAssign, opMulAssign, opDivAssign, opRemAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
@@ -415,6 +417,14 @@ export fn runFrontend() -> Comp {
         // std library root for `@Std/…`: the `std/` directory next to the plewc
         // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
         val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes)
+        // the global package cache root (for git `@dep` source lookup via the lock),
+        // resolved once for the whole build.
+        val cacheRootBytes: Array[U8] = cacheRoot()
+        // the ENTRY package's lock governs the whole dependency graph (spec/17: the
+        // lock binds only at the top-level build target). Every git `@dep` — even one
+        // imported deep inside a dependency — resolves its commit from THIS lock; the
+        // dependency's own manifest only supplies the git URL + phantom check.
+        val entryLock: Lock = loadLock(pkgDir: findPkgDir(entry: entryBytes))
         val es: U64 = pathBuf.count
         appendBytes(into: inout pathBuf, from: entryBytes)
         loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=0 fieldLen=entryBytes.count />)
@@ -536,9 +546,14 @@ export fn runFrontend() -> Comp {
                     TopItemAst.Import(val imp) => {
                         mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
                         // a non-`@Std` `@dep` import is unresolved by @Path (returns
-                        // empty); resolve it against this package's [dependencies].
+                        // empty); resolve it against this package's [dependencies] —
+                        // path deps directly, git deps via the lock's pinned commit in
+                        // the global cache.
                         if childPath.count == 0 {
                             childPath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
+                        }
+                        if childPath.count == 0 {
+                            childPath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
                         }
                         // phantom-dependency rule (spec/17): an external `@<name>` import
                         // that no declared dependency backs is a loud error (provenance:
@@ -592,6 +607,9 @@ export fn runFrontend() -> Comp {
                         // with { … }`); resolve `@dep` the same way as an import.
                         if rePath.count == 0 {
                             rePath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
+                        }
+                        if rePath.count == 0 {
+                            rePath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
                         }
                         if rePath.count == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {

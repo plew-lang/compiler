@@ -1,0 +1,238 @@
+// @Lock — read and write `Plew.lock` (spec/17). The resolver WRITES it (a
+// deterministic, sorted serialization it fully controls); the compiler's loader
+// READS it to map a git dependency to its pinned commit. Reading goes through the
+// shared @Toml parser; writing is direct so formatting/sorting stay under our
+// control. Pure byte logic (no compiler arena) so both binaries can share it.
+
+import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, bytesEq, appendBytes }
+
+// A byte-string wrapped for use in arrays (avoids Array[Array[U8]]).
+export struct Name {
+    pub val s: Array[U8]
+}
+
+// One resolved package: its git URL, the resolved tag (human reference), the
+// pinned commit (the integrity guarantee), and the resolved direct dependency
+// edges (binding names) for provenance / re-resolution checks.
+export struct LockPkg {
+    pub val git: Array[U8]
+    pub val version: Array[U8]
+    pub val commit: Array[U8]
+    pub val deps: Array[Name]
+}
+
+// A parsed lock: the resolved packages plus, for a shared lock, the referrers
+// (the Plew.toml paths that point at it — self-healing, spec/17 workspace).
+export struct Lock {
+    pub val pkgs: Array[LockPkg]
+    pub val referrers: Array[Name]
+}
+
+// Public memberwise factories so the standalone resolver (another module) can
+// construct these (spec/05: the default memberwise factory is module-private).
+pub impl Name { factory }
+pub impl LockPkg { factory }
+
+// An empty lock (no packages / referrers) — for the no-Plew.lock case.
+export fn emptyLock() -> Lock {
+    mut val ps: Array[LockPkg] = []
+    mut val rs: Array[Name] = []
+    return <Lock pkgs=ps referrers=rs />
+}
+
+// ---- reading ----
+
+// The scalar string of field `key` in a section (empty if absent / not a scalar).
+fn sectionStr(sec: Section, key: Array[U8]) -> Array[U8] {
+    mut val i: U64 = 0
+    while i < sec.fields.count {
+        val f: Field = sec.fields[i]
+        if bytesEq(a: f.key, b: key) {
+            match f.value {
+                Value.SVal(val s) => { return s }
+                _ => {}
+            }
+        }
+        i += 1
+    }
+    return []
+}
+
+// The string-array value of field `key` in a section (empty list if absent / not
+// an array).
+fn sectionArr(sec: Section, key: Array[U8]) -> Array[Name] {
+    mut val out: Array[Name] = []
+    mut val i: U64 = 0
+    while i < sec.fields.count {
+        val f: Field = sec.fields[i]
+        if bytesEq(a: f.key, b: key) {
+            match f.value {
+                Value.Arr(val items) => {
+                    mut val j: U64 = 0
+                    while j < items.count {
+                        out.append(<Name s=items[j].str />)
+                        j += 1
+                    }
+                }
+                _ => {}
+            }
+        }
+        i += 1
+    }
+    return out
+}
+
+// Parse a `Plew.lock` byte buffer into its packages + referrers.
+export fn parseLock(bytes: Array[U8]) -> Lock {
+    val doc: TomlDoc = parseToml(bytes: bytes)
+    mut val pkgs: Array[LockPkg] = []
+    mut val refs: Array[Name] = []
+    mut val si: U64 = 0
+    while si < doc.sections.count {
+        val sec: Section = doc.sections[si]
+        if sec.isArrayElem {
+            if bytesEq(a: sec.header, b: "package".bytes) {
+                pkgs.append(<LockPkg git=sectionStr(sec: sec, key: "git".bytes) version=sectionStr(sec: sec, key: "version".bytes) commit=sectionStr(sec: sec, key: "commit".bytes) deps=sectionArr(sec: sec, key: "dependencies".bytes) />)
+            } else {
+                if bytesEq(a: sec.header, b: "referrer".bytes) {
+                    refs.append(<Name s=sectionStr(sec: sec, key: "path".bytes) />)
+                }
+            }
+        }
+        si += 1
+    }
+    return <Lock pkgs=pkgs referrers=refs />
+}
+
+// Look up a package by git URL; returns its commit (empty if not in the lock).
+export fn lockCommitFor(lock: Lock, git: Array[U8]) -> Array[U8] {
+    mut val i: U64 = 0
+    while i < lock.pkgs.count {
+        val p: LockPkg = lock.pkgs[i]
+        if bytesEq(a: p.git, b: git) {
+            return p.commit
+        }
+        i += 1
+    }
+    return []
+}
+
+// ---- writing ----
+
+// Lexicographic byte comparison: true when a < b.
+fn bytesLess(a: Array[U8], b: Array[U8]) -> Bool {
+    mut val i: U64 = 0
+    mut val n: U64 = a.count
+    if b.count < n {
+        n = b.count
+    }
+    while i < n {
+        if a[i] < b[i] {
+            return true
+        }
+        if a[i] > b[i] {
+            return false
+        }
+        i += 1
+    }
+    return a.count < b.count
+}
+
+// A package sorts before another by git URL, then by version (spec/17: a
+// deterministic order minimizes lock merge conflicts).
+fn pkgLess(a: LockPkg, b: LockPkg) -> Bool {
+    if bytesLess(a: a.git, b: b.git) {
+        return true
+    }
+    if bytesLess(a: b.git, b: a.git) {
+        return false
+    }
+    return bytesLess(a: a.version, b: b.version)
+}
+
+// Return `pkgs` sorted deterministically (insertion sort — lock lists are small).
+fn sortPkgs(pkgs: Array[LockPkg]) -> Array[LockPkg] {
+    mut val out: Array[LockPkg] = []
+    mut val i: U64 = 0
+    while i < pkgs.count {
+        val p: LockPkg = pkgs[i]
+        // insert p into out keeping order
+        mut val pos: U64 = out.count
+        mut val j: U64 = 0
+        mut val found: Bool = false
+        while j < out.count {
+            if !found {
+                if pkgLess(a: p, b: out[j]) {
+                    pos = j
+                    found = true
+                }
+            }
+            j += 1
+        }
+        // build a new array with p inserted at pos
+        mut val next: Array[LockPkg] = []
+        mut val k: U64 = 0
+        while k < out.count {
+            if k == pos {
+                next.append(value: p)
+            }
+            next.append(value: out[k])
+            k += 1
+        }
+        if pos == out.count {
+            next.append(value: p)
+        }
+        out = next
+        i += 1
+    }
+    return out
+}
+
+fn emitStr(into: inout Array[U8], key: Array[U8], value: Array[U8]) {
+    appendBytes(into: inout into, from: key)
+    appendBytes(into: inout into, from: " = \"".bytes)
+    appendBytes(into: inout into, from: value)
+    appendBytes(into: inout into, from: "\"\n".bytes)
+}
+
+fn emitArr(into: inout Array[U8], key: Array[U8], names: Array[Name]) {
+    appendBytes(into: inout into, from: key)
+    appendBytes(into: inout into, from: " = [".bytes)
+    mut val i: U64 = 0
+    while i < names.count {
+        if i > 0 {
+            appendBytes(into: inout into, from: ", ".bytes)
+        }
+        appendBytes(into: inout into, from: "\"".bytes)
+        appendBytes(into: inout into, from: names[i].s)
+        appendBytes(into: inout into, from: "\"".bytes)
+        i += 1
+    }
+    appendBytes(into: inout into, from: "]\n".bytes)
+}
+
+// Serialize a lock to its `Plew.lock` byte form (deterministic, sorted).
+export fn writeLock(pkgs: Array[LockPkg], referrers: Array[Name]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    appendBytes(into: inout out, from: "version = 1\n".bytes)
+    val sorted: Array[LockPkg] = sortPkgs(pkgs: pkgs)
+    mut val i: U64 = 0
+    while i < sorted.count {
+        val p: LockPkg = sorted[i]
+        appendBytes(into: inout out, from: "\n[[package]]\n".bytes)
+        emitStr(into: inout out, key: "git".bytes, value: p.git)
+        if p.version.count > 0 {
+            emitStr(into: inout out, key: "version".bytes, value: p.version)
+        }
+        emitStr(into: inout out, key: "commit".bytes, value: p.commit)
+        emitArr(into: inout out, key: "dependencies".bytes, names: p.deps)
+        i += 1
+    }
+    mut val r: U64 = 0
+    while r < referrers.count {
+        appendBytes(into: inout out, from: "\n[[referrer]]\n".bytes)
+        emitStr(into: inout out, key: "path".bytes, value: referrers[r].s)
+        r += 1
+    }
+    return out
+}

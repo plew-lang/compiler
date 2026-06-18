@@ -1,0 +1,91 @@
+// @Fetch — git operations for the dependency resolver, driven through the
+// process-exec intrinsic (`@Std/Process.execOut`). It clones each git dependency
+// into a bare mirror under the global cache, lists its tags, resolves a tag to a
+// commit, and materializes a commit's tree into the cache's source dir. The
+// resolver composes these; the compiler never fetches.
+//
+// Shell safety: URLs / paths are single-quoted before interpolation. A URL or path
+// containing a literal single quote is rejected by callers (a hardening TODO is to
+// validate manifest URLs up front).
+
+import @Std/Process with { execOut, execCode }
+import @Std/Core with { stringFromBytesUnchecked }
+import ./Toml with { appendBytes }
+import ./Cache with { repoDir, srcDir, trimEnd, cacheRoot }
+
+// Run a shell command (its bytes), returning captured stdout bytes. The exit code
+// is available from `execCode()` immediately after.
+fn run(cmd: Array[U8]) -> Array[U8] {
+    val out: String = execOut(cmd: stringFromBytesUnchecked(cmd))
+    return out.bytes
+}
+
+// Append `'s'` (single-quoted) so a path/URL interpolates as one shell word.
+fn q(into: inout Array[U8], s: Array[U8]) {
+    into.append(39U8)
+    appendBytes(into: inout into, from: s)
+    into.append(39U8)
+}
+
+// Ensure a bare mirror for `url` exists under the cache and its tags are current:
+// clone --bare if missing, else fetch --tags. Returns the git exit code.
+export fn ensureMirror(cacheRoot: Array[U8], url: Array[U8]) -> I64 {
+    val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
+    mut val cmd: Array[U8] = []
+    appendBytes(into: inout cmd, from: "if [ -d ".bytes)
+    q(into: inout cmd, s: rd)
+    appendBytes(into: inout cmd, from: " ]; then git -C ".bytes)
+    q(into: inout cmd, s: rd)
+    appendBytes(into: inout cmd, from: " fetch --tags --prune --quiet; else git clone --bare --quiet ".bytes)
+    q(into: inout cmd, s: url)
+    appendBytes(into: inout cmd, from: " ".bytes)
+    q(into: inout cmd, s: rd)
+    appendBytes(into: inout cmd, from: "; fi".bytes)
+    run(cmd: cmd)
+    return execCode()
+}
+
+// List the repo's tags (one per line), from its mirror.
+export fn listTags(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
+    val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
+    mut val cmd: Array[U8] = []
+    appendBytes(into: inout cmd, from: "git -C ".bytes)
+    q(into: inout cmd, s: rd)
+    appendBytes(into: inout cmd, from: " tag".bytes)
+    return run(cmd: cmd)
+}
+
+// Resolve a tag (or any ref) to its commit SHA.
+export fn resolveCommit(cacheRoot: Array[U8], url: Array[U8], ref: Array[U8]) -> Array[U8] {
+    val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
+    mut val refExpr: Array[U8] = []
+    appendBytes(into: inout refExpr, from: ref)
+    appendBytes(into: inout refExpr, from: "^{commit}".bytes)
+    mut val cmd: Array[U8] = []
+    appendBytes(into: inout cmd, from: "git -C ".bytes)
+    q(into: inout cmd, s: rd)
+    appendBytes(into: inout cmd, from: " rev-parse ".bytes)
+    q(into: inout cmd, s: refExpr)
+    return trimEnd(b: run(cmd: cmd))
+}
+
+// Materialize a commit's tree into `<cacheRoot>/src/<url>/<commit>` (git archive |
+// tar — no `.git` left behind). Idempotent: skips if already materialized. Returns
+// the git/tar exit code (0 when already present).
+export fn materialize(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -> I64 {
+    val sd: Array[U8] = srcDir(cacheRoot: cacheRoot, url: url, commit: commit)
+    val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
+    mut val cmd: Array[U8] = []
+    appendBytes(into: inout cmd, from: "if [ -e ".bytes)
+    q(into: inout cmd, s: sd)
+    appendBytes(into: inout cmd, from: "/Plew.toml ]; then exit 0; fi; mkdir -p ".bytes)
+    q(into: inout cmd, s: sd)
+    appendBytes(into: inout cmd, from: " && git -C ".bytes)
+    q(into: inout cmd, s: rd)
+    appendBytes(into: inout cmd, from: " archive ".bytes)
+    q(into: inout cmd, s: commit)
+    appendBytes(into: inout cmd, from: " | tar -x -C ".bytes)
+    q(into: inout cmd, s: sd)
+    run(cmd: cmd)
+    return execCode()
+}
