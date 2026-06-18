@@ -1,6 +1,6 @@
 // gen test (spec/16 M0): a user-defined macro `Greet` generates a top-level
 // function into App.gen.pw, which the normal build auto-parts and `main` calls.
-import @Std/Syntax with { Derive, TopItemAst }
+import @Plew/Syntax with { Derive, TopItemAst }
 import @Std/Io with { write }
 
 struct Greet { }

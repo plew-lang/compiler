@@ -2,7 +2,7 @@
 // is private, so the directive `@[Tag(prefix: …)]` construction must be REJECTED by
 // `plewc --gen` (the harness cannot set a private field from outside).
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, DeclAst }
+import @Plew/Syntax with { Derive, DeclAst }
 
 struct Tag {
     val prefix: String

@@ -1,9 +1,9 @@
 // Scoped resolution (spec/15), local-annotation site: a type from another module is
 // usable only when imported — including in a LOCAL `val x: T` annotation, not just a
-// param / field. `Tok` is a @Std/Syntax type; loading the module via `kindCode` does
+// param / field. `Tok` is a @Plew/Syntax type; loading the module via `kindCode` does
 // NOT bring the type into scope. The choke-point type-visibility walk reaches this
 // annotation like any other written type. Must be rejected.
-import @Std/Syntax with { kindCode }
+import @Plew/Syntax with { kindCode }
 
 fn f() {
     mut val t: Optional[Tok] = none

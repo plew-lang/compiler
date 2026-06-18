@@ -1,9 +1,9 @@
 // Scoped resolution (spec/15): a type from another module is usable only when
-// imported. `Tok` is a @Std/Syntax type; importing the function `kindCode` loads the
+// imported. `Tok` is a @Plew/Syntax type; importing the function `kindCode` loads the
 // module (so `Tok` exists) but does NOT bring the type into scope. Naming `Tok` here
-// without `import @Std/Syntax with { Tok }` must be rejected (the type side of the
+// without `import @Plew/Syntax with { Tok }` must be rejected (the type side of the
 // same rule that gates free-function use across modules).
-import @Std/Syntax with { kindCode }
+import @Plew/Syntax with { kindCode }
 
 fn usesTok(t: Tok) -> U64 { return 0U64 }
 

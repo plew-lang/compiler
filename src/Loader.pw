@@ -3,14 +3,14 @@
 // A module may span several files: `part <path>` stitches a file into the same
 // module (shared scope), `import <path>` pulls in a separate module. Loading is
 // PARSE-DRIVEN: the driver (main) appends each file's source to the arena's byte
-// buffer, parses it with the shared @Std/Syntax parser (parseAndLowerFile), lowers
+// buffer, parses it with the shared @Plew/Syntax parser (parseAndLowerFile), lowers
 // its items, and follows the `import`/`part` nodes the parser returns to discover
 // more files — no separate directive pre-scan. Every distinct file is appended once
 // (single-arena, single-C-output; no separate compilation). `resolveImport` turns a
 // path node into a file path (`@Std/X`, `/Seg`, `./Name`, `../Name`).
 
 // Parse one already-appended file (its bytes sit at c.arena.bytes[fileStart..]) through the
-// shared @Std/Syntax parser and lower its items into the arena (spec/15,16). `base =
+// shared @Plew/Syntax parser and lower its items into the arena (spec/15,16). `base =
 // fileStart` so every node span is an absolute offset into c.arena.bytes (module tagging
 // via moduleOf works). Returns the parsed item list so the loader can follow the
 // `Import` items (part/import) to more files and notice `@[...]` directives.

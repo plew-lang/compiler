@@ -2,7 +2,7 @@
 // macro receives the trait as `TopItemAst.Trait` and reads its requirement names,
 // generating a `reqNames()` listing them — proving impl/trait are macro targets.
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, TopItemAst, TraitAst, Src, newSrc }
+import @Plew/Syntax with { Derive, TopItemAst, TraitAst, Src, newSrc }
 
 struct ReqList { }
 

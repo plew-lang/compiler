@@ -1,7 +1,7 @@
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, TopItemAst, DeclAst, Src, newSrc }
+import @Plew/Syntax with { Derive, TopItemAst, DeclAst, Src, newSrc }
 
-// A derive over an enum that lists its variants (using the @Std/Syntax Src builder).
+// A derive over an enum that lists its variants (using the @Plew/Syntax Src builder).
 struct VariantNames { }
 
 pub impl VariantNames as Derive {

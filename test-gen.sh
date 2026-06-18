@@ -40,6 +40,7 @@ for app in tests/gen/*/App.pw; do
     rm -rf "$work"
     mkdir -p "$work"
     cp "$dir"/*.pw "$work/" 2>/dev/null || true
+    cp Plew.toml Plew.lock "$work/" 2>/dev/null || true
     rm -f "$work"/*.gen.pw
 
     # 1. harness IR (a feature the backend can't lower yet -> loud reject -> SKIP)
@@ -78,6 +79,7 @@ for app in tests/genreject/*/App.pw; do
     rm -rf "$work"
     mkdir -p "$work"
     cp "$(dirname "$app")"/*.pw "$work/" 2>/dev/null || true
+    cp Plew.toml Plew.lock "$work/" 2>/dev/null || true
     rm -f "$work"/*.gen.pw
     if "$PLEWC" --gen "$work/App.pw" > /dev/null 2>/dev/null; then
         fail=$((fail + 1)); failed="$failed genreject/$name(accepted)"

@@ -1,7 +1,7 @@
 // Narrowing TryFrom across the full sub-64-bit integer matrix (spec/12). These
 // `impl T as TryFrom[S]` witnesses for narrower sources (and cross-sign pairs) are
 // MACHINE-GENERATED: Core's primitive decls carry `@[IntTryFrom(sources: [...])]`,
-// and the `IntTryFrom` derive (a dumb, arg-only renderer in @Std/Syntax) emits one
+// and the `IntTryFrom` derive (a dumb, arg-only renderer in @Plew/Syntax) emits one
 // delegating witness per source into the committed `Core.gen.pw`. Each delegates to
 // the target's hand-written `TryFrom[I64]` base after a lossless `from as I64` widen.
 import @Std/Io with { print }

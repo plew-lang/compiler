@@ -1,5 +1,5 @@
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, TopItemAst, DeclAst, TypeAst, Src, newSrc }
+import @Plew/Syntax with { Derive, TopItemAst, DeclAst, TypeAst, Src, newSrc }
 
 // A derive that reads each field's TYPE (including nested generic args) and
 // generates a function returning a flattened "name=Type[args]" listing.

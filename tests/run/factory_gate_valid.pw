@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 // spec/05: `Lexer` declares a public `factory`, so it is constructible from another
 // module. (A type defined in THIS module needs no factory for same-module construction.)
-import @Std/Syntax with { Lexer }
+import @Plew/Syntax with { Lexer }
 struct Local { pub val n: I64 }
 fn main() {
     val l: Lexer = <Lexer bytes=[] pos=0U64 toks=[] depth=0I64 />

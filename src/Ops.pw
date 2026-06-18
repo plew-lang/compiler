@@ -3,10 +3,10 @@
 // number). These named accessors are the single symbolic source for the opcode
 // comparisons both the front-end and the backend make — renumbering a token in
 // `kindCode` flows through here, so no bare magic numbers leak into either layer.
-// A pure leaf module (depends only on `@Std/Syntax`): both `./Frontend` and
+// A pure leaf module (depends only on `@Plew/Syntax`): both `./Frontend` and
 // `./Backend` import it, so the opcodes belong to neither layer (a clean DAG edge).
 
-import @Std/Syntax with { Kind, kindCode }
+import @Plew/Syntax with { Kind, kindCode }
 
 export fn opEq() -> I64 { return kindCode(k: <Kind.EqEq />) }
 export fn opNe() -> I64 { return kindCode(k: <Kind.Ne />) }

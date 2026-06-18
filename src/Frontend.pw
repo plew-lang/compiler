@@ -15,7 +15,7 @@ import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileByte
 import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
-import @Std/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
@@ -372,7 +372,7 @@ export fn runFrontend() -> Comp {
     }
     // The compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
     // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to
-    // `c.arena.bytes`, parsed by the shared @Std/Syntax parser, its items lowered, and its
+    // `c.arena.bytes`, parsed by the shared @Plew/Syntax parser, its items lowered, and its
     // `import`/`part` nodes followed to more files. There is no separate directive
     // pre-scan: the parsed tree drives discovery. (`bytes` is built incrementally, so
     // a file's source sits at `fileStart` before its items lower, and re-interned
@@ -486,19 +486,27 @@ export fn runFrontend() -> Comp {
                 loaded.append(<Bind nameStart=ios nameLen=ioPath.count fieldStart=nextModuleId fieldLen=ioPath.count />)
                 nextModuleId = nextModuleId + 1
             }
-            // force-load @Std/Syntax too: the harness calls `parseItem` and the derive
-            // interfaces / built-in derivers (`impl Hash as Derive`) live there. Its
-            // `part`s + `import @Std/Core` are followed by the BFS below; a target file
-            // that also imports it dedups via pathSeen.
-            mut val synPath: Array[U8] = []
-            appendBytes(into: inout synPath, from: stdRoot)
-            appendBytes(into: inout synPath, from: "Syntax.pw".bytes)
-            if fileExists(path: synPath) {
-                if !(pathSeen(buf: pathBuf, loaded: loaded, path: synPath)) {
-                    val sys: U64 = pathBuf.count
-                    appendBytes(into: inout pathBuf, from: synPath)
-                    loaded.append(<Bind nameStart=sys nameLen=synPath.count fieldStart=nextModuleId fieldLen=synPath.count />)
-                    nextModuleId = nextModuleId + 1
+            // force-load @Plew/Syntax too: the harness calls `parseItem` and the derive
+            // interfaces / built-in derivers (`impl Hash as Derive`) live there. Resolve
+            // it through the gen target's OWN manifest (a path or git dependency), exactly
+            // like a normal `@dep` import, so the macro's pinned Syntax version is the one
+            // loaded. Its `part`s + `import @Std/Core` are followed by the BFS below; a
+            // target file that also imports it dedups via pathSeen.
+            val synName: Array[U8] = "@Plew/Syntax".bytes
+            val genPkgDir: Array[U8] = findPkgDir(entry: entryBytes)
+            val genDeps: Array[Dep] = loadManifestDeps(pkgDir: genPkgDir)
+            mut val synPath: Array[U8] = resolveDepImport(src: synName, pStart: 0, pLen: synName.count, deps: genDeps, pkgDir: genPkgDir)
+            if synPath.count == 0 {
+                synPath = resolveGitDepImport(src: synName, pStart: 0, pLen: synName.count, deps: genDeps, cacheRoot: cacheRootBytes, lock: entryLock)
+            }
+            if synPath.count != 0 {
+                if fileExists(path: synPath) {
+                    if !(pathSeen(buf: pathBuf, loaded: loaded, path: synPath)) {
+                        val sys: U64 = pathBuf.count
+                        appendBytes(into: inout pathBuf, from: synPath)
+                        loaded.append(<Bind nameStart=sys nameLen=synPath.count fieldStart=nextModuleId fieldLen=synPath.count />)
+                        nextModuleId = nextModuleId + 1
+                    }
                 }
             }
         }

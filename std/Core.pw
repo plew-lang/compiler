@@ -12,7 +12,7 @@
 // witnesses (below + in Core/Num) sit in the same module = type-owned coherence; @Std/Lang
 // re-exports them to make them ambient. The integer primitives carry `@[IntTryFrom(sources:
 // […])]` listing the sub-64-bit SOURCE types whose narrowing TryFrom into that target is
-// fallible (spec/12); the `@[IntTryFrom]` derive (@Std/Syntax) renders one delegating
+// fallible (spec/12); the `@[IntTryFrom]` derive (@Plew/Syntax) renders one delegating
 // `impl T as TryFrom[S]` per source into Core.gen.pw (auto-parted). (I64 as a TARGET has no
 // fallible sub-64-bit source — all widen into it — and the wide/float sources are
 // hand-written below, next to where TryFrom lives.)
@@ -582,7 +582,7 @@ export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value: Val
 // bytes must already be valid UTF-8; decimal digits and interned source spans always
 // are). The validated public constructor is `<String.checked source=bytes/>`
 // (`String as TryFrom[Array[U8]]`, below). Lowered inline to the {ptr,i64} reinterpret.
-// Exported so @Std/Syntax's parser and the compiler can turn known-valid byte ranges
+// Exported so @Plew/Syntax's parser and the compiler can turn known-valid byte ranges
 // into Strings without paying re-validation; user code should prefer the checked form.
 export extern "plew-intrinsic" {
     fn stringFromBytesUnchecked(b~: Array[U8]) -> String

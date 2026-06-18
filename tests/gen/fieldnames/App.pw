@@ -1,10 +1,10 @@
 // Metaprogramming gen test (spec/16, M1): a derive macro that READS the annotated
 // declaration's real structure. `@[FieldList]` reads `Point`'s actual fields (via
-// the @Std/Syntax value-tree `DeclAst`) and generates a `fieldNames()` returning
+// the @Plew/Syntax value-tree `DeclAst`) and generates a `fieldNames()` returning
 // their comma-separated names — proving the macro receives the parsed declaration,
 // not a stub.
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, TopItemAst, DeclAst }
+import @Plew/Syntax with { Derive, TopItemAst, DeclAst }
 import @Std/Core with { stringFromBytesUnchecked }
 
 struct FieldList { }

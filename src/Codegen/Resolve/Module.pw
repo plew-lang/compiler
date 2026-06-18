@@ -271,7 +271,7 @@ pub impl Comp {
         // free fns (`parseItem`/`write`/…) that the gen'd entry file does not `import` —
         // force-load is NOT import, so scoped resolution above found no visible candidate
         // (the harness's call has a re-interned nameStart, `moduleOf` 0, which can't see
-        // @Std/Syntax). The harness is trusted compiler-generated code, so resolve it
+        // @Plew/Syntax). The harness is trusted compiler-generated code, so resolve it
         // GLOBALLY here, gen-only (the pre-scoped-resolution behaviour): first label match,
         // type match preferred. Normal compilation never reaches this — it returns
         // "not found" (firstLabel == count) so checkUseVisibility can demand an import.

@@ -498,7 +498,7 @@ pub impl Comp {
 // ---- declaration lowering (shared DeclAst value tree -> the compiler arena) ----
 //
 // Mirrors Parser/Decl.pw's parseStruct/parseEnum arena seeding so the frontend can
-// parse nominal declarations through the ONE shared @Std/Syntax parser (spec/16,
+// parse nominal declarations through the ONE shared @Plew/Syntax parser (spec/16,
 // worklog A). Names are re-interned (codegen reads bytes; the emitted C is
 // byte-identical) — struct/enum names never feed `moduleOf` (types are ambient, not
 // visibility-gated), so re-interning is sound here. (A *function* declaration name

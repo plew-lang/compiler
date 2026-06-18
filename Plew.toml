@@ -1,0 +1,8 @@
+name = "plewc"
+
+[dependencies]
+# The shared syntax layer (lexer + value-tree AST + parser + builder). The
+# compiler and `plew gen` macros depend on the SAME @Plew/Syntax. Exact-pinned so
+# the resolver is deterministic and the self-host bootstrap is reproducible (bump
+# the version + reseed in lockstep when the syntax package changes).
+"Plew/Syntax" = { git = "https://github.com/plew-lang/syntax.git", version = "0.1.0" }

@@ -5,7 +5,7 @@
 // `../Name`) into a file path; the rest are byte/path helpers it builds on.
 
 import @Std/Io with { fileExists }
-import @Std/Syntax with { rangeEquals }
+import @Plew/Syntax with { rangeEquals }
 import ./Ir with { Bind, appendBytes }
 
 // Remove `n` trailing directory components from the prefix path[0..baseLen]
@@ -192,6 +192,13 @@ export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
         val mn: Array[U8] = "Plew.toml".bytes
         appendBytes(into: inout mani, from: mn)
         if fileExists(path: mani) {
+            // manifest in the entry's own directory (a relative entry like `src/_.pw`
+            // run from the package dir): dirLen is 0, so the prefix is empty. Return
+            // `./` (not "") so loadManifestDeps/loadLock don't read it as "no package"
+            // — the package IS the cwd. Path deps then resolve under `./`.
+            if dirLen == 0 {
+                return "./".bytes
+            }
             mut val dir: Array[U8] = []
             mut val j: U64 = 0
             while j < dirLen {

@@ -2,7 +2,7 @@
 // macro receives the impl as `TopItemAst.Impl` and reads its member names,
 // generating a `methodNames()` listing them.
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, TopItemAst, ImplAst, Src, newSrc }
+import @Plew/Syntax with { Derive, TopItemAst, ImplAst, Src, newSrc }
 
 struct MethodList { }
 

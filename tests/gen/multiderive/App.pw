@@ -1,5 +1,5 @@
 import @Std/Io with { write }
-import @Std/Syntax with { Derive, TopItemAst, DeclAst, Src, newSrc }
+import @Plew/Syntax with { Derive, TopItemAst, DeclAst, Src, newSrc }
 
 struct A { }
 pub impl A as Derive {

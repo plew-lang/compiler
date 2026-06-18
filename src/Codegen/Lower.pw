@@ -1,4 +1,4 @@
-// Part of the Plew compiler module (root: _.pw). Lowering: the shared @Std/Syntax
+// Part of the Plew compiler module (root: _.pw). Lowering: the shared @Plew/Syntax
 // body value tree (ExprAst / StmtAst / BlockAst / PatternAst) -> the compiler's
 // arena (Expr / Stmt / Block / MatchArm). This is how the compiler frontend reuses
 // the ONE shared parser (spec/16, worklog A): `parseBlock` drives the shared

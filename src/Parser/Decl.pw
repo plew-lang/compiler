@@ -1,7 +1,7 @@
 // ---- compiler top-level frontend: parse-driven program lowering + derive synthesis
 // ----
 //
-// ALL parsing is the shared @Std/Syntax parser's job now: `parseProgram` runs
+// ALL parsing is the shared @Plew/Syntax parser's job now: `parseProgram` runs
 // `parseProgramAst` over the compiler's token stream and `lowerTopItem`
 // (Codegen/Lower.pw) lowers each value-tree item (decl / impl / trait / extern /
 // import / export / directive) into the arena or Comp state. What remains here is the
