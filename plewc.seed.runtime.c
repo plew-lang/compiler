@@ -21,7 +21,7 @@ unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned ch
 PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=(char*)""; s.n=0; return s; } size_t n=strlen((const char*)p); char* b=(char*)malloc(n+1); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }
 void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }
 long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }
-void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }
+void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); if(data && ((long long*)data)[-1]<=1) free((long long*)data-2); return nd; }
 void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }
 void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }
 long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }

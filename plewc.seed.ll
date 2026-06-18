@@ -432,7 +432,7 @@ source_filename = "plew"
 @342 = private unnamed_addr constant [227 x i8] c"PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=(char*)\22\22; s.n=0; return s; } size_t n=strlen((const char*)p); char* b=(char*)malloc(n+1); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }\0A\00", align 1
 @343 = private unnamed_addr constant [179 x i8] c"void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }\0A\00", align 1
 @344 = private unnamed_addr constant [71 x i8] c"long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }\0A\00", align 1
-@345 = private unnamed_addr constant [269 x i8] c"void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\0A\00", align 1
+@345 = private unnamed_addr constant [333 x i8] c"void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); if(data && ((long long*)data)[-1]<=1) free((long long*)data-2); return nd; }\0A\00", align 1
 @346 = private unnamed_addr constant [190 x i8] c"void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\0A\00", align 1
 @347 = private unnamed_addr constant [66 x i8] c"void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }\0A\00", align 1
 @348 = private unnamed_addr constant [90 x i8] c"long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }\0A\00", align 1
@@ -39316,7 +39316,7 @@ body0:                                            ; preds = %entry
   call void @plew_write_raw(ptr @342, i64 226)
   call void @plew_write_raw(ptr @343, i64 178)
   call void @plew_write_raw(ptr @344, i64 70)
-  call void @plew_write_raw(ptr @345, i64 268)
+  call void @plew_write_raw(ptr @345, i64 332)
   call void @plew_write_raw(ptr @346, i64 189)
   call void @plew_write_raw(ptr @347, i64 65)
   call void @plew_write_raw(ptr @348, i64 89)
