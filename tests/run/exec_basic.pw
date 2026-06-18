@@ -1,0 +1,11 @@
+// @Std/Process execOut/execCode: run a shell command, capture stdout + exit code.
+import @Std/Io with { print, write }
+import @Std/Process with { execOut, execCode }
+
+fn main() {
+    write(s: execOut(cmd: "printf 'ab'; printf 'cd'"))
+    write(s: "\n")
+    print(execCode())          // 0
+    val r: String = execOut(cmd: "exit 5")
+    print(execCode())          // 5
+}

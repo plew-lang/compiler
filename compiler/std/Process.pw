@@ -7,4 +7,10 @@ export extern "plew-intrinsic" {
     fn argAt(i~: I64) -> String
     // Terminate the process with the given exit code (does not return).
     fn exit(code: I64)
+    // Run `sh -c cmd`, returning its captured stdout. The child's exit status is
+    // available from `execCode()` until the next `execOut`. Used by the package
+    // dependency resolver to drive `git` (spec/17).
+    fn execOut(cmd: String) -> String
+    // The exit status of the most recent `execOut` (-1 if it could not run).
+    fn execCode() -> I64
 }

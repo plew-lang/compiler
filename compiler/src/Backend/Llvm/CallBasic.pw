@@ -253,6 +253,19 @@ pub impl LlvmCtx {
             // i64 1/0 -> Bool i1.
             return LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         }
+        // @Std/Process execOut(cmd: String) -> String: run `sh -c cmd`, capture stdout
+        // (the cmd String is a {ptr,i64} value, same path-intrinsic shape).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "execOut") {
+            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.strty, pathExpr: args[0].expr)
+        }
+        // execCode() -> I64: the exit status of the last execOut.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "execCode") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_execCode", nameId: 71U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
+        }
         // RawBuffer floor intrinsics (extern "plew-intrinsic"): the buffer is the raw
         // data pointer over the rawbuf runtime; element type from the arg's RawBuffer[T].
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") {
