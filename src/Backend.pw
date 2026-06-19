@@ -1399,6 +1399,9 @@ export fn emitLlvmRuntime() {
     // drop one owner: decrement the refcount, free the cell at 0. The sentinel rc
     // (1<<62, string literals / shared empty string) never reaches 0.
     write(s: "void plew_rawbuf_drop(void* p){ if(!p) return; if(--((long long*)p)[-1]==0) free((long long*)p-2); }\n")
+    // free a rawbuf cell unconditionally (the caller has already established rc reached 0
+    // and released the element heap); a null / sentinel-rc cell is left alone.
+    write(s: "void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-2); }\n")
     // copy-on-write a (scalar-element) array buffer before an in-place mutation: if the
     // buffer is shared (rc>1), allocate a private rc=1 copy of `count` elements, drop one
     // owner from the shared original, and return the copy; otherwise return it unchanged.

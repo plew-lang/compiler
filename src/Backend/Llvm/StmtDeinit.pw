@@ -79,7 +79,15 @@ pub impl LlvmCtx {
         if self.locIsArr[li] {
             if li >= self.curBodyMark {
                 val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                self.rawbufDrop(c: inout c, cell: LLVMBuildExtractValue(self.b, arr, 0U64, anon()))
+                val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+                // an element type that owns heap (a nested array): release its buffer rc and,
+                // at 0, release each element's heap (recursively) before freeing — instead of
+                // just dropping the outer (which would leak the elements).
+                if self.arrElemNeedsValueArc(c: inout c, elemRef: self.locElemTypeRef[li]) {
+                    self.emitReleaseArrayValue(c: inout c, data: data, count: LLVMBuildExtractValue(self.b, arr, 1U64, anon()), elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
+                } else {
+                    self.rawbufDrop(c: inout c, cell: data)
+                }
             }
             return
         }

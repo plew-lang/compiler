@@ -411,7 +411,7 @@ pub impl LlvmCtx {
                         mut val count: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
                         val islot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: ibase)
                         if LLVMIsNull(islot) == 0I32 {
-                            data = self.cowArraySlot(c: inout c, slotPtr: islot, elemTy: elemTy)
+                            data = self.cowArraySlot(c: inout c, slotPtr: islot, elemTy: elemTy, elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: ibase))
                             count = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.arrayTy, islot, 1U64, anon()), anon())
                         } else {
                             val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: ibase)

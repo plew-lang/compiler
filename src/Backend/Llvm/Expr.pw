@@ -275,7 +275,7 @@ pub impl LlvmCtx {
                                     // drop does not free the buffer the env now holds).
                                     mut val cv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
                                     if cap.isArray {
-                                        cv2 = self.copyArrayValue(c: inout c, arrVal: cv2, elemTy: self.locElemTy[li])
+                                        cv2 = self.copyArrayValue(c: inout c, arrVal: cv2, elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
                                     } else {
                                         val csi: U64 = self.locStructIdx[li]
                                         if csi < c.arena.structs.count {

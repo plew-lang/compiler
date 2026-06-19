@@ -29,6 +29,7 @@ void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=p
 void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }
 long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }
 void plew_rawbuf_drop(void* p){ if(!p) return; if(--((long long*)p)[-1]==0) free((long long*)p-2); }
+void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-2); }
 void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)data)[-1]--; return nd; } return data; }
 void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs("panic: index out of bounds\n",stderr); exit(1); } }
 int8_t plew_i8Add(int8_t a, int8_t b){ int8_t r; if(__builtin_add_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }

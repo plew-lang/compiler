@@ -282,7 +282,7 @@ pub impl LlvmCtx {
             // field unchanged.
             mut val av: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
             if arrayExprIsPlace(c: inout c, id: valExpr) {
-                av = self.copyArrayValue(c: inout c, arrVal: av, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen))
+                av = self.copyArrayValue(c: inout c, arrVal: av, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), elemRef: arrayFieldElemRef(c: inout c, f: fld))
             }
             return av
         }
@@ -347,11 +347,12 @@ pub impl LlvmCtx {
 
     // Eager value-semantics copy of an array value `{data,count}`: allocate a fresh
     // buffer of `count` elements (size from elemTy) and memcpy, returning the new
-    // `{newdata,count}`. Shallow — the elements themselves are bit-copied (correct for
-    // primitives / flat structs; a deep copy of array/Ref-bearing elements is a later
-    // ARC refinement). Used so binding/assigning an array from an existing place gives
-    // an independent value (`val b = a` then `a[0]=…` leaves b unchanged).
-    inout fn copyArrayValue(c: inout Comp, arrVal: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
+    // `{newdata,count}`. The memcpy is SHALLOW — so for an ARC-bearing element type
+    // (a nested array) the copy duplicates each element's leading heap reference, which
+    // must be RETAINED (else the copy and the source both release it at drop = double
+    // free). `elemRef` (the element TypeRef) drives that retain; pass 0 only when the
+    // element provably owns no heap (a primitive).
+    inout fn copyArrayValue(c: inout Comp, arrVal: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
         val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arrVal, 0U64, anon())
         val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arrVal, 1U64, anon())
         mut val ptys: Array[LLVMTypeRef] = []
@@ -365,6 +366,9 @@ pub impl LlvmCtx {
         av.append(value: LLVMSizeOf(elemTy))
         av.append(value: count)
         val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
+        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
+            self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
+        }
         mut val agg: LLVMValueRef = LLVMGetUndef(self.arrayTy)
         agg = LLVMBuildInsertValue(self.b, agg, nd, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, count, 1U64, anon())
@@ -391,7 +395,7 @@ pub impl LlvmCtx {
             if er != 0U64 {
                 val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
                 val et: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: er)
-                agg = LLVMBuildInsertValue(self.b, agg, self.copyArrayValue(c: inout c, arrVal: elem, elemTy: et), fi, anon())
+                agg = LLVMBuildInsertValue(self.b, agg, self.copyArrayValue(c: inout c, arrVal: elem, elemTy: et, elemRef: er), fi, anon())
             } else {
                 if c.fieldIsBoxed(f: fd) {
                     // a boxed (recursive) field is a shared heap pointer — leave it (deep
@@ -420,7 +424,7 @@ pub impl LlvmCtx {
     inout fn copyValueIfPlace(c: inout Comp, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
         if self.exprIsArray(c: inout c, id: valueExpr) {
             if arrayExprIsPlace(c: inout c, id: valueExpr) {
-                return self.copyArrayValue(c: inout c, arrVal: rv, elemTy: self.arrElemTyOf(c: inout c, id: valueExpr))
+                return self.copyArrayValue(c: inout c, arrVal: rv, elemTy: self.arrElemTyOf(c: inout c, id: valueExpr), elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: valueExpr))
             }
             return rv
         }
@@ -514,7 +518,7 @@ pub impl LlvmCtx {
     // possibly-new data back, and return that data pointer. The slot is the array local's
     // {ptr,count} alloca (or an inout param's slot — so a mutation through `inout` CoWs the
     // caller's binding, leaving other sharers untouched).
-    inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
+    inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> LLVMValueRef {
         val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slotPtr, 0U64, anon())
         val countPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slotPtr, 1U64, anon())
         val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, dataPtr, anon())
@@ -531,7 +535,122 @@ pub impl LlvmCtx {
         av.append(value: count)
         val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
         LLVMBuildStore(self.b, nd, dataPtr)
+        // when the CoW actually duplicated the buffer (nd != old data), the shallow memcpy
+        // duplicated every element's leading heap reference too — retain each so the new
+        // owner co-owns it (balanced by this owner's eventual element release at drop).
+        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
+            val copied: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), nd, data, anon())
+            val retBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.retain"))
+            val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.cont"))
+            LLVMBuildCondBr(self.b, copied, retBB, contBB)
+            LLVMPositionBuilderAtEnd(self.b, retBB)
+            self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
+            LLVMBuildBr(self.b, contBB)
+            LLVMPositionBuilderAtEnd(self.b, contBB)
+        }
         return nd
+    }
+
+    // ---- recursive value ARC over array element heap (Stage 2b leak refinement) ----
+    //
+    // Only the array's own ({data,count}) buffer is rc-managed by the array machinery; an
+    // element that itself owns heap (currently: a nested array — its element buffer) is
+    // retained when an outer CoW duplicates it and released when the outer is freed, so the
+    // element buffer is reclaimed instead of leaked. retain is SHALLOW (bump the element's
+    // leading rc); release CASCADES (frees at rc 0, recursing into deeper elements).
+    // String / struct / enum / Ref elements are not yet covered (they need their own value
+    // ARC first) — arrElemNeedsValueArc returns false for them, so they stay leaked-but-safe.
+    inout fn arrElemNeedsValueArc(c: inout Comp, elemRef: U64) -> Bool {
+        if elemRef == 0U64 {
+            return false
+        }
+        val t: TypeRef = c.arena.types[elemRef]
+        return rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array")
+    }
+
+    // Free a rawbuf cell unconditionally (rc already at 0); null / sentinel-rc left alone.
+    inout fn rawbufFree(c: inout Comp, cell: LLVMValueRef) {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_free", nameId: 32U64, fnTy: fty)
+        mut val cav: Array[LLVMValueRef] = []
+        cav.append(value: cell)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(cav), 1U64, anon())
+    }
+
+    // Shallow-retain one array element VALUE `v` of type `typeRef` (bump its leading heap
+    // rc). For a nested array: retain the inner buffer. Scalars / unsupported: nop.
+    inout fn emitRetainValue(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
+        if typeRef == 0U64 {
+            return
+        }
+        val t: TypeRef = c.arena.types[typeRef]
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+        }
+    }
+
+    // Cascading-release one array element VALUE `v` of type `typeRef`. For a nested array:
+    // release its buffer (recursing into ITS elements at rc 0). Scalars / unsupported: nop.
+    inout fn emitReleaseValue(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
+        if typeRef == 0U64 {
+            return
+        }
+        val t: TypeRef = c.arena.types[typeRef]
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            mut val innerRef: U64 = 0
+            if t.args.count > 0U64 {
+                innerRef = t.args[0]
+            }
+            val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
+            self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: innerTy, elemRef: innerRef)
+        }
+    }
+
+    // Release one owner of array buffer `data` (count `count`, element type elemTy/elemRef):
+    // decrement its rc, and at 0 release every element's heap (loop) then free the buffer.
+    inout fn emitReleaseArrayValue(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
+        val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: data)
+        val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.free"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.cont"))
+        LLVMBuildCondBr(self.b, isZero, freeBB, contBB)
+        LLVMPositionBuilderAtEnd(self.b, freeBB)
+        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
+            self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: false)
+        }
+        self.rawbufFree(c: inout c, cell: data)
+        LLVMBuildBr(self.b, contBB)
+        LLVMPositionBuilderAtEnd(self.b, contBB)
+    }
+
+    // Retain (shallow) every element of array buffer `data` — used after a CoW copy.
+    inout fn emitRetainArrayElems(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
+        self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: true)
+    }
+
+    // Emit `for i in 0..count { v = data[i]; retain ? retainValue(v) : releaseValue(v) }`.
+    inout fn emitArrayElemLoop(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64, retain: Bool) {
+        val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
+        LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
+        val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.cond"))
+        val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.body"))
+        val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrelem.end"))
+        LLVMBuildBr(self.b, condBB)
+        LLVMPositionBuilderAtEnd(self.b, condBB)
+        val iv: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, iSlot, anon())
+        LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
+        LLVMPositionBuilderAtEnd(self.b, bodyBB)
+        val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
+        if retain {
+            self.emitRetainValue(c: inout c, v: elem, typeRef: elemRef)
+        } else {
+            self.emitReleaseValue(c: inout c, v: elem, typeRef: elemRef)
+        }
+        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
+        LLVMBuildBr(self.b, condBB)
+        LLVMPositionBuilderAtEnd(self.b, endBB)
     }
 
     // The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
