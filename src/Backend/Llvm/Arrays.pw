@@ -577,7 +577,18 @@ pub impl LlvmCtx {
             return false
         }
         val t: TypeRef = c.arena.types[elemRef]
-        return rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array")
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            return true
+        }
+        // a struct element that releases heap on destruction (array/struct field or `deinit`):
+        // its elements are retained on outer CoW and released on outer drop.
+        val sidx: U64 = c.structIndexByName(start: t.nameStart, len: t.nameLen)
+        if sidx < c.arena.structs.count {
+            if !(c.arena.structs[sidx].isExtern) {
+                return self.structNeedsDeinit(c: inout c, sidx: sidx)
+            }
+        }
+        return false
     }
 
     // Free a rawbuf cell unconditionally (rc already at 0); null / sentinel-rc left alone.
@@ -600,7 +611,43 @@ pub impl LlvmCtx {
         val t: TypeRef = c.arena.types[typeRef]
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+            return
         }
+        val sidx: U64 = c.structIndexByName(start: t.nameStart, len: t.nameLen)
+        if sidx < c.arena.structs.count {
+            if !(c.arena.structs[sidx].isExtern) {
+                self.emitStructRetain(c: inout c, v: v, sidx: sidx)
+            }
+        }
+    }
+
+    // Shallow-retain a struct value's heap-owning fields (an array field's buffer; a nested
+    // struct field recursively) — used when an Array[Struct] CoW duplicates the element, so
+    // each owner co-owns the field buffers (balanced by emitDeinitValue at drop).
+    inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64) {
+        if self.arcOnStack(sidx: sidx) {
+            return
+        }
+        self.arcPush(sidx: sidx)
+        val sd: StructDef = c.arena.structs[sidx]
+        mut val i: U64 = 0
+        while i < sd.fields.count {
+            val fd: FieldDef = sd.fields[i]
+            if fd.tyIsArray {
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, v, i, anon()), 0U64, anon()))
+            } else {
+                val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
+                if fsi < c.arena.structs.count {
+                    if !(c.arena.structs[fsi].isExtern) {
+                        if self.structNeedsDeinit(c: inout c, sidx: fsi) {
+                            self.emitStructRetain(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), sidx: fsi)
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        self.arcPop()
     }
 
     // Cascading-release one array element VALUE `v` of type `typeRef`. For a nested array:
@@ -617,6 +664,13 @@ pub impl LlvmCtx {
             }
             val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
             self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: innerTy, elemRef: innerRef)
+            return
+        }
+        val sidx: U64 = c.structIndexByName(start: t.nameStart, len: t.nameLen)
+        if sidx < c.arena.structs.count {
+            if !(c.arena.structs[sidx].isExtern) {
+                self.emitDeinitValue(c: inout c, v: v, sidx: sidx)
+            }
         }
     }
 

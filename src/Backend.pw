@@ -182,6 +182,11 @@ struct LlvmCtx {
     pub mut val gvalTref: Array[U64] = []
     pub mut val gvalElemStructIdx: Array[U64] = []
     pub mut val gvalElemTypeRef: Array[U64] = []
+    // struct indices currently on the value-ARC emit stack (emitDeinitValue / emitStructRetain),
+    // so a self-referential type (`struct S { items: Array[S] }`) does not recurse forever at
+    // codegen — a struct already being emitted is skipped (its deeper level leaks, never crashes).
+    pub mut val arcStack: Array[U64] = []
+    pub mut val arcDepth: U64 = 0
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]

@@ -4,6 +4,33 @@
 
 pub impl LlvmCtx {
 
+    // value-ARC emit-recursion guard (breaks self-referential types like `struct S {
+    // items: Array[S] }` at codegen): push on entry to a struct's release/retain emission,
+    // pop on exit; a struct already on the stack is skipped (its deeper level leaks).
+    inout fn arcPush(sidx: U64) {
+        if self.arcDepth < self.arcStack.count {
+            self.arcStack[self.arcDepth] = sidx
+        } else {
+            self.arcStack.append(value: sidx)
+        }
+        self.arcDepth = self.arcDepth + 1U64
+    }
+    inout fn arcPop() {
+        if self.arcDepth > 0U64 {
+            self.arcDepth = self.arcDepth - 1U64
+        }
+    }
+    inout fn arcOnStack(sidx: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.arcDepth {
+            if self.arcStack[i] == sidx {
+                return true
+            }
+            i += 1
+        }
+        return false
+    }
+
     // Whether destroying a value of struct `sidx` runs any deinit — its own, or a
     // (registered, non-array) field's, recursively (spec/03).
     inout fn structNeedsDeinit(c: inout Comp, sidx: U64) -> Bool {
@@ -33,6 +60,11 @@ pub impl LlvmCtx {
     // Destroy a struct VALUE `v` of struct `sidx` (spec/03): run its own `deinit` body
     // first, then each field's deinit in declaration order, recursively.
     inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64) {
+        // break a self-referential type's codegen recursion (Array[Self] element release).
+        if self.arcOnStack(sidx: sidx) {
+            return
+        }
+        self.arcPush(sidx: sidx)
         val sd: StructDef = c.arena.structs[sidx]
         val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
         if fi < c.arena.funcs.count {
@@ -70,6 +102,7 @@ pub impl LlvmCtx {
             }
             i += 1
         }
+        self.arcPop()
     }
 
     // Run scope-exit destruction of local `li` (spec/03) if it is an owned, not-moved
