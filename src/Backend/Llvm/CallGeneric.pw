@@ -231,16 +231,14 @@ pub impl LlvmCtx {
                 _ => {}
             }
             val arrArg: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
-            // a by-value scalar-array argument from a place SHARES the caller's buffer:
-            // retain it so the callee co-owns (the refcount now exceeds 1, so a callee
-            // mutation CoWs instead of clobbering the caller's binding, and `plew_arr_grow`
-            // will not free the caller's buffer out from under it). A `move` arg transfers
-            // ownership instead (markLocalMoved above), so it is not also retained.
+            // a by-value array argument from a place SHARES the caller's buffer: retain it
+            // so the callee co-owns (the refcount now exceeds 1, so a callee mutation CoWs
+            // instead of clobbering the caller's binding, and `plew_arr_grow` will not free
+            // the caller's buffer out from under it). A `move` arg transfers ownership
+            // instead (markLocalMoved above), so it is not also retained.
             if !(p.isMove) {
                 if arrayExprIsPlace(c: inout c, id: argExpr) {
-                    if self.arrElemIsScalar(elemTy: self.arrElemTyOf(c: inout c, id: argExpr)) {
-                        self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, arrArg, 0U64, anon()))
-                    }
+                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, arrArg, 0U64, anon()))
                 }
             }
             return arrArg

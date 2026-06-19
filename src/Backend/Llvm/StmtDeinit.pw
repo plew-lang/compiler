@@ -70,17 +70,16 @@ pub impl LlvmCtx {
         if self.locMoved[li] {
             return
         }
-        // an owned scalar-array BODY local (Stage 2a CoW): release its buffer, free at 0.
-        // Gated on `li >= curBodyMark` so params / seeded globals / closure captures (bound
-        // before the mark) are NOT released here — they are borrows of an owner elsewhere,
-        // or a retained arg whose release is deferred (a tolerated leak, never a UAF). Only
-        // integer-element arrays for now (arrElemIsScalar): no element recursion needed.
+        // an owned array BODY local (CoW): release its OWN buffer, free at 0. Gated on
+        // `li >= curBodyMark` so params / seeded globals / closure captures (bound before
+        // the mark) are NOT released here — they are borrows of an owner elsewhere, or a
+        // retained arg whose release is deferred (a tolerated leak, never a UAF). All
+        // element types: only the rc-tracked outer buffer is freed (element heap is
+        // shallow-shared and leaks; never double-freed since it is never freed here).
         if self.locIsArr[li] {
             if li >= self.curBodyMark {
-                if self.arrElemIsScalar(elemTy: self.locElemTy[li]) {
-                    val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                    self.rawbufDrop(c: inout c, cell: LLVMBuildExtractValue(self.b, arr, 0U64, anon()))
-                }
+                val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                self.rawbufDrop(c: inout c, cell: LLVMBuildExtractValue(self.b, arr, 0U64, anon()))
             }
             return
         }

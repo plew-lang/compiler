@@ -489,28 +489,24 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
-    // CoW (Stage 2) is, for now, scoped to arrays whose ELEMENT owns no heap — an integer
-    // (`iN`: every U/I width and Bool). Such buffers are rc-shared on bind/arg/reassign,
-    // CoW'd on mutation, and released at scope exit, with no element recursion. Pointer-,
-    // struct-, enum-, float-, and nested-array elements stay on the legacy eager-copy path
-    // (Stage 2b) — `false` here keeps them there.
-    inout fn arrElemIsScalar(elemTy: LLVMTypeRef) -> Bool {
-        return LLVMGetTypeKind(elemTy) == 8U32
-    }
+    // Array CoW (Stage 2) makes the array's OWN ({data,count}) buffer the rc-managed unit
+    // for EVERY element type: rc-shared on bind/arg/payload-bind/enum-construct, CoW'd on
+    // mutation (append/set/`[i]=`/inout), and released (freed at rc 0) at scope exit.
+    // Element heap (String buffers, inner arrays, struct/enum payload buffers) is still
+    // shallow-shared and is NOT released — but since only the rc-tracked outer buffer is
+    // ever freed (never an element buffer), inner sharing can never double-free; it only
+    // leaks (deep per-element release is a later refinement).
 
     // Take a new owner of an array VALUE bound/passed from an existing place (`val b = a`,
-    // a by-value arg). For a scalar-element array this RETAINS the shared buffer (true CoW
-    // — no copy); for a non-scalar element it falls back to the eager deep copy (Stage 2b).
-    // A non-place (literal / call result) already owns its buffer and passes through.
+    // a by-value arg): RETAIN the shared buffer (true CoW — no copy; the copy is deferred
+    // to the first mutation). A non-place (literal / call result) already owns its buffer
+    // and passes through.
     inout fn shareArrayIfPlace(c: inout Comp, arrVal: LLVMValueRef, elemTy: LLVMTypeRef, valueExpr: U64) -> LLVMValueRef {
         if !(arrayExprIsPlace(c: inout c, id: valueExpr)) {
             return arrVal
         }
-        if self.arrElemIsScalar(elemTy: elemTy) {
-            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, arrVal, 0U64, anon()))
-            return arrVal
-        }
-        return self.copyArrayValue(c: inout c, arrVal: arrVal, elemTy: elemTy)
+        self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, arrVal, 0U64, anon()))
+        return arrVal
     }
 
     // CoW a scalar array place's buffer in its storage slot before an in-place mutation:

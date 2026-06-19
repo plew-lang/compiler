@@ -410,7 +410,7 @@ pub impl LlvmCtx {
                         mut val data: LLVMValueRef = LLVMConstNull(self.ptrty)
                         mut val count: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
                         val islot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: ibase)
-                        if LLVMIsNull(islot) == 0I32 && self.arrElemIsScalar(elemTy: elemTy) {
+                        if LLVMIsNull(islot) == 0I32 {
                             data = self.cowArraySlot(c: inout c, slotPtr: islot, elemTy: elemTy)
                             count = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.arrayTy, islot, 1U64, anon()), anon())
                         } else {
@@ -677,12 +677,12 @@ pub impl LlvmCtx {
                                 val li: U64 = self.findLocal(c: inout c, start: s, len: l)
                                 if li < self.nLocals {
                                     excludeLi = li
-                                    // a returned scalar-array local MOVES its buffer to the
-                                    // caller (Stage 2a): the {data,count} carries the local's
-                                    // refcount out unchanged — no copy, no retain — and the
-                                    // local is excluded from the drop below, so it balances.
+                                    // a returned array local MOVES its buffer to the caller:
+                                    // the {data,count} carries the local's refcount out
+                                    // unchanged — no copy, no retain — and the local is
+                                    // excluded from the drop below, so it balances.
                                     if self.locIsArr[li] {
-                                        scalarArrMove = self.arrElemIsScalar(elemTy: self.locElemTy[li])
+                                        scalarArrMove = true
                                     }
                                 }
                             }
