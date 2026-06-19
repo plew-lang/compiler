@@ -196,6 +196,15 @@ pub impl LlvmCtx {
                     slot = self.entryAlloca(ty: pty)
                 }
                 LLVMBuildStore(self.b, fv, slot)
+                // a scalar-array payload bind SHARES the enum's payload buffer (Stage 2a):
+                // retain it so the bind co-owns the buffer (its scope-exit release then
+                // balances, leaving the variant's copy intact). Without this, the bind's
+                // release would free a buffer the enum still owns — a double-free.
+                if isArrF {
+                    if self.arrElemIsScalar(elemTy: elemTyF) {
+                        self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, fv, 0U64, anon()))
+                    }
+                }
                 // an enum-typed bind carries a bare enum TypeRef so a nested match on it
                 // (the recursive case) recovers the enum (typeOf can't see this local).
                 mut val tref: U64 = 0
@@ -287,6 +296,12 @@ pub impl LlvmCtx {
                     if fld.tyIsArray {
                         elemTy = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
                         elemKind = kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                        // a scalar-array struct-pattern bind SHARES the scrutinee's field
+                        // buffer (Stage 2a): retain so its scope-exit release balances and
+                        // does not free a buffer the struct still owns (a double-free).
+                        if self.arrElemIsScalar(elemTy: elemTy) {
+                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, fv, 0U64, anon()))
+                        }
                     }
                     self.pushLocal(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
                 }

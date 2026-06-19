@@ -353,7 +353,13 @@ pub impl LlvmCtx {
                                 agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: gfElem)), fj, anon())
                             }
                             _ => {
-                                agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmExpr(c: inout c, id: valExpr), fj, anon())
+                                // value semantics: an array payload from a place SHARES the
+                                // buffer + retains (scalar element, Stage 2a) or eager-copies
+                                // (non-scalar), so dropping the source local does not free a
+                                // buffer the constructed enum now owns.
+                                val pelemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: gfElem)
+                                val pav: LLVMValueRef = self.shareArrayIfPlace(c: inout c, arrVal: self.genLlvmExpr(c: inout c, id: valExpr), elemTy: pelemTy, valueExpr: valExpr)
+                                agg = LLVMBuildInsertValue(self.b, agg, pav, fj, anon())
                             }
                         }
                     } else {

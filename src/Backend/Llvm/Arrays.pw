@@ -478,6 +478,66 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
+    // Drop one owner of a rawbuf cell: decrement its refcount, free at 0 (`plew_rawbuf_drop`).
+    inout fn rawbufDrop(c: inout Comp, cell: LLVMValueRef) {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_drop", nameId: 23U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: cell)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    }
+
+    // CoW (Stage 2) is, for now, scoped to arrays whose ELEMENT owns no heap — an integer
+    // (`iN`: every U/I width and Bool). Such buffers are rc-shared on bind/arg/reassign,
+    // CoW'd on mutation, and released at scope exit, with no element recursion. Pointer-,
+    // struct-, enum-, float-, and nested-array elements stay on the legacy eager-copy path
+    // (Stage 2b) — `false` here keeps them there.
+    inout fn arrElemIsScalar(elemTy: LLVMTypeRef) -> Bool {
+        return LLVMGetTypeKind(elemTy) == 8U32
+    }
+
+    // Take a new owner of an array VALUE bound/passed from an existing place (`val b = a`,
+    // a by-value arg). For a scalar-element array this RETAINS the shared buffer (true CoW
+    // — no copy); for a non-scalar element it falls back to the eager deep copy (Stage 2b).
+    // A non-place (literal / call result) already owns its buffer and passes through.
+    inout fn shareArrayIfPlace(c: inout Comp, arrVal: LLVMValueRef, elemTy: LLVMTypeRef, valueExpr: U64) -> LLVMValueRef {
+        if !(arrayExprIsPlace(c: inout c, id: valueExpr)) {
+            return arrVal
+        }
+        if self.arrElemIsScalar(elemTy: elemTy) {
+            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, arrVal, 0U64, anon()))
+            return arrVal
+        }
+        return self.copyArrayValue(c: inout c, arrVal: arrVal, elemTy: elemTy)
+    }
+
+    // CoW a scalar array place's buffer in its storage slot before an in-place mutation:
+    // load {data,count}, call plew_arr_cow (copies + drops one owner iff rc>1), store the
+    // possibly-new data back, and return that data pointer. The slot is the array local's
+    // {ptr,count} alloca (or an inout param's slot — so a mutation through `inout` CoWs the
+    // caller's binding, leaving other sharers untouched).
+    inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef) -> LLVMValueRef {
+        val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slotPtr, 0U64, anon())
+        val countPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slotPtr, 1U64, anon())
+        val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, dataPtr, anon())
+        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_cow", nameId: 31U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        av.append(value: LLVMSizeOf(elemTy))
+        av.append(value: count)
+        val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
+        LLVMBuildStore(self.b, nd, dataPtr)
+        return nd
+    }
+
     // The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
     // that needs a deinit, else c.arena.structs.count.
     inout fn refDeinitPointeeSidx(c: inout Comp, refTy: U64) -> U64 {

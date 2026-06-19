@@ -323,6 +323,9 @@ pub impl LlvmCtx {
                         self.bindOneParam(c: inout c, p: params[pi], fv: fv, argIdx: pi + 1U64)
                         pi += 1
                     }
+                    // body locals are released at scope exit; captures + params (bound above,
+                    // owned by the enclosing scope / caller) are excluded.
+                    self.curBodyMark = self.nLocals
                     self.genLlvmBlock(c: inout c, id: body)
                     if !(self.terminated) {
                         if self.curRetVoid {

@@ -56,6 +56,11 @@ pub impl LlvmCtx {
         LLVMBuildBr(self.b, body0)
         LLVMPositionBuilderAtEnd(self.b, body0)
         self.terminated = false
+        // scope-exit array release is gated on `li >= curBodyMark` (so params / seeded
+        // globals / captures are excluded). Default to a sentinel so an entry that forgets
+        // to set its real body mark releases NOTHING (a tolerated leak, never a UAF);
+        // genLlvmFuncBody, main, and closures set it after binding params.
+        self.curBodyMark = 18446744073709551615U64
     }
 
     // Allocate in the current function's entry block (before its terminator), then

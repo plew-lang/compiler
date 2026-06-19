@@ -129,6 +129,8 @@ pub impl LlvmCtx {
         self.locOwned = []
         self.locMoved = []
         self.seedGlobals(c: inout c)
+        // body locals (declared from here) are released at scope exit; seeded globals are not.
+        self.curBodyMark = self.nLocals
         self.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
         if !(self.terminated) {
             LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))

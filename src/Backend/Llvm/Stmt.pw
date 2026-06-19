@@ -114,13 +114,12 @@ pub impl LlvmCtx {
                     }
                     v = self.genLlvmExpr(c: inout c, id: init)
                     self.expectedTy = 0U64
-                    // value semantics: binding an array from an existing place (`val b = a`)
-                    // copies the buffer so later mutation through one binding leaves the
-                    // other unchanged (CoW, here eager).
+                    // value semantics: binding an array from an existing place (`val b = a`).
+                    // For a scalar-element array this SHARES the buffer + bumps its refcount
+                    // (true CoW — the copy is deferred to the first mutation); a non-scalar
+                    // element still eager-copies (Stage 2b).
                     if isArr {
-                        if arrayExprIsPlace(c: inout c, id: init) {
-                            v = self.copyArrayValue(c: inout c, arrVal: v, elemTy: elemTy)
-                        }
+                        v = self.shareArrayIfPlace(c: inout c, arrVal: v, elemTy: elemTy, valueExpr: init)
                     } else {
                         // a struct value bound from a place deep-copies its array fields
                         // (`val y = x` then `x.items[0]=…` leaves y.items unchanged; a
@@ -406,9 +405,19 @@ pub impl LlvmCtx {
                             return
                         }
                         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: ibase)
-                        val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: ibase)
-                        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
-                        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+                        // CoW (Stage 2a): privatize a shared scalar array in its slot before
+                        // the element store, so `arr[i] = v` does not clobber another sharer.
+                        mut val data: LLVMValueRef = LLVMConstNull(self.ptrty)
+                        mut val count: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
+                        val islot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: ibase)
+                        if LLVMIsNull(islot) == 0I32 && self.arrElemIsScalar(elemTy: elemTy) {
+                            data = self.cowArraySlot(c: inout c, slotPtr: islot, elemTy: elemTy)
+                            count = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.arrayTy, islot, 1U64, anon()), anon())
+                        } else {
+                            val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: ibase)
+                            data = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+                            count = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+                        }
                         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iindex)
                         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
                         val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
@@ -659,20 +668,32 @@ pub impl LlvmCtx {
                                 rv = self.coerceIntTo(c: inout c, v: rv, tyStart: self.curRetTyStart, tyLen: self.curRetTyLen)
                             }
                         }
-                        // value semantics: returning an array/struct place gives the caller
-                        // an independent value (`return b.xs` then caller's `r[0]=…`).
-                        rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                         // scope-exit deinits for all live locals — but a returned local is
                         // moved out to the caller, so exclude it.
                         mut val excludeLi: U64 = sentinel
+                        mut val scalarArrMove: Bool = false
                         match c.arena.exprs[value] {
                             Expr.Ident(start: val s, len: val l) => {
                                 val li: U64 = self.findLocal(c: inout c, start: s, len: l)
                                 if li < self.nLocals {
                                     excludeLi = li
+                                    // a returned scalar-array local MOVES its buffer to the
+                                    // caller (Stage 2a): the {data,count} carries the local's
+                                    // refcount out unchanged — no copy, no retain — and the
+                                    // local is excluded from the drop below, so it balances.
+                                    if self.locIsArr[li] {
+                                        scalarArrMove = self.arrElemIsScalar(elemTy: self.locElemTy[li])
+                                    }
                                 }
                             }
                             _ => {}
+                        }
+                        // value semantics: returning an array/struct PLACE (a field, or a
+                        // non-scalar array) gives the caller an independent value
+                        // (`return b.xs` then caller's `r[0]=…`). A moved scalar-array local
+                        // passes through unchanged.
+                        if !(scalarArrMove) {
+                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                         }
                         self.dropScope(c: inout c, fromMark: 0U64, excludeLi: excludeLi)
                         LLVMBuildRet(self.b, rv)

@@ -337,6 +337,16 @@ pub impl LlvmCtx {
             // the strty aggregate from the array's data + count. The validated public path is
             // `<String.checked source=bytes/>` (TryFrom[Array[U8]]); this is the unchecked floor.
             val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
+            // the Array[U8]'s buffer is MOVED into the returned String (same {ptr,len}, no
+            // copy) — which outlives this call. If the source is an array local, mark it
+            // moved so the CoW scope-exit release does not free the bytes out from under
+            // the String (the String becomes the buffer's owner; freed when strings drop).
+            match c.arena.exprs[args[0].expr] {
+                Expr.Ident(start: val ms, len: val ml) => {
+                    self.markLocalMoved(c: inout c, start: ms, len: ml)
+                }
+                _ => {}
+            }
             mut val s: LLVMValueRef = LLVMGetUndef(self.strty)
             s = LLVMBuildInsertValue(self.b, s, LLVMBuildExtractValue(self.b, arr, 0U64, anon()), 0U64, anon())
             s = LLVMBuildInsertValue(self.b, s, LLVMBuildExtractValue(self.b, arr, 1U64, anon()), 1U64, anon())

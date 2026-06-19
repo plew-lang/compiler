@@ -462,6 +462,10 @@ pub impl LlvmCtx {
         self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, startBB, 8U32)
         LLVMPositionBuilderAtEnd(self.b, startBB)
         self.terminated = false
+        // async bodies keep their locals in the resume frame (not allocas) and exit across
+        // suspend points — scope-exit array release is out of scope here, so the sentinel
+        // body mark disables it (a tolerated leak, never a UAF).
+        self.curBodyMark = 18446744073709551615U64
         // fresh locals: params bound to frame fields 3..; lets/binds get fields after.
         self.nLocals = 0
         self.locStart = []
