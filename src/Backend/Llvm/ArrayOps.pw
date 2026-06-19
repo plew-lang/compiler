@@ -145,7 +145,11 @@ pub impl LlvmCtx {
             _ => {}
         }
         if !(builtLit) {
-            ev = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy)
+            // value semantics (spec/03): appending an array/struct PLACE element copies,
+            // so the array's element stays independent of the source binding
+            // (`xs.append(a)` then `a[0]=…` must leave `xs[0]` unchanged). A literal /
+            // call result already owns its buffer; copyValueIfPlace passes it through.
+            ev = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
         }
         LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
         LLVMBuildStore(self.b, LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), countPtr)

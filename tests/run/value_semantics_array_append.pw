@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+// Appending an array PLACE element copies (spec/03 value semantics): the
+// container's element stays independent of the source binding.
+fn main() {
+    mut val outer: Array[Array[I64]] = []
+    mut val a: Array[I64] = [1, 2, 3]
+    outer.append(value: a)
+    a.set(i: 0, value: 99)
+    print(outer[0][0])
+
+    mut val b: Array[I64] = [10, 20]
+    outer.append(value: b)
+    b.set(i: 1, value: 88)
+    print(outer[1][1])
+}

@@ -13770,40 +13770,54 @@ body0:                                            ; preds = %entry
   %294 = call ptr @plew_arr_grow(ptr %292, i64 ptrtoint (ptr getelementptr (%st77, ptr null, i32 1) to i64), i64 %293)
   store ptr %294, ptr %290, align 8
   %295 = load %st77, ptr %38, align 8
-  %296 = getelementptr %st77, ptr %294, i64 %293
-  store %st77 %295, ptr %296, align 8
-  %297 = add i64 %293, 1
-  store i64 %297, ptr %291, align 4
-  %298 = getelementptr inbounds nuw { ptr, i64 }, ptr %48, i32 0, i32 0
-  %299 = getelementptr inbounds nuw { ptr, i64 }, ptr %48, i32 0, i32 1
-  %300 = load ptr, ptr %298, align 8
-  %301 = load i64, ptr %299, align 4
-  %302 = call ptr @plew_arr_grow(ptr %300, i64 ptrtoint (ptr getelementptr (%st77, ptr null, i32 1) to i64), i64 %301)
-  store ptr %302, ptr %298, align 8
-  %303 = load %st77, ptr %47, align 8
-  %304 = getelementptr %st77, ptr %302, i64 %301
-  store %st77 %303, ptr %304, align 8
-  %305 = add i64 %301, 1
-  store i64 %305, ptr %299, align 4
-  %306 = load %st31, ptr %0, align 8
-  %307 = extractvalue %st31 %306, 0
-  %308 = extractvalue %st96 %307, 1
-  %309 = extractvalue { ptr, i64 } %308, 0
-  %310 = extractvalue { ptr, i64 } %308, 1
-  %311 = load i64, ptr %7, align 4
-  call void @plew_bounds(i64 %311, i64 %310)
-  %312 = getelementptr %en9, ptr %309, i64 %311
+  %296 = extractvalue %st77 %295, 5
+  %297 = extractvalue { ptr, i64 } %296, 0
+  %298 = extractvalue { ptr, i64 } %296, 1
+  %299 = call ptr @plew_arr_copy(ptr %297, i64 ptrtoint (ptr getelementptr (%st75, ptr null, i32 1) to i64), i64 %298)
+  %300 = insertvalue { ptr, i64 } undef, ptr %299, 0
+  %301 = insertvalue { ptr, i64 } %300, i64 %298, 1
+  %302 = insertvalue %st77 %295, { ptr, i64 } %301, 5
+  %303 = getelementptr %st77, ptr %294, i64 %293
+  store %st77 %302, ptr %303, align 8
+  %304 = add i64 %293, 1
+  store i64 %304, ptr %291, align 4
+  %305 = getelementptr inbounds nuw { ptr, i64 }, ptr %48, i32 0, i32 0
+  %306 = getelementptr inbounds nuw { ptr, i64 }, ptr %48, i32 0, i32 1
+  %307 = load ptr, ptr %305, align 8
+  %308 = load i64, ptr %306, align 4
+  %309 = call ptr @plew_arr_grow(ptr %307, i64 ptrtoint (ptr getelementptr (%st77, ptr null, i32 1) to i64), i64 %308)
+  store ptr %309, ptr %305, align 8
+  %310 = load %st77, ptr %47, align 8
+  %311 = extractvalue %st77 %310, 5
+  %312 = extractvalue { ptr, i64 } %311, 0
+  %313 = extractvalue { ptr, i64 } %311, 1
+  %314 = call ptr @plew_arr_copy(ptr %312, i64 ptrtoint (ptr getelementptr (%st75, ptr null, i32 1) to i64), i64 %313)
+  %315 = insertvalue { ptr, i64 } undef, ptr %314, 0
+  %316 = insertvalue { ptr, i64 } %315, i64 %313, 1
+  %317 = insertvalue %st77 %310, { ptr, i64 } %316, 5
+  %318 = getelementptr %st77, ptr %309, i64 %308
+  store %st77 %317, ptr %318, align 8
+  %319 = add i64 %308, 1
+  store i64 %319, ptr %306, align 4
+  %320 = load %st31, ptr %0, align 8
+  %321 = extractvalue %st31 %320, 0
+  %322 = extractvalue %st96 %321, 1
+  %323 = extractvalue { ptr, i64 } %322, 0
+  %324 = extractvalue { ptr, i64 } %322, 1
+  %325 = load i64, ptr %7, align 4
+  call void @plew_bounds(i64 %325, i64 %324)
+  %326 = getelementptr %en9, ptr %323, i64 %325
   store %en9 zeroinitializer, ptr %49, align 4
-  %313 = getelementptr inbounds nuw %en9, ptr %49, i32 0, i32 0
-  store i64 15, ptr %313, align 4
-  %314 = load i64, ptr %24, align 4
-  %315 = insertvalue { i64, { ptr, i64 } } zeroinitializer, i64 %314, 0
-  %316 = load { ptr, i64 }, ptr %48, align 8
-  %317 = insertvalue { i64, { ptr, i64 } } %315, { ptr, i64 } %316, 1
-  %318 = getelementptr inbounds nuw %en9, ptr %49, i32 0, i32 1
-  store { i64, { ptr, i64 } } %317, ptr %318, align 8
-  %319 = load %en9, ptr %49, align 4
-  store %en9 %319, ptr %312, align 4
+  %327 = getelementptr inbounds nuw %en9, ptr %49, i32 0, i32 0
+  store i64 15, ptr %327, align 4
+  %328 = load i64, ptr %24, align 4
+  %329 = insertvalue { i64, { ptr, i64 } } zeroinitializer, i64 %328, 0
+  %330 = load { ptr, i64 }, ptr %48, align 8
+  %331 = insertvalue { i64, { ptr, i64 } } %329, { ptr, i64 } %330, 1
+  %332 = getelementptr inbounds nuw %en9, ptr %49, i32 0, i32 1
+  store { i64, { ptr, i64 } } %331, ptr %332, align 8
+  %333 = load %en9, ptr %49, align 4
+  store %en9 %333, ptr %326, align 4
   ret void
 }
 
@@ -29068,34 +29082,36 @@ then8:                                            ; preds = %match.end
   %188 = call ptr @pf1331(ptr %0, ptr %1, i64 %187)
   %189 = load ptr, ptr %7, align 8
   %190 = call ptr @pf1353(ptr %0, ptr %188, ptr %189)
-  store ptr %190, ptr %17, align 8
+  %191 = load i64, ptr %5, align 4
+  %192 = call ptr @pf1346(ptr %0, ptr %1, ptr %190, i64 %191)
+  store ptr %192, ptr %17, align 8
   br label %endif9
 
 endif9:                                           ; preds = %then8, %match.end
-  %191 = load %st36, ptr %0, align 8
-  %192 = extractvalue %st36 %191, 2
-  %193 = load ptr, ptr %17, align 8
-  %194 = load ptr, ptr %7, align 8
-  %195 = load ptr, ptr %16, align 8
-  %196 = load ptr, ptr %11, align 8
-  %197 = call ptr @pf1352(ptr %0, ptr %194, ptr %195, ptr %196)
-  %198 = call ptr @LLVMBuildStore(ptr %192, ptr %193, ptr %197)
-  %199 = load %st36, ptr %0, align 8
-  %200 = extractvalue %st36 %199, 2
+  %193 = load %st36, ptr %0, align 8
+  %194 = extractvalue %st36 %193, 2
+  %195 = load ptr, ptr %17, align 8
+  %196 = load ptr, ptr %7, align 8
+  %197 = load ptr, ptr %16, align 8
+  %198 = load ptr, ptr %11, align 8
+  %199 = call ptr @pf1352(ptr %0, ptr %196, ptr %197, ptr %198)
+  %200 = call ptr @LLVMBuildStore(ptr %194, ptr %195, ptr %199)
   %201 = load %st36, ptr %0, align 8
   %202 = extractvalue %st36 %201, 2
-  %203 = load ptr, ptr %11, align 8
-  %204 = load %st36, ptr %0, align 8
-  %205 = extractvalue %st36 %204, 7
-  %206 = call ptr @LLVMConstInt(ptr %205, i64 1, i32 0)
-  %207 = call ptr @pf421()
-  %208 = call ptr @LLVMBuildAdd(ptr %202, ptr %203, ptr %206, ptr %207)
-  %209 = load ptr, ptr %9, align 8
-  %210 = call ptr @LLVMBuildStore(ptr %200, ptr %208, ptr %209)
-  %211 = load %st36, ptr %0, align 8
-  %212 = extractvalue %st36 %211, 7
-  %213 = call ptr @LLVMConstInt(ptr %212, i64 0, i32 0)
-  ret ptr %213
+  %203 = load %st36, ptr %0, align 8
+  %204 = extractvalue %st36 %203, 2
+  %205 = load ptr, ptr %11, align 8
+  %206 = load %st36, ptr %0, align 8
+  %207 = extractvalue %st36 %206, 7
+  %208 = call ptr @LLVMConstInt(ptr %207, i64 1, i32 0)
+  %209 = call ptr @pf421()
+  %210 = call ptr @LLVMBuildAdd(ptr %204, ptr %205, ptr %208, ptr %209)
+  %211 = load ptr, ptr %9, align 8
+  %212 = call ptr @LLVMBuildStore(ptr %202, ptr %210, ptr %211)
+  %213 = load %st36, ptr %0, align 8
+  %214 = extractvalue %st36 %213, 7
+  %215 = call ptr @LLVMConstInt(ptr %214, i64 0, i32 0)
+  ret ptr %215
 }
 
 define ptr @pf1358(ptr %0, ptr %1, i64 %2, i64 %3, i64 %4) {
@@ -82959,39 +82975,44 @@ while.end:                                        ; preds = %while.cond
   %203 = call ptr @plew_arr_grow(ptr %201, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %202)
   store ptr %203, ptr %199, align 8
   %204 = load { ptr, i64 }, ptr %7, align 8
-  %205 = getelementptr { ptr, i64 }, ptr %203, i64 %202
-  store { ptr, i64 } %204, ptr %205, align 8
-  %206 = add i64 %202, 1
-  store i64 %206, ptr %200, align 4
-  %207 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
-  %208 = getelementptr inbounds nuw %st103, ptr %207, i32 0, i32 16
-  %209 = load i64, ptr %12, align 4
-  store i64 %209, ptr %208, align 4
-  %210 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
-  %211 = getelementptr inbounds nuw %st103, ptr %210, i32 0, i32 17
-  %212 = load i64, ptr %13, align 4
-  store i64 %212, ptr %211, align 4
-  %213 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
-  %214 = getelementptr inbounds nuw %st103, ptr %213, i32 0, i32 18
-  %215 = load { ptr, i64 }, ptr %9, align 8
-  %216 = extractvalue { ptr, i64 } %215, 0
-  %217 = extractvalue { ptr, i64 } %215, 1
-  %218 = call ptr @plew_arr_copy(ptr %216, i64 ptrtoint (ptr getelementptr (%st75, ptr null, i32 1) to i64), i64 %217)
-  %219 = insertvalue { ptr, i64 } undef, ptr %218, 0
-  %220 = insertvalue { ptr, i64 } %219, i64 %217, 1
-  store { ptr, i64 } %220, ptr %214, align 8
-  %221 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
-  %222 = getelementptr inbounds nuw %st103, ptr %221, i32 0, i32 19
-  %223 = load { ptr, i64 }, ptr %10, align 8
-  %224 = extractvalue { ptr, i64 } %223, 0
-  %225 = extractvalue { ptr, i64 } %223, 1
-  %226 = call ptr @plew_arr_copy(ptr %224, i64 ptrtoint (ptr getelementptr (i64, ptr null, i32 1) to i64), i64 %225)
-  %227 = insertvalue { ptr, i64 } undef, ptr %226, 0
-  %228 = insertvalue { ptr, i64 } %227, i64 %225, 1
-  store { ptr, i64 } %228, ptr %222, align 8
-  %229 = getelementptr inbounds nuw %st36, ptr %0, i32 0, i32 39
-  %230 = load i64, ptr %11, align 4
-  store i64 %230, ptr %229, align 4
+  %205 = extractvalue { ptr, i64 } %204, 0
+  %206 = extractvalue { ptr, i64 } %204, 1
+  %207 = call ptr @plew_arr_copy(ptr %205, i64 ptrtoint (ptr getelementptr (i64, ptr null, i32 1) to i64), i64 %206)
+  %208 = insertvalue { ptr, i64 } undef, ptr %207, 0
+  %209 = insertvalue { ptr, i64 } %208, i64 %206, 1
+  %210 = getelementptr { ptr, i64 }, ptr %203, i64 %202
+  store { ptr, i64 } %209, ptr %210, align 8
+  %211 = add i64 %202, 1
+  store i64 %211, ptr %200, align 4
+  %212 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
+  %213 = getelementptr inbounds nuw %st103, ptr %212, i32 0, i32 16
+  %214 = load i64, ptr %12, align 4
+  store i64 %214, ptr %213, align 4
+  %215 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
+  %216 = getelementptr inbounds nuw %st103, ptr %215, i32 0, i32 17
+  %217 = load i64, ptr %13, align 4
+  store i64 %217, ptr %216, align 4
+  %218 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
+  %219 = getelementptr inbounds nuw %st103, ptr %218, i32 0, i32 18
+  %220 = load { ptr, i64 }, ptr %9, align 8
+  %221 = extractvalue { ptr, i64 } %220, 0
+  %222 = extractvalue { ptr, i64 } %220, 1
+  %223 = call ptr @plew_arr_copy(ptr %221, i64 ptrtoint (ptr getelementptr (%st75, ptr null, i32 1) to i64), i64 %222)
+  %224 = insertvalue { ptr, i64 } undef, ptr %223, 0
+  %225 = insertvalue { ptr, i64 } %224, i64 %222, 1
+  store { ptr, i64 } %225, ptr %219, align 8
+  %226 = getelementptr inbounds nuw %st31, ptr %1, i32 0, i32 3
+  %227 = getelementptr inbounds nuw %st103, ptr %226, i32 0, i32 19
+  %228 = load { ptr, i64 }, ptr %10, align 8
+  %229 = extractvalue { ptr, i64 } %228, 0
+  %230 = extractvalue { ptr, i64 } %228, 1
+  %231 = call ptr @plew_arr_copy(ptr %229, i64 ptrtoint (ptr getelementptr (i64, ptr null, i32 1) to i64), i64 %230)
+  %232 = insertvalue { ptr, i64 } undef, ptr %231, 0
+  %233 = insertvalue { ptr, i64 } %232, i64 %230, 1
+  store { ptr, i64 } %233, ptr %227, align 8
+  %234 = getelementptr inbounds nuw %st36, ptr %0, i32 0, i32 39
+  %235 = load i64, ptr %11, align 4
+  store i64 %235, ptr %234, align 4
   ret void
 }
 
@@ -100958,10 +100979,17 @@ arm25:                                            ; preds = %match.next24
   %170 = call ptr @plew_arr_grow(ptr %168, i64 ptrtoint (ptr getelementptr (%st59, ptr null, i32 1) to i64), i64 %169)
   store ptr %170, ptr %166, align 8
   %171 = load %st59, ptr %14, align 8
-  %172 = getelementptr %st59, ptr %170, i64 %169
-  store %st59 %171, ptr %172, align 8
-  %173 = add i64 %169, 1
-  store i64 %173, ptr %167, align 4
+  %172 = extractvalue %st59 %171, 0
+  %173 = extractvalue { ptr, i64 } %172, 0
+  %174 = extractvalue { ptr, i64 } %172, 1
+  %175 = call ptr @plew_arr_copy(ptr %173, i64 ptrtoint (ptr getelementptr (%st58, ptr null, i32 1) to i64), i64 %174)
+  %176 = insertvalue { ptr, i64 } undef, ptr %175, 0
+  %177 = insertvalue { ptr, i64 } %176, i64 %174, 1
+  %178 = insertvalue %st59 %171, { ptr, i64 } %177, 0
+  %179 = getelementptr %st59, ptr %170, i64 %169
+  store %st59 %178, ptr %179, align 8
+  %180 = add i64 %169, 1
+  store i64 %180, ptr %167, align 4
   store %st59 zeroinitializer, ptr %14, align 8
   call void @pf840(ptr %0)
   br label %match.end18
@@ -100970,62 +100998,69 @@ match.next26:                                     ; preds = %match.next24
   br label %arm27
 
 arm27:                                            ; preds = %match.next26
-  %174 = call i1 @pf588(ptr %0, { ptr, i64 } { ptr @782, i64 4 })
-  %175 = icmp ne i1 %174, false
-  br i1 %175, label %then28, label %else30
+  %181 = call i1 @pf588(ptr %0, { ptr, i64 } { ptr @782, i64 4 })
+  %182 = icmp ne i1 %181, false
+  br i1 %182, label %then28, label %else30
 
 then28:                                           ; preds = %arm27
-  %176 = load %st66, ptr %0, align 8
-  %177 = load %st66, ptr %0, align 8
-  %178 = call %st44 @pf837(%st66 %177)
-  %179 = call %st46 @pf843(%st66 %176, %st44 %178)
-  store %st46 %179, ptr %18, align 4
+  %183 = load %st66, ptr %0, align 8
+  %184 = load %st66, ptr %0, align 8
+  %185 = call %st44 @pf837(%st66 %184)
+  %186 = call %st46 @pf843(%st66 %183, %st44 %185)
+  store %st46 %186, ptr %18, align 4
   call void @pf840(ptr %0)
-  %180 = load %st66, ptr %0, align 8
-  %181 = call %st44 @pf837(%st66 %180)
-  store %st44 %181, ptr %19, align 4
-  %182 = getelementptr inbounds nuw { ptr, i64 }, ptr %11, i32 0, i32 0
-  %183 = getelementptr inbounds nuw { ptr, i64 }, ptr %11, i32 0, i32 1
-  %184 = load ptr, ptr %182, align 8
-  %185 = load i64, ptr %183, align 4
-  %186 = call ptr @plew_arr_grow(ptr %184, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %185)
-  store ptr %186, ptr %182, align 8
   %187 = load %st66, ptr %0, align 8
-  %188 = load %st44, ptr %19, align 4
-  %189 = call { ptr, i64 } @pf842(%st66 %187, %st44 %188)
-  %190 = getelementptr { ptr, i64 }, ptr %186, i64 %185
-  store { ptr, i64 } %189, ptr %190, align 8
-  %191 = add i64 %185, 1
-  store i64 %191, ptr %183, align 4
-  %192 = getelementptr inbounds nuw { ptr, i64 }, ptr %12, i32 0, i32 0
-  %193 = getelementptr inbounds nuw { ptr, i64 }, ptr %12, i32 0, i32 1
-  %194 = load ptr, ptr %192, align 8
-  %195 = load i64, ptr %193, align 4
-  %196 = call ptr @plew_arr_grow(ptr %194, i64 ptrtoint (ptr getelementptr (%st46, ptr null, i32 1) to i64), i64 %195)
-  store ptr %196, ptr %192, align 8
-  %197 = load %st46, ptr %18, align 4
-  %198 = extractvalue %st46 %197, 0
-  %199 = insertvalue %st46 undef, i64 %198, 0
-  %200 = load %st66, ptr %0, align 8
-  %201 = load %st44, ptr %19, align 4
-  %202 = call %st46 @pf843(%st66 %200, %st44 %201)
-  %203 = extractvalue %st46 %202, 1
-  %204 = insertvalue %st46 %199, i64 %203, 1
-  %205 = getelementptr %st46, ptr %196, i64 %195
-  store %st46 %204, ptr %205, align 4
-  %206 = add i64 %195, 1
-  store i64 %206, ptr %193, align 4
-  %207 = getelementptr inbounds nuw { ptr, i64 }, ptr %13, i32 0, i32 0
-  %208 = getelementptr inbounds nuw { ptr, i64 }, ptr %13, i32 0, i32 1
-  %209 = load ptr, ptr %207, align 8
-  %210 = load i64, ptr %208, align 4
-  %211 = call ptr @plew_arr_grow(ptr %209, i64 ptrtoint (ptr getelementptr (%st59, ptr null, i32 1) to i64), i64 %210)
-  store ptr %211, ptr %207, align 8
-  %212 = load %st59, ptr %14, align 8
-  %213 = getelementptr %st59, ptr %211, i64 %210
-  store %st59 %212, ptr %213, align 8
-  %214 = add i64 %210, 1
-  store i64 %214, ptr %208, align 4
+  %188 = call %st44 @pf837(%st66 %187)
+  store %st44 %188, ptr %19, align 4
+  %189 = getelementptr inbounds nuw { ptr, i64 }, ptr %11, i32 0, i32 0
+  %190 = getelementptr inbounds nuw { ptr, i64 }, ptr %11, i32 0, i32 1
+  %191 = load ptr, ptr %189, align 8
+  %192 = load i64, ptr %190, align 4
+  %193 = call ptr @plew_arr_grow(ptr %191, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %192)
+  store ptr %193, ptr %189, align 8
+  %194 = load %st66, ptr %0, align 8
+  %195 = load %st44, ptr %19, align 4
+  %196 = call { ptr, i64 } @pf842(%st66 %194, %st44 %195)
+  %197 = getelementptr { ptr, i64 }, ptr %193, i64 %192
+  store { ptr, i64 } %196, ptr %197, align 8
+  %198 = add i64 %192, 1
+  store i64 %198, ptr %190, align 4
+  %199 = getelementptr inbounds nuw { ptr, i64 }, ptr %12, i32 0, i32 0
+  %200 = getelementptr inbounds nuw { ptr, i64 }, ptr %12, i32 0, i32 1
+  %201 = load ptr, ptr %199, align 8
+  %202 = load i64, ptr %200, align 4
+  %203 = call ptr @plew_arr_grow(ptr %201, i64 ptrtoint (ptr getelementptr (%st46, ptr null, i32 1) to i64), i64 %202)
+  store ptr %203, ptr %199, align 8
+  %204 = load %st46, ptr %18, align 4
+  %205 = extractvalue %st46 %204, 0
+  %206 = insertvalue %st46 undef, i64 %205, 0
+  %207 = load %st66, ptr %0, align 8
+  %208 = load %st44, ptr %19, align 4
+  %209 = call %st46 @pf843(%st66 %207, %st44 %208)
+  %210 = extractvalue %st46 %209, 1
+  %211 = insertvalue %st46 %206, i64 %210, 1
+  %212 = getelementptr %st46, ptr %203, i64 %202
+  store %st46 %211, ptr %212, align 4
+  %213 = add i64 %202, 1
+  store i64 %213, ptr %200, align 4
+  %214 = getelementptr inbounds nuw { ptr, i64 }, ptr %13, i32 0, i32 0
+  %215 = getelementptr inbounds nuw { ptr, i64 }, ptr %13, i32 0, i32 1
+  %216 = load ptr, ptr %214, align 8
+  %217 = load i64, ptr %215, align 4
+  %218 = call ptr @plew_arr_grow(ptr %216, i64 ptrtoint (ptr getelementptr (%st59, ptr null, i32 1) to i64), i64 %217)
+  store ptr %218, ptr %214, align 8
+  %219 = load %st59, ptr %14, align 8
+  %220 = extractvalue %st59 %219, 0
+  %221 = extractvalue { ptr, i64 } %220, 0
+  %222 = extractvalue { ptr, i64 } %220, 1
+  %223 = call ptr @plew_arr_copy(ptr %221, i64 ptrtoint (ptr getelementptr (%st58, ptr null, i32 1) to i64), i64 %222)
+  %224 = insertvalue { ptr, i64 } undef, ptr %223, 0
+  %225 = insertvalue { ptr, i64 } %224, i64 %222, 1
+  %226 = insertvalue %st59 %219, { ptr, i64 } %225, 0
+  %227 = getelementptr %st59, ptr %218, i64 %217
+  store %st59 %226, ptr %227, align 8
+  %228 = add i64 %217, 1
+  store i64 %228, ptr %215, align 4
   store %st59 zeroinitializer, ptr %14, align 8
   call void @pf840(ptr %0)
   br label %endif29
@@ -101034,20 +101069,20 @@ endif29:                                          ; preds = %endif32, %then28
   br label %match.end18
 
 else30:                                           ; preds = %arm27
-  %215 = load %st66, ptr %0, align 8
-  %216 = call %en3 @pf839(%st66 %215, i64 1)
+  %229 = load %st66, ptr %0, align 8
+  %230 = call %en3 @pf839(%st66 %229, i64 1)
   store %en3 zeroinitializer, ptr %20, align 4
-  %217 = getelementptr inbounds nuw %en3, ptr %20, i32 0, i32 0
-  store i64 35, ptr %217, align 4
-  %218 = load %en3, ptr %20, align 4
-  %219 = extractvalue %en3 %216, 0
-  %220 = extractvalue %en3 %218, 0
-  %221 = icmp eq i64 %219, %220
-  br i1 %221, label %then31, label %else33
+  %231 = getelementptr inbounds nuw %en3, ptr %20, i32 0, i32 0
+  store i64 35, ptr %231, align 4
+  %232 = load %en3, ptr %20, align 4
+  %233 = extractvalue %en3 %230, 0
+  %234 = extractvalue %en3 %232, 0
+  %235 = icmp eq i64 %233, %234
+  br i1 %235, label %then31, label %else33
 
 then31:                                           ; preds = %else30
-  %222 = call %st59 @pf614(ptr %0)
-  store %st59 %222, ptr %14, align 8
+  %236 = call %st59 @pf614(ptr %0)
+  store %st59 %236, ptr %14, align 8
   br label %endif32
 
 endif32:                                          ; preds = %else33, %then31
@@ -135265,28 +135300,44 @@ match.end44:                                      ; preds = %arm47, %arm45
   %236 = call ptr @plew_arr_grow(ptr %234, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %235)
   store ptr %236, ptr %232, align 8
   %237 = load %st47, ptr %24, align 8
-  %238 = getelementptr %st47, ptr %236, i64 %235
-  store %st47 %237, ptr %238, align 8
-  %239 = add i64 %235, 1
-  store i64 %239, ptr %233, align 4
+  %238 = extractvalue %st47 %237, 1
+  %239 = extractvalue { ptr, i64 } %238, 0
+  %240 = extractvalue { ptr, i64 } %238, 1
+  %241 = call ptr @plew_arr_copy(ptr %239, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %240)
+  %242 = insertvalue { ptr, i64 } undef, ptr %241, 0
+  %243 = insertvalue { ptr, i64 } %242, i64 %240, 1
+  %244 = insertvalue %st47 %237, { ptr, i64 } %243, 1
+  %245 = extractvalue %st47 %244, 2
+  %246 = insertvalue %st47 %244, %st46 %245, 2
+  %247 = extractvalue %st47 %246, 5
+  %248 = extractvalue { ptr, i64 } %247, 0
+  %249 = extractvalue { ptr, i64 } %247, 1
+  %250 = call ptr @plew_arr_copy(ptr %248, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %249)
+  %251 = insertvalue { ptr, i64 } undef, ptr %250, 0
+  %252 = insertvalue { ptr, i64 } %251, i64 %249, 1
+  %253 = insertvalue %st47 %246, { ptr, i64 } %252, 5
+  %254 = getelementptr %st47, ptr %236, i64 %235
+  store %st47 %253, ptr %254, align 8
+  %255 = add i64 %235, 1
+  store i64 %255, ptr %233, align 4
   store { ptr, i64 } zeroinitializer, ptr %27, align 8
-  %240 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 0
-  %241 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 1
-  %242 = load ptr, ptr %240, align 8
-  %243 = load i64, ptr %241, align 4
-  %244 = call ptr @plew_arr_grow(ptr %242, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %243)
-  store ptr %244, ptr %240, align 8
-  %245 = getelementptr { ptr, i64 }, ptr %244, i64 %243
-  store { ptr, i64 } { ptr @1089, i64 0 }, ptr %245, align 8
-  %246 = add i64 %243, 1
-  store i64 %246, ptr %241, align 4
+  %256 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 0
+  %257 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 1
+  %258 = load ptr, ptr %256, align 8
+  %259 = load i64, ptr %257, align 4
+  %260 = call ptr @plew_arr_grow(ptr %258, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %259)
+  store ptr %260, ptr %256, align 8
+  %261 = getelementptr { ptr, i64 }, ptr %260, i64 %259
+  store { ptr, i64 } { ptr @1089, i64 0 }, ptr %261, align 8
+  %262 = add i64 %259, 1
+  store i64 %262, ptr %257, align 4
   store i64 0, ptr %28, align 4
   br label %while.cond48
 
 arm45:                                            ; preds = %while.end25
   call void @pf840(ptr %0)
-  %247 = call %st47 @pf591(ptr %0)
-  store %st47 %247, ptr %24, align 8
+  %263 = call %st47 @pf591(ptr %0)
+  store %st47 %263, ptr %24, align 8
   br label %match.end44
 
 match.next46:                                     ; preds = %while.end25
@@ -135296,92 +135347,92 @@ arm47:                                            ; preds = %match.next46
   br label %match.end44
 
 while.cond48:                                     ; preds = %while.body49, %match.end44
-  %248 = load i64, ptr %28, align 4
-  %249 = load { ptr, i64 }, ptr %16, align 8
-  %250 = extractvalue { ptr, i64 } %249, 1
-  %251 = icmp ult i64 %248, %250
-  br i1 %251, label %while.body49, label %while.end50
+  %264 = load i64, ptr %28, align 4
+  %265 = load { ptr, i64 }, ptr %16, align 8
+  %266 = extractvalue { ptr, i64 } %265, 1
+  %267 = icmp ult i64 %264, %266
+  br i1 %267, label %while.body49, label %while.end50
 
 while.body49:                                     ; preds = %while.cond48
-  %252 = getelementptr inbounds nuw { ptr, i64 }, ptr %26, i32 0, i32 0
-  %253 = getelementptr inbounds nuw { ptr, i64 }, ptr %26, i32 0, i32 1
-  %254 = load ptr, ptr %252, align 8
-  %255 = load i64, ptr %253, align 4
-  %256 = call ptr @plew_arr_grow(ptr %254, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %255)
-  store ptr %256, ptr %252, align 8
-  %257 = load { ptr, i64 }, ptr %16, align 8
-  %258 = extractvalue { ptr, i64 } %257, 0
-  %259 = extractvalue { ptr, i64 } %257, 1
-  %260 = load i64, ptr %28, align 4
-  call void @plew_bounds(i64 %260, i64 %259)
-  %261 = getelementptr %st47, ptr %258, i64 %260
-  %262 = load %st47, ptr %261, align 8
-  %263 = getelementptr %st47, ptr %256, i64 %255
-  store %st47 %262, ptr %263, align 8
-  %264 = add i64 %255, 1
-  store i64 %264, ptr %253, align 4
-  %265 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 0
-  %266 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 1
-  %267 = load ptr, ptr %265, align 8
-  %268 = load i64, ptr %266, align 4
-  %269 = call ptr @plew_arr_grow(ptr %267, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %268)
-  store ptr %269, ptr %265, align 8
-  %270 = load { ptr, i64 }, ptr %17, align 8
-  %271 = extractvalue { ptr, i64 } %270, 0
-  %272 = extractvalue { ptr, i64 } %270, 1
-  %273 = load i64, ptr %28, align 4
-  call void @plew_bounds(i64 %273, i64 %272)
-  %274 = getelementptr { ptr, i64 }, ptr %271, i64 %273
-  %275 = load { ptr, i64 }, ptr %274, align 8
-  %276 = getelementptr { ptr, i64 }, ptr %269, i64 %268
-  store { ptr, i64 } %275, ptr %276, align 8
-  %277 = add i64 %268, 1
-  store i64 %277, ptr %266, align 4
-  %278 = load i64, ptr %28, align 4
-  %279 = call i64 @plew_u64Add(i64 %278, i64 1)
-  store i64 %279, ptr %28, align 4
+  %268 = getelementptr inbounds nuw { ptr, i64 }, ptr %26, i32 0, i32 0
+  %269 = getelementptr inbounds nuw { ptr, i64 }, ptr %26, i32 0, i32 1
+  %270 = load ptr, ptr %268, align 8
+  %271 = load i64, ptr %269, align 4
+  %272 = call ptr @plew_arr_grow(ptr %270, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %271)
+  store ptr %272, ptr %268, align 8
+  %273 = load { ptr, i64 }, ptr %16, align 8
+  %274 = extractvalue { ptr, i64 } %273, 0
+  %275 = extractvalue { ptr, i64 } %273, 1
+  %276 = load i64, ptr %28, align 4
+  call void @plew_bounds(i64 %276, i64 %275)
+  %277 = getelementptr %st47, ptr %274, i64 %276
+  %278 = load %st47, ptr %277, align 8
+  %279 = getelementptr %st47, ptr %272, i64 %271
+  store %st47 %278, ptr %279, align 8
+  %280 = add i64 %271, 1
+  store i64 %280, ptr %269, align 4
+  %281 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 0
+  %282 = getelementptr inbounds nuw { ptr, i64 }, ptr %27, i32 0, i32 1
+  %283 = load ptr, ptr %281, align 8
+  %284 = load i64, ptr %282, align 4
+  %285 = call ptr @plew_arr_grow(ptr %283, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %284)
+  store ptr %285, ptr %281, align 8
+  %286 = load { ptr, i64 }, ptr %17, align 8
+  %287 = extractvalue { ptr, i64 } %286, 0
+  %288 = extractvalue { ptr, i64 } %286, 1
+  %289 = load i64, ptr %28, align 4
+  call void @plew_bounds(i64 %289, i64 %288)
+  %290 = getelementptr { ptr, i64 }, ptr %287, i64 %289
+  %291 = load { ptr, i64 }, ptr %290, align 8
+  %292 = getelementptr { ptr, i64 }, ptr %285, i64 %284
+  store { ptr, i64 } %291, ptr %292, align 8
+  %293 = add i64 %284, 1
+  store i64 %293, ptr %282, align 4
+  %294 = load i64, ptr %28, align 4
+  %295 = call i64 @plew_u64Add(i64 %294, i64 1)
+  store i64 %295, ptr %28, align 4
   br label %while.cond48
 
 while.end50:                                      ; preds = %while.cond48
-  %280 = load { ptr, i64 }, ptr %13, align 8
-  %281 = insertvalue %st47 undef, { ptr, i64 } %280, 0
-  %282 = load { ptr, i64 }, ptr %26, align 8
-  %283 = extractvalue { ptr, i64 } %282, 0
-  %284 = extractvalue { ptr, i64 } %282, 1
-  %285 = call ptr @plew_arr_copy(ptr %283, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %284)
-  %286 = insertvalue { ptr, i64 } undef, ptr %285, 0
-  %287 = insertvalue { ptr, i64 } %286, i64 %284, 1
-  %288 = insertvalue %st47 %281, { ptr, i64 } %287, 1
-  %289 = load i64, ptr %14, align 4
-  %290 = insertvalue %st46 undef, i64 %289, 0
-  %291 = load %st66, ptr %0, align 8
-  %292 = call i64 @pf844(%st66 %291)
-  %293 = insertvalue %st46 %290, i64 %292, 1
-  %294 = insertvalue %st47 %288, %st46 %293, 2
-  %295 = insertvalue %st47 %294, { ptr, i64 } { ptr @1090, i64 0 }, 3
-  %296 = insertvalue %st47 %295, i1 false, 4
-  %297 = load { ptr, i64 }, ptr %27, align 8
-  %298 = extractvalue { ptr, i64 } %297, 0
-  %299 = extractvalue { ptr, i64 } %297, 1
-  %300 = call ptr @plew_arr_copy(ptr %298, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %299)
-  %301 = insertvalue { ptr, i64 } undef, ptr %300, 0
-  %302 = insertvalue { ptr, i64 } %301, i64 %299, 1
-  %303 = insertvalue %st47 %296, { ptr, i64 } %302, 5
-  %304 = insertvalue %st47 %303, i1 false, 6
-  ret %st47 %304
+  %296 = load { ptr, i64 }, ptr %13, align 8
+  %297 = insertvalue %st47 undef, { ptr, i64 } %296, 0
+  %298 = load { ptr, i64 }, ptr %26, align 8
+  %299 = extractvalue { ptr, i64 } %298, 0
+  %300 = extractvalue { ptr, i64 } %298, 1
+  %301 = call ptr @plew_arr_copy(ptr %299, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %300)
+  %302 = insertvalue { ptr, i64 } undef, ptr %301, 0
+  %303 = insertvalue { ptr, i64 } %302, i64 %300, 1
+  %304 = insertvalue %st47 %297, { ptr, i64 } %303, 1
+  %305 = load i64, ptr %14, align 4
+  %306 = insertvalue %st46 undef, i64 %305, 0
+  %307 = load %st66, ptr %0, align 8
+  %308 = call i64 @pf844(%st66 %307)
+  %309 = insertvalue %st46 %306, i64 %308, 1
+  %310 = insertvalue %st47 %304, %st46 %309, 2
+  %311 = insertvalue %st47 %310, { ptr, i64 } { ptr @1090, i64 0 }, 3
+  %312 = insertvalue %st47 %311, i1 false, 4
+  %313 = load { ptr, i64 }, ptr %27, align 8
+  %314 = extractvalue { ptr, i64 } %313, 0
+  %315 = extractvalue { ptr, i64 } %313, 1
+  %316 = call ptr @plew_arr_copy(ptr %314, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %315)
+  %317 = insertvalue { ptr, i64 } undef, ptr %316, 0
+  %318 = insertvalue { ptr, i64 } %317, i64 %315, 1
+  %319 = insertvalue %st47 %312, { ptr, i64 } %318, 5
+  %320 = insertvalue %st47 %319, i1 false, 6
+  ret %st47 %320
 
 arm51:                                            ; preds = %match.next18
   br label %match.end16
 
 match.end52:                                      ; preds = %arm72, %while.end57
   store { ptr, i64 } { ptr @1092, i64 0 }, ptr %36, align 8
-  %305 = load %st66, ptr %0, align 8
-  %306 = call %en3 @pf838(%st66 %305)
-  store %en3 %306, ptr %37, align 4
-  %307 = getelementptr inbounds nuw %en3, ptr %37, i32 0, i32 0
-  %308 = load i64, ptr %307, align 4
-  %309 = icmp eq i64 %308, 79
-  br i1 %309, label %arm74, label %match.next75
+  %321 = load %st66, ptr %0, align 8
+  %322 = call %en3 @pf838(%st66 %321)
+  store %en3 %322, ptr %37, align 4
+  %323 = getelementptr inbounds nuw %en3, ptr %37, i32 0, i32 0
+  %324 = load i64, ptr %323, align 4
+  %325 = icmp eq i64 %324, 79
+  br i1 %325, label %arm74, label %match.next75
 
 arm53:                                            ; preds = %match.end16
   call void @pf840(ptr %0)
@@ -135394,13 +135445,13 @@ while.cond55:                                     ; preds = %match.end58, %arm53
   br i1 true, label %while.body56, label %while.end57
 
 while.body56:                                     ; preds = %while.cond55
-  %310 = load %st66, ptr %0, align 8
-  %311 = call %en3 @pf838(%st66 %310)
-  store %en3 %311, ptr %32, align 4
-  %312 = getelementptr inbounds nuw %en3, ptr %32, i32 0, i32 0
-  %313 = load i64, ptr %312, align 4
-  %314 = icmp eq i64 %313, 36
-  br i1 %314, label %arm59, label %match.next60
+  %326 = load %st66, ptr %0, align 8
+  %327 = call %en3 @pf838(%st66 %326)
+  store %en3 %327, ptr %32, align 4
+  %328 = getelementptr inbounds nuw %en3, ptr %32, i32 0, i32 0
+  %329 = load i64, ptr %328, align 4
+  %330 = icmp eq i64 %329, 36
+  br i1 %330, label %arm59, label %match.next60
 
 while.end57:                                      ; preds = %arm61, %arm59, %while.cond55
   br label %match.end52
@@ -135413,15 +135464,15 @@ arm59:                                            ; preds = %while.body56
   br label %while.end57
 
 match.next60:                                     ; preds = %while.body56
-  %315 = icmp eq i64 %313, 0
-  br i1 %315, label %arm61, label %match.next62
+  %331 = icmp eq i64 %329, 0
+  br i1 %331, label %arm61, label %match.next62
 
 arm61:                                            ; preds = %match.next60
   br label %while.end57
 
 match.next62:                                     ; preds = %match.next60
-  %316 = icmp eq i64 %313, 39
-  br i1 %316, label %arm63, label %match.next64
+  %332 = icmp eq i64 %329, 39
+  br i1 %332, label %arm63, label %match.next64
 
 arm63:                                            ; preds = %match.next62
   call void @pf840(ptr %0)
@@ -135432,60 +135483,60 @@ match.next64:                                     ; preds = %match.next62
 
 arm65:                                            ; preds = %match.next64
   store { ptr, i64 } { ptr @1091, i64 0 }, ptr %33, align 8
-  %317 = load %st66, ptr %0, align 8
-  %318 = call %en3 @pf838(%st66 %317)
-  store %en3 %318, ptr %34, align 4
-  %319 = getelementptr inbounds nuw %en3, ptr %34, i32 0, i32 0
-  %320 = load i64, ptr %319, align 4
-  %321 = icmp eq i64 %320, 6
-  br i1 %321, label %arm67, label %match.next68
+  %333 = load %st66, ptr %0, align 8
+  %334 = call %en3 @pf838(%st66 %333)
+  store %en3 %334, ptr %34, align 4
+  %335 = getelementptr inbounds nuw %en3, ptr %34, i32 0, i32 0
+  %336 = load i64, ptr %335, align 4
+  %337 = icmp eq i64 %336, 6
+  br i1 %337, label %arm67, label %match.next68
 
 match.end66:                                      ; preds = %arm71, %endif70
-  %322 = getelementptr inbounds nuw { ptr, i64 }, ptr %29, i32 0, i32 0
-  %323 = getelementptr inbounds nuw { ptr, i64 }, ptr %29, i32 0, i32 1
-  %324 = load ptr, ptr %322, align 8
-  %325 = load i64, ptr %323, align 4
-  %326 = call ptr @plew_arr_grow(ptr %324, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %325)
-  store ptr %326, ptr %322, align 8
-  %327 = call %st47 @pf591(ptr %0)
-  %328 = getelementptr %st47, ptr %326, i64 %325
-  store %st47 %327, ptr %328, align 8
-  %329 = add i64 %325, 1
-  store i64 %329, ptr %323, align 4
-  %330 = getelementptr inbounds nuw { ptr, i64 }, ptr %30, i32 0, i32 0
-  %331 = getelementptr inbounds nuw { ptr, i64 }, ptr %30, i32 0, i32 1
-  %332 = load ptr, ptr %330, align 8
-  %333 = load i64, ptr %331, align 4
-  %334 = call ptr @plew_arr_grow(ptr %332, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %333)
-  store ptr %334, ptr %330, align 8
-  %335 = load { ptr, i64 }, ptr %33, align 8
-  %336 = getelementptr { ptr, i64 }, ptr %334, i64 %333
-  store { ptr, i64 } %335, ptr %336, align 8
-  %337 = add i64 %333, 1
-  store i64 %337, ptr %331, align 4
+  %338 = getelementptr inbounds nuw { ptr, i64 }, ptr %29, i32 0, i32 0
+  %339 = getelementptr inbounds nuw { ptr, i64 }, ptr %29, i32 0, i32 1
+  %340 = load ptr, ptr %338, align 8
+  %341 = load i64, ptr %339, align 4
+  %342 = call ptr @plew_arr_grow(ptr %340, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %341)
+  store ptr %342, ptr %338, align 8
+  %343 = call %st47 @pf591(ptr %0)
+  %344 = getelementptr %st47, ptr %342, i64 %341
+  store %st47 %343, ptr %344, align 8
+  %345 = add i64 %341, 1
+  store i64 %345, ptr %339, align 4
+  %346 = getelementptr inbounds nuw { ptr, i64 }, ptr %30, i32 0, i32 0
+  %347 = getelementptr inbounds nuw { ptr, i64 }, ptr %30, i32 0, i32 1
+  %348 = load ptr, ptr %346, align 8
+  %349 = load i64, ptr %347, align 4
+  %350 = call ptr @plew_arr_grow(ptr %348, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %349)
+  store ptr %350, ptr %346, align 8
+  %351 = load { ptr, i64 }, ptr %33, align 8
+  %352 = getelementptr { ptr, i64 }, ptr %350, i64 %349
+  store { ptr, i64 } %351, ptr %352, align 8
+  %353 = add i64 %349, 1
+  store i64 %353, ptr %347, align 4
   br label %match.end58
 
 arm67:                                            ; preds = %arm65
-  %338 = load %st66, ptr %0, align 8
-  %339 = call %en3 @pf839(%st66 %338, i64 1)
+  %354 = load %st66, ptr %0, align 8
+  %355 = call %en3 @pf839(%st66 %354, i64 1)
   store %en3 zeroinitializer, ptr %35, align 4
-  %340 = getelementptr inbounds nuw %en3, ptr %35, i32 0, i32 0
-  store i64 42, ptr %340, align 4
-  %341 = load %en3, ptr %35, align 4
-  %342 = extractvalue %en3 %339, 0
-  %343 = extractvalue %en3 %341, 0
-  %344 = icmp eq i64 %342, %343
-  br i1 %344, label %then69, label %endif70
+  %356 = getelementptr inbounds nuw %en3, ptr %35, i32 0, i32 0
+  store i64 42, ptr %356, align 4
+  %357 = load %en3, ptr %35, align 4
+  %358 = extractvalue %en3 %355, 0
+  %359 = extractvalue %en3 %357, 0
+  %360 = icmp eq i64 %358, %359
+  br i1 %360, label %then69, label %endif70
 
 match.next68:                                     ; preds = %arm65
   br label %arm71
 
 then69:                                           ; preds = %arm67
-  %345 = load %st66, ptr %0, align 8
-  %346 = load %st66, ptr %0, align 8
-  %347 = call %st44 @pf837(%st66 %346)
-  %348 = call { ptr, i64 } @pf842(%st66 %345, %st44 %347)
-  store { ptr, i64 } %348, ptr %33, align 8
+  %361 = load %st66, ptr %0, align 8
+  %362 = load %st66, ptr %0, align 8
+  %363 = call %st44 @pf837(%st66 %362)
+  %364 = call { ptr, i64 } @pf842(%st66 %361, %st44 %363)
+  store { ptr, i64 } %364, ptr %33, align 8
   call void @pf840(ptr %0)
   call void @pf840(ptr %0)
   br label %endif70
@@ -135500,41 +135551,41 @@ arm72:                                            ; preds = %match.next54
   br label %match.end52
 
 match.end73:                                      ; preds = %arm76, %arm74
-  %349 = load { ptr, i64 }, ptr %13, align 8
-  %350 = insertvalue %st47 undef, { ptr, i64 } %349, 0
-  %351 = load { ptr, i64 }, ptr %29, align 8
-  %352 = extractvalue { ptr, i64 } %351, 0
-  %353 = extractvalue { ptr, i64 } %351, 1
-  %354 = call ptr @plew_arr_copy(ptr %352, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %353)
-  %355 = insertvalue { ptr, i64 } undef, ptr %354, 0
-  %356 = insertvalue { ptr, i64 } %355, i64 %353, 1
-  %357 = insertvalue %st47 %350, { ptr, i64 } %356, 1
-  %358 = load i64, ptr %14, align 4
-  %359 = insertvalue %st46 undef, i64 %358, 0
-  %360 = load %st66, ptr %0, align 8
-  %361 = call i64 @pf844(%st66 %360)
-  %362 = insertvalue %st46 %359, i64 %361, 1
-  %363 = insertvalue %st47 %357, %st46 %362, 2
-  %364 = load { ptr, i64 }, ptr %36, align 8
-  %365 = insertvalue %st47 %363, { ptr, i64 } %364, 3
-  %366 = insertvalue %st47 %365, i1 false, 4
-  %367 = load { ptr, i64 }, ptr %30, align 8
+  %365 = load { ptr, i64 }, ptr %13, align 8
+  %366 = insertvalue %st47 undef, { ptr, i64 } %365, 0
+  %367 = load { ptr, i64 }, ptr %29, align 8
   %368 = extractvalue { ptr, i64 } %367, 0
   %369 = extractvalue { ptr, i64 } %367, 1
-  %370 = call ptr @plew_arr_copy(ptr %368, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %369)
+  %370 = call ptr @plew_arr_copy(ptr %368, i64 ptrtoint (ptr getelementptr (%st47, ptr null, i32 1) to i64), i64 %369)
   %371 = insertvalue { ptr, i64 } undef, ptr %370, 0
   %372 = insertvalue { ptr, i64 } %371, i64 %369, 1
-  %373 = insertvalue %st47 %366, { ptr, i64 } %372, 5
-  %374 = insertvalue %st47 %373, i1 false, 6
-  ret %st47 %374
+  %373 = insertvalue %st47 %366, { ptr, i64 } %372, 1
+  %374 = load i64, ptr %14, align 4
+  %375 = insertvalue %st46 undef, i64 %374, 0
+  %376 = load %st66, ptr %0, align 8
+  %377 = call i64 @pf844(%st66 %376)
+  %378 = insertvalue %st46 %375, i64 %377, 1
+  %379 = insertvalue %st47 %373, %st46 %378, 2
+  %380 = load { ptr, i64 }, ptr %36, align 8
+  %381 = insertvalue %st47 %379, { ptr, i64 } %380, 3
+  %382 = insertvalue %st47 %381, i1 false, 4
+  %383 = load { ptr, i64 }, ptr %30, align 8
+  %384 = extractvalue { ptr, i64 } %383, 0
+  %385 = extractvalue { ptr, i64 } %383, 1
+  %386 = call ptr @plew_arr_copy(ptr %384, i64 ptrtoint (ptr getelementptr ({ ptr, i64 }, ptr null, i32 1) to i64), i64 %385)
+  %387 = insertvalue { ptr, i64 } undef, ptr %386, 0
+  %388 = insertvalue { ptr, i64 } %387, i64 %385, 1
+  %389 = insertvalue %st47 %382, { ptr, i64 } %388, 5
+  %390 = insertvalue %st47 %389, i1 false, 6
+  ret %st47 %390
 
 arm74:                                            ; preds = %match.end52
   call void @pf840(ptr %0)
-  %375 = load %st66, ptr %0, align 8
-  %376 = load %st66, ptr %0, align 8
-  %377 = call %st44 @pf837(%st66 %376)
-  %378 = call { ptr, i64 } @pf842(%st66 %375, %st44 %377)
-  store { ptr, i64 } %378, ptr %36, align 8
+  %391 = load %st66, ptr %0, align 8
+  %392 = load %st66, ptr %0, align 8
+  %393 = call %st44 @pf837(%st66 %392)
+  %394 = call { ptr, i64 } @pf842(%st66 %391, %st44 %393)
+  store { ptr, i64 } %394, ptr %36, align 8
   call void @pf840(ptr %0)
   br label %match.end73
 
