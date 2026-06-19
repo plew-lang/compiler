@@ -622,6 +622,16 @@ pub impl LlvmCtx {
                 return self.structNeedsDeinit(c: inout c, sidx: sidx)
             }
         }
+        // an enum element that owns heap (a variant with a non-boxed array/struct field):
+        // its elements are retained on outer CoW and released on outer drop (like structs).
+        val gei: U64 = self.genEnumSlot(c: inout c, ref: elemRef)
+        if gei < self.genEnumRefs.count {
+            return self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[gei])
+        }
+        val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
+        if reg < self.enumIdxs.count {
+            return self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg])
+        }
         return false
     }
 
@@ -651,8 +661,12 @@ pub impl LlvmCtx {
         if sidx < c.arena.structs.count {
             if !(c.arena.structs[sidx].isExtern) {
                 self.emitStructRetain(c: inout c, v: v, sidx: sidx)
+                return
             }
         }
+        // an enum element: retain its active variant's non-boxed heap (counterpart of the
+        // emitReleaseValue enum branch).
+        self.emitEnumRetainRef(c: inout c, v: v, ref: typeRef)
     }
 
     // Shallow-retain a struct value's heap-owning fields (an array field's buffer; a nested
@@ -704,8 +718,12 @@ pub impl LlvmCtx {
         if sidx < c.arena.structs.count {
             if !(c.arena.structs[sidx].isExtern) {
                 self.emitDeinitValue(c: inout c, v: v, sidx: sidx)
+                return
             }
         }
+        // an enum element: release its active variant's non-boxed heap (cascades into nested
+        // arrays/structs; boxed/Ref fields are leaked-but-safe).
+        self.emitEnumReleaseRef(c: inout c, v: v, ref: typeRef)
     }
 
     // Release one owner of array buffer `data` (count `count`, element type elemTy/elemRef):

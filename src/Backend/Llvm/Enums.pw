@@ -319,6 +319,13 @@ pub impl LlvmCtx {
     // the payload area as that variant's struct, and release each non-boxed array/struct
     // field. (Boxed/Ref/scalar fields are left — leaked-but-safe, like struct ARC.)
     inout fn emitEnumRelease(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef) {
+        // break codegen recursion for a self-referential enum reached through a non-boxed
+        // array element (`ExprAst.ArrayLit(elems: Array[ExprAst])`): keyed by enum id in the
+        // shared arcStack, offset past any struct sidx so the two id spaces never collide.
+        if self.arcOnStack(sidx: self.enumArcKey(eid: eid)) {
+            return
+        }
+        self.arcPush(sidx: self.enumArcKey(eid: eid))
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
         LLVMBuildStore(self.b, v, slot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
@@ -364,6 +371,90 @@ pub impl LlvmCtx {
             }
             vi += 1
         }
+        self.arcPop()
+    }
+
+    // Shallow-retain the heap held by enum value `v` (type `ety`) of `eid`: tag-dispatch and,
+    // for the active variant, bump each non-boxed array field's buffer rc and recurse into
+    // struct fields. Mirrors emitEnumRelease — used when an Array[Enum] CoW duplicates an
+    // element so each owner co-owns the element's field buffers (balanced at outer drop).
+    inout fn emitEnumRetain(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef) {
+        // mirror emitEnumRelease's self-referential codegen-recursion guard.
+        if self.arcOnStack(sidx: self.enumArcKey(eid: eid)) {
+            return
+        }
+        self.arcPush(sidx: self.enumArcKey(eid: eid))
+        val slot: LLVMValueRef = self.entryAlloca(ty: ety)
+        LLVMBuildStore(self.b, v, slot)
+        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
+        val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
+        mut val vi: U64 = 0
+        while vi < c.arena.enums[eid].variants.count {
+            if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
+                val isV: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon())
+                val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumret.v"))
+                val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumret.c"))
+                LLVMBuildCondBr(self.b, isV, thenBB, contBB)
+                LLVMPositionBuilderAtEnd(self.b, thenBB)
+                val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
+                val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
+                val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+                mut val fj: U64 = 0
+                while fj < fs.count {
+                    val fd: FieldDef = fs[fj]
+                    if !(c.fieldIsBoxed(f: fd)) {
+                        if fd.tyIsArray {
+                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, pv, fj, anon()), 0U64, anon()))
+                        } else {
+                            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
+                            if fsi < c.arena.structs.count {
+                                if !(c.arena.structs[fsi].isExtern) {
+                                    if self.structNeedsDeinit(c: inout c, sidx: fsi) {
+                                        self.emitStructRetain(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), sidx: fsi)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    fj += 1
+                }
+                LLVMBuildBr(self.b, contBB)
+                LLVMPositionBuilderAtEnd(self.b, contBB)
+            }
+            vi += 1
+        }
+        self.arcPop()
+    }
+
+    // The arcStack recursion-guard key for enum `eid`: offset past any struct sidx so enum
+    // and struct id spaces never collide in the shared stack (structs push their bare sidx).
+    inout fn enumArcKey(eid: U64) -> U64 {
+        return 4611686018427387904U64 + eid
+    }
+
+    // Retain the heap of enum value `v` of type `ref` if it owns any (genericinstance or
+    // registered named enum needing deinit); else a nop. The retain counterpart of
+    // emitEnumReleaseRef.
+    inout fn emitEnumRetainRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Bool {
+        if ref == 0U64 {
+            return false
+        }
+        val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
+        if ge < self.genEnumRefs.count {
+            if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[ge]) {
+                self.emitEnumRetain(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
+            }
+            return true
+        }
+        val t: TypeRef = c.arena.types[ref]
+        val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
+        if reg < self.enumIdxs.count {
+            if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
+                self.emitEnumRetain(c: inout c, v: v, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+            }
+            return true
+        }
+        return false
     }
 
     // Deep-copy enum value `v` (type `ety`) of `eid` so its heap is independent of the
