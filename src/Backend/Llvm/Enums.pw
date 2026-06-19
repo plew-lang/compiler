@@ -225,6 +225,153 @@ pub impl LlvmCtx {
         return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count, 0I32)
     }
 
+    // ---- enum value ARC (tag-dispatch over the active variant's payload) ----
+    //
+    // Whether variant `vi` of enum `eid` has a non-boxed heap-owning field (array, or a
+    // struct that needs deinit). Boxed (recursive) fields are skipped — they are heap
+    // pointers handled like Ref (not yet released; also breaks codegen recursion for
+    // recursive enums, so no arcStack guard is needed here).
+    inout fn variantHasHeap(c: inout Comp, eid: U64, vi: U64) -> Bool {
+        val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+        mut val fj: U64 = 0
+        while fj < fs.count {
+            val fd: FieldDef = fs[fj]
+            if !(c.fieldIsBoxed(f: fd)) {
+                if fd.tyIsArray {
+                    return true
+                }
+                val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
+                if fsi < c.arena.structs.count {
+                    if !(c.arena.structs[fsi].isExtern) {
+                        if self.structNeedsDeinit(c: inout c, sidx: fsi) {
+                            return true
+                        }
+                    }
+                }
+            }
+            fj += 1
+        }
+        return false
+    }
+
+    // Whether an enum value of `eid` releases any heap on destruction (any variant has heap).
+    inout fn enumNeedsDeinit(c: inout Comp, eid: U64) -> Bool {
+        mut val vi: U64 = 0
+        while vi < c.arena.enums[eid].variants.count {
+            if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
+                return true
+            }
+            vi += 1
+        }
+        return false
+    }
+
+    // Release the heap held by enum value `v` (LLVM type `ety`) of enum `eid`: store it,
+    // load the tag, and for each variant that owns heap, branch on `tag == vi`, reinterpret
+    // the payload area as that variant's struct, and release each non-boxed array/struct
+    // field. (Boxed/Ref/scalar fields are left — leaked-but-safe, like struct ARC.)
+    inout fn emitEnumRelease(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef) {
+        val slot: LLVMValueRef = self.entryAlloca(ty: ety)
+        LLVMBuildStore(self.b, v, slot)
+        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
+        val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
+        mut val vi: U64 = 0
+        while vi < c.arena.enums[eid].variants.count {
+            if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
+                val isV: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon())
+                val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumrel.v"))
+                val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumrel.c"))
+                LLVMBuildCondBr(self.b, isV, thenBB, contBB)
+                LLVMPositionBuilderAtEnd(self.b, thenBB)
+                val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
+                val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
+                val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+                mut val fj: U64 = 0
+                while fj < fs.count {
+                    val fd: FieldDef = fs[fj]
+                    if !(c.fieldIsBoxed(f: fd)) {
+                        if fd.tyIsArray {
+                            val fv: LLVMValueRef = LLVMBuildExtractValue(self.b, pv, fj, anon())
+                            val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+                            mut val ety2: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                            if er != 0U64 {
+                                ety2 = self.llvmTypeOfRef(c: inout c, ref: er)
+                            }
+                            self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, fv, 0U64, anon()), count: LLVMBuildExtractValue(self.b, fv, 1U64, anon()), elemTy: ety2, elemRef: er)
+                        } else {
+                            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
+                            if fsi < c.arena.structs.count {
+                                if !(c.arena.structs[fsi].isExtern) {
+                                    if self.structNeedsDeinit(c: inout c, sidx: fsi) {
+                                        self.emitDeinitValue(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), sidx: fsi)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    fj += 1
+                }
+                LLVMBuildBr(self.b, contBB)
+                LLVMPositionBuilderAtEnd(self.b, contBB)
+            }
+            vi += 1
+        }
+    }
+
+    // Deep-copy enum value `v` (type `ety`) of `eid` so its heap is independent of the
+    // source: store it, tag-dispatch, deep-copy the active variant's non-boxed array/struct
+    // fields in place, and reload. Mirrors emitEnumRelease — needed wherever an enum value
+    // is placed into a longer-lived owner (so the source's drop does not free it).
+    inout fn deepCopyEnumValue(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef) -> LLVMValueRef {
+        val slot: LLVMValueRef = self.entryAlloca(ty: ety)
+        LLVMBuildStore(self.b, v, slot)
+        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()), anon())
+        val payloadPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, ety, slot, 1U64, anon())
+        mut val vi: U64 = 0
+        while vi < c.arena.enums[eid].variants.count {
+            if self.variantHasHeap(c: inout c, eid: eid, vi: vi) {
+                val isV: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, vi, 0I32), anon())
+                val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumcp.v"))
+                val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "enumcp.c"))
+                LLVMBuildCondBr(self.b, isV, thenBB, contBB)
+                LLVMPositionBuilderAtEnd(self.b, thenBB)
+                val pty: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
+                mut val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pty, payloadPtr, anon())
+                val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
+                mut val fj: U64 = 0
+                while fj < fs.count {
+                    val fd: FieldDef = fs[fj]
+                    if !(c.fieldIsBoxed(f: fd)) {
+                        if fd.tyIsArray {
+                            val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+                            mut val ety2: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                            if er != 0U64 {
+                                ety2 = self.llvmTypeOfRef(c: inout c, ref: er)
+                            }
+                            val nf: LLVMValueRef = self.copyArrayValue(c: inout c, arrVal: LLVMBuildExtractValue(self.b, pv, fj, anon()), elemTy: ety2, elemRef: er)
+                            pv = LLVMBuildInsertValue(self.b, pv, nf, fj, anon())
+                        } else {
+                            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
+                            if fsi < c.arena.structs.count {
+                                if !(c.arena.structs[fsi].isExtern) {
+                                    if self.structNeedsDeinit(c: inout c, sidx: fsi) {
+                                        pv = LLVMBuildInsertValue(self.b, pv, self.deepCopyStructValue(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), sidx: fsi), fj, anon())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    fj += 1
+                }
+                LLVMBuildStore(self.b, pv, payloadPtr)
+                LLVMBuildBr(self.b, contBB)
+                LLVMPositionBuilderAtEnd(self.b, contBB)
+            }
+            vi += 1
+        }
+        return LLVMBuildLoad2(self.b, ety, slot, anon())
+    }
+
     // Construct an enum value `<E.V f=e ... />`: alloca {tag,payload}, store the tag
     // and (if any) the variant payload struct, then load the whole value.
     inout fn genLlvmMakeEnum(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
