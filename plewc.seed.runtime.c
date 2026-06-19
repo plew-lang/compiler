@@ -14,11 +14,14 @@ void plew_print_u64(unsigned long long v){ printf("%llu\n", v); }
 void plew_print_bool(long long v){ fputs(v?"1":"0",stdout); fputc('\n',stdout); }
 long long plew_str_eq(const char* a, long long na, const char* b, long long nb){ if(na!=nb) return 0; for(long long i=0;i<na;i++) if(a[i]!=b[i]) return 0; return 1; }
 typedef struct { char* d; long long n; } PlewStrR;
-PlewStrR plew_f64_to_str(double v){ char* buf=(char*)malloc(32); int n=snprintf(buf,32,"%g",v); PlewStrR s; s.d=buf; s.n=(long long)n; return s; }
+void* plew_rawbuf_alloc(long long elemSize, long long cap);
+static char* plew_str_buf(long long n){ return (char*)plew_rawbuf_alloc(1, n+1); }
+static char* plew_str_empty(void){ static char* e=0; if(!e){ e=(char*)plew_rawbuf_alloc(1,1); e[0]=0; ((long long*)e)[-1]=(long long)1<<62; } return e; }
+PlewStrR plew_f64_to_str(double v){ char buf[32]; int n=snprintf(buf,32,"%g",v); char* b=plew_str_buf(n); memcpy(b,buf,(size_t)n); b[n]=0; PlewStrR s; s.d=b; s.n=(long long)n; return s; }
 void plew_f64_nan_check(double a, double b){ if(a!=a || b!=b) plew_panic_raw("NaN comparison",14); }
-PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } PlewStrR s; s.d=buf; s.n=(long long)len; return s; }
+PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } char* b=plew_str_buf((long long)len); if(len) memcpy(b,buf,len); b[len]=0; free(buf); PlewStrR s; s.d=b; s.n=(long long)len; return s; }
 unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }
-PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=(char*)""; s.n=0; return s; } size_t n=strlen((const char*)p); char* b=(char*)malloc(n+1); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }
+PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=plew_str_empty(); s.n=0; return s; } size_t n=strlen((const char*)p); char* b=plew_str_buf((long long)n); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }
 void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }
 long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }
 void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); if(data && ((long long*)data)[-1]<=1) free((long long*)data-2); return nd; }
@@ -73,16 +76,16 @@ uint64_t plew_u64Rem(uint64_t a, uint64_t b){ if(b==0) plew_panic_raw("remainder
 static int plew_argc = 0; static char** plew_argv = 0;
 void plew_set_args(int argc, char** argv){ plew_argc = argc; plew_argv = argv; }
 long long plew_argCount(void){ return (long long)plew_argc; }
-PlewStrR plew_argAt(long long i){ PlewStrR s; if(i<0||i>=plew_argc){ s.d=(char*)""; s.n=0; return s; } s.d=plew_argv[i]; s.n=(long long)strlen(plew_argv[i]); return s; }
+PlewStrR plew_argAt(long long i){ PlewStrR s; if(i<0||i>=plew_argc){ s.d=plew_str_empty(); s.n=0; return s; } size_t n=strlen(plew_argv[i]); char* b=plew_str_buf((long long)n); memcpy(b,plew_argv[i],n); b[n]=0; s.d=b; s.n=(long long)n; return s; }
 void plew_writeByte(unsigned char b){ putchar((int)b); }
 unsigned long long plew_random_u64(void){ unsigned long long x=0; FILE* f=fopen("/dev/urandom","rb"); if(f){ size_t r=fread(&x,sizeof(x),1,f); fclose(f); if(r==1) return x; } return ((unsigned long long)(uintptr_t)&x * 0x9E3779B97F4A7C15ULL) | 1ULL; }
 unsigned long long plew_dict_seed(void){ static unsigned long long s=0; static int init=0; if(!init){ s=plew_random_u64(); init=1; } return s; }
-static PlewStrR plew_readPath(const char* path){ FILE* f=fopen(path,"rb"); PlewStrR s; if(!f){ s.d=(char*)""; s.n=0; return s; } fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc((size_t)sz+1); size_t n=fread(buf,1,(size_t)sz,f); fclose(f); buf[n]=0; s.d=buf; s.n=(long long)n; return s; }
+static PlewStrR plew_readPath(const char* path){ FILE* f=fopen(path,"rb"); PlewStrR s; if(!f){ s.d=plew_str_empty(); s.n=0; return s; } fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=plew_str_buf((long long)sz); size_t n=fread(buf,1,(size_t)sz,f); fclose(f); buf[n]=0; s.d=buf; s.n=(long long)n; return s; }
 PlewStrR plew_readFile(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR r=plew_readPath(p); free(p); return r; }
 PlewStrR plew_readFileBytes(char* d, long long n){ return plew_readFile(d,n); }
 long long plew_fileExists(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; FILE* f=fopen(p,"rb"); free(p); if(f){ fclose(f); return 1; } return 0; }
 static long long plew_last_exit = 0;
-PlewStrR plew_execOut(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR s; s.d=(char*)""; s.n=0; FILE* f=popen(p,"r"); free(p); if(!f){ plew_last_exit=-1; return s; } size_t cap=4096,len=0; char* buf=(char*)malloc(cap); size_t r; while((r=fread(buf+len,1,cap-len,f))>0){ len+=r; if(len==cap){ cap*=2; buf=(char*)realloc(buf,cap); } } int st=pclose(f); plew_last_exit=(long long)(WIFEXITED(st)?WEXITSTATUS(st):-1); buf=(char*)realloc(buf,len+1); buf[len]=0; s.d=buf; s.n=(long long)len; return s; }
+PlewStrR plew_execOut(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; PlewStrR s; s.d=plew_str_empty(); s.n=0; FILE* f=popen(p,"r"); free(p); if(!f){ plew_last_exit=-1; return s; } size_t cap=4096,len=0; char* buf=(char*)malloc(cap); size_t r; while((r=fread(buf+len,1,cap-len,f))>0){ len+=r; if(len==cap){ cap*=2; buf=(char*)realloc(buf,cap); } } int st=pclose(f); plew_last_exit=(long long)(WIFEXITED(st)?WEXITSTATUS(st):-1); char* ob=plew_str_buf((long long)len); if(len) memcpy(ob,buf,len); ob[len]=0; free(buf); s.d=ob; s.n=(long long)len; return s; }
 long long plew_execCode(void){ return plew_last_exit; }
 typedef struct PlewPromise PlewPromise;
 typedef void (*PlewResumeFn)(void*);
