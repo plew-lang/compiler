@@ -57,9 +57,26 @@ pub impl LlvmCtx {
         return false
     }
 
+    // Whether struct `sidx` is the lang-item `String` (a transparent single-field wrapper
+    // whose flat {ptr,i64} VALUE is its `Array[U8]` buffer — released/copied as the array,
+    // not via field-extract, since the value has the buffer's layout, not a nested struct).
+    inout fn isStringStruct(c: inout Comp, sidx: U64) -> Bool {
+        if sidx >= c.arena.structs.count {
+            return false
+        }
+        val sd: StructDef = c.arena.structs[sidx]
+        return rangeEquals(bytes: c.arena.bytes, start: sd.nameStart, len: sd.nameLen, kw: "String")
+    }
+
     // Destroy a struct VALUE `v` of struct `sidx` (spec/03): run its own `deinit` body
     // first, then each field's deinit in declaration order, recursively.
     inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64) {
+        // `String`: the whole value IS the Array[U8] buffer — release it directly (U8 scalar
+        // elements, so only the rc-managed outer buffer is freed; literals carry sentinel rc).
+        if self.isStringStruct(c: inout c, sidx: sidx) {
+            self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: self.i8ty, elemRef: 0U64)
+            return
+        }
         // break a self-referential type's codegen recursion (Array[Self] element release).
         if self.arcOnStack(sidx: sidx) {
             return

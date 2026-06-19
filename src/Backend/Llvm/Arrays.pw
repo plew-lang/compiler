@@ -413,6 +413,11 @@ pub impl LlvmCtx {
     // `x.items[0]=…` must leave y.items unchanged. Fields under a generic env resolve
     // via the active substitution. Non-array/non-struct fields pass through unchanged.
     inout fn deepCopyStructValue(c: inout Comp, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
+        // `String`: the value IS its Array[U8] buffer — deep-copy as the array (transparent
+        // single-field wrapper; see isStringStruct / emitDeinitValue).
+        if self.isStringStruct(c: inout c, sidx: sidx) {
+            return self.copyArrayValue(c: inout c, arrVal: v, elemTy: self.i8ty, elemRef: 0U64)
+        }
         val sd: StructDef = c.arena.structs[sidx]
         mut val agg: LLVMValueRef = v
         mut val fi: U64 = 0
@@ -673,6 +678,11 @@ pub impl LlvmCtx {
     // struct field recursively) — used when an Array[Struct] CoW duplicates the element, so
     // each owner co-owns the field buffers (balanced by emitDeinitValue at drop).
     inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64) {
+        // `String`: retain its buffer (the value IS the Array[U8]); transparent single field.
+        if self.isStringStruct(c: inout c, sidx: sidx) {
+            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+            return
+        }
         if self.arcOnStack(sidx: sidx) {
             return
         }

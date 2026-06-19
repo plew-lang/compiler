@@ -84,7 +84,12 @@ pub impl LlvmCtx {
                 // the struct's fields as a {ptr,len} String and dereferences garbage.
                 if op == opEq() || op == opNe() {
                     if self.valueKind(c: inout c, id: lhs) == 1U64 {
-                        if self.exprStructIdx(c: inout c, id: lhs) >= c.arena.structs.count {
+                        // `String` is itself a registered struct now (struct{Array[U8]}), so
+                        // also take the byte-compare path when lhs IS String — only a DIFFERENT
+                        // registered struct that happens to share the {ptr,i64} layout falls
+                        // through to its own Eq witness.
+                        val esi: U64 = self.exprStructIdx(c: inout c, id: lhs)
+                        if esi >= c.arena.structs.count || self.isStringStruct(c: inout c, sidx: esi) {
                             return self.emitStrEq(c: inout c, op: op, lhs: lhs, rhs: rhs)
                         }
                     }

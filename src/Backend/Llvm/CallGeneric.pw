@@ -255,7 +255,17 @@ pub impl LlvmCtx {
         }
         val argV: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
         self.expectedTy = 0U64
-        return self.coerceIntTo(c: inout c, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
+        mut val out: LLVMValueRef = self.coerceIntTo(c: inout c, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
+        // value semantics: a by-value struct / String / enum argument from a PLACE is an
+        // independent copy (the callee owns its param and runs its deinit at scope exit, so
+        // without this the caller's value and the param would share one heap and double-free).
+        // A `move` arg transfers ownership instead (markLocalMoved above) and a literal / call
+        // result already owns its value, so copyValueIfPlace leaves those untouched. (Arrays
+        // are handled by the share+retain branch above; this is the non-array path.)
+        if !(p.isMove) {
+            out = self.copyValueIfPlace(c: inout c, rv: out, valueExpr: argExpr)
+        }
+        return out
     }
 
     // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count.

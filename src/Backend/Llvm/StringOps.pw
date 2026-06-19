@@ -112,7 +112,11 @@ pub impl LlvmCtx {
     // String types — observably identical. A user type implementing Format is not yet
     // supported here (rejected loudly).
     inout fn emitPrint(c: inout Comp, argExpr: U64) -> LLVMValueRef {
-        if self.exprStructIdx(c: inout c, id: argExpr) < c.arena.structs.count {
+        // `String` is a registered struct now (struct{Array[U8]}), but print(String) is the
+        // built-in string sink (k==1 below), NOT a Format witness — only a non-String struct
+        // is rejected here.
+        val psi: U64 = self.exprStructIdx(c: inout c, id: argExpr)
+        if psi < c.arena.structs.count && !(self.isStringStruct(c: inout c, sidx: psi)) {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
