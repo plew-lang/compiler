@@ -27,7 +27,9 @@ pub impl LlvmCtx {
                     ev = self.genLlvmExpr(c: inout c, id: elems[i])
                 }
             } else {
-                ev = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elems[i]), elemTy: elemTy)
+                // value semantics: copy an array/struct PLACE element (`[a, b]` for
+                // Array[Array[T]]) so the literal is independent of the source bindings.
+                ev = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elems[i]), elemTy: elemTy), valueExpr: elems[i])
             }
             LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1
@@ -166,7 +168,9 @@ pub impl LlvmCtx {
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
-        val rv: LLVMValueRef = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy)
+        // value semantics: copy an array/struct PLACE element so `arr.set(i, a)` leaves
+        // the stored element independent of `a` (a literal / call result passes through).
+        val rv: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
         LLVMBuildStore(self.b, rv, ep)
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
