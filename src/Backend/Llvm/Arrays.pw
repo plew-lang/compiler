@@ -309,7 +309,9 @@ pub impl LlvmCtx {
                 bg = c.groundTypeRef(ref: fld.ty)
             }
             self.expectedTy = bg
-            val boxedVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+            // boxed field moves into a heap cell outliving this scope; deep-copy a place source
+            // so its drop does not free the boxed payload (mirrors the enum boxed-payload path).
+            val boxedVal: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valExpr), valueExpr: valExpr)
             val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
             val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
             LLVMBuildStore(self.b, boxedVal, cell)

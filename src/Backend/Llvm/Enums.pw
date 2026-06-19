@@ -531,7 +531,10 @@ pub impl LlvmCtx {
                         bg = c.groundTypeRef(ref: fs[fj].ty)
                     }
                     self.expectedTy = bg
-                    val boxedVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+                    // the boxed value moves into a heap cell that outlives this scope; if it
+                    // came from a place (`<ExprAst.Assign target=lhs/>`), deep-copy its heap so
+                    // the source local's drop does not free the boxed payload (struct/enum/array).
+                    val boxedVal: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valExpr), valueExpr: valExpr)
                     val boxedTy: LLVMTypeRef = LLVMTypeOf(boxedVal)
                     val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(boxedTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                     LLVMBuildStore(self.b, boxedVal, cell)
@@ -602,7 +605,22 @@ pub impl LlvmCtx {
                                 }
                             }
                             if !(handled) {
-                                val fv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                                mut val fv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                                // a plain (non-generic) enum payload from a place (`<StmtAst.ExprStmt
+                                // expr=lhs/>`, expr: ExprAst inline): deep-copy its active variant's
+                                // heap so the source local's drop does not free a buffer the
+                                // constructed enum now owns (mirrors the struct branch above; the
+                                // generic-enum case is handled at line ~590). localStructIdxFor misses
+                                // it (it is an enum, not a struct), so it would otherwise bit-copy.
+                                // deepCopyEnumRef / coerceIntTo are both no-ops off their own type,
+                                // so scalar places keep their width coercion unchanged.
+                                if structExprIsPlace(c: inout c, id: valExpr) {
+                                    mut val gef: U64 = fs[fj].ty
+                                    if c.cur.typeParams.count > 0U64 {
+                                        gef = c.groundTypeRef(ref: fs[fj].ty)
+                                    }
+                                    fv = self.deepCopyEnumRef(c: inout c, v: fv, ref: gef)
+                                }
                                 agg = LLVMBuildInsertValue(self.b, agg, fv, fj, anon())
                             }
                         }
