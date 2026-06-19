@@ -347,6 +347,15 @@ pub impl LlvmCtx {
                 }
             }
         }
+        // a NON-generic enum field that owns heap (`Field.value: Value` whose `SVal` holds an
+        // Array[U8]), from a place: deep-copy its payload so the constructed struct's field is
+        // independent (else the source enum's drop frees the shared payload → UAF). Generic
+        // enum instances are handled by the isGenericInst path above.
+        if self.enumRegSlot(c: inout c, start: fld.tyStart, len: fld.tyLen) < self.enumIdxs.count {
+            if structExprIsPlace(c: inout c, id: valExpr) {
+                return self.deepCopyEnumRef(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), ref: self.exprTypeRef(c: inout c, id: valExpr))
+            }
+        }
         return self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
     }
 
