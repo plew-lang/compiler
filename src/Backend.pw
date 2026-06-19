@@ -541,16 +541,23 @@ fn arrayExprIsPlace(c: inout Comp, id: U64) -> Bool {
     match c.arena.exprs[id] {
         Expr.Ident(start: _, len: _) => { return true }
         Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        // a nested-array element `outer[i]` (Array[Array[E]]) aliases the inner buffer,
+        // so binding/storing it must copy (`val inner = outer[i]` then `inner[0]=…` must
+        // leave outer unchanged) — same as an Ident/Field place.
+        Expr.Index(base: _, index: _) => { return true }
         _ => { return false }
     }
 }
 
-// Whether a non-array expression is an existing struct PLACE (Ident/Field) whose
-// value-copy must deep-copy array fields.
+// Whether a non-array expression is an existing struct PLACE (Ident/Field/element)
+// whose value-copy must deep-copy array fields.
 fn structExprIsPlace(c: inout Comp, id: U64) -> Bool {
     match c.arena.exprs[id] {
         Expr.Ident(start: _, len: _) => { return true }
         Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        // a struct element `arr[i]` (Array[Struct]) aliases the array's storage, so its
+        // value-copy must deep-copy the struct's array fields.
+        Expr.Index(base: _, index: _) => { return true }
         _ => { return false }
     }
 }

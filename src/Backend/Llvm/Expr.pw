@@ -269,7 +269,19 @@ pub impl LlvmCtx {
                                 if cap.boxed {
                                     LLVMBuildStore(self.b, self.locPtr[li], LLVMBuildStructGEP2(self.b, envTy, env, ci, anon()))
                                 } else {
-                                    val cv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                                    // a by-value capture is an independent value (spec/04): copy
+                                    // an array/struct buffer so the closure's env owns it and the
+                                    // captured-from local stays independent (and its scope-exit
+                                    // drop does not free the buffer the env now holds).
+                                    mut val cv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                                    if cap.isArray {
+                                        cv2 = self.copyArrayValue(c: inout c, arrVal: cv2, elemTy: self.locElemTy[li])
+                                    } else {
+                                        val csi: U64 = self.locStructIdx[li]
+                                        if csi < c.arena.structs.count {
+                                            cv2 = self.deepCopyStructValue(c: inout c, v: cv2, sidx: csi)
+                                        }
+                                    }
                                     LLVMBuildStore(self.b, cv2, LLVMBuildStructGEP2(self.b, envTy, env, ci, anon()))
                                 }
                             }
