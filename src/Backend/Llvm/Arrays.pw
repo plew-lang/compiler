@@ -326,7 +326,13 @@ pub impl LlvmCtx {
             }
             if c.isGenericInst(ref: g) {
                 self.expectedTy = g
-                return self.genLlvmExpr(c: inout c, id: valExpr)
+                val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+                // a generic enum instance with heap (`Optional[Array[I64]]`) from a place:
+                // deep-copy its payload so the constructed struct's field is independent.
+                if structExprIsPlace(c: inout c, id: valExpr) {
+                    return self.deepCopyEnumRef(c: inout c, v: giv, ref: g)
+                }
+                return giv
             }
         }
         // a struct-typed field that owns heap (e.g. `FieldAst.ty: TypeAst` whose `args` is an
@@ -456,6 +462,12 @@ pub impl LlvmCtx {
                 }
                 return copied
             }
+        }
+        // an enum value from a place (`val o2 = o` / `return opt` / `arr[i] = res`): deep-copy
+        // its active variant's heap so the new owner is independent (else the source's drop
+        // frees a buffer the copy still references). A non-place / non-enum passes through.
+        if structExprIsPlace(c: inout c, id: valueExpr) {
+            return self.deepCopyEnumRef(c: inout c, v: rv, ref: self.exprTypeRef(c: inout c, id: valueExpr))
         }
         return rv
     }

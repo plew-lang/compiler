@@ -227,6 +227,54 @@ pub impl LlvmCtx {
 
     // ---- enum value ARC (tag-dispatch over the active variant's payload) ----
     //
+    // Release any heap held by enum value `v` whose type ref is `ref` (a generic instance
+    // like `Optional[Array[I64]]` via genEnumSlot, or a plain registered enum by name).
+    // Returns true if `ref` was an enum (so the caller knows it was handled).
+    inout fn emitEnumReleaseRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> Bool {
+        if ref == 0U64 {
+            return false
+        }
+        val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
+        if ge < self.genEnumRefs.count {
+            if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[ge]) {
+                self.emitEnumRelease(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
+            }
+            return true
+        }
+        val t: TypeRef = c.arena.types[ref]
+        val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
+        if reg < self.enumIdxs.count {
+            if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
+                self.emitEnumRelease(c: inout c, v: v, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+            }
+            return true
+        }
+        return false
+    }
+
+    // Deep-copy enum value `v` of type `ref` if it is an enum that owns heap; else return v
+    // unchanged. Used at every site that places an enum value into a longer-lived owner.
+    inout fn deepCopyEnumRef(c: inout Comp, v: LLVMValueRef, ref: U64) -> LLVMValueRef {
+        if ref == 0U64 {
+            return v
+        }
+        val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
+        if ge < self.genEnumRefs.count {
+            if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[ge]) {
+                return self.deepCopyEnumValue(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
+            }
+            return v
+        }
+        val t: TypeRef = c.arena.types[ref]
+        val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
+        if reg < self.enumIdxs.count {
+            if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
+                return self.deepCopyEnumValue(c: inout c, v: v, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+            }
+        }
+        return v
+    }
+
     // Whether variant `vi` of enum `eid` has a non-boxed heap-owning field (array, or a
     // struct that needs deinit). Boxed (recursive) fields are skipped — they are heap
     // pointers handled like Ref (not yet released; also breaks codegen recursion for
@@ -533,7 +581,13 @@ pub impl LlvmCtx {
                         }
                         if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
                             self.expectedTy = gpf
-                            agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmExpr(c: inout c, id: valExpr), fj, anon())
+                            mut val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+                            // a generic enum payload with heap (`A(o: Optional[Array[I64]])`)
+                            // from a place: deep-copy so the constructed enum is independent.
+                            if structExprIsPlace(c: inout c, id: valExpr) {
+                                giv = self.deepCopyEnumRef(c: inout c, v: giv, ref: gpf)
+                            }
+                            agg = LLVMBuildInsertValue(self.b, agg, giv, fj, anon())
                         } else {
                             // a struct-with-heap payload from a place: deep-copy so the enum's
                             // payload is independent of the source (mirrors genFieldValue).

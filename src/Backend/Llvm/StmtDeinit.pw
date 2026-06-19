@@ -156,6 +156,12 @@ pub impl LlvmCtx {
         }
         val sidx: U64 = self.locStructIdx[li]
         if sidx >= c.arena.structs.count {
+            // an owned enum BODY local: release its active variant's payload heap. Gated on
+            // li >= curBodyMark like arrays/structs (params / globals / captures excluded).
+            if li >= self.curBodyMark {
+                val ev: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                self.emitEnumReleaseRef(c: inout c, v: ev, ref: self.locTypeRef[li])
+            }
             return
         }
         if !(self.structNeedsDeinit(c: inout c, sidx: sidx)) {
