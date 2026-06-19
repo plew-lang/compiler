@@ -24,12 +24,36 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // Build a String value (strty `{i8*, i64}`) from a literal: a private global for
-    // the bytes + the decoded length.
+    // Build a String value (strty `{i8*, i64}`) from a literal. The bytes live in a
+    // rawbuf-SHAPED global `[i64 cap][i64 rc][bytes…]` (the same layout plew_rawbuf_alloc
+    // produces) with rc = a huge sentinel, and the String's pointer is at the bytes
+    // (offset 16). This unifies String buffers onto rawbuf so `.bytes` views and the
+    // scope-exit drop (plew_rawbuf_drop: dec rc, free at 0) work uniformly — the sentinel
+    // rc means a literal is never freed (program-lifetime), and the header is invisible to
+    // String ops (which read only {ptr,len}). The global is mutable so rc is writable.
     inout fn genLlvmStr(c: inout Comp, start: U64, len: U64) -> LLVMValueRef {
         mut val bytes: Array[U8] = strDecodeBytes(c: inout c, start: start, len: len)
         val n: U64 = bytes.count - 1
-        val ptr: LLVMValueRef = LLVMBuildGlobalStringPtr(self.b, arrayCPtr(bytes), anon())
+        val i8ty: LLVMTypeRef = LLVMInt8TypeInContext(self.ctx)
+        mut val cvals: Array[LLVMValueRef] = []
+        // header: cap (8 LE bytes) = buffer byte count; rc (8 LE bytes) = never-free sentinel.
+        appendU64Le(into: inout cvals, n: bytes.count, i8ty: i8ty)
+        appendU64Le(into: inout cvals, n: 4611686018427387904U64, i8ty: i8ty)
+        mut val j: U64 = 0
+        while j < bytes.count {
+            cvals.append(value: LLVMConstInt(i8ty, bytes[j] as U64, 0I32))
+            j += 1
+        }
+        val m: U64 = 16U64 + bytes.count
+        val arrTy: LLVMTypeRef = LLVMArrayType2(i8ty, m)
+        val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, cstr(s: "str"))
+        LLVMSetInitializer(g, LLVMConstArray2(i8ty, arrayCPtr(cvals), m))
+        LLVMSetGlobalConstant(g, 0I32)
+        LLVMSetAlignment(g, 8U32)
+        mut val idxs: Array[LLVMValueRef] = []
+        idxs.append(value: LLVMConstInt(self.i64ty, 0U64, 0I32))
+        idxs.append(value: LLVMConstInt(self.i64ty, 16U64, 0I32))
+        val ptr: LLVMValueRef = LLVMBuildGEP2(self.b, arrTy, g, arrayCPtr(idxs), 2U64, anon())
         mut val agg: LLVMValueRef = LLVMGetUndef(self.strty)
         agg = LLVMBuildInsertValue(self.b, agg, ptr, 0U64, anon())
         agg = LLVMBuildInsertValue(self.b, agg, LLVMConstInt(self.i64ty, n, 0I32), 1U64, anon())

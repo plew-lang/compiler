@@ -368,6 +368,7 @@ extern(c) {
     fn LLVMSetInitializer(global~: LLVMValueRef, val~: LLVMValueRef)
     fn LLVMSetGlobalConstant(global~: LLVMValueRef, isConstant~: I32)
     fn LLVMConstArray2(elemTy~: LLVMTypeRef, vals~: CPtr[LLVMValueRef], count~: U64) -> LLVMValueRef
+    fn LLVMSetAlignment(v~: LLVMValueRef, bytes~: U32)
 }
 
 part ./Backend/Llvm
@@ -1253,6 +1254,16 @@ fn appendU64Dec(into: inout Array[U8], n: U64) {
         appendU64Dec(into: inout into, n: n / 10U64)
     }
     appendBytes(into: inout into, from: digitStrU(d: n % 10U64).bytes)
+}
+
+// Append the 8 little-endian bytes of `n` as i8 constants (for a rawbuf-shaped global's
+// i64 cap/rc header, built as a flat i8 array constant).
+fn appendU64Le(into: inout Array[LLVMValueRef], n: U64, i8ty: LLVMTypeRef) {
+    mut val k: U64 = 0
+    while k < 8U64 {
+        into.append(value: LLVMConstInt(i8ty, (n >> (k * 8U64)) & 255U64, 0I32))
+        k += 1
+    }
 }
 
 // Find the registered generic-fn instance slot for (fnIdx, args), or count.
