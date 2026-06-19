@@ -388,8 +388,22 @@ pub impl LlvmCtx {
                             self.expectedTy = gpf
                             agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmExpr(c: inout c, id: valExpr), fj, anon())
                         } else {
-                            val fv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
-                            agg = LLVMBuildInsertValue(self.b, agg, fv, fj, anon())
+                            // a struct-with-heap payload from a place: deep-copy so the enum's
+                            // payload is independent of the source (mirrors genFieldValue).
+                            mut val handled: Bool = false
+                            val psi: U64 = self.localStructIdxFor(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
+                            if psi < c.arena.structs.count {
+                                if self.structNeedsDeinit(c: inout c, sidx: psi) {
+                                    if structExprIsPlace(c: inout c, id: valExpr) {
+                                        agg = LLVMBuildInsertValue(self.b, agg, self.deepCopyStructValue(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), sidx: psi), fj, anon())
+                                        handled = true
+                                    }
+                                }
+                            }
+                            if !(handled) {
+                                val fv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fs[fj].tyStart, tyLen: fs[fj].tyLen)
+                                agg = LLVMBuildInsertValue(self.b, agg, fv, fj, anon())
+                            }
                         }
                     }
                 }

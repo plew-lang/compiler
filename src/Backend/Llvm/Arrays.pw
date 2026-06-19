@@ -329,6 +329,18 @@ pub impl LlvmCtx {
                 return self.genLlvmExpr(c: inout c, id: valExpr)
             }
         }
+        // a struct-typed field that owns heap (e.g. `FieldAst.ty: TypeAst` whose `args` is an
+        // array), initialized from a struct PLACE: deep-copy so the constructed struct's field
+        // is independent of the source (else the bit-copy below shares the source's array
+        // fields and the source's drop frees them under the new struct).
+        val fsi2: U64 = self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen)
+        if fsi2 < c.arena.structs.count {
+            if self.structNeedsDeinit(c: inout c, sidx: fsi2) {
+                if structExprIsPlace(c: inout c, id: valExpr) {
+                    return self.deepCopyStructValue(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), sidx: fsi2)
+                }
+            }
+        }
         return self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
     }
 

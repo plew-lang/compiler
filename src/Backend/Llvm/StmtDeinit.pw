@@ -14,13 +14,14 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count {
             val fd: FieldDef = sd.fields[i]
-            if !(fd.tyIsArray) {
-                val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                if fsi < c.arena.structs.count {
-                    if !(c.arena.structs[fsi].isExtern) {
-                        if self.structNeedsDeinit(c: inout c, sidx: fsi) {
-                            return true
-                        }
+            if fd.tyIsArray {
+                return true
+            }
+            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
+            if fsi < c.arena.structs.count {
+                if !(c.arena.structs[fsi].isExtern) {
+                    if self.structNeedsDeinit(c: inout c, sidx: fsi) {
+                        return true
                     }
                 }
             }
@@ -45,7 +46,19 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count {
             val fd: FieldDef = sd.fields[i]
-            if !(fd.tyIsArray) {
+            if fd.tyIsArray {
+                // release the field's rc-managed array buffer (nested-array elements cascade;
+                // Array[Struct] element release is deferred). Sound because every site that
+                // places a struct value deep-copies its heap (see genFieldValue / genLlvmMakeEnum
+                // / copyValueIfPlace), so a struct's array fields are independently owned.
+                val fv: LLVMValueRef = LLVMBuildExtractValue(self.b, v, i, anon())
+                val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+                mut val ety: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                if er != 0U64 {
+                    ety = self.llvmTypeOfRef(c: inout c, ref: er)
+                }
+                self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, fv, 0U64, anon()), count: LLVMBuildExtractValue(self.b, fv, 1U64, anon()), elemTy: ety, elemRef: er)
+            } else {
                 val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                 if fsi < c.arena.structs.count {
                     if !(c.arena.structs[fsi].isExtern) {

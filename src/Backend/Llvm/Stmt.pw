@@ -772,8 +772,10 @@ pub impl LlvmCtx {
                 self.genLlvmMatch(c: inout c, scrut: scrut, arms: arms)
             }
             Stmt.Give(val value) => {
-                // yield the enclosing value-position block's result (IfExpr reads it).
-                self.giveValue = self.genLlvmExpr(c: inout c, id: value)
+                // yield the enclosing value-position block's result (IfExpr reads it). The
+                // result MOVES out of the block, so an array/struct PLACE is made independent
+                // of this block's locals (else the block's drop frees its buffer under giveValue).
+                self.giveValue = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: value), valueExpr: value)
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 if isStruct {
