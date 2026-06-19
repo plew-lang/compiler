@@ -97,6 +97,12 @@ pub impl LlvmCtx {
                 }
             }
             self.genLlvmBlock(c: inout c, id: arm.body)
+            // release the payload binds on fall-through (they co-own the scrutinee's heap via
+            // the retain in bindMatchPayload). A terminating arm (return/panic) already ran a
+            // full dropScope, so only a fall-through needs this — else the retained binds leak.
+            if !(self.terminated) {
+                self.dropScope(c: inout c, fromMark: savedBB, excludeLi: 18446744073709551615U64)
+            }
             self.nLocals = savedBB
             if !(self.terminated) {
                 LLVMBuildBr(self.b, contBB)
@@ -238,6 +244,19 @@ pub impl LlvmCtx {
                         if gbs < self.genStructRefs.count {
                             bindStructIdx = self.genStructDefs[gbs]
                         }
+                    }
+                }
+                // a non-array heap-owning payload bind (String / struct / enum) likewise
+                // SHARES the enum's payload heap, so retain it — its scope-exit release then
+                // balances instead of double-freeing the variant's value. (Arrays handled
+                // above; boxed recursive fields are leaked-but-safe, never released, so skip.)
+                if !(isArrF) {
+                    if !(c.fieldIsBoxed(f: fd)) {
+                        mut val rref: U64 = tref
+                        if rref == 0U64 {
+                            rref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
+                        }
+                        self.emitRetainValue(c: inout c, v: fv, typeRef: rref)
                     }
                 }
                 self.pushLocalR(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)

@@ -173,6 +173,12 @@ pub impl LlvmCtx {
                     armVal = self.coerceInt(v: armVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
                 }
                 phiVals.append(value: armVal)
+                // release this arm's payload binds before branching (they co-own the
+                // scrutinee's heap via bindMatchPayload's retain; the arm VALUE is an
+                // independent copy — `give` runs copyValueIfPlace — so releasing the binds is
+                // safe). Without this the retained binds leak on the fall-through path. The
+                // release may add basic blocks, so record the PHI predecessor AFTER it.
+                self.dropScope(c: inout c, fromMark: saved, excludeLi: 18446744073709551615U64)
                 phiBlocks.append(value: LLVMGetInsertBlock(self.b))
                 LLVMBuildBr(self.b, contBB)
             }
