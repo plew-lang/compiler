@@ -167,7 +167,7 @@ pub impl Comp {
                         // payload bind resolved here does not poison the typeOf cache.)
                         if !handled {
                             val lt: TypeInfo = self.exprType(id: lhs)
-                            if lt.kind == 1 || lt.kind == 2 {
+                            if lt.kind == 2 {
                                 if self.checkBinTraitRhs(op: op, lhs: lhs, rhs: rhs) {
                                     self.checkLitCtx(id: lhs, eKind: 0, eBits: 0, eSgn: false)
                                     handled = true

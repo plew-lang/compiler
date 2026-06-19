@@ -75,15 +75,6 @@ pub impl Comp {
         if ti.ref != 0 {
             return ti.ref
         }
-        // a String value (kind 1) carries no name span in TypeInfo, but as a type argument
-        // it must infer to `String` (a string-literal accumulator `fold(init: "z", …)`), not
-        // unknown — else the inferred own arg is 0 and the env gets the index-0 dummy ref.
-        if ti.kind == 1 {
-            val ss: Bind = self.stringTypeSpan()
-            if ss.nameLen != 0 {
-                return self.simpleTypeRef(nameStart: ss.nameStart, nameLen: ss.nameLen)
-            }
-        }
         if ti.nameLen == 0 {
             return 0
         }
@@ -263,13 +254,7 @@ pub impl Comp {
         // already carries its name. A generic method on a primitive (`u64.hash[H]`)
         // must register its instance too, so we no longer bail on non-struct kinds —
         // only arrays (kind 3, handled per element type) and nameless values are skipped.
-        mut val rt: TypeInfo = rt0
-        if rt0.kind == 1 {
-            val ss: Bind = self.stringTypeSpan()
-            if ss.nameLen != 0 {
-                rt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
-            }
-        }
+        val rt: TypeInfo = rt0
         if rt.kind == 3 {
             return
         }

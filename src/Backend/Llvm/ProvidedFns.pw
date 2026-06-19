@@ -203,7 +203,7 @@ pub impl LlvmCtx {
         if t.kind == 0 {
             return c.findOrAddTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
         }
-        if t.kind == 1 {
+        if t.kind == 2 && rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
             return c.findOrAddTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
         }
         return 0U64

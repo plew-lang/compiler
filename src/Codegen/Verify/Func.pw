@@ -166,9 +166,6 @@ pub impl Comp {
             Expr.Str(start: _, len: _) => { return true }
             _ => {
                 val it: TypeInfo = self.typeOf(id: value)
-                if it.kind == 1 {
-                    return true
-                }
                 if it.kind == 2 {
                     return true
                 }

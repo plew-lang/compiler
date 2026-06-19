@@ -21,7 +21,7 @@ pub impl Comp {
             }
         }
         val lt: TypeInfo = self.typeOf(id: lhs)
-        return lt.kind == 1
+        return lt.kind == 2 && rangeEquals(bytes: self.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "String")
     }
 
     inout fn isEnumName(start: U64, len: U64) -> Bool {
@@ -259,16 +259,11 @@ pub impl Comp {
             }
             return lt
         }
-        // a String operand (kind 1 carries no name span): name it "String" so an
-        // arithmetic operator resolves its conformance — `String as Add[String]` makes
-        // `"a" + "b"` desugar to `String.add(lhs:, rhs:)` (spec/02,12). Other arithmetic
-        // ops have no String witness, so `"a" - "b"` still errors (sound).
-        if lt.kind == 1 {
-            val ss: Bind = self.stringTypeSpan()
-            if ss.nameLen != 0U64 {
-                return self.typeInfoOfName(start: ss.nameStart, len: ss.nameLen, isArray: false)
-            }
-        }
+        // a String operand: `String as Add[String]` makes `"a" + "b"` desugar to
+        // `String.add(lhs:, rhs:)` (spec/02,12). String is a named struct (kind 2) carrying
+        // its own name, so it flows through the kind==2 branch above (not a newtype, so that
+        // branch returns `lt` = String). Other arithmetic ops have no String witness, so
+        // `"a" - "b"` still errors (sound).
         if lt.kind == 0 {
             if lt.nameLen > 0 {
                 return lt

@@ -38,7 +38,7 @@ pub impl Comp {
                 // TypeRef — a generic call `print("hi")` then infers T = String (without
                 // the name, a string-literal argument left T uninferred -> no instance).
                 val ss: Bind = self.stringTypeSpan()
-                return <TypeInfo kind=1 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
+                return <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
             }
             Expr.Ident(val start, val len) => {
                 if self.isSelfRef(start: start, len: len) {
@@ -270,7 +270,7 @@ pub impl Comp {
                 // `String.bytes` is an `Array[U8]` view, so a chained `.count` /
                 // index / `val bs = s.bytes` inference sees an array (else `.count`
                 // wouldn't lower to `.len`). Recover a "U8" span to name the element.
-                if bt.kind == 1 {
+                if bt.kind == 2 && rangeEquals(bytes: self.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "String") {
                     if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bytes") {
                         val u8: Bind = self.kwSpan(kw: "U8", kwLen: 2)
                         if u8.nameLen != 0 {
@@ -394,14 +394,6 @@ pub impl Comp {
                     return scalarInfo()
                 }
                 mut val rt: TypeInfo = self.exprType(id: recv)
-                // a String value method's receiver: recover "String" so the method
-                // resolves (exprType carries no name span for String).
-                if rt.kind == 1 {
-                    val ss: Bind = self.stringTypeSpan()
-                    if ss.nameLen != 0 {
-                        rt = <TypeInfo kind=2 nameStart=ss.nameStart nameLen=ss.nameLen ref=0 />
-                    }
-                }
                 // wrapping arithmetic on an integer receiver yields the receiver's type
                 // (`x.wrappingMul(by: y): U64` when x: U64) — a privileged lowering with
                 // no real fn, so its type is recovered here (see Expr.pw codegen).

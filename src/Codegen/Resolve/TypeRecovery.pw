@@ -52,9 +52,6 @@ pub impl Comp {
             }
             return false
         }
-        if ti.kind == 1 {
-            return rangeEquals(bytes: self.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "String")
-        }
         if ti.kind == 2 {
             return intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
         }
@@ -299,7 +296,7 @@ pub impl Comp {
             return scalarInfo()
         }
         if rangeEquals(bytes: self.arena.bytes, start: rs, len: rl, kw: "String") {
-            return <TypeInfo kind=1 nameStart=rs nameLen=rl ref=0 />
+            return <TypeInfo kind=2 nameStart=rs nameLen=rl ref=0 />
         }
         if self.isPrimType(start: rs, len: rl) {
             // kind=0 (scalar) but carry the type name so the width is recoverable

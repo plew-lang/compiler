@@ -358,7 +358,7 @@ pub impl LlvmCtx {
         }
         // fallback: the typed-AST cache (works for call results, fields, …).
         val t: TypeInfo = c.typeOf(id: id)
-        if t.kind == 1 { return 1U64 }
+        if t.kind == 2 && rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") { return 1U64 }
         if t.kind == 0 {
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Bool") { return 2U64 }
             if isUnsignedName(c: inout c, start: t.nameStart, len: t.nameLen) { return 3U64 }

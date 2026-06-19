@@ -118,17 +118,6 @@ pub impl Comp {
                 if ti.kind == 3 {
                     effArr = true
                 }
-                if ti.kind == 1 {
-                    if effLen == 0 {
-                        val ss: Bind = self.stringTypeSpan()
-                        if ss.nameLen == 0 {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: init)), msg: "cannot infer the type of this binding; add a type annotation (e.g. `: String`)")
-                        } else {
-                            effStart = ss.nameStart
-                            effLen = ss.nameLen
-                        }
-                    }
-                }
             }
         }
         return <LetEff start=effStart len=effLen arr=effArr ty=effTy />
