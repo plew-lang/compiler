@@ -12,3 +12,7 @@
 
 # scratch dir for local experiments (gen-harness builds, self-host checks, etc.)
 /tmp/
+/asan.ll
+/asan.runtime.c
+/plewc_asan
+/plewc_asan.dSYM/
