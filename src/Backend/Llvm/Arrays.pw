@@ -432,6 +432,17 @@ pub impl LlvmCtx {
                     if nsi < c.arena.structs.count {
                         val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
                         agg = LLVMBuildInsertValue(self.b, agg, self.deepCopyStructValue(c: inout c, v: elem, sidx: nsi), fi, anon())
+                    } else {
+                        // an enum field (generic instance like `Optional[Array]` or a plain
+                        // enum like `Value`): deep-copy its active variant's payload so the
+                        // copy is independent (closes the struct<->enum recursion). A non-enum
+                        // field passes through deepCopyEnumRef unchanged.
+                        mut val gref: U64 = fd.ty
+                        if c.cur.typeParams.count > 0U64 {
+                            gref = c.groundTypeRef(ref: fd.ty)
+                        }
+                        val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
+                        agg = LLVMBuildInsertValue(self.b, agg, self.deepCopyEnumRef(c: inout c, v: elem, ref: gref), fi, anon())
                     }
                 }
             }
