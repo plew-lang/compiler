@@ -37,6 +37,11 @@ SEED_RT=plewc.seed.runtime.c
 # robust no matter the current directory.
 PW="$(pwd)/src/_.pw"
 LDLIBS="$("$LC" --ldflags --libs core)"
+# Optimize the built compiler: plewc is run (not just produced) on every
+# self-compile, so -O2 roughly halves self-compile time (measured 89s -> 45s).
+# The emitted IR is plewc's deterministic output, independent of this flag, so
+# the fixpoint still holds bit-for-bit; -O2 only costs a slower clang link.
+OPT="-O2"
 
 [ -f "$SEED_LL" ] || { echo "missing $SEED_LL — cannot bootstrap" >&2; exit 1; }
 [ -f "$SEED_RT" ] || { echo "missing $SEED_RT — cannot bootstrap" >&2; exit 1; }
@@ -44,7 +49,7 @@ LDLIBS="$("$LC" --ldflags --libs core)"
 echo "[1/4] clang the IR seed -> plewc0..."
 # Built at plewc0 so it resolves @Std from std/ (the std
 # root is the binary's directory + std/, see computeStdRoot).
-clang -w "$SEED_LL" "$SEED_RT" $LDLIBS -o plewc0
+clang -w $OPT "$SEED_LL" "$SEED_RT" $LDLIBS -o plewc0
 
 echo "[2/4] fetch @Plew/Syntax into the cache (resolver)..."
 # The resolver (resolve/_.pw) imports only the arena-free toolchain leaves
@@ -55,14 +60,14 @@ echo "[2/4] fetch @Plew/Syntax into the cache (resolver)..."
 # refresh is fine (we rely on what is already cached).
 ./plewc0 resolve/_.pw > plew-resolve.ll
 ./plewc0 --runtime > plew-resolve.runtime.c
-clang -w plew-resolve.ll plew-resolve.runtime.c -o plew-resolve
+clang -w $OPT plew-resolve.ll plew-resolve.runtime.c -o plew-resolve
 ./plew-resolve > /dev/null 2>&1 || echo "  (dep refresh failed — offline? relying on existing cache)"
 rm -f plew-resolve.ll plew-resolve.runtime.c
 
 echo "[3/4] plewc0 compiles the compiler -> plewc..."
 ./plewc0 "$PW" > plewc.ll
 ./plewc0 --runtime > plewc.runtime.c
-clang -w plewc.ll plewc.runtime.c $LDLIBS -o plewc
+clang -w $OPT plewc.ll plewc.runtime.c $LDLIBS -o plewc
 
 if [ "$1" = "--reseed" ]; then
     cp plewc.ll "$SEED_LL"

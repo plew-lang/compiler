@@ -25,8 +25,11 @@ command -v "$LC" >/dev/null 2>&1 || { echo "llvm-config not found (set LLVM_CONF
 [ -x plewc ] || { echo "plewc missing — run ./bootstrap.sh first" >&2; exit 1; }
 
 LDLIBS="$("$LC" --ldflags --libs core)"
+# -O2 to match bootstrap.sh: plewc is run on every self-compile, so optimizing
+# the binary roughly halves rebuild/compile time (the emitted IR is unaffected).
+OPT="-O2"
 plewc src/_.pw > /tmp/_plewc.ll
 plewc --runtime > /tmp/_plewc.runtime.c
-clang -w /tmp/_plewc.ll /tmp/_plewc.runtime.c $LDLIBS -o /tmp/_plewc.new
+clang -w $OPT /tmp/_plewc.ll /tmp/_plewc.runtime.c $LDLIBS -o /tmp/_plewc.new
 mv -f /tmp/_plewc.new plewc
 echo "rebuilt plewc from current source"
