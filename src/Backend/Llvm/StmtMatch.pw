@@ -97,12 +97,9 @@ pub impl LlvmCtx {
                 }
             }
             self.genLlvmBlock(c: inout c, id: arm.body)
-            // release the payload binds on fall-through (they co-own the scrutinee's heap via
-            // the retain in bindMatchPayload). A terminating arm (return/panic) already ran a
-            // full dropScope, so only a fall-through needs this — else the retained binds leak.
-            if !(self.terminated) {
-                self.dropScope(c: inout c, fromMark: savedBB, excludeLi: 18446744073709551615U64)
-            }
+            // payload binds borrow the scrutinee's heap (bindMatchPayload marks them
+            // not-owned), so no scope-exit release is needed here — the binds in
+            // [savedBB, nLocals) all skip emitDeinitCall. Just pop them off the local stack.
             self.nLocals = savedBB
             if !(self.terminated) {
                 LLVMBuildBr(self.b, contBB)
@@ -202,13 +199,13 @@ pub impl LlvmCtx {
                     slot = self.entryAlloca(ty: pty)
                 }
                 LLVMBuildStore(self.b, fv, slot)
-                // an array payload bind SHARES the enum's payload buffer: retain it so the
-                // bind co-owns the buffer (its scope-exit release then balances, leaving
-                // the variant's copy intact). Without this, the bind's release would free a
-                // buffer the enum still owns — a double-free.
-                if isArrF {
-                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, fv, 0U64, anon()))
-                }
+                // A payload bind BORROWS the scrutinee's heap: it is immutable (the parser
+                // never produces a `mut` pattern bind — spec/11 binds are read-only here), so
+                // it can neither mutate in place (no CoW privatization) nor be moved out. Any
+                // escape (let/return/give/store/by-value arg) retains/copies at the
+                // destination, so the bind itself needs no retain — and is marked not-owned
+                // below so no scope-exit release runs. This keeps the refcount neutral while
+                // removing a retain + a release per bind (the dominant ARC cost in plewc).
                 // an enum-typed bind carries a bare enum TypeRef so a nested match on it
                 // (the recursive case) recovers the enum (typeOf can't see this local).
                 mut val tref: U64 = 0
@@ -246,20 +243,11 @@ pub impl LlvmCtx {
                         }
                     }
                 }
-                // a non-array heap-owning payload bind (String / struct / enum) likewise
-                // SHARES the enum's payload heap, so retain it — its scope-exit release then
-                // balances instead of double-freeing the variant's value. (Arrays handled
-                // above; boxed recursive fields are leaked-but-safe, never released, so skip.)
-                if !(isArrF) {
-                    if !(c.fieldIsBoxed(f: fd)) {
-                        mut val rref: U64 = tref
-                        if rref == 0U64 {
-                            rref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
-                        }
-                        self.emitRetainValue(c: inout c, v: fv, typeRef: rref)
-                    }
-                }
+                // A non-array heap payload bind (String / struct / enum) also borrows — see
+                // the array note above; no retain, marked not-owned, escapes copy at the dest.
                 self.pushLocalR(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
+                // borrow: this bind never deinit's (it shares the scrutinee's still-owned heap).
+                self.setLocalOwned(owned: false)
                 // an array-of-struct payload bind (`Expr.Call(.., val args)` with
                 // args: Array[Arg]): track the element struct + ref so `args[i].field`
                 // and nested-array/Ref elements resolve in the arm body.
