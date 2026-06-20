@@ -739,15 +739,23 @@ pub impl LlvmCtx {
     // Release one owner of array buffer `data` (count `count`, element type elemTy/elemRef):
     // decrement its rc, and at 0 release every element's heap (loop) then free the buffer.
     inout fn emitReleaseArrayValue(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
+        // No per-element heap to release (scalar / String / Ref elements): the whole
+        // decrement-and-free-at-0 is exactly plew_rawbuf_drop, so emit one call instead
+        // of inlining release + icmp + 2 blocks + condbr + free at every site (~8800
+        // sites — most array releases). Semantically identical; cuts ~60k IR lines.
+        if !(self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef)) {
+            self.rawbufDrop(c: inout c, cell: data)
+            return
+        }
         val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: data)
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.free"))
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrel.cont"))
         LLVMBuildCondBr(self.b, isZero, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
-        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
-            self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: false)
-        }
+        // reached only with element value-ARC (the scalar case returned above): cascade
+        // into each element's heap before freeing the buffer.
+        self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: false)
         self.rawbufFree(c: inout c, cell: data)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
