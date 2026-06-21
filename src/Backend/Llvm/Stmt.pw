@@ -404,6 +404,10 @@ pub impl LlvmCtx {
                             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: ibase)), msg: "LLVM backend: user IndexSet subscript needs an `indexSet` method")
                             return
                         }
+                        // CoW gateway (1-0): privatize any shared array buffer ABOVE `ibase`
+                        // (e.g. `arr[i][j]=v` -> own `arr` first) before the immediate-level
+                        // CoW below; no-op for a top-level array local / under eager-copy.
+                        self.privatizeForWrite(c: inout c, id: ibase)
                         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: ibase)
                         // CoW (Stage 2a): privatize a shared scalar array in its slot before
                         // the element store, so `arr[i] = v` does not clobber another sharer.
@@ -498,7 +502,7 @@ pub impl LlvmCtx {
                                         val baseTy: LLVMTypeRef = self.structLlvmTyOfExpr(c: inout c, structExpr: fbase, sidx: bsi)
                                         if LLVMIsNull(baseTy) == 0I32 {
                                             val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
-                                            val basePtr: LLVMValueRef = self.placePtrOf(c: inout c, id: fbase)
+                                            val basePtr: LLVMValueRef = self.placePtrOfWrite(c: inout c, id: fbase)
                                             val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, baseTy, basePtr, fidx, anon())
                                             val gfr2: U64 = fieldGenInstRef(c: inout c, fld: fld)
                                             if op == opAssign() && gfr2 != 0U64 {

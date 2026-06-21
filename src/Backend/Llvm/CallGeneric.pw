@@ -38,7 +38,7 @@ pub impl LlvmCtx {
         val mf: Func = c.arena.funcs[mfi]
         mut val av: Array[LLVMValueRef] = []
         if mf.selfInout {
-            av.append(value: self.placePtrOf(c: inout c, id: recv))
+            av.append(value: self.placePtrOfWrite(c: inout c, id: recv))
         } else {
             av.append(value: self.genLlvmExpr(c: inout c, id: recv))
         }
@@ -171,6 +171,41 @@ pub impl LlvmCtx {
         LLVMBuildStore(self.b, v, slot)
         return slot
     }
+
+    // CoW gateway (1-0): before WRITING through a place (assignment target, `inout` arg,
+    // `inout` self receiver), privatize every shared array buffer ON THE PATH ABOVE the
+    // written slot — outermost first — so an in-place write cannot leak into another sharer
+    // of an enclosing array. Recurses base-first (the outer array is privatized before the
+    // inner), each level via the array's storage slot (`cowArraySlot` round-trips the slot,
+    // CoWing iff rc>1). The IMMEDIATE array (the one whose element/field is written) is
+    // privatized by the write-site itself (its own `cowArraySlot`, or the callee's). Under
+    // eager-copy (no sharing) every rc<=1, so `plew_arr_cow` no-ops — runtime-neutral until
+    // the place split flips to CoW-share (1-3a). NOT placed inside `placePtrStrict`: that
+    // also serves READ borrows, where privatizing would defeat CoW-share.
+    inout fn privatizeForWrite(c: inout Comp, id: U64) {
+        match c.arena.exprs[id] {
+            Expr.Index(base: val b, index: val ix) => {
+                self.privatizeForWrite(c: inout c, id: b)
+                if self.exprIsArray(c: inout c, id: b) {
+                    val slot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: b)
+                    if LLVMIsNull(slot) == 0I32 {
+                        self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: self.arrElemTyOf(c: inout c, id: b), elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: b))
+                    }
+                }
+            }
+            Expr.Field(base: val b, nameStart: val ns, nameLen: val nl) => {
+                self.privatizeForWrite(c: inout c, id: b)
+            }
+            _ => {}
+        }
+    }
+
+    // `placePtrOf` for a WRITE place: run the CoW gateway first (see `privatizeForWrite`),
+    // then take the place pointer. Use at every mutation site that takes a place address.
+    inout fn placePtrOfWrite(c: inout Comp, id: U64) -> LLVMValueRef {
+        self.privatizeForWrite(c: inout c, id: id)
+        return self.placePtrOf(c: inout c, id: id)
+    }
 }
 
 pub impl LlvmCtx {
@@ -195,7 +230,7 @@ pub impl LlvmCtx {
         }
         if p.isInout {
             // pass the caller's place address (the callee mutates in place).
-            return self.placePtrOf(c: inout c, id: argExpr)
+            return self.placePtrOfWrite(c: inout c, id: argExpr)
         }
         // a `move` parameter consumes the argument — the callee owns it and runs
         // deinit, so mark the source local moved (excluded from the caller's drop).

@@ -1,0 +1,22 @@
+// CoW gateway (corpus ⑥): `a[i].field = v` where the element is a struct with an
+// array field and `a` is shared. Writing the field must privatize the OUTER array
+// `a` first (the gateway's `placePtrOfWrite` on the field base `a[i]`), so the
+// second sharer `b` keeps the original value. Value semantics either way (eager
+// copy or CoW-share); this pins the observable contract for the place-Index path
+// that the gateway is the sole guard of.
+import @Std/Io with { print }
+
+struct Bag {
+    pub mut val items: Array[I32]
+}
+
+fn main() {
+    mut val a: Array[Bag] = []
+    a.append(<Bag items=[1, 2] />)
+    val b: Array[Bag] = a
+    a[0].items = [9, 9, 9]
+    print(a[0].items.count)
+    print(b[0].items.count)
+    print(a[0].items[0])
+    print(b[0].items[0])
+}

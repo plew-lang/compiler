@@ -1,0 +1,18 @@
+// CoW gateway (corpus ④): nested `a[i][j] = v` and `a[i].append(v)` on a shared
+// `Array[Array[I32]]`. The nested element store must privatize the OUTER array `a`
+// (gateway on the index base) before the inner-level CoW, so the sharer `b` is
+// untouched at every level.
+import @Std/Io with { print }
+
+fn main() {
+    mut val a: Array[Array[I32]] = []
+    a.append([1, 2, 3])
+    a.append([4, 5])
+    val b: Array[Array[I32]] = a
+    a[0][1] = 99
+    a[1].append(6)
+    print(a[0][1])
+    print(b[0][1])
+    print(a[1].count)
+    print(b[1].count)
+}

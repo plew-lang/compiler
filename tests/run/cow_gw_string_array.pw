@@ -1,0 +1,13 @@
+// CoW gateway (corpus ①): `Array[String]` shared then element-assigned. Value
+// semantics — the sharer keeps the original string; both arrays drop cleanly.
+import @Std/Io with { print }
+
+fn main() {
+    mut val a: Array[String] = ["hello", "world"]
+    val b: Array[String] = a
+    a[0] = "changed"
+    print(a[0])
+    print(b[0])
+    print(a.count)
+    print(b.count)
+}

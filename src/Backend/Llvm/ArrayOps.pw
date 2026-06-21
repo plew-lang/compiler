@@ -115,6 +115,9 @@ pub impl LlvmCtx {
     }
 
     inout fn genLlvmAppend(c: inout Comp, recv: U64, valueExpr: U64) -> LLVMValueRef {
+        // CoW gateway (1-0): own any shared array buffer ABOVE the receiver (e.g.
+        // `arr[i].append(v)` -> own `arr` first) before the immediate-level CoW below.
+        self.privatizeForWrite(c: inout c, id: recv)
         val arrPtr: LLVMValueRef = self.arrStoragePtr(c: inout c, id: recv)
         if LLVMIsNull(arrPtr) != 0I32 {
             compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local / struct field (so far)")
@@ -177,6 +180,9 @@ pub impl LlvmCtx {
     // `arr[i] = v`). For a scalar array that shares its buffer (rc>1) this CoWs it in the
     // slot first (Stage 2a). Returns a unit value.
     inout fn genLlvmArraySet(c: inout Comp, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
+        // CoW gateway (1-0): own any shared array buffer ABOVE the receiver (e.g.
+        // `arr[i].set(j, v)` -> own `arr` first) before the immediate-level CoW below.
+        self.privatizeForWrite(c: inout c, id: recv)
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
         mut val data: LLVMValueRef = LLVMConstNull(self.ptrty)
         mut val count: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)

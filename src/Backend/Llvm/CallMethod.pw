@@ -84,7 +84,7 @@ pub impl LlvmCtx {
         val mf: Func = c.arena.funcs[mfi]
         mut val av: Array[LLVMValueRef] = []
         if mf.selfInout {
-            av.append(value: self.placePtrOf(c: inout c, id: recv))
+            av.append(value: self.placePtrOfWrite(c: inout c, id: recv))
         } else {
             av.append(value: self.genLlvmExpr(c: inout c, id: recv))
         }
@@ -209,7 +209,7 @@ pub impl LlvmCtx {
                     val smf: Func = c.arena.funcs[smfi]
                     mut val sav: Array[LLVMValueRef] = []
                     if smf.selfInout {
-                        sav.append(value: self.placePtrOf(c: inout c, id: recv))
+                        sav.append(value: self.placePtrOfWrite(c: inout c, id: recv))
                     } else {
                         sav.append(value: self.genLlvmExpr(c: inout c, id: recv))
                     }
@@ -312,7 +312,7 @@ pub impl LlvmCtx {
                             val emf: Func = c.arena.funcs[emfi]
                             mut val eav: Array[LLVMValueRef] = []
                             if emf.selfInout {
-                                eav.append(value: self.placePtrOf(c: inout c, id: recv))
+                                eav.append(value: self.placePtrOfWrite(c: inout c, id: recv))
                             } else {
                                 eav.append(value: self.genLlvmExpr(c: inout c, id: recv))
                             }
@@ -423,7 +423,7 @@ pub impl LlvmCtx {
         mut val av: Array[LLVMValueRef] = []
         // self: an `inout fn` needs the receiver's address (a place); else its value.
         if mf.selfInout {
-            av.append(value: self.placePtrOf(c: inout c, id: recv))
+            av.append(value: self.placePtrOfWrite(c: inout c, id: recv))
         } else {
             av.append(value: self.genLlvmExpr(c: inout c, id: recv))
         }

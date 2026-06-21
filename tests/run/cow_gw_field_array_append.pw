@@ -1,0 +1,20 @@
+// CoW gateway (corpus ②, array-field-only sub-case): `a[i].field.append(v)` — an
+// inout-self append on a nested struct-field array, with `a` shared. The gateway
+// privatizes the outer array `a` (recursing through the field base `a[i]`) before
+// the append's own field-buffer CoW, so the sharer `b` keeps the original.
+import @Std/Io with { print }
+
+struct Box {
+    pub mut val xs: Array[I32]
+}
+
+fn main() {
+    mut val a: Array[Box] = []
+    a.append(<Box xs=[1] />)
+    val b: Array[Box] = a
+    a[0].xs.append(2)
+    a[0].xs.append(3)
+    print(a[0].xs.count)
+    print(b[0].xs.count)
+    print(a[0].xs[1])
+}

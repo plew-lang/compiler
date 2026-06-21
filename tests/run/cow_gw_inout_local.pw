@@ -1,0 +1,17 @@
+// CoW gateway (corpus ⑤): `val b = a` then mutate `a` through an `inout` whole-array
+// argument. The gateway is a no-op on the Ident place; the callee's own append-CoW
+// splits the buffer, so `b` keeps the original.
+import @Std/Io with { print }
+
+fn grow(x: inout Array[I32]) {
+    x.append(7)
+}
+
+fn main() {
+    mut val a: Array[I32] = [1, 2]
+    val b: Array[I32] = a
+    grow(x: inout a)
+    print(a.count)
+    print(b.count)
+    print(a[2])
+}
