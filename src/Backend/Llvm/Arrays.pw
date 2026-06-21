@@ -737,6 +737,23 @@ pub impl LlvmCtx {
             self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
             return
         }
+        // a concrete registered struct: call its retain witness instead of inlining the
+        // walker (fields are concrete, so the witness body is env-independent). A generic
+        // struct stays unregistered and is walked inline under the caller's env.
+        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
+            val slot: U64 = self.structRetainWitness(c: inout c, sidx: sidx)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: v)
+            LLVMBuildCall2(self.b, self.retWitTy[slot], self.retWitVal[slot], arrayCPtr(av), 1U64, anon())
+            return
+        }
+        self.emitRetainWitnessWalk(c: inout c, v: v, sidx: sidx)
+    }
+
+    // The retain-the-fields walker — emitted ONCE inside each type's witness body (and the
+    // inline fallback for an unregistered generic struct). Sub-struct fields recurse through
+    // `emitStructRetain`, routing each to its own witness call.
+    inout fn emitRetainWitnessWalk(c: inout Comp, v: LLVMValueRef, sidx: U64) {
         if self.arcOnStack(sidx: sidx) {
             return
         }
@@ -775,6 +792,57 @@ pub impl LlvmCtx {
             i += 1
         }
         self.arcPop()
+    }
+
+    // The retWit* slot for struct `sidx`, or retWitSidx.count if none declared yet.
+    inout fn retWitSlot(sidx: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.retWitSidx.count {
+            if self.retWitSidx[i] == sidx {
+                return i
+            }
+            i += 1
+        }
+        return self.retWitSidx.count
+    }
+
+    // Ensure the per-type retain witness `void @pwretain<sidx>(structVal)` is declared, and
+    // return its retWit* slot. Body emitted later (emitRetainWitnessBodies). Caller must have
+    // checked `sidx` is a registered struct.
+    inout fn structRetainWitness(c: inout Comp, sidx: U64) -> U64 {
+        val found: U64 = self.retWitSlot(sidx: sidx)
+        if found < self.retWitSidx.count {
+            return found
+        }
+        val reg: U64 = self.structSlotForSidx(sidx: sidx)
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.structTys[reg])
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pwretain".bytes)
+        appendU64Dec(into: inout nm, n: sidx)
+        nm.append(value: 0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        self.retWitSidx.append(value: sidx)
+        self.retWitVal.append(value: fv)
+        self.retWitTy.append(value: fty)
+        return self.retWitSidx.count - 1U64
+    }
+
+    // Emit the body of every declared retain witness: the field-retain walker over its single
+    // struct-value parameter. Drained by a growing cursor (a walk may declare sub-struct
+    // witnesses). Called once after the main emit pass, alongside the drop witnesses.
+    inout fn emitRetainWitnessBodies(c: inout Comp) {
+        mut val s: U64 = 0
+        while s < self.retWitSidx.count {
+            val sidx: U64 = self.retWitSidx[s]
+            val fv: LLVMValueRef = self.retWitVal[s]
+            self.curFn = fv
+            self.beginFnBody(fv: fv)
+            self.emitRetainWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: sidx)
+            LLVMBuildRetVoid(self.b)
+            s += 1
+        }
     }
 
     // Release one owner of array buffer `data` (count `count`, element type elemTy/elemRef):

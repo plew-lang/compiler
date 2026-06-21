@@ -216,6 +216,15 @@ struct LlvmCtx {
     pub mut val dropWitSidx: Array[U64]
     pub mut val dropWitVal: Array[LLVMValueRef]
     pub mut val dropWitTy: Array[LLVMTypeRef]
+    // per-struct retain witnesses, keyed by struct index (parallel arrays): ONE
+    // `void @pwretain<sidx>(structVal)` shallow-retains that type's heap-owning fields
+    // (array buffers, nested struct/enum), so every CoW-share / by-value-arg retain
+    // site emits a single call instead of inlining the walker. Same lifecycle as the
+    // drop witnesses. Only CONCRETE registered structs are routed (env-independent);
+    // a generic struct stays unregistered and is walked inline under the caller's env.
+    pub mut val retWitSidx: Array[U64]
+    pub mut val retWitVal: Array[LLVMValueRef]
+    pub mut val retWitTy: Array[LLVMTypeRef]
     // provided trait methods reached (called) during emission: declared lazily (so
     // an uncalled std-trait adapter method — map/filter, whose body constructs an
     // unsupported adapter — is never emitted), then their bodies drained after the
@@ -802,7 +811,7 @@ export fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) structIdxs=[] structTys=[] genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] enumIdxs=[] enumTys=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethOwn=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] locElemTypeRef=[] locOwned=[] locMoved=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitSidx=[] dropWitVal=[] dropWitTy=[] provEmit=[] genMethEmit=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] locElemTypeRef=[] locOwned=[] locMoved=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitSidx=[] dropWitVal=[] dropWitTy=[] retWitSidx=[] retWitVal=[] retWitTy=[] provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
@@ -922,6 +931,7 @@ export fn emitLlvm(c: inout Comp) {
     // drain's growing cursor picks up. All callees (user deinit fns, runtime intrinsics)
     // are already declared, so this runs after the provided/generic fixpoint.
     st.emitDropWitnessBodies(c: inout c)
+    st.emitRetainWitnessBodies(c: inout c)
     if !(foundMain) {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
     }
