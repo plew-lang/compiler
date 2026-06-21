@@ -487,8 +487,12 @@ pub impl LlvmCtx {
         if structExprIsPlace(c: inout c, id: expr) {
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
             if sidx < c.arena.structs.count {
-                // set the value's generic instance env so a field of param type that
-                // grounds to an array (`Box[Array[I32]].v`) is deep-copied.
+                // 1-3a (struct class): CoW-SHARE the struct place — retain its heap fields
+                // (rc++) instead of deep-copying them; the first in-place mutation of a field
+                // CoWs via the slot (gateway). emitStructRetain rc-bumps exactly the buffers
+                // deepCopyStructValue made independent, so value semantics hold. Set the
+                // generic instance env so a param-typed field grounding to an array
+                // (`Box[Array[I32]].v`) is retained (its arrayFieldElemRef resolves).
                 mut val sref: U64 = typeRef
                 if sref == 0U64 {
                     sref = self.exprTypeRef(c: inout c, id: expr)
@@ -496,12 +500,12 @@ pub impl LlvmCtx {
                 val savedP: Array[Bind] = c.cur.typeParams
                 val savedA: Array[U64] = c.cur.typeArgs
                 val didSet: Bool = self.setStructEnv(c: inout c, ref: sref)
-                val copied: LLVMValueRef = self.deepCopyStructValue(c: inout c, v: v, sidx: sidx)
+                self.emitStructRetain(c: inout c, v: v, sidx: sidx)
                 if didSet {
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
                 }
-                return copied
+                return v
             }
             // an enum value from a place (`val o2 = o` / `return opt` / `arr[i] = res`):
             // deep-copy its active variant's heap so the new owner is independent (else the
@@ -718,8 +722,15 @@ pub impl LlvmCtx {
     }
 
     // Shallow-retain a struct value's heap-owning fields (an array field's buffer; a nested
-    // struct field recursively) — used when an Array[Struct] CoW duplicates the element, so
-    // each owner co-owns the field buffers (balanced by emitDeinitValue at drop).
+    // struct/enum field recursively) so a second owner co-owns them — used for an Array[Struct]
+    // CoW element retain, a by-value struct arg, and the CoW-SHARE of a struct place (1-3a).
+    // Mirrors `deepCopyStructValue`'s field dispatch EXACTLY (grounded array via
+    // `arrayFieldElemRef`, boxed skip, `localStructIdxFor` struct recursion, grounded enum via
+    // `emitEnumRetainRef`) so it rc-bumps precisely the buffers deep-copy would have made
+    // independent — i.e. every buffer a later in-place mutation must CoW (rc>1) for value
+    // semantics. The active generic env must be set by the caller (consumeIntoOwned does so via
+    // setStructEnv) for the grounding to resolve. Balanced by `emitDeinitValue` at drop (which
+    // gates on declared types, so an over-retained generic field is leaked-but-safe, never UAF).
     inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64) {
         // `String`: retain its buffer (the value IS the Array[U8]); transparent single field.
         if self.isStringStruct(c: inout c, sidx: sidx) {
@@ -734,15 +745,30 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count {
             val fd: FieldDef = sd.fields[i]
-            if fd.tyIsArray {
+            val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+            if er != 0U64 {
+                // an array field (declared `Array[E]` or a type param grounding to one under
+                // the active env): retain its buffer (shallow).
                 self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, v, i, anon()), 0U64, anon()))
             } else {
-                val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                if fsi < c.arena.structs.count {
-                    if !(c.arena.structs[fsi].isExtern) {
-                        if self.structNeedsDeinit(c: inout c, sidx: fsi) {
-                            self.emitStructRetain(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), sidx: fsi)
+                if c.fieldIsBoxed(f: fd) {
+                    // a boxed (recursive) field is a shared heap pointer — leave it (like Ref).
+                } else {
+                    val nsi: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
+                    if nsi < c.arena.structs.count {
+                        // skip a no-heap struct field (nothing to retain) — coverage-neutral but
+                        // cuts the inline expansion (matches emitDeinitValue's drop-side gate).
+                        if self.structNeedsDeinit(c: inout c, sidx: nsi) {
+                            self.emitStructRetain(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), sidx: nsi)
                         }
+                    } else {
+                        // an enum field (generic instance like `Optional[Array]` or a plain enum):
+                        // retain its active variant's payload heap. A non-enum field is a no-op.
+                        mut val gref: U64 = fd.ty
+                        if c.cur.typeParams.count > 0U64 {
+                            gref = c.groundTypeRef(ref: fd.ty)
+                        }
+                        self.emitEnumRetainRef(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), ref: gref)
                     }
                 }
             }
