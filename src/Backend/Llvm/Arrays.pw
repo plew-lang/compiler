@@ -651,27 +651,47 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(cav), 1U64, anon())
     }
 
-    // Shallow-retain one array element VALUE `v` of type `typeRef` (bump its leading heap
-    // rc). For a nested array: retain the inner buffer. Scalars / unsupported: nop.
-    inout fn emitRetainValue(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
+    // Value-ARC one element VALUE `v` of type `typeRef`: `retain` bumps its leading heap rc
+    // shallowly (nested array: retain the inner buffer; struct: co-own heap fields; enum:
+    // retain the active variant's non-boxed heap), else cascading-release it (nested array:
+    // release the buffer, recursing into ITS elements at rc 0; struct: deinit; enum: release
+    // the active variant). The type dispatch is shared; only the leaf op differs by `retain`.
+    // Scalars / unsupported types: nop. The single value-ARC entry (retain and release).
+    inout fn valueArc(c: inout Comp, v: LLVMValueRef, typeRef: U64, retain: Bool) {
         if typeRef == 0U64 {
             return
         }
         val t: TypeRef = c.arena.types[typeRef]
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+            if retain {
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+            } else {
+                mut val innerRef: U64 = 0
+                if t.args.count > 0U64 {
+                    innerRef = t.args[0]
+                }
+                val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
+                self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: innerTy, elemRef: innerRef)
+            }
             return
         }
         val sidx: U64 = c.structIndexByName(start: t.nameStart, len: t.nameLen)
         if sidx < c.arena.structs.count {
             if !(c.arena.structs[sidx].isExtern) {
-                self.emitStructRetain(c: inout c, v: v, sidx: sidx)
+                if retain {
+                    self.emitStructRetain(c: inout c, v: v, sidx: sidx)
+                } else {
+                    self.emitDeinitValue(c: inout c, v: v, sidx: sidx)
+                }
                 return
             }
         }
-        // an enum element: retain its active variant's non-boxed heap (counterpart of the
-        // emitReleaseValue enum branch).
-        self.emitEnumRetainRef(c: inout c, v: v, ref: typeRef)
+        // an enum element: value-ARC its active variant's non-boxed heap.
+        if retain {
+            self.emitEnumRetainRef(c: inout c, v: v, ref: typeRef)
+        } else {
+            self.emitEnumReleaseRef(c: inout c, v: v, ref: typeRef)
+        }
     }
 
     // Shallow-retain a struct value's heap-owning fields (an array field's buffer; a nested
@@ -706,34 +726,6 @@ pub impl LlvmCtx {
             i += 1
         }
         self.arcPop()
-    }
-
-    // Cascading-release one array element VALUE `v` of type `typeRef`. For a nested array:
-    // release its buffer (recursing into ITS elements at rc 0). Scalars / unsupported: nop.
-    inout fn emitReleaseValue(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
-        if typeRef == 0U64 {
-            return
-        }
-        val t: TypeRef = c.arena.types[typeRef]
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-            mut val innerRef: U64 = 0
-            if t.args.count > 0U64 {
-                innerRef = t.args[0]
-            }
-            val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
-            self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: innerTy, elemRef: innerRef)
-            return
-        }
-        val sidx: U64 = c.structIndexByName(start: t.nameStart, len: t.nameLen)
-        if sidx < c.arena.structs.count {
-            if !(c.arena.structs[sidx].isExtern) {
-                self.emitDeinitValue(c: inout c, v: v, sidx: sidx)
-                return
-            }
-        }
-        // an enum element: release its active variant's non-boxed heap (cascades into nested
-        // arrays/structs; boxed/Ref fields are leaked-but-safe).
-        self.emitEnumReleaseRef(c: inout c, v: v, ref: typeRef)
     }
 
     // Release one owner of array buffer `data` (count `count`, element type elemTy/elemRef):
@@ -779,11 +771,7 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
-        if retain {
-            self.emitRetainValue(c: inout c, v: elem, typeRef: elemRef)
-        } else {
-            self.emitReleaseValue(c: inout c, v: elem, typeRef: elemRef)
-        }
+        self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: retain)
         LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)

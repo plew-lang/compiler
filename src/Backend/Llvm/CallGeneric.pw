@@ -300,7 +300,7 @@ pub impl LlvmCtx {
         // call result already owns its value (not a place), so neither is retained.
         if !(p.isMove) {
             if structExprIsPlace(c: inout c, id: argExpr) {
-                self.emitRetainValue(c: inout c, v: out, typeRef: self.exprTypeRef(c: inout c, id: argExpr))
+                self.valueArc(c: inout c, v: out, typeRef: self.exprTypeRef(c: inout c, id: argExpr), retain: true)
             }
         }
         return out
