@@ -823,11 +823,12 @@ pub impl LlvmCtx {
                         }
                         if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
                             self.expectedTy = gpf
-                            mut val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+                            val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
                             // a generic enum payload with heap (`A(o: Optional[Array[I64]])`)
-                            // from a place: deep-copy so the constructed enum is independent.
+                            // from a place: CoW-SHARE its active variant's heap (rc++); the
+                            // gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
                             if structExprIsPlace(c: inout c, id: valExpr) {
-                                giv = self.deepCopyEnumRef(c: inout c, v: giv, ref: gpf)
+                                self.emitEnumRetainRef(c: inout c, v: giv, ref: gpf)
                             }
                             agg = LLVMBuildInsertValue(self.b, agg, giv, fj, anon())
                         } else {
@@ -838,7 +839,11 @@ pub impl LlvmCtx {
                             if psi < c.arena.structs.count {
                                 if self.structNeedsDeinit(c: inout c, sidx: psi) {
                                     if structExprIsPlace(c: inout c, id: valExpr) {
-                                        agg = LLVMBuildInsertValue(self.b, agg, self.deepCopyStructValue(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), sidx: psi), fj, anon())
+                                        // CoW-SHARE the struct place into the payload (rc++ its
+                                        // heap fields); the gateway CoWs before any mutation.
+                                        val psv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+                                        self.emitStructRetain(c: inout c, v: psv, sidx: psi)
+                                        agg = LLVMBuildInsertValue(self.b, agg, psv, fj, anon())
                                         handled = true
                                     }
                                 }
@@ -848,17 +853,17 @@ pub impl LlvmCtx {
                                 // a plain (non-generic) enum payload from a place (`<StmtAst.ExprStmt
                                 // expr=lhs/>`, expr: ExprAst inline): deep-copy its active variant's
                                 // heap so the source local's drop does not free a buffer the
-                                // constructed enum now owns (mirrors the struct branch above; the
+                                // constructed enum now co-owns (mirrors the struct branch above; the
                                 // generic-enum case is handled at line ~590). localStructIdxFor misses
                                 // it (it is an enum, not a struct), so it would otherwise bit-copy.
-                                // deepCopyEnumRef / coerceIntTo are both no-ops off their own type,
-                                // so scalar places keep their width coercion unchanged.
+                                // emitEnumRetainRef is a no-op off an enum type, so scalar places keep
+                                // their width coercion (coerceIntTo above) unchanged.
                                 if structExprIsPlace(c: inout c, id: valExpr) {
                                     mut val gef: U64 = fs[fj].ty
                                     if c.cur.typeParams.count > 0U64 {
                                         gef = c.groundTypeRef(ref: fs[fj].ty)
                                     }
-                                    fv = self.deepCopyEnumRef(c: inout c, v: fv, ref: gef)
+                                    self.emitEnumRetainRef(c: inout c, v: fv, ref: gef)
                                 }
                                 agg = LLVMBuildInsertValue(self.b, agg, fv, fj, anon())
                             }

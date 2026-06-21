@@ -1,0 +1,16 @@
+// Value semantics for a construction-site field initializer (1-3a): a struct's array
+// field built from a PLACE (`<Bag items=arr/>`, not a literal) CoW-SHARES the source
+// buffer (rc++); the gateway (1-0) privatizes before any later mutation, so the source
+// `arr` and the constructed struct stay independent. (The struct / enum-payload
+// construction branches are covered by cow_struct / array_enum_arc + the ASan-clean
+// self-compile, which builds them constantly.)
+import @Std/Io with { print }
+struct Bag { pub mut val items: Array[I32] }
+fn main() {
+    mut val arr: Array[I32] = [1, 2, 3]
+    val h: Bag = <Bag items=arr />   // h co-owns arr's buffer (CoW-share)
+    arr.append(4)                     // gateway CoWs; h.items stays [1,2,3]
+    print(arr.count)        // 4
+    print(h.items.count)    // 3
+    print(h.items[0])       // 1
+}

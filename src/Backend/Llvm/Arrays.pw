@@ -278,13 +278,10 @@ pub impl LlvmCtx {
                 _ => {}
             }
             // value semantics: an array field initialized from a place (`<Holder items=a/>`)
-            // copies the buffer so later mutation of the source leaves the struct's
-            // field unchanged.
-            mut val av: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
-            if arrayExprIsPlace(c: inout c, id: valExpr) {
-                av = self.copyArrayValue(c: inout c, arrVal: av, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), elemRef: arrayFieldElemRef(c: inout c, f: fld))
-            }
-            return av
+            // CoW-SHARES the buffer (rc++) — the gateway (1-0) privatizes before any later
+            // mutation of the field or the source, so they stay independent. Mirrors
+            // consumeIntoOwned's array class.
+            return self.shareArrayIfPlace(c: inout c, arrVal: self.genLlvmExpr(c: inout c, id: valExpr), elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), valueExpr: valExpr)
         }
         // an existential `any P` field (spec/08): box a concrete conforming initializer,
         // or value-semantics-copy an existing `any` place.
@@ -330,9 +327,11 @@ pub impl LlvmCtx {
                 self.expectedTy = g
                 val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
                 // a generic enum instance with heap (`Optional[Array[I64]]`) from a place:
-                // deep-copy its payload so the constructed struct's field is independent.
+                // CoW-SHARE its payload (rc++) so the field co-owns it; the gateway CoWs
+                // before any later mutation. Mirrors consumeIntoOwned's enum class.
                 if structExprIsPlace(c: inout c, id: valExpr) {
-                    return self.deepCopyEnumRef(c: inout c, v: giv, ref: g)
+                    self.emitEnumRetainRef(c: inout c, v: giv, ref: g)
+                    return giv
                 }
                 return giv
             }
@@ -345,7 +344,12 @@ pub impl LlvmCtx {
         if fsi2 < c.arena.structs.count {
             if self.structNeedsDeinit(c: inout c, sidx: fsi2) {
                 if structExprIsPlace(c: inout c, id: valExpr) {
-                    return self.deepCopyStructValue(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), sidx: fsi2)
+                    // CoW-SHARE the struct place into the field (rc++ its heap fields under the
+                    // active construction env, matching what deepCopyStructValue would copy);
+                    // the gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
+                    val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+                    self.emitStructRetain(c: inout c, v: sv, sidx: fsi2)
+                    return sv
                 }
             }
         }
@@ -355,7 +359,11 @@ pub impl LlvmCtx {
         // enum instances are handled by the isGenericInst path above.
         if self.enumRegSlot(c: inout c, start: fld.tyStart, len: fld.tyLen) < self.enumIdxs.count {
             if structExprIsPlace(c: inout c, id: valExpr) {
-                return self.deepCopyEnumRef(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), ref: self.exprTypeRef(c: inout c, id: valExpr))
+                // CoW-SHARE the enum place into the field (rc++ its active variant's heap);
+                // the gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
+                val ev: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+                self.emitEnumRetainRef(c: inout c, v: ev, ref: self.exprTypeRef(c: inout c, id: valExpr))
+                return ev
             }
         }
         return self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
