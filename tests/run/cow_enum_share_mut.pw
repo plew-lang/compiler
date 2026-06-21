@@ -1,0 +1,19 @@
+// Value semantics for the enum place class (1-3a): a shared enum value (`b = a`,
+// `[a, b]`) co-owns its active variant's heap (CoW-share, not deep-copy), and the
+// gateway privatizes before any mutation — so reassigning/mutating one owner leaves
+// the others intact. Exercises the consumeIntoOwned enum branch + array-of-enum CoW.
+import @Std/Io with { print }
+enum Word { Tagged(tags: Array[I32])  Empty }
+fn main() {
+    mut val a: Word = <Word.Tagged tags=[1, 2, 3] />
+    mut val b: Word = a                 // CoW-share: b co-owns a's buffer
+    a = <Word.Tagged tags=[1, 2, 3, 4] />  // replace a; b must stay [1,2,3]
+    match b { Word.Tagged(val tags) => { print(tags.count) }  Word.Empty => { print(-1I64) } }
+    match a { Word.Tagged(val tags) => { print(tags.count) }  Word.Empty => { print(-1I64) } }
+    mut val xs: Array[Word] = [a, b]
+    mut val ys: Array[Word] = xs        // share the array
+    ys.append(<Word.Empty />)            // CoW at the array level; xs unchanged
+    print(xs.count)
+    print(ys.count)
+    match xs[0] { Word.Tagged(val tags) => { print(tags.count) }  Word.Empty => { print(-1I64) } }
+}

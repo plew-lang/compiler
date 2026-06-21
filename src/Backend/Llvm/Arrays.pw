@@ -573,14 +573,19 @@ pub impl LlvmCtx {
                 }
                 return v
             }
-            // an enum value from a place (`val o2 = o` / `return opt` / `arr[i] = res`):
-            // deep-copy its active variant's heap so the new owner is independent (else the
-            // source's drop frees a buffer the copy still references).
+            // 1-3a (enum class): CoW-SHARE an enum place (`val o2 = o` / `return opt` /
+            // `arr[i] = res`) — retain its active variant's heap (rc++) instead of deep-
+            // copying; the first in-place mutation of the payload CoWs via the gateway (1-0).
+            // emitEnumRetainRef rc-bumps exactly the variant heap deepCopyEnumRef would have
+            // copied (both tag-dispatch the same fields) and is balanced by emitEnumReleaseRef
+            // at drop, so value semantics hold and nothing double-frees. Mirrors the array /
+            // struct classes above.
             mut val eref: U64 = typeRef
             if eref == 0U64 {
                 eref = self.exprTypeRef(c: inout c, id: expr)
             }
-            return self.deepCopyEnumRef(c: inout c, v: v, ref: eref)
+            self.emitEnumRetainRef(c: inout c, v: v, ref: eref)
+            return v
         }
         return v
     }
