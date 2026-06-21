@@ -476,10 +476,13 @@ pub impl LlvmCtx {
     // under-copying miscompiles.
     inout fn consumeIntoOwned(c: inout Comp, v: LLVMValueRef, expr: U64, typeRef: U64) -> LLVMValueRef {
         if self.exprIsArray(c: inout c, id: expr) {
-            if arrayExprIsPlace(c: inout c, id: expr) {
-                return self.copyArrayValue(c: inout c, arrVal: v, elemTy: self.arrElemTyOf(c: inout c, id: expr), elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: expr))
-            }
-            return v
+            // 1-3a (array class): CoW-SHARE an array place into the new owner — retain the
+            // buffer (rc++) instead of eager deep-copy; the first in-place mutation CoWs via
+            // the slot (the 1-0 gateway privatizes shared buffers above any write). Same op
+            // as let-bind sharing (shareArrayIfPlace). Element retain/release stays shallow:
+            // a nested-array element is referenced once by the single shared buffer (no extra
+            // retain), and the buffer's drop cascades into elements at rc 0 — balanced.
+            return self.shareArrayIfPlace(c: inout c, arrVal: v, elemTy: self.arrElemTyOf(c: inout c, id: expr), valueExpr: expr)
         }
         if structExprIsPlace(c: inout c, id: expr) {
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
