@@ -513,14 +513,14 @@ pub impl LlvmCtx {
     // struct-value parameter, returning the independent copy. Drained by a growing cursor
     // (a walk may declare sub-struct witnesses). Called once after the main emit pass.
     inout fn emitCopyWitnessBodies(c: inout Comp) {
-        mut val s: U64 = 0
-        while s < self.copyWitSidx.count {
+        while self.copyWitDone < self.copyWitSidx.count {
+            val s: U64 = self.copyWitDone
             val sidx: U64 = self.copyWitSidx[s]
             val fv: LLVMValueRef = self.copyWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
             LLVMBuildRet(self.b, self.deepCopyStructWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: sidx))
-            s += 1
+            self.copyWitDone += 1
         }
     }
 }
@@ -899,15 +899,15 @@ pub impl LlvmCtx {
     // struct-value parameter. Drained by a growing cursor (a walk may declare sub-struct
     // witnesses). Called once after the main emit pass, alongside the drop witnesses.
     inout fn emitRetainWitnessBodies(c: inout Comp) {
-        mut val s: U64 = 0
-        while s < self.retWitSidx.count {
+        while self.retWitDone < self.retWitSidx.count {
+            val s: U64 = self.retWitDone
             val sidx: U64 = self.retWitSidx[s]
             val fv: LLVMValueRef = self.retWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
             self.emitRetainWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: sidx)
             LLVMBuildRetVoid(self.b)
-            s += 1
+            self.retWitDone += 1
         }
     }
 

@@ -193,15 +193,44 @@ pub impl LlvmCtx {
     // growing cursor — a walk may declare further sub-struct witnesses (appended to the
     // tables), which this same loop then picks up. Called once after the main emit pass.
     inout fn emitDropWitnessBodies(c: inout Comp) {
-        mut val s: U64 = 0
-        while s < self.dropWitSidx.count {
+        while self.dropWitDone < self.dropWitSidx.count {
+            val s: U64 = self.dropWitDone
             val sidx: U64 = self.dropWitSidx[s]
             val fv: LLVMValueRef = self.dropWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
             self.emitDropWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: sidx)
             LLVMBuildRetVoid(self.b)
-            s += 1
+            self.dropWitDone += 1
+        }
+    }
+
+    // Whether any witness table has an undrained body pending (count past its cursor).
+    inout fn witnessPending() -> Bool {
+        if self.dropWitDone < self.dropWitSidx.count { return true }
+        if self.retWitDone < self.retWitSidx.count { return true }
+        if self.copyWitDone < self.copyWitSidx.count { return true }
+        if self.enumRelWitDone < self.enumRelWitEid.count { return true }
+        if self.enumRetWitDone < self.enumRetWitEid.count { return true }
+        if self.enumCopyWitDone < self.enumCopyWitEid.count { return true }
+        return false
+    }
+
+    // Drain all 6 witness body tables to a fixpoint. The graphs cross struct<->enum within a
+    // family (a struct-drop body can declare an enum-release witness and vice versa), so one
+    // pass over each table is not enough: loop until no table grows. Each drain resumes from
+    // its persistent cursor, so a re-entry never re-emits an already-emitted body. Families
+    // (drop/release, retain, copy) don't cross each other, but a single fixpoint covers all.
+    inout fn emitWitnessBodies(c: inout Comp) {
+        mut val draining: Bool = true
+        while draining {
+            self.emitDropWitnessBodies(c: inout c)
+            self.emitRetainWitnessBodies(c: inout c)
+            self.emitCopyWitnessBodies(c: inout c)
+            self.emitEnumReleaseWitnessBodies(c: inout c)
+            self.emitEnumRetainWitnessBodies(c: inout c)
+            self.emitEnumCopyWitnessBodies(c: inout c)
+            draining = self.witnessPending()
         }
     }
 

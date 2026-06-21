@@ -245,7 +245,10 @@ pub impl LlvmCtx {
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
         if reg < self.enumIdxs.count {
             if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
-                self.emitEnumRelease(c: inout c, v: v, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+                val slot: U64 = self.enumReleaseWitness(c: inout c, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+                mut val av: Array[LLVMValueRef] = []
+                av.append(value: v)
+                LLVMBuildCall2(self.b, self.enumRelWitTy[slot], self.enumRelWitVal[slot], arrayCPtr(av), 1U64, anon())
             }
             return true
         }
@@ -269,7 +272,10 @@ pub impl LlvmCtx {
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
         if reg < self.enumIdxs.count {
             if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
-                return self.deepCopyEnumValue(c: inout c, v: v, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+                val slot: U64 = self.enumCopyWitness(c: inout c, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+                mut val av: Array[LLVMValueRef] = []
+                av.append(value: v)
+                return LLVMBuildCall2(self.b, self.enumCopyWitTy[slot], self.enumCopyWitVal[slot], arrayCPtr(av), 1U64, anon())
             }
         }
         return v
@@ -432,6 +438,145 @@ pub impl LlvmCtx {
         return 4611686018427387904U64 + eid
     }
 
+    // ---- per-enum value-ARC witnesses (registered/concrete enums only) ----
+    // Each mirrors the struct witnesses: a single per-enum function out-of-lines the
+    // tag-dispatch walker so every value-ARC site emits a call. Concrete enum fields are
+    // env-independent (declared array-ness + concrete element/struct refs), so the body is
+    // byte-for-byte the inline walker, just moved into a function. Declared on demand at a
+    // site, bodies drained after the main pass by a growing cursor.
+
+    inout fn enumRelWitSlot(eid: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.enumRelWitEid.count {
+            if self.enumRelWitEid[i] == eid {
+                return i
+            }
+            i += 1
+        }
+        return self.enumRelWitEid.count
+    }
+    inout fn enumReleaseWitness(c: inout Comp, eid: U64, ety: LLVMTypeRef) -> U64 {
+        val found: U64 = self.enumRelWitSlot(eid: eid)
+        if found < self.enumRelWitEid.count {
+            return found
+        }
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: ety)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pwenumrel".bytes)
+        appendU64Dec(into: inout nm, n: eid)
+        nm.append(value: 0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        self.enumRelWitEid.append(value: eid)
+        self.enumRelWitVal.append(value: fv)
+        self.enumRelWitTy.append(value: fty)
+        return self.enumRelWitEid.count - 1U64
+    }
+    inout fn emitEnumReleaseWitnessBodies(c: inout Comp) {
+        while self.enumRelWitDone < self.enumRelWitEid.count {
+            val s: U64 = self.enumRelWitDone
+            val fv: LLVMValueRef = self.enumRelWitVal[s]
+            self.curFn = fv
+            self.beginFnBody(fv: fv)
+            self.emitEnumRelease(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRelWitEid[s], ety: self.enumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRelWitEid[s])])
+            LLVMBuildRetVoid(self.b)
+            self.enumRelWitDone += 1
+        }
+    }
+
+    inout fn enumRetWitSlot(eid: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.enumRetWitEid.count {
+            if self.enumRetWitEid[i] == eid {
+                return i
+            }
+            i += 1
+        }
+        return self.enumRetWitEid.count
+    }
+    inout fn enumRetainWitness(c: inout Comp, eid: U64, ety: LLVMTypeRef) -> U64 {
+        val found: U64 = self.enumRetWitSlot(eid: eid)
+        if found < self.enumRetWitEid.count {
+            return found
+        }
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: ety)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pwenumret".bytes)
+        appendU64Dec(into: inout nm, n: eid)
+        nm.append(value: 0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        self.enumRetWitEid.append(value: eid)
+        self.enumRetWitVal.append(value: fv)
+        self.enumRetWitTy.append(value: fty)
+        return self.enumRetWitEid.count - 1U64
+    }
+    inout fn emitEnumRetainWitnessBodies(c: inout Comp) {
+        while self.enumRetWitDone < self.enumRetWitEid.count {
+            val s: U64 = self.enumRetWitDone
+            val fv: LLVMValueRef = self.enumRetWitVal[s]
+            self.curFn = fv
+            self.beginFnBody(fv: fv)
+            self.emitEnumRetain(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRetWitEid[s], ety: self.enumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRetWitEid[s])])
+            LLVMBuildRetVoid(self.b)
+            self.enumRetWitDone += 1
+        }
+    }
+
+    inout fn enumCopyWitSlot(eid: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.enumCopyWitEid.count {
+            if self.enumCopyWitEid[i] == eid {
+                return i
+            }
+            i += 1
+        }
+        return self.enumCopyWitEid.count
+    }
+    inout fn enumCopyWitness(c: inout Comp, eid: U64, ety: LLVMTypeRef) -> U64 {
+        val found: U64 = self.enumCopyWitSlot(eid: eid)
+        if found < self.enumCopyWitEid.count {
+            return found
+        }
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: ety)
+        val fty: LLVMTypeRef = LLVMFunctionType(ety, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pwenumcopy".bytes)
+        appendU64Dec(into: inout nm, n: eid)
+        nm.append(value: 0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        self.enumCopyWitEid.append(value: eid)
+        self.enumCopyWitVal.append(value: fv)
+        self.enumCopyWitTy.append(value: fty)
+        return self.enumCopyWitEid.count - 1U64
+    }
+    inout fn emitEnumCopyWitnessBodies(c: inout Comp) {
+        while self.enumCopyWitDone < self.enumCopyWitEid.count {
+            val s: U64 = self.enumCopyWitDone
+            val fv: LLVMValueRef = self.enumCopyWitVal[s]
+            self.curFn = fv
+            self.beginFnBody(fv: fv)
+            LLVMBuildRet(self.b, self.deepCopyEnumValue(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumCopyWitEid[s], ety: self.enumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumCopyWitEid[s])]))
+            self.enumCopyWitDone += 1
+        }
+    }
+
+    // The enumIdxs/enumTys slot for a registered enum by its enum id (the inverse of
+    // enumIdxs[reg]=eid), or enumIdxs.count if not registered.
+    inout fn enumRegSlotByEid(c: inout Comp, eid: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.enumIdxs.count {
+            if self.enumIdxs[i] == eid {
+                return i
+            }
+            i += 1
+        }
+        return self.enumIdxs.count
+    }
+
     // Retain the heap of enum value `v` of type `ref` if it owns any (genericinstance or
     // registered named enum needing deinit); else a nop. The retain counterpart of
     // emitEnumReleaseRef.
@@ -450,7 +595,10 @@ pub impl LlvmCtx {
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
         if reg < self.enumIdxs.count {
             if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
-                self.emitEnumRetain(c: inout c, v: v, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+                val slot: U64 = self.enumRetainWitness(c: inout c, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+                mut val av: Array[LLVMValueRef] = []
+                av.append(value: v)
+                LLVMBuildCall2(self.b, self.enumRetWitTy[slot], self.enumRetWitVal[slot], arrayCPtr(av), 1U64, anon())
             }
             return true
         }
