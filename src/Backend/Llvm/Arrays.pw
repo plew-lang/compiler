@@ -418,6 +418,21 @@ pub impl LlvmCtx {
         if self.isStringStruct(c: inout c, sidx: sidx) {
             return self.copyArrayValue(c: inout c, arrVal: v, elemTy: self.i8ty, elemRef: 0U64)
         }
+        // a concrete registered struct: call its copy witness (fields are concrete, so the
+        // witness body is env-independent). A generic struct walks inline under the caller's env.
+        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
+            val slot: U64 = self.structCopyWitness(c: inout c, sidx: sidx)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(value: v)
+            return LLVMBuildCall2(self.b, self.copyWitTy[slot], self.copyWitVal[slot], arrayCPtr(av), 1U64, anon())
+        }
+        return self.deepCopyStructWalk(c: inout c, v: v, sidx: sidx)
+    }
+
+    // The deep-copy walker — emitted ONCE inside each type's witness body (and the inline
+    // fallback for an unregistered generic struct). Returns the independent copy. Sub-struct
+    // fields recurse through `deepCopyStructValue`, routing each to its own witness call.
+    inout fn deepCopyStructWalk(c: inout Comp, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
         val sd: StructDef = c.arena.structs[sidx]
         mut val agg: LLVMValueRef = v
         mut val fi: U64 = 0
@@ -456,6 +471,57 @@ pub impl LlvmCtx {
             fi += 1
         }
         return agg
+    }
+
+    // The copyWit* slot for struct `sidx`, or copyWitSidx.count if none declared yet.
+    inout fn copyWitSlot(sidx: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.copyWitSidx.count {
+            if self.copyWitSidx[i] == sidx {
+                return i
+            }
+            i += 1
+        }
+        return self.copyWitSidx.count
+    }
+
+    // Ensure the per-type copy witness `structTy @pwcopy<sidx>(structTy)` is declared, and
+    // return its copyWit* slot. Body emitted later (emitCopyWitnessBodies). Caller must have
+    // checked `sidx` is a registered struct.
+    inout fn structCopyWitness(c: inout Comp, sidx: U64) -> U64 {
+        val found: U64 = self.copyWitSlot(sidx: sidx)
+        if found < self.copyWitSidx.count {
+            return found
+        }
+        val reg: U64 = self.structSlotForSidx(sidx: sidx)
+        val sty: LLVMTypeRef = self.structTys[reg]
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: sty)
+        val fty: LLVMTypeRef = LLVMFunctionType(sty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pwcopy".bytes)
+        appendU64Dec(into: inout nm, n: sidx)
+        nm.append(value: 0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        self.copyWitSidx.append(value: sidx)
+        self.copyWitVal.append(value: fv)
+        self.copyWitTy.append(value: fty)
+        return self.copyWitSidx.count - 1U64
+    }
+
+    // Emit the body of every declared copy witness: the deep-copy walker over its single
+    // struct-value parameter, returning the independent copy. Drained by a growing cursor
+    // (a walk may declare sub-struct witnesses). Called once after the main emit pass.
+    inout fn emitCopyWitnessBodies(c: inout Comp) {
+        mut val s: U64 = 0
+        while s < self.copyWitSidx.count {
+            val sidx: U64 = self.copyWitSidx[s]
+            val fv: LLVMValueRef = self.copyWitVal[s]
+            self.curFn = fv
+            self.beginFnBody(fv: fv)
+            LLVMBuildRet(self.b, self.deepCopyStructWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: sidx))
+            s += 1
+        }
     }
 }
 
