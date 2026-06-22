@@ -1,0 +1,30 @@
+// Value semantics + ARC for Array[String] ELEMENTS (1-3b): a String element owns an
+// rc-managed buffer, so CoW-duplicating the array retains each element and dropping it
+// releases each — no leak, no double-free. Stresses append (place + literal), share,
+// CoW-on-append, and element store across two independent owners.
+import @Std/Io with { print }
+fn make() -> Array[String] {
+    mut val xs: Array[String] = []
+    mut val a: String = "he"
+    a = a + "llo"            // a computed String (rc-managed, not a literal sentinel)
+    xs.append(a)             // append a place -> share into the array
+    xs.append("world")       // append a literal
+    val b: String = a        // share a again
+    xs.append(b)
+    return xs                // move out; the locals a, b drop here
+}
+fn main() {
+    mut val xs: Array[String] = make()
+    print(xs.count)          // 3
+    print(xs[0])             // hello
+    print(xs[2])             // hello
+    mut val ys: Array[String] = xs   // share the array buffer
+    ys.append("z")                    // CoW: duplicate + retain each String element
+    print(xs.count)          // 3
+    print(ys.count)          // 4
+    print(xs[0])             // hello  (xs intact after ys split off)
+    print(ys[3])             // z
+    xs[1] = "WORLD"          // element store into xs only
+    print(xs[1])             // WORLD
+    print(ys[1])             // world  (ys unaffected)
+}

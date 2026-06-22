@@ -653,10 +653,11 @@ pub impl LlvmCtx {
     // Array CoW (Stage 2) makes the array's OWN ({data,count}) buffer the rc-managed unit
     // for EVERY element type: rc-shared on bind/arg/payload-bind/enum-construct, CoW'd on
     // mutation (append/set/`[i]=`/inout), and released (freed at rc 0) at scope exit.
-    // Element heap (String buffers, inner arrays, struct/enum payload buffers) is still
-    // shallow-shared and is NOT released — but since only the rc-tracked outer buffer is
-    // ever freed (never an element buffer), inner sharing can never double-free; it only
-    // leaks (deep per-element release is a later refinement).
+    // Element heap (String buffers, inner arrays, struct/enum payload buffers) CASCADES
+    // (1-3b): when a CoW actually duplicates the buffer the elements are retained, and when
+    // the buffer is freed they are released — so element heap is reclaimed, not leaked. Only
+    // `Ref` elements stay shallow (their own rc semantics own them; arrElemNeedsValueArc
+    // returns false for them, so they are never double-freed here).
 
     // Take a new owner of an array VALUE bound/passed from an existing place (`val b = a`,
     // a by-value arg): RETAIN the shared buffer (true CoW — no copy; the copy is deferred
@@ -708,21 +709,27 @@ pub impl LlvmCtx {
         return nd
     }
 
-    // ---- recursive value ARC over array element heap (Stage 2b leak refinement) ----
+    // ---- recursive value ARC over array element heap (1-3b: element cascade) ----
     //
     // Only the array's own ({data,count}) buffer is rc-managed by the array machinery; an
-    // element that itself owns heap (currently: a nested array — its element buffer) is
-    // retained when an outer CoW duplicates it and released when the outer is freed, so the
-    // element buffer is reclaimed instead of leaked. retain is SHALLOW (bump the element's
-    // leading rc); release CASCADES (frees at rc 0, recursing into deeper elements).
-    // String / struct / enum / Ref elements are not yet covered (they need their own value
-    // ARC first) — arrElemNeedsValueArc returns false for them, so they stay leaked-but-safe.
+    // element that itself owns heap — a nested array, a String, a struct/enum that needs a
+    // deinit — is retained when an outer CoW duplicates it and released when the outer is
+    // freed, so the element heap is reclaimed instead of leaked. retain is SHALLOW (bump the
+    // element's leading rc / co-own its fields); release CASCADES (frees at rc 0, recursing
+    // into deeper elements). `Ref` elements are intentionally NOT covered (their own rc
+    // semantics own the pointee) — arrElemNeedsValueArc returns false for them, so they are
+    // never retained/released here and can never be double-freed.
     inout fn arrElemNeedsValueArc(c: inout Comp, elemRef: U64) -> Bool {
         if elemRef == 0U64 {
             return false
         }
         val t: TypeRef = c.arena.types[elemRef]
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            return true
+        }
+        // a String element owns an rc-managed Array[U8] buffer — retained on outer CoW,
+        // released on outer drop (its value IS the buffer; see valueArc's String case).
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
             return true
         }
         // a struct element that releases heap on destruction (array/struct field or `deinit`):
@@ -778,6 +785,17 @@ pub impl LlvmCtx {
                 }
                 val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
                 self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: innerTy, elemRef: innerRef)
+            }
+            return
+        }
+        // a String element: its value IS the Array[U8] buffer — value-ARC it directly (U8
+        // scalars, so just the rc-managed outer buffer; literal Strings carry a sentinel rc,
+        // making retain/drop a no-op for them). Matches emitDeinitValue's String handling.
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
+            if retain {
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+            } else {
+                self.rawbufDrop(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
             }
             return
         }
