@@ -225,7 +225,7 @@ pub impl Comp {
         }
     }
 
-    inout fn registerAssocInst(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    inout fn registerAssocInst(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg], resultRef: U64) {
         val arn: Bind = self.assocRecvName(recv: recv)
         if arn.nameLen == 0U64 {
             return
@@ -238,12 +238,52 @@ pub impl Comp {
             return
         }
         if self.isGenericFreeFn(fi: afi) {
-            val inferred: Array[U64] = self.inferFnArgs(f: self.arena.funcs[afi], args: args)
+            mut val inferred: Array[U64] = self.inferFnArgs(f: self.arena.funcs[afi], args: args)
+            // ground params the arguments didn't determine — a constructor whose type
+            // param comes only from the expected result type (`Set.new()`, or
+            // `Set.from([])` whose element type the empty literal can't supply). A
+            // constructor returns `Recv[params]`, so when the call's result type is a
+            // same-head generic instance, its args ARE the params. Mirrors the backend's
+            // groundAssocFromExpected, at the mono-registration layer (else the instance
+            // is never registered and the backend rejects the call as un-emittable).
+            self.groundAssocFromResult(resultRef: resultRef, recvStart: arn.nameStart, recvLen: arn.nameLen, inferred: inout inferred)
             if self.fnArgsAllGround(args: inferred) {
                 if !(self.fnInstExists(fnIdx: afi, args: inferred)) {
                     self.monoWork.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
                 }
             }
+        }
+    }
+    // Ground unfound (or name-less) inferred type args from the call's result type when
+    // it is a generic instance of the assoc fn's receiver head (the type params line up
+    // 1:1 with the receiver's args for a `Type[params]` constructor). A no-op when the
+    // args already determined every param.
+    inout fn groundAssocFromResult(resultRef: U64, recvStart: U64, recvLen: U64, inferred: inout Array[U64]) {
+        if resultRef == 0U64 {
+            return
+        }
+        if !(self.isGenericInst(ref: resultRef)) {
+            return
+        }
+        val rt: TypeRef = self.arena.types[resultRef]
+        if !(spansEqual(c: inout self, aStart: rt.nameStart, aLen: rt.nameLen, bStart: recvStart, bLen: recvLen)) {
+            return
+        }
+        if rt.args.count != inferred.count {
+            return
+        }
+        mut val i: U64 = 0
+        while i < inferred.count {
+            mut val needsGround: Bool = inferred[i] == 0U64
+            if !(needsGround) {
+                if self.arena.types[inferred[i]].nameLen == 0U64 {
+                    needsGround = true
+                }
+            }
+            if needsGround {
+                inferred.set(i: i, value: rt.args[i])
+            }
+            i += 1
         }
     }
 

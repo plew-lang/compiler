@@ -1,0 +1,189 @@
+// @Std/Set — a CoW value-semantics hash set (spec/02). NOT a language item: `Set` has
+// no literal, so naming it in a type position needs `import @Std/Set with { Set }`, and
+// instances are built via `Set.from([…])` / `Set.new()`. Built on `Array` (so CoW +
+// value semantics come for free via Array's buffer sharing): the dense `items`/`hashes`
+// arrays hold the elements, and `buckets` is an open-addressing index map (slot -> entry
+// index + 1; 0 = empty) for O(1) membership. Elements need `Hash` (to place) and `Eq`
+// (to resolve collisions). Linear probing, growing at load 0.75 — the same floor as
+// `Dictionary`, minus the value column.
+import @Std/Hash with { Hash, SipHasher }
+
+export struct Set[E] {
+    mut val items: Array[E]
+    mut val hashes: Array[U64]
+    mut val buckets: Array[U64]
+    pub(get) mut val count: U64
+}
+pub impl[E] Set[E] {
+    // An empty set.
+    assoc fn new() -> Set[E] {
+        return <Set items=[] hashes=[] buckets=[] count=0U64 />
+    }
+    // A set of every element in `source` (duplicates collapse to one).
+    assoc fn from(source: Array[E]) -> Set[E] where E: Hash, E: Eq {
+        mut val s: Set[E] = <Set items=[] hashes=[] buckets=[] count=0U64 />
+        mut val i: U64 = 0
+        while i < source.count {
+            s.insert(source[i])
+            i = i + 1U64
+        }
+        return s
+    }
+    // SipHash digest of an element (per-process random seed — see @Std/Hash).
+    fn hashOf(value: E) -> U64 where E: Hash {
+        mut val h: SipHasher = SipHasher.new()
+        value.hash(hasher: inout h)
+        return h.finish()
+    }
+    // Resize the bucket index (double, or 8 from empty) and re-place every entry by its
+    // stored hash. Entry order is preserved (dense arrays untouched).
+    inout fn grow() where E: Hash {
+        mut val newCap: U64 = 8U64
+        if self.buckets.count > 0U64 {
+            newCap = self.buckets.count * 2U64
+        }
+        mut val nb: Array[U64] = []
+        mut val j: U64 = 0
+        while j < newCap {
+            nb.append(value: 0U64)
+            j = j + 1U64
+        }
+        mut val i: U64 = 0
+        while i < self.items.count {
+            val code: U64 = self.hashes[i]
+            mut val slot: U64 = code & (newCap - 1U64)
+            while nb[slot] != 0U64 {
+                slot = (slot + 1U64) & (newCap - 1U64)
+            }
+            nb.set(i: slot, value: i + 1U64)
+            i = i + 1U64
+        }
+        self.buckets = nb
+    }
+    // Add `value` (a no-op when already present).
+    inout fn insert(value~: E) where E: Hash, E: Eq {
+        if self.buckets.count == 0U64 {
+            self.grow()
+        } else {
+            if (self.count + 1U64) * 4U64 > self.buckets.count * 3U64 {
+                self.grow()
+            }
+        }
+        val code: U64 = self.hashOf(value: value)
+        val cap: U64 = self.buckets.count
+        mut val slot: U64 = code & (cap - 1U64)
+        while true {
+            val b: U64 = self.buckets[slot]
+            if b == 0U64 {
+                self.items.append(value: value)
+                self.hashes.append(value: code)
+                self.buckets.set(i: slot, value: self.items.count)
+                self.count = self.count + 1U64
+                return
+            }
+            val idx: U64 = b - 1U64
+            if self.hashes[idx] == code {
+                if self.items[idx] == value {
+                    return
+                }
+            }
+            slot = (slot + 1U64) & (cap - 1U64)
+        }
+    }
+    // Entry index + 1 for `value` (0 = absent).
+    fn find(value: E) -> U64 where E: Hash, E: Eq {
+        if self.buckets.count == 0U64 {
+            return 0U64
+        }
+        val code: U64 = self.hashOf(value: value)
+        val cap: U64 = self.buckets.count
+        mut val slot: U64 = code & (cap - 1U64)
+        while true {
+            val b: U64 = self.buckets[slot]
+            if b == 0U64 {
+                return 0U64
+            }
+            val idx: U64 = b - 1U64
+            if self.hashes[idx] == code {
+                if self.items[idx] == value {
+                    return b
+                }
+            }
+            slot = (slot + 1U64) & (cap - 1U64)
+        }
+        return 0U64
+    }
+    // Whether `value` is a member.
+    fn contains(value~: E) -> Bool where E: Hash, E: Eq {
+        return self.find(value: value) != 0U64
+    }
+    // Remove `value` if present (a no-op when absent). Mirrors `Dictionary.remove`:
+    // (1) backward-shift the open-addressing index to fill the emptied slot (no
+    // tombstones, so lookups never degrade), then (2) swap the last dense entry into the
+    // freed position and drop the tail.
+    inout fn remove(value~: E) where E: Hash, E: Eq {
+        if self.buckets.count == 0U64 {
+            return
+        }
+        val cap: U64 = self.buckets.count
+        val code: U64 = self.hashOf(value: value)
+        mut val s: U64 = code & (cap - 1U64)
+        mut val found: Bool = false
+        while !found {
+            val b: U64 = self.buckets[s]
+            if b == 0U64 {
+                return
+            }
+            val idx: U64 = b - 1U64
+            if self.hashes[idx] == code {
+                if self.items[idx] == value {
+                    found = true
+                }
+            }
+            if !found {
+                s = (s + 1U64) & (cap - 1U64)
+            }
+        }
+        val r: U64 = self.buckets[s] - 1U64
+        // (1) backward-shift deletion (Knuth 6.4 Algorithm R).
+        mut val i: U64 = s
+        mut val doneShift: Bool = false
+        while !doneShift {
+            self.buckets.set(i: i, value: 0U64)
+            mut val j: U64 = i
+            mut val moved: Bool = false
+            while !moved {
+                j = (j + 1U64) & (cap - 1U64)
+                val bj: U64 = self.buckets[j]
+                if bj == 0U64 {
+                    doneShift = true
+                    moved = true
+                } else {
+                    val ideal: U64 = self.hashes[bj - 1U64] & (cap - 1U64)
+                    val di: U64 = (i + cap - ideal) & (cap - 1U64)
+                    val dj: U64 = (j + cap - ideal) & (cap - 1U64)
+                    if di <= dj {
+                        self.buckets.set(i: i, value: bj)
+                        i = j
+                        moved = true
+                    }
+                }
+            }
+        }
+        // (2) compact the dense arrays.
+        val lastIdx: U64 = self.count - 1U64
+        if r != lastIdx {
+            val movedHash: U64 = self.hashes[lastIdx]
+            self.items.set(i: r, value: self.items[lastIdx])
+            self.hashes.set(i: r, value: movedHash)
+            mut val t: U64 = movedHash & (cap - 1U64)
+            while self.buckets[t] != lastIdx + 1U64 {
+                t = (t + 1U64) & (cap - 1U64)
+            }
+            self.buckets.set(i: t, value: r + 1U64)
+        }
+        self.items.removeLast()
+        self.hashes.removeLast()
+        self.count = self.count - 1U64
+    }
+}

@@ -272,8 +272,13 @@ pub impl Comp {
                 }
                 self.registerMethodInst(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 // an assoc-fn call `Type.make(args)` (type-name receiver): register its
-                // monomorphized instance through the free-fn machinery (no self).
-                self.registerAssocInst(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                // monomorphized instance through the free-fn machinery (no self). The
+                // result type grounds any param the args alone don't (`Set.new()`).
+                mut val assocResultRef: U64 = self.monoWork.scanExpectedTy
+                if assocResultRef == 0U64 {
+                    assocResultRef = self.tyRefOfInfo(ti: self.typeOf(id: exprId))
+                }
+                self.registerAssocInst(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, resultRef: assocResultRef)
                 // register the call's result type: a combinator on a generic receiver
                 // (`mapIter.filter(p)`) yields a new adapter instantiation
                 // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so
@@ -382,7 +387,15 @@ pub impl Comp {
     inout fn scanStmtInsts(stmtId: U64) {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                // expose the annotation as the expected type while scanning the
+                // initializer, so an assoc-fn constructor whose type param comes only
+                // from context (`val s: Set[I64] = Set.new()`) registers its instance.
+                val savedExpected: U64 = self.monoWork.scanExpectedTy
+                if !(tyIsArray) {
+                    self.monoWork.scanExpectedTy = ty
+                }
                 self.scanExprInsts(exprId: init)
+                self.monoWork.scanExpectedTy = savedExpected
                 // register the local with its EFFECTIVE type (inferred when there is no
                 // annotation), mirroring codegen — otherwise a later `p.x` on an
                 // inferred-typed `val p = <P …/>` can't recover its type, so a generic

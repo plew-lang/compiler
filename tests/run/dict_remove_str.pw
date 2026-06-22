@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// Dictionary.remove with String keys AND values: the dense-array swap copies a
+// String place into the freed slot (CoW-share, rc++) and drops the tail (rc--),
+// so the surviving Strings stay valid — no use-after-free, no double-free.
+fn main() {
+    mut val m: Dictionary[String, String] = [:]
+    m.insert(key: "a", value: "alpha")
+    m.insert(key: "b", value: "bravo")
+    m.insert(key: "c", value: "charlie")
+    m.insert(key: "d", value: "delta")
+    m.remove(key: "b")
+    print(m.count)                              // 3
+    print(m.contains(key: "b"))                 // 0
+    print(m.getOr(key: "a", fallback: "?"))     // alpha
+    print(m.getOr(key: "c", fallback: "?"))     // charlie
+    print(m.getOr(key: "d", fallback: "?"))     // delta
+    m.remove(key: "a")
+    m.remove(key: "c")
+    m.remove(key: "d")
+    print(m.count)                              // 0
+    print(m.contains(key: "a"))                 // 0
+}

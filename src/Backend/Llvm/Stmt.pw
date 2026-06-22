@@ -105,12 +105,24 @@ pub impl LlvmCtx {
                         }
                     }
                 }
+                // ground the annotation's type params under the active instance env (a
+                // generic fn / method body): a generic-typed local (`mut val b: Bag[T]`
+                // inside `Bag[T].of`, with T = I64) must resolve to the concrete instance
+                // Bag[I64] — its construction (expectedTy) and later method dispatch need
+                // the registered instance, not the template. A no-op outside a generic
+                // body or for an already-concrete annotation.
+                mut val gty: U64 = ty
+                if ty != 0U64 {
+                    if c.cur.typeParams.count > 0U64 {
+                        gty = c.groundTypeRef(ref: ty)
+                    }
+                }
                 if !(builtArr) {
                     // a let annotation provides the expected type so an un-suffixed JSX
                     // generic construction (`val o: Optional[I64] = <Optional.Some … />`)
                     // infers its type args. Consumed by the construction (cleared there).
                     if !(isArr) {
-                        self.expectedTy = ty
+                        self.expectedTy = gty
                     }
                     v = self.genLlvmExpr(c: inout c, id: init)
                     self.expectedTy = 0U64
@@ -140,16 +152,18 @@ pub impl LlvmCtx {
                     sidx = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
                 }
                 // a generic struct instance (Box[I32]): point at the generic def (so
-                // field access works) and track the instance ref for substitution.
+                // field access works) and track the instance ref for substitution. `gty`
+                // is the env-grounded annotation, so a generic-param local in a generic
+                // body (`b: Bag[T]` with T = I64) tracks the concrete Bag[I64].
                 mut val tref: U64 = 0
-                if c.isGenericInst(ref: ty) {
-                    val gslot: U64 = self.genStructSlot(c: inout c, ref: ty)
+                if c.isGenericInst(ref: gty) {
+                    val gslot: U64 = self.genStructSlot(c: inout c, ref: gty)
                     if gslot < self.genStructRefs.count {
                         sidx = self.genStructDefs[gslot]
-                        tref = ty
+                        tref = gty
                     } else {
-                        if self.genEnumSlot(c: inout c, ref: ty) < self.genEnumRefs.count {
-                            tref = ty
+                        if self.genEnumSlot(c: inout c, ref: gty) < self.genEnumRefs.count {
+                            tref = gty
                         }
                     }
                 }

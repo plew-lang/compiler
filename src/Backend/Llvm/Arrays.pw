@@ -549,6 +549,26 @@ pub impl LlvmCtx {
     // place paths, shifting instance numbering. Over-copying is observably harmless;
     // under-copying miscompiles.
     inout fn consumeIntoOwned(c: inout Comp, v: LLVMValueRef, expr: U64, typeRef: U64) -> LLVMValueRef {
+        // 1-3a (String class): CoW-SHARE a String PLACE — a String's value IS an
+        // rc-managed Array[U8] buffer (immutable, so sharing never needs a write-time
+        // CoW), so copying a String place RETAINS the buffer (rc++) instead of aliasing
+        // it unmanaged. Balanced by the owner's release at drop (Array[String] element
+        // release / struct-field deinit / removeLast). A fresh String (literal / call
+        // result) already owns its buffer and passes through; literals carry a sentinel
+        // rc making the retain a no-op. Mirrors the array / struct / enum classes below.
+        if structExprIsPlace(c: inout c, id: expr) {
+            mut val sr: U64 = typeRef
+            if sr == 0U64 {
+                sr = self.exprTypeRef(c: inout c, id: expr)
+            }
+            if sr != 0U64 {
+                val st: TypeRef = c.arena.types[sr]
+                if rangeEquals(bytes: c.arena.bytes, start: st.nameStart, len: st.nameLen, kw: "String") {
+                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                    return v
+                }
+            }
+        }
         if self.exprIsArray(c: inout c, id: expr) {
             // 1-3a (array class): CoW-SHARE an array place into the new owner — retain the
             // buffer (rc++) instead of eager deep-copy; the first in-place mutation CoWs via

@@ -819,6 +819,11 @@ export struct MonoWork {
     pub mut val captures: Array[CaptureEntry] = []
     pub mut val arrayElems: Array[Bind] = []
     pub mut val boxedFields: Array[U64] = []
+    // transient: the expected type ref of the binding currently being scanned (a `let`
+    // annotation), so an assoc-fn constructor whose type param comes only from context
+    // (`Set.new()` / `Set.from([])`) registers its instance. Mirrors the backend's
+    // expectedTy; set/restored around the initializer scan, 0 otherwise.
+    pub mut val scanExpectedTy: U64 = 0
 }
 pub impl MonoWork { factory }
 

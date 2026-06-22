@@ -205,6 +205,38 @@ pub impl LlvmCtx {
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
+    // `arr.removeLast()`: shrink the array by one (panics when empty). Symmetric with
+    // append — CoWs a shared buffer first (it is a mutation), then releases the popped
+    // element's owned heap (String / nested array / deinit-bearing struct/enum) so the
+    // element cascade stays balanced, and decrements `count`. The storage buffer itself
+    // is left at its grown capacity (only the live `count` shrinks). Returns unit. Used
+    // by the dense-array compaction in Dictionary/Set `remove`.
+    inout fn genLlvmArrayRemoveLast(c: inout Comp, recv: U64) -> LLVMValueRef {
+        // CoW gateway (1-0): own any shared array buffer ABOVE the receiver first.
+        self.privatizeForWrite(c: inout c, id: recv)
+        val slot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: removeLast only on an array local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
+        val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
+        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
+        val countPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 1U64, anon())
+        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        // empty-guard: index 0 must be in range (i.e. count > 0), else panic.
+        self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
+        val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        // release the popped element's owned heap (balance the value-ARC cascade).
+        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
+            val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount)
+            val ev: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
+            self.valueArc(c: inout c, v: ev, typeRef: elemRef, retain: false)
+        }
+        LLVMBuildStore(self.b, newCount, countPtr)
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
+    }
+
     // Emit a condition expression as an i1. A comparison binary already yields i1; any
     // other integer becomes `x != 0`.
     // `a && b` / `a || b` with short-circuit semantics (spec/12), yielding an i1.

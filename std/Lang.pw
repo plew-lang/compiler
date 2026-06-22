@@ -138,6 +138,7 @@ extern "plew-intrinsic" {
     fn arrayGet[T](a: Array[T], i: U64) -> T
     fn arraySet[T](a: inout Array[T], i: U64, v: T)
     fn arrayLen[T](a: Array[T]) -> U64
+    fn arrayPop[T](a: inout Array[T])
 }
 
 // Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
@@ -154,6 +155,12 @@ pub impl[T] Array[T] {
     // Replace the element at `i` (panics when out of range).
     inout fn set(i: U64, value: T) {
         arraySet(a: inout self, i: i, v: value)
+    }
+    // Remove the last element (panics when empty). The storage keeps its capacity;
+    // only the live `count` shrinks. Used by Dictionary/Set `remove` to compact the
+    // dense entry arrays after a deletion.
+    inout fn removeLast() {
+        arrayPop(a: inout self)
     }
 }
 
@@ -288,5 +295,81 @@ pub impl[K, V] Dictionary[K, V] {
             panic "dictionary: key not found"
         }
         return self.vals[b - 1U64]
+    }
+    // Remove `key` if present (a no-op when absent — spec/02's removal path; there is no
+    // `dict[key] = nil` special case). Two steps keep the structure dense and the probe
+    // chains intact: (1) backward-shift the open-addressing index to fill the emptied
+    // slot (no tombstones, so lookups never degrade), then (2) swap the last dense entry
+    // into the freed position and drop the tail.
+    inout fn remove(key: K) where K: Hash, K: Eq {
+        if self.buckets.count == 0U64 {
+            return
+        }
+        val cap: U64 = self.buckets.count
+        val code: U64 = self.hashOf(key: key)
+        // locate the slot holding `key` (linear probe from its ideal slot).
+        mut val s: U64 = code & (cap - 1U64)
+        mut val found: Bool = false
+        while !found {
+            val b: U64 = self.buckets[s]
+            if b == 0U64 {
+                return
+            }
+            val idx: U64 = b - 1U64
+            if self.hashes[idx] == code {
+                if self.keys[idx] == key {
+                    found = true
+                }
+            }
+            if !found {
+                s = (s + 1U64) & (cap - 1U64)
+            }
+        }
+        val r: U64 = self.buckets[s] - 1U64
+        // (1) backward-shift deletion (Knuth 6.4 Algorithm R): pull each following entry
+        // back into the hole when its ideal slot lies at/behind the hole, so every entry
+        // stays reachable by probing from its ideal slot.
+        mut val i: U64 = s
+        mut val doneShift: Bool = false
+        while !doneShift {
+            self.buckets.set(i: i, value: 0U64)
+            mut val j: U64 = i
+            mut val moved: Bool = false
+            while !moved {
+                j = (j + 1U64) & (cap - 1U64)
+                val bj: U64 = self.buckets[j]
+                if bj == 0U64 {
+                    doneShift = true
+                    moved = true
+                } else {
+                    val ideal: U64 = self.hashes[bj - 1U64] & (cap - 1U64)
+                    val di: U64 = (i + cap - ideal) & (cap - 1U64)
+                    val dj: U64 = (j + cap - ideal) & (cap - 1U64)
+                    if di <= dj {
+                        self.buckets.set(i: i, value: bj)
+                        i = j
+                        moved = true
+                    }
+                }
+            }
+        }
+        // (2) compact the dense arrays: move the last entry into freed slot `r` (unless
+        // `r` is already the last), repoint its bucket pointer, then drop the tail.
+        val lastIdx: U64 = self.count - 1U64
+        if r != lastIdx {
+            val movedHash: U64 = self.hashes[lastIdx]
+            self.keys.set(i: r, value: self.keys[lastIdx])
+            self.vals.set(i: r, value: self.vals[lastIdx])
+            self.hashes.set(i: r, value: movedHash)
+            mut val t: U64 = movedHash & (cap - 1U64)
+            while self.buckets[t] != lastIdx + 1U64 {
+                t = (t + 1U64) & (cap - 1U64)
+            }
+            self.buckets.set(i: t, value: r + 1U64)
+        }
+        self.keys.removeLast()
+        self.vals.removeLast()
+        self.hashes.removeLast()
+        self.count = self.count - 1U64
     }
 }

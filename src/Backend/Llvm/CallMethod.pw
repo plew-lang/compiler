@@ -258,6 +258,10 @@ pub impl LlvmCtx {
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "set") {
                 return self.genLlvmArraySet(c: inout c, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
             }
+            // `arr.removeLast()`: shrink by one (panics when empty), releasing the popped element.
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "removeLast") {
+                return self.genLlvmArrayRemoveLast(c: inout c, recv: recv)
+            }
             // a USER method on Array (`xs.first()` for `impl[T] Array[T]`): monomorphize
             // it for Array[elem] (the element ref drives the instance).
             val arrB: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)

@@ -1,0 +1,37 @@
+import @Std/Io with { print }
+
+// Dictionary.remove (spec/02): deletes a key, compacting the dense entries and
+// backward-shifting the open-addressing index so every surviving key stays
+// findable. Removing an absent key is a no-op; a removed key can be re-inserted.
+fn main() {
+    mut val m: Dictionary[I64, I64] = [:]
+    mut val i: I64 = 0
+    while i < 10I64 {
+        m.insert(key: i, value: i * 10I64)
+        i = i + 1I64
+    }
+    print(m.count)                       // 10
+    m.remove(key: 3I64)
+    m.remove(key: 7I64)
+    m.remove(key: 100I64)                // absent — no-op
+    print(m.count)                       // 8
+    print(m.contains(key: 3I64))         // 0
+    print(m.contains(key: 7I64))         // 0
+    // every surviving key still maps correctly (probe chains intact).
+    mut val ok: I64 = 1
+    mut val k: I64 = 0
+    while k < 10I64 {
+        if k != 3I64 {
+            if k != 7I64 {
+                if m.getOr(key: k, fallback: -1I64) != k * 10I64 {
+                    ok = 0
+                }
+            }
+        }
+        k = k + 1I64
+    }
+    print(ok)                            // 1
+    m.insert(key: 3I64, value: 333I64)   // re-insert a removed key
+    print(m.getOr(key: 3I64, fallback: -1I64))  // 333
+    print(m.count)                       // 9
+}

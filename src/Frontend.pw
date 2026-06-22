@@ -255,6 +255,7 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") { return true }
         if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arraySet") { return true }
         if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayLen") { return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayPop") { return true }
         return false
     }
 }
