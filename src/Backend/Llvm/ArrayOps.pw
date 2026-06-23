@@ -271,12 +271,27 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            // a `Buffer[T]` STRUCT FIELD (`dict.keys`, `holder.items`): resolve the field's
+            // declared type from the base's struct (under the base's generic env so a
+            // `Buffer[K]` field on `Dictionary[String, V]` grounds correctly).
+            // a `Buffer[T]` STRUCT FIELD (`dict.keys`, `holder.items`): consult the field's
+            // declared type from the base's struct.
+            Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
+                val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
+                if bsi < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
+                    if fidx < c.arena.structs[bsi].fields.count {
+                        return fieldIsBufferType(c: inout c, f: c.arena.structs[bsi].fields[fidx])
+                    }
+                }
+            }
             _ => {}
         }
         return false
     }
 
-    // The element TypeRef of a `Buffer[T]` receiver local (T), or 0.
+    // The element TypeRef of a `Buffer[T]` receiver (T), or 0 — a Buffer local or a Buffer
+    // struct field.
     inout fn bufElemRef(c: inout Comp, id: U64) -> U64 {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
@@ -287,6 +302,15 @@ pub impl LlvmCtx {
                         if c.arena.types[tr].args.count > 0U64 {
                             return c.arena.types[tr].args[0]
                         }
+                    }
+                }
+            }
+            Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
+                val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
+                if bsi < c.arena.structs.count {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
+                    if fidx < c.arena.structs[bsi].fields.count {
+                        return bufferFieldElemRef(c: inout c, f: c.arena.structs[bsi].fields[fidx])
                     }
                 }
             }

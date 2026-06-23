@@ -1,0 +1,3 @@
+h=3
+shared h=3 h2=3
+h2[0]=alpha h[2]=gamma

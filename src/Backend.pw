@@ -983,6 +983,54 @@ fn globalSymbol(idx: U64) -> String {
 
 // If field `f` is of array type — declared `Array[E]`, or a type param that
 // grounds (under the active env) to `Array[E]` — the element type ref E, else 0.
+// Whether field `f` is a `Buffer[T]` (the rc-managed storage floor) held by value — a
+// struct field of Buffer type (C2: Dictionary/Set hold their dense/index buffers this way).
+// A Buffer field is NOT `tyIsArray` (its declared type is `Buffer[...]`, not `Array[...]`),
+// so the array-field ARC paths must check this in parallel. The grounded type is consulted
+// so a generic field param grounding to `Buffer` (under the active env) is recognized too.
+fn fieldIsBufferType(c: inout Comp, f: FieldDef) -> Bool {
+    if f.tyIsArray {
+        return false
+    }
+    if f.ty == 0U64 {
+        return false
+    }
+    // a name check on the DECLARED type (no grounding): a Buffer field is declared
+    // `Buffer[...]` (name "Buffer") directly — Dict/Set hold `Buffer[K]` etc. explicitly,
+    // never via a bare type param. Crucially this avoids calling groundTypeRef from the
+    // hot, recursive structNeedsDeinit (which can re-enter type resolution and overflow).
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Buffer")
+}
+
+// The element TypeRef of a `Buffer[T]` field (T), or 0 — for the element-cascade in the
+// field ARC paths (Array and Buffer fields are rep-identical, so they share the cascade).
+fn bufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
+    if !(fieldIsBufferType(c: inout c, f: f)) {
+        return 0U64
+    }
+    mut val g: U64 = f.ty
+    if c.cur.typeParams.count > 0U64 {
+        g = c.groundTypeRef(ref: f.ty)
+    }
+    val t: TypeRef = c.arena.types[g]
+    if t.args.count > 0U64 {
+        return t.args[0]
+    }
+    return 0U64
+}
+
+// The element ref for a field that owns an rc-managed buffer — an `Array[E]` field or a
+// `Buffer[E]` field (both are a single rawbuf pointer). 0 if the field owns no such buffer.
+// The companion gate is `f.tyIsArray || fieldIsBufferType(f)` (the buffer is released/
+// retained even when E is a scalar, i.e. when this returns 0 for a scalar element).
+fn arrayOrBufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
+    val ae: U64 = arrayFieldElemRef(c: inout c, f: f)
+    if ae != 0U64 {
+        return ae
+    }
+    return bufferFieldElemRef(c: inout c, f: f)
+}
+
 fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     if f.tyIsArray {
         if f.ty != 0U64 {

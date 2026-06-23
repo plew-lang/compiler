@@ -41,8 +41,19 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count {
             val fd: FieldDef = sd.fields[i]
+            // an array OR Buffer field owns an rc-managed buffer that must be released. The
+            // Array struct itself (`struct { data: Buffer[T] }`) is EXCLUDED — its single
+            // Buffer field IS the array value, released by the dedicated array-value path
+            // (emitDeinitCall's locIsArr branch), never the struct-deinit path; treating it
+            // as a deinit-needing struct double-processes Array and recurses (Array is the
+            // type the array machinery special-cases everywhere).
             if fd.tyIsArray {
                 return true
+            }
+            if !(rangeEquals(bytes: c.arena.bytes, start: sd.nameStart, len: sd.nameLen, kw: "Array")) {
+                if fieldIsBufferType(c: inout c, f: fd) {
+                    return true
+                }
             }
             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
             if fsi < c.arena.structs.count {
@@ -161,13 +172,15 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count {
             val fd: FieldDef = sd.fields[i]
-            if fd.tyIsArray {
-                // release the field's rc-managed array buffer (nested-array elements cascade;
-                // Array[Struct] element release is deferred). Sound because every site that
-                // places a struct value deep-copies its heap (see genFieldValue / genLlvmMakeEnum
-                // / copyValueIfPlace), so a struct's array fields are independently owned.
+            if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
+                // release the field's rc-managed array/Buffer buffer (its elements cascade
+                // when they own heap; scalar elements just free the buffer at rc 0). Sound
+                // because every site that places a struct value deep-copies / CoW-shares its
+                // heap (genFieldValue / genLlvmMakeEnum / copyValueIfPlace), so a struct's
+                // array/Buffer fields are independently owned. Array and Buffer fields are
+                // rep-identical (single rawbuf pointer) so they share emitReleaseArrayValue.
                 val fv: LLVMValueRef = LLVMBuildExtractValue(self.b, v, i, anon())
-                val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+                val er: U64 = arrayOrBufferFieldElemRef(c: inout c, f: fd)
                 mut val ety: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
                 if er != 0U64 {
                     ety = self.llvmTypeOfRef(c: inout c, ref: er)

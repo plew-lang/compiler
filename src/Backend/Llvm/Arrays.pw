@@ -283,6 +283,13 @@ pub impl LlvmCtx {
             // consumeIntoOwned's array class.
             return self.shareArrayIfPlace(c: inout c, arrVal: self.genLlvmExpr(c: inout c, id: valExpr), elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), valueExpr: valExpr)
         }
+        // a Buffer field initialized from a place CoW-SHARES the buffer (rc++) — same as an
+        // array field (rep-identical); a fresh buffer (call result) passes through. Placed
+        // before the generic-instance branch below so a `Buffer[T]` place is not misrouted
+        // through the enum/struct-instance retain path.
+        if fieldIsBufferType(c: inout c, f: fld) {
+            return self.shareArrayIfPlace(c: inout c, arrVal: self.genLlvmExpr(c: inout c, id: valExpr), elemTy: self.i64ty, valueExpr: valExpr)
+        }
         // an existential `any P` field (spec/08): box a concrete conforming initializer,
         // or value-semantics-copy an existing `any` place.
         mut val fldBoxed: Bool = false
@@ -525,9 +532,9 @@ pub impl LlvmCtx {
         mut val fi: U64 = 0
         while fi < sd.fields.count {
             val fd: FieldDef = sd.fields[fi]
-            // an array field (declared `Array[E]` or a type param grounding to one under
-            // the active env): deep-copy the buffer.
-            val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+            // an array or Buffer field (declared `Array[E]`/`Buffer[E]` or a type param
+            // grounding to one): deep-copy the buffer (rep-identical, so the same path).
+            val er: U64 = arrayOrBufferFieldElemRef(c: inout c, f: fd)
             if er != 0U64 {
                 val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
                 val et: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: er)
@@ -961,10 +968,9 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count {
             val fd: FieldDef = sd.fields[i]
-            val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+            val er: U64 = arrayOrBufferFieldElemRef(c: inout c, f: fd)
             if er != 0U64 {
-                // an array field (declared `Array[E]` or a type param grounding to one under
-                // the active env): retain its buffer (shallow).
+                // an array or Buffer field: retain its buffer (shallow CoW-share).
                 self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: LLVMBuildExtractValue(self.b, v, i, anon())))
             } else {
                 if c.fieldIsBoxed(f: fd) {
