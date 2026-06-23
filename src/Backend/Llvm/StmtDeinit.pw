@@ -267,12 +267,24 @@ pub impl LlvmCtx {
             return
         }
         // an owned `Buffer[T]` BODY local: drop its single data pointer (dec rc, free at
-        // 0). Gated on `li >= curBodyMark` (params / globals / captures are borrows). MVP:
-        // scalar elements only — element heap (String / nested) cascade is C1/C2 work.
+        // 0). Gated on `li >= curBodyMark` (params / globals / captures are borrows). An
+        // element type that owns heap (String / nested Buffer / array-field struct) gets
+        // the same rc-aware element cascade as arrays (release [0,count) then free) via
+        // emitReleaseArrayValue — the Buffer value is the data pointer, identical to an
+        // array value, and the element ref comes from the `Buffer[T]` type argument.
         if self.locTypeRef[li] != 0U64 {
             if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.locTypeRef[li]].nameStart, len: c.arena.types[self.locTypeRef[li]].nameLen, kw: "Buffer") {
                 if li >= self.curBodyMark {
-                    self.rawbufDrop(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
+                    val bdata: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
+                    mut val ber: U64 = 0
+                    if c.arena.types[self.locTypeRef[li]].args.count > 0U64 {
+                        ber = c.arena.types[self.locTypeRef[li]].args[0]
+                    }
+                    if self.arrElemNeedsValueArc(c: inout c, elemRef: ber) {
+                        self.emitReleaseArrayValue(c: inout c, data: bdata, count: self.rawbufCount(c: inout c, data: bdata), elemTy: self.llvmTypeOfRef(c: inout c, ref: ber), elemRef: ber)
+                    } else {
+                        self.rawbufDrop(c: inout c, cell: bdata)
+                    }
                 }
                 return
             }

@@ -1,0 +1,29 @@
+// The Buffer floor with an ARC-bearing element type (String): append copies the
+// value in, get is value-return (retains so the result independently owns its
+// buffer), set is commit-then-release (drops the replaced element), removeLast
+// releases the popped element, and scope-drop releases every live element before
+// freeing the backing buffer. Exercises the element cascade beyond the scalar MVP
+// (the companion ASan-on-self-compile gate proves it is leak/UAF-free).
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+fn main() {
+    mut val b: Buffer[String] = Buffer.new()
+    mut val i: I64 = 0I64
+    while i < 12I64 {
+        b.append("item-" + i.format(format: ""))
+        i += 1I64
+    }
+    val c0: U64 = b.count()
+    print(line: "count=" + c0.format(format: ""))
+    val first: String = b.get(index: 0U64)
+    print(line: "first=" + first)
+    val last: String = b.get(index: 11U64)
+    print(line: "last=" + last)
+    b.set(index: 0U64, "replaced")
+    val r: String = b.get(index: 0U64)
+    print(line: "r=" + r)
+    b.removeLast()
+    val c1: U64 = b.count()
+    print(line: "afterPop=" + c1.format(format: ""))
+}

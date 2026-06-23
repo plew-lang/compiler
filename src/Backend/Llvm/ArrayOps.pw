@@ -363,14 +363,22 @@ pub impl LlvmCtx {
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
-    // `buf.get(index)`: bounds-checked element read (panics when out of range).
+    // `buf.get(index)`: bounds-checked element read (panics when out of range). The read
+    // is value-return (buffer-floor.md §4.1): an ARC-bearing element is RETAINED so the
+    // returned value independently owns it (CoW-shared) — its drop balances this retain,
+    // and the buffer's own element release at drop is unaffected. (A scalar passes through.)
     inout fn genLlvmBufferGet(c: inout Comp, recv: U64, indexExpr: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
         val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-        return LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
+            self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
+        }
+        return elem
     }
 
     // `buf.capacity()`: the allocated capacity, read from the header.
@@ -384,32 +392,52 @@ pub impl LlvmCtx {
         return LLVMBuildICmp(self.b, llvmIntEq(), count, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
     }
 
-    // `buf.set(index, value)`: bounds-checked element store (MVP: scalar elements — no
-    // element-heap release/retain yet; that arrives with the C1/C2 element cascade).
+    // `buf.set(index, value)`: bounds-checked element store. commit-then-release for an
+    // ARC-bearing element type (String / nested buffer / array-field struct): read old,
+    // store the (place-copied/retained) new value, then release the old — so a re-entrant
+    // deinit observes the slot already holding the live new value (collections §6-4).
     inout fn genLlvmBufferSet(c: inout Comp, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
         val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val rv: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
-        LLVMBuildStore(self.b, rv, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx))
+        val slotPtr: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
+        if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
+            val old: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, slotPtr, anon())
+            LLVMBuildStore(self.b, rv, slotPtr)
+            self.valueArc(c: inout c, v: old, typeRef: er, retain: false)
+        } else {
+            LLVMBuildStore(self.b, rv, slotPtr)
+        }
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
     // `buf.removeLast()`: shrink the live count by one (panics when empty). The storage
-    // keeps its capacity. MVP: scalar elements — no popped-element release yet.
+    // keeps its capacity. For an ARC-bearing element, release the popped element after
+    // committing the smaller count (commit-then-release).
     inout fn genLlvmBufferRemoveLast(c: inout Comp, recv: U64) -> LLVMValueRef {
         val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
         if LLVMIsNull(slot) != 0I32 {
             compileErrorAt(line: 0, msg: "LLVM backend: Buffer.removeLast only on a buffer local (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
         val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slot, anon())
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         // empty-guard: index 0 must be in range (count > 0), else panic.
         self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
-        self.rawbufSetCount(c: inout c, data: data, n: LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
+        val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
+            val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount), anon())
+            self.rawbufSetCount(c: inout c, data: data, n: newCount)
+            self.valueArc(c: inout c, v: popped, typeRef: er, retain: false)
+        } else {
+            self.rawbufSetCount(c: inout c, data: data, n: newCount)
+        }
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
