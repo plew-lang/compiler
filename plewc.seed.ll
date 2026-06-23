@@ -121138,7 +121138,7 @@ arm115:                                           ; preds = %match.next106
   store ptr getelementptr ([25 x i8], ptr @str.846, i64 0, i64 24), ptr %57, align 8
   %470 = load ptr, ptr %55, align 8
   %471 = call i64 @plew_rawbuf_count(ptr %470)
-  %472 = icmp ugt i64 %471, 0
+  %472 = icmp sgt i64 %471, 0
   br i1 %472, label %then117, label %endif118
 
 match.next116:                                    ; preds = %match.next106
