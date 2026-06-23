@@ -36,15 +36,18 @@ pub impl LlvmCtx {
         val n: U64 = bytes.count - 1
         val i8ty: LLVMTypeRef = LLVMInt8TypeInContext(self.ctx)
         mut val cvals: Array[LLVMValueRef] = []
-        // header: cap (8 LE bytes) = buffer byte count; rc (8 LE bytes) = never-free sentinel.
+        // rawbuf header (3 i64 words, matching plew_rawbuf_alloc): cap = buffer byte count,
+        // count = the live string length (n), rc = never-free sentinel. The String VALUE is
+        // the data pointer (offset 24); arrValCount reads `count` straight from this header.
         appendU64Le(into: inout cvals, n: bytes.count, i8ty: i8ty)
+        appendU64Le(into: inout cvals, n: n, i8ty: i8ty)
         appendU64Le(into: inout cvals, n: 4611686018427387904U64, i8ty: i8ty)
         mut val j: U64 = 0
         while j < bytes.count {
             cvals.append(value: LLVMConstInt(i8ty, bytes[j] as U64, 0I32))
             j += 1
         }
-        val m: U64 = 16U64 + bytes.count
+        val m: U64 = 24U64 + bytes.count
         val arrTy: LLVMTypeRef = LLVMArrayType2(i8ty, m)
         val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, cstr(s: "str"))
         LLVMSetInitializer(g, LLVMConstArray2(i8ty, arrayCPtr(cvals), m))
@@ -52,9 +55,9 @@ pub impl LlvmCtx {
         LLVMSetAlignment(g, 8U32)
         mut val idxs: Array[LLVMValueRef] = []
         idxs.append(value: LLVMConstInt(self.i64ty, 0U64, 0I32))
-        idxs.append(value: LLVMConstInt(self.i64ty, 16U64, 0I32))
-        val ptr: LLVMValueRef = LLVMBuildGEP2(self.b, arrTy, g, arrayCPtr(idxs), 2U64, anon())
-        return self.arrValMake(c: inout c, data: ptr, count: LLVMConstInt(self.i64ty, n, 0I32))
+        idxs.append(value: LLVMConstInt(self.i64ty, 24U64, 0I32))
+        // the data pointer at offset 24 IS the String value (count is baked in the header above).
+        return LLVMBuildGEP2(self.b, arrTy, g, arrayCPtr(idxs), 2U64, anon())
     }
 
     // Decompose a String value to (i8* data, i64 len) and call a 2-arg runtime sink

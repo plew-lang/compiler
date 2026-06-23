@@ -346,9 +346,14 @@ pub impl LlvmCtx {
                     }
                 }
                 // the env-aware element type (a generic array field `self.keys: Array[K]`
-                // with K -> String grounds to strty, so `self.keys[i] == key` is String ==).
+                // with K -> String, so `self.keys[i] == key` is String ==). C1 made String a
+                // bare data pointer (no longer a distinct LLVM struct kind), so detect it from
+                // the element TYPE REF by name rather than the lowered LLVM type.
+                val eref: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: base)
+                if eref != 0U64 {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[eref].nameStart, len: c.arena.types[eref].nameLen, kw: "String") { return 1U64 }
+                }
                 val et: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
-                if LLVMGetTypeKind(et) == 10U32 { return 1U64 }
                 if LLVMGetTypeKind(et) == 8U32 {
                     if LLVMGetIntTypeWidth(et) == 1U32 { return 2U64 }
                 }

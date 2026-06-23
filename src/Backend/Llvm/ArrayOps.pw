@@ -57,10 +57,10 @@ pub impl LlvmCtx {
         }
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
         val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
-        // the base must be an array {ptr,i64} aggregate; a non-aggregate here means a
-        // nested array (Array[Array[T]]) or unsupported element typing — reject loudly
-        // rather than extractvalue on a scalar (which crashes the LLVM builder).
-        if LLVMGetTypeKind(LLVMTypeOf(arr)) != 10U32 {
+        // the base must be an array VALUE (a single rawbuf data pointer, C1); a non-pointer
+        // here means the base resolved to a scalar (unsupported element typing) — reject
+        // loudly rather than treating an integer as a buffer (which crashes at runtime).
+        if LLVMGetTypeKind(LLVMTypeOf(arr)) != 12U32 {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
