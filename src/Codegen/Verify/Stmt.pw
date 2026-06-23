@@ -21,7 +21,7 @@ pub impl Comp {
                 // name resolves). typeOf returns kind 0 (numeric) BOTH for a real int AND
                 // as an unrecovered default (a fn-value ref, a dict literal, a call), so an
                 // init reported numeric is never trusted as a mismatch source (that sank the
-                // first attempt — fn_value / dict / rawAlloc false-rejected). Skip arrays
+                // first attempt — fn_value / dict / a call false-rejected). Skip arrays
                 // (separate machinery) and floats (typeOf wobbles float literal vs local).
                 self.checkGenericArity(ref: ty, offset: nameStart)
                 // declared an array but initialized with a non-array (`val a: Array[I64] =

@@ -95,8 +95,8 @@ pub impl Comp {
                             val lt2: TypeRef = self.arena.types[lo.ty]
                             return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
                         }
-                        // a RawBuffer[T] local: keep the structured ref so rawLoad can
-                        // recover the element type T from its argument.
+                        // a Buffer[T] local: keep the structured ref so the floor
+                        // intrinsics can recover the element type T from its argument.
                         if self.isRawBufInst(ref: lo.ty) {
                             val lt3: TypeRef = self.arena.types[lo.ty]
                             return <TypeInfo kind=2 nameStart=lt3.nameStart nameLen=lt3.nameLen ref=lo.ty />
@@ -164,35 +164,6 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                // raw-memory floor: rawLoad returns the element type of its RawBuffer[T]
-                // argument, rawCap returns U64, rawIsUnique returns Bool. rawAlloc's
-                // result is always bound through an explicit RawBuffer[T] annotation, so
-                // a scalar placeholder suffices here (never the source of the type).
-                if self.isRawIntrinsicName(nameStart: nameStart, nameLen: nameLen) {
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
-                        val bt: TypeInfo = self.exprType(id: args[0].expr)
-                        if bt.ref < self.arena.types.count {
-                            val rb: TypeRef = self.arena.types[bt.ref]
-                            if rb.args.count == 1 {
-                                return self.typeInfoOfRef(ref: rb.args[0])
-                            }
-                        }
-                        return scalarInfo()
-                    }
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
-                        val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3)
-                        if u64.nameLen != 0 {
-                            return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
-                        }
-                    }
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
-                        val bl: Bind = self.kwSpan(kw: "Bool", kwLen: 4)
-                        if bl.nameLen != 0 {
-                            return <TypeInfo kind=0 nameStart=bl.nameStart nameLen=bl.nameLen ref=0 />
-                        }
-                    }
-                    return scalarInfo()
-                }
                 // array intrinsics: arrayGet returns the element type of its `Array[T]`
                 // argument, arrayLen returns U64 (arrayPush/arraySet return ()).
                 if self.isArrayIntrinsicName(nameStart: nameStart, nameLen: nameLen) {

@@ -625,18 +625,6 @@ pub impl LlvmCtx {
         return self.consumeIntoOwned(c: inout c, v: rv, expr: valueExpr, typeRef: 0U64)
     }
 
-    // The LLVM element type of a `Buffer[T]` argument expression (from its tracked
-    // Buffer[T] type ref), or i64 if not resolvable.
-    inout fn rawBufElemTy(c: inout Comp, bufExpr: U64) -> LLVMTypeRef {
-        val r: U64 = self.exprTypeRef(c: inout c, id: bufExpr)
-        if r != 0U64 {
-            if c.arena.types[r].args.count > 0U64 {
-                return self.llvmTypeOfRef(c: inout c, ref: c.arena.types[r].args[0])
-            }
-        }
-        return self.i64ty
-    }
-
     // Increment a rawbuf cell's refcount (`Ref` share — `val r2 = r`).
     inout fn rawbufRetain(c: inout Comp, cell: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []

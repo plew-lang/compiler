@@ -235,20 +235,11 @@ export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     }
 }
 
-// Intrinsic-name predicates for the array / raw-buffer floor (spec/15 core-library
+// Intrinsic-name predicates for the array storage floor (spec/15 core-library
 // boundary): the `extern "plew-intrinsic"` ops Core's Array/Buffer methods call.
 // `pub` so the (still free-function) type-recovery callers can reach them during the
 // methodization transition.
 pub impl Comp {
-    // Is `(nameStart,nameLen)` a raw-floor intrinsic name?
-    fn isRawIntrinsicName(nameStart: U64, nameLen: U64) -> Bool {
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") { return true }
-        return false
-    }
     // Is `(nameStart,nameLen)` an array intrinsic name?
     fn isArrayIntrinsicName(nameStart: U64, nameLen: U64) -> Bool {
         if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayPush") { return true }

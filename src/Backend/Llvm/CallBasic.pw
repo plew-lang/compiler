@@ -266,46 +266,6 @@ pub impl LlvmCtx {
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
-        // RawBuffer floor intrinsics (extern "plew-intrinsic"): the buffer is the raw
-        // data pointer over the rawbuf runtime; element type from the arg's RawBuffer[T].
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawAlloc") {
-            // rawAlloc[T](cap, of) -> RawBuffer[T]: malloc cap*sizeof(T); `of`'s type is T.
-            val ofTy: LLVMTypeRef = LLVMTypeOf(self.genLlvmExpr(c: inout c, id: args[1].expr))
-            val cap: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
-            return self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(ofTy), cap: cap)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawLoad") {
-            val et: LLVMTypeRef = self.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
-            val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
-            val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[1].expr)
-            return LLVMBuildLoad2(self.b, et, self.arrElemPtr(elemTy: et, data: data, idx: idx), anon())
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawStore") {
-            val et: LLVMTypeRef = self.rawBufElemTy(c: inout c, bufExpr: args[0].expr)
-            val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
-            val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[1].expr)
-            val v: LLVMValueRef = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: args[2].expr), elemTy: et)
-            LLVMBuildStore(self.b, v, self.arrElemPtr(elemTy: et, data: data, idx: idx))
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawCap") {
-            mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: self.ptrty)
-            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_cap", nameId: 28U64, fnTy: fty)
-            mut val av: Array[LLVMValueRef] = []
-            av.append(value: self.genLlvmExpr(c: inout c, id: args[0].expr))
-            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rawIsUnique") {
-            // refcount == 1: the header word at data[-1] (data = header + 2).
-            val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
-            mut val idxs: Array[LLVMValueRef] = []
-            idxs.append(value: LLVMConstInt(self.i64ty, 18446744073709551615U64, 1I32))
-            val rcPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, data, arrayCPtr(idxs), 1U64, anon())
-            val rc: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, rcPtr, anon())
-            return LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        }
         // FFI String <-> C-string (@Std/Ffi extern(plewIntrinsic)).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "cString") {
             mut val ptys: Array[LLVMTypeRef] = []
