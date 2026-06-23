@@ -22,15 +22,17 @@ void plew_f64_nan_check(double a, double b){ if(a!=a || b!=b) plew_panic_raw("Na
 PlewStrR plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } char* b=plew_str_buf((long long)len); if(len) memcpy(b,buf,len); b[len]=0; free(buf); PlewStrR s; s.d=b; s.n=(long long)len; return s; }
 unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }
 PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=plew_str_empty(); s.n=0; return s; } size_t n=strlen((const char*)p); char* b=plew_str_buf((long long)n); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }
-void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }
-long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }
-void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); if(data && ((long long*)data)[-1]<=1) free((long long*)data-2); return nd; }
-void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }
+void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(3*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }
+long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-3]:0; }
+long long plew_rawbuf_count(void* p){ return p?((long long*)p)[-2]:0; }
+void plew_rawbuf_set_count(void* p, long long n){ if(p) ((long long*)p)[-2]=n; }
+void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } if(data && ((long long*)data)[-1]<=1) free((long long*)data-3); return nd; }
+void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } return nd; }
 void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }
 long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }
-void plew_rawbuf_drop(void* p){ if(!p) return; if(--((long long*)p)[-1]==0) free((long long*)p-2); }
-void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-2); }
-void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)data)[-1]--; return nd; } return data; }
+void plew_rawbuf_drop(void* p){ if(!p) return; if(--((long long*)p)[-1]==0) free((long long*)p-3); }
+void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-3); }
+void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } ((long long*)data)[-1]--; return nd; } return data; }
 void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs("panic: index out of bounds\n",stderr); exit(1); } }
 int8_t plew_i8Add(int8_t a, int8_t b){ int8_t r; if(__builtin_add_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }
 int8_t plew_i8Sub(int8_t a, int8_t b){ int8_t r; if(__builtin_sub_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }

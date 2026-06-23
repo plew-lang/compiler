@@ -1446,28 +1446,34 @@ export fn emitLlvmRuntime() {
     // (owned by C until freed); stringFromCString copies a NUL-terminated C string.
     write(s: "unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }\n")
     write(s: "PlewStrR plew_stringFromCString(unsigned char* p){ PlewStrR s; if(!p){ s.d=plew_str_empty(); s.n=0; return s; } size_t n=strlen((const char*)p); char* b=plew_str_buf((long long)n); memcpy(b,p,n); b[n]=0; s.d=b; s.n=(long long)n; return s; }\n")
-    // Array storage floor (a [cap][rc][data...] buffer). alloc seeds rc=1; binding an
-    // array eager-copies (arr_copy), so an array buffer is sole-owned (rc==1, never
-    // retained — only `Ref` cells are). grow therefore FREES the buffer it replaces on
-    // realloc (guarded by rc<=1 — a shared buffer is left alone, leak-safe), which
-    // reclaims the geometric-growth intermediates an append chain would otherwise leak.
-    // per-element load/store is inlined in IR via typed GEP.
-    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(2*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=1; return (void*)(h+2); }\n")
-    write(s: "long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-2]:0; }\n")
-    write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count) memcpy(nd,data,(size_t)(elemSize*count)); if(data && ((long long*)data)[-1]<=1) free((long long*)data-2); return nd; }\n")
-    write(s: "void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); return nd; }\n")
+    // Array / Buffer storage floor (a [cap][count][rc][data...] block). The pointer is
+    // the data; three header words sit before it: cap=[-3], count=[-2], rc=[-1]. `count`
+    // is the floor's own live-element count — the Buffer intrinsics maintain it; the
+    // legacy Array path tracks count in its {ptr,i64} value and leaves this slot 0.
+    // alloc seeds count=0, rc=1; binding an array eager-copies (arr_copy), so an array
+    // buffer is sole-owned (rc==1, never retained — only `Ref` cells are). grow therefore
+    // FREES the buffer it replaces on realloc (guarded by rc<=1 — a shared buffer is left
+    // alone, leak-safe), reclaiming the geometric-growth intermediates an append chain
+    // would otherwise leak. per-element load/store is inlined in IR via typed GEP.
+    write(s: "void* plew_rawbuf_alloc(long long elemSize, long long cap){ long long* h=(long long*)malloc(3*sizeof(long long)+(size_t)(elemSize*cap)); h[0]=cap; h[1]=0; h[2]=1; return (void*)(h+3); }\n")
+    write(s: "long long plew_rawbuf_cap(void* p){ return p?((long long*)p)[-3]:0; }\n")
+    // header `count` accessors (the Buffer floor's live-element count).
+    write(s: "long long plew_rawbuf_count(void* p){ return p?((long long*)p)[-2]:0; }\n")
+    write(s: "void plew_rawbuf_set_count(void* p, long long n){ if(p) ((long long*)p)[-2]=n; }\n")
+    write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } if(data && ((long long*)data)[-1]<=1) free((long long*)data-3); return nd; }\n")
+    write(s: "void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } return nd; }\n")
     write(s: "void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }\n")
     write(s: "long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }\n")
     // drop one owner: decrement the refcount, free the cell at 0. The sentinel rc
     // (1<<62, string literals / shared empty string) never reaches 0.
-    write(s: "void plew_rawbuf_drop(void* p){ if(!p) return; if(--((long long*)p)[-1]==0) free((long long*)p-2); }\n")
+    write(s: "void plew_rawbuf_drop(void* p){ if(!p) return; if(--((long long*)p)[-1]==0) free((long long*)p-3); }\n")
     // free a rawbuf cell unconditionally (the caller has already established rc reached 0
     // and released the element heap); a null / sentinel-rc cell is left alone.
-    write(s: "void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-2); }\n")
+    write(s: "void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-3); }\n")
     // copy-on-write a (scalar-element) array buffer before an in-place mutation: if the
     // buffer is shared (rc>1), allocate a private rc=1 copy of `count` elements, drop one
     // owner from the shared original, and return the copy; otherwise return it unchanged.
-    write(s: "void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count) memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)data)[-1]--; return nd; } return data; }\n")
+    write(s: "void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } ((long long*)data)[-1]--; return nd; } return data; }\n")
     write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
     // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
     // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
