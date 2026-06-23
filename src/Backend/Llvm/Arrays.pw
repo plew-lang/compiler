@@ -420,6 +420,47 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
+    // ---- Array/String value representation SEAM (C1 migration boundary) ----
+    //
+    // An array/string VALUE is currently the `{ptr,i64}` aggregate (data + inline count).
+    // C1 migrates it to a single data pointer with count in the heap header. EVERY access
+    // to the data/count of an array/string value or its in-place storage slot goes through
+    // these helpers, so the representation flip is localized here (reimplement the bodies)
+    // instead of scattered across ~80 inline extractvalue/insertvalue/GEP sites. Today the
+    // bodies are the identity `{ptr,i64}` ops — byte-identical emitted IR, behavior-neutral.
+
+    // The data pointer of an array/string VALUE.
+    inout fn arrValData(c: inout Comp, arr: LLVMValueRef) -> LLVMValueRef {
+        return LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+    }
+    // The live element count of an array/string VALUE.
+    inout fn arrValCount(c: inout Comp, arr: LLVMValueRef) -> LLVMValueRef {
+        return LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+    }
+    // Build an array/string VALUE from a data pointer and a count.
+    inout fn arrValMake(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef) -> LLVMValueRef {
+        mut val agg: LLVMValueRef = LLVMGetUndef(self.arrayTy)
+        agg = LLVMBuildInsertValue(self.b, agg, data, 0U64, anon())
+        agg = LLVMBuildInsertValue(self.b, agg, count, 1U64, anon())
+        return agg
+    }
+    // Load the data pointer from an array STORAGE SLOT (an array local / field alloca).
+    inout fn arrSlotData(c: inout Comp, slot: LLVMValueRef) -> LLVMValueRef {
+        return LLVMBuildLoad2(self.b, self.ptrty, LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 0U64, anon()), anon())
+    }
+    // Load the live count from an array STORAGE SLOT.
+    inout fn arrSlotCount(c: inout Comp, slot: LLVMValueRef) -> LLVMValueRef {
+        return LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 1U64, anon()), anon())
+    }
+    // Store a data pointer into an array STORAGE SLOT.
+    inout fn arrSlotSetData(c: inout Comp, slot: LLVMValueRef, data: LLVMValueRef) {
+        LLVMBuildStore(self.b, data, LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 0U64, anon()))
+    }
+    // Store a count into an array STORAGE SLOT.
+    inout fn arrSlotSetCount(c: inout Comp, slot: LLVMValueRef, count: LLVMValueRef) {
+        LLVMBuildStore(self.b, count, LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 1U64, anon()))
+    }
+
     // Eager value-semantics copy of an array value `{data,count}`: allocate a fresh
     // buffer of `count` elements (size from elemTy) and memcpy, returning the new
     // `{newdata,count}`. The memcpy is SHALLOW — so for an ARC-bearing element type

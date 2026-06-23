@@ -6,12 +6,9 @@
 
 pub impl LlvmCtx {
     inout fn genLlvmArrayLit(c: inout Comp, elems: Array[U64], elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
-        mut val agg: LLVMValueRef = LLVMGetUndef(self.arrayTy)
         val n: U64 = elems.count
         if n == 0U64 {
-            agg = LLVMBuildInsertValue(self.b, agg, LLVMConstNull(self.ptrty), 0U64, anon())
-            agg = LLVMBuildInsertValue(self.b, agg, LLVMConstInt(self.i64ty, 0U64, 0I32), 1U64, anon())
-            return agg
+            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32))
         }
         // an `Array[any P]` literal (spec/08): each concrete element is boxed into the
         // existential fat pointer so heterogeneous concrete types share one element slot.
@@ -34,9 +31,7 @@ pub impl LlvmCtx {
             LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1
         }
-        agg = LLVMBuildInsertValue(self.b, agg, data, 0U64, anon())
-        agg = LLVMBuildInsertValue(self.b, agg, LLVMConstInt(self.i64ty, n, 0I32), 1U64, anon())
-        return agg
+        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, n, 0I32))
     }
 
     // `arr[i]` read: bounds-checked element load.
@@ -69,8 +64,8 @@ pub impl LlvmCtx {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
-        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+        val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
+        val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         return LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
@@ -127,10 +122,8 @@ pub impl LlvmCtx {
         // CoW: if this array shares its buffer (rc>1), privatize it in the slot before
         // mutating, so the append does not clobber another binding's view.
         self.cowArraySlot(c: inout c, slotPtr: arrPtr, elemTy: elemTy, elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: recv))
-        val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, arrPtr, 0U64, anon())
-        val countPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, arrPtr, 1U64, anon())
-        val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, dataPtr, anon())
-        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        val data: LLVMValueRef = self.arrSlotData(c: inout c, slot: arrPtr)
+        val count: LLVMValueRef = self.arrSlotCount(c: inout c, slot: arrPtr)
         // newdata = plew_arr_grow(data, elemSize, count)
         mut val gtys: Array[LLVMTypeRef] = []
         gtys.append(value: self.ptrty)
@@ -143,7 +136,7 @@ pub impl LlvmCtx {
         gav.append(value: LLVMSizeOf(elemTy))
         gav.append(value: count)
         val newdata: LLVMValueRef = LLVMBuildCall2(self.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
-        LLVMBuildStore(self.b, newdata, dataPtr)
+        self.arrSlotSetData(c: inout c, slot: arrPtr, data: newdata)
         // build the appended value. An array-LITERAL appended to a nested array
         // (`m.append([1,2,3])` for m: Array[Array[I32]]) must use the inner element
         // type, not i64-defaulted — recover it from the receiver's element ref.
@@ -172,7 +165,7 @@ pub impl LlvmCtx {
             ev = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
         }
         LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
-        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), countPtr)
+        self.arrSlotSetCount(c: inout c, slot: arrPtr, count: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
@@ -192,11 +185,11 @@ pub impl LlvmCtx {
         if LLVMIsNull(slot) == 0I32 {
             placed = true
             data = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
-            count = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 1U64, anon()), anon())
+            count = self.arrSlotCount(c: inout c, slot: slot)
         } else {
             val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
-            data = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
-            count = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+            data = self.arrValData(c: inout c, arr: arr)
+            count = self.arrValCount(c: inout c, arr: arr)
         }
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
@@ -239,8 +232,7 @@ pub impl LlvmCtx {
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
         val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
         val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
-        val countPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 1U64, anon())
-        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        val count: LLVMValueRef = self.arrSlotCount(c: inout c, slot: slot)
         // empty-guard: index 0 must be in range (i.e. count > 0), else panic.
         self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
         val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
@@ -253,10 +245,10 @@ pub impl LlvmCtx {
         if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
             val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount)
             val ev: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
-            LLVMBuildStore(self.b, newCount, countPtr)
+            self.arrSlotSetCount(c: inout c, slot: slot, count: newCount)
             self.valueArc(c: inout c, v: ev, typeRef: elemRef, retain: false)
         } else {
-            LLVMBuildStore(self.b, newCount, countPtr)
+            self.arrSlotSetCount(c: inout c, slot: slot, count: newCount)
         }
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
