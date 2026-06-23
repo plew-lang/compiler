@@ -236,7 +236,7 @@ export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
 }
 
 // Intrinsic-name predicates for the array / raw-buffer floor (spec/15 core-library
-// boundary): the `extern "plew-intrinsic"` ops Core's Array/RawBuffer methods call.
+// boundary): the `extern "plew-intrinsic"` ops Core's Array/Buffer methods call.
 // `pub` so the (still free-function) type-recovery callers can reach them during the
 // methodization transition.
 pub impl Comp {

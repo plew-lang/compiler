@@ -52,9 +52,10 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
     }
 
-    // Is `ref` a `RawBuffer[T]` instantiation? `RawBuffer` is a blessed primitive
-    // (the refcounted raw buffer that Array's storage is built on), lowered like
-    // `Ref` to a C `T*` (with a {rc,cap} header before data) — not a user type.
+    // Is `ref` a `Buffer[T]` instantiation? `Buffer` is the blessed safe storage
+    // floor (a cap+count+rc growable buffer that Array's storage is built on),
+    // lowered like `Ref` to a C `T*` (with a {cap,rc} header before data) — not a
+    // user type.
     inout fn isRawBufInst(ref: U64) -> Bool {
         if ref >= self.arena.types.count {
             return false
@@ -63,7 +64,7 @@ pub impl Comp {
         if t.args.count != 1 {
             return false
         }
-        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "RawBuffer")
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer")
     }
 
     // ── Recursive-value-type boxing (spec/03) ────────────────────────────────────
@@ -71,16 +72,16 @@ pub impl Comp {
     // containment cycle; emitted inline it would be an infinite C struct. We break
     // the cycle by storing such a field behind a heap pointer (`T*`). Detection is a
     // reachability walk over the *concrete* (non-generic) struct/enum graph, treating
-    // `Array`/`RawBuffer`/`Ref`/`WeakRef` as cycle-breaking (already pointer-backed)
+    // `Array`/`Buffer`/`Ref`/`WeakRef` as cycle-breaking (already pointer-backed)
     // and `Optional`/`Result` as transparent (their payload holds the arg by value).
 
     // Does this type head name an already-indirect container (pointer-backed), so it
-    // cannot transmit a by-value cycle? (Array/RawBuffer/Ref/WeakRef.)
+    // cannot transmit a by-value cycle? (Array/Buffer/Ref/WeakRef.)
     inout fn isIndirectContainer(nStart: U64, nLen: U64) -> Bool {
         if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Array") {
             return true
         }
-        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "RawBuffer") {
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Buffer") {
             return true
         }
         if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Ref") {

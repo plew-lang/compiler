@@ -1,14 +1,14 @@
 import @Std/Io with { print }
-import @Std/Core with { RawBuffer }
+import @Std/Core with { Buffer }
 extern "plew-intrinsic" {
-    fn rawAlloc(cap: U64, of: I64) -> RawBuffer[I64]
-    fn rawLoad(b: RawBuffer[I64], i: U64) -> I64
-    fn rawStore(b: RawBuffer[I64], i: U64, v: I64)
-    fn rawCap(b: RawBuffer[I64]) -> U64
-    fn rawIsUnique(b: RawBuffer[I64]) -> Bool
+    fn rawAlloc(cap: U64, of: I64) -> Buffer[I64]
+    fn rawLoad(b: Buffer[I64], i: U64) -> I64
+    fn rawStore(b: Buffer[I64], i: U64, v: I64)
+    fn rawCap(b: Buffer[I64]) -> U64
+    fn rawIsUnique(b: Buffer[I64]) -> Bool
 }
 struct VecI {
-    pub mut val data: RawBuffer[I64]
+    pub mut val data: Buffer[I64]
     pub mut val count: U64
 }
 pub impl VecI {
@@ -25,7 +25,7 @@ pub impl VecI {
             if newCap < 4U64 {
                 newCap = 4U64
             }
-            mut val nb: RawBuffer[I64] = rawAlloc(cap: newCap, of: value)
+            mut val nb: Buffer[I64] = rawAlloc(cap: newCap, of: value)
             mut val i: U64 = 0
             while i < self.count {
                 rawStore(b: nb, i: i, v: rawLoad(b: self.data, i: i))

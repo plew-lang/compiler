@@ -249,7 +249,7 @@ pub impl Comp {
         // whose type ARGUMENT coincides with one of its parameter names cannot be grounded
         // (the concrete type and the parameter are indistinguishable, so substitution never
         // terminates and the compiler stack-overflows). The lone exception is a generic
-        // floored purely on an extern intrinsic (`Array[T]` over `RawBuffer`), which
+        // floored purely on an extern intrinsic (`Array[T]` over `Buffer`), which
         // terminates; rejecting that rare ambiguous case too is the accepted cost of a
         // simple, crash-proof rule (rename the colliding type).
         mut val params: Array[Bind] = []

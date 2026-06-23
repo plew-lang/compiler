@@ -13,9 +13,9 @@
 
 // The `Dictionary` lang item (below) is built on hashing, which is NOT a language item
 // (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash. `Array`'s
-// storage floor `RawBuffer` is a non-ambient primitive imported from @Std/Core.
+// storage floor `Buffer` is a non-ambient primitive imported from @Std/Core.
 import @Std/Hash with { Hash, Hasher, SipHasher }
-import @Std/Core with { RawBuffer }
+import @Std/Core with { Buffer }
 
 // Re-export the primitive scalar types from @Std/Core (where they are DEFINED, with
 // their operator/conversion witnesses — coherent). The re-export makes them ambient:
@@ -117,7 +117,7 @@ pub impl[T, E] Result[T, E] {
     }
 }
 
-// `Array[T]` is a value-semantics (CoW) struct over the `RawBuffer[T]` floor (`RawBuffer`
+// `Array[T]` is a value-semantics (CoW) struct over the `Buffer[T]` floor (`Buffer`
 // is a non-ambient floor primitive imported from @Std/Core above): the
 // growable buffer (whose `[cap][rc]` header carries capacity and the CoW
 // refcount) plus the live element `count`. This is the type literals `[…]`,
@@ -126,7 +126,7 @@ pub impl[T, E] Result[T, E] {
 // struct shape comes from this declaration (spec/02,05). `pub(get)` exposes
 // `.count` for reading while keeping it module-writable.
 struct Array[T] {
-    mut val data: RawBuffer[T]
+    mut val data: Buffer[T]
     pub(get) mut val count: U64
 }
 

@@ -57,8 +57,8 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Ref") {
             return self.ptrty
         }
-        // a `RawBuffer[T]` is the raw data pointer (the rawbuf floor; opaque ptr).
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "RawBuffer") {
+        // a `Buffer[T]` is the raw data pointer (the storage floor; opaque ptr).
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Buffer") {
             return self.ptrty
         }
         // FFI raw pointers (`CPtr[T]`) are opaque pointers (spec/15).

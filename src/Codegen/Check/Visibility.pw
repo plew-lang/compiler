@@ -344,7 +344,7 @@ pub impl Comp {
 
     // Is (start,len) the name of an `@Std` function the LLVM backend intercepts by raw
     // name (so it would emit without an import)? These need a real import gate (spec/15):
-    // the user-facing I/O / process / async intrinsics. (The RawBuffer/String/FFI floor
+    // the user-facing I/O / process / async intrinsics. (The Buffer/String/FFI floor
     // intrinsics are resolved through their loaded `extern` decls, so they fall under
     // the ordinary import check above and are not listed here.)
     inout fn isAmbientInterceptedName(start: U64, len: U64) -> Bool {

@@ -561,14 +561,17 @@ export enum Ordering { Less  Equal  Greater }
 // `[…]`), so by the spec/15 criterion they are import-required, like any library type.
 // The representation is compiler-supplied (a "blessed primitive" — refcounted heap
 // cell), so they are declared opaque; `export`ed so other modules can import them.
-// `RawBuffer[T]` — the growable contiguous storage floor (spec/15 §FFI: "`RawBuffer`/
-// `Ref` と同格のコンパイラ組み込みプリミティブ"). `Array` is built on it; it is also
-// usable directly as a low-level floor. Like `Ref`, it is named explicitly (no literal
-// produces it) → import-required, so it lives here with the other floor primitives.
+// `Buffer[T]` — the blessed safe storage floor (spec/15 §FFI: "安全床 `Buffer` /
+// `Ref` と同格のコンパイラ組み込みプリミティブ"; spec/02 §buffer): a `cap+count+rc`
+// growable contiguous buffer whose lifecycle ops are compiler intrinsics and whose
+// element copy/drop run through invisible witnesses (no raw slot/pointer surface).
+// `Array`/`Dictionary`/`Set`/`String` are all built on it. Like `Ref`, it is named
+// explicitly (no literal produces it) → import-required, so it lives here with the
+// other floor primitives.
 export extern "plew-intrinsic" {
     struct Ref
     struct WeakRef
-    struct RawBuffer
+    struct Buffer
 }
 
 // Subscript (spec/12): `a[k]` desugars to `a.index(key: k)`, `a[k] = v` to

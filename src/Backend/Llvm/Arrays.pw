@@ -625,8 +625,8 @@ pub impl LlvmCtx {
         return self.consumeIntoOwned(c: inout c, v: rv, expr: valueExpr, typeRef: 0U64)
     }
 
-    // The LLVM element type of a `RawBuffer[T]` argument expression (from its tracked
-    // RawBuffer[T] type ref), or i64 if not resolvable.
+    // The LLVM element type of a `Buffer[T]` argument expression (from its tracked
+    // Buffer[T] type ref), or i64 if not resolvable.
     inout fn rawBufElemTy(c: inout Comp, bufExpr: U64) -> LLVMTypeRef {
         val r: U64 = self.exprTypeRef(c: inout c, id: bufExpr)
         if r != 0U64 {

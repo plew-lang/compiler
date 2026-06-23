@@ -210,7 +210,7 @@ source_filename = "plew"
 @str.120 = global [20 x i8] c"\04\00\00\00\00\00\00\00\00\00\00\00\00\00\00@F64\00", align 8
 @str.121 = global [20 x i8] c"\04\00\00\00\00\00\00\00\00\00\00\00\00\00\00@F32\00", align 8
 @str.122 = global [20 x i8] c"\04\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Ref\00", align 8
-@str.123 = global [26 x i8] c"\0A\00\00\00\00\00\00\00\00\00\00\00\00\00\00@RawBuffer\00", align 8
+@str.123 = global [23 x i8] c"\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Buffer\00", align 8
 @str.124 = global [21 x i8] c"\05\00\00\00\00\00\00\00\00\00\00\00\00\00\00@CPtr\00", align 8
 @str.125 = global [19 x i8] c"\03\00\00\00\00\00\00\00\00\00\00\00\00\00\00@fn\00", align 8
 @str.126 = global [19 x i8] c"\03\00\00\00\00\00\00\00\00\00\00\00\00\00\00@I8\00", align 8
@@ -630,7 +630,7 @@ source_filename = "plew"
 @str.540 = global [20 x i8] c"\04\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Ord\00", align 8
 @str.541 = global [23 x i8] c"\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00@String\00", align 8
 @str.542 = global [22 x i8] c"\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Array\00", align 8
-@str.543 = global [26 x i8] c"\0A\00\00\00\00\00\00\00\00\00\00\00\00\00\00@RawBuffer\00", align 8
+@str.543 = global [23 x i8] c"\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Buffer\00", align 8
 @str.544 = global [20 x i8] c"\04\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Ref\00", align 8
 @str.545 = global [24 x i8] c"\08\00\00\00\00\00\00\00\00\00\00\00\00\00\00@WeakRef\00", align 8
 @str.546 = global [25 x i8] c"\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Optional\00", align 8
@@ -950,7 +950,7 @@ source_filename = "plew"
 @str.860 = global [23 x i8] c"\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00@buffer\00", align 8
 @str.861 = global [17 x i8] c"\01\00\00\00\00\00\00\00\00\00\00\00\00\00\00@\00", align 8
 @str.862 = global [17 x i8] c"\01\00\00\00\00\00\00\00\00\00\00\00\00\00\00@\00", align 8
-@str.863 = global [26 x i8] c"\0A\00\00\00\00\00\00\00\00\00\00\00\00\00\00@RawBuffer\00", align 8
+@str.863 = global [23 x i8] c"\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Buffer\00", align 8
 @str.864 = global [25 x i8] c"\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00@rawAlloc\00", align 8
 @str.865 = global [24 x i8] c"\08\00\00\00\00\00\00\00\00\00\00\00\00\00\00@rawLoad\00", align 8
 @str.866 = global [25 x i8] c"\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00@rawStore\00", align 8
@@ -1085,7 +1085,7 @@ source_filename = "plew"
 @str.995 = global [21 x i8] c"\05\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Self\00", align 8
 @str.996 = global [22 x i8] c"\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00@plew_\00", align 8
 @str.997 = global [161 x i8] c"\91\00\00\00\00\00\00\00\00\00\00\00\00\00\00@extension view mismatch: the binding's `#Ext` view must match its initializer \E2\80\94 apply or drop the view explicitly (`value#Ext` / `value#!Ext`)\00", align 8
-@str.998 = global [26 x i8] c"\0A\00\00\00\00\00\00\00\00\00\00\00\00\00\00@RawBuffer\00", align 8
+@str.998 = global [23 x i8] c"\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Buffer\00", align 8
 @str.999 = global [154 x i8] c"\8A\00\00\00\00\00\00\00\00\00\00\00\00\00\00@extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view \E2\80\94 adjust it explicitly (`value#Ext` / `value#!Ext`)\00", align 8
 @str.1000 = global [73 x i8] c"9\00\00\00\00\00\00\00\00\00\00\00\00\00\00@LLVM backend: assignment target must be a local (so far)\00", align 8
 @str.1001 = global [27 x i8] c"\0B\00\00\00\00\00\00\00\00\00\00\00\00\00\00@Dictionary\00", align 8
@@ -25927,7 +25927,7 @@ endif18:                                          ; preds = %endif16
   call void @plew_rawbuf_retain(ptr %163)
   %164 = load i64, ptr %4, align 4
   %165 = load i64, ptr %5, align 4
-  %166 = call i1 @pf586({ ptr, i64 } %162, i64 %164, i64 %165, { ptr, i64 } { ptr getelementptr ([26 x i8], ptr @str.123, i64 0, i64 16), i64 9 })
+  %166 = call i1 @pf586({ ptr, i64 } %162, i64 %164, i64 %165, { ptr, i64 } { ptr getelementptr ([23 x i8], ptr @str.123, i64 0, i64 16), i64 6 })
   %167 = icmp ne i1 %166, false
   br i1 %167, label %then19, label %endif20
 
@@ -71566,7 +71566,7 @@ endif:                                            ; preds = %body0
   call void @plew_rawbuf_retain(ptr %16)
   %17 = load i64, ptr %3, align 4
   %18 = load i64, ptr %4, align 4
-  %19 = call i1 @pf586({ ptr, i64 } %15, i64 %17, i64 %18, { ptr, i64 } { ptr getelementptr ([26 x i8], ptr @str.543, i64 0, i64 16), i64 9 })
+  %19 = call i1 @pf586({ ptr, i64 } %15, i64 %17, i64 %18, { ptr, i64 } { ptr getelementptr ([23 x i8], ptr @str.543, i64 0, i64 16), i64 6 })
   %20 = icmp ne i1 %19, false
   br i1 %20, label %then1, label %endif2
 
@@ -128119,7 +128119,7 @@ endif2:                                           ; preds = %endif
   %28 = extractvalue %st70 %27, 0
   %29 = load %st70, ptr %3, align 8
   %30 = extractvalue %st70 %29, 1
-  %31 = call i1 @pf586({ ptr, i64 } %25, i64 %28, i64 %30, { ptr, i64 } { ptr getelementptr ([26 x i8], ptr @str.863, i64 0, i64 16), i64 9 })
+  %31 = call i1 @pf586({ ptr, i64 } %25, i64 %28, i64 %30, { ptr, i64 } { ptr getelementptr ([23 x i8], ptr @str.863, i64 0, i64 16), i64 6 })
   %32 = load %st70, ptr %3, align 8
   call void @pwdrop70(%st70 %32)
   ret i1 %31
@@ -148690,7 +148690,7 @@ then73:                                           ; preds = %endif72
   %500 = getelementptr %st70, ptr %497, i64 %499
   %501 = load %st70, ptr %500, align 8
   %502 = extractvalue %st70 %501, 1
-  %503 = call i1 @pf586({ ptr, i64 } %483, i64 %493, i64 %502, { ptr, i64 } { ptr getelementptr ([26 x i8], ptr @str.998, i64 0, i64 16), i64 9 })
+  %503 = call i1 @pf586({ ptr, i64 } %483, i64 %493, i64 %502, { ptr, i64 } { ptr getelementptr ([23 x i8], ptr @str.998, i64 0, i64 16), i64 6 })
   %504 = icmp ne i1 %503, false
   br i1 %504, label %then75, label %endif76
 
