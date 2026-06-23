@@ -328,8 +328,11 @@ pub impl LlvmCtx {
         return self.i64ty
     }
 
-    // The alloca holding a `Buffer[T]` local's data pointer (so append can store the
-    // grown pointer back). Null if not an addressable buffer local.
+    // The slot holding a `Buffer[T]`'s single data pointer (so a grow/CoW can store the
+    // new pointer back): the local's alloca, or — for a `Buffer` STRUCT FIELD
+    // (`dict.keys`, `holder.items`) — the field place pointer (placePtrStrict recurses
+    // through nesting). Null if neither (caller errors). Mirrors `arrStoragePtr`; a Buffer
+    // is a single pointer just like a (post-flip) Array, so the slot is a `ptr*`.
     inout fn bufStoragePtr(c: inout Comp, id: U64) -> LLVMValueRef {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
@@ -337,10 +340,11 @@ pub impl LlvmCtx {
                 if li < self.nLocals {
                     return self.locPtr[li]
                 }
+                return LLVMConstNull(self.ptrty)
             }
             _ => {}
         }
-        return LLVMConstNull(self.ptrty)
+        return self.placePtrStrict(c: inout c, id: id)
     }
 
     // `Buffer.new()`: a fresh empty buffer (header-only, cap=0 — the first append grows
@@ -357,13 +361,18 @@ pub impl LlvmCtx {
     // `buf.append(value)`: grow the buffer if full, store the (place-copied) value at the
     // header count index, and bump the header count.
     inout fn genLlvmBufferAppend(c: inout Comp, recv: U64, valueExpr: U64) -> LLVMValueRef {
+        // CoW gateway (1-0): own any shared buffer ABOVE the receiver (e.g. a `Buffer`
+        // field reached through a shared struct) before the immediate-level CoW below.
+        self.privatizeForWrite(c: inout c, id: recv)
         val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
         if LLVMIsNull(slot) != 0I32 {
-            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.append only on a buffer local (so far)")
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.append only on a buffer local / struct field (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
-        val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slot, anon())
+        // CoW: if this buffer shares its backing (rc>1), privatize it in the slot before
+        // mutating, so the append does not clobber another sharer's view (§5).
+        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: self.bufElemRef(c: inout c, id: recv))
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         // newdata = plew_arr_grow(data, elemSize, count) — grows (and frees the old, rc<=1)
         // only when count>=cap; the header count is carried across in the runtime.
@@ -421,9 +430,19 @@ pub impl LlvmCtx {
     // store the (place-copied/retained) new value, then release the old — so a re-entrant
     // deinit observes the slot already holding the live new value (collections §6-4).
     inout fn genLlvmBufferSet(c: inout Comp, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
+        // CoW gateway (1-0): own any shared buffer ABOVE the receiver first.
+        self.privatizeForWrite(c: inout c, id: recv)
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
         val er: U64 = self.bufElemRef(c: inout c, id: recv)
-        val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
+        // a place receiver CoWs its backing in the slot before the in-place write (§5);
+        // an rvalue receiver (no slot) just reads its already-owned data.
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        mut val data: LLVMValueRef = LLVMConstNull(self.ptrty)
+        if LLVMIsNull(slot) == 0I32 {
+            data = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: er)
+        } else {
+            data = self.genLlvmExpr(c: inout c, id: recv)
+        }
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
@@ -443,14 +462,17 @@ pub impl LlvmCtx {
     // keeps its capacity. For an ARC-bearing element, release the popped element after
     // committing the smaller count (commit-then-release).
     inout fn genLlvmBufferRemoveLast(c: inout Comp, recv: U64) -> LLVMValueRef {
+        // CoW gateway (1-0): own any shared buffer ABOVE the receiver first.
+        self.privatizeForWrite(c: inout c, id: recv)
         val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
         if LLVMIsNull(slot) != 0I32 {
-            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.removeLast only on a buffer local (so far)")
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.removeLast only on a buffer local / struct field (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
         val er: U64 = self.bufElemRef(c: inout c, id: recv)
-        val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slot, anon())
+        // CoW: privatize a shared backing before shrinking it (§5).
+        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: er)
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         // empty-guard: index 0 must be in range (count > 0), else panic.
         self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)

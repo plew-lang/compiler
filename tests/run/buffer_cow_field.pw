@@ -1,0 +1,31 @@
+// CoW on a Buffer through value-semantics copies + mutation on a struct FIELD place.
+// A struct copy CoW-SHARES the field buffer (rc++); the first mutation on either copy
+// privatizes its backing (rc>1 -> copy) so the two views diverge. Mutators are exercised
+// directly on the field place (`h.items.append(...)` / `.set(...)` / `.removeLast()`),
+// which previously only worked on a plain local. ASan-on-self-compile / run prove the
+// privatized backing + its String elements stay leak/UAF-free.
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+struct Bag {
+    pub(get) mut val items: Buffer[String]
+}
+
+fn main() {
+    mut val b: Buffer[String] = Buffer.new()
+    b.append("a")
+    b.append("b")
+    mut val h: Bag = <Bag items=b />
+    val h2: Bag = h            // CoW-share: h.items and h2.items share one backing
+    h.items.append("c")        // privatize h.items -> diverge from h2.items
+    h.items.set(index: 0U64, "A")
+    val n1: U64 = h.items.count()
+    val n2: U64 = h2.items.count()
+    print(line: "h=" + n1.format(format: "") + " h2=" + n2.format(format: ""))
+    print(line: "h[0]=" + h.items.get(index: 0U64) + " h2[0]=" + h2.items.get(index: 0U64))
+    print(line: "h[2]=" + h.items.get(index: 2U64))
+    h.items.removeLast()
+    val n3: U64 = h.items.count()
+    val n4: U64 = h2.items.count()
+    print(line: "after pop h=" + n3.format(format: "") + " h2=" + n4.format(format: ""))
+}
