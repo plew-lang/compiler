@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+
+// Regression for the §6-4 lifecycle fix: `arr[i] = v` (arraySet) now releases the
+// retired element (commit-then-release) and `removeLast` shrinks `count` before
+// releasing the popped element. A second CoW owner of the same buffer must stay
+// intact — a mis-balanced old-value release would free the shared element and
+// corrupt `b` (caught by value mismatch and ASan double-free).
+fn main() {
+    mut val a: Array[String] = ["alpha", "beta", "gamma"]
+    val b: Array[String] = a        // CoW share — b and a share one buffer
+
+    a[1] = "BETA"                   // privatize a, store new, release old "beta"
+    print(a[1])                     // BETA
+    print(b[1])                     // beta   (b unchanged — value semantics)
+
+    a.removeLast()                  // commit count-- then release "gamma" in a
+    print(a.count)                  // 2
+    print(b.count)                  // 3
+    print(b[2])                     // gamma  (b intact)
+
+    a[0] = "first"                  // overwrite again, release old "alpha" in a
+    print(a[0])                     // first
+    print(b[0])                     // alpha
+
+    // overwrite every slot in a fresh array a few times (exercise repeated release)
+    mut val c: Array[String] = ["x", "y"]
+    c[0] = "xx"
+    c[0] = "xxx"
+    c[1] = "yy"
+    print(c[0])                     // xxx
+    print(c[1])                     // yy
+}

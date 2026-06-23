@@ -36521,117 +36521,164 @@ entry:
   %6 = alloca i64, align 8
   %7 = alloca i64, align 8
   %8 = alloca ptr, align 8
-  %9 = alloca ptr, align 8
+  %9 = alloca i64, align 8
   %10 = alloca ptr, align 8
   %11 = alloca ptr, align 8
-  %12 = alloca ptr, align 8
+  %12 = alloca i1, align 1
   %13 = alloca ptr, align 8
   %14 = alloca ptr, align 8
   %15 = alloca ptr, align 8
+  %16 = alloca ptr, align 8
+  %17 = alloca ptr, align 8
+  %18 = alloca ptr, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
   store i64 %2, ptr %5, align 4
   store i64 %3, ptr %6, align 4
   store i64 %4, ptr %7, align 4
-  %16 = load i64, ptr %5, align 4
-  call void @pf1425(ptr %0, ptr %1, i64 %16)
-  %17 = load i64, ptr %5, align 4
-  %18 = call ptr @pf1363(ptr %0, ptr %1, i64 %17)
-  store ptr %18, ptr %8, align 8
-  %19 = load %st36, ptr %0, align 8
-  %20 = extractvalue %st36 %19, 10
-  %21 = call ptr @LLVMConstNull(ptr %20)
-  store ptr %21, ptr %9, align 8
-  %22 = load %st36, ptr %0, align 8
-  %23 = extractvalue %st36 %22, 7
-  %24 = call ptr @LLVMConstInt(ptr %23, i64 0, i32 0)
-  store ptr %24, ptr %10, align 8
-  %25 = load i64, ptr %5, align 4
-  %26 = call ptr @pf1365(ptr %0, ptr %1, i64 %25)
-  store ptr %26, ptr %11, align 8
-  %27 = load ptr, ptr %11, align 8
-  %28 = call i32 @LLVMIsNull(ptr %27)
-  %29 = icmp eq i32 %28, 0
-  br i1 %29, label %then, label %else
+  %19 = load i64, ptr %5, align 4
+  call void @pf1425(ptr %0, ptr %1, i64 %19)
+  %20 = load i64, ptr %5, align 4
+  %21 = call ptr @pf1363(ptr %0, ptr %1, i64 %20)
+  store ptr %21, ptr %8, align 8
+  %22 = load i64, ptr %5, align 4
+  %23 = call i64 @pf1398(ptr %0, ptr %1, i64 %22)
+  store i64 %23, ptr %9, align 4
+  %24 = load %st36, ptr %0, align 8
+  %25 = extractvalue %st36 %24, 10
+  %26 = call ptr @LLVMConstNull(ptr %25)
+  store ptr %26, ptr %10, align 8
+  %27 = load %st36, ptr %0, align 8
+  %28 = extractvalue %st36 %27, 7
+  %29 = call ptr @LLVMConstInt(ptr %28, i64 0, i32 0)
+  store ptr %29, ptr %11, align 8
+  store i1 false, ptr %12, align 1
+  %30 = load i64, ptr %5, align 4
+  %31 = call ptr @pf1365(ptr %0, ptr %1, i64 %30)
+  store ptr %31, ptr %13, align 8
+  %32 = load ptr, ptr %13, align 8
+  %33 = call i32 @LLVMIsNull(ptr %32)
+  %34 = icmp eq i32 %33, 0
+  br i1 %34, label %then, label %else
 
 then:                                             ; preds = %body0
-  %30 = load ptr, ptr %11, align 8
-  %31 = load ptr, ptr %8, align 8
-  %32 = load i64, ptr %5, align 4
-  %33 = call i64 @pf1398(ptr %0, ptr %1, i64 %32)
-  %34 = call ptr @pf1380(ptr %0, ptr %1, ptr %30, ptr %31, i64 %33)
-  store ptr %34, ptr %9, align 8
-  %35 = load %st36, ptr %0, align 8
-  %36 = extractvalue %st36 %35, 2
-  %37 = load %st36, ptr %0, align 8
-  %38 = extractvalue %st36 %37, 7
+  store i1 true, ptr %12, align 1
+  %35 = load ptr, ptr %13, align 8
+  %36 = load ptr, ptr %8, align 8
+  %37 = load i64, ptr %9, align 4
+  %38 = call ptr @pf1380(ptr %0, ptr %1, ptr %35, ptr %36, i64 %37)
+  store ptr %38, ptr %10, align 8
   %39 = load %st36, ptr %0, align 8
   %40 = extractvalue %st36 %39, 2
   %41 = load %st36, ptr %0, align 8
-  %42 = extractvalue %st36 %41, 12
-  %43 = load ptr, ptr %11, align 8
-  %44 = call ptr @pf425()
-  %45 = call ptr @LLVMBuildStructGEP2(ptr %40, ptr %42, ptr %43, i64 1, ptr %44)
-  %46 = call ptr @pf425()
-  %47 = call ptr @LLVMBuildLoad2(ptr %36, ptr %38, ptr %45, ptr %46)
-  store ptr %47, ptr %10, align 8
+  %42 = extractvalue %st36 %41, 7
+  %43 = load %st36, ptr %0, align 8
+  %44 = extractvalue %st36 %43, 2
+  %45 = load %st36, ptr %0, align 8
+  %46 = extractvalue %st36 %45, 12
+  %47 = load ptr, ptr %13, align 8
+  %48 = call ptr @pf425()
+  %49 = call ptr @LLVMBuildStructGEP2(ptr %44, ptr %46, ptr %47, i64 1, ptr %48)
+  %50 = call ptr @pf425()
+  %51 = call ptr @LLVMBuildLoad2(ptr %40, ptr %42, ptr %49, ptr %50)
+  store ptr %51, ptr %11, align 8
   br label %endif
 
 endif:                                            ; preds = %else, %then
-  %48 = load i64, ptr %6, align 4
-  %49 = call ptr @pf1355(ptr %0, ptr %1, i64 %48)
-  store ptr %49, ptr %13, align 8
-  %50 = load ptr, ptr %13, align 8
-  %51 = load ptr, ptr %10, align 8
-  call void @pf1393(ptr %0, ptr %1, ptr %50, ptr %51)
-  %52 = load ptr, ptr %8, align 8
-  %53 = load ptr, ptr %9, align 8
-  %54 = load ptr, ptr %13, align 8
-  %55 = call ptr @pf1394(ptr %0, ptr %52, ptr %53, ptr %54)
-  store ptr %55, ptr %14, align 8
-  %56 = load i64, ptr %7, align 4
-  %57 = call ptr @pf1355(ptr %0, ptr %1, i64 %56)
-  %58 = load ptr, ptr %8, align 8
-  %59 = call ptr @pf1395(ptr %0, ptr %57, ptr %58)
+  %52 = load i64, ptr %6, align 4
+  %53 = call ptr @pf1355(ptr %0, ptr %1, i64 %52)
+  store ptr %53, ptr %15, align 8
+  %54 = load ptr, ptr %15, align 8
+  %55 = load ptr, ptr %11, align 8
+  call void @pf1393(ptr %0, ptr %1, ptr %54, ptr %55)
+  %56 = load ptr, ptr %8, align 8
+  %57 = load ptr, ptr %10, align 8
+  %58 = load ptr, ptr %15, align 8
+  %59 = call ptr @pf1394(ptr %0, ptr %56, ptr %57, ptr %58)
+  store ptr %59, ptr %16, align 8
   %60 = load i64, ptr %7, align 4
-  %61 = call ptr @pf1375(ptr %0, ptr %1, ptr %59, i64 %60)
-  store ptr %61, ptr %15, align 8
-  %62 = load %st36, ptr %0, align 8
-  %63 = extractvalue %st36 %62, 2
-  %64 = load ptr, ptr %15, align 8
-  %65 = load ptr, ptr %14, align 8
-  %66 = call ptr @LLVMBuildStore(ptr %63, ptr %64, ptr %65)
-  %67 = load %st36, ptr %0, align 8
-  %68 = extractvalue %st36 %67, 7
-  %69 = call ptr @LLVMConstInt(ptr %68, i64 0, i32 0)
-  %70 = load ptr, ptr %15, align 8
-  %71 = load ptr, ptr %14, align 8
-  %72 = load ptr, ptr %13, align 8
-  %73 = load ptr, ptr %11, align 8
-  %74 = load ptr, ptr %10, align 8
-  %75 = load ptr, ptr %9, align 8
-  %76 = load ptr, ptr %8, align 8
-  ret ptr %69
+  %61 = call ptr @pf1355(ptr %0, ptr %1, i64 %60)
+  %62 = load ptr, ptr %8, align 8
+  %63 = call ptr @pf1395(ptr %0, ptr %61, ptr %62)
+  %64 = load i64, ptr %7, align 4
+  %65 = call ptr @pf1375(ptr %0, ptr %1, ptr %63, i64 %64)
+  store ptr %65, ptr %17, align 8
+  %66 = load i1, ptr %12, align 1
+  %67 = icmp ne i1 %66, false
+  br i1 %67, label %sc.rhs, label %sc.cont
 
 else:                                             ; preds = %body0
-  %77 = load i64, ptr %5, align 4
-  %78 = call ptr @pf1355(ptr %0, ptr %1, i64 %77)
-  store ptr %78, ptr %12, align 8
-  %79 = load %st36, ptr %0, align 8
-  %80 = extractvalue %st36 %79, 2
-  %81 = load ptr, ptr %12, align 8
-  %82 = call ptr @pf425()
-  %83 = call ptr @LLVMBuildExtractValue(ptr %80, ptr %81, i64 0, ptr %82)
-  store ptr %83, ptr %9, align 8
-  %84 = load %st36, ptr %0, align 8
-  %85 = extractvalue %st36 %84, 2
-  %86 = load ptr, ptr %12, align 8
-  %87 = call ptr @pf425()
-  %88 = call ptr @LLVMBuildExtractValue(ptr %85, ptr %86, i64 1, ptr %87)
-  store ptr %88, ptr %10, align 8
-  %89 = load ptr, ptr %12, align 8
+  %68 = load i64, ptr %5, align 4
+  %69 = call ptr @pf1355(ptr %0, ptr %1, i64 %68)
+  store ptr %69, ptr %14, align 8
+  %70 = load %st36, ptr %0, align 8
+  %71 = extractvalue %st36 %70, 2
+  %72 = load ptr, ptr %14, align 8
+  %73 = call ptr @pf425()
+  %74 = call ptr @LLVMBuildExtractValue(ptr %71, ptr %72, i64 0, ptr %73)
+  store ptr %74, ptr %10, align 8
+  %75 = load %st36, ptr %0, align 8
+  %76 = extractvalue %st36 %75, 2
+  %77 = load ptr, ptr %14, align 8
+  %78 = call ptr @pf425()
+  %79 = call ptr @LLVMBuildExtractValue(ptr %76, ptr %77, i64 1, ptr %78)
+  store ptr %79, ptr %11, align 8
+  %80 = load ptr, ptr %14, align 8
   br label %endif
+
+sc.rhs:                                           ; preds = %endif
+  %81 = load i64, ptr %9, align 4
+  %82 = call i1 @pf1381(ptr %0, ptr %1, i64 %81)
+  %83 = icmp ne i1 %82, false
+  br label %sc.cont
+
+sc.cont:                                          ; preds = %sc.rhs, %endif
+  %84 = phi i1 [ false, %endif ], [ %83, %sc.rhs ]
+  %85 = icmp ne i1 %84, false
+  br i1 %85, label %then1, label %else3
+
+then1:                                            ; preds = %sc.cont
+  %86 = load %st36, ptr %0, align 8
+  %87 = extractvalue %st36 %86, 2
+  %88 = load ptr, ptr %8, align 8
+  %89 = load ptr, ptr %16, align 8
+  %90 = call ptr @pf425()
+  %91 = call ptr @LLVMBuildLoad2(ptr %87, ptr %88, ptr %89, ptr %90)
+  store ptr %91, ptr %18, align 8
+  %92 = load %st36, ptr %0, align 8
+  %93 = extractvalue %st36 %92, 2
+  %94 = load ptr, ptr %17, align 8
+  %95 = load ptr, ptr %16, align 8
+  %96 = call ptr @LLVMBuildStore(ptr %93, ptr %94, ptr %95)
+  %97 = load ptr, ptr %18, align 8
+  %98 = load i64, ptr %9, align 4
+  call void @pf1383(ptr %0, ptr %1, ptr %97, i64 %98, i1 false)
+  %99 = load ptr, ptr %18, align 8
+  br label %endif2
+
+endif2:                                           ; preds = %else3, %then1
+  %100 = load %st36, ptr %0, align 8
+  %101 = extractvalue %st36 %100, 7
+  %102 = call ptr @LLVMConstInt(ptr %101, i64 0, i32 0)
+  %103 = load ptr, ptr %17, align 8
+  %104 = load ptr, ptr %16, align 8
+  %105 = load ptr, ptr %15, align 8
+  %106 = load ptr, ptr %13, align 8
+  %107 = load i1, ptr %12, align 1
+  %108 = load ptr, ptr %11, align 8
+  %109 = load ptr, ptr %10, align 8
+  %110 = load i64, ptr %9, align 4
+  %111 = load ptr, ptr %8, align 8
+  ret ptr %102
+
+else3:                                            ; preds = %sc.cont
+  %112 = load %st36, ptr %0, align 8
+  %113 = extractvalue %st36 %112, 2
+  %114 = load ptr, ptr %17, align 8
+  %115 = load ptr, ptr %16, align 8
+  %116 = call ptr @LLVMBuildStore(ptr %113, ptr %114, ptr %115)
+  br label %endif2
 }
 
 define ptr @pf1401(ptr %0, ptr %1, i64 %2) {
@@ -36713,7 +36760,7 @@ endif:                                            ; preds = %body0
   %57 = load i64, ptr %6, align 4
   %58 = call i1 @pf1381(ptr %0, ptr %1, i64 %57)
   %59 = icmp ne i1 %58, false
-  br i1 %59, label %then1, label %endif2
+  br i1 %59, label %then1, label %else
 
 then1:                                            ; preds = %endif
   %60 = load ptr, ptr %5, align 8
@@ -36728,19 +36775,19 @@ then1:                                            ; preds = %endif
   %68 = call ptr @pf425()
   %69 = call ptr @LLVMBuildLoad2(ptr %65, ptr %66, ptr %67, ptr %68)
   store ptr %69, ptr %12, align 8
-  %70 = load ptr, ptr %12, align 8
-  %71 = load i64, ptr %6, align 4
-  call void @pf1383(ptr %0, ptr %1, ptr %70, i64 %71, i1 false)
-  %72 = load ptr, ptr %12, align 8
-  %73 = load ptr, ptr %11, align 8
+  %70 = load %st36, ptr %0, align 8
+  %71 = extractvalue %st36 %70, 2
+  %72 = load ptr, ptr %10, align 8
+  %73 = load ptr, ptr %8, align 8
+  %74 = call ptr @LLVMBuildStore(ptr %71, ptr %72, ptr %73)
+  %75 = load ptr, ptr %12, align 8
+  %76 = load i64, ptr %6, align 4
+  call void @pf1383(ptr %0, ptr %1, ptr %75, i64 %76, i1 false)
+  %77 = load ptr, ptr %12, align 8
+  %78 = load ptr, ptr %11, align 8
   br label %endif2
 
-endif2:                                           ; preds = %then1, %endif
-  %74 = load %st36, ptr %0, align 8
-  %75 = extractvalue %st36 %74, 2
-  %76 = load ptr, ptr %10, align 8
-  %77 = load ptr, ptr %8, align 8
-  %78 = call ptr @LLVMBuildStore(ptr %75, ptr %76, ptr %77)
+endif2:                                           ; preds = %else, %then1
   %79 = load %st36, ptr %0, align 8
   %80 = extractvalue %st36 %79, 7
   %81 = call ptr @LLVMConstInt(ptr %80, i64 0, i32 0)
@@ -36752,6 +36799,14 @@ endif2:                                           ; preds = %then1, %endif
   %87 = load ptr, ptr %5, align 8
   %88 = load ptr, ptr %4, align 8
   ret ptr %81
+
+else:                                             ; preds = %endif
+  %89 = load %st36, ptr %0, align 8
+  %90 = extractvalue %st36 %89, 2
+  %91 = load ptr, ptr %10, align 8
+  %92 = load ptr, ptr %8, align 8
+  %93 = call ptr @LLVMBuildStore(ptr %90, ptr %91, ptr %92)
+  br label %endif2
 }
 
 define ptr @pf1402(ptr %0, ptr %1, i1 %2, i64 %3, i64 %4) {

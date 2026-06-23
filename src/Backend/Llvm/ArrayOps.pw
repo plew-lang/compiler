@@ -184,11 +184,14 @@ pub impl LlvmCtx {
         // `arr[i].set(j, v)` -> own `arr` first) before the immediate-level CoW below.
         self.privatizeForWrite(c: inout c, id: recv)
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
+        val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
         mut val data: LLVMValueRef = LLVMConstNull(self.ptrty)
         mut val count: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
+        mut val placed: Bool = false
         val slot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: recv)
         if LLVMIsNull(slot) == 0I32 {
-            data = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: recv))
+            placed = true
+            data = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
             count = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, self.arrayTy, slot, 1U64, anon()), anon())
         } else {
             val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
@@ -201,7 +204,21 @@ pub impl LlvmCtx {
         // value semantics: copy an array/struct PLACE element so `arr.set(i, a)` leaves
         // the stored element independent of `a` (a literal / call result passes through).
         val rv: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
-        LLVMBuildStore(self.b, rv, ep)
+        // commit-then-release (§2c): for an ARC-bearing element on a privatized place
+        // buffer, read the retiring value, store the new one (commit the slot to a valid
+        // value), THEN release the old heap. Overwriting `[0,count)` is always overwriting
+        // a live value (dense invariant), so the old element's heap (String / nested array
+        // / deinit-bearing struct/enum) is freed rather than leaked, and a re-entrant
+        // deinit only observes a fully-initialized slot. The non-place rvalue branch keeps
+        // the old leak-safe store (its temp buffer may be shared, so releasing could
+        // double-free); that path discards its result anyway.
+        if placed && self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
+            val old: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
+            LLVMBuildStore(self.b, rv, ep)
+            self.valueArc(c: inout c, v: old, typeRef: elemRef, retain: false)
+        } else {
+            LLVMBuildStore(self.b, rv, ep)
+        }
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
@@ -227,13 +244,20 @@ pub impl LlvmCtx {
         // empty-guard: index 0 must be in range (i.e. count > 0), else panic.
         self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
         val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        // release the popped element's owned heap (balance the value-ARC cascade).
+        // commit-then-release (§2c): shrink `count` FIRST so the popped slot leaves the
+        // live prefix [0,count), THEN release its owned heap (String / nested array /
+        // deinit-bearing struct/enum) to keep the value-ARC cascade balanced. Releasing a
+        // last `Ref` runs `deinit` synchronously and can re-enter; committing the shrink
+        // first means such a re-entry only ever observes the dense prefix, never the
+        // half-torn-down element. The buffer keeps its grown capacity.
         if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
             val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount)
             val ev: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
+            LLVMBuildStore(self.b, newCount, countPtr)
             self.valueArc(c: inout c, v: ev, typeRef: elemRef, retain: false)
+        } else {
+            LLVMBuildStore(self.b, newCount, countPtr)
         }
-        LLVMBuildStore(self.b, newCount, countPtr)
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
