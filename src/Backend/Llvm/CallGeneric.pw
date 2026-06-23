@@ -147,8 +147,8 @@ pub impl LlvmCtx {
                 if self.exprIsArray(c: inout c, id: base) {
                     val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
                     val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
-                    val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
-                    val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+                    val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
+                    val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
                     val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
                     self.emitBoundsCheck(c: inout c, idx: idx, count: count)
                     return self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
@@ -273,7 +273,7 @@ pub impl LlvmCtx {
             // instead (markLocalMoved above), so it is not also retained.
             if !(p.isMove) {
                 if arrayExprIsPlace(c: inout c, id: argExpr) {
-                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, arrArg, 0U64, anon()))
+                    self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: arrArg))
                 }
             }
             return arrArg

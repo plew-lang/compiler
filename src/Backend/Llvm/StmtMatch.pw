@@ -304,7 +304,7 @@ pub impl LlvmCtx {
                         // an array struct-pattern bind SHARES the scrutinee's field buffer:
                         // retain so its scope-exit release balances and does not free a
                         // buffer the struct still owns (a double-free).
-                        self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, fv, 0U64, anon()))
+                        self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: fv))
                     }
                     self.pushLocal(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
                 }

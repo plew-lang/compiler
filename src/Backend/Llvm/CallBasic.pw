@@ -275,8 +275,8 @@ pub impl LlvmCtx {
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", nameId: 29U64, fnTy: fty)
             val s: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: LLVMBuildExtractValue(self.b, s, 0U64, anon()))
-            av.append(value: LLVMBuildExtractValue(self.b, s, 1U64, anon()))
+            av.append(value: self.arrValData(c: inout c, arr: s))
+            av.append(value: self.arrValCount(c: inout c, arr: s))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") {
@@ -290,7 +290,7 @@ pub impl LlvmCtx {
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") {
             // an array's storage base as CPtr[T]: the data pointer (field 0).
-            return LLVMBuildExtractValue(self.b, self.genLlvmExpr(c: inout c, id: args[0].expr), 0U64, anon())
+            return self.arrValData(c: inout c, arr: self.genLlvmExpr(c: inout c, id: args[0].expr))
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromBytesUnchecked") {
             // an (assumed-valid) UTF-8 Array[U8] -> String: same {ptr,i64} layout, so rebuild
@@ -307,10 +307,7 @@ pub impl LlvmCtx {
                 }
                 _ => {}
             }
-            mut val s: LLVMValueRef = LLVMGetUndef(self.strty)
-            s = LLVMBuildInsertValue(self.b, s, LLVMBuildExtractValue(self.b, arr, 0U64, anon()), 0U64, anon())
-            s = LLVMBuildInsertValue(self.b, s, LLVMBuildExtractValue(self.b, arr, 1U64, anon()), 1U64, anon())
-            return s
+            return self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: arr), count: self.arrValCount(c: inout c, arr: arr))
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "floatToString") {
             // a double -> String via the runtime (snprintf %g into a malloc'd buffer).
@@ -348,8 +345,8 @@ pub impl LlvmCtx {
             // (its {ptr,len} aggregate), else the default "assertion failed".
             if args.count > 1U64 {
                 val msg: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[1].expr)
-                av.append(value: LLVMBuildExtractValue(self.b, msg, 0U64, anon()))
-                av.append(value: LLVMBuildExtractValue(self.b, msg, 1U64, anon()))
+                av.append(value: self.arrValData(c: inout c, arr: msg))
+                av.append(value: self.arrValCount(c: inout c, arr: msg))
             } else {
                 av.append(value: LLVMBuildGlobalStringPtr(self.b, cstr(s: "assertion failed"), anon()))
                 av.append(value: LLVMConstInt(self.i64ty, 16U64, 0I32))

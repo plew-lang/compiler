@@ -358,7 +358,7 @@ pub impl LlvmCtx {
                             if er != 0U64 {
                                 ety2 = self.llvmTypeOfRef(c: inout c, ref: er)
                             }
-                            self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, fv, 0U64, anon()), count: LLVMBuildExtractValue(self.b, fv, 1U64, anon()), elemTy: ety2, elemRef: er)
+                            self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety2, elemRef: er)
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                             if fsi < c.arena.structs.count {
@@ -410,7 +410,7 @@ pub impl LlvmCtx {
                     val fd: FieldDef = fs[fj]
                     if !(c.fieldIsBoxed(f: fd)) {
                         if fd.tyIsArray {
-                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, pv, fj, anon()), 0U64, anon()))
+                            self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: LLVMBuildExtractValue(self.b, pv, fj, anon())))
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                             if fsi < c.arena.structs.count {

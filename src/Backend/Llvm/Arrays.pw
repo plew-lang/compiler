@@ -469,8 +469,8 @@ pub impl LlvmCtx {
     // free). `elemRef` (the element TypeRef) drives that retain; pass 0 only when the
     // element provably owns no heap (a primitive).
     inout fn copyArrayValue(c: inout Comp, arrVal: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
-        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arrVal, 0U64, anon())
-        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arrVal, 1U64, anon())
+        val data: LLVMValueRef = self.arrValData(c: inout c, arr: arrVal)
+        val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arrVal)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: self.ptrty)
         ptys.append(value: self.i64ty)
@@ -485,10 +485,7 @@ pub impl LlvmCtx {
         if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
             self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
         }
-        mut val agg: LLVMValueRef = LLVMGetUndef(self.arrayTy)
-        agg = LLVMBuildInsertValue(self.b, agg, nd, 0U64, anon())
-        agg = LLVMBuildInsertValue(self.b, agg, count, 1U64, anon())
-        return agg
+        return self.arrValMake(c: inout c, data: nd, count: count)
     }
 }
 
@@ -643,7 +640,7 @@ pub impl LlvmCtx {
             if sr != 0U64 {
                 val st: TypeRef = c.arena.types[sr]
                 if rangeEquals(bytes: c.arena.bytes, start: st.nameStart, len: st.nameLen, kw: "String") {
-                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                    self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
                     return v
                 }
             }
@@ -754,7 +751,7 @@ pub impl LlvmCtx {
         if !(arrayExprIsPlace(c: inout c, id: valueExpr)) {
             return arrVal
         }
-        self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, arrVal, 0U64, anon()))
+        self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: arrVal))
         return arrVal
     }
 
@@ -764,10 +761,8 @@ pub impl LlvmCtx {
     // {ptr,count} alloca (or an inout param's slot — so a mutation through `inout` CoWs the
     // caller's binding, leaving other sharers untouched).
     inout fn cowArraySlot(c: inout Comp, slotPtr: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) -> LLVMValueRef {
-        val dataPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slotPtr, 0U64, anon())
-        val countPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.arrayTy, slotPtr, 1U64, anon())
-        val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, dataPtr, anon())
-        val count: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, countPtr, anon())
+        val data: LLVMValueRef = self.arrSlotData(c: inout c, slot: slotPtr)
+        val count: LLVMValueRef = self.arrSlotCount(c: inout c, slot: slotPtr)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: self.ptrty)
         ptys.append(value: self.i64ty)
@@ -779,7 +774,7 @@ pub impl LlvmCtx {
         av.append(value: LLVMSizeOf(elemTy))
         av.append(value: count)
         val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
-        LLVMBuildStore(self.b, nd, dataPtr)
+        self.arrSlotSetData(c: inout c, slot: slotPtr, data: nd)
         // when the CoW actually duplicated the buffer (nd != old data), the shallow memcpy
         // duplicated every element's leading heap reference too — retain each so the new
         // owner co-owns it (balanced by this owner's eventual element release at drop).
@@ -864,14 +859,14 @@ pub impl LlvmCtx {
         val t: TypeRef = c.arena.types[typeRef]
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             if retain {
-                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
             } else {
                 mut val innerRef: U64 = 0
                 if t.args.count > 0U64 {
                     innerRef = t.args[0]
                 }
                 val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
-                self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: innerTy, elemRef: innerRef)
+                self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), count: self.arrValCount(c: inout c, arr: v), elemTy: innerTy, elemRef: innerRef)
             }
             return
         }
@@ -880,9 +875,9 @@ pub impl LlvmCtx {
         // making retain/drop a no-op for them). Matches emitDeinitValue's String handling.
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
             if retain {
-                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
             } else {
-                self.rawbufDrop(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                self.rawbufDrop(c: inout c, cell: self.arrValData(c: inout c, arr: v))
             }
             return
         }
@@ -918,7 +913,7 @@ pub impl LlvmCtx {
     inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64) {
         // `String`: retain its buffer (the value IS the Array[U8]); transparent single field.
         if self.isStringStruct(c: inout c, sidx: sidx) {
-            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+            self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
             return
         }
         // a concrete registered struct: call its retain witness instead of inlining the
@@ -950,7 +945,7 @@ pub impl LlvmCtx {
             if er != 0U64 {
                 // an array field (declared `Array[E]` or a type param grounding to one under
                 // the active env): retain its buffer (shallow).
-                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, v, i, anon()), 0U64, anon()))
+                self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: LLVMBuildExtractValue(self.b, v, i, anon())))
             } else {
                 if c.fieldIsBoxed(f: fd) {
                     // a boxed (recursive) field is a shared heap pointer — leave it (like Ref).

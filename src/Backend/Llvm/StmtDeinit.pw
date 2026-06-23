@@ -124,7 +124,7 @@ pub impl LlvmCtx {
         // `String`: the whole value IS the Array[U8] buffer — release it directly (U8 scalar
         // elements, so only the rc-managed outer buffer is freed; literals carry sentinel rc).
         if self.isStringStruct(c: inout c, sidx: sidx) {
-            self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, v, 0U64, anon()), count: LLVMBuildExtractValue(self.b, v, 1U64, anon()), elemTy: self.i8ty, elemRef: 0U64)
+            self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), count: self.arrValCount(c: inout c, arr: v), elemTy: self.i8ty, elemRef: 0U64)
             return
         }
         // registered struct: call its drop witness instead of inlining the walker.
@@ -172,7 +172,7 @@ pub impl LlvmCtx {
                 if er != 0U64 {
                     ety = self.llvmTypeOfRef(c: inout c, ref: er)
                 }
-                self.emitReleaseArrayValue(c: inout c, data: LLVMBuildExtractValue(self.b, fv, 0U64, anon()), count: LLVMBuildExtractValue(self.b, fv, 1U64, anon()), elemTy: ety, elemRef: er)
+                self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety, elemRef: er)
             } else {
                 val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                 if fsi < c.arena.structs.count {
@@ -254,12 +254,12 @@ pub impl LlvmCtx {
         if self.locIsArr[li] {
             if li >= self.curBodyMark {
                 val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+                val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
                 // an element type that owns heap (a nested array): release its buffer rc and,
                 // at 0, release each element's heap (recursively) before freeing — instead of
                 // just dropping the outer (which would leak the elements).
                 if self.arrElemNeedsValueArc(c: inout c, elemRef: self.locElemTypeRef[li]) {
-                    self.emitReleaseArrayValue(c: inout c, data: data, count: LLVMBuildExtractValue(self.b, arr, 1U64, anon()), elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
+                    self.emitReleaseArrayValue(c: inout c, data: data, count: self.arrValCount(c: inout c, arr: arr), elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
                 } else {
                     self.rawbufDrop(c: inout c, cell: data)
                 }

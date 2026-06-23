@@ -214,7 +214,8 @@ pub impl LlvmCtx {
                 // `arr.count` — an array's count is field 1.
                 if self.exprIsArray(c: inout c, id: base) {
                     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
-                        return LLVMBuildExtractValue(self.b, self.genLlvmExpr(c: inout c, id: base), 1U64, anon())
+                        val av: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                        return self.arrValCount(c: inout c, arr: av)
                     }
                 }
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)

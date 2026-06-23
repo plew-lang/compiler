@@ -54,10 +54,7 @@ pub impl LlvmCtx {
         idxs.append(value: LLVMConstInt(self.i64ty, 0U64, 0I32))
         idxs.append(value: LLVMConstInt(self.i64ty, 16U64, 0I32))
         val ptr: LLVMValueRef = LLVMBuildGEP2(self.b, arrTy, g, arrayCPtr(idxs), 2U64, anon())
-        mut val agg: LLVMValueRef = LLVMGetUndef(self.strty)
-        agg = LLVMBuildInsertValue(self.b, agg, ptr, 0U64, anon())
-        agg = LLVMBuildInsertValue(self.b, agg, LLVMConstInt(self.i64ty, n, 0I32), 1U64, anon())
-        return agg
+        return self.arrValMake(c: inout c, data: ptr, count: LLVMConstInt(self.i64ty, n, 0I32))
     }
 
     // Decompose a String value to (i8* data, i64 len) and call a 2-arg runtime sink
@@ -65,8 +62,8 @@ pub impl LlvmCtx {
     // the struct by value, sidesteps the C struct-by-value ABI until it is modeled.
     inout fn emitStrSink(c: inout Comp, rtName: String, rtId: U64, argExpr: U64) -> LLVMValueRef {
         val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
-        val ptr: LLVMValueRef = LLVMBuildExtractValue(self.b, sv, 0U64, anon())
-        val len: LLVMValueRef = LLVMBuildExtractValue(self.b, sv, 1U64, anon())
+        val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sv)
+        val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sv)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: self.ptrty)
         ptys.append(value: self.i64ty)
@@ -89,8 +86,8 @@ pub impl LlvmCtx {
         val fty: LLVMTypeRef = LLVMFunctionType(retTy, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, nameId: rtId, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: LLVMBuildExtractValue(self.b, pv, 0U64, anon()))
-        av.append(value: LLVMBuildExtractValue(self.b, pv, 1U64, anon()))
+        av.append(value: self.arrValData(c: inout c, arr: pv))
+        av.append(value: self.arrValCount(c: inout c, arr: pv))
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
@@ -148,10 +145,10 @@ pub impl LlvmCtx {
 
     // Byte-compare two String VALUES (strty) -> i1 (true if equal).
     inout fn emitStrEqValues(c: inout Comp, a: LLVMValueRef, b: LLVMValueRef) -> LLVMValueRef {
-        val pa: LLVMValueRef = LLVMBuildExtractValue(self.b, a, 0U64, anon())
-        val la: LLVMValueRef = LLVMBuildExtractValue(self.b, a, 1U64, anon())
-        val pb: LLVMValueRef = LLVMBuildExtractValue(self.b, b, 0U64, anon())
-        val lb: LLVMValueRef = LLVMBuildExtractValue(self.b, b, 1U64, anon())
+        val pa: LLVMValueRef = self.arrValData(c: inout c, arr: a)
+        val la: LLVMValueRef = self.arrValCount(c: inout c, arr: a)
+        val pb: LLVMValueRef = self.arrValData(c: inout c, arr: b)
+        val lb: LLVMValueRef = self.arrValCount(c: inout c, arr: b)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: self.ptrty)
         ptys.append(value: self.i64ty)
@@ -478,10 +475,10 @@ pub impl LlvmCtx {
     inout fn emitStrEq(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
         val a: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
         val b: LLVMValueRef = self.genLlvmExpr(c: inout c, id: rhs)
-        val pa: LLVMValueRef = LLVMBuildExtractValue(self.b, a, 0U64, anon())
-        val la: LLVMValueRef = LLVMBuildExtractValue(self.b, a, 1U64, anon())
-        val pb: LLVMValueRef = LLVMBuildExtractValue(self.b, b, 0U64, anon())
-        val lb: LLVMValueRef = LLVMBuildExtractValue(self.b, b, 1U64, anon())
+        val pa: LLVMValueRef = self.arrValData(c: inout c, arr: a)
+        val la: LLVMValueRef = self.arrValCount(c: inout c, arr: a)
+        val pb: LLVMValueRef = self.arrValData(c: inout c, arr: b)
+        val lb: LLVMValueRef = self.arrValCount(c: inout c, arr: b)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(value: self.ptrty)
         ptys.append(value: self.i64ty)

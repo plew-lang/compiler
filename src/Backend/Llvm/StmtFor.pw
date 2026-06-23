@@ -326,8 +326,8 @@ pub impl LlvmCtx {
         val mark: U64 = self.nLocals
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: iter)
         val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iter)
-        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
-        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+        val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
+        val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
         val idxslot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), idxslot)
         val vslot: LLVMValueRef = self.entryAlloca(ty: elemTy)
@@ -406,8 +406,8 @@ pub impl LlvmCtx {
         val mark: U64 = self.nLocals
         val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: iter)
         val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iter)
-        val data: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 0U64, anon())
-        val count: LLVMValueRef = LLVMBuildExtractValue(self.b, arr, 1U64, anon())
+        val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
+        val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
         val idxslot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), idxslot)
         val eslot: LLVMValueRef = self.entryAlloca(ty: elemTy)
