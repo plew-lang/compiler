@@ -657,6 +657,15 @@ pub impl LlvmCtx {
             // retain), and the buffer's drop cascades into elements at rc 0 — balanced.
             return self.shareArrayIfPlace(c: inout c, arrVal: v, elemTy: self.arrElemTyOf(c: inout c, id: expr), valueExpr: expr)
         }
+        // 1-3a (buffer class): CoW-SHARE a Buffer place — Buffer is structurally an array
+        // (single rawbuf pointer, header count, rc), so retain the buffer (rc++) exactly
+        // like the array class; the buffer's drop cascades into elements at rc 0. A fresh
+        // buffer (call result) is a non-place and passes through. Needed so appending /
+        // storing a Buffer local (`outer.append(inner)`) co-owns it instead of aliasing a
+        // buffer the inner local's scope-drop will free.
+        if self.exprIsBuffer(c: inout c, id: expr) {
+            return self.shareArrayIfPlace(c: inout c, arrVal: v, elemTy: self.bufElemTyOf(c: inout c, id: expr), valueExpr: expr)
+        }
         if structExprIsPlace(c: inout c, id: expr) {
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
             if sidx < c.arena.structs.count {
@@ -809,7 +818,12 @@ pub impl LlvmCtx {
             return false
         }
         val t: TypeRef = c.arena.types[elemRef]
+        // Array and Buffer are structurally identical (single rawbuf data pointer, count in
+        // the header, rc-managed): both own heap, so both are value-ARC'd as elements.
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            return true
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer") {
             return true
         }
         // a String element owns an rc-managed Array[U8] buffer — retained on outer CoW,
@@ -860,7 +874,10 @@ pub impl LlvmCtx {
             return
         }
         val t: TypeRef = c.arena.types[typeRef]
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+        // Array / Buffer: structurally identical (single rawbuf pointer, header count, rc).
+        // retain = bump the buffer rc (shallow CoW-share); release = the rc-aware cascade
+        // (release each element at rc 0, then free). The element ref is the type argument.
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") || rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer") {
             if retain {
                 self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
             } else {

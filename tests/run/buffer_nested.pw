@@ -1,0 +1,29 @@
+// A Buffer whose element type is itself a Buffer (Buffer[Buffer[I64]]): exercises
+// Buffer recognized as an rc-managed ARC element. append(innerPlace) co-owns the
+// inner buffer (rc++) so the inner local's scope-drop does not free it, get is
+// value-return (retains), and the outer's scope-drop cascades into each inner
+// buffer's release+free. ASan-on-self-compile / run prove it is leak/UAF-free.
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+fn main() {
+    mut val outer: Buffer[Buffer[I64]] = Buffer.new()
+    mut val k: I64 = 0I64
+    while k < 5I64 {
+        mut val inner: Buffer[I64] = Buffer.new()
+        mut val j: I64 = 0I64
+        while j < 4I64 {
+            inner.append(k * 10I64 + j)
+            j += 1I64
+        }
+        outer.append(inner)
+        k += 1I64
+    }
+    val oc: U64 = outer.count()
+    print(line: "outer=" + oc.format(format: ""))
+    val row: Buffer[I64] = outer.get(index: 2U64)
+    val rc: U64 = row.count()
+    print(line: "row2count=" + rc.format(format: ""))
+    val v: I64 = row.get(index: 3U64)
+    print(line: "v=" + v.format(format: ""))
+}
