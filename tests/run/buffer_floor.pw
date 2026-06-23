@@ -1,0 +1,29 @@
+// The Buffer storage floor (buffer-floor.md): `Buffer[T]` is the blessed safe
+// storage primitive Array/Dictionary/Set/String are built on. Unlike Array's
+// `{ptr,i64}` value, a Buffer is a single data pointer whose cap/count/rc live
+// in the heap header; new/count/append/get are lowered inline to the rawbuf
+// header ops. This exercises construction, growth across cap boundaries
+// (0 -> 8 -> 16 -> 32), the header count, bounds-checked reads, and scope-drop.
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+fn main() {
+    mut val b: Buffer[I64] = Buffer.new()
+    val empty: U64 = b.count()
+    print(line: "empty=" + empty.format(format: ""))
+    mut val i: I64 = 0I64
+    while i < 20I64 {
+        b.append(i * 10I64)
+        i += 1I64
+    }
+    val n: U64 = b.count()
+    print(line: "count=" + n.format(format: ""))
+    mut val sum: I64 = 0I64
+    mut val k: U64 = 0U64
+    while k < n {
+        val e: I64 = b.get(index: k)
+        sum += e
+        k += 1U64
+    }
+    print(line: "sum=" + sum.format(format: ""))
+}

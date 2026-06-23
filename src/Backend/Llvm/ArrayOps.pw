@@ -261,6 +261,126 @@ pub impl LlvmCtx {
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
+    // ---- Buffer floor ops (buffer-floor.md). Unlike Array's `{ptr,i64}` value, a
+    // `Buffer[T]` is a SINGLE data pointer; its `cap`/`count`/`rc` live in the heap
+    // header before the pointer (`plew_rawbuf_*`). The element type T is recovered from
+    // the receiver local's tracked `Buffer[T]` TypeRef. These mirror genLlvmAppend / etc
+    // but read/write count via the header rather than an inline struct field. ----
+
+    // Whether an expression is a `Buffer[T]`-typed local (for routing new/count/append/get).
+    inout fn exprIsBuffer(c: inout Comp, id: U64) -> Bool {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+                if li < self.nLocals {
+                    val tr: U64 = self.locTypeRef[li]
+                    if tr != 0U64 {
+                        return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[tr].nameStart, len: c.arena.types[tr].nameLen, kw: "Buffer")
+                    }
+                }
+            }
+            _ => {}
+        }
+        return false
+    }
+
+    // The element TypeRef of a `Buffer[T]` receiver local (T), or 0.
+    inout fn bufElemRef(c: inout Comp, id: U64) -> U64 {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+                if li < self.nLocals {
+                    val tr: U64 = self.locTypeRef[li]
+                    if tr != 0U64 {
+                        if c.arena.types[tr].args.count > 0U64 {
+                            return c.arena.types[tr].args[0]
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
+    // The LLVM element type of a `Buffer[T]` receiver (i64 fallback).
+    inout fn bufElemTyOf(c: inout Comp, id: U64) -> LLVMTypeRef {
+        val er: U64 = self.bufElemRef(c: inout c, id: id)
+        if er != 0U64 {
+            return self.llvmTypeOfRef(c: inout c, ref: er)
+        }
+        return self.i64ty
+    }
+
+    // The alloca holding a `Buffer[T]` local's data pointer (so append can store the
+    // grown pointer back). Null if not an addressable buffer local.
+    inout fn bufStoragePtr(c: inout Comp, id: U64) -> LLVMValueRef {
+        match c.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+                if li < self.nLocals {
+                    return self.locPtr[li]
+                }
+            }
+            _ => {}
+        }
+        return LLVMConstNull(self.ptrty)
+    }
+
+    // `Buffer.new()`: a fresh empty buffer (header-only, cap=0 — the first append grows
+    // it). The element size is irrelevant at cap=0, so a unit elemSize suffices.
+    inout fn genLlvmBufferNew(c: inout Comp) -> LLVMValueRef {
+        return self.rawbufAlloc(c: inout c, elemSize: LLVMConstInt(self.i64ty, 1U64, 0I32), cap: LLVMConstInt(self.i64ty, 0U64, 0I32))
+    }
+
+    // `buf.count()`: the live-element count, read from the heap header.
+    inout fn genLlvmBufferCount(c: inout Comp, recv: U64) -> LLVMValueRef {
+        return self.rawbufCount(c: inout c, data: self.genLlvmExpr(c: inout c, id: recv))
+    }
+
+    // `buf.append(value)`: grow the buffer if full, store the (place-copied) value at the
+    // header count index, and bump the header count.
+    inout fn genLlvmBufferAppend(c: inout Comp, recv: U64, valueExpr: U64) -> LLVMValueRef {
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.append only on a buffer local (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val data: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slot, anon())
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+        // newdata = plew_arr_grow(data, elemSize, count) — grows (and frees the old, rc<=1)
+        // only when count>=cap; the header count is carried across in the runtime.
+        mut val gtys: Array[LLVMTypeRef] = []
+        gtys.append(value: self.ptrty)
+        gtys.append(value: self.i64ty)
+        gtys.append(value: self.i64ty)
+        val gfty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(gtys), 3U64, 0I32)
+        val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
+        mut val gav: Array[LLVMValueRef] = []
+        gav.append(value: data)
+        gav.append(value: LLVMSizeOf(elemTy))
+        gav.append(value: count)
+        val newdata: LLVMValueRef = LLVMBuildCall2(self.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
+        LLVMBuildStore(self.b, newdata, slot)
+        // value semantics: a struct/array/String PLACE element copies (a literal / call
+        // result already owns its buffer and passes through).
+        val ev: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
+        LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
+        self.rawbufSetCount(c: inout c, data: newdata, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
+    }
+
+    // `buf.get(index)`: bounds-checked element read (panics when out of range).
+    inout fn genLlvmBufferGet(c: inout Comp, recv: U64, indexExpr: U64) -> LLVMValueRef {
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
+        self.emitBoundsCheck(c: inout c, idx: idx, count: count)
+        return LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+    }
+
     // Emit a condition expression as an i1. A comparison binary already yields i1; any
     // other integer becomes `x != 0`.
     // `a && b` / `a || b` with short-circuit semantics (spec/12), yielding an i1.

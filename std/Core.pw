@@ -574,6 +574,40 @@ export extern "plew-intrinsic" {
     struct Buffer
 }
 
+// The Buffer storage-floor intrinsics (buffer-floor.md): lowered by the compiler to the
+// `plew_rawbuf_*` header ops (count lives in the heap header, before the data pointer).
+// The element type T is recovered from the `Buffer[T]` argument / receiver. Like Array's
+// `arrayPush`/etc, these are never emitted — the methods below are intercepted at the
+// call site — so the declarations only have to type-check the wrapper bodies.
+export extern "plew-intrinsic" {
+    fn bufferNew[T]() -> Buffer[T]
+    fn bufferCount[T](buffer: Buffer[T]) -> U64
+    fn bufferAppend[T](buffer: inout Buffer[T], value: T)
+    fn bufferGet[T](buffer: Buffer[T], index: U64) -> T
+}
+
+// Methods on the Buffer floor, in pure Plew over the intrinsics above. Like Array's
+// methods they are dispatched by name at the call site (the bodies are never emitted),
+// so the floor's public surface is ordinary methods, not raw functions.
+pub impl[T] Buffer[T] {
+    // A fresh empty buffer (no allocation until the first append).
+    assoc fn new() -> Buffer[T] {
+        return bufferNew()
+    }
+    // The number of live elements.
+    fn count() -> U64 {
+        return bufferCount(buffer: self)
+    }
+    // Append `value` to the end (growing the storage as needed).
+    inout fn append(value~: T) {
+        bufferAppend(buffer: inout self, value: value)
+    }
+    // The element at `index` (panics when out of range).
+    fn get(index: U64) -> T {
+        return bufferGet(buffer: self, index: index)
+    }
+}
+
 // Subscript (spec/12): `a[k]` desugars to `a.index(key: k)`, `a[k] = v` to
 // `a.indexSet(key: k, value: v)`. Container accessors, so the requirement is a
 // method (receiver = the collection), not an assoc fn. Read and write are separate

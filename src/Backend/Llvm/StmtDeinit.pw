@@ -266,6 +266,17 @@ pub impl LlvmCtx {
             }
             return
         }
+        // an owned `Buffer[T]` BODY local: drop its single data pointer (dec rc, free at
+        // 0). Gated on `li >= curBodyMark` (params / globals / captures are borrows). MVP:
+        // scalar elements only — element heap (String / nested) cascade is C1/C2 work.
+        if self.locTypeRef[li] != 0U64 {
+            if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.locTypeRef[li]].nameStart, len: c.arena.types[self.locTypeRef[li]].nameLen, kw: "Buffer") {
+                if li >= self.curBodyMark {
+                    self.rawbufDrop(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
+                }
+                return
+            }
+        }
         // a `Ref[T]` local with a deinit-bearing pointee: release the shared cell; when
         // the last owner drops (refcount hits 0), destroy the pointee (spec/03).
         val rpsi: U64 = self.refDeinitPointeeSidx(c: inout c, refTy: self.locTypeRef[li])

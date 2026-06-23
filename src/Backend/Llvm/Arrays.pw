@@ -382,6 +382,32 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
+    // Declare/cache `plew_rawbuf_count(ptr) -> i64` — the buffer's live-element count,
+    // read from the heap header (the Buffer floor maintains it; spec/02, buffer-floor.md).
+    inout fn rawbufCount(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_count", nameId: 9160U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    }
+
+    // Declare/cache `plew_rawbuf_set_count(ptr, i64)` — store the buffer's live-element
+    // count into the heap header.
+    inout fn rawbufSetCount(c: inout Comp, data: LLVMValueRef, n: LLVMValueRef) {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_set_count", nameId: 9161U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        av.append(value: n)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+
     // Eager value-semantics copy of an array value `{data,count}`: allocate a fresh
     // buffer of `count` elements (size from elemTy) and memcpy, returning the new
     // `{newdata,count}`. The memcpy is SHALLOW — so for an ARC-bearing element type

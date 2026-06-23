@@ -112,6 +112,13 @@ pub impl LlvmCtx {
         // a value): dispatch to the assoc fn (no self argument).
         val arn: Bind = c.assocRecvName(recv: recv)
         if arn.nameLen != 0U64 {
+            // the Buffer floor's construction assoc fn `Buffer.new()` is lowered inline
+            // (its body is never emitted — like Array's intercepted methods).
+            if rangeEquals(bytes: c.arena.bytes, start: arn.nameStart, len: arn.nameLen, kw: "Buffer") {
+                if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "new") {
+                    return self.genLlvmBufferNew(c: inout c)
+                }
+            }
             // a primitive numeric operator witness (`I32.add(lhs:, rhs:)`, `I64.neg(value:)`)
             // lowers straight to the LLVM op rather than emitting the std witness body
             // (which bottoms out in intrinsics). The result type / signedness is the
@@ -244,6 +251,21 @@ pub impl LlvmCtx {
                     return LLVMConstInt(self.i64ty, 0U64, 0I32)
                 }
             }
+        }
+        // Buffer floor methods (count / append / get), lowered inline against the header
+        // count + single data pointer (their wrapper bodies are never emitted).
+        if self.exprIsBuffer(c: inout c, id: recv) {
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
+                return self.genLlvmBufferCount(c: inout c, recv: recv)
+            }
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
+                return self.genLlvmBufferAppend(c: inout c, recv: recv, valueExpr: args[0].expr)
+            }
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "get") {
+                return self.genLlvmBufferGet(c: inout c, recv: recv, indexExpr: args[0].expr)
+            }
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this Buffer method is not yet supported (new / count / append / get)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // array methods (append / get / set; user methods on Array are TODO).
         if self.exprIsArray(c: inout c, id: recv) {
