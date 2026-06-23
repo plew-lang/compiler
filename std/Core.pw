@@ -582,8 +582,11 @@ export extern "plew-intrinsic" {
 export extern "plew-intrinsic" {
     fn bufferNew[T]() -> Buffer[T]
     fn bufferCount[T](buffer: Buffer[T]) -> U64
+    fn bufferCapacity[T](buffer: Buffer[T]) -> U64
     fn bufferAppend[T](buffer: inout Buffer[T], value: T)
     fn bufferGet[T](buffer: Buffer[T], index: U64) -> T
+    fn bufferSet[T](buffer: inout Buffer[T], index: U64, value: T)
+    fn bufferRemoveLast[T](buffer: inout Buffer[T])
 }
 
 // Methods on the Buffer floor, in pure Plew over the intrinsics above. Like Array's
@@ -598,6 +601,14 @@ pub impl[T] Buffer[T] {
     fn count() -> U64 {
         return bufferCount(buffer: self)
     }
+    // The allocated capacity (>= count); how many elements fit before the next grow.
+    fn capacity() -> U64 {
+        return bufferCapacity(buffer: self)
+    }
+    // Whether the buffer holds no live elements.
+    fn isEmpty() -> Bool {
+        return bufferCount(buffer: self) == 0U64
+    }
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
         bufferAppend(buffer: inout self, value: value)
@@ -605,6 +616,15 @@ pub impl[T] Buffer[T] {
     // The element at `index` (panics when out of range).
     fn get(index: U64) -> T {
         return bufferGet(buffer: self, index: index)
+    }
+    // Replace the element at `index` (panics when out of range).
+    inout fn set(index: U64, value~: T) {
+        bufferSet(buffer: inout self, index: index, value: value)
+    }
+    // Remove the last element (panics when empty). The storage keeps its capacity;
+    // only the live count shrinks.
+    inout fn removeLast() {
+        bufferRemoveLast(buffer: inout self)
     }
 }
 

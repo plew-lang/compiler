@@ -394,6 +394,18 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
+    // Declare/cache `plew_rawbuf_cap(ptr) -> i64` — the buffer's allocated capacity,
+    // read from the heap header.
+    inout fn rawbufCap(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_cap", nameId: 9162U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    }
+
     // Declare/cache `plew_rawbuf_set_count(ptr, i64)` — store the buffer's live-element
     // count into the heap header.
     inout fn rawbufSetCount(c: inout Comp, data: LLVMValueRef, n: LLVMValueRef) {

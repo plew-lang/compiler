@@ -26,4 +26,16 @@ fn main() {
         k += 1U64
     }
     print(line: "sum=" + sum.format(format: ""))
+    // set / removeLast / isEmpty / capacity.
+    b.set(index: 0U64, value: 7I64)
+    val b0: I64 = b.get(index: 0U64)
+    print(line: "b0=" + b0.format(format: ""))
+    b.removeLast()
+    val n2: U64 = b.count()
+    print(line: "afterPop=" + n2.format(format: ""))
+    val cap: U64 = b.capacity()
+    val capOk: Bool = cap >= n2
+    if capOk { print(line: "cap-ok") }
+    val empty2: Bool = b.isEmpty()
+    if empty2 { print(line: "BAD") } else { print(line: "nonempty-ok") }
 }

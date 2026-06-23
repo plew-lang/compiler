@@ -1,3 +1,7 @@
 empty=0
 count=20
 sum=1900
+b0=7
+afterPop=19
+cap-ok
+nonempty-ok

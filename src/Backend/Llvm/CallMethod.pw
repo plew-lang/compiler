@@ -258,13 +258,25 @@ pub impl LlvmCtx {
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                 return self.genLlvmBufferCount(c: inout c, recv: recv)
             }
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "capacity") {
+                return self.genLlvmBufferCapacity(c: inout c, recv: recv)
+            }
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "isEmpty") {
+                return self.genLlvmBufferIsEmpty(c: inout c, recv: recv)
+            }
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
                 return self.genLlvmBufferAppend(c: inout c, recv: recv, valueExpr: args[0].expr)
             }
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "get") {
                 return self.genLlvmBufferGet(c: inout c, recv: recv, indexExpr: args[0].expr)
             }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this Buffer method is not yet supported (new / count / append / get)")
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "set") {
+                return self.genLlvmBufferSet(c: inout c, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
+            }
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "removeLast") {
+                return self.genLlvmBufferRemoveLast(c: inout c, recv: recv)
+            }
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this Buffer method is not yet supported (new / count / capacity / isEmpty / append / get / set / removeLast)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // array methods (append / get / set; user methods on Array are TODO).
