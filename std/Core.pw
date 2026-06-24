@@ -569,8 +569,8 @@ export enum Ordering { Less  Equal  Greater }
 // explicitly (no literal produces it) → import-required, so it lives here with the
 // other floor primitives.
 export extern "plew-intrinsic" {
-    struct Ref
-    struct WeakRef
+    struct Ref[T]
+    struct WeakRef[T]
     struct Buffer[T]
 }
 
