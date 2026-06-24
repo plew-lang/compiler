@@ -52,16 +52,16 @@ pub impl LlvmCtx {
             LLVMSetInitializer(gv, LLVMConstNull(lty))
             val cur: LLVMValueRef = LLVMBuildLoad2(self.b, lty, self.locPtr[li], anon())
             LLVMBuildStore(self.b, cur, gv)
-            self.gvalRef.append(value: gv)
-            self.gvalLty.append(value: lty)
-            self.gvalKind.append(value: self.locKind[li])
-            self.gvalSidx.append(value: self.locStructIdx[li])
-            self.gvalIsArr.append(value: self.locIsArr[li])
-            self.gvalElemTy.append(value: self.locElemTy[li])
-            self.gvalElemKind.append(value: self.locElemKind[li])
-            self.gvalTref.append(value: self.locTypeRef[li])
-            self.gvalElemStructIdx.append(value: self.locElemStructIdx[li])
-            self.gvalElemTypeRef.append(value: self.locElemTypeRef[li])
+            self.gvalRef.append(gv)
+            self.gvalLty.append(lty)
+            self.gvalKind.append(self.locKind[li])
+            self.gvalSidx.append(self.locStructIdx[li])
+            self.gvalIsArr.append(self.locIsArr[li])
+            self.gvalElemTy.append(self.locElemTy[li])
+            self.gvalElemKind.append(self.locElemKind[li])
+            self.gvalTref.append(self.locTypeRef[li])
+            self.gvalElemStructIdx.append(self.locElemStructIdx[li])
+            self.gvalElemTypeRef.append(self.locElemTypeRef[li])
             gi += 1
         }
         LLVMBuildRetVoid(self.b)
@@ -92,8 +92,8 @@ pub impl LlvmCtx {
         // (@Std/Process argCount/argAt) — the args are stashed into the runtime via
         // plew_set_args before the body runs.
         mut val mainParams: Array[LLVMTypeRef] = []
-        mainParams.append(value: self.i32ty)
-        mainParams.append(value: self.ptrty)
+        mainParams.append(self.i32ty)
+        mainParams.append(self.ptrty)
         val mainTy: LLVMTypeRef = LLVMFunctionType(self.i32ty, arrayCPtr(mainParams), 2U64, 0I32)
         val mainFn: LLVMValueRef = LLVMAddFunction(self.mod, cstr(s: "main"), mainTy)
         self.curFn = mainFn
@@ -102,13 +102,13 @@ pub impl LlvmCtx {
         self.beginFnBody(fv: mainFn)
         // plew_set_args(argc, argv).
         mut val saTys: Array[LLVMTypeRef] = []
-        saTys.append(value: self.i32ty)
-        saTys.append(value: self.ptrty)
+        saTys.append(self.i32ty)
+        saTys.append(self.ptrty)
         val saTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(saTys), 2U64, 0I32)
         val saFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_set_args", nameId: 56U64, fnTy: saTy)
         mut val saArgs: Array[LLVMValueRef] = []
-        saArgs.append(value: LLVMGetParam(mainFn, 0U64))
-        saArgs.append(value: LLVMGetParam(mainFn, 1U64))
+        saArgs.append(LLVMGetParam(mainFn, 0U64))
+        saArgs.append(LLVMGetParam(mainFn, 1U64))
         LLVMBuildCall2(self.b, saTy, saFn, arrayCPtr(saArgs), 2U64, anon())
         // initialize module-level variables (spec/15) before the body runs.
         self.callInitGlobals(c: inout c)

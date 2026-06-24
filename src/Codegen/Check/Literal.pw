@@ -308,7 +308,7 @@ pub impl Comp {
                         if f.params.count >= 2 {
                             if self.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
                                 if !(u64ArrayHas(a: seen, v: f.params[1].tyNameId)) {
-                                    seen.append(value: f.params[1].tyNameId)
+                                    seen.append(f.params[1].tyNameId)
                                 }
                             }
                         }

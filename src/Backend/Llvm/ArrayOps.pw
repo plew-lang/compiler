@@ -115,155 +115,11 @@ pub impl LlvmCtx {
         return 0U64
     }
 
-    inout fn genLlvmAppend(c: inout Comp, recv: U64, valueExpr: U64) -> LLVMValueRef {
-        // CoW gateway (1-0): own any shared array buffer ABOVE the receiver (e.g.
-        // `arr[i].append(v)` -> own `arr` first) before the immediate-level CoW below.
-        self.privatizeForWrite(c: inout c, id: recv)
-        val arrPtr: LLVMValueRef = self.arrStoragePtr(c: inout c, id: recv)
-        if LLVMIsNull(arrPtr) != 0I32 {
-            compileErrorAt(line: 0, msg: "LLVM backend: append only on an array local / struct field (so far)")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
-        // CoW: if this array shares its buffer (rc>1), privatize it in the slot before
-        // mutating, so the append does not clobber another binding's view.
-        self.cowArraySlot(c: inout c, slotPtr: arrPtr, elemTy: elemTy, elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: recv))
-        val data: LLVMValueRef = self.arrSlotData(c: inout c, slot: arrPtr)
-        val count: LLVMValueRef = self.arrSlotCount(c: inout c, slot: arrPtr)
-        // newdata = plew_arr_grow(data, elemSize, count)
-        mut val gtys: Array[LLVMTypeRef] = []
-        gtys.append(value: self.ptrty)
-        gtys.append(value: self.i64ty)
-        gtys.append(value: self.i64ty)
-        val gfty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(gtys), 3U64, 0I32)
-        val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
-        mut val gav: Array[LLVMValueRef] = []
-        gav.append(value: data)
-        gav.append(value: LLVMSizeOf(elemTy))
-        gav.append(value: count)
-        val newdata: LLVMValueRef = LLVMBuildCall2(self.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
-        self.arrSlotSetData(c: inout c, slot: arrPtr, data: newdata)
-        // build the appended value. An array-LITERAL appended to a nested array
-        // (`m.append([1,2,3])` for m: Array[Array[I32]]) must use the inner element
-        // type, not i64-defaulted — recover it from the receiver's element ref.
-        mut val ev: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
-        mut val builtLit: Bool = false
-        match c.arena.exprs[valueExpr] {
-            Expr.Array(val elems) => {
-                val recvElemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
-                if recvElemRef != 0U64 {
-                    val ret: TypeRef = c.arena.types[recvElemRef]
-                    if rangeEquals(bytes: c.arena.bytes, start: ret.nameStart, len: ret.nameLen, kw: "Array") {
-                        if ret.args.count > 0U64 {
-                            ev = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: ret.args[0]))
-                            builtLit = true
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-        if !(builtLit) {
-            // value semantics (spec/03): appending an array/struct PLACE element copies,
-            // so the array's element stays independent of the source binding
-            // (`xs.append(a)` then `a[0]=…` must leave `xs[0]` unchanged). A literal /
-            // call result already owns its buffer; copyValueIfPlace passes it through.
-            ev = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
-        }
-        LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
-        self.arrSlotSetCount(c: inout c, slot: arrPtr, count: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
-        return LLVMConstInt(self.i64ty, 0U64, 0I32)
-    }
-
-    // `arr.set(i:, value:)`: bounds-checked element store (same place mutation as
-    // `arr[i] = v`). For a scalar array that shares its buffer (rc>1) this CoWs it in the
-    // slot first (Stage 2a). Returns a unit value.
-    inout fn genLlvmArraySet(c: inout Comp, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
-        // CoW gateway (1-0): own any shared array buffer ABOVE the receiver (e.g.
-        // `arr[i].set(j, v)` -> own `arr` first) before the immediate-level CoW below.
-        self.privatizeForWrite(c: inout c, id: recv)
-        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
-        val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
-        mut val data: LLVMValueRef = LLVMConstNull(self.ptrty)
-        mut val count: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
-        mut val placed: Bool = false
-        val slot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: recv)
-        if LLVMIsNull(slot) == 0I32 {
-            placed = true
-            data = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
-            count = self.arrSlotCount(c: inout c, slot: slot)
-        } else {
-            val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
-            data = self.arrValData(c: inout c, arr: arr)
-            count = self.arrValCount(c: inout c, arr: arr)
-        }
-        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
-        self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-        val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
-        // value semantics: copy an array/struct PLACE element so `arr.set(i, a)` leaves
-        // the stored element independent of `a` (a literal / call result passes through).
-        val rv: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
-        // commit-then-release (§2c): for an ARC-bearing element on a privatized place
-        // buffer, read the retiring value, store the new one (commit the slot to a valid
-        // value), THEN release the old heap. Overwriting `[0,count)` is always overwriting
-        // a live value (dense invariant), so the old element's heap (String / nested array
-        // / deinit-bearing struct/enum) is freed rather than leaked, and a re-entrant
-        // deinit only observes a fully-initialized slot. The non-place rvalue branch keeps
-        // the old leak-safe store (its temp buffer may be shared, so releasing could
-        // double-free); that path discards its result anyway.
-        if placed && self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
-            val old: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
-            LLVMBuildStore(self.b, rv, ep)
-            self.valueArc(c: inout c, v: old, typeRef: elemRef, retain: false)
-        } else {
-            LLVMBuildStore(self.b, rv, ep)
-        }
-        return LLVMConstInt(self.i64ty, 0U64, 0I32)
-    }
-
-    // `arr.removeLast()`: shrink the array by one (panics when empty). Symmetric with
-    // append — CoWs a shared buffer first (it is a mutation), then releases the popped
-    // element's owned heap (String / nested array / deinit-bearing struct/enum) so the
-    // element cascade stays balanced, and decrements `count`. The storage buffer itself
-    // is left at its grown capacity (only the live `count` shrinks). Returns unit. Used
-    // by the dense-array compaction in Dictionary/Set `remove`.
-    inout fn genLlvmArrayRemoveLast(c: inout Comp, recv: U64) -> LLVMValueRef {
-        // CoW gateway (1-0): own any shared array buffer ABOVE the receiver first.
-        self.privatizeForWrite(c: inout c, id: recv)
-        val slot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: recv)
-        if LLVMIsNull(slot) != 0I32 {
-            compileErrorAt(line: 0, msg: "LLVM backend: removeLast only on an array local / struct field (so far)")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: recv)
-        val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
-        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: elemRef)
-        val count: LLVMValueRef = self.arrSlotCount(c: inout c, slot: slot)
-        // empty-guard: index 0 must be in range (i.e. count > 0), else panic.
-        self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
-        val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        // commit-then-release (§2c): shrink `count` FIRST so the popped slot leaves the
-        // live prefix [0,count), THEN release its owned heap (String / nested array /
-        // deinit-bearing struct/enum) to keep the value-ARC cascade balanced. Releasing a
-        // last `Ref` runs `deinit` synchronously and can re-enter; committing the shrink
-        // first means such a re-entry only ever observes the dense prefix, never the
-        // half-torn-down element. The buffer keeps its grown capacity.
-        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
-            val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount)
-            val ev: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
-            self.arrSlotSetCount(c: inout c, slot: slot, count: newCount)
-            self.valueArc(c: inout c, v: ev, typeRef: elemRef, retain: false)
-        } else {
-            self.arrSlotSetCount(c: inout c, slot: slot, count: newCount)
-        }
-        return LLVMConstInt(self.i64ty, 0U64, 0I32)
-    }
-
-    // ---- Buffer floor ops (buffer-floor.md). Unlike Array's `{ptr,i64}` value, a
-    // `Buffer[T]` is a SINGLE data pointer; its `cap`/`count`/`rc` live in the heap
-    // header before the pointer (`plew_rawbuf_*`). The element type T is recovered from
-    // the receiver local's tracked `Buffer[T]` TypeRef. These mirror genLlvmAppend / etc
-    // but read/write count via the header rather than an inline struct field. ----
+    // ---- Buffer floor ops (collections.md). A `Buffer[T]` is a SINGLE data pointer; its
+    // `cap`/`count`/`rc` live in the heap header before the pointer (`plew_rawbuf_*`). The
+    // element type T is recovered from the receiver's tracked `Buffer[T]` TypeRef. Array's
+    // own methods (append/get/set/removeLast) are now pure Plew over `self.data` and lower
+    // through THESE ops (Array A); there is no separate array-method codegen any more. ----
 
     // Whether an expression is a `Buffer[T]`-typed local (for routing new/count/append/get).
     inout fn exprIsBuffer(c: inout Comp, id: U64) -> Bool {
@@ -383,15 +239,15 @@ pub impl LlvmCtx {
         // newdata = plew_arr_grow(data, elemSize, count) — grows (and frees the old, rc<=1)
         // only when count>=cap; the header count is carried across in the runtime.
         mut val gtys: Array[LLVMTypeRef] = []
-        gtys.append(value: self.ptrty)
-        gtys.append(value: self.i64ty)
-        gtys.append(value: self.i64ty)
+        gtys.append(self.ptrty)
+        gtys.append(self.i64ty)
+        gtys.append(self.i64ty)
         val gfty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(gtys), 3U64, 0I32)
         val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", nameId: 22U64, fnTy: gfty)
         mut val gav: Array[LLVMValueRef] = []
-        gav.append(value: data)
-        gav.append(value: LLVMSizeOf(elemTy))
-        gav.append(value: count)
+        gav.append(data)
+        gav.append(LLVMSizeOf(elemTy))
+        gav.append(count)
         val newdata: LLVMValueRef = LLVMBuildCall2(self.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
         LLVMBuildStore(self.b, newdata, slot)
         // value semantics: a struct/array/String PLACE element copies (a literal / call
@@ -665,11 +521,11 @@ pub impl LlvmCtx {
             scConst = LLVMConstInt(self.i1ty, 1U64, 0I32)
         }
         mut val vals: Array[LLVMValueRef] = []
-        vals.append(value: scConst)
-        vals.append(value: rv)
+        vals.append(scConst)
+        vals.append(rv)
         mut val blocks: Array[LLVMBasicBlockRef] = []
-        blocks.append(value: lhsEndBB)
-        blocks.append(value: rhsEndBB)
+        blocks.append(lhsEndBB)
+        blocks.append(rhsEndBB)
         LLVMAddIncoming(phi, arrayCPtr(vals), arrayCPtr(blocks), 2U64)
         return phi
     }

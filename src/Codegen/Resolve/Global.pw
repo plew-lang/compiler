@@ -26,7 +26,7 @@ pub impl Comp {
                 while gi < self.arena.globals.count {
                     if spansEqual(c: inout self, aStart: self.arena.globals[gi].nameStart, aLen: self.arena.globals[gi].nameLen, bStart: start, bLen: len) {
                         if !(u64ArrayHas(a: into, v: gi)) {
-                            into.append(value: gi)
+                            into.append(gi)
                         }
                     }
                     gi += 1
@@ -90,7 +90,7 @@ pub impl Comp {
             k += 1
         }
         state[i] = 2U64
-        order.append(value: i)
+        order.append(i)
     }
 
     inout fn orderGlobalsByDependency() {
@@ -101,7 +101,7 @@ pub impl Comp {
         mut val state: Array[U64] = []
         mut val j: U64 = 0
         while j < n {
-            state.append(value: 0U64)
+            state.append(0U64)
             j += 1
         }
         mut val order: Array[U64] = []
@@ -114,7 +114,7 @@ pub impl Comp {
         mut val reordered: Array[Global] = []
         mut val o: U64 = 0
         while o < order.count {
-            reordered.append(value: self.arena.globals[order[o]])
+            reordered.append(self.arena.globals[order[o]])
             o += 1
         }
         self.arena.globals = reordered
@@ -137,7 +137,7 @@ pub impl Comp {
                             mut val args: Array[Arg] = []
                             mut val fi: U64 = 0
                             while fi < fields.count {
-                                args.append(value: <Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
+                                args.append(<Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
                                 fi += 1
                             }
                             self.arena.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
@@ -151,7 +151,7 @@ pub impl Comp {
                                 if self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
                                     val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                                     mut val fargs: Array[Arg] = []
-                                    fargs.append(value: <Arg expr=fields[0].value isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
+                                    fargs.append(<Arg expr=fields[0].value isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
                                     self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=fargs />
                                 }
                             }
@@ -165,7 +165,7 @@ pub impl Comp {
                     if self.typeHasAssocFn(typeStart: tyStart, typeLen: tyLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
                         mut val cargs: Array[Arg] = []
-                        cargs.append(value: <Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
+                        cargs.append(<Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
                         self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=cargs />
                     }
                 }

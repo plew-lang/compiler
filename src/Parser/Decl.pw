@@ -30,7 +30,7 @@ pub impl Comp {
     // `@[Ord]` matches build their arm values directly, so they wrap them here.
     inout fn synthGiveBlock(valueExpr: U64) -> U64 {
         mut val ss: Array[U64] = []
-        ss.append(value: self.pushStmt(s: <Stmt.Give value=valueExpr />))
+        ss.append(self.pushStmt(s: <Stmt.Give value=valueExpr />))
         val id: U64 = self.arena.blocks.count
         self.arena.blocks.append(<Block stmts=ss />)
         return id

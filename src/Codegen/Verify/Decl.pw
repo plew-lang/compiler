@@ -164,8 +164,8 @@ pub impl Comp {
             val sd: StructDef = self.arena.structs[si]
             if !(sd.isExtern) {
                 if self.moduleOf(offset: sd.nameStart) == 0U64 {
-                    names.append(value: intern(c: inout self, start: sd.nameStart, len: sd.nameLen))
-                    offs.append(value: sd.nameStart)
+                    names.append(intern(c: inout self, start: sd.nameStart, len: sd.nameLen))
+                    offs.append(sd.nameStart)
                 }
             }
             si += 1
@@ -174,8 +174,8 @@ pub impl Comp {
         while ei < self.arena.enums.count {
             val ed: EnumDef = self.arena.enums[ei]
             if self.moduleOf(offset: ed.nameStart) == 0U64 {
-                names.append(value: intern(c: inout self, start: ed.nameStart, len: ed.nameLen))
-                offs.append(value: ed.nameStart)
+                names.append(intern(c: inout self, start: ed.nameStart, len: ed.nameLen))
+                offs.append(ed.nameStart)
             }
             ei += 1
         }
@@ -245,7 +245,7 @@ pub impl Comp {
             val f: Func = self.arena.funcs[fi]
             if f.typeParams.count == 0U64 && !f.isProvided && !f.isExtern && !self.fnHasDefault(f: f) {
                 if self.moduleOf(offset: f.nameStart) == 0U64 {
-                    cand.append(value: fi)
+                    cand.append(fi)
                 }
             }
             fi += 1

@@ -368,7 +368,7 @@ pub impl Iterator {
         mut val go: Bool = true
         while go {
             match it.next() {
-                Optional.Some(val v) => { out.append(value: v) }
+                Optional.Some(val v) => { out.append(v) }
                 Optional.None => { go = false }
             }
         }
@@ -869,7 +869,7 @@ pub impl String as Add[String] {
         val rb: Array[U8] = rhs.bytes
         mut val i: U64 = 0
         while i < rb.count {
-            out.append(value: rb[i])
+            out.append(rb[i])
             i = i + 1U64
         }
         return stringFromBytesUnchecked(out)

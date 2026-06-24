@@ -134,9 +134,9 @@ pub impl LlvmCtx {
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "st".bytes)
                 appendU64Dec(into: inout nm, n: i)
-                nm.append(value: 0)
-                self.structIdxs.append(value: i)
-                self.structTys.append(value: LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
+                nm.append(0)
+                self.structIdxs.append(i)
+                self.structTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
             }
             i += 1
         }
@@ -154,9 +154,9 @@ pub impl LlvmCtx {
             while fi < sd.fields.count {
                 // a boxed (recursive) field is stored as a heap pointer.
                 if c.fieldIsBoxed(f: sd.fields[fi]) {
-                    elems.append(value: self.ptrty)
+                    elems.append(self.ptrty)
                 } else {
-                    elems.append(value: self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
+                    elems.append(self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
                 }
                 fi += 1
             }

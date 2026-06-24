@@ -51,7 +51,7 @@ pub impl Comp {
 
     inout fn blockOfGive(giveExpr: U64) -> U64 {
         mut val ss: Array[U64] = []
-        ss.append(value: self.pushStmt(s: <Stmt.Give value=giveExpr />))
+        ss.append(self.pushStmt(s: <Stmt.Give value=giveExpr />))
         return self.blockOfStmts(stmts: ss)
     }
 
@@ -75,7 +75,7 @@ pub impl Comp {
             if cn.bytes.count > 0 {
                 val cap: Bind = self.internBytes(s: cn)
                 val recv: U64 = self.pushExpr(e: <Expr.Ident start=srcStart len=srcLen />)
-                stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
             }
             i += 1
         }
@@ -104,7 +104,7 @@ pub impl Comp {
     inout fn lowerScalarMatchStmtInto(scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
         val tmp: Bind = self.internBytes(s: "__mtmp")
         val sv: U64 = self.lowerExpr(e: scrut)
-        stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
         self.bindScalarCapturesInto(arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout stmts)
         val elseIdx: U64 = self.scalarMatchElseIdx(arms: arms)
         mut val elseBlkId: U64 = 0
@@ -128,7 +128,7 @@ pub impl Comp {
                     val thenBlkId: U64 = self.lowerBlock(b: arms[k].body)
                     val ifStmt: U64 = self.pushStmt(s: <Stmt.If cond=sc.cond thenBlk=thenBlkId elseBlk=elseBlkId hasElse=true />)
                     mut val wrap: Array[U64] = []
-                    wrap.append(value: ifStmt)
+                    wrap.append(ifStmt)
                     elseBlkId = self.blockOfStmts(stmts: wrap)
                     headStmt = ifStmt
                     haveHead = true
@@ -136,13 +136,13 @@ pub impl Comp {
             }
         }
         if haveHead {
-            stmts.append(value: headStmt)
+            stmts.append(headStmt)
         } else {
             // no conditional arms (only a wildcard, `match x { _ => body }`):
             // run the else body unconditionally via `if true { else } else {}`.
             mut val empty: Array[U64] = []
             val emptyBlk: U64 = self.blockOfStmts(stmts: empty)
-            stmts.append(value: self.pushStmt(s: <Stmt.If cond=self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />) thenBlk=elseBlkId elseBlk=emptyBlk hasElse=true />))
+            stmts.append(self.pushStmt(s: <Stmt.If cond=self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />) thenBlk=elseBlkId elseBlk=emptyBlk hasElse=true />))
         }
     }
 
@@ -194,7 +194,7 @@ pub impl Comp {
             curElseBlk = self.lowerBlock(b: arms[elseIdx].body)
         } else {
             mut val es: Array[U64] = []
-            es.append(value: self.pushStmt(s: <Stmt.Give value=self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />))
+            es.append(self.pushStmt(s: <Stmt.Give value=self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />) />))
             curElseBlk = self.blockOfStmts(stmts: es)
         }
         mut val headExpr: U64 = 0
@@ -226,14 +226,14 @@ pub impl Comp {
         // PHI — no dummy value is needed (and it cannot reference a capture binding).
         val sv: U64 = self.lowerExpr(e: scrut)
         mut val thenStmts: Array[U64] = []
-        thenStmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        thenStmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
         self.bindScalarCapturesInto(arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout thenStmts)
-        thenStmts.append(value: self.pushStmt(s: <Stmt.Give value=headExpr />))
+        thenStmts.append(self.pushStmt(s: <Stmt.Give value=headExpr />))
         val thenWrap: U64 = self.blockOfStmts(stmts: thenStmts)
         val msg: Bind = self.internBytes(s: "unreachable scalar-match wrapper else")
         val msgE: U64 = self.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
         mut val elseStmts: Array[U64] = []
-        elseStmts.append(value: self.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
+        elseStmts.append(self.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
         val elseWrap: U64 = self.blockOfStmts(stmts: elseStmts)
         val trueCond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
         return self.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
@@ -248,10 +248,10 @@ pub impl Comp {
     inout fn lowerEnumMatchCaptureInto(scrut: ExprAst, arms: Array[MatchArmAst], span: Span, stmts: inout Array[U64]) {
         val tmp: Bind = self.internBytes(s: "__scap")
         val sv: U64 = self.lowerExpr(e: scrut)
-        stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
         val ma: Array[MatchArm] = self.lowerCaptureArms(arms: arms, isExpr: false, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
         val scrutId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
-        stmts.append(value: self.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
+        stmts.append(self.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
     }
 
     // Lower enum-dispatch arms with capture support: each arm's lowered body block gets
@@ -273,15 +273,15 @@ pub impl Comp {
                 val scapId: U64 = self.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
                 val capLet: U64 = self.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
                 mut val ns: Array[U64] = []
-                ns.append(value: capLet)
+                ns.append(capLet)
                 mut val k: U64 = 0
                 while k < self.arena.blocks[bodyIdx].stmts.count {
-                    ns.append(value: self.arena.blocks[bodyIdx].stmts[k])
+                    ns.append(self.arena.blocks[bodyIdx].stmts[k])
                     k += 1
                 }
                 bodyIdx = self.blockOfStmts(stmts: ns)
             }
-            ma.append(value: <MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
+            ma.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
             i += 1
         }
         return ma
@@ -298,13 +298,13 @@ pub impl Comp {
         val scrutId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
         val matchExpr: U64 = self.pushExpr(e: <Expr.MatchExpr scrut=scrutId arms=ma />)
         mut val thenStmts: Array[U64] = []
-        thenStmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-        thenStmts.append(value: self.pushStmt(s: <Stmt.Give value=matchExpr />))
+        thenStmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
+        thenStmts.append(self.pushStmt(s: <Stmt.Give value=matchExpr />))
         val thenWrap: U64 = self.blockOfStmts(stmts: thenStmts)
         val msg: Bind = self.internBytes(s: "unreachable capture-match wrapper else")
         val msgE: U64 = self.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
         mut val elseStmts: Array[U64] = []
-        elseStmts.append(value: self.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
+        elseStmts.append(self.pushStmt(s: <Stmt.Panic msg=msgE offset=span.start />))
         val elseWrap: U64 = self.blockOfStmts(stmts: elseStmts)
         val trueCond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
         return self.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
@@ -375,16 +375,16 @@ pub impl Comp {
                         val nameB: Bind = self.internBytes(s: binds[bi].name)
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=fe.nameStart len=fe.nameLen />)
                         val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
-                        bstmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+                        bstmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
                         bi += 1
                     }
                     mut val ob: U64 = 0
                     while ob < self.arena.blocks[inner].stmts.count {
-                        bstmts.append(value: self.arena.blocks[inner].stmts[ob])
+                        bstmts.append(self.arena.blocks[inner].stmts[ob])
                         ob += 1
                     }
                     val bd2: U64 = self.arena.blocks.count
-                    self.arena.blocks.append(value: <Block stmts=bstmts />)
+                    self.arena.blocks.append(<Block stmts=bstmts />)
                     result = self.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
                     return result
                 }
@@ -451,14 +451,14 @@ pub impl Comp {
     inout fn lowerDestructureInto(binds: Array[BindAst], init: ExprAst, stmts: inout Array[U64]) {
         val tmp: Bind = self.internBytes(s: "__dtmp")
         val iv: U64 = self.lowerExpr(e: init)
-        stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
         mut val bi: U64 = 0
         while bi < binds.count {
             val fldName: Bind = self.internBytes(s: binds[bi].field)
             val nameB: Bind = self.internBytes(s: binds[bi].name)
             val recv: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
             val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
-            stmts.append(value: self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+            stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
             bi += 1
         }
     }

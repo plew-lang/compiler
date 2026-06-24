@@ -23,20 +23,20 @@ pub impl LlvmCtx {
             self.locOwned[self.nLocals] = true
             self.locMoved[self.nLocals] = false
         } else {
-            self.locStart.append(value: nameStart)
-            self.locLen.append(value: nameLen)
-            self.locPtr.append(value: ptr)
-            self.locTy.append(value: ty)
-            self.locKind.append(value: kind)
-            self.locStructIdx.append(value: structIdx)
-            self.locIsArr.append(value: isArr)
-            self.locElemTy.append(value: elemTy)
-            self.locElemKind.append(value: elemKind)
-            self.locTypeRef.append(value: typeRef)
-            self.locElemStructIdx.append(value: 18446744073709551615U64)
-            self.locElemTypeRef.append(value: 0U64)
-            self.locOwned.append(value: true)
-            self.locMoved.append(value: false)
+            self.locStart.append(nameStart)
+            self.locLen.append(nameLen)
+            self.locPtr.append(ptr)
+            self.locTy.append(ty)
+            self.locKind.append(kind)
+            self.locStructIdx.append(structIdx)
+            self.locIsArr.append(isArr)
+            self.locElemTy.append(elemTy)
+            self.locElemKind.append(elemKind)
+            self.locTypeRef.append(typeRef)
+            self.locElemStructIdx.append(18446744073709551615U64)
+            self.locElemTypeRef.append(0U64)
+            self.locOwned.append(true)
+            self.locMoved.append(false)
         }
         self.nLocals = self.nLocals + 1
     }
@@ -83,8 +83,8 @@ pub impl LlvmCtx {
             self.loopBreakBB[self.loopDepth] = breakBB
             self.loopContBB[self.loopDepth] = contBB
         } else {
-            self.loopBreakBB.append(value: breakBB)
-            self.loopContBB.append(value: contBB)
+            self.loopBreakBB.append(breakBB)
+            self.loopContBB.append(contBB)
         }
         self.loopDepth = self.loopDepth + 1U64
     }

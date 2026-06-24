@@ -78,7 +78,7 @@ pub impl Comp {
             if m.factoryKind == 1U64 {
                 val optN: Bind = self.internBytes(s: "Optional")
                 mut val oargs: Array[U64] = []
-                oargs.append(value: ft.ref)
+                oargs.append(ft.ref)
                 retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs />)
                 retStart = optN.nameStart
                 retLen = optN.nameLen
@@ -88,8 +88,8 @@ pub impl Comp {
                     val resN: Bind = self.internBytes(s: "Result")
                     val et: PType = self.lowerType(t: m.factoryErr)
                     mut val rargs: Array[U64] = []
-                    rargs.append(value: ft.ref)
-                    rargs.append(value: et.ref)
+                    rargs.append(ft.ref)
+                    rargs.append(et.ref)
                     retRef = self.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs />)
                     retStart = resN.nameStart
                     retLen = resN.nameLen

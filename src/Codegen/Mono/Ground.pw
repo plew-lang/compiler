@@ -69,7 +69,7 @@ pub impl Comp {
         val tr: TypeRef = self.arena.types[ref]
         mut val i: U64 = 0
         while i < tr.nameLen {
-            out.append(value: self.arena.bytes[tr.nameStart + i])
+            out.append(self.arena.bytes[tr.nameStart + i])
             i += 1
         }
         if tr.args.count > 0U64 {
@@ -82,7 +82,7 @@ pub impl Comp {
                 val ar: TypeRef = self.arena.types[tr.args[a]]
                 mut val k: U64 = 0
                 while k < ar.nameLen {
-                    out.append(value: self.arena.bytes[ar.nameStart + k])
+                    out.append(self.arena.bytes[ar.nameStart + k])
                     k += 1
                 }
                 a += 1
@@ -116,7 +116,7 @@ pub impl Comp {
             val fd: FieldDef = sd.fields[j]
             mut val k: U64 = 0
             while k < fd.nameLen {
-                cn.append(value: self.arena.bytes[fd.nameStart + k])
+                cn.append(self.arena.bytes[fd.nameStart + k])
                 k += 1
             }
             appendBytes(into: inout cn, from: ":".bytes)

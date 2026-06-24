@@ -24,8 +24,8 @@ pub impl LlvmCtx {
         val thenEnd: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         self.nLocals = markT
         if !(thenDiv) {
-            phiVals.append(value: thenVal)
-            phiBlocks.append(value: thenEnd)
+            phiVals.append(thenVal)
+            phiBlocks.append(thenEnd)
             LLVMBuildBr(self.b, contBB)
         }
         LLVMPositionBuilderAtEnd(self.b, elseBB)
@@ -41,8 +41,8 @@ pub impl LlvmCtx {
             if phiVals.count > 0U64 {
                 elseVal = self.coerceInt(v: elseVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
             }
-            phiVals.append(value: elseVal)
-            phiBlocks.append(value: elseEnd)
+            phiVals.append(elseVal)
+            phiBlocks.append(elseEnd)
             LLVMBuildBr(self.b, contBB)
         }
         LLVMPositionBuilderAtEnd(self.b, contBB)
@@ -172,14 +172,14 @@ pub impl LlvmCtx {
                 if phiVals.count > 0U64 {
                     armVal = self.coerceInt(v: armVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
                 }
-                phiVals.append(value: armVal)
+                phiVals.append(armVal)
                 // release this arm's payload binds before branching (they co-own the
                 // scrutinee's heap via bindMatchPayload's retain; the arm VALUE is an
                 // independent copy — `give` runs copyValueIfPlace — so releasing the binds is
                 // safe). Without this the retained binds leak on the fall-through path. The
                 // release may add basic blocks, so record the PHI predecessor AFTER it.
                 self.dropScope(c: inout c, fromMark: saved, excludeLi: 18446744073709551615U64)
-                phiBlocks.append(value: LLVMGetInsertBlock(self.b))
+                phiBlocks.append(LLVMGetInsertBlock(self.b))
                 LLVMBuildBr(self.b, contBB)
             }
             self.nLocals = saved
@@ -244,7 +244,7 @@ pub impl LlvmCtx {
             uRef = c.pushType(t: <TypeRef nameStart=memberFd.tyStart nameLen=memberFd.tyLen args=noArgs />)
         }
         mut val rArgs: Array[U64] = []
-        rArgs.append(value: uRef)
+        rArgs.append(uRef)
         val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
         val rge: U64 = self.genEnumSlot(c: inout c, ref: rr)
         if rge >= self.genEnumRefs.count {
@@ -275,7 +275,7 @@ pub impl LlvmCtx {
         val memberVal: LLVMValueRef = LLVMBuildExtractValue(self.b, innerVal, fidx, anon())
         val didR: Bool = self.setEnumEnv(c: inout c, ref: rr)
         mut val someArgs: Array[LLVMValueRef] = []
-        someArgs.append(value: memberVal)
+        someArgs.append(memberVal)
         val someResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: someVi, payloadVals: someArgs)
         if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         LLVMBuildStore(self.b, someResult, resSlot)
@@ -352,7 +352,7 @@ pub impl LlvmCtx {
                         }
                         if fslot < self.fnIdx.count {
                             mut val cav: Array[LLVMValueRef] = []
-                            cav.append(value: errVal)
+                            cav.append(errVal)
                             convErrVal = LLVMBuildCall2(self.b, self.fnTy[fslot], self.fnVal[fslot], arrayCPtr(cav), cav.count, anon())
                         }
                     }
@@ -361,7 +361,7 @@ pub impl LlvmCtx {
         }
         val didR: Bool = self.setEnumEnv(c: inout c, ref: self.curRetRef)
         mut val errArgs: Array[LLVMValueRef] = []
-        errArgs.append(value: convErrVal)
+        errArgs.append(convErrVal)
         val retResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: errVi, payloadVals: errArgs)
         if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         LLVMBuildRet(self.b, retResult)

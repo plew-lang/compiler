@@ -152,13 +152,13 @@ pub impl LlvmCtx {
     // before an ordered comparison runs (so NaN compares are loud, not silently false).
     inout fn emitF64NanCheck(c: inout Comp, l: LLVMValueRef, r: LLVMValueRef) {
         mut val tys: Array[LLVMTypeRef] = []
-        tys.append(value: self.f64ty)
-        tys.append(value: self.f64ty)
+        tys.append(self.f64ty)
+        tys.append(self.f64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(tys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_nan_check", nameId: 9150U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: l)
-        av.append(value: r)
+        av.append(l)
+        av.append(r)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
@@ -321,9 +321,9 @@ pub impl LlvmCtx {
         }
         val af: Func = c.arena.funcs[fi]
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: self.genArgValue(c: inout c, argExpr: lhs, p: af.params[0]))
+        av.append(self.genArgValue(c: inout c, argExpr: lhs, p: af.params[0]))
         if binary {
-            av.append(value: self.genArgValue(c: inout c, argExpr: rhs, p: af.params[1]))
+            av.append(self.genArgValue(c: inout c, argExpr: rhs, p: af.params[1]))
         }
         return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count, anon())
     }

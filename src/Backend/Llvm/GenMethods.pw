@@ -78,13 +78,13 @@ pub impl LlvmCtx {
         }
         mut val ptys: Array[LLVMTypeRef] = []
         if mf.selfInout {
-            ptys.append(value: self.ptrty)
+            ptys.append(self.ptrty)
         } else {
-            ptys.append(value: self.llvmTypeOfRef(c: inout c, ref: instRef))
+            ptys.append(self.llvmTypeOfRef(c: inout c, ref: instRef))
         }
         mut val pi: U64 = 0
         while pi < mf.params.count {
-            ptys.append(value: self.paramLlvmTy(c: inout c, p: mf.params[pi]))
+            ptys.append(self.paramLlvmTy(c: inout c, p: mf.params[pi]))
             pi += 1
         }
         val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: mf), arrayCPtr(ptys), ptys.count, 0I32)
@@ -93,13 +93,13 @@ pub impl LlvmCtx {
         appendU64Dec(into: inout nm, n: mfi)
         appendBytes(into: inout nm, from: "_".bytes)
         appendU64Dec(into: inout nm, n: instRef)
-        nm.append(value: 0)
+        nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.genMethK.append(value: mfi)
-        self.genMethInst.append(value: instRef)
-        self.genMethVal.append(value: fv)
-        self.genMethTy.append(value: fty)
-        self.genMethOwn.append(value: ownArgs)
+        self.genMethK.append(mfi)
+        self.genMethInst.append(instRef)
+        self.genMethVal.append(fv)
+        self.genMethTy.append(fty)
+        self.genMethOwn.append(ownArgs)
         c.cur.selfRef = sDs
         c.cur.itemRef = sDi
         c.cur.typeParams = savedP
@@ -166,7 +166,7 @@ pub impl LlvmCtx {
         }
         self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
         val slot: U64 = self.genMethK.count - 1U64
-        self.genMethEmit.append(value: slot)
+        self.genMethEmit.append(slot)
         return slot
     }
 }

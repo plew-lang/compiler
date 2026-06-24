@@ -61,10 +61,10 @@ pub impl LlvmCtx {
             c.cur.typeArgs = envArgs
         }
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         mut val pi: U64 = 0
         while pi < req.params.count {
-            ptys.append(value: self.paramLlvmTy(c: inout c, p: req.params[pi]))
+            ptys.append(self.paramLlvmTy(c: inout c, p: req.params[pi]))
             pi += 1
         }
         mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
@@ -84,7 +84,7 @@ pub impl LlvmCtx {
         appendU64Dec(into: inout nm, n: idx)
         appendBytes(into: inout nm, from: "_".bytes)
         appendU64Dec(into: inout nm, n: anyBindKey(c: inout c, args: envArgs))
-        nm.append(value: 0)
+        nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
@@ -97,10 +97,10 @@ pub impl LlvmCtx {
             selfArg = LLVMBuildLoad2(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
         }
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: selfArg)
+        av.append(selfArg)
         mut val ai: U64 = 0
         while ai < req.params.count {
-            av.append(value: LLVMGetParam(fv, ai + 1U64))
+            av.append(LLVMGetParam(fv, ai + 1U64))
             ai += 1
         }
         val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[wslot], self.fnVal[wslot], arrayCPtr(av), av.count, anon())
@@ -132,12 +132,12 @@ pub impl LlvmCtx {
         }
         val concreteTy: LLVMTypeRef = self.structTys[regSlot]
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvtcopy".bytes)
         appendU64Dec(into: inout nm, n: sidx)
-        nm.append(value: 0)
+        nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
@@ -160,10 +160,10 @@ pub impl LlvmCtx {
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
         val copyFn: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, vtPtr, anon())
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: dataPtr)
+        av.append(dataPtr)
         val newData: LLVMValueRef = LLVMBuildCall2(self.b, fty, copyFn, arrayCPtr(av), 1U64, anon())
         mut val agg: LLVMValueRef = LLVMGetUndef(self.anyTy)
         agg = LLVMBuildInsertValue(self.b, agg, newData, 0U64, anon())
@@ -215,18 +215,18 @@ pub impl LlvmCtx {
         appendU64Dec(into: inout nm, n: traitIdx)
         appendBytes(into: inout nm, from: "_".bytes)
         appendU64Dec(into: inout nm, n: bindKey)
-        nm.append(value: 0)
+        nm.append(0)
         val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, arrayCPtr(nm))
         LLVMSetGlobalConstant(g, 1I32)
-        self.anyVtType.append(value: sidx)
-        self.anyVtTrait.append(value: traitIdx)
-        self.anyVtBindKey.append(value: bindKey)
-        self.anyVtVal.append(value: g)
+        self.anyVtType.append(sidx)
+        self.anyVtTrait.append(traitIdx)
+        self.anyVtBindKey.append(bindKey)
+        self.anyVtVal.append(g)
         mut val slots: Array[LLVMValueRef] = []
-        slots.append(value: self.buildAnyCopyThunk(c: inout c, sidx: sidx))
+        slots.append(self.buildAnyCopyThunk(c: inout c, sidx: sidx))
         mut val ri: U64 = 0
         while ri < t.reqs.count {
-            slots.append(value: self.buildAnyThunk(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
+            slots.append(self.buildAnyThunk(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
             ri += 1
         }
         LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count))
@@ -313,7 +313,7 @@ pub impl LlvmCtx {
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
         // &vtable[slot] via flat ptr-element GEP (element type ptr), then load the fn ptr.
         mut val gepIdx: Array[LLVMValueRef] = []
-        gepIdx.append(value: LLVMConstInt(self.i64ty, slot, 0I32))
+        gepIdx.append(LLVMConstInt(self.i64ty, slot, 0I32))
         val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
         val fnPtr: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon())
         // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>,
@@ -329,10 +329,10 @@ pub impl LlvmCtx {
             c.cur.typeArgs = envArgs
         }
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         mut val pi: U64 = 0
         while pi < req.params.count {
-            ptys.append(value: self.paramLlvmTy(c: inout c, p: req.params[pi]))
+            ptys.append(self.paramLlvmTy(c: inout c, p: req.params[pi]))
             pi += 1
         }
         mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
@@ -346,10 +346,10 @@ pub impl LlvmCtx {
         }
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: dataPtr)
+        av.append(dataPtr)
         mut val ai: U64 = 0
         while ai < args.count {
-            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: req.params[ai]))
+            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: req.params[ai]))
             ai += 1
         }
         return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count, anon())

@@ -82,11 +82,11 @@ pub impl LlvmCtx {
         val sd: StructDef = c.arena.structs[self.genStructDefs[gslot]]
         mut val fields: Array[MakeField] = []
         // field 0 = inner = the receiver expression.
-        fields.append(value: <MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv />)
+        fields.append(<MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv />)
         mut val i: U64 = 1
         while i < sd.fields.count {
             if i - 1U64 < args.count {
-                fields.append(value: <MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=args[i - 1U64].expr />)
+                fields.append(<MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=args[i - 1U64].expr />)
             }
             i += 1
         }

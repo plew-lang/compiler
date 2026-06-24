@@ -12,10 +12,10 @@ pub impl LlvmCtx {
     inout fn closureLlvmFnTy(c: inout Comp, fnRef: U64) -> LLVMTypeRef {
         val t: TypeRef = c.arena.types[fnRef]
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         mut val i: U64 = 1
         while i < t.args.count {
-            ptys.append(value: self.llvmTypeOfRef(c: inout c, ref: t.args[i]))
+            ptys.append(self.llvmTypeOfRef(c: inout c, ref: t.args[i]))
             i += 1
         }
         mut val rty: LLVMTypeRef = self.voidty
@@ -37,7 +37,7 @@ pub impl LlvmCtx {
         val fty: LLVMTypeRef = self.closureLlvmFnTy(c: inout c, fnRef: fnRef)
         val ft: TypeRef = c.arena.types[fnRef]
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: env)
+        av.append(env)
         mut val i: U64 = 0
         while i < args.count {
             mut val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[i].expr)
@@ -48,7 +48,7 @@ pub impl LlvmCtx {
                     v = self.coerceInt(v: v, target: self.llvmTypeOfRef(c: inout c, ref: ft.args[i + 1U64]), unsigned: isUnsignedName(c: inout c, start: pt.nameStart, len: pt.nameLen))
                 }
             }
-            av.append(value: v)
+            av.append(v)
             i += 1
         }
         return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
@@ -87,7 +87,7 @@ pub impl LlvmCtx {
         mut val av: Array[LLVMValueRef] = []
         mut val ai: U64 = 0
         while ai < args.count {
-            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
+            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
             ai += 1
         }
         return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count, anon())
@@ -166,11 +166,11 @@ pub impl LlvmCtx {
         // `plew_sleep(i64) -> PlewPromise*` (await suspends until it fires).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sleep") {
             mut val sty: Array[LLVMTypeRef] = []
-            sty.append(value: self.i64ty)
+            sty.append(self.i64ty)
             val sleepTy: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(sty), 1U64, 0I32)
             val sleepFn: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_sleep", nameId: 42U64, fnTy: sleepTy)
             mut val sargs: Array[LLVMValueRef] = []
-            sargs.append(value: self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: false))
+            sargs.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: false))
             return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "write") {
@@ -182,11 +182,11 @@ pub impl LlvmCtx {
         // @Std/Io writeByte(b: U8): putchar.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "writeByte") {
             mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: self.i8ty)
+            ptys.append(self.i8ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_writeByte", nameId: 52U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: self.i8ty, unsigned: true))
+            av.append(self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: self.i8ty, unsigned: true))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
         }
         // @Std/Process argCount() -> I64.
@@ -200,11 +200,11 @@ pub impl LlvmCtx {
         // @Std/Process argAt(i: I64) -> String (strty {ptr,i64}).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argAt") {
             mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: self.i64ty)
+            ptys.append(self.i64ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ptys), 1U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argAt", nameId: 51U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: false))
+            av.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: false))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
         }
         // @Std/Random entropyU64() -> U64: a fresh 64-bit value from the OS entropy
@@ -314,23 +314,23 @@ pub impl LlvmCtx {
         // FFI String <-> C-string (@Std/Ffi extern(plewIntrinsic)).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "cString") {
             mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: self.ptrty)
-            ptys.append(value: self.i64ty)
+            ptys.append(self.ptrty)
+            ptys.append(self.i64ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 2U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cString", nameId: 29U64, fnTy: fty)
             val s: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: self.arrValData(c: inout c, arr: s))
-            av.append(value: self.arrValCount(c: inout c, arr: s))
+            av.append(self.arrValData(c: inout c, arr: s))
+            av.append(self.arrValCount(c: inout c, arr: s))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") {
             mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: self.ptrty)
+            ptys.append(self.ptrty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ptys), 1U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", nameId: 30U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: self.genLlvmExpr(c: inout c, id: args[0].expr))
+            av.append(self.genLlvmExpr(c: inout c, id: args[0].expr))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "arrayCPtr") {
@@ -358,11 +358,11 @@ pub impl LlvmCtx {
             // a double -> String via the runtime (snprintf %g into a malloc'd buffer).
             val fv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
             mut val ftys: Array[LLVMTypeRef] = []
-            ftys.append(value: self.f64ty)
+            ftys.append(self.f64ty)
             val ffty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ftys), 1U64, 0I32)
             val fcallee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ffty)
             mut val fav: Array[LLVMValueRef] = []
-            fav.append(value: fv)
+            fav.append(fv)
             return LLVMBuildCall2(self.b, ffty, fcallee, arrayCPtr(fav), 1U64, anon())
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
@@ -381,8 +381,8 @@ pub impl LlvmCtx {
             LLVMBuildCondBr(self.b, cond, okBB, failBB)
             LLVMPositionBuilderAtEnd(self.b, failBB)
             mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: self.ptrty)
-            ptys.append(value: self.i64ty)
+            ptys.append(self.ptrty)
+            ptys.append(self.i64ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_panic_raw", nameId: 4U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
@@ -390,11 +390,11 @@ pub impl LlvmCtx {
             // (its {ptr,len} aggregate), else the default "assertion failed".
             if args.count > 1U64 {
                 val msg: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[1].expr)
-                av.append(value: self.arrValData(c: inout c, arr: msg))
-                av.append(value: self.arrValCount(c: inout c, arr: msg))
+                av.append(self.arrValData(c: inout c, arr: msg))
+                av.append(self.arrValCount(c: inout c, arr: msg))
             } else {
-                av.append(value: LLVMBuildGlobalStringPtr(self.b, cstr(s: "assertion failed"), anon()))
-                av.append(value: LLVMConstInt(self.i64ty, 16U64, 0I32))
+                av.append(LLVMBuildGlobalStringPtr(self.b, cstr(s: "assertion failed"), anon()))
+                av.append(LLVMConstInt(self.i64ty, 16U64, 0I32))
             }
             LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
             LLVMBuildUnreachable(self.b)
@@ -404,11 +404,11 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "exit") {
             // void plew_exit(i64): truncate-free (the code is already i64), then call.
             mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: self.i64ty)
+            ptys.append(self.i64ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_exit", nameId: 1U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: self.valueKind(c: inout c, id: args[0].expr) == 3U64))
+            av.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: self.valueKind(c: inout c, id: args[0].expr) == 3U64))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
         }
         // a user-defined free function: resolve like the C backend, then call the
@@ -432,13 +432,13 @@ pub impl LlvmCtx {
                 mut val ai: U64 = 0
                 while ai < args.count {
                     // coerce each argument to the parameter's integer width.
-                    av2.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
+                    av2.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
                     ai += 1
                 }
                 // fill omitted trailing params with their default expressions (spec/04).
                 mut val di: U64 = args.count
                 while di < cf.params.count {
-                    av2.append(value: self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
+                    av2.append(self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
                     di += 1
                 }
                 return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av2), av2.count, anon())
@@ -457,12 +457,12 @@ pub impl LlvmCtx {
                     mut val av3: Array[LLVMValueRef] = []
                     mut val ai3: U64 = 0
                     while ai3 < args.count {
-                        av3.append(value: self.genArgValue(c: inout c, argExpr: args[ai3].expr, p: cf.params[ai3]))
+                        av3.append(self.genArgValue(c: inout c, argExpr: args[ai3].expr, p: cf.params[ai3]))
                         ai3 += 1
                     }
                     mut val di3: U64 = args.count
                     while di3 < cf.params.count {
-                        av3.append(value: self.genArgValue(c: inout c, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
+                        av3.append(self.genArgValue(c: inout c, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
                         di3 += 1
                     }
                     c.cur.typeParams = savedP
@@ -479,7 +479,7 @@ pub impl LlvmCtx {
                 mut val ptys: Array[LLVMTypeRef] = []
                 mut val pe: U64 = 0
                 while pe < ef.params.count {
-                    ptys.append(value: self.ffiTyOf(c: inout c, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
+                    ptys.append(self.ffiTyOf(c: inout c, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
                     pe += 1
                 }
                 mut val rty: LLVMTypeRef = self.voidty
@@ -508,19 +508,19 @@ pub impl LlvmCtx {
                     mut val nm: Array[U8] = []
                     mut val k: U64 = 0
                     while k < nameLen {
-                        nm.append(value: c.arena.bytes[nameStart + k])
+                        nm.append(c.arena.bytes[nameStart + k])
                         k += 1
                     }
-                    nm.append(value: 0)
+                    nm.append(0)
                     callee = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-                    self.declId.append(value: ckey)
-                    self.declFn.append(value: callee)
-                    self.declTy.append(value: fty)
+                    self.declId.append(ckey)
+                    self.declFn.append(callee)
+                    self.declTy.append(fty)
                 }
                 mut val av: Array[LLVMValueRef] = []
                 mut val ai: U64 = 0
                 while ai < args.count {
-                    av.append(value: self.genLlvmExpr(c: inout c, id: args[ai].expr))
+                    av.append(self.genLlvmExpr(c: inout c, id: args[ai].expr))
                     ai += 1
                 }
                 val rv: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), av.count, anon())

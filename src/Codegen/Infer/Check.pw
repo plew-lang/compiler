@@ -375,7 +375,7 @@ pub impl Comp {
         appendBytes(into: inout bs, from: prefix.bytes)
         mut val i: U64 = 0
         while i < nameLen {
-            bs.append(value: self.arena.bytes[nameStart + i])
+            bs.append(self.arena.bytes[nameStart + i])
             i += 1
         }
         return stringFromBytesUnchecked(b: bs)
@@ -390,7 +390,7 @@ pub impl Comp {
                 appendBytes(into: inout bs, from: "Field:".bytes)
                 mut val i: U64 = 0
                 while i < nameLen {
-                    bs.append(value: self.arena.bytes[nameStart + i])
+                    bs.append(self.arena.bytes[nameStart + i])
                     i += 1
                 }
                 return stringFromBytesUnchecked(b: bs)
@@ -402,7 +402,7 @@ pub impl Comp {
                 appendBytes(into: inout bs, from: "Ident:".bytes)
                 mut val i: U64 = 0
                 while i < len {
-                    bs.append(value: self.arena.bytes[start + i])
+                    bs.append(self.arena.bytes[start + i])
                     i += 1
                 }
                 return stringFromBytesUnchecked(b: bs)
@@ -415,7 +415,7 @@ pub impl Comp {
                 appendBytes(into: inout bs, from: "Int:".bytes)
                 mut val i: U64 = 0
                 while i < tyLen {
-                    bs.append(value: self.arena.bytes[tyStart + i])
+                    bs.append(self.arena.bytes[tyStart + i])
                     i += 1
                 }
                 return stringFromBytesUnchecked(b: bs)
@@ -433,7 +433,7 @@ pub impl Comp {
         mut val bs: Array[U8] = []
         mut val i: U64 = 0
         while i < t.nameLen {
-            bs.append(value: self.arena.bytes[t.nameStart + i])
+            bs.append(self.arena.bytes[t.nameStart + i])
             i += 1
         }
         return stringFromBytesUnchecked(b: bs)

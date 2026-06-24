@@ -11,7 +11,7 @@ pub impl LlvmCtx {
         if self.arcDepth < self.arcStack.count {
             self.arcStack[self.arcDepth] = sidx
         } else {
-            self.arcStack.append(value: sidx)
+            self.arcStack.append(sidx)
         }
         self.arcDepth = self.arcDepth + 1U64
     }
@@ -114,16 +114,16 @@ pub impl LlvmCtx {
         }
         val reg: U64 = self.structSlotForSidx(sidx: sidx)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.structTys[reg])
+        ptys.append(self.structTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwdrop".bytes)
         appendU64Dec(into: inout nm, n: sidx)
-        nm.append(value: 0)
+        nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.dropWitSidx.append(value: sidx)
-        self.dropWitVal.append(value: fv)
-        self.dropWitTy.append(value: fty)
+        self.dropWitSidx.append(sidx)
+        self.dropWitVal.append(fv)
+        self.dropWitTy.append(fty)
         return self.dropWitSidx.count - 1U64
     }
 
@@ -142,7 +142,7 @@ pub impl LlvmCtx {
         if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
             val slot: U64 = self.structDropWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: v)
+            av.append(v)
             LLVMBuildCall2(self.b, self.dropWitTy[slot], self.dropWitVal[slot], arrayCPtr(av), 1U64, anon())
             return
         }
@@ -165,7 +165,7 @@ pub impl LlvmCtx {
             val slot: U64 = self.userFnSlot(idx: fi)
             if slot < self.fnIdx.count {
                 mut val av: Array[LLVMValueRef] = []
-                av.append(value: v)
+                av.append(v)
                 LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), 1U64, anon())
             }
         }

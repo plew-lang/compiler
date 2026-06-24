@@ -36,7 +36,7 @@ pub impl LlvmCtx {
         mut val elems: Array[LLVMTypeRef] = []
         mut val i: U64 = 0
         while i < caps.count {
-            elems.append(value: self.captureSlotTy(c: inout c, cap: caps[i]))
+            elems.append(self.captureSlotTy(c: inout c, cap: caps[i]))
             i += 1
         }
         return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count, 0I32)
@@ -70,10 +70,10 @@ pub impl LlvmCtx {
         match c.arena.exprs[id] {
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, body: _) => {
                 mut val ptys: Array[LLVMTypeRef] = []
-                ptys.append(value: self.ptrty)
+                ptys.append(self.ptrty)
                 mut val pi: U64 = 0
                 while pi < params.count {
-                    ptys.append(value: self.paramLlvmTy(c: inout c, p: params[pi]))
+                    ptys.append(self.paramLlvmTy(c: inout c, p: params[pi]))
                     pi += 1
                 }
                 mut val rty: LLVMTypeRef = self.voidty
@@ -88,11 +88,11 @@ pub impl LlvmCtx {
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "__closure".bytes)
                 appendU64Dec(into: inout nm, n: id)
-                nm.append(value: 0)
+                nm.append(0)
                 val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-                self.cloIdx.append(value: id)
-                self.cloVal.append(value: fv)
-                self.cloTy.append(value: fty)
+                self.cloIdx.append(id)
+                self.cloVal.append(fv)
+                self.cloTy.append(fty)
             }
             _ => {}
         }

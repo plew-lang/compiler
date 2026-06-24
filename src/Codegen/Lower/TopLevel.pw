@@ -101,7 +101,7 @@ pub impl Comp {
                     nsEnd = imp.aliasSpan.end
                 }
                 if nsEnd > nsStart {
-                    self.decls.namespaces.append(value: <Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
+                    self.decls.namespaces.append(<Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
                 }
             }
         }
@@ -113,7 +113,7 @@ pub impl Comp {
             if i < imp.nameAliasSpans.count {
                 val al: Span = imp.nameAliasSpans[i]
                 if al.end > al.start {
-                    self.decls.importAliases.append(value: <Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
+                    self.decls.importAliases.append(<Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
                 }
             }
             i += 1
@@ -236,7 +236,7 @@ pub impl Comp {
     inout fn lowerNewtype(name: String, ty: TypeAst, defOffset: U64) {
         val nm: Bind = self.internBytes(s: name)
         val under: PType = self.lowerType(t: ty)
-        self.arena.newtypes.append(value: <NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
+        self.arena.newtypes.append(<NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
     }
 
     inout fn lowerGlobalVal(s: StmtAst) {

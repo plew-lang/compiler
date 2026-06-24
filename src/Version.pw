@@ -14,7 +14,7 @@ export fn parseVer(s: Array[U8]) -> Array[U64] {
     while i < s.count {
         val c: U8 = s[i]
         if c == 46U8 {
-            comps.append(value: cur)
+            comps.append(cur)
             cur = 0
         } else {
             if c >= 48U8 {
@@ -25,7 +25,7 @@ export fn parseVer(s: Array[U8]) -> Array[U64] {
         }
         i += 1
     }
-    comps.append(value: cur)
+    comps.append(cur)
     return comps
 }
 

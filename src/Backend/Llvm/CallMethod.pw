@@ -36,11 +36,11 @@ pub impl LlvmCtx {
         // `p#A#B.a()` — parsed as ExtMethod(src=B) on recv `p#A` — also sees A). The
         // name must resolve in exactly one view (same-name in two is ambiguous).
         mut val views: Array[U64] = []
-        views.append(value: intern(c: inout c, start: srcStart, len: srcLen))
+        views.append(intern(c: inout c, start: srcStart, len: srcLen))
         val recvChain: Array[U64] = self.collectViewChain(c: inout c, id: recv)
         mut val rci: U64 = 0
         while rci < recvChain.count {
-            views.append(value: recvChain[rci])
+            views.append(recvChain[rci])
             rci += 1
         }
         mut val mfi: U64 = c.arena.funcs.count
@@ -84,18 +84,18 @@ pub impl LlvmCtx {
         val mf: Func = c.arena.funcs[mfi]
         mut val av: Array[LLVMValueRef] = []
         if mf.selfInout {
-            av.append(value: self.placePtrOfWrite(c: inout c, id: recv))
+            av.append(self.placePtrOfWrite(c: inout c, id: recv))
         } else {
-            av.append(value: self.genLlvmExpr(c: inout c, id: recv))
+            av.append(self.genLlvmExpr(c: inout c, id: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count {
-            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
+            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
             ai += 1
         }
         mut val di: U64 = args.count
         while di < mf.params.count {
-            av.append(value: self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
+            av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
             di += 1
         }
         return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count, anon())
@@ -152,12 +152,12 @@ pub impl LlvmCtx {
                         mut val gav: Array[LLVMValueRef] = []
                         mut val gai: U64 = 0
                         while gai < args.count {
-                            gav.append(value: self.genArgValue(c: inout c, argExpr: args[gai].expr, p: gaf.params[gai]))
+                            gav.append(self.genArgValue(c: inout c, argExpr: args[gai].expr, p: gaf.params[gai]))
                             gai += 1
                         }
                         mut val gdi: U64 = args.count
                         while gdi < gaf.params.count {
-                            gav.append(value: self.genArgValue(c: inout c, argExpr: gaf.params[gdi].defaultExpr, p: gaf.params[gdi]))
+                            gav.append(self.genArgValue(c: inout c, argExpr: gaf.params[gdi].defaultExpr, p: gaf.params[gdi]))
                             gdi += 1
                         }
                         c.cur.typeParams = gsavedP
@@ -176,12 +176,12 @@ pub impl LlvmCtx {
                     mut val aav: Array[LLVMValueRef] = []
                     mut val aai: U64 = 0
                     while aai < args.count {
-                        aav.append(value: self.genArgValue(c: inout c, argExpr: args[aai].expr, p: af.params[aai]))
+                        aav.append(self.genArgValue(c: inout c, argExpr: args[aai].expr, p: af.params[aai]))
                         aai += 1
                     }
                     mut val adi: U64 = args.count
                     while adi < af.params.count {
-                        aav.append(value: self.genArgValue(c: inout c, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
+                        aav.append(self.genArgValue(c: inout c, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
                         adi += 1
                     }
                     return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(aav), aav.count, anon())
@@ -216,13 +216,13 @@ pub impl LlvmCtx {
                     val smf: Func = c.arena.funcs[smfi]
                     mut val sav: Array[LLVMValueRef] = []
                     if smf.selfInout {
-                        sav.append(value: self.placePtrOfWrite(c: inout c, id: recv))
+                        sav.append(self.placePtrOfWrite(c: inout c, id: recv))
                     } else {
-                        sav.append(value: self.genLlvmExpr(c: inout c, id: recv))
+                        sav.append(self.genLlvmExpr(c: inout c, id: recv))
                     }
                     mut val sai: U64 = 0
                     while sai < args.count {
-                        sav.append(value: self.genArgValue(c: inout c, argExpr: args[sai].expr, p: smf.params[sai]))
+                        sav.append(self.genArgValue(c: inout c, argExpr: args[sai].expr, p: smf.params[sai]))
                         sai += 1
                     }
                     return LLVMBuildCall2(self.b, self.fnTy[sslot], self.fnVal[sslot], arrayCPtr(sav), sav.count, anon())
@@ -232,10 +232,21 @@ pub impl LlvmCtx {
         // generic-receiver method dispatch (`box.get()`, `maybe.unwrapOr(...)`): the
         // receiver local carries its instantiation ref; route to the monomorphized
         // method instance emitted by declareGenMethods.
-        val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
+        mut val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
+        // Array A: an array expr tracks its type as locIsArr + element ref (not a full
+        // Array[T] locTypeRef), so synthesize the Array[elem] instance ref here so its pure-
+        // Plew methods (append/get/set/removeLast over self.data) ride the generic path.
+        if recvRef == 0U64 && self.exprIsArray(c: inout c, id: recv) {
+            val aelem: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
+            if aelem != 0U64 {
+                val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                mut val aargs: Array[U64] = []
+                aargs.append(aelem)
+                recvRef = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+            }
+        }
         if recvRef != 0U64 {
-            val rtnm: TypeRef = c.arena.types[recvRef]
-            if c.isGenericInst(ref: recvRef) && !rangeEquals(bytes: c.arena.bytes, start: rtnm.nameStart, len: rtnm.nameLen, kw: "Array") {
+            if c.isGenericInst(ref: recvRef) {
                 val grt: TypeRef = c.arena.types[recvRef]
                 val gmfi: U64 = c.findMethod(recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if gmfi < c.arena.funcs.count {
@@ -252,46 +263,11 @@ pub impl LlvmCtx {
                 }
             }
         }
-        // (Buffer floor methods are no longer intercepted here by receiver-type + name:
-        // `Buffer[T]` is now a generic-instance receiver, so its methods ride the uniform
-        // generic-method path above (238) like Box/Optional, and their bodies lower the
-        // `buffer*` intrinsics by function identity in genLlvmCall. collections.md §3-付録3.)
-        // array methods (append / get / set; user methods on Array are TODO).
-        if self.exprIsArray(c: inout c, id: recv) {
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
-                return self.genLlvmAppend(c: inout c, recv: recv, valueExpr: args[0].expr)
-            }
-            // `arr.get(i:)` is the prelude's checked element read (same as `arr[i]`).
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "get") {
-                return self.genLlvmIndex(c: inout c, base: recv, index: args[0].expr)
-            }
-            // `arr.set(i:, value:)` is the prelude's checked element write (`arr[i]=v`).
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "set") {
-                return self.genLlvmArraySet(c: inout c, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
-            }
-            // `arr.removeLast()`: shrink by one (panics when empty), releasing the popped element.
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "removeLast") {
-                return self.genLlvmArrayRemoveLast(c: inout c, recv: recv)
-            }
-            // a USER method on Array (`xs.first()` for `impl[T] Array[T]`): monomorphize
-            // it for Array[elem] (the element ref drives the instance).
-            val arrB: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
-            val amfi: U64 = c.findMethod(recvStart: arrB.nameStart, recvLen: arrB.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-            if amfi < c.arena.funcs.count {
-                val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
-                if elemRef != 0U64 {
-                    mut val aargs: Array[U64] = []
-                    aargs.append(value: elemRef)
-                    val arrInst: U64 = c.pushType(t: <TypeRef nameStart=arrB.nameStart nameLen=arrB.nameLen args=aargs />)
-                    val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: amfi, instRef: arrInst, ownArgs: [])
-                    if gslot < self.genMethK.count {
-                        return self.genGenMethodCall(c: inout c, recv: recv, mfi: amfi, slot: gslot, instRef: arrInst, args: args)
-                    }
-                }
-            }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this array method is not yet supported (append / get / set)")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
+        // (Neither Buffer nor Array floor methods are intercepted here by receiver-type +
+        // name any more: `Buffer[T]` and `Array[T]` are both generic-instance receivers, so
+        // their methods ride the uniform generic-method path above (238) like Box/Optional.
+        // Array's methods are pure Plew over `self.data` (std/Lang.pw); the inner `buffer*`
+        // intrinsics lower by function identity in genLlvmCall. collections.md §3-付録3.)
         // wrapping arithmetic on a primitive integer receiver: two's-complement wrap
         // is LLVM's default add/sub/mul (no overflow check), so `x.wrappingAdd(by: y)`
         // is a plain op at the receiver's width. (Checked `+`/`-`/`*` aren't modeled
@@ -327,18 +303,18 @@ pub impl LlvmCtx {
                             val emf: Func = c.arena.funcs[emfi]
                             mut val eav: Array[LLVMValueRef] = []
                             if emf.selfInout {
-                                eav.append(value: self.placePtrOfWrite(c: inout c, id: recv))
+                                eav.append(self.placePtrOfWrite(c: inout c, id: recv))
                             } else {
-                                eav.append(value: self.genLlvmExpr(c: inout c, id: recv))
+                                eav.append(self.genLlvmExpr(c: inout c, id: recv))
                             }
                             mut val eai: U64 = 0
                             while eai < args.count {
-                                eav.append(value: self.genArgValue(c: inout c, argExpr: args[eai].expr, p: emf.params[eai]))
+                                eav.append(self.genArgValue(c: inout c, argExpr: args[eai].expr, p: emf.params[eai]))
                                 eai += 1
                             }
                             mut val edi: U64 = args.count
                             while edi < emf.params.count {
-                                eav.append(value: self.genArgValue(c: inout c, argExpr: emf.params[edi].defaultExpr, p: emf.params[edi]))
+                                eav.append(self.genArgValue(c: inout c, argExpr: emf.params[edi].defaultExpr, p: emf.params[edi]))
                                 edi += 1
                             }
                             return LLVMBuildCall2(self.b, self.fnTy[eslot], self.fnVal[eslot], arrayCPtr(eav), eav.count, anon())
@@ -438,18 +414,18 @@ pub impl LlvmCtx {
         mut val av: Array[LLVMValueRef] = []
         // self: an `inout fn` needs the receiver's address (a place); else its value.
         if mf.selfInout {
-            av.append(value: self.placePtrOfWrite(c: inout c, id: recv))
+            av.append(self.placePtrOfWrite(c: inout c, id: recv))
         } else {
-            av.append(value: self.genLlvmExpr(c: inout c, id: recv))
+            av.append(self.genLlvmExpr(c: inout c, id: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count {
-            av.append(value: self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
+            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
             ai += 1
         }
         mut val di: U64 = args.count
         while di < mf.params.count {
-            av.append(value: self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
+            av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
             di += 1
         }
         return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count, anon())

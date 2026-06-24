@@ -31,21 +31,21 @@ pub impl LlvmCtx {
             return
         }
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         mut val pi: U64 = 0
         while pi < f.params.count {
-            ptys.append(value: self.paramLlvmTy(c: inout c, p: f.params[pi]))
+            ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
             pi += 1
         }
         val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "__fnthunk".bytes)
         appendU64Dec(into: inout nm, n: fi)
-        nm.append(value: 0)
+        nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.thunkIdx.append(value: fi)
-        self.thunkVal.append(value: fv)
-        self.thunkTy.append(value: fty)
+        self.thunkIdx.append(fi)
+        self.thunkVal.append(fv)
+        self.thunkTy.append(fty)
     }
 
     // Declare a thunk for every bare identifier that names a plain free function (a
@@ -83,7 +83,7 @@ pub impl LlvmCtx {
             mut val av: Array[LLVMValueRef] = []
             mut val pi: U64 = 0
             while pi < f.params.count {
-                av.append(value: LLVMGetParam(fv, pi + 1U64))
+                av.append(LLVMGetParam(fv, pi + 1U64))
                 pi += 1
             }
             val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[callSlot], self.fnVal[callSlot], arrayCPtr(av), av.count, anon())

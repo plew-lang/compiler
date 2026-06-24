@@ -190,7 +190,7 @@ fn internGrow(c: inout Comp) {
     mut val nb: Array[U64] = []
     mut val k: U64 = 0
     while k < newCap {
-        nb.append(value: 0)
+        nb.append(0)
         k += 1
     }
     mut val i: U64 = 0
@@ -222,8 +222,8 @@ export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     while true {
         val b: U64 = c.interner.buckets[slot]
         if b == 0 {
-            c.interner.starts.append(value: start)
-            c.interner.lens.append(value: len)
+            c.interner.starts.append(start)
+            c.interner.lens.append(len)
             c.interner.count += 1
             c.interner.buckets.set(i: slot, value: c.interner.count)
             return c.interner.count
@@ -528,7 +528,7 @@ export fn runFrontend() -> Comp {
             if u64ArrayHas(a: rootSeen, v: moduleId) {
                 c.checkPartImplOnly(items: items)
             } else {
-                rootSeen.append(value: moduleId)
+                rootSeen.append(moduleId)
             }
             val baseLen: U64 = dirPrefixLen(path: path)
             // per-package resolution context for THIS file's imports: its own package

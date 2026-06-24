@@ -43,7 +43,7 @@ pub impl Comp {
         mut val out: Array[U8] = []
         mut val i: U64 = 0
         while i < pty.len {
-            out.append(value: self.arena.bytes[pty.start + i])
+            out.append(self.arena.bytes[pty.start + i])
             i += 1
         }
         if pty.ref < self.arena.types.count {
@@ -58,7 +58,7 @@ pub impl Comp {
                     val ar: TypeRef = self.arena.types[tr.args[a]]
                     mut val k: U64 = 0
                     while k < ar.nameLen {
-                        out.append(value: self.arena.bytes[ar.nameStart + k])
+                        out.append(self.arena.bytes[ar.nameStart + k])
                         k += 1
                     }
                     a += 1
@@ -81,7 +81,7 @@ pub impl Comp {
         mut val order: Array[U64] = []
         mut val i: U64 = 0
         while i < fieldNames.count {
-            order.append(value: i)
+            order.append(i)
             i += 1
         }
         mut val a: U64 = 0
@@ -127,11 +127,11 @@ pub impl Comp {
         while f < order.count {
             val fn2: Bind = self.internBytes(s: fieldNames[order[f]])
             val fty: PType = fieldTys[order[f]]
-            fields.append(value: <FieldDef nameStart=fn2.nameStart nameLen=fn2.nameLen nameId=intern(c: inout self, start: fn2.nameStart, len: fn2.nameLen) tyStart=fty.start tyLen=fty.len tyNameId=intern(c: inout self, start: fty.start, len: fty.len) tyIsArray=fty.isArray ty=fty.ref isMut=false hasDefault=false defaultVal=0 vis=2 />)
+            fields.append(<FieldDef nameStart=fn2.nameStart nameLen=fn2.nameLen nameId=intern(c: inout self, start: fn2.nameStart, len: fn2.nameLen) tyStart=fty.start tyLen=fty.len tyNameId=intern(c: inout self, start: fty.start, len: fty.len) tyIsArray=fty.isArray ty=fty.ref isMut=false hasDefault=false defaultVal=0 vis=2 />)
             f += 1
         }
         val noTP: Array[Bind] = []
-        self.arena.structs.append(value: <StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=fields isUnique=false isExtern=false />)
+        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=fields isUnique=false isExtern=false />)
         return nm
     }
 
@@ -142,7 +142,7 @@ pub impl Comp {
             mut val fieldTys: Array[PType] = []
             mut val fi: U64 = 0
             while fi < t.args.count {
-                fieldTys.append(value: self.lowerType(t: t.args[fi]))
+                fieldTys.append(self.lowerType(t: t.args[fi]))
                 fi += 1
             }
             val rnm: Bind = self.ensureRecordStruct(fieldNames: t.argLabels, fieldTys: fieldTys)

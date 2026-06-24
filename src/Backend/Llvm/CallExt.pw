@@ -100,7 +100,7 @@ pub impl LlvmCtx {
                     if strp {
                         go = false
                     } else {
-                        out.append(value: intern(c: inout c, start: ss, len: sl))
+                        out.append(intern(c: inout c, start: ss, len: sl))
                         cur = r
                     }
                 }
@@ -110,7 +110,7 @@ pub impl LlvmCtx {
         val r: U64 = self.exprTypeRef(c: inout c, id: cur)
         if r != 0U64 {
             if c.arena.types[r].viewExtId != 0U64 {
-                out.append(value: c.arena.types[r].viewExtId)
+                out.append(c.arena.types[r].viewExtId)
             }
         }
         return out

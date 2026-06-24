@@ -30,10 +30,10 @@ pub impl LlvmCtx {
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "gs".bytes)
                     appendU64Dec(into: inout nm, n: k)
-                    nm.append(value: 0)
-                    self.genStructRefs.append(value: ref)
-                    self.genStructTys.append(value: LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
-                    self.genStructDefs.append(value: defIdx)
+                    nm.append(0)
+                    self.genStructRefs.append(ref)
+                    self.genStructTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
+                    self.genStructDefs.append(defIdx)
                 }
             }
             k += 1
@@ -60,9 +60,9 @@ pub impl LlvmCtx {
                 // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
                 // the inline layout disagrees with the boxed (ptr) construction value.
                 if c.fieldIsBoxed(f: sd.fields[fi]) {
-                    elems.append(value: self.ptrty)
+                    elems.append(self.ptrty)
                 } else {
-                    elems.append(value: self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
+                    elems.append(self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
                 }
                 fi += 1
             }
@@ -121,17 +121,17 @@ pub impl LlvmCtx {
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "ge".bytes)
                     appendU64Dec(into: inout nm, n: k)
-                    nm.append(value: 0)
+                    nm.append(0)
                     val ty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
                     mut val elems: Array[LLVMTypeRef] = []
-                    elems.append(value: self.i64ty)
-                    elems.append(value: LLVMArrayType2(self.i64ty, maxWords))
+                    elems.append(self.i64ty)
+                    elems.append(LLVMArrayType2(self.i64ty, maxWords))
                     LLVMStructSetBody(ty, arrayCPtr(elems), 2U64, 0I32)
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
-                    self.genEnumRefs.append(value: ref)
-                    self.genEnumTys.append(value: ty)
-                    self.genEnumDefs.append(value: defIdx)
+                    self.genEnumRefs.append(ref)
+                    self.genEnumTys.append(ty)
+                    self.genEnumDefs.append(defIdx)
                 }
             }
             k += 1
@@ -369,7 +369,7 @@ pub impl LlvmCtx {
             uRef = c.pushType(t: <TypeRef nameStart=fd.tyStart nameLen=fd.tyLen args=noArgs />)
         }
         mut val rArgs: Array[U64] = []
-        rArgs.append(value: uRef)
+        rArgs.append(uRef)
         return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=rArgs />)
     }
 }

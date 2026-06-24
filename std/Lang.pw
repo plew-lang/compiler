@@ -139,26 +139,28 @@ extern "plew-intrinsic" {
     fn arrayPop[T](a: inout Array[T])
 }
 
-// Methods on the builtin Array, in pure Plew over the floor above. Monomorphized
-// per element type and dispatched by name (emitArrayMethods).
+// Methods on the builtin Array, in pure Plew over its `data` Buffer floor (Array A:
+// Array is an ordinary `struct { data: Buffer[T] }`, so its methods just forward to the
+// Buffer floor — the inner `buffer*` intrinsics are lowered by function identity, and the
+// dispatch rides the uniform generic-method path, no Array type-name branching).
 pub impl[T] Array[T] {
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
-        arrayPush(a: inout self, v: value)
+        self.data.append(value)
     }
     // The element at `i` (panics when out of range — same as `xs[i]`).
     fn get(i: U64) -> T {
-        return arrayGet(a: self, i: i)
+        return self.data.get(index: i)
     }
     // Replace the element at `i` (panics when out of range).
     inout fn set(i: U64, value: T) {
-        arraySet(a: inout self, i: i, v: value)
+        self.data.set(index: i, value)
     }
     // Remove the last element (panics when empty). The storage keeps its capacity;
     // only the live `count` shrinks. Used by Dictionary/Set `remove` to compact the
-    // dense entry arrays after a deletion.
+    // dense entry arrays after a deletion. (The moved-out tail is dropped here.)
     inout fn removeLast() {
-        arrayPop(a: inout self)
+        self.data.removeLast()
     }
 }
 

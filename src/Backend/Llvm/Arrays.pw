@@ -390,13 +390,13 @@ pub impl LlvmCtx {
     // Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
     inout fn rawbufAlloc(c: inout Comp, elemSize: LLVMValueRef, cap: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_alloc", nameId: 20U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: elemSize)
-        av.append(value: cap)
+        av.append(elemSize)
+        av.append(cap)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
@@ -404,11 +404,11 @@ pub impl LlvmCtx {
     // read from the heap header (the Buffer floor maintains it; spec/02, buffer-floor.md).
     inout fn rawbufCount(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_count", nameId: 9160U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
+        av.append(data)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
@@ -416,11 +416,11 @@ pub impl LlvmCtx {
     // read from the heap header.
     inout fn rawbufCap(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_cap", nameId: 9162U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
+        av.append(data)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
@@ -428,13 +428,13 @@ pub impl LlvmCtx {
     // count into the heap header.
     inout fn rawbufSetCount(c: inout Comp, data: LLVMValueRef, n: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_set_count", nameId: 9161U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
-        av.append(value: n)
+        av.append(data)
+        av.append(n)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
@@ -442,19 +442,19 @@ pub impl LlvmCtx {
     // slots within the buffer (insertAt/removeAt shift). A pure byte move (no element ARC).
     inout fn rawbufMove(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, dst: LLVMValueRef, src: LLVMValueRef, n: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 5U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_move", nameId: 9162U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
-        av.append(value: elemSize)
-        av.append(value: dst)
-        av.append(value: src)
-        av.append(value: n)
+        av.append(data)
+        av.append(elemSize)
+        av.append(dst)
+        av.append(src)
+        av.append(n)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 5U64, anon())
     }
 
@@ -462,15 +462,15 @@ pub impl LlvmCtx {
     // more element (grows by doubling when count>=cap), returning the (possibly new) data.
     inout fn growBuf(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, count: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
         val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", nameId: 22U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
-        av.append(value: LLVMSizeOf(elemTy))
-        av.append(value: count)
+        av.append(data)
+        av.append(LLVMSizeOf(elemTy))
+        av.append(count)
         return LLVMBuildCall2(self.b, fty, grow, arrayCPtr(av), 3U64, anon())
     }
 
@@ -478,15 +478,15 @@ pub impl LlvmCtx {
     // >= mincap (preserving elements + count), returning the (possibly new) data pointer.
     inout fn rawbufReserve(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, mincap: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_reserve", nameId: 9163U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
-        av.append(value: elemSize)
-        av.append(value: mincap)
+        av.append(data)
+        av.append(elemSize)
+        av.append(mincap)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
     }
 
@@ -557,15 +557,15 @@ pub impl LlvmCtx {
         val data: LLVMValueRef = self.arrValData(c: inout c, arr: arrVal)
         val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arrVal)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_copy", nameId: 24U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
-        av.append(value: LLVMSizeOf(elemTy))
-        av.append(value: count)
+        av.append(data)
+        av.append(LLVMSizeOf(elemTy))
+        av.append(count)
         val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
         if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
             self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
@@ -592,7 +592,7 @@ pub impl LlvmCtx {
         if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
             val slot: U64 = self.structCopyWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: v)
+            av.append(v)
             return LLVMBuildCall2(self.b, self.copyWitTy[slot], self.copyWitVal[slot], arrayCPtr(av), 1U64, anon())
         }
         return self.deepCopyStructWalk(c: inout c, v: v, sidx: sidx)
@@ -665,16 +665,16 @@ pub impl LlvmCtx {
         val reg: U64 = self.structSlotForSidx(sidx: sidx)
         val sty: LLVMTypeRef = self.structTys[reg]
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: sty)
+        ptys.append(sty)
         val fty: LLVMTypeRef = LLVMFunctionType(sty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwcopy".bytes)
         appendU64Dec(into: inout nm, n: sidx)
-        nm.append(value: 0)
+        nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.copyWitSidx.append(value: sidx)
-        self.copyWitVal.append(value: fv)
-        self.copyWitTy.append(value: fty)
+        self.copyWitSidx.append(sidx)
+        self.copyWitVal.append(fv)
+        self.copyWitTy.append(fty)
         return self.copyWitSidx.count - 1U64
     }
 
@@ -798,33 +798,33 @@ pub impl LlvmCtx {
     // Increment a rawbuf cell's refcount (`Ref` share — `val r2 = r`).
     inout fn rawbufRetain(c: inout Comp, cell: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_retain", nameId: 25U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: cell)
+        av.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
     // Decrement a rawbuf cell's refcount and return the new count (i64).
     inout fn rawbufRelease(c: inout Comp, cell: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_release", nameId: 26U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: cell)
+        av.append(cell)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
     // Drop one owner of a rawbuf cell: decrement its refcount, free at 0 (`plew_rawbuf_drop`).
     inout fn rawbufDrop(c: inout Comp, cell: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_drop", nameId: 23U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: cell)
+        av.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
@@ -858,15 +858,15 @@ pub impl LlvmCtx {
         val data: LLVMValueRef = self.arrSlotData(c: inout c, slot: slotPtr)
         val count: LLVMValueRef = self.arrSlotCount(c: inout c, slot: slotPtr)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_cow", nameId: 31U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: data)
-        av.append(value: LLVMSizeOf(elemTy))
-        av.append(value: count)
+        av.append(data)
+        av.append(LLVMSizeOf(elemTy))
+        av.append(count)
         val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
         self.arrSlotSetData(c: inout c, slot: slotPtr, data: nd)
         // when the CoW actually duplicated the buffer (nd != old data), the shallow memcpy
@@ -937,11 +937,11 @@ pub impl LlvmCtx {
     // Free a rawbuf cell unconditionally (rc already at 0); null / sentinel-rc left alone.
     inout fn rawbufFree(c: inout Comp, cell: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
+        ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_free", nameId: 32U64, fnTy: fty)
         mut val cav: Array[LLVMValueRef] = []
-        cav.append(value: cell)
+        cav.append(cell)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(cav), 1U64, anon())
     }
 
@@ -1024,7 +1024,7 @@ pub impl LlvmCtx {
         if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
             val slot: U64 = self.structRetainWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: v)
+            av.append(v)
             LLVMBuildCall2(self.b, self.retWitTy[slot], self.retWitVal[slot], arrayCPtr(av), 1U64, anon())
             return
         }
@@ -1096,16 +1096,16 @@ pub impl LlvmCtx {
         }
         val reg: U64 = self.structSlotForSidx(sidx: sidx)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.structTys[reg])
+        ptys.append(self.structTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwretain".bytes)
         appendU64Dec(into: inout nm, n: sidx)
-        nm.append(value: 0)
+        nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.retWitSidx.append(value: sidx)
-        self.retWitVal.append(value: fv)
-        self.retWitTy.append(value: fty)
+        self.retWitSidx.append(sidx)
+        self.retWitVal.append(fv)
+        self.retWitTy.append(fty)
         return self.retWitSidx.count - 1U64
     }
 
@@ -1218,20 +1218,20 @@ pub impl LlvmCtx {
     // Bounds-check `i` against `count` via the runtime (panics on out-of-range).
     inout fn emitBoundsCheck(c: inout Comp, idx: LLVMValueRef, count: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_bounds", nameId: 21U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: idx)
-        av.append(value: count)
+        av.append(idx)
+        av.append(count)
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
     // GEP &data[i] for element type elemTy.
     inout fn arrElemPtr(elemTy: LLVMTypeRef, data: LLVMValueRef, idx: LLVMValueRef) -> LLVMValueRef {
         mut val idxs: Array[LLVMValueRef] = []
-        idxs.append(value: idx)
+        idxs.append(idx)
         return LLVMBuildGEP2(self.b, elemTy, data, arrayCPtr(idxs), 1U64, anon())
     }
 

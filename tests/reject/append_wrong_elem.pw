@@ -1,5 +1,5 @@
 // spec/02: an Array[I64] element must be I64 — appending a Bool has no conversion.
 fn main() {
     mut val a: Array[I64] = []
-    a.append(value: true)
+    a.append(true)
 }

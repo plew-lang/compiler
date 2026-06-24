@@ -15,9 +15,9 @@ pub impl LlvmCtx {
             i += 1
         }
         val f: LLVMValueRef = LLVMAddFunction(self.mod, cstr(s: name), fnTy)
-        self.declId.append(value: nameId)
-        self.declFn.append(value: f)
-        self.declTy.append(value: fnTy)
+        self.declId.append(nameId)
+        self.declFn.append(f)
+        self.declTy.append(fnTy)
         return f
     }
 }
@@ -44,7 +44,7 @@ pub impl LlvmCtx {
         appendU64Le(into: inout cvals, n: 4611686018427387904U64, i8ty: i8ty)
         mut val j: U64 = 0
         while j < bytes.count {
-            cvals.append(value: LLVMConstInt(i8ty, bytes[j] as U64, 0I32))
+            cvals.append(LLVMConstInt(i8ty, bytes[j] as U64, 0I32))
             j += 1
         }
         val m: U64 = 24U64 + bytes.count
@@ -54,8 +54,8 @@ pub impl LlvmCtx {
         LLVMSetGlobalConstant(g, 0I32)
         LLVMSetAlignment(g, 8U32)
         mut val idxs: Array[LLVMValueRef] = []
-        idxs.append(value: LLVMConstInt(self.i64ty, 0U64, 0I32))
-        idxs.append(value: LLVMConstInt(self.i64ty, 24U64, 0I32))
+        idxs.append(LLVMConstInt(self.i64ty, 0U64, 0I32))
+        idxs.append(LLVMConstInt(self.i64ty, 24U64, 0I32))
         // the data pointer at offset 24 is the String buffer (count is baked in the header
         // above); wrap it into the `{ptr}` String/Array VALUE aggregate (Array A).
         val data: LLVMValueRef = LLVMBuildGEP2(self.b, arrTy, g, arrayCPtr(idxs), 2U64, anon())
@@ -70,13 +70,13 @@ pub impl LlvmCtx {
         val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sv)
         val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sv)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, nameId: rtId, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: ptr)
-        av.append(value: len)
+        av.append(ptr)
+        av.append(len)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
@@ -86,13 +86,13 @@ pub impl LlvmCtx {
     inout fn emitPathStrIntrinsic(c: inout Comp, rtName: String, rtId: U64, retTy: LLVMTypeRef, pathExpr: U64) -> LLVMValueRef {
         val pv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: pathExpr)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(retTy, arrayCPtr(ptys), 2U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, nameId: rtId, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: self.arrValData(c: inout c, arr: pv))
-        av.append(value: self.arrValCount(c: inout c, arr: pv))
+        av.append(self.arrValData(c: inout c, arr: pv))
+        av.append(self.arrValCount(c: inout c, arr: pv))
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
@@ -100,11 +100,11 @@ pub impl LlvmCtx {
     // `plew_print_bool`) with an already-i64 value.
     inout fn emitI64Sink(c: inout Comp, rtName: String, rtId: U64, v: LLVMValueRef) -> LLVMValueRef {
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.i64ty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: rtName, nameId: rtId, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: v)
+        av.append(v)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
@@ -134,11 +134,11 @@ pub impl LlvmCtx {
             // a float: pass the double straight to plew_print_f64.
             val fv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
             mut val ftys: Array[LLVMTypeRef] = []
-            ftys.append(value: self.f64ty)
+            ftys.append(self.f64ty)
             val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ftys), 1U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_print_f64", nameId: 9130U64, fnTy: fty)
             mut val fav: Array[LLVMValueRef] = []
-            fav.append(value: fv)
+            fav.append(fv)
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(fav), 1U64, anon())
         }
         val v: LLVMValueRef = self.extendToI64(v: self.genLlvmExpr(c: inout c, id: argExpr), unsigned: k == 3U64)
@@ -155,17 +155,17 @@ pub impl LlvmCtx {
         val pb: LLVMValueRef = self.arrValData(c: inout c, arr: b)
         val lb: LLVMValueRef = self.arrValCount(c: inout c, arr: b)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 4U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: pa)
-        av.append(value: la)
-        av.append(value: pb)
-        av.append(value: lb)
+        av.append(pa)
+        av.append(la)
+        av.append(pb)
+        av.append(lb)
         val r: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 4U64, anon())
         return LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
     }
@@ -485,17 +485,17 @@ pub impl LlvmCtx {
         val pb: LLVMValueRef = self.arrValData(c: inout c, arr: b)
         val lb: LLVMValueRef = self.arrValCount(c: inout c, arr: b)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
-        ptys.append(value: self.ptrty)
-        ptys.append(value: self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 4U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: pa)
-        av.append(value: la)
-        av.append(value: pb)
-        av.append(value: lb)
+        av.append(pa)
+        av.append(la)
+        av.append(pb)
+        av.append(lb)
         val r: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 4U64, anon())
         mut val pred: U32 = llvmIntNe()
         if op == opNe() {

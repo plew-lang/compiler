@@ -194,13 +194,13 @@ fn sortPkgs(pkgs: Array[LockPkg]) -> Array[LockPkg] {
         mut val k: U64 = 0
         while k < out.count {
             if k == pos {
-                next.append(value: p)
+                next.append(p)
             }
-            next.append(value: out[k])
+            next.append(out[k])
             k += 1
         }
         if pos == out.count {
-            next.append(value: p)
+            next.append(p)
         }
         out = next
         i += 1

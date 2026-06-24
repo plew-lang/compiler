@@ -556,23 +556,23 @@ fn checkedOpIdx(op: I64) -> U64 {
 // "i8".."u64" prefix bytes (signedness + width) for a `plew_<prefix><Op>` symbol.
 fn checkedPrefixBytes(unsigned: Bool, wi: U64) -> Array[U8] {
     mut val b: Array[U8] = []
-    if unsigned { b.append(value: 117) } else { b.append(value: 105) }
+    if unsigned { b.append(117) } else { b.append(105) }
     if wi == 0U64 {
-        b.append(value: 56)
+        b.append(56)
         return b
     }
     if wi == 1U64 {
-        b.append(value: 49)
-        b.append(value: 54)
+        b.append(49)
+        b.append(54)
         return b
     }
     if wi == 2U64 {
-        b.append(value: 51)
-        b.append(value: 50)
+        b.append(51)
+        b.append(50)
         return b
     }
-    b.append(value: 54)
-    b.append(value: 52)
+    b.append(54)
+    b.append(52)
     return b
 }
 
@@ -722,7 +722,7 @@ fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Arr
         if !(c.isIntType(start: owt.nameStart, len: owt.nameLen) || c.isFloatType(start: owt.nameStart, len: owt.nameLen)) {
             return []
         }
-        out.append(value: inferred[i])
+        out.append(inferred[i])
         i += 1
     }
     return out
@@ -761,7 +761,7 @@ fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
     mut val i: U64 = 0
     while i < c.monoWork.captures.count {
         if c.monoWork.captures[i].closureId == cloId {
-            out.append(value: c.monoWork.captures[i])
+            out.append(c.monoWork.captures[i])
         }
         i += 1
     }
@@ -820,25 +820,25 @@ export fn emitLlvm(c: inout Comp) {
     // wraps/unwraps the `{ptr}`; the SLOT seam (arrStoragePtr GEPs field 0 → the inner buffer
     // ptr*, so cowArraySlot/arrSlot* stay uniform with the bare-ptr Buffer floor).
     mut val wrapElems: Array[LLVMTypeRef] = []
-    wrapElems.append(value: ptrty)
+    wrapElems.append(ptrty)
     val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(wrapElems), 1U64, 0I32)
     val strty: LLVMTypeRef = arrayTy
     mut val cloelems: Array[LLVMTypeRef] = []
-    cloelems.append(value: ptrty)
-    cloelems.append(value: ptrty)
+    cloelems.append(ptrty)
+    cloelems.append(ptrty)
     val closureTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(cloelems), 2U64, 0I32)
     // any P = { ptr data, ptr vtable } (fat pointer for existentials).
     mut val anyelems: Array[LLVMTypeRef] = []
-    anyelems.append(value: ptrty)
-    anyelems.append(value: ptrty)
+    anyelems.append(ptrty)
+    anyelems.append(ptrty)
     val anyTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(anyelems), 2U64, 0I32)
     // PlewPromise = { i32 done, i64 value, ptr k, ptr kframe } (ABI-identical to
     // the C runtime). Awaited values are type-erased through `value` (i64).
     mut val promelems: Array[LLVMTypeRef] = []
-    promelems.append(value: LLVMInt32TypeInContext(ctx))
-    promelems.append(value: i64ty)
-    promelems.append(value: ptrty)
-    promelems.append(value: ptrty)
+    promelems.append(LLVMInt32TypeInContext(ctx))
+    promelems.append(i64ty)
+    promelems.append(ptrty)
+    promelems.append(ptrty)
     val promiseTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(promelems), 4U64, 0I32)
     mut val st: LlvmCtx = <LlvmCtx
         ctx=ctx mod=m b=LLVMCreateBuilderInContext(ctx)
@@ -1066,7 +1066,7 @@ fn dbgSpan(c: inout Comp, start: U64, len: U64) -> String {
     mut val nm: Array[U8] = []
     mut val j: U64 = start
     while j < start + len {
-        nm.append(value: c.arena.bytes[j])
+        nm.append(c.arena.bytes[j])
         j += 1
     }
     return stringFromBytesUnchecked(nm)
@@ -1137,7 +1137,7 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
             lbl = ar.argLabels[ai]
         }
         if lbl == 0U64 {
-            positional.append(value: ar.args[ai])
+            positional.append(ar.args[ai])
         }
         ai += 1
     }
@@ -1168,8 +1168,8 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
         if !(found) {
             return false
         }
-        outParams.append(value: tp)
-        outArgs.append(value: ref)
+        outParams.append(tp)
+        outArgs.append(ref)
         tpi += 1
     }
     // associated types: named binding only.
@@ -1191,8 +1191,8 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
         if !(found2) {
             return false
         }
-        outParams.append(value: at)
-        outArgs.append(value: ref2)
+        outParams.append(at)
+        outArgs.append(ref2)
         asi += 1
     }
     return true
@@ -1312,18 +1312,18 @@ fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
 fn concatParams(add: Array[Bind], base: Array[Bind]) -> Array[Bind] {
     mut val r: Array[Bind] = []
     mut val i: U64 = 0
-    while i < add.count { r.append(value: add[i])  i += 1 }
+    while i < add.count { r.append(add[i])  i += 1 }
     mut val j: U64 = 0
-    while j < base.count { r.append(value: base[j])  j += 1 }
+    while j < base.count { r.append(base[j])  j += 1 }
     return r
 }
 
 fn concatArgs(add: Array[U64], base: Array[U64]) -> Array[U64] {
     mut val r: Array[U64] = []
     mut val i: U64 = 0
-    while i < add.count { r.append(value: add[i])  i += 1 }
+    while i < add.count { r.append(add[i])  i += 1 }
     mut val j: U64 = 0
-    while j < base.count { r.append(value: base[j])  j += 1 }
+    while j < base.count { r.append(base[j])  j += 1 }
     return r
 }
 
@@ -1374,7 +1374,7 @@ fn appendU64Dec(into: inout Array[U8], n: U64) {
 fn appendU64Le(into: inout Array[LLVMValueRef], n: U64, i8ty: LLVMTypeRef) {
     mut val k: U64 = 0
     while k < 8U64 {
-        into.append(value: LLVMConstInt(i8ty, (n >> (k * 8U64)) & 255U64, 0I32))
+        into.append(LLVMConstInt(i8ty, (n >> (k * 8U64)) & 255U64, 0I32))
         k += 1
     }
 }
@@ -1590,7 +1590,7 @@ fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
     mut val bs: Array[U8] = []
     mut val i: U64 = 0
     while i < len {
-        bs.append(value: c.arena.bytes[start + i])
+        bs.append(c.arena.bytes[start + i])
         i += 1U64
     }
     return cstr(s: stringFromBytesUnchecked(bs))
@@ -1638,24 +1638,24 @@ fn hexDigitVal(b: U8) -> U64 {
 // UTF-8 encode a Unicode scalar `cp` (from a `\u{...}` escape) into `out`.
 fn appendUtf8(out: inout Array[U8], cp: U64) {
     if cp < 128U64 {
-        out.append(value: truncU8(n: cp))
+        out.append(truncU8(n: cp))
         return
     }
     if cp < 2048U64 {
-        out.append(value: truncU8(n: 192U64 | (cp >> 6U64)))
-        out.append(value: truncU8(n: 128U64 | (cp & 63U64)))
+        out.append(truncU8(n: 192U64 | (cp >> 6U64)))
+        out.append(truncU8(n: 128U64 | (cp & 63U64)))
         return
     }
     if cp < 65536U64 {
-        out.append(value: truncU8(n: 224U64 | (cp >> 12U64)))
-        out.append(value: truncU8(n: 128U64 | ((cp >> 6U64) & 63U64)))
-        out.append(value: truncU8(n: 128U64 | (cp & 63U64)))
+        out.append(truncU8(n: 224U64 | (cp >> 12U64)))
+        out.append(truncU8(n: 128U64 | ((cp >> 6U64) & 63U64)))
+        out.append(truncU8(n: 128U64 | (cp & 63U64)))
         return
     }
-    out.append(value: truncU8(n: 240U64 | (cp >> 18U64)))
-    out.append(value: truncU8(n: 128U64 | ((cp >> 12U64) & 63U64)))
-    out.append(value: truncU8(n: 128U64 | ((cp >> 6U64) & 63U64)))
-    out.append(value: truncU8(n: 128U64 | (cp & 63U64)))
+    out.append(truncU8(n: 240U64 | (cp >> 18U64)))
+    out.append(truncU8(n: 128U64 | ((cp >> 12U64) & 63U64)))
+    out.append(truncU8(n: 128U64 | ((cp >> 6U64) & 63U64)))
+    out.append(truncU8(n: 128U64 | (cp & 63U64)))
 }
 
 fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
@@ -1688,15 +1688,15 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
                 appendUtf8(out: inout out, cp: cp)
                 j = k
             } else {
-                out.append(value: escByte(nx: c.arena.bytes[j + 1]))
+                out.append(escByte(nx: c.arena.bytes[j + 1]))
                 j += 2
             }
         } else {
-            out.append(value: c.arena.bytes[j])
+            out.append(c.arena.bytes[j])
             j += 1
         }
     }
-    out.append(value: 0)
+    out.append(0)
     return out
 }
 

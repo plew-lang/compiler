@@ -21,7 +21,7 @@ pub impl LlvmCtx {
             }
             i += 1
         }
-        self.reachAssoc.append(value: fi)
+        self.reachAssoc.append(fi)
         return true
     }
 }
@@ -312,11 +312,11 @@ pub impl LlvmCtx {
                 }
                 mut val ptys: Array[LLVMTypeRef] = []
                 if f.hasRecv {
-                    ptys.append(value: self.selfParamTy(c: inout c, f: f))
+                    ptys.append(self.selfParamTy(c: inout c, f: f))
                 }
                 mut val pi: U64 = 0
                 while pi < f.params.count {
-                    ptys.append(value: self.paramLlvmTy(c: inout c, p: f.params[pi]))
+                    ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
                     pi += 1
                 }
                 val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: f)
@@ -327,11 +327,11 @@ pub impl LlvmCtx {
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "pf".bytes)
                 appendU64Dec(into: inout nm, n: fi)
-                nm.append(value: 0)
+                nm.append(0)
                 val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-                self.fnIdx.append(value: fi)
-                self.fnVal.append(value: fv)
-                self.fnTy.append(value: fty)
+                self.fnIdx.append(fi)
+                self.fnVal.append(fv)
+                self.fnTy.append(fty)
             }
             fi += 1
         }

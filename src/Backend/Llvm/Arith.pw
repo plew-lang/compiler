@@ -52,13 +52,13 @@ pub impl LlvmCtx {
             val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(l)))
             val ity: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wi)
             mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(value: ity)
-            ptys.append(value: ity)
+            ptys.append(ity)
+            ptys.append(ity)
             val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 2U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: checkedFnName(op: op, unsigned: unsigned, wi: wi), nameId: checkedNameId(op: op, unsigned: unsigned, wi: wi), fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
-            av.append(value: l)
-            av.append(value: r)
+            av.append(l)
+            av.append(r)
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
         }
         return self.buildBinOpS(c: inout c, op: op, l: l, r: r, unsigned: unsigned)
@@ -70,14 +70,14 @@ pub impl LlvmCtx {
         val wi: U64 = llvmWidthIdx(w: LLVMGetIntTypeWidth(LLVMTypeOf(v)))
         val ity: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wi)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(value: ity)
+        ptys.append(ity)
         val fty: LLVMTypeRef = LLVMFunctionType(ity, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = "plew_".bytes
         appendBytes(into: inout nm, from: checkedPrefixBytes(unsigned: false, wi: wi))
         appendBytes(into: inout nm, from: "Neg".bytes)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: stringFromBytesUnchecked(nm), nameId: 9100U64 + wi, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(value: v)
+        av.append(v)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
