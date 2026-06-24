@@ -427,6 +427,26 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
     }
 
+    // Declare/cache `plew_rawbuf_move(ptr, elemSize, dst, src, n)` — relocate `n` element
+    // slots within the buffer (insertAt/removeAt shift). A pure byte move (no element ARC).
+    inout fn rawbufMove(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, dst: LLVMValueRef, src: LLVMValueRef, n: LLVMValueRef) {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 5U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_rawbuf_move", nameId: 9162U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        av.append(value: elemSize)
+        av.append(value: dst)
+        av.append(value: src)
+        av.append(value: n)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 5U64, anon())
+    }
+
     // ---- Array/String value representation SEAM (C1 migration boundary) ----
     //
     // An array/string VALUE is a single data pointer (== the Buffer floor): `data` points at
@@ -1094,6 +1114,30 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
         self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: retain)
+        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
+        LLVMBuildBr(self.b, condBB)
+        LLVMPositionBuilderAtEnd(self.b, endBB)
+    }
+
+    // Release each element in the half-open range [start, end) of buffer `data` (used by
+    // clear/truncate to drop a removed suffix). A no-op when the element type carries no
+    // value-ARC. The caller must have committed the smaller count first (commit-then-release).
+    inout fn emitArrayElemRangeRelease(c: inout Comp, data: LLVMValueRef, start: LLVMValueRef, end: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
+        if !(self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef)) {
+            return
+        }
+        val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
+        LLVMBuildStore(self.b, start, iSlot)
+        val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.cond"))
+        val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.body"))
+        val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arrrng.end"))
+        LLVMBuildBr(self.b, condBB)
+        LLVMPositionBuilderAtEnd(self.b, condBB)
+        val iv: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, iSlot, anon())
+        LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, end, anon()), bodyBB, endBB)
+        LLVMPositionBuilderAtEnd(self.b, bodyBB)
+        val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon())
+        self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: false)
         LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)

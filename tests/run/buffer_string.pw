@@ -23,7 +23,8 @@ fn main() {
     b.set(index: 0U64, "replaced")
     val r: String = b.get(index: 0U64)
     print(line: "r=" + r)
-    b.removeLast()
+    val popped: String = b.removeLast()   // move-out: caller owns + drops "item-11"
+    print(line: "popped=" + popped)
     val c1: U64 = b.count()
     print(line: "afterPop=" + c1.format(format: ""))
 }

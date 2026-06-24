@@ -458,9 +458,12 @@ pub impl LlvmCtx {
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
-    // `buf.removeLast()`: shrink the live count by one (panics when empty). The storage
-    // keeps its capacity. For an ARC-bearing element, release the popped element after
-    // committing the smaller count (commit-then-release).
+    // `buf.removeLast() -> T`: shrink the live count by one (panics when empty) and MOVE
+    // the retired element OUT to the caller (value return). The storage keeps its capacity.
+    // No retain/release on the moved element: it leaves [0,count) (so the buffer no longer
+    // owns it) and the returned value takes over that single reference — the caller's
+    // binding balances it at drop. (A privatize above retained every element, so in the
+    // shared case the move hands the caller the privatize's added reference.)
     inout fn genLlvmBufferRemoveLast(c: inout Comp, recv: U64) -> LLVMValueRef {
         // CoW gateway (1-0): own any shared buffer ABOVE the receiver first.
         self.privatizeForWrite(c: inout c, id: recv)
@@ -477,13 +480,105 @@ pub impl LlvmCtx {
         // empty-guard: index 0 must be in range (count > 0), else panic.
         self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
         val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
-        if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
-            val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount), anon())
-            self.rawbufSetCount(c: inout c, data: data, n: newCount)
-            self.valueArc(c: inout c, v: popped, typeRef: er, retain: false)
-        } else {
-            self.rawbufSetCount(c: inout c, data: data, n: newCount)
+        val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: newCount), anon())
+        self.rawbufSetCount(c: inout c, data: data, n: newCount)
+        return popped
+    }
+
+    // `buf.removeAt(index) -> T`: move the element at `index` OUT (value return) and shift
+    // the following elements left to keep order (panics when `index >= count`). The shift
+    // is a pure memmove (relocation, no element ARC); the moved-out element takes over its
+    // slot's single reference (caller's binding balances it).
+    inout fn genLlvmBufferRemoveAt(c: inout Comp, recv: U64, indexExpr: U64) -> LLVMValueRef {
+        self.privatizeForWrite(c: inout c, id: recv)
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.removeAt only on a buffer local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
+        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: er)
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
+        self.emitBoundsCheck(c: inout c, idx: idx, count: count)
+        val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        // shift [idx+1, count) down by one over the hole at idx (n = newCount - idx; n=0
+        // when removing the last element -> memmove no-op).
+        val n: LLVMValueRef = LLVMBuildSub(self.b, newCount, idx, anon())
+        self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: idx, src: LLVMBuildAdd(self.b, idx, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), n: n)
+        self.rawbufSetCount(c: inout c, data: data, n: newCount)
+        return popped
+    }
+
+    // `buf.swapRemove(index) -> T`: move the element at `index` OUT (value return) and move
+    // the last element into its slot (O(1), order not preserved; panics when out of range).
+    // The last->idx move is a memmove (no ARC); when idx is the last element it is a no-op
+    // (dst==src) and the slot falls outside [0,newCount) so it is never double-owned.
+    inout fn genLlvmBufferSwapRemove(c: inout Comp, recv: U64, indexExpr: U64) -> LLVMValueRef {
+        self.privatizeForWrite(c: inout c, id: recv)
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.swapRemove only on a buffer local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
+        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: er)
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
+        self.emitBoundsCheck(c: inout c, idx: idx, count: count)
+        val popped: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        val newCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: idx, src: newCount, n: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        self.rawbufSetCount(c: inout c, data: data, n: newCount)
+        return popped
+    }
+
+    // `buf.clear()`: drop every element and set count to 0 (commit-then-release: count is
+    // committed to 0 before the element heaps are released, so a re-entrant deinit only
+    // sees the empty buffer). The storage keeps its capacity.
+    inout fn genLlvmBufferClear(c: inout Comp, recv: U64) -> LLVMValueRef {
+        self.privatizeForWrite(c: inout c, id: recv)
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.clear only on a buffer local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
+        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: er)
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+        self.rawbufSetCount(c: inout c, data: data, n: LLVMConstInt(self.i64ty, 0U64, 0I32))
+        self.emitArrayElemRangeRelease(c: inout c, data: data, start: LLVMConstInt(self.i64ty, 0U64, 0I32), end: count, elemTy: elemTy, elemRef: er)
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
+    }
+
+    // `buf.truncate(n)`: when n < count, drop the suffix [n, count) and set count to n
+    // (commit-then-release); when n >= count, a no-op. The storage keeps its capacity.
+    inout fn genLlvmBufferTruncate(c: inout Comp, recv: U64, countExpr: U64) -> LLVMValueRef {
+        self.privatizeForWrite(c: inout c, id: recv)
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.truncate only on a buffer local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
+        val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: er)
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+        val n: LLVMValueRef = self.genLlvmExpr(c: inout c, id: countExpr)
+        // only shrink: guard n < count, else leave the buffer untouched.
+        val shrink: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntUlt(), n, count, anon())
+        val doBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "trunc.do"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "trunc.cont"))
+        LLVMBuildCondBr(self.b, shrink, doBB, contBB)
+        LLVMPositionBuilderAtEnd(self.b, doBB)
+        self.rawbufSetCount(c: inout c, data: data, n: n)
+        self.emitArrayElemRangeRelease(c: inout c, data: data, start: n, end: count, elemTy: elemTy, elemRef: er)
+        LLVMBuildBr(self.b, contBB)
+        LLVMPositionBuilderAtEnd(self.b, contBB)
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 

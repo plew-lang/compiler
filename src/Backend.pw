@@ -1522,6 +1522,10 @@ export fn emitLlvmRuntime() {
     // buffer is shared (rc>1), allocate a private rc=1 copy of `count` elements, drop one
     // owner from the shared original, and return the copy; otherwise return it unchanged.
     write(s: "void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } ((long long*)data)[-1]--; return nd; } return data; }\n")
+    // relocate `n` element slots within a buffer (insertAt/removeAt shift). A pure byte
+    // move: each element's inline bytes (incl any heap reference) move intact, so no
+    // element retain/release is needed (buffer-floor.md §5 relocation = memmove).
+    write(s: "void plew_rawbuf_move(void* data, long long elemSize, long long dst, long long src, long long n){ if(n>0) memmove((char*)data+(size_t)(elemSize*dst),(char*)data+(size_t)(elemSize*src),(size_t)(elemSize*n)); }\n")
     write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
     // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
     // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the

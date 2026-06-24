@@ -586,7 +586,13 @@ export extern "plew-intrinsic" {
     fn bufferAppend[T](buffer: inout Buffer[T], value: T)
     fn bufferGet[T](buffer: Buffer[T], index: U64) -> T
     fn bufferSet[T](buffer: inout Buffer[T], index: U64, value: T)
-    fn bufferRemoveLast[T](buffer: inout Buffer[T])
+    // removal (buffer-floor.md §3): removeLast/removeAt/swapRemove move the retired
+    // element OUT to the caller (value return); clear/truncate drop the removed range.
+    fn bufferRemoveLast[T](buffer: inout Buffer[T]) -> T
+    fn bufferRemoveAt[T](buffer: inout Buffer[T], index: U64) -> T
+    fn bufferSwapRemove[T](buffer: inout Buffer[T], index: U64) -> T
+    fn bufferClear[T](buffer: inout Buffer[T])
+    fn bufferTruncate[T](buffer: inout Buffer[T], count: U64)
 }
 
 // Methods on the Buffer floor, in pure Plew over the intrinsics above. Like Array's
@@ -621,10 +627,28 @@ pub impl[T] Buffer[T] {
     inout fn set(index: U64, value~: T) {
         bufferSet(buffer: inout self, index: index, value: value)
     }
-    // Remove the last element (panics when empty). The storage keeps its capacity;
-    // only the live count shrinks.
-    inout fn removeLast() {
-        bufferRemoveLast(buffer: inout self)
+    // Remove the last element and return it (panics when empty). The storage keeps its
+    // capacity; only the live count shrinks. The returned value is independently owned.
+    inout fn removeLast() -> T {
+        return bufferRemoveLast(buffer: inout self)
+    }
+    // Remove the element at `index` and return it, shifting the following elements left
+    // to keep order (O(n)). Panics when `index >= count`.
+    inout fn removeAt(index: U64) -> T {
+        return bufferRemoveAt(buffer: inout self, index: index)
+    }
+    // Remove the element at `index` and return it, moving the last element into its slot
+    // (O(1), order not preserved). Panics when `index >= count`.
+    inout fn swapRemove(index: U64) -> T {
+        return bufferSwapRemove(buffer: inout self, index: index)
+    }
+    // Remove all elements (count -> 0). The storage's capacity is unspecified afterward.
+    inout fn clear() {
+        bufferClear(buffer: inout self)
+    }
+    // Drop the suffix `[count, self.count)` when `count < self.count` (else a no-op).
+    inout fn truncate(count: U64) {
+        bufferTruncate(buffer: inout self, count: count)
     }
 }
 

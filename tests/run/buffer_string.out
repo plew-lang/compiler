@@ -2,4 +2,5 @@ count=12
 first=item-0
 last=item-11
 r=replaced
+popped=item-11
 afterPop=11

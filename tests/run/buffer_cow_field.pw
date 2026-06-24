@@ -24,8 +24,8 @@ fn main() {
     print(line: "h=" + n1.format(format: "") + " h2=" + n2.format(format: ""))
     print(line: "h[0]=" + h.items.get(index: 0U64) + " h2[0]=" + h2.items.get(index: 0U64))
     print(line: "h[2]=" + h.items.get(index: 2U64))
-    h.items.removeLast()
+    val popped: String = h.items.removeLast()   // move-out: caller owns "c"
     val n3: U64 = h.items.count()
     val n4: U64 = h2.items.count()
-    print(line: "after pop h=" + n3.format(format: "") + " h2=" + n4.format(format: ""))
+    print(line: "popped=" + popped + " after pop h=" + n3.format(format: "") + " h2=" + n4.format(format: ""))
 }

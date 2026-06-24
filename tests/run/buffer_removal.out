@@ -1,0 +1,4 @@
+removeAt=b n=4 [1]=c
+swapRemove=a n=3 [0]=e
+truncate n=1 [0]=e
+clear n=0

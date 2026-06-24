@@ -1,0 +1,36 @@
+// The Buffer floor's removal family (buffer-floor.md §3) with an ARC-bearing element
+// type (String): removeAt moves the element out and shifts the rest left (order kept),
+// swapRemove moves it out and pulls the last element into the hole (O(1), order broken),
+// truncate drops a suffix, clear drops everything. The moved-out elements are owned by
+// the caller's bindings (dropped at scope end); the dropped suffix/all are released by
+// the buffer (commit-then-release). ASan-on-self-compile / run prove leak/UAF freedom.
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+fn main() {
+    mut val b: Buffer[String] = Buffer.new()
+    b.append("a")
+    b.append("b")
+    b.append("c")
+    b.append("d")
+    b.append("e")
+    // removeAt(1) -> "b", order preserved: [a, c, d, e]
+    val r1: String = b.removeAt(index: 1U64)
+    val n1: U64 = b.count()
+    val e1: String = b.get(index: 1U64)
+    print(line: "removeAt=" + r1 + " n=" + n1.format(format: "") + " [1]=" + e1)
+    // swapRemove(0) -> "a", last (e) moves into slot 0: [e, c, d]
+    val r2: String = b.swapRemove(index: 0U64)
+    val n2: U64 = b.count()
+    val e2: String = b.get(index: 0U64)
+    print(line: "swapRemove=" + r2 + " n=" + n2.format(format: "") + " [0]=" + e2)
+    // truncate(1): drop the suffix [1,3) (= "c","d") -> [e]
+    b.truncate(count: 1U64)
+    val n3: U64 = b.count()
+    val e3: String = b.get(index: 0U64)
+    print(line: "truncate n=" + n3.format(format: "") + " [0]=" + e3)
+    // clear: drop the remaining element -> []
+    b.clear()
+    val n4: U64 = b.count()
+    print(line: "clear n=" + n4.format(format: ""))
+}
