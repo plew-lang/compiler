@@ -582,6 +582,53 @@ pub impl LlvmCtx {
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
+    // `buf.insertAt(index, value)`: shift [index, count) right by one and insert a copy of
+    // `value` at `index` (panics when `index > count`; `index == count` is append). Grows
+    // the storage if full. The shift is a pure memmove (relocation, no element ARC); only
+    // the inserted value is copy-on-place.
+    inout fn genLlvmBufferInsertAt(c: inout Comp, recv: U64, indexExpr: U64, valueExpr: U64) -> LLVMValueRef {
+        self.privatizeForWrite(c: inout c, id: recv)
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.insertAt only on a buffer local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val data0: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: self.bufElemRef(c: inout c, id: recv))
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data0)
+        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
+        // valid index range is [0, count] (count == append), so bound is count+1.
+        self.emitBoundsCheck(c: inout c, idx: idx, count: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
+        // grow for the extra element, store the (possibly new) data back into the slot.
+        val data: LLVMValueRef = self.growBuf(c: inout c, data: data0, elemTy: elemTy, count: count)
+        LLVMBuildStore(self.b, data, slot)
+        // open a hole at idx: shift [idx, count) up by one (n = count - idx; n=0 -> no-op).
+        self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: LLVMBuildAdd(self.b, idx, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), src: idx, n: LLVMBuildSub(self.b, count, idx, anon()))
+        val ev: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
+        LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx))
+        self.rawbufSetCount(c: inout c, data: data, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
+    }
+
+    // `buf.reserve(additionalCapacity)`: ensure capacity >= count + additionalCapacity
+    // (never shrinks; count + elements unchanged). Grows + stores the new data back.
+    inout fn genLlvmBufferReserve(c: inout Comp, recv: U64, addCapExpr: U64) -> LLVMValueRef {
+        self.privatizeForWrite(c: inout c, id: recv)
+        val slot: LLVMValueRef = self.bufStoragePtr(c: inout c, id: recv)
+        if LLVMIsNull(slot) != 0I32 {
+            compileErrorAt(line: 0, msg: "LLVM backend: Buffer.reserve only on a buffer local / struct field (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
+        val data0: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: self.bufElemRef(c: inout c, id: recv))
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data0)
+        val add: LLVMValueRef = self.genLlvmExpr(c: inout c, id: addCapExpr)
+        val mincap: LLVMValueRef = LLVMBuildAdd(self.b, count, add, anon())
+        val data: LLVMValueRef = self.rawbufReserve(c: inout c, data: data0, elemSize: LLVMSizeOf(elemTy), mincap: mincap)
+        LLVMBuildStore(self.b, data, slot)
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
+    }
+
     // Emit a condition expression as an i1. A comparison binary already yields i1; any
     // other integer becomes `x != 0`.
     // `a && b` / `a || b` with short-circuit semantics (spec/12), yielding an i1.

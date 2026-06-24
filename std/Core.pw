@@ -583,7 +583,9 @@ export extern "plew-intrinsic" {
     fn bufferNew[T]() -> Buffer[T]
     fn bufferCount[T](buffer: Buffer[T]) -> U64
     fn bufferCapacity[T](buffer: Buffer[T]) -> U64
+    fn bufferReserve[T](buffer: inout Buffer[T], additionalCapacity: U64)
     fn bufferAppend[T](buffer: inout Buffer[T], value: T)
+    fn bufferInsertAt[T](buffer: inout Buffer[T], index: U64, value: T)
     fn bufferGet[T](buffer: Buffer[T], index: U64) -> T
     fn bufferSet[T](buffer: inout Buffer[T], index: U64, value: T)
     // removal (buffer-floor.md §3): removeLast/removeAt/swapRemove move the retired
@@ -615,9 +617,18 @@ pub impl[T] Buffer[T] {
     fn isEmpty() -> Bool {
         return bufferCount(buffer: self) == 0U64
     }
+    // Ensure capacity for at least `additionalCapacity` more elements (never shrinks).
+    inout fn reserve(additionalCapacity: U64) {
+        bufferReserve(buffer: inout self, additionalCapacity: additionalCapacity)
+    }
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
         bufferAppend(buffer: inout self, value: value)
+    }
+    // Insert a copy of `value` at `index`, shifting the following elements right to keep
+    // order (`index == count` is append). Panics when `index > count`.
+    inout fn insertAt(index: U64, value~: T) {
+        bufferInsertAt(buffer: inout self, index: index, value: value)
     }
     // The element at `index` (panics when out of range).
     fn get(index: U64) -> T {

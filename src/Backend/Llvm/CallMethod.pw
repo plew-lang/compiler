@@ -267,6 +267,12 @@ pub impl LlvmCtx {
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
                 return self.genLlvmBufferAppend(c: inout c, recv: recv, valueExpr: args[0].expr)
             }
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "reserve") {
+                return self.genLlvmBufferReserve(c: inout c, recv: recv, addCapExpr: args[0].expr)
+            }
+            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "insertAt") {
+                return self.genLlvmBufferInsertAt(c: inout c, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
+            }
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "get") {
                 return self.genLlvmBufferGet(c: inout c, recv: recv, indexExpr: args[0].expr)
             }
@@ -288,7 +294,7 @@ pub impl LlvmCtx {
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncate") {
                 return self.genLlvmBufferTruncate(c: inout c, recv: recv, countExpr: args[0].expr)
             }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this Buffer method is not yet supported (new / count / capacity / isEmpty / append / get / set / removeLast / removeAt / swapRemove / clear / truncate)")
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this Buffer method is not yet supported (new / count / capacity / isEmpty / reserve / append / insertAt / get / set / removeLast / removeAt / swapRemove / clear / truncate)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // array methods (append / get / set; user methods on Array are TODO).

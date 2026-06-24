@@ -447,6 +447,38 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 5U64, anon())
     }
 
+    // Declare/cache `plew_arr_grow(data, elemSize, count) -> ptr` — ensure room for one
+    // more element (grows by doubling when count>=cap), returning the (possibly new) data.
+    inout fn growBuf(c: inout Comp, data: LLVMValueRef, elemTy: LLVMTypeRef, count: LLVMValueRef) -> LLVMValueRef {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
+        val grow: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_grow", nameId: 22U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        av.append(value: LLVMSizeOf(elemTy))
+        av.append(value: count)
+        return LLVMBuildCall2(self.b, fty, grow, arrayCPtr(av), 3U64, anon())
+    }
+
+    // Declare/cache `plew_arr_reserve(data, elemSize, mincap) -> ptr` — grow capacity to
+    // >= mincap (preserving elements + count), returning the (possibly new) data pointer.
+    inout fn rawbufReserve(c: inout Comp, data: LLVMValueRef, elemSize: LLVMValueRef, mincap: LLVMValueRef) -> LLVMValueRef {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(value: self.ptrty)
+        ptys.append(value: self.i64ty)
+        ptys.append(value: self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 3U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_arr_reserve", nameId: 9163U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(value: data)
+        av.append(value: elemSize)
+        av.append(value: mincap)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
+    }
+
     // ---- Array/String value representation SEAM (C1 migration boundary) ----
     //
     // An array/string VALUE is a single data pointer (== the Buffer floor): `data` points at

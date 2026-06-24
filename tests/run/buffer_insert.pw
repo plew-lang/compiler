@@ -1,0 +1,26 @@
+// Buffer insertAt / reserve (buffer-floor.md §3) with an ARC-bearing element (String).
+// insertAt shifts the tail right and copies the value into the hole (index == count is
+// append); reserve grows capacity without changing the elements. The inserted value is
+// copy-on-place; the shift is a pure memmove (no element ARC). ASan proves leak/UAF
+// freedom across the grow/realloc that insertAt/reserve trigger. (capacity is an
+// unspecified lower bound per spec, so the test asserts count + elements, not capacity.)
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+fn main() {
+    mut val b: Buffer[String] = Buffer.new()
+    b.reserve(additionalCapacity: 4U64)
+    val c0: U64 = b.count()
+    print(line: "afterReserve count=" + c0.format(format: ""))
+    b.append("a")
+    b.append("c")
+    b.insertAt(index: 1U64, "b")   // [a, b, c]
+    b.insertAt(index: 0U64, "z")   // [z, a, b, c]
+    val n: U64 = b.count()
+    b.insertAt(index: n, "e")      // index == count -> append: [z, a, b, c, e]
+    val n2: U64 = b.count()
+    val e0: String = b.get(index: 0U64)
+    val e2: String = b.get(index: 2U64)
+    val e4: String = b.get(index: 4U64)
+    print(line: "n=" + n2.format(format: "") + " [0]=" + e0 + " [2]=" + e2 + " [4]=" + e4)
+}
