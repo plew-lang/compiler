@@ -30,7 +30,7 @@ export @Std/Core with { I8, I16, I32, I64, U8, U16, U32, U64, F32, F64, Bool, St
 // in spec/15's ambient set, so they belong in @Std/Lang's surface.
 extern "plew-intrinsic" {
     struct HalfOpenRange  struct ClosedRange
-    struct Promise        struct JoinHandle
+    struct Promise[T]     struct JoinHandle[T]
 }
 
 // An optional value: `Some` holds a `T`, `None` holds nothing.
