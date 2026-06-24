@@ -41,19 +41,17 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count {
             val fd: FieldDef = sd.fields[i]
-            // an array OR Buffer field owns an rc-managed buffer that must be released. The
-            // Array struct itself (`struct { data: Buffer[T] }`) is EXCLUDED — its single
-            // Buffer field IS the array value, released by the dedicated array-value path
-            // (emitDeinitCall's locIsArr branch), never the struct-deinit path; treating it
-            // as a deinit-needing struct double-processes Array and recurses (Array is the
-            // type the array machinery special-cases everywhere).
+            // an array OR Buffer field owns an rc-managed buffer that must be released. This
+            // now INCLUDES the Array struct itself (`struct { data: Buffer[T] }`): its single
+            // Buffer field makes it deinit-needing, and its drop/copy/ARC run through the
+            // ordinary struct field-recursion (valueArc's struct path / the drop witness),
+            // not a dedicated "Array" name-branch. An array LOCAL is still dropped by
+            // emitDeinitCall's locIsArr fast path (returns early, so no double-processing).
             if fd.tyIsArray {
                 return true
             }
-            if !(rangeEquals(bytes: c.arena.bytes, start: sd.nameStart, len: sd.nameLen, kw: "Array")) {
-                if fieldIsBufferType(c: inout c, f: fd) {
-                    return true
-                }
+            if fieldIsBufferType(c: inout c, f: fd) {
+                return true
             }
             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
             if fsi < c.arena.structs.count {

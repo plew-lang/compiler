@@ -395,6 +395,26 @@ pub impl Comp {
         return self.arena.structs.count
     }
 
+    // Like `structIndexByName` but ALSO matches a GENERIC struct def (`Array`, `Buffer`'s
+    // user-side wrappers, any `struct Foo[T]`) — the structural ARC queries (valueArc /
+    // arrElemNeedsValueArc / structNeedsDeinit) resolve a generic struct VALUE by its type
+    // name to enumerate its fields, with the instance env supplied separately (setStructEnv)
+    // for grounding. `structIndexByName` intentionally excludes generics (concrete-struct
+    // codegen routes those through the genStruct instance machinery); this is its any-arity
+    // sibling for the field-recursion ARC paths. Name ids are unique, so a name matches one def.
+    inout fn structDefByNameAny(start: U64, len: U64) -> U64 {
+        val ar: Bind = self.aliasReal(start: start, len: len)
+        val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.structs.count {
+            if self.arena.structs[i].nameId == qId {
+                return i
+            }
+            i += 1
+        }
+        return self.arena.structs.count
+    }
+
     inout fn enumIdxByName(start: U64, len: U64) -> U64 {
         // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
         val ar: Bind = self.aliasReal(start: start, len: len)
