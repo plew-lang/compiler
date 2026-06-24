@@ -439,10 +439,23 @@ pub impl Comp {
         return out
     }
 
-    // Build a fresh empty `<Dictionary keys=[] vals=[] hashes=[] buckets=[] count=0 />`
-    // Make node typed as `ctxRef` (a `Dictionary[K, V]` TypeRef). The empty array
-    // literals take their element type from the struct field at codegen, so no element
-    // type is needed here.
+    // A fresh `Buffer.new()` call expr (the empty floor buffer). Its element type is
+    // inferred from the expected type at the use site (the `Buffer[K]` dict field), so
+    // none is supplied here — Buffer is opaque single-pointer storage, so the empty
+    // buffer is element-type-agnostic at construction.
+    inout fn synthBufferNew() -> U64 {
+        val bufN: Bind = self.internBytes(s: "Buffer")
+        val newN: Bind = self.internBytes(s: "new")
+        val recv: U64 = self.pushExpr(e: <Expr.Ident start=bufN.nameStart len=bufN.nameLen />)
+        val noArgs: Array[Arg] = []
+        return self.pushExpr(e: <Expr.Method recv=recv nameStart=newN.nameStart nameLen=newN.nameLen args=noArgs />)
+    }
+
+    // Build a fresh empty
+    // `<Dictionary keys=Buffer.new() vals=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() count=0 />`
+    // Make node typed as `ctxRef` (a `Dictionary[K, V]` TypeRef). The dict's columns are
+    // `Buffer[K]`/`Buffer[V]`/`Buffer[U64]` (the storage floor) — built via `Buffer.new()`,
+    // whose element type is inferred from the field type at codegen.
     inout fn synthEmptyDict(ctxRef: U64) -> U64 {
         val ct: TypeRef = self.arena.types[ctxRef]
         val kN: Bind = self.internBytes(s: "keys")
@@ -450,11 +463,10 @@ pub impl Comp {
         val hN: Bind = self.internBytes(s: "hashes")
         val bN: Bind = self.internBytes(s: "buckets")
         val cN: Bind = self.internBytes(s: "count")
-        val noElems: Array[U64] = []
-        val emptyKeys: U64 = self.pushExpr(e: <Expr.Array elems=noElems />)
-        val emptyVals: U64 = self.pushExpr(e: <Expr.Array elems=noElems />)
-        val emptyHashes: U64 = self.pushExpr(e: <Expr.Array elems=noElems />)
-        val emptyBuckets: U64 = self.pushExpr(e: <Expr.Array elems=noElems />)
+        val emptyKeys: U64 = self.synthBufferNew()
+        val emptyVals: U64 = self.synthBufferNew()
+        val emptyHashes: U64 = self.synthBufferNew()
+        val emptyBuckets: U64 = self.synthBufferNew()
         val zero: U64 = self.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
         mut val fields: Array[MakeField] = []
         // offset = the interned (unloaded) name span: marks these as synthesized so the

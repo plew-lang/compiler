@@ -345,6 +345,19 @@ pub impl LlvmCtx {
                         return self.valueKind(c: inout c, id: m)
                     }
                 }
+                // a Buffer index (`self.items[i]` with items: Buffer[E]): recover the
+                // element kind from the Buffer[E] element ref so the operator path sees a
+                // String/Bool/unsigned element (else it defaults to signed int and e.g.
+                // `self.items[i] == value` on Buffer[String] misroutes — collections D).
+                if self.exprIsBuffer(c: inout c, id: base) {
+                    val ber: U64 = self.bufElemRef(c: inout c, id: base)
+                    if ber != 0U64 {
+                        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[ber].nameStart, len: c.arena.types[ber].nameLen, kw: "String") { return 1U64 }
+                        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[ber].nameStart, len: c.arena.types[ber].nameLen, kw: "Bool") { return 2U64 }
+                        if isUnsignedName(c: inout c, start: c.arena.types[ber].nameStart, len: c.arena.types[ber].nameLen) { return 3U64 }
+                    }
+                    return 0U64
+                }
                 // the env-aware element type (a generic array field `self.keys: Array[K]`
                 // with K -> String, so `self.keys[i] == key` is String ==). C1 made String a
                 // bare data pointer (no longer a distinct LLVM struct kind), so detect it from

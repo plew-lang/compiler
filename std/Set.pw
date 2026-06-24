@@ -7,21 +7,22 @@
 // (to resolve collisions). Linear probing, growing at load 0.75 — the same floor as
 // `Dictionary`, minus the value column.
 import @Std/Hash with { Hash, SipHasher }
+import @Std/Core with { Buffer }
 
 export struct Set[E] {
-    mut val items: Array[E]
-    mut val hashes: Array[U64]
-    mut val buckets: Array[U64]
+    mut val items: Buffer[E]
+    mut val hashes: Buffer[U64]
+    mut val buckets: Buffer[U64]
     pub(get) mut val count: U64
 }
 pub impl[E] Set[E] {
     // An empty set.
     assoc fn new() -> Set[E] {
-        return <Set items=[] hashes=[] buckets=[] count=0U64 />
+        return <Set items=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() count=0U64 />
     }
     // A set of every element in `source` (duplicates collapse to one).
     assoc fn from(source: Array[E]) -> Set[E] where E: Hash, E: Eq {
-        mut val s: Set[E] = <Set items=[] hashes=[] buckets=[] count=0U64 />
+        mut val s: Set[E] = <Set items=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() count=0U64 />
         mut val i: U64 = 0
         while i < source.count {
             s.insert(source[i])
@@ -42,7 +43,7 @@ pub impl[E] Set[E] {
         if self.buckets.count > 0U64 {
             newCap = self.buckets.count * 2U64
         }
-        mut val nb: Array[U64] = []
+        mut val nb: Buffer[U64] = Buffer.new()
         mut val j: U64 = 0
         while j < newCap {
             nb.append(value: 0U64)
@@ -55,7 +56,7 @@ pub impl[E] Set[E] {
             while nb[slot] != 0U64 {
                 slot = (slot + 1U64) & (newCap - 1U64)
             }
-            nb.set(i: slot, value: i + 1U64)
+            nb.set(index: slot, value: i + 1U64)
             i = i + 1U64
         }
         self.buckets = nb
@@ -77,7 +78,7 @@ pub impl[E] Set[E] {
             if b == 0U64 {
                 self.items.append(value: value)
                 self.hashes.append(value: code)
-                self.buckets.set(i: slot, value: self.items.count)
+                self.buckets.set(index: slot, value: self.items.count)
                 self.count = self.count + 1U64
                 return
             }
@@ -149,7 +150,7 @@ pub impl[E] Set[E] {
         mut val i: U64 = s
         mut val doneShift: Bool = false
         while !doneShift {
-            self.buckets.set(i: i, value: 0U64)
+            self.buckets.set(index: i, value: 0U64)
             mut val j: U64 = i
             mut val moved: Bool = false
             while !moved {
@@ -163,7 +164,7 @@ pub impl[E] Set[E] {
                     val di: U64 = (i + cap - ideal) & (cap - 1U64)
                     val dj: U64 = (j + cap - ideal) & (cap - 1U64)
                     if di <= dj {
-                        self.buckets.set(i: i, value: bj)
+                        self.buckets.set(index: i, value: bj)
                         i = j
                         moved = true
                     }
@@ -174,16 +175,19 @@ pub impl[E] Set[E] {
         val lastIdx: U64 = self.count - 1U64
         if r != lastIdx {
             val movedHash: U64 = self.hashes[lastIdx]
-            self.items.set(i: r, value: self.items[lastIdx])
-            self.hashes.set(i: r, value: movedHash)
+            self.items.set(index: r, value: self.items[lastIdx])
+            self.hashes.set(index: r, value: movedHash)
             mut val t: U64 = movedHash & (cap - 1U64)
             while self.buckets[t] != lastIdx + 1U64 {
                 t = (t + 1U64) & (cap - 1U64)
             }
-            self.buckets.set(i: t, value: r + 1U64)
+            self.buckets.set(index: t, value: r + 1U64)
         }
-        self.items.removeLast()
-        self.hashes.removeLast()
+        // removeLast moves the retired tail element OUT; bind it so the caller-owned
+        // duplicate (case r != lastIdx: the same element now also lives at slot r) /
+        // the removed element (case r == lastIdx) is released at scope end.
+        val droppedItem: E = self.items.removeLast()
+        val droppedHash: U64 = self.hashes.removeLast()
         self.count = self.count - 1U64
     }
 }
