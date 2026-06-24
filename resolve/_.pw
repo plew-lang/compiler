@@ -100,7 +100,7 @@ fn main() {
     mut val di: U64 = 0
     while di < root.deps.count {
         if root.deps[di].kind == 1U8 {
-            work.append(value: root.deps[di])
+            work.append(root.deps[di])
         }
         di += 1
     }
@@ -141,7 +141,7 @@ fn main() {
             mut val ti: U64 = 0
             while ti < tm.deps.count {
                 if tm.deps[ti].kind == 1U8 {
-                    work.append(value: tm.deps[ti])
+                    work.append(tm.deps[ti])
                 }
                 ti += 1
             }

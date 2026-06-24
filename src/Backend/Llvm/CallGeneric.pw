@@ -44,8 +44,17 @@ pub impl LlvmCtx {
         }
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
-        c.cur.typeParams = mf.typeParams
-        c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot])
+        // MERGE the callee's substitution env ON TOP of the caller's (concat: callee
+        // params/args first, caller's as the base). The arguments must coerce to the
+        // callee's concrete param types (a `fallback: T` arg → the receiver's instance
+        // type), so the callee env must be present — but an argument EXPRESSION still
+        // belongs to the caller's scope, so a construction from the caller's own type
+        // params (`xs.append(<Entry[K,V] …/>)` with K,V the enclosing method's) must also
+        // ground. Keeping both (callee shadows on name clash) satisfies both, mirroring
+        // genLlvmMakeEnum's merge. Pure callee env (the prior code) dropped the caller's,
+        // leaving such a construction an ungrounded template.
+        c.cur.typeParams = concatParams(add: mf.typeParams, base: savedP)
+        c.cur.typeArgs = concatArgs(add: concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot]), base: savedA)
         // bind Self/Item for an own-param provided call so an argument typed by `Item`
         // coerces against the receiver's real item type (see emitOneGenMethod).
         val sGs: U64 = c.cur.selfRef

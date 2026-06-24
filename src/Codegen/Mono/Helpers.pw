@@ -13,17 +13,6 @@ pub impl Comp {
         if t.args.count == 0 {
             return false
         }
-        // `Array[U8]` stays out of the genInst machinery: its C type (`Array_U8`) and
-        // runtime are hand-written and always emitted (file paths / String.bytes need
-        // it even when no source mentions `Array[U8]`), so it must not also get a
-        // genInst typedef. Every other `Array[E]` is an ordinary genInst of the prelude
-        // `struct Array[T]`.
-        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-            val a0: TypeRef = self.arena.types[t.args[0]]
-            if rangeEquals(bytes: self.arena.bytes, start: a0.nameStart, len: a0.nameLen, kw: "U8") {
-                return false
-            }
-        }
         if self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.structs.count {
             return true
         }

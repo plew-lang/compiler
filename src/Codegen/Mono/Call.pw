@@ -300,6 +300,13 @@ pub impl Comp {
                     self.scanExprInsts(exprId: fields[i].value)
                     i += 1
                 }
+                // register the constructed type's grounded instance (`<Entry[K,V] …/>`
+                // under K=U64,V=U64 -> Entry_U64_U64). Without this, a construction that
+                // appears only as a call argument (`xs.append(<Entry[K,V] …/>)`) — whose
+                // result type no field/return scan reaches — never gets its genInst typedef.
+                if ty != 0U64 {
+                    self.scanType(ref: ty)
+                }
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
