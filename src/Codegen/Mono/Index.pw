@@ -19,6 +19,35 @@ pub impl Comp {
         return self.arena.structs.count
     }
 
+    // Index in c.arena.structs of ANY struct named (nameStart,nameLen) — generic OR
+    // not — or c.arena.structs.count. Unlike genericStructIndex this does NOT filter on
+    // typeParams>0, so the arity check can catch a 0-param struct used with type
+    // arguments (`struct Bar` then `Bar[I32]`), which the generic-only lookup misses.
+    inout fn anyStructIndex(nameStart: U64, nameLen: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.structs.count {
+            if self.arena.structs[i].nameId == qId {
+                return i
+            }
+            i += 1
+        }
+        return self.arena.structs.count
+    }
+
+    // Index in c.arena.enums of ANY enum named (nameStart,nameLen) — generic or not.
+    inout fn anyEnumIndex(nameStart: U64, nameLen: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.enums.count {
+            if self.arena.enums[i].nameId == qId {
+                return i
+            }
+            i += 1
+        }
+        return self.arena.enums.count
+    }
+
     inout fn genericEnumIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0

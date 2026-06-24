@@ -1,0 +1,8 @@
+// spec/06: applying type arguments to a type that declares no type parameters is
+// an arity error. The front-end arity check must catch this for a PLAIN (zero-param)
+// struct too — not only for declared-generic types — so a vestigial/absent type
+// parameter cannot silently swallow the `[…]` (`Bar[I32]` against `struct Bar`).
+struct Bar { val n: I32 }
+fn main() {
+    val b: Bar[I32] = <Bar n=1I32 />
+}

@@ -151,12 +151,17 @@ pub impl Comp {
                 if ty != 0U64 {
                     val tr: TypeRef = self.arena.types[ty]
                     if tr.args.count > 0U64 {
+                        // look up the head as ANY struct/enum (not only generic ones): a
+                        // 0-param struct/enum constructed with type arguments (`struct Bar`
+                        // then `<Bar[I32] …/>`) is an arity error too. genericStructIndex
+                        // filters typeParams>0 and would miss it — the same hole that let
+                        // `Foo[I32]` through for a non-generic `Foo` (spec/06).
                         mut val tpCount: U64 = self.arena.structs.count + self.arena.enums.count + 1U64
-                        val gsi: U64 = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
+                        val gsi: U64 = self.anyStructIndex(nameStart: typeStart, nameLen: typeLen)
                         if gsi < self.arena.structs.count {
                             tpCount = self.arena.structs[gsi].typeParams.count
                         } else {
-                            val gei: U64 = self.genericEnumIndex(nameStart: typeStart, nameLen: typeLen)
+                            val gei: U64 = self.anyEnumIndex(nameStart: typeStart, nameLen: typeLen)
                             if gei < self.arena.enums.count {
                                 tpCount = self.arena.enums[gei].typeParams.count
                             }

@@ -324,13 +324,19 @@ pub impl Comp {
         }
         val t: TypeRef = self.arena.types[ref]
         if t.args.count > 0U64 {
-            val si: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+            // look up the head name as ANY struct/enum (not only generic ones): a 0-param
+            // struct/enum used with type arguments (`struct Bar` then `Bar[I32]`) is an arity
+            // error too. genericStructIndex would skip it (it filters typeParams>0), which is
+            // exactly the hole that let `Foo[I32]` through for a non-generic `Foo`. Names that
+            // are not registered structs/enums (type params, `fn`, the array-special head,
+            // `any P`) aren't found, so they pass as before.
+            val si: U64 = self.anyStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if si < self.arena.structs.count {
                 if t.args.count != self.arena.structs[si].typeParams.count {
                     compileErrorAt(line: self.lineOf(offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")
                 }
             } else {
-                val ei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+                val ei: U64 = self.anyEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
                 if ei < self.arena.enums.count {
                     if t.args.count != self.arena.enums[ei].typeParams.count {
                         compileErrorAt(line: self.lineOf(offset: offset), msg: "wrong number of type arguments for this generic type (spec/06)")

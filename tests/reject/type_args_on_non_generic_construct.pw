@@ -1,0 +1,9 @@
+// spec/06: applying type arguments to a type that declares no type parameters is an
+// arity error even at the CONSTRUCTION expression (`<Bar[I32] …/>`), with no type
+// annotation to route it through the let/param/return arity check. The construction-site
+// check must also look up the head as ANY struct (not only generic ones), or a vestigial /
+// absent type parameter silently swallows the `[…]`.
+struct Bar { val n: I32 }
+fn main() {
+    val b = <Bar[I32] n=1I32 />
+}
