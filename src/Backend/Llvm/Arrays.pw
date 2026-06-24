@@ -246,14 +246,13 @@ pub impl LlvmCtx {
         return 0U64
     }
 
-    // A pointer to the {ptr,i64} storage of an array place (an array local or an
-    // array struct field of a struct local), so `.append` can grow it in place.
-    // Returns LLVMConstNull(ptr) if not an addressable array place.
-    inout fn arrStoragePtr(c: inout Comp, id: U64) -> LLVMValueRef {
+    // A pointer to the `{ptr}` aggregate of an array place (an array local or an array struct
+    // field of a struct local). Returns LLVMConstNull(ptr) if not an addressable array place.
+    inout fn arrPlacePtr(c: inout Comp, id: U64) -> LLVMValueRef {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
-                // only an array LOCAL has its {ptr,count} in an alloca we can mutate in
-                // place; a non-array local is not array storage (null -> caller errors).
+                // only an array LOCAL has its `{ptr}` in an alloca we can mutate in place;
+                // a non-array local is not array storage (null -> caller errors).
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     if self.locIsArr[li] { return self.locPtr[li] }
@@ -263,8 +262,20 @@ pub impl LlvmCtx {
             _ => {}
         }
         // a field/element place (possibly nested, e.g. `c.arena.items`): its place
-        // pointer IS the array-storage slot. placePtrStrict recurses through nesting.
+        // pointer IS the array `{ptr}` slot. placePtrStrict recurses through nesting.
         return self.placePtrStrict(c: inout c, id: id)
+    }
+
+    // The inner buffer data-pointer SLOT (a `ptr*`) of an array place, so `.append` can grow
+    // it in place. Array A: the array value is a `{ptr}` aggregate, so the buffer slot is
+    // field 0 of the place's `{ptr}` storage — GEPing it keeps the slot seam (cowArraySlot /
+    // arrSlot*) identical to the bare-ptr Buffer floor (whose slot is the local ptr* directly).
+    inout fn arrStoragePtr(c: inout Comp, id: U64) -> LLVMValueRef {
+        val place: LLVMValueRef = self.arrPlacePtr(c: inout c, id: id)
+        if LLVMIsNull(place) != 0I32 {
+            return place
+        }
+        return LLVMBuildStructGEP2(self.b, self.arrayTy, place, 0U64, anon())
     }
 
     // Build a struct/enum field value, honoring an array field's element type (so an
@@ -488,21 +499,33 @@ pub impl LlvmCtx {
     // localized here. (Before C1 the value was a `{ptr,i64}` aggregate with inline count; the
     // seam was introduced so the flip is a handful of helper bodies, not ~80 inline sites.)
 
-    // The data pointer of an array/string VALUE — the value IS the data pointer.
+    // The data pointer of an array/string VALUE. The value is a `{ptr}` aggregate (Array A),
+    // so unwrap field 0. Kept kind-agnostic: a bare pointer (the Buffer floor, which shares
+    // this seam through valueArc) passes through unchanged — only a `{ptr}` struct (kind 10)
+    // is unwrapped.
     inout fn arrValData(c: inout Comp, arr: LLVMValueRef) -> LLVMValueRef {
+        if LLVMGetTypeKind(LLVMTypeOf(arr)) == 10U32 {
+            return LLVMBuildExtractValue(self.b, arr, 0U64, anon())
+        }
         return arr
     }
     // The live element count of an array/string VALUE (read from the heap header; 0 for null).
     inout fn arrValCount(c: inout Comp, arr: LLVMValueRef) -> LLVMValueRef {
-        return self.rawbufCount(c: inout c, data: arr)
+        return self.rawbufCount(c: inout c, data: self.arrValData(c: inout c, arr: arr))
     }
-    // Build an array/string VALUE from a data pointer and a count: the value is just `data`,
-    // so stamp `count` into its heap header and return it. Callers pass a buffer that already
+    // Wrap a bare data pointer into the `{ptr}` array/string VALUE aggregate WITHOUT touching
+    // the heap header (the count is already correct — e.g. a baked string literal whose count
+    // is in its constant header).
+    inout fn arrValWrap(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
+        return LLVMBuildInsertValue(self.b, LLVMGetUndef(self.arrayTy), data, 0U64, anon())
+    }
+    // Build an array/string VALUE from a data pointer and a count: stamp `count` into the
+    // heap header, then wrap into the `{ptr}` aggregate. Callers pass a buffer that already
     // owns the elements (a fresh rawbuf_alloc, an arr_copy, or a baked literal); set_count is
     // a no-op on null and idempotent when the header already holds `count`.
     inout fn arrValMake(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef) -> LLVMValueRef {
         self.rawbufSetCount(c: inout c, data: data, n: count)
-        return data
+        return self.arrValWrap(c: inout c, data: data)
     }
     // Load the data pointer from an array STORAGE SLOT (an array local / field alloca): the
     // slot holds the single data pointer.

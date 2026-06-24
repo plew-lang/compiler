@@ -812,12 +812,17 @@ export fn emitLlvm(c: inout Comp) {
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     val ptrty: LLVMTypeRef = LLVMPointerTypeInContext(ctx, 0U32)
     val i64ty: LLVMTypeRef = LLVMInt64TypeInContext(ctx)
-    // C1: String / Array VALUE = a single data pointer (== the Buffer floor's rep). The
+    // Array A (de-collapse): String / Array VALUE = a real one-field aggregate `{ptr}`
+    // wrapping the rawbuf data pointer, so Array/String are ordinary structs riding the
+    // generic-struct machinery (collections.md §3-付録3 case A; was C1's bare pointer). The
     // live count + capacity live in the heap header [cap@-3][count@-2][rc@-1] before the
-    // data, read via plew_rawbuf_count/cap. Every data/count access goes through the
-    // arrVal*/arrSlot* seam (Arrays.pw), so the rep is fully described by these two anchors.
-    val strty: LLVMTypeRef = ptrty
-    val arrayTy: LLVMTypeRef = ptrty
+    // data, read via plew_rawbuf_count/cap. The VALUE seam (arrValData/arrValMake/arrValWrap)
+    // wraps/unwraps the `{ptr}`; the SLOT seam (arrStoragePtr GEPs field 0 → the inner buffer
+    // ptr*, so cowArraySlot/arrSlot* stay uniform with the bare-ptr Buffer floor).
+    mut val wrapElems: Array[LLVMTypeRef] = []
+    wrapElems.append(value: ptrty)
+    val arrayTy: LLVMTypeRef = LLVMStructTypeInContext(ctx, arrayCPtr(wrapElems), 1U64, 0I32)
+    val strty: LLVMTypeRef = arrayTy
     mut val cloelems: Array[LLVMTypeRef] = []
     cloelems.append(value: ptrty)
     cloelems.append(value: ptrty)
