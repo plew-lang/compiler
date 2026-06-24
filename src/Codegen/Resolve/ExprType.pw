@@ -312,6 +312,16 @@ pub impl Comp {
                         return self.typeInfoOfRef(ref: dt.args[1])
                     }
                 }
+                // `buf[i]` on the Buffer floor yields the element type T (args[0]) — the
+                // compiler-recognised subscript (value return; see genLlvmIndex).
+                if self.isBufferType(ti: bt) {
+                    if bt.ref != 0 {
+                        val bft: TypeRef = self.arena.types[bt.ref]
+                        if bft.args.count > 0 {
+                            return self.typeInfoOfRef(ref: bft.args[0])
+                        }
+                    }
+                }
                 // a user type's `a[k]` desugars to `a.index(key:k)`; its type is the
                 // `index` method's return (the Index trait's `Output`).
                 if bt.kind == 2 {

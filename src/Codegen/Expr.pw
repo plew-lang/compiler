@@ -18,6 +18,17 @@ pub impl Comp {
         return self.isGenericInst(ref: ti.ref)
     }
 
+    // The `Buffer[T]` floor type (a kind-2 named type). Used to type-resolve the floor's
+    // compiler-recognised subscript (`buf[i] -> T`) and properties (`count`/`capacity`/
+    // `isEmpty`) — Plew has no general computed properties, so these are special-cased
+    // exactly like `Array`'s (the floor is an opaque intrinsic, not a fielded struct).
+    inout fn isBufferType(ti: TypeInfo) -> Bool {
+        if ti.kind != 2 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: ti.nameStart, len: ti.nameLen, kw: "Buffer")
+    }
+
     // Does type (typeStart,typeLen) have a method named `name` (a receiver fn)? Used
     // to route a subscript `a[k]` to a user type's `Index.index` / `IndexSet.indexSet`
     // witness — a normal method, so the call is synthesized and dispatched as one.

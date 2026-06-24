@@ -1,0 +1,24 @@
+// The Buffer floor's subscript read `buf[i]` (buffer-floor.md §4 — the compiler-
+// recognised Index, value-return like `get`). Works for an ARC element (String, where
+// the read retains so the result is independently owned) and a scalar element (U64, used
+// in arithmetic / comparison). Special-cased like Array's `[]` (not an `index` witness).
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+fn main() {
+    mut val b: Buffer[String] = Buffer.new()
+    b.append("x")
+    b.append("y")
+    b.append("z")
+    val e1: String = b[1U64]
+    print(line: "b[1]=" + e1)
+    mut val nums: Buffer[U64] = Buffer.new()
+    nums.append(10U64)
+    nums.append(20U64)
+    val s: U64 = nums[0U64] + nums[1U64]
+    print(line: "sum=" + s.format(format: ""))
+    val first: U64 = nums[0U64]
+    if first == 10U64 {
+        print(line: "first==10")
+    }
+}

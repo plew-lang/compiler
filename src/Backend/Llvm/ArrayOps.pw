@@ -36,6 +36,12 @@ pub impl LlvmCtx {
 
     // `arr[i]` read: bounds-checked element load.
     inout fn genLlvmIndex(c: inout Comp, base: U64, index: U64) -> LLVMValueRef {
+        // `buf[i]` on the Buffer floor is the compiler-recognised subscript = the value-
+        // return `get` (retains an ARC element; buffer-floor.md §4). Special-cased like
+        // Array's `[]` rather than routed through an `index` witness.
+        if self.exprIsBuffer(c: inout c, id: base) {
+            return self.genLlvmBufferGet(c: inout c, recv: base, indexExpr: index)
+        }
         // only a built-in Array is indexed directly; a user `Index`-impl subscript
         // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
         if !(self.exprIsArray(c: inout c, id: base)) {
