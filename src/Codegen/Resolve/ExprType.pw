@@ -164,21 +164,6 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                // array intrinsics: arrayGet returns the element type of its `Array[T]`
-                // argument, arrayLen returns U64 (arrayPush/arraySet return ()).
-                if self.isArrayIntrinsicName(nameStart: nameStart, nameLen: nameLen) {
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") {
-                        val at: TypeInfo = self.exprType(id: args[0].expr)
-                        return self.typeInfoOfName(start: at.nameStart, len: at.nameLen, isArray: false)
-                    }
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayLen") {
-                        val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3)
-                        if u64.nameLen != 0 {
-                            return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
-                        }
-                    }
-                    return scalarInfo()
-                }
                 // (I/O builtins are ordinary `extern "plew-intrinsic"` declarations now,
                 // so their return type comes from the resolved Func below — no special
                 // cases here.)

@@ -128,17 +128,6 @@ struct Array[T] {
     mut val data: Buffer[T]
 }
 
-// The array intrinsic floor (spec/02): lowered by the compiler to the per-element
-// runtime `Array_<E>_<op>` / inline buffer ops. The element type E is recovered
-// from the first `Array[T]` argument (the compiler knows these names).
-extern "plew-intrinsic" {
-    fn arrayPush[T](a: inout Array[T], v: T)
-    fn arrayGet[T](a: Array[T], i: U64) -> T
-    fn arraySet[T](a: inout Array[T], i: U64, v: T)
-    fn arrayLen[T](a: Array[T]) -> U64
-    fn arrayPop[T](a: inout Array[T])
-}
-
 // Methods on the builtin Array, in pure Plew over its `data` Buffer floor (Array A:
 // Array is an ordinary `struct { data: Buffer[T] }`, so its methods just forward to the
 // Buffer floor — the inner `buffer*` intrinsics are lowered by function identity, and the

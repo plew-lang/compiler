@@ -239,17 +239,6 @@ export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
 // boundary): the `extern "plew-intrinsic"` ops Core's Array/Buffer methods call.
 // `pub` so the (still free-function) type-recovery callers can reach them during the
 // methodization transition.
-pub impl Comp {
-    // Is `(nameStart,nameLen)` an array intrinsic name?
-    fn isArrayIntrinsicName(nameStart: U64, nameLen: U64) -> Bool {
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayPush") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayGet") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arraySet") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayLen") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "arrayPop") { return true }
-        return false
-    }
-}
 
 part ./Parser/Decl
 part ./Codegen/Emit
