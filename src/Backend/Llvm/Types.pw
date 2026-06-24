@@ -131,12 +131,23 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < c.arena.structs.count {
             if structRegisterable(c: inout c, sidx: i) {
-                mut val nm: Array[U8] = []
-                appendBytes(into: inout nm, from: "st".bytes)
-                appendU64Dec(into: inout nm, n: i)
-                nm.append(0)
                 self.structIdxs.append(i)
-                self.structTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
+                // `String` is the canonical single-`Buffer` struct: its VALUE rep is the shared
+                // `{ptr}` aggregate `strty` (= arrayTy, an anonymous literal struct), not a fresh
+                // named `%stN`. Reuse strty as its registered type so the generic copy/drop/retain
+                // WITNESSES take strty and match every String value (literal / runtime helper /
+                // field). This is the same representation pin as llvmTypeOfRef's name→strty
+                // short-circuit — NOT behavior dispatch (collections.md §3-付録3). Its body is
+                // already `{ptr}` (set at strty creation), so registerStructBodies skips it.
+                if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[i].nameStart, len: c.arena.structs[i].nameLen, kw: "String") {
+                    self.structTys.append(self.strty)
+                } else {
+                    mut val nm: Array[U8] = []
+                    appendBytes(into: inout nm, from: "st".bytes)
+                    appendU64Dec(into: inout nm, n: i)
+                    nm.append(0)
+                    self.structTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
+                }
             }
             i += 1
         }
@@ -149,6 +160,12 @@ pub impl LlvmCtx {
         mut val s: U64 = 0
         while s < self.structIdxs.count {
             val sd: StructDef = c.arena.structs[self.structIdxs[s]]
+            // `String`'s registered type is the shared strty (a literal struct whose `{ptr}`
+            // body is fixed at creation); LLVMStructSetBody is only valid on a named struct,
+            // so skip it (the pin in registerStructNames already gave it the right layout).
+            if rangeEquals(bytes: c.arena.bytes, start: sd.nameStart, len: sd.nameLen, kw: "String") {
+                s += 1
+            } else {
             mut val elems: Array[LLVMTypeRef] = []
             mut val fi: U64 = 0
             while fi < sd.fields.count {
@@ -162,6 +179,7 @@ pub impl LlvmCtx {
             }
             LLVMStructSetBody(self.structTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
             s += 1
+            }
         }
     }
 }

@@ -130,12 +130,6 @@ pub impl LlvmCtx {
     // single per-type witness call (structDropWitness) so the recursive walker is emitted
     // ONCE per type instead of inlined at every drop site (collapsing the IR).
     inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64) {
-        // `String`: the whole value IS the Array[U8] buffer — release it directly (U8 scalar
-        // elements, so only the rc-managed outer buffer is freed; literals carry sentinel rc).
-        if self.isStringStruct(c: inout c, sidx: sidx) {
-            self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), count: self.arrValCount(c: inout c, arr: v), elemTy: self.i8ty, elemRef: 0U64)
-            return
-        }
         // registered struct: call its drop witness instead of inlining the walker.
         if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
             val slot: U64 = self.structDropWitness(c: inout c, sidx: sidx)
