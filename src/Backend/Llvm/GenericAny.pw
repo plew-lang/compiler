@@ -39,6 +39,16 @@ pub impl LlvmCtx {
             }
         }
         if c.isGenericInst(ref: ref) {
+            // a generic OPAQUE intrinsic (`Buffer[T]`): its representation is a single
+            // pointer (like Array/Ref), NOT a struct layout — so it gets no `%gs` type
+            // (registerGenStructNames skips it). Ask the representation question once here.
+            val gat: TypeRef = c.arena.types[ref]
+            val gxi: U64 = c.genericStructIndex(nameStart: gat.nameStart, nameLen: gat.nameLen)
+            if gxi < c.arena.structs.count {
+                if c.arena.structs[gxi].isExtern {
+                    return self.ptrty
+                }
+            }
             val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
             if gs < self.genStructRefs.count {
                 return self.genStructTys[gs]

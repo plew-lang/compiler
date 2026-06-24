@@ -252,51 +252,10 @@ pub impl LlvmCtx {
                 }
             }
         }
-        // Buffer floor methods (count / append / get), lowered inline against the header
-        // count + single data pointer (their wrapper bodies are never emitted).
-        if self.exprIsBuffer(c: inout c, id: recv) {
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
-                return self.genLlvmBufferCount(c: inout c, recv: recv)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "capacity") {
-                return self.genLlvmBufferCapacity(c: inout c, recv: recv)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "isEmpty") {
-                return self.genLlvmBufferIsEmpty(c: inout c, recv: recv)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
-                return self.genLlvmBufferAppend(c: inout c, recv: recv, valueExpr: args[0].expr)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "reserve") {
-                return self.genLlvmBufferReserve(c: inout c, recv: recv, addCapExpr: args[0].expr)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "insertAt") {
-                return self.genLlvmBufferInsertAt(c: inout c, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "get") {
-                return self.genLlvmBufferGet(c: inout c, recv: recv, indexExpr: args[0].expr)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "set") {
-                return self.genLlvmBufferSet(c: inout c, recv: recv, indexExpr: args[0].expr, valueExpr: args[1].expr)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "removeLast") {
-                return self.genLlvmBufferRemoveLast(c: inout c, recv: recv)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "removeAt") {
-                return self.genLlvmBufferRemoveAt(c: inout c, recv: recv, indexExpr: args[0].expr)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "swapRemove") {
-                return self.genLlvmBufferSwapRemove(c: inout c, recv: recv, indexExpr: args[0].expr)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "clear") {
-                return self.genLlvmBufferClear(c: inout c, recv: recv)
-            }
-            if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncate") {
-                return self.genLlvmBufferTruncate(c: inout c, recv: recv, countExpr: args[0].expr)
-            }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this Buffer method is not yet supported (new / count / capacity / isEmpty / reserve / append / insertAt / get / set / removeLast / removeAt / swapRemove / clear / truncate)")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
+        // (Buffer floor methods are no longer intercepted here by receiver-type + name:
+        // `Buffer[T]` is now a generic-instance receiver, so its methods ride the uniform
+        // generic-method path above (238) like Box/Optional, and their bodies lower the
+        // `buffer*` intrinsics by function identity in genLlvmCall. collections.md §3-付録3.)
         // array methods (append / get / set; user methods on Array are TODO).
         if self.exprIsArray(c: inout c, id: recv) {
             if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "append") {

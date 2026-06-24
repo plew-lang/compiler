@@ -27,7 +27,7 @@ fn main() {
     }
     print(line: "sum=" + sum.format(format: ""))
     // set / removeLast / isEmpty / capacity.
-    b.set(index: 0U64, value: 7I64)
+    b.set(index: 0U64, 7I64)
     val b0: I64 = b.get(index: 0U64)
     print(line: "b0=" + b0.format(format: ""))
     b.removeLast()

@@ -23,7 +23,10 @@ pub impl LlvmCtx {
             if c.isGenericInst(ref: ref) {
                 val t: TypeRef = c.arena.types[ref]
                 val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-                if defIdx < c.arena.structs.count {
+                // an extern generic struct (`Buffer[T]`) is an OPAQUE intrinsic represented
+                // as a pointer — it has no struct layout, so register no `%gs` type for it
+                // (llvmTypeOfRef returns ptrty for it). Mirrors Array's exclusion.
+                if defIdx < c.arena.structs.count && !(c.arena.structs[defIdx].isExtern) {
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "gs".bytes)
                     appendU64Dec(into: inout nm, n: k)

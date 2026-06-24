@@ -5,4 +5,8 @@ name = "plewc"
 # compiler and `plew gen` macros depend on the SAME @Plew/Syntax. Exact-pinned so
 # the resolver is deterministic and the self-host bootstrap is reproducible (bump
 # the version + reseed in lockstep when the syntax package changes).
-"Plew/Syntax" = { git = "https://github.com/plew-lang/syntax.git", version = "0.1.0" }
+# TEMP: local path dep while iterating on the extern-struct-type-params parser
+# change in @Plew/Syntax. Revert to the git pin (+ bump version + reseed lockstep)
+# once the syntax change is committed/tagged in the syntax repo.
+"Plew/Syntax" = { path = "../syntax", version = "0.1.0" }
+# "Plew/Syntax" = { git = "https://github.com/plew-lang/syntax.git", version = "0.1.0" }

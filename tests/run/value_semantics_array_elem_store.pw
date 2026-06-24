@@ -3,8 +3,8 @@ fn main() {
     mut val z0: Array[I64] = [0]
     mut val z1: Array[I64] = [0]
     mut val outer: Array[Array[I64]] = []
-    outer.append(value: z0)
-    outer.append(value: z1)
+    outer.append(z0)
+    outer.append(z1)
     mut val a: Array[I64] = [1, 2, 3]
     outer[0] = a
     a.set(i: 0, value: 99)

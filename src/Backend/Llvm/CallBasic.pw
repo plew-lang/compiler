@@ -102,6 +102,51 @@ pub impl LlvmCtx {
                 return self.genLlvmClosureCall(c: inout c, li: cli, args: args)
             }
         }
+        // Buffer floor intrinsics in free-function form, lowered by intrinsic-function
+        // IDENTITY (not by receiver-type recognition): the `Buffer[T]` methods are now
+        // ordinary monomorphized generic methods whose bodies call these intrinsics, so
+        // each `buffer*(buffer: …, …)` lowers to the same header op as the old call-site
+        // interception did. The element type is recovered from the buffer argument; args
+        // arrive in the extern declaration's parameter order. (collections.md §3-付録3.)
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferNew") {
+            return self.genLlvmBufferNew(c: inout c)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferCount") {
+            return self.genLlvmBufferCount(c: inout c, recv: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferCapacity") {
+            return self.genLlvmBufferCapacity(c: inout c, recv: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferReserve") {
+            return self.genLlvmBufferReserve(c: inout c, recv: args[0].expr, addCapExpr: args[1].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferAppend") {
+            return self.genLlvmBufferAppend(c: inout c, recv: args[0].expr, valueExpr: args[1].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferInsertAt") {
+            return self.genLlvmBufferInsertAt(c: inout c, recv: args[0].expr, indexExpr: args[1].expr, valueExpr: args[2].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferGet") {
+            return self.genLlvmBufferGet(c: inout c, recv: args[0].expr, indexExpr: args[1].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferSet") {
+            return self.genLlvmBufferSet(c: inout c, recv: args[0].expr, indexExpr: args[1].expr, valueExpr: args[2].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferRemoveLast") {
+            return self.genLlvmBufferRemoveLast(c: inout c, recv: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferRemoveAt") {
+            return self.genLlvmBufferRemoveAt(c: inout c, recv: args[0].expr, indexExpr: args[1].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferSwapRemove") {
+            return self.genLlvmBufferSwapRemove(c: inout c, recv: args[0].expr, indexExpr: args[1].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferClear") {
+            return self.genLlvmBufferClear(c: inout c, recv: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferTruncate") {
+            return self.genLlvmBufferTruncate(c: inout c, recv: args[0].expr, countExpr: args[1].expr)
+        }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "print") {
             return self.emitPrint(c: inout c, argExpr: args[0].expr)
         }

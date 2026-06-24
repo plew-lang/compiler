@@ -2,7 +2,7 @@ import @Std/Io with { print }
 fn main() {
     mut val z0: Array[I64] = [1, 2, 3]
     mut val outer: Array[Array[I64]] = []
-    outer.append(value: z0)
+    outer.append(z0)
     // val inner = outer[0] must be an independent copy.
     mut val inner: Array[I64] = outer[0]
     inner.set(i: 0, value: 99)

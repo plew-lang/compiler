@@ -34,7 +34,14 @@ pub impl Comp {
         mut val si: U64 = 0
         while si < e.structNames.count {
             val nm: Bind = self.internBytes(s: e.structNames[si])
-            val noTP: Array[Bind] = []
+            // generic params for a generic opaque intrinsic (`struct Buffer[T]`): the
+            // StructDef carries them like an ordinary generic struct, so `Buffer[E]` is a
+            // genuine generic instance dispatched through the uniform path. Empty for the
+            // non-generic intrinsics (`Ref`/`WeakRef`/the scalar lang-items) and FFI types.
+            mut val externTP: Array[Bind] = []
+            if si < e.structTypeParams.count {
+                externTP = self.lowerTypeParamNames(names: e.structTypeParams[si])
+            }
             val noFields: Array[FieldDef] = []
             // defOffset = the struct's REAL source offset (its `struct Name` span), so type
             // visibility can locate the declaring module. Without it (defOffset 0) a
@@ -57,7 +64,7 @@ pub impl Comp {
                 fields.append(<FieldDef nameStart=bufnm.nameStart nameLen=bufnm.nameLen nameId=intern(c: inout self, start: bufnm.nameStart, len: bufnm.nameLen) tyStart=u8nm.nameStart tyLen=u8nm.nameLen tyNameId=intern(c: inout self, start: u8nm.nameStart, len: u8nm.nameLen) tyIsArray=true ty=0U64 isMut=false hasDefault=false defaultVal=0U64 vis=0U64 />)
                 isExt = false
             }
-            self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=noTP fields=fields isUnique=false isExtern=isExt isCExtern=e.abiC defOffset=defOff />)
+            self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=externTP fields=fields isUnique=false isExtern=isExt isCExtern=e.abiC defOffset=defOff />)
             // a `@[...]` derive on this opaque extern type (spec/16): lower its directive to
             // pending derives and drain them onto this type, with the `struct Name` span as
             // the item source so the harness `parseItem` recovers a `Decl` (name = the type).

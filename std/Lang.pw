@@ -195,7 +195,7 @@ pub impl[K, V] Dictionary[K, V] {
         mut val nb: Buffer[U64] = Buffer.new()
         mut val j: U64 = 0
         while j < newCap {
-            nb.append(value: 0U64)
+            nb.append(0U64)
             j = j + 1U64
         }
         mut val i: U64 = 0
@@ -205,7 +205,7 @@ pub impl[K, V] Dictionary[K, V] {
             while nb[slot] != 0U64 {
                 slot = (slot + 1U64) & (newCap - 1U64)
             }
-            nb.set(index: slot, value: i + 1U64)
+            nb.set(index: slot, i + 1U64)
             i = i + 1U64
         }
         self.buckets = nb
@@ -225,17 +225,17 @@ pub impl[K, V] Dictionary[K, V] {
         while true {
             val b: U64 = self.buckets[slot]
             if b == 0U64 {
-                self.keys.append(value: key)
-                self.vals.append(value: value)
-                self.hashes.append(value: code)
-                self.buckets.set(index: slot, value: self.keys.count)
+                self.keys.append(key)
+                self.vals.append(value)
+                self.hashes.append(code)
+                self.buckets.set(index: slot, self.keys.count)
                 self.count = self.count + 1U64
                 return
             }
             val idx: U64 = b - 1U64
             if self.hashes[idx] == code {
                 if self.keys[idx] == key {
-                    self.vals.set(index: idx, value: value)
+                    self.vals.set(index: idx, value)
                     return
                 }
             }
@@ -330,7 +330,7 @@ pub impl[K, V] Dictionary[K, V] {
         mut val i: U64 = s
         mut val doneShift: Bool = false
         while !doneShift {
-            self.buckets.set(index: i, value: 0U64)
+            self.buckets.set(index: i, 0U64)
             mut val j: U64 = i
             mut val moved: Bool = false
             while !moved {
@@ -344,7 +344,7 @@ pub impl[K, V] Dictionary[K, V] {
                     val di: U64 = (i + cap - ideal) & (cap - 1U64)
                     val dj: U64 = (j + cap - ideal) & (cap - 1U64)
                     if di <= dj {
-                        self.buckets.set(index: i, value: bj)
+                        self.buckets.set(index: i, bj)
                         i = j
                         moved = true
                     }
@@ -356,14 +356,14 @@ pub impl[K, V] Dictionary[K, V] {
         val lastIdx: U64 = self.count - 1U64
         if r != lastIdx {
             val movedHash: U64 = self.hashes[lastIdx]
-            self.keys.set(index: r, value: self.keys[lastIdx])
-            self.vals.set(index: r, value: self.vals[lastIdx])
-            self.hashes.set(index: r, value: movedHash)
+            self.keys.set(index: r, self.keys[lastIdx])
+            self.vals.set(index: r, self.vals[lastIdx])
+            self.hashes.set(index: r, movedHash)
             mut val t: U64 = movedHash & (cap - 1U64)
             while self.buckets[t] != lastIdx + 1U64 {
                 t = (t + 1U64) & (cap - 1U64)
             }
-            self.buckets.set(index: t, value: r + 1U64)
+            self.buckets.set(index: t, r + 1U64)
         }
         // removeLast moves the retired tail entry OUT; bind it so the caller-owned
         // duplicate (case r != lastIdx: the same entry now also lives at slot r) /

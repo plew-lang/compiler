@@ -571,7 +571,7 @@ export enum Ordering { Less  Equal  Greater }
 export extern "plew-intrinsic" {
     struct Ref
     struct WeakRef
-    struct Buffer
+    struct Buffer[T]
 }
 
 // The Buffer storage-floor intrinsics (buffer-floor.md): lowered by the compiler to the
@@ -612,7 +612,10 @@ pub impl[T] Buffer[T] {
     // the property name ("a method cannot be used as a value"), so none is declared.
     // Whether the buffer holds no live elements.
     fn isEmpty() -> Bool {
-        return bufferCount(buffer: self) == 0U64
+        // (count bound to a local first: `intrinsic(...) == 0` would chain an operator on a
+        // call-result rvalue, which the backend's call-result type tracking doesn't follow.)
+        val liveCount: U64 = bufferCount(buffer: self)
+        return liveCount == 0U64
     }
     // Ensure capacity for at least `additionalCapacity` more elements (never shrinks).
     inout fn reserve(additionalCapacity: U64) {

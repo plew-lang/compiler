@@ -6,15 +6,15 @@ import @Std/Io with { print }
 struct P { pub val x: I64  pub val y: I64 }
 fn main() {
     mut val ps: Array[P] = []
-    ps.append(value: <P x=1 y=2 />)
-    ps.append(value: <P x=3 y=4 />)
+    ps.append(<P x=1 y=2 />)
+    ps.append(<P x=3 y=4 />)
     for val p in ps {
         print(p.x + p.y)       // 3, 7
     }
     // record elements too
     val a: (x: I64, y: I64) = (x: 10, y: 20)
     mut val rs: Array[(x: I64, y: I64)] = []
-    rs.append(value: a)
+    rs.append(a)
     for val r in rs {
         print(r.x * r.y)       // 200
     }

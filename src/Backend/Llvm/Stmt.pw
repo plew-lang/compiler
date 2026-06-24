@@ -480,8 +480,18 @@ pub impl LlvmCtx {
                                             val gfr: U64 = fieldGenInstRef(c: inout c, fld: fld)
                                             if gfr != 0U64 {
                                                 self.expectedTy = gfr
-                                                val gv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
+                                                mut val gv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
                                                 self.expectedTy = 0U64
+                                                // value semantics: assigning a generic-instance PLACE
+                                                // (an opaque `Buffer[T]` field, a `Box`/`Optional` place)
+                                                // into a field copies/retains its heap so the field and
+                                                // the RHS binding stay independent (`self.buf = nb` must
+                                                // co-own nb's buffer, not alias one nb's drop will free).
+                                                // A fresh construction RHS is a non-place and passes
+                                                // through. Mirrors the scalar-field path below.
+                                                if op == opAssign() {
+                                                    gv = self.copyValueIfPlace(c: inout c, rv: gv, valueExpr: value)
+                                                }
                                                 LLVMBuildStore(self.b, gv, gep)
                                                 return
                                             }
