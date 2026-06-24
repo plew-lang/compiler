@@ -9,14 +9,14 @@ import @Std/Core with { Buffer }
 
 fn main() {
     mut val b: Buffer[I64] = Buffer.new()
-    val empty: U64 = b.count()
+    val empty: U64 = b.count
     print(line: "empty=" + empty.format(format: ""))
     mut val i: I64 = 0I64
     while i < 20I64 {
         b.append(i * 10I64)
         i += 1I64
     }
-    val n: U64 = b.count()
+    val n: U64 = b.count
     print(line: "count=" + n.format(format: ""))
     mut val sum: I64 = 0I64
     mut val k: U64 = 0U64
@@ -31,9 +31,9 @@ fn main() {
     val b0: I64 = b.get(index: 0U64)
     print(line: "b0=" + b0.format(format: ""))
     b.removeLast()
-    val n2: U64 = b.count()
+    val n2: U64 = b.count
     print(line: "afterPop=" + n2.format(format: ""))
-    val cap: U64 = b.capacity()
+    val cap: U64 = b.capacity
     val capOk: Bool = cap >= n2
     if capOk { print(line: "cap-ok") }
     val empty2: Bool = b.isEmpty()

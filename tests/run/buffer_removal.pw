@@ -16,21 +16,21 @@ fn main() {
     b.append("e")
     // removeAt(1) -> "b", order preserved: [a, c, d, e]
     val r1: String = b.removeAt(index: 1U64)
-    val n1: U64 = b.count()
+    val n1: U64 = b.count
     val e1: String = b.get(index: 1U64)
     print(line: "removeAt=" + r1 + " n=" + n1.format(format: "") + " [1]=" + e1)
     // swapRemove(0) -> "a", last (e) moves into slot 0: [e, c, d]
     val r2: String = b.swapRemove(index: 0U64)
-    val n2: U64 = b.count()
+    val n2: U64 = b.count
     val e2: String = b.get(index: 0U64)
     print(line: "swapRemove=" + r2 + " n=" + n2.format(format: "") + " [0]=" + e2)
     // truncate(1): drop the suffix [1,3) (= "c","d") -> [e]
     b.truncate(count: 1U64)
-    val n3: U64 = b.count()
+    val n3: U64 = b.count
     val e3: String = b.get(index: 0U64)
     print(line: "truncate n=" + n3.format(format: "") + " [0]=" + e3)
     // clear: drop the remaining element -> []
     b.clear()
-    val n4: U64 = b.count()
+    val n4: U64 = b.count
     print(line: "clear n=" + n4.format(format: ""))
 }

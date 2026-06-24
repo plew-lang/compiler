@@ -218,6 +218,15 @@ pub impl LlvmCtx {
                         return self.arrValCount(c: inout c, arr: av)
                     }
                 }
+                // `buf.count` / `buf.capacity` — the Buffer floor's property reads (header).
+                if self.exprIsBuffer(c: inout c, id: base) {
+                    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
+                        return self.genLlvmBufferCount(c: inout c, recv: base)
+                    }
+                    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "capacity") {
+                        return self.genLlvmBufferCapacity(c: inout c, recv: base)
+                    }
+                }
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
                 if sidx < c.arena.structs.count {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)

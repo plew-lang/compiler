@@ -374,6 +374,15 @@ pub impl Comp {
                     if bt.kind == 3 {
                         return <IntTy known=true bits=64 sgn=false />
                     }
+                    if self.isBufferType(ti: bt) {
+                        return <IntTy known=true bits=64 sgn=false />
+                    }
+                }
+                if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "capacity") {
+                    val bt: TypeInfo = self.exprType(id: base)
+                    if self.isBufferType(ti: bt) {
+                        return <IntTy known=true bits=64 sgn=false />
+                    }
                 }
             }
             Expr.Index(val base, val index) => {

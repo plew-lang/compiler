@@ -605,14 +605,11 @@ pub impl[T] Buffer[T] {
     assoc fn new() -> Buffer[T] {
         return bufferNew()
     }
-    // The number of live elements.
-    fn count() -> U64 {
-        return bufferCount(buffer: self)
-    }
-    // The allocated capacity (>= count); how many elements fit before the next grow.
-    fn capacity() -> U64 {
-        return bufferCapacity(buffer: self)
-    }
+    // `count` (live element count) and `capacity` are compiler-recognised PROPERTIES
+    // (`buf.count` / `buf.capacity`, no parens), not methods — Plew has no general
+    // computed properties, so the floor's are special-cased like Array's `.count`
+    // (frontend exprType + backend Expr.Field). A `count()` method would collide with
+    // the property name ("a method cannot be used as a value"), so none is declared.
     // Whether the buffer holds no live elements.
     fn isEmpty() -> Bool {
         return bufferCount(buffer: self) == 0U64

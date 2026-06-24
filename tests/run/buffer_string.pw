@@ -14,7 +14,7 @@ fn main() {
         b.append("item-" + i.format(format: ""))
         i += 1I64
     }
-    val c0: U64 = b.count()
+    val c0: U64 = b.count
     print(line: "count=" + c0.format(format: ""))
     val first: String = b.get(index: 0U64)
     print(line: "first=" + first)
@@ -25,6 +25,6 @@ fn main() {
     print(line: "r=" + r)
     val popped: String = b.removeLast()   // move-out: caller owns + drops "item-11"
     print(line: "popped=" + popped)
-    val c1: U64 = b.count()
+    val c1: U64 = b.count
     print(line: "afterPop=" + c1.format(format: ""))
 }

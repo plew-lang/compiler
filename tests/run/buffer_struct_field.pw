@@ -1,6 +1,6 @@
 // A user struct holding a `Buffer[String]` field (the shape Dictionary/Set use): the
 // struct's value-semantics copy CoW-shares the field buffer (rc++ via the struct retain
-// walker), reads go through field-receiver Buffer methods (`h.items.count()`/`.get()`),
+// walker), reads go through field-receiver Buffer methods (`h.items.count`/`.get()`),
 // and both the original and the copy release the field buffer at scope-drop (the struct
 // deinit walker). ASan-on-self-compile / run prove the field buffer + its String elements
 // are leak/UAF-free. (Buffer mutators on a field place are a separate follow-on.)
@@ -21,11 +21,11 @@ fn build() -> Buffer[String] {
 
 fn main() {
     val h: Holder = <Holder items=build() />
-    val n0: U64 = h.items.count()
+    val n0: U64 = h.items.count
     print(line: "h=" + n0.format(format: ""))
     val h2: Holder = h
-    val n1: U64 = h.items.count()
-    val n2: U64 = h2.items.count()
+    val n1: U64 = h.items.count
+    val n2: U64 = h2.items.count
     print(line: "shared h=" + n1.format(format: "") + " h2=" + n2.format(format: ""))
     val e0: String = h2.items.get(index: 0U64)
     val e2: String = h.items.get(index: 2U64)
