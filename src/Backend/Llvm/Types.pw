@@ -40,9 +40,10 @@ pub impl LlvmCtx {
                 ti += 1
             }
         }
-        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
-            return self.strty
-        }
+        // `String` is no longer name-dispatched here: it is a registered struct whose type is
+        // pinned to `strty`, so it resolves via the registered-struct lookup below (returns the
+        // same strty). The representation alias `strty` (= arrayTy) stays; only the type-name
+        // branch is gone (collections.md §3-付録2).
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") {
             return self.i1ty
         }
