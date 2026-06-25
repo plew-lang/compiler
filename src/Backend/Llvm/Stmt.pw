@@ -278,6 +278,31 @@ pub impl LlvmCtx {
                         slot = self.entryAlloca(ty: lty)
                     }
                 }
+                // E3 step (a): bind an array local as a generic-struct value — its
+                // TypeRef is `Array[E]` and its struct index is Array's arena def — so
+                // `exprTypeRef`/`exprStructIdx` resolve it through the uniform generic path
+                // (Array's `{ptr}` value already IS `struct Array{data:Buffer[T]}`). This
+                // lets the method-receiver synthesis and other use sites drop the
+                // `exprIsArray` type-name dispatch (collections.md E3).
+                if isArr {
+                    if tref == 0U64 {
+                        if tyIsArray {
+                            tref = ty
+                        } else {
+                            val aer: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: init)
+                            if aer != 0U64 {
+                                val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                                mut val aargs: Array[U64] = []
+                                aargs.append(aer)
+                                tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+                            }
+                        }
+                    }
+                    val asi: U64 = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
+                    if asi < c.arena.structs.count() {
+                        sidx = asi
+                    }
+                }
                 LLVMBuildStore(self.b, v, slot)
                 self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
                 // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the

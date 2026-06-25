@@ -249,6 +249,18 @@ pub impl LlvmCtx {
                         }
                     }
                 }
+                // E3 step (a): an array payload bind (`Tagged(val tags)` with tags: Array[E])
+                // is a generic-struct value `Array[E]` over Array's arena def, so a use in the
+                // arm resolves through the uniform generic path (drops exprIsArray dispatch).
+                if isArrF {
+                    if elemRef != 0U64 {
+                        val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                        mut val aargs: Array[U64] = []
+                        aargs.append(elemRef)
+                        tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+                        bindStructIdx = c.structDefByNameAny(start: ab.nameStart, len: 5U64)
+                    }
+                }
                 // A non-array heap payload bind (String / struct / enum) also borrows — see
                 // the array note above; no retain, marked not-owned, escapes copy at the dest.
                 self.pushLocalR(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
@@ -312,14 +324,25 @@ pub impl LlvmCtx {
                         // buffer the struct still owns (a double-free).
                         self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: fv))
                     }
-                    self.pushLocal(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen), isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
-                    // an array field bind (`Outer { val items }` with items: Array[I32]): track
-                    // the element TypeRef so a later `items.count()`/`items[i]` synthesizes its
-                    // `Array[elem]` receiver (ground under the scrutinee's env for a generic field).
+                    // E3 step (a): an array field bind (`Outer { val items }` with
+                    // items: Array[E]) is a generic-struct value `Array[E]` over Array's arena
+                    // def, so its struct index is Array (not the element's), letting a use in
+                    // the arm resolve through the uniform generic path (drops exprIsArray).
+                    mut val bindSidx: U64 = self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen)
+                    if fld.tyIsArray {
+                        bindSidx = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
+                    }
+                    self.pushLocal(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: fty, kind: kindFromTySpan(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), structIdx: bindSidx, isArr: fld.tyIsArray, elemTy: elemTy, elemKind: elemKind)
+                    // track the element TypeRef and the `Array[E]` ref so a later
+                    // `items.count()`/`items[i]` resolves (ground under the scrutinee's env).
                     if fld.tyIsArray {
                         val fer: U64 = arrayFieldElemRef(c: inout c, f: fld)
                         if fer != 0U64 {
                             self.setLocalElemTypeRef(ref: fer)
+                            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                            mut val aargs: Array[U64] = []
+                            aargs.append(fer)
+                            self.setLocalTypeRef(ref: c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />))
                         }
                     }
                 }

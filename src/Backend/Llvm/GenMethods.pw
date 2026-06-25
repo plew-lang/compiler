@@ -242,6 +242,17 @@ pub impl LlvmCtx {
                 }
             }
             pty = self.arrayTy
+            // E3 step (a): track the array param as a generic-struct value `Array[E]` (the
+            // ref grounded under the active instantiation env) + Array's arena struct index,
+            // so a use resolves through the uniform generic path (drops exprIsArray dispatch).
+            if p.ty != 0U64 {
+                mut val gpr: U64 = p.ty
+                if c.cur.typeParams.count() > 0U64 {
+                    gpr = c.groundTypeRef(ref: p.ty)
+                }
+                pRef = gpr
+            }
+            pSidx = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
         } else {
             if c.isGenericInst(ref: p.ty) {
                 pty = self.llvmTypeOfRef(c: inout c, ref: p.ty)

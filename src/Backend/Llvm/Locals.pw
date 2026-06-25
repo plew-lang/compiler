@@ -108,6 +108,15 @@ pub impl LlvmCtx {
         }
     }
 
+    // Set the just-pushed local's own TypeRef (e.g. an array bind whose value is `Array[E]`
+    // — so `exprTypeRef`/`exprStructIdx` resolve it through the uniform generic path). Call
+    // right after a `pushLocal` that could not supply the ref inline.
+    inout fn setLocalTypeRef(ref: U64) {
+        if self.nLocals > 0U64 {
+            self.locTypeRef[self.nLocals - 1U64] = ref
+        }
+    }
+
     // Set the just-pushed local's ownership (false = a borrow/inout param the caller
     // owns, so it is not deinit'd here).
     inout fn setLocalOwned(owned: Bool) {
