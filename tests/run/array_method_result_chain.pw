@@ -1,0 +1,19 @@
+// An Array-returning method's call RESULT tracks as an array, so chaining
+// `.count()` / index / `for` directly off the call (without binding to a local
+// first) routes through the array path. This is the call-result type tracking
+// that String `.bytes()` and Array `.count()` methodization rely on.
+import @Std/Io with { print }
+
+struct Holder { val xs: Array[I64] }
+pub impl Holder {
+    fn items() -> Array[I64] { return self.xs }
+}
+
+fn main() {
+    val h: Holder = <Holder xs=[10I64, 20I64, 30I64] />
+    print(h.items().count)        // chained property/length off the call result
+    print(h.items()[1])           // index off the call result
+    for v in h.items() {          // for over the call result
+        print(v)
+    }
+}
