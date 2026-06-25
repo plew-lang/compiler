@@ -44,10 +44,10 @@ pub impl LlvmCtx {
         }
         // `recv[i]` (read) desugars to the `Index` witness `recv.index(key: i)` (spec/12) —
         // uniform across Array and user `Index` types (collections.md E3: no Array type-name
-        // branch). A Dictionary subscript `d[k]` lowers to the panicking accessor `d.at(key:k)`
-        // (spec/02). The built-in Array direct path below is a fallback only for array exprs
-        // whose struct index can't be recovered here (a literal `[1,2,3][i]`, a chained call
-        // result) — those carry no struct binding to dispatch the witness through.
+        // branch). Every array value — a local, a struct field, a call/method result, a
+        // literal — resolves to the `Array` generic def (exprStructIdx), which carries the
+        // `index` witness, so all route here. A Dictionary subscript `d[k]` lowers to the
+        // panicking accessor `d.at(key:k)` (spec/02).
         val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
         if bsi < c.arena.structs.count() {
             if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
@@ -59,24 +59,8 @@ pub impl LlvmCtx {
                 return self.genLlvmExpr(c: inout c, id: m)
             }
         }
-        if !(self.exprIsArray(c: inout c, id: base)) {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
-        val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
-        // the base must be an array VALUE (the `{ptr}` aggregate, Array A); a non-struct here
-        // means the base resolved to a scalar (unsupported element typing) — reject loudly
-        // rather than treating an integer as a buffer (which crashes at runtime).
-        if LLVMGetTypeKind(LLVMTypeOf(arr)) != 10U32 {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: nested arrays / this index form not yet supported")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
-        val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
-        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
-        self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-        return LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
+        return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
     // `arr.append(v)` on an array local: grow the buffer if full, store v at `count`,

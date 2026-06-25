@@ -232,19 +232,12 @@ pub impl LlvmCtx {
         // generic-receiver method dispatch (`box.get()`, `maybe.unwrapOr(...)`): the
         // receiver local carries its instantiation ref; route to the monomorphized
         // method instance emitted by declareGenMethods.
-        mut val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
-        // Array A: an array expr tracks its type as locIsArr + element ref (not a full
-        // Array[T] locTypeRef), so synthesize the Array[elem] instance ref here so its pure-
-        // Plew methods (append/get/set/removeLast over self.data) ride the generic path.
-        if recvRef == 0U64 && self.exprIsArray(c: inout c, id: recv) {
-            val aelem: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: recv)
-            if aelem != 0U64 {
-                val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
-                mut val aargs: Array[U64] = []
-                aargs.append(aelem)
-                recvRef = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
-            }
-        }
+        val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
+        // every array expr (local, struct field, call/method result, literal) now carries a
+        // full `Array[E]` instance ref via exprTypeRef, so its pure-Plew methods
+        // (append/get/set/removeLast/count over self.data) ride the uniform generic-method
+        // path below like any generic-instance receiver (collections.md E3: no Array
+        // type-name synthesis of the receiver ref here any more).
         if recvRef != 0U64 {
             if c.isGenericInst(ref: recvRef) {
                 val grt: TypeRef = c.arena.types[recvRef]

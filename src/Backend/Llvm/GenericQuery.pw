@@ -43,7 +43,13 @@ pub impl LlvmCtx {
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
-                    return self.locStructIdx[li]
+                    if self.locStructIdx[li] < c.arena.structs.count() {
+                        return self.locStructIdx[li]
+                    }
+                    // an array local whose struct idx wasn't pinned (e.g. a closure-captured
+                    // `Array[E]` param) falls through to the array catch below, which resolves
+                    // it to the `Array` def so its index/method rides the witness; a plain
+                    // scalar local likewise falls through and the catch returns the sentinel.
                 }
             }
             Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, fields: _) => {
@@ -58,13 +64,6 @@ pub impl LlvmCtx {
                     }
                     return self.localStructIdxFor(c: inout c, start: typeStart, len: typeLen)
                 }
-            }
-            Expr.Array(elems: _) => {
-                // an array literal `[…]` : the `Array` generic def (resolved arena-wide —
-                // Array is not in the registered-struct table, it is gen-instance pinned), so
-                // a direct index / method on the literal dispatches the Index/witness path
-                // like a bound array (collections.md E3, mirrors locStructIdx=Array).
-                return c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: c.kwSpan(kw: "Array", kwLen: 5U64).nameLen)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 // a nested-struct field access (`ln.b`): the field's declared type is
@@ -132,7 +131,10 @@ pub impl LlvmCtx {
                     val afi: U64 = c.findAssoc(recvStart: marn.nameStart, recvLen: marn.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                     if afi < c.arena.funcs.count() {
                         if c.arena.funcs[afi].hasRet {
-                            return self.localStructIdxFor(c: inout c, start: c.arena.funcs[afi].retStart, len: c.arena.funcs[afi].retLen)
+                            val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[afi].retStart, len: c.arena.funcs[afi].retLen)
+                            if r < c.arena.structs.count() {
+                                return r
+                            }
                         }
                     }
                 } else {
@@ -141,7 +143,14 @@ pub impl LlvmCtx {
                         val mfi: U64 = c.findMethod(recvStart: c.arena.structs[mrsi].nameStart, recvLen: c.arena.structs[mrsi].nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                         if mfi < c.arena.funcs.count() {
                             if c.arena.funcs[mfi].hasRet {
-                                return self.localStructIdxFor(c: inout c, start: c.arena.funcs[mfi].retStart, len: c.arena.funcs[mfi].retLen)
+                                // an Array-returning method (`h.items() -> Array[I64]`)
+                                // resolves to the sentinel here (Array isn't registered) —
+                                // fall through to the array catch so `h.items()[i]` /
+                                // `h.items().count()` ride the witness.
+                                val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[mfi].retStart, len: c.arena.funcs[mfi].retLen)
+                                if r < c.arena.structs.count() {
+                                    return r
+                                }
                             }
                         }
                     } else {
@@ -168,7 +177,10 @@ pub impl LlvmCtx {
                                         }
                                         if g != 0U64 {
                                             val gt: TypeRef = c.arena.types[g]
-                                            return self.localStructIdxFor(c: inout c, start: gt.nameStart, len: gt.nameLen)
+                                            val r: U64 = self.localStructIdxFor(c: inout c, start: gt.nameStart, len: gt.nameLen)
+                                            if r < c.arena.structs.count() {
+                                                return r
+                                            }
                                         }
                                     }
                                 }
@@ -197,9 +209,18 @@ pub impl LlvmCtx {
                             val r: U64 = self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
                             c.cur.typeParams = savedP
                             c.cur.typeArgs = savedA
-                            return r
+                            if r < c.arena.structs.count() {
+                                return r
+                            }
+                        } else {
+                            // an Array-returning free call (`mk() -> Array[E]`) resolves to the
+                            // sentinel (Array isn't registered) — fall through to the array
+                            // catch so `mk()[i]` / `mk().count()` ride the witness.
+                            val r: U64 = self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
+                            if r < c.arena.structs.count() {
+                                return r
+                            }
                         }
-                        return self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
                     }
                 }
             }
@@ -227,10 +248,24 @@ pub impl LlvmCtx {
             }
             Expr.Index(val base, index: _) => {
                 // an array element used as a struct (`h.items[0].v`): the array's element
-                // struct, grounded under the base value's instance env.
-                return self.arrFieldElemStructIdx(c: inout c, arrayExpr: base)
+                // struct, grounded under the base value's instance env. A nested-array element
+                // (`m[i]` for m: Array[Array[T]]) is itself an Array — not an element struct,
+                // so fall through to the array catch below rather than returning the sentinel.
+                val ei: U64 = self.arrFieldElemStructIdx(c: inout c, arrayExpr: base)
+                if ei < c.arena.structs.count() {
+                    return ei
+                }
             }
             _ => {}
+        }
+        // a fall-through array-typed expr (an array struct field `s.items`, an array-returning
+        // call/method result `mk()` / `s.bytes()`, a nested-array element `m[i]`) is an `Array`
+        // value — resolve to the Array generic def so a direct index / method on it dispatches
+        // the Index / generic-method witness uniformly (collections.md E3: no `exprIsArray`
+        // type-name fallback). Array is gen-instance pinned, so it is found arena-wide.
+        if self.exprIsArray(c: inout c, id: id) {
+            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+            return c.structDefByNameAny(start: ab.nameStart, len: ab.nameLen)
         }
         return c.arena.structs.count()
     }

@@ -210,6 +210,27 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                // a field through a `Ref` deref (`s->items` with items: Array[E]): the field's
+                // (generic-instance or existential) type ref, grounded under the pointee's env,
+                // so `s->items[i]` / `s->items.count()` dispatch the Array witness like a local
+                // field (mirrors the Field arm via the ref's pointee struct).
+                val psi: U64 = self.refPointeeStructIdx(c: inout c, base: base)
+                if psi < c.arena.structs.count() {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psi, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[psi].fields.count() {
+                        val fd: FieldDef = c.arena.structs[psi].fields[fidx]
+                        if fd.ty != 0U64 {
+                            if c.isGenericInst(ref: fd.ty) {
+                                return fd.ty
+                            }
+                            if refIsAny(c: inout c, ref: fd.ty) {
+                                return fd.ty
+                            }
+                        }
+                    }
+                }
+            }
             Expr.Index(val base, index: _) => {
                 // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
                 // -> `ys[i]->v`, a generic element, or a nested-array element).
