@@ -438,65 +438,31 @@ pub impl LlvmCtx {
                                 self.genLlvmExpr(c: inout c, id: m)
                                 return
                             }
-                            // a compound `arr[i] OP= v` on an ARRAY keeps the direct
-                            // element-width path below: desugaring it to `indexSet(key, arr[i]
-                            // OP v)` would compute the synthesized `arr[i] OP v` at the literal's
-                            // default i64 width (the frontend records no element-width context
-                            // for the backend-synthesized binary), dropping the narrow-int
-                            // overflow check the element-pointer store preserves. Plain `arr[i] =
-                            // v` and all user-`IndexSet` writes still ride the witness.
-                            val arrCompound: Bool = op != opAssign() && self.exprIsArray(c: inout c, id: ibase)
-                            if !arrCompound {
-                                if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "indexSet") {
-                                    mut val rhsExpr: U64 = value
-                                    if op != opAssign() {
-                                        val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
-                                        rhsExpr = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
-                                    }
-                                    val m: U64 = c.synthDictMethod(recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: rhsExpr)
-                                    self.genLlvmExpr(c: inout c, id: m)
-                                    return
+                            // `arr[i] = v` / `arr[i] OP= v` ride the `indexSet` witness
+                            // uniformly (Array's `indexSet` forwards to the Buffer floor). The
+                            // compound form desugars `v` to `arr[i] OP v` (read via the `Index`
+                            // witness); the narrow-int overflow check is preserved because the
+                            // RHS literal already carries the element-width context the frontend
+                            // recorded for it (verifyAssign / checkAssignRhsLit), so the
+                            // synthesized binary types at the element width, not the i64 default.
+                            if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "indexSet") {
+                                mut val rhsExpr: U64 = value
+                                if op != opAssign() {
+                                    val getExpr: U64 = c.pushExpr(e: <Expr.Index base=ibase index=iindex />)
+                                    rhsExpr = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=getExpr rhs=value />)
                                 }
+                                val m: U64 = c.synthDictMethod(recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: rhsExpr)
+                                self.genLlvmExpr(c: inout c, id: m)
+                                return
                             }
                         }
-                        if !(self.exprIsArray(c: inout c, id: ibase)) {
-                            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: ibase)), msg: "LLVM backend: user IndexSet subscript needs an `indexSet` method")
-                            return
-                        }
-                        // fallback for an array value with no `indexSet` witness receiver (a
-                        // literal / call-result subscripted directly, not bound as an Array
-                        // struct local): the built-in bounds-checked element store with CoW.
-                        // CoW gateway (1-0): privatize any shared array buffer ABOVE `ibase`
-                        // (e.g. `arr[i][j]=v` -> own `arr` first) before the immediate-level
-                        // CoW below; no-op for a top-level array local / under eager-copy.
-                        self.privatizeForWrite(c: inout c, id: ibase)
-                        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: ibase)
-                        // CoW (Stage 2a): privatize a shared scalar array in its slot before
-                        // the element store, so `arr[i] = v` does not clobber another sharer.
-                        mut val data: LLVMValueRef = LLVMConstNull(self.ptrty)
-                        mut val count: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
-                        val islot: LLVMValueRef = self.arrStoragePtr(c: inout c, id: ibase)
-                        if LLVMIsNull(islot) == 0I32 {
-                            data = self.cowArraySlot(c: inout c, slotPtr: islot, elemTy: elemTy, elemRef: self.arrayExprElemRef(c: inout c, arrayExpr: ibase))
-                            count = self.arrSlotCount(c: inout c, slot: islot)
-                        } else {
-                            val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: ibase)
-                            data = self.arrValData(c: inout c, arr: arr)
-                            count = self.arrValCount(c: inout c, arr: arr)
-                        }
-                        val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iindex)
-                        self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-                        val ep: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
-                        mut val rv: LLVMValueRef = self.coerceElem(v: self.genLlvmExpr(c: inout c, id: value), elemTy: elemTy)
-                        if op == opAssign() {
-                            // value semantics: copy an array/struct PLACE element so
-                            // `arr[i] = a` leaves the element independent of `a`.
-                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
-                            LLVMBuildStore(self.b, rv, ep)
-                        } else {
-                            val cur: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, ep, anon())
-                            LLVMBuildStore(self.b, self.buildBinOpChecked(c: inout c, op: compoundBinOp(op: op), l: cur, r: rv, unsigned: self.valueKind(c: inout c, id: target) == 3U64), ep)
-                        }
+                        // every subscript-assign now resolves through the `IndexSet` witness
+                        // above (Array included, since E3 binds arrays as generic-struct locals
+                        // and `exprStructIdx` recovers the Array struct for any array place) —
+                        // there is no built-in array element-store path and no `exprIsArray`
+                        // type-name dispatch here. A base with no `indexSet` witness is an error.
+                        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: ibase)), msg: "LLVM backend: subscript assignment requires an `indexSet` method")
+                        return
                     }
                     Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
                         // place mutation `base.field = v`: GEP into the base local's
