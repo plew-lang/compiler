@@ -164,6 +164,15 @@ pub impl Comp {
             Expr.Array(elems: _) => { return false }
             Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
             Expr.Str(start: _, len: _) => { return true }
+            // `<Array data=buf />` constructs the array struct directly (the only way to
+            // wrap an existing `Buffer` as an `Array`, e.g. `String.bytes()`): it IS an
+            // array value, so it satisfies an `-> Array[T]` return.
+            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => {
+                if rangeEquals(bytes: self.arena.bytes, start: typeStart, len: typeLen, kw: "Array") {
+                    return false
+                }
+                return true
+            }
             _ => {
                 val it: TypeInfo = self.typeOf(id: value)
                 if it.kind == 2 {
