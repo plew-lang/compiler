@@ -51,13 +51,13 @@ pub impl LlvmCtx {
     // iterator protocol — `it = iterable.iterator(); loop { match it.next() { Some(v)
     // => { x = v; body }, None => break } }`. The iterator is stored in a mutable slot
     // (next() is `inout`); each next() yields an Optional[Item] matched by tag.
-    inout fn genLlvmForIterable(c: inout Comp, varStart: U64, varLen: U64, iter: U64, body: U64) {
+    inout fn genLlvmForIterable(c: inout Comp, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64) {
         // an existential iterator (`for x in (it: any Iter[Item=I64])`): each iteration
         // dynamically dispatches `next()` on the any value (spec/08). The box is shared
         // via the fat pointer's data field, so the iterator state advances across calls.
         val recvRef: U64 = self.exprTypeRef(c: inout c, id: iter)
         if refIsAny(c: inout c, ref: recvRef) {
-            self.genLlvmForAnyIter(c: inout c, varStart: varStart, varLen: varLen, iter: iter, anyRef: recvRef, body: body)
+            self.genLlvmForAnyIter(c: inout c, varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, iter: iter, anyRef: recvRef, body: body)
             return
         }
         // Generic-instance iterable/iterator (`Box[I64]` / `BoxIter[I64]`): the
@@ -65,7 +65,7 @@ pub impl LlvmCtx {
         // so route through that path rather than the plain user-fn slots.
         if recvRef != 0U64 {
             if c.isGenericInst(ref: recvRef) {
-                self.genLlvmForGenIterable(c: inout c, varStart: varStart, varLen: varLen, iter: iter, body: body, recvRef: recvRef)
+                self.genLlvmForGenIterable(c: inout c, varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, iter: iter, body: body, recvRef: recvRef)
                 return
             }
         }
@@ -109,7 +109,7 @@ pub impl LlvmCtx {
             return
         }
         val nf: Func = c.arena.funcs[nfi]
-        self.emitIterNextLoop(c: inout c, iterVal: iterVal, optRef: nf.retTy, nextTy: self.fnTy[nSlotF], nextVal: self.fnVal[nSlotF], varStart: varStart, varLen: varLen, body: body)
+        self.emitIterNextLoop(c: inout c, iterVal: iterVal, optRef: nf.retTy, nextTy: self.fnTy[nSlotF], nextVal: self.fnVal[nSlotF], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
     }
 
     // `for x in genericIterable` where the receiver is a generic instance (`Box[I64]`).
@@ -117,7 +117,7 @@ pub impl LlvmCtx {
     // instance ref is recovered by grounding iterator()'s return type under the
     // receiver's env, and the Optional[Item] return by grounding next()'s under the
     // iterator instance's env.
-    inout fn genLlvmForGenIterable(c: inout Comp, varStart: U64, varLen: U64, iter: U64, body: U64, recvRef: U64) {
+    inout fn genLlvmForGenIterable(c: inout Comp, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64, recvRef: U64) {
         val gt: TypeRef = c.arena.types[recvRef]
         val noArgs: Array[Arg] = []
         mut val iterVal: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -164,7 +164,7 @@ pub impl LlvmCtx {
         val optRef: U64 = c.groundTypeRef(ref: nf.retTy)
         c.cur.typeParams = sP2
         c.cur.typeArgs = sA2
-        self.emitIterNextLoop(c: inout c, iterVal: iterVal, optRef: optRef, nextTy: self.genMethTy[nSlot], nextVal: self.genMethVal[nSlot], varStart: varStart, varLen: varLen, body: body)
+        self.emitIterNextLoop(c: inout c, iterVal: iterVal, optRef: optRef, nextTy: self.genMethTy[nSlot], nextVal: self.genMethVal[nSlot], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
     }
 
     // Bind an iterator-protocol loop variable from a Some payload value already stored in
@@ -200,7 +200,7 @@ pub impl LlvmCtx {
     // Drive the iterator-protocol loop: store `iterVal` in a mutable slot (next() is
     // `inout`), and on each `next()` call (callee `nextTy`/`nextVal`) match the ground
     // `optRef` Optional[Item] — bind x to the Some payload + run body, else break.
-    inout fn emitIterNextLoop(c: inout Comp, iterVal: LLVMValueRef, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, body: U64) {
+    inout fn emitIterNextLoop(c: inout Comp, iterVal: LLVMValueRef, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], body: U64) {
         val iterTy: LLVMTypeRef = LLVMTypeOf(iterVal)
         val iterSlot: LLVMValueRef = self.entryAlloca(ty: iterTy)
         LLVMBuildStore(self.b, iterVal, iterSlot)
@@ -259,7 +259,20 @@ pub impl LlvmCtx {
                 xLen = c.arena.types[gx].nameLen
             }
         }
-        self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)
+        // a struct-destructure pattern (`for S { val a } in …`) binds the element's
+        // fields directly (mirroring the match struct pattern); otherwise bind the whole
+        // element to the single loop variable.
+        if binds.count() > 0U64 {
+            val psidx: U64 = self.localStructIdxFor(c: inout c, start: patStart, len: patLen)
+            if psidx >= c.arena.structs.count() {
+                if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
+                compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
+                return
+            }
+            self.bindStructPattern(c: inout c, sidx: psidx, binds: binds, scrutTy: xTy, scrutSlot: xSlot)
+        } else {
+            self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)
+        }
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         // `continue` -> condBB (next() again), `break` -> endBB.
         self.pushLoop(breakBB: endBB, contBB: condBB)
@@ -277,7 +290,7 @@ pub impl LlvmCtx {
     // `for x in anyIter` where the receiver is an existential `any Iter[Item=…]`: loop
     // dynamically dispatching `next()` on the any value (the box's iterator state
     // advances in place), binding `x` to each `Some` payload until `None`.
-    inout fn genLlvmForAnyIter(c: inout Comp, varStart: U64, varLen: U64, iter: U64, anyRef: U64, body: U64) {
+    inout fn genLlvmForAnyIter(c: inout Comp, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, anyRef: U64, body: U64) {
         val traitIdx: U64 = c.findTraitIdxByName(start: c.arena.types[anyRef].nameStart, len: c.arena.types[anyRef].nameLen)
         if traitIdx >= c.decls.traits.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
@@ -339,7 +352,17 @@ pub impl LlvmCtx {
                 xLen = c.arena.types[gx].nameLen
             }
         }
-        self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)
+        if binds.count() > 0U64 {
+            val psidx: U64 = self.localStructIdxFor(c: inout c, start: patStart, len: patLen)
+            if psidx >= c.arena.structs.count() {
+                if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
+                compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
+                return
+            }
+            self.bindStructPattern(c: inout c, sidx: psidx, binds: binds, scrutTy: xTy, scrutSlot: xSlot)
+        } else {
+            self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)
+        }
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
         self.pushLoop(breakBB: endBB, contBB: condBB)
         self.genLlvmBlock(c: inout c, id: body)
@@ -354,54 +377,11 @@ pub impl LlvmCtx {
     }
 
 
-    // `for S { val x } in arr { body }`: walk an array of structs, binding each
-    // element's fields (per the struct pattern) directly each iteration, mirroring
-    // the match struct pattern. The element struct is stored in a slot so its fields
-    // can be GEP'd; field binds are popped at the end of every iteration.
+    // `for S { val x } in iterable { body }`: a struct-destructure for-loop drives the
+    // same iterator protocol as the single-variable form, but binds each element's
+    // fields (per the struct pattern) directly — mirroring the match struct pattern —
+    // rather than binding the whole element to one variable.
     inout fn genLlvmForArrayStruct(c: inout Comp, patStart: U64, patLen: U64, iter: U64, binds: Array[Bind], body: U64) {
-        if !(self.exprIsArray(c: inout c, id: iter)) {
-            compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop over a non-array not yet supported")
-            return
-        }
-        val sidx: U64 = self.localStructIdxFor(c: inout c, start: patStart, len: patLen)
-        if sidx >= c.arena.structs.count() {
-            compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
-            return
-        }
-        val mark: U64 = self.nLocals
-        val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: iter)
-        val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iter)
-        val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
-        val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
-        val idxslot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
-        LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), idxslot)
-        val eslot: LLVMValueRef = self.entryAlloca(ty: elemTy)
-        val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fors.cond"))
-        val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fors.body"))
-        val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fors.end"))
-        LLVMBuildBr(self.b, condBB)
-        LLVMPositionBuilderAtEnd(self.b, condBB)
-        val iv: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, idxslot, anon())
-        LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
-        LLVMPositionBuilderAtEnd(self.b, bodyBB)
-        self.terminated = false
-        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: iv), anon()), eslot)
-        val bmark: U64 = self.nLocals
-        self.bindStructPattern(c: inout c, sidx: sidx, binds: binds, scrutTy: elemTy, scrutSlot: eslot)
-        val stepBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fors.step"))
-        self.pushLoop(breakBB: endBB, contBB: stepBB)
-        self.genLlvmBlock(c: inout c, id: body)
-        self.popLoop()
-        self.nLocals = bmark
-        if !(self.terminated) {
-            LLVMBuildBr(self.b, stepBB)
-        }
-        LLVMPositionBuilderAtEnd(self.b, stepBB)
-        val iv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, idxslot, anon())
-        LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv2, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), idxslot)
-        LLVMBuildBr(self.b, condBB)
-        LLVMPositionBuilderAtEnd(self.b, endBB)
-        self.terminated = false
-        self.nLocals = mark
+        self.genLlvmForIterable(c: inout c, varStart: 0U64, varLen: 0U64, patStart: patStart, patLen: patLen, binds: binds, iter: iter, body: body)
     }
 }

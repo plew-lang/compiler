@@ -864,7 +864,8 @@ pub impl LlvmCtx {
                         // protocol uniformly — an array is no longer a special case (it carries
                         // `recvRef = Array[E]`, so genLlvmForIterable -> genLlvmForGenIterable
                         // calls Array's `iterator()` witness and drives `next()`).
-                        self.genLlvmForIterable(c: inout c, varStart: varStart, varLen: varLen, iter: iter, body: body)
+                        val noBinds: Array[Bind] = []
+                        self.genLlvmForIterable(c: inout c, varStart: varStart, varLen: varLen, patStart: 0U64, patLen: 0U64, binds: noBinds, iter: iter, body: body)
                     }
                 }
             }
