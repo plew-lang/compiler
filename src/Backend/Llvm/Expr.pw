@@ -203,7 +203,11 @@ pub impl LlvmCtx {
                 return self.genLlvmIndex(c: inout c, base: base, index: index)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                // `arr.count()` — an array's count is field 1.
+                // a bare `arr.count` property read (no parens): still accepted for arrays as a
+                // convenience that lowers to the buffer-header count. collections.md §3-付録4
+                // decides count is a METHOD (`arr.count()`, no computed properties); disallowing
+                // the bare form is a pending language-surface call (it would reject existing
+                // `arr.count` usages). Keeping the interception until that is decided.
                 if self.exprIsArray(c: inout c, id: base) {
                     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                         val av: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)

@@ -36,7 +36,7 @@ pub impl Comp {
                     match e {
                         ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
                             if !(isEnum) {
-                                if typeArgs.count == 0 {
+                                if typeArgs.count() == 0 {
                                     val tn: Bind = self.internBytes(s: typeName)
                                     if intern(c: inout self, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
                                         val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: "", isEnum: false)
@@ -178,10 +178,10 @@ pub impl Comp {
             ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
                 val tn: Bind = self.internBytes(s: typeName)
                 mut val tyRef: U64 = 0
-                if typeArgs.count > 0 {
+                if typeArgs.count() > 0 {
                     mut val targs: Array[U64] = []
                     mut val ti: U64 = 0
-                    while ti < typeArgs.count {
+                    while ti < typeArgs.count() {
                         targs.append(self.lowerType(t: typeArgs[ti]).ref)
                         ti += 1
                     }
@@ -200,7 +200,7 @@ pub impl Comp {
             ExprAst.ArrayLit(val elems, val span) => {
                 mut val es: Array[U64] = []
                 mut val i: U64 = 0
-                while i < elems.count {
+                while i < elems.count() {
                     es.append(self.lowerExpr(e: elems[i]))
                     i += 1
                 }
