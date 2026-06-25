@@ -27,12 +27,22 @@ pub impl LlvmCtx {
                 // as a pointer — it has no struct layout, so register no `%gs` type for it
                 // (llvmTypeOfRef returns ptrty for it). Mirrors Array's exclusion.
                 if defIdx < c.arena.structs.count && !(c.arena.structs[defIdx].isExtern) {
-                    mut val nm: Array[U8] = []
-                    appendBytes(into: inout nm, from: "gs".bytes)
-                    appendU64Dec(into: inout nm, n: k)
-                    nm.append(0)
                     self.genStructRefs.append(ref)
-                    self.genStructTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
+                    // `Array[T]`'s VALUE rep is the shared `{ptr}` aggregate `arrayTy`, not a
+                    // fresh named `%gsN` — the same representation pin as `String`->`strty`
+                    // (collections.md §3-付録2/3). Pinning it here makes a `<Array data=buf />`
+                    // construction (the only Make of an array — e.g. `String.bytes()`) build an
+                    // arrayTy value that matches every array site (literals, returns, fields).
+                    // Its body is already `{ptr}` at arrayTy creation, so the body pass skips it.
+                    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                        self.genStructTys.append(self.arrayTy)
+                    } else {
+                        mut val nm: Array[U8] = []
+                        appendBytes(into: inout nm, from: "gs".bytes)
+                        appendU64Dec(into: inout nm, n: k)
+                        nm.append(0)
+                        self.genStructTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
+                    }
                     self.genStructDefs.append(defIdx)
                 }
             }
@@ -48,6 +58,12 @@ pub impl LlvmCtx {
         while s < self.genStructRefs.count {
             val ref: U64 = self.genStructRefs[s]
             val sd: StructDef = c.arena.structs[self.genStructDefs[s]]
+            // `Array[T]` is pinned to the literal `arrayTy` (set at creation); LLVMStructSetBody
+            // is only valid on a named struct, so skip it — same as `String`/`strty`.
+            if rangeEquals(bytes: c.arena.bytes, start: sd.nameStart, len: sd.nameLen, kw: "Array") {
+                s += 1
+                continue
+            }
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = sd.typeParams
