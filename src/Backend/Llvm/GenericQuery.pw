@@ -59,6 +59,13 @@ pub impl LlvmCtx {
                     return self.localStructIdxFor(c: inout c, start: typeStart, len: typeLen)
                 }
             }
+            Expr.Array(elems: _) => {
+                // an array literal `[…]` : the `Array` generic def (resolved arena-wide —
+                // Array is not in the registered-struct table, it is gen-instance pinned), so
+                // a direct index / method on the literal dispatches the Index/witness path
+                // like a bound array (collections.md E3, mirrors locStructIdx=Array).
+                return c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: c.kwSpan(kw: "Array", kwLen: 5U64).nameLen)
+            }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 // a nested-struct field access (`ln.b`): the field's declared type is
                 // itself a (registered) struct, so its struct index drives further

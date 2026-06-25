@@ -246,6 +246,19 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            Expr.Array(val elems) => {
+                // an array literal `[e0, …]` : its `Array[E]` instance ref (E = first
+                // element's type), so a direct index / method / `for` over the literal rides
+                // the same Index/Iterator/generic witnesses as a bound array — no literal
+                // type-name special case (collections.md E3).
+                val er: U64 = self.arrayLitElemRef(c: inout c, elems: elems)
+                if er != 0U64 {
+                    val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                    mut val aargs: Array[U64] = []
+                    aargs.append(er)
+                    return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+                }
+            }
             Expr.OptChain(val base, val memberStart, val memberLen) => {
                 // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
                 return self.optChainResultRefLL(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
