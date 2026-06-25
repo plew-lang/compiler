@@ -2,7 +2,7 @@
 // locals.
 
 // The value expression of the last `give` in a block (the block's result), or
-// `c.arena.exprs.count` (one past the end) if the block has no `give`. A U64 sentinel
+// `c.arena.exprs.count()` (one past the end) if the block has no `give`. A U64 sentinel
 // keeps callers off signed indices. Used to infer a value-position `if`'s type.
 
 pub impl Comp {
@@ -10,8 +10,8 @@ pub impl Comp {
         val blk: Block = self.arena.blocks[blkId]
         val stmts: Array[U64] = blk.stmts
         mut val i: U64 = 0
-        mut val found: U64 = self.arena.exprs.count
-        while i < stmts.count {
+        mut val found: U64 = self.arena.exprs.count()
+        while i < stmts.count() {
             val s: Stmt = self.arena.stmts[stmts[i]]
             match s {
                 Stmt.Give(val value) => { found = value }
@@ -31,17 +31,17 @@ pub impl Comp {
         val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count {
+        while ei < self.arena.enums.count() {
             val e: EnumDef = self.arena.enums[ei]
             if e.nameId == qEnum {
                 val vars: Array[Variant] = e.variants
                 mut val vi: U64 = 0
-                while vi < vars.count {
+                while vi < vars.count() {
                     val v: Variant = vars[vi]
                     if v.nameId == qVar {
                         val fs: Array[FieldDef] = v.fields
                         mut val fi: U64 = 0
-                        while fi < fs.count {
+                        while fi < fs.count() {
                             val f: FieldDef = fs[fi]
                             if f.nameId == qField {
                                 self.addLocalCn(nameStart: bindStart, nameLen: bindLen, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray, ty: f.ty, isInout: false, isMut: false, owned: false, cnum: cnum)

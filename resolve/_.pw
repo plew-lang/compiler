@@ -21,7 +21,7 @@ import ../src/Toml with { appendBytes, bytesEq }
 // Whether `b` is already in the list of seen byte-strings.
 fn hasName(seen: Array[Name], b: Array[U8]) -> Bool {
     mut val i: U64 = 0
-    while i < seen.count {
+    while i < seen.count() {
         if bytesEq(a: seen[i].s, b: b) {
             return true
         }
@@ -38,7 +38,7 @@ fn majorOf(tag: Array[U8]) -> Array[U8] {
     mut val i: U64 = 0
     mut val go: Bool = true
     while go {
-        if i < tag.count {
+        if i < tag.count() {
             if tag[i] == 46U8 {
                 go = false
             } else {
@@ -66,7 +66,7 @@ fn verKey(url: Array[U8], tag: Array[U8]) -> Array[U8] {
 fn depEdges(deps: Array[Dep]) -> Array[Name] {
     mut val out: Array[Name] = []
     mut val i: U64 = 0
-    while i < deps.count {
+    while i < deps.count() {
         out.append(<Name s=deps[i].key />)
         i += 1
     }
@@ -98,7 +98,7 @@ fn main() {
     // BFS worklist of git dependencies (path deps are local — not fetched/locked).
     mut val work: Array[Dep] = []
     mut val di: U64 = 0
-    while di < root.deps.count {
+    while di < root.deps.count() {
         if root.deps[di].kind == 1U8 {
             work.append(root.deps[di])
         }
@@ -109,7 +109,7 @@ fn main() {
     mut val resolvedKeys: Array[Name] = []  // <url>#<major> already resolved
     mut val lockPkgs: Array[LockPkg] = []
     mut val wi: U64 = 0
-    while wi < work.count {
+    while wi < work.count() {
         val dep: Dep = work[wi]
         wi += 1
         val url: Array[U8] = dep.loc
@@ -123,14 +123,14 @@ fn main() {
         }
         val tags: Array[U8] = listTags(cacheRoot: cr, url: url)
         val tag: Array[U8] = pickLatest(constraint: dep.version, tagsBlob: tags)
-        if tag.count == 0 {
+        if tag.count() == 0 {
             fail(msg: url)
         }
         val key: Array[U8] = verKey(url: url, tag: tag)
         if !(hasName(seen: resolvedKeys, b: key)) {
             resolvedKeys.append(<Name s=key />)
             val commit: Array[U8] = resolveCommit(cacheRoot: cr, url: url, ref: tag)
-            if commit.count == 0 {
+            if commit.count() == 0 {
                 fail(msg: url)
             }
             if materialize(cacheRoot: cr, url: url, commit: commit) != 0I64 {
@@ -139,7 +139,7 @@ fn main() {
             // follow transitive git dependencies.
             val tm: Manifest = readCachedManifest(cr: cr, url: url, commit: commit)
             mut val ti: U64 = 0
-            while ti < tm.deps.count {
+            while ti < tm.deps.count() {
                 if tm.deps[ti].kind == 1U8 {
                     work.append(tm.deps[ti])
                 }

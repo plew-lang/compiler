@@ -9,7 +9,7 @@
 
 pub impl Comp {
     inout fn isSelfTypeInProvided(start: U64, len: U64) -> Bool {
-        if self.cur.checkFn >= self.arena.funcs.count {
+        if self.cur.checkFn >= self.arena.funcs.count() {
             return false
         }
         val f: Func = self.arena.funcs[self.cur.checkFn]
@@ -20,13 +20,13 @@ pub impl Comp {
     }
 
     inout fn isTypeParamOf(fnIdx: U64, start: U64, len: U64) -> Bool {
-        if fnIdx >= self.arena.funcs.count {
+        if fnIdx >= self.arena.funcs.count() {
             return false
         }
         val tps: Array[Bind] = self.arena.funcs[fnIdx].typeParams
         val qTp: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < tps.count {
+        while i < tps.count() {
             if tps[i].nameId == qTp {
                 return true
             }
@@ -40,12 +40,12 @@ pub impl Comp {
             return false
         }
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count {
+        while ti < self.decls.traits.count() {
             val t: TraitDef = self.decls.traits[ti]
             if t.nameId == traitNameId {
                 // requirement of this trait
                 mut val ri: U64 = 0
-                while ri < t.reqs.count {
+                while ri < t.reqs.count() {
                     val r: Func = t.reqs[ri]
                     if r.nameId == qName {
                         if self.paramsLabelsOk(params: r.params, args: args) {
@@ -56,7 +56,7 @@ pub impl Comp {
                 }
                 // recurse into supertraits (`trait Sub: Super + ...`)
                 mut val sti: U64 = 0
-                while sti < t.supertraits.count {
+                while sti < t.supertraits.count() {
                     val sup: Bind = t.supertraits[sti]
                     val supId: U64 = intern(c: inout self, start: sup.nameStart, len: sup.nameLen)
                     if self.traitProvidesMember(traitNameId: supId, qName: qName, args: args, depth: depth + 1U64) {
@@ -69,7 +69,7 @@ pub impl Comp {
         }
         // provided method of this trait (a method with recv = the trait)
         mut val gi: U64 = 0
-        while gi < self.arena.funcs.count {
+        while gi < self.arena.funcs.count() {
             val g: Func = self.arena.funcs[gi]
             if g.hasRecv {
                 if g.recvId == traitNameId {
@@ -89,7 +89,7 @@ pub impl Comp {
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count {
+        while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
@@ -107,7 +107,7 @@ pub impl Comp {
     inout fn boundHasTraitNamed(fnIdx: U64, tpStart: U64, tpLen: U64, traitName: String) -> Bool {
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val bi: U64 = 0
-        while bi < self.decls.funcBounds.count {
+        while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
@@ -152,7 +152,7 @@ pub impl Comp {
                 if ut.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
                         val need: String = self.unOpTraitName(op: op)
-                        if need.bytes().count != 0U64 {
+                        if need.bytes().count() != 0U64 {
                             if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
                                 compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
                             }
@@ -166,7 +166,7 @@ pub impl Comp {
                 // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
                 // the same binop type-check verifyProgram runs on non-generic bodies, but
                 // only for the USER's (entry-module) generic templates (std is trusted).
-                if self.cur.checkFn < self.arena.funcs.count {
+                if self.cur.checkFn < self.arena.funcs.count() {
                     if self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn]) {
                         self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                     }
@@ -183,10 +183,10 @@ pub impl Comp {
                             }
                         }
                         // arithmetic / bitwise / shift desugar to their operator trait.
-                        if need.bytes().count == 0U64 {
+                        if need.bytes().count() == 0U64 {
                             need = self.binOpTraitName(op: op)
                         }
-                        if need.bytes().count != 0U64 {
+                        if need.bytes().count() != 0U64 {
                             if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
                                 compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                             }
@@ -196,7 +196,7 @@ pub impl Comp {
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     self.checkBoundsExpr(exprId: args[i].expr)
                     i += 1
                 }
@@ -204,11 +204,11 @@ pub impl Comp {
                 // and `f`'s `x: I64`) is a type error at the definition. The callee's own
                 // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
                 val fi: U64 = self.resolvedCallee(id: exprId)
-                if fi < self.arena.funcs.count {
+                if fi < self.arena.funcs.count() {
                     val ps: Array[Param] = self.arena.funcs[fi].params
                     mut val k: U64 = 0
-                    while k < args.count {
-                        if k < ps.count {
+                    while k < args.count() {
+                        if k < ps.count() {
                             if !(ps[k].tyIsArray) {
                                 self.checkGenericTypeMatch(expectedRef: ps[k].ty, valueExpr: args[k].expr)
                             }
@@ -220,7 +220,7 @@ pub impl Comp {
             Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
                 self.checkBoundsExpr(exprId: recv)
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     self.checkBoundsExpr(exprId: args[i].expr)
                     i += 1
                 }
@@ -231,7 +231,7 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.checkBoundsExpr(exprId: recv)
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     self.checkBoundsExpr(exprId: args[i].expr)
                     i += 1
                 }
@@ -258,11 +258,11 @@ pub impl Comp {
                         // backend; here we check the non-generic-receiver case.
                         if !(self.isGenericInst(ref: rt.ref)) {
                             val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                            if mi != self.arena.funcs.count {
+                            if mi != self.arena.funcs.count() {
                                 val mps: Array[Param] = self.arena.funcs[mi].params
                                 mut val mk: U64 = 0
-                                while mk < args.count {
-                                    if mk < mps.count {
+                                while mk < args.count() {
+                                    if mk < mps.count() {
                                         if !(mps[mk].tyIsArray) {
                                             self.checkGenericTypeMatch(expectedRef: mps[mk].ty, valueExpr: args[mk].expr)
                                         }
@@ -279,7 +279,7 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: base)
                 // a field access on a type-parameter value is invalid: `T` is opaque and
                 // traits declare methods, not fields, so a bound cannot grant a field
-                // (spec/06). `.count`/`.bytes()` etself. on a `T` value have no meaning.
+                // (spec/06). `.count()`/`.bytes()` etself. on a `T` value have no meaning.
                 val bt: TypeInfo = self.exprType(id: base)
                 if bt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
@@ -303,7 +303,7 @@ pub impl Comp {
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count {
+                while i < fields.count() {
                     self.checkBoundsExpr(exprId: fields[i].value)
                     // a `T` value placed into a CONCRETE-typed field (`<S a=valueT/>` where
                     // S.a: I64) is a type error at the definition. The field type comes from
@@ -321,7 +321,7 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count {
+                while i < elems.count() {
                     self.checkBoundsExpr(exprId: elems[i])
                     i += 1
                 }
@@ -338,7 +338,7 @@ pub impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 self.checkBoundsExpr(exprId: scrut)
                 mut val ai: U64 = 0
-                while ai < arms.count {
+                while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.exprType(id: scrut))
@@ -356,7 +356,7 @@ pub impl Comp {
         if expectedRef == 0U64 {
             return
         }
-        if self.cur.checkFn >= self.arena.funcs.count {
+        if self.cur.checkFn >= self.arena.funcs.count() {
             return
         }
         // only the USER's (entry-module) generic bodies are judged; std/prelude is
@@ -368,7 +368,7 @@ pub impl Comp {
         }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
         // is invalid — T is opaque, and no bound makes it numeric-literal-receptive (spec/06).
-        if expectedRef < self.arena.types.count {
+        if expectedRef < self.arena.types.count() {
             if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen) || self.isSelfTypeInProvided(start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen) {
                 match self.arena.exprs[valueExpr] {
                     Expr.Int(value: _, offset: _, val isBool, tyStart: _, val tyLen, isNeg: _) => {
@@ -400,11 +400,11 @@ pub impl Comp {
             }
             Expr.MatchExpr(scrut: _, val arms) => {
                 mut val ai: U64 = 0
-                while ai < arms.count {
+                while ai < arms.count() {
                     if !(arms[ai].isDiverge) {
-                        if arms[ai].binds.count == 0U64 {
+                        if arms[ai].binds.count() == 0U64 {
                             val g: U64 = self.blockGiveExpr(blkId: arms[ai].body)
-                            if g < self.arena.exprs.count {
+                            if g < self.arena.exprs.count() {
                                 self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: g)
                             }
                         }
@@ -416,14 +416,14 @@ pub impl Comp {
         }
         // an array literal in an `Array[E]` position: recurse element-wise (inferType
         // reports an array literal as unknown, so check each element against E).
-        if expectedRef < self.arena.types.count {
+        if expectedRef < self.arena.types.count() {
             if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen, kw: "Array") {
-                if self.arena.types[expectedRef].args.count > 0U64 {
+                if self.arena.types[expectedRef].args.count() > 0U64 {
                     match self.arena.exprs[valueExpr] {
                         Expr.Array(val elems) => {
                             val elemRef: U64 = self.arena.types[expectedRef].args[0]
                             mut val ei: U64 = 0
-                            while ei < elems.count {
+                            while ei < elems.count() {
                                 self.checkGenericTypeMatch(expectedRef: elemRef, valueExpr: elems[ei])
                                 ei += 1
                             }
@@ -461,7 +461,7 @@ pub impl Comp {
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     self.checkBoundsExpr(exprId: value)
-                    if self.cur.checkFn < self.arena.funcs.count {
+                    if self.cur.checkFn < self.arena.funcs.count() {
                         self.checkGenericTypeMatch(expectedRef: self.arena.funcs[self.cur.checkFn].retTy, valueExpr: value)
                     }
                 }
@@ -503,7 +503,7 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 self.checkBoundsExpr(exprId: scrut)
                 mut val ai: U64 = 0
-                while ai < arms.count {
+                while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.exprType(id: scrut))
@@ -523,7 +523,7 @@ pub impl Comp {
         val mark: U64 = self.scopeMark()
         val stmts: Array[U64] = self.arena.blocks[blkId].stmts
         mut val i: U64 = 0
-        while i < stmts.count {
+        while i < stmts.count() {
             self.checkBoundsStmt(stmtId: stmts[i])
             i += 1
         }
@@ -532,7 +532,7 @@ pub impl Comp {
 
     inout fn checkGenericBodies() {
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count {
+        while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             // skip extern fns: they have no body (`body == 0` is a sentinel, not a real
             // block). Generic externs like `arrayPush[T]` would otherwise have block 0
@@ -544,7 +544,7 @@ pub impl Comp {
             // would otherwise escape all checks. std's provided methods (iterator
             // combinators) are trusted and not walked here.
             mut val shouldCheck: Bool = false
-            if f.typeParams.count > 0 {
+            if f.typeParams.count() > 0 {
                 shouldCheck = true
             }
             if self.methodRecvIsTrait(f: f) {
@@ -566,7 +566,7 @@ pub impl Comp {
                 self.cur.typeArgs = noArgs
                 self.cur.checkFn = fi
                 mut val pi: U64 = 0
-                while pi < f.params.count {
+                while pi < f.params.count() {
                     val p: Param = f.params[pi]
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                     pi += 1
@@ -577,6 +577,6 @@ pub impl Comp {
         }
         self.cur.locals = []
         self.cur.hasRecv = false
-        self.cur.checkFn = self.arena.funcs.count
+        self.cur.checkFn = self.arena.funcs.count()
     }
 }

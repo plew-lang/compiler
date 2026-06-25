@@ -38,7 +38,7 @@ pub impl LlvmCtx {
         self.nLocals = markE
         if !(elseDiv) {
             // unify the else branch's width to a value branch (context-less literals).
-            if phiVals.count > 0U64 {
+            if phiVals.count() > 0U64 {
                 elseVal = self.coerceInt(v: elseVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
             }
             phiVals.append(elseVal)
@@ -47,14 +47,14 @@ pub impl LlvmCtx {
         }
         LLVMPositionBuilderAtEnd(self.b, contBB)
         self.terminated = false
-        if phiVals.count == 0U64 {
+        if phiVals.count() == 0U64 {
             // both branches diverge: the continuation is unreachable.
             LLVMBuildUnreachable(self.b)
             self.terminated = true
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val phi: LLVMValueRef = LLVMBuildPhi(self.b, LLVMTypeOf(phiVals[0]), anon())
-        LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count)
+        LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count())
         return phi
     }
 
@@ -79,7 +79,7 @@ pub impl LlvmCtx {
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a value-position struct destructuring match (irrefutable, one arm): bind the
         // scrutinee's fields (under any generic env), then evaluate the arm expression.
-        if arms.count > 0U64 {
+        if arms.count() > 0U64 {
             if arms[0].isStruct {
                 val ssidx: U64 = self.exprStructIdx(c: inout c, id: scrut)
                 val savedSP: Array[Bind] = c.cur.typeParams
@@ -107,19 +107,19 @@ pub impl LlvmCtx {
         val scrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
         val savedVP: Array[Bind] = c.cur.typeParams
         val savedVA: Array[U64] = c.cur.typeArgs
-        mut val eid: U64 = c.arena.enums.count
+        mut val eid: U64 = c.arena.enums.count()
         mut val ai0: U64 = 0
-        while ai0 < arms.count {
+        while ai0 < arms.count() {
             if !(arms[ai0].isWildcard) {
                 if !(arms[ai0].isStruct) {
-                    if eid == c.arena.enums.count {
+                    if eid == c.arena.enums.count() {
                         eid = c.enumIdxByName(start: arms[ai0].enumStart, len: arms[ai0].enumLen)
                     }
                 }
             }
             ai0 += 1
         }
-        if eid >= c.arena.enums.count {
+        if eid >= c.arena.enums.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: value-match is only supported on a registered enum (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -132,7 +132,7 @@ pub impl LlvmCtx {
         mut val phiVals: Array[LLVMValueRef] = []
         mut val phiBlocks: Array[LLVMBasicBlockRef] = []
         mut val ai: U64 = 0
-        while ai < arms.count {
+        while ai < arms.count() {
             val arm: MatchArm = arms[ai]
             val armBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "varm"))
             LLVMPositionBuilderAtEnd(self.b, checkBB)
@@ -169,7 +169,7 @@ pub impl LlvmCtx {
                 mut val armVal: LLVMValueRef = self.giveValue
                 // unify integer arm values to the first arm's width (a context-less literal
                 // may default wider/narrower) so the PHI is single-typed.
-                if phiVals.count > 0U64 {
+                if phiVals.count() > 0U64 {
                     armVal = self.coerceInt(v: armVal, target: LLVMTypeOf(phiVals[0]), unsigned: false)
                 }
                 phiVals.append(armVal)
@@ -192,13 +192,13 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, contBB)
         self.terminated = false
         // all arms diverged: the continuation is unreachable (the match never yields).
-        if phiVals.count == 0U64 {
+        if phiVals.count() == 0U64 {
             LLVMBuildUnreachable(self.b)
             self.terminated = true
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val phi: LLVMValueRef = LLVMBuildPhi(self.b, LLVMTypeOf(phiVals[0]), anon())
-        LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count)
+        LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count())
         return phi
     }
 
@@ -211,7 +211,7 @@ pub impl LlvmCtx {
         // typed-AST cache typeOf relies on isn't populated in this backend).
         val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
         val bge: U64 = self.genEnumSlot(c: inout c, ref: baseRef)
-        if bge >= self.genEnumRefs.count {
+        if bge >= self.genEnumRefs.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` base must be a registered Optional instance")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -226,12 +226,12 @@ pub impl LlvmCtx {
         val tRef: U64 = c.arena.types[baseRef].args[0]
         val tName: TypeRef = c.arena.types[tRef]
         val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
-        if tSidx >= c.arena.structs.count {
+        if tSidx >= c.arena.structs.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` element must be a registered struct")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
-        if fidx >= c.arena.structs[tSidx].fields.count {
+        if fidx >= c.arena.structs[tSidx].fields.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` element has no such field")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -247,7 +247,7 @@ pub impl LlvmCtx {
         rArgs.append(uRef)
         val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
         val rge: U64 = self.genEnumSlot(c: inout c, ref: rr)
-        if rge >= self.genEnumRefs.count {
+        if rge >= self.genEnumRefs.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` result Optional instance is not registered")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -302,11 +302,11 @@ pub impl LlvmCtx {
         }
         val ege: U64 = self.genEnumSlot(c: inout c, ref: exprRef)
         val rge: U64 = self.genEnumSlot(c: inout c, ref: self.curRetRef)
-        if ege >= self.genEnumRefs.count {
+        if ege >= self.genEnumRefs.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: expr)), msg: "LLVM backend: `try` needs a registered Result instance")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        if rge >= self.genEnumRefs.count {
+        if rge >= self.genEnumRefs.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: expr)), msg: "LLVM backend: `try` is only valid in a function returning a registered Result")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -345,15 +345,15 @@ pub impl LlvmCtx {
             if fnErrRef != 0U64 {
                 if c.arena.types[opErrRef].nameId != c.arena.types[fnErrRef].nameId {
                     val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef)
-                    if ffi < c.arena.funcs.count {
+                    if ffi < c.arena.funcs.count() {
                         mut val fslot: U64 = self.userFnSlot(idx: ffi)
-                        if fslot >= self.fnIdx.count {
+                        if fslot >= self.fnIdx.count() {
                             fslot = self.ensureFreeFnDeclared(c: inout c, fi: ffi)
                         }
-                        if fslot < self.fnIdx.count {
+                        if fslot < self.fnIdx.count() {
                             mut val cav: Array[LLVMValueRef] = []
                             cav.append(errVal)
-                            convErrVal = LLVMBuildCall2(self.b, self.fnTy[fslot], self.fnVal[fslot], arrayCPtr(cav), cav.count, anon())
+                            convErrVal = LLVMBuildCall2(self.b, self.fnTy[fslot], self.fnVal[fslot], arrayCPtr(cav), cav.count(), anon())
                         }
                     }
                 }

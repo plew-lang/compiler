@@ -12,7 +12,7 @@ pub impl Comp {
 
     inout fn seedGlobalLocals() {
         mut val gi: U64 = 0
-        while gi < self.arena.globals.count {
+        while gi < self.arena.globals.count() {
             match self.arena.stmts[self.arena.globals[gi].letStmt] {
                 Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                     val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
@@ -25,7 +25,7 @@ pub impl Comp {
     }
 
     inout fn scopeMark() -> U64 {
-        return self.cur.locals.count
+        return self.cur.locals.count()
     }
 
     inout fn popLocals(mark: U64) {
@@ -51,7 +51,7 @@ pub impl Comp {
             }
         }
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = self.cur.locals.count
+        mut val i: U64 = self.cur.locals.count()
         while i > 0 {
             i -= 1
             val lo: Local = self.cur.locals[i]
@@ -84,7 +84,7 @@ pub impl Comp {
             rLen = ntu.nameLen
         }
         val si: U64 = self.structIndexByName(start: rStart, len: rLen)
-        if si >= self.arena.structs.count {
+        if si >= self.arena.structs.count() {
             return false
         }
         return self.arena.structs[si].isUnique
@@ -92,7 +92,7 @@ pub impl Comp {
 
     inout fn localIndexByName(start: U64, len: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val i: U64 = self.cur.locals.count
+        mut val i: U64 = self.cur.locals.count()
         while i > 0 {
             i -= 1
             val lo: Local = self.cur.locals[i]
@@ -100,7 +100,7 @@ pub impl Comp {
                 return i
             }
         }
-        return self.cur.locals.count
+        return self.cur.locals.count()
     }
 
     inout fn optChainResultRef(base: U64, memberStart: U64, memberLen: U64) -> U64 {
@@ -108,14 +108,14 @@ pub impl Comp {
         if bt.kind != 2 {
             return 0
         }
-        if bt.ref >= self.arena.types.count {
+        if bt.ref >= self.arena.types.count() {
             return 0
         }
         val ot: TypeRef = self.arena.types[bt.ref]
         if !(rangeEquals(bytes: self.arena.bytes, start: ot.nameStart, len: ot.nameLen, kw: "Optional")) {
             return 0
         }
-        if ot.args.count < 1 {
+        if ot.args.count() < 1 {
             return 0
         }
         val tInfo: TypeInfo = self.typeInfoOfRef(ref: ot.args[0])
@@ -138,22 +138,22 @@ pub impl Comp {
         // a newtype inherits the underlying struct's fields (spec/10): resolve to the
         // underlying so `<Brand code=… />` / `brand.code` finds Rgb's `code` (Brand = Rgb).
         mut val ntI: U64 = 0
-        while ntI < self.arena.newtypes.count {
+        while ntI < self.arena.newtypes.count() {
             if self.arena.newtypes[ntI].nameId == qStruct {
                 qStruct = intern(c: inout self, start: self.arena.newtypes[ntI].underStart, len: self.arena.newtypes[ntI].underLen)
-                ntI = self.arena.newtypes.count
+                ntI = self.arena.newtypes.count()
             } else {
                 ntI += 1
             }
         }
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count {
+        while si < self.arena.structs.count() {
             val s: StructDef = self.arena.structs[si]
             if s.nameId == qStruct {
                 val fs: Array[FieldDef] = s.fields
                 mut val fi: U64 = 0
-                while fi < fs.count {
+                while fi < fs.count() {
                     val f: FieldDef = fs[fi]
                     if f.nameId == qField {
                         // a generic-instantiation field type (`Optional[Node]`) carries its
@@ -178,12 +178,12 @@ pub impl Comp {
         val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count {
+        while si < self.arena.structs.count() {
             val s: StructDef = self.arena.structs[si]
             if s.nameId == qStruct {
                 val fs: Array[FieldDef] = s.fields
                 mut val fi: U64 = 0
-                while fi < fs.count {
+                while fi < fs.count() {
                     val f: FieldDef = fs[fi]
                     if f.nameId == qField {
                         return f.isMut
@@ -200,12 +200,12 @@ pub impl Comp {
         val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
-        while si < self.arena.structs.count {
+        while si < self.arena.structs.count() {
             val s: StructDef = self.arena.structs[si]
             if s.nameId == qStruct {
                 val fs: Array[FieldDef] = s.fields
                 mut val fi: U64 = 0
-                while fi < fs.count {
+                while fi < fs.count() {
                     val f: FieldDef = fs[fi]
                     if f.nameId == qField {
                         return f.vis
@@ -222,7 +222,7 @@ pub impl Comp {
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 if f.nameId == qName {
@@ -290,10 +290,10 @@ pub impl Comp {
             return
         }
         mut val sidx: U64 = self.structIndexByName(start: typeStart, len: typeLen)
-        if sidx >= self.arena.structs.count {
+        if sidx >= self.arena.structs.count() {
             sidx = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
         }
-        if sidx >= self.arena.structs.count {
+        if sidx >= self.arena.structs.count() {
             return
         }
         val sd: StructDef = self.arena.structs[sidx]
@@ -302,7 +302,7 @@ pub impl Comp {
         }
         val defMod: U64 = self.moduleOf(offset: sd.defOffset)
         mut val i: U64 = 0
-        while i < fields.count {
+        while i < fields.count() {
             val v: U64 = self.fieldVis(structStart: typeStart, structLen: typeLen, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
             if v == 0U64 || v == 1U64 {
                 // gate by the field's ORIGINAL source offset (nameStart is re-interned and
@@ -325,14 +325,14 @@ pub impl Comp {
         // requires `T` to declare a public factory (`pub impl T { factory }`). Find a
         // representative construction-site offset (a loaded field) to locate its module.
         mut val ci: U64 = 0
-        while ci < fields.count {
+        while ci < fields.count() {
             if self.offsetIsLoaded(offset: fields[ci].offset) {
                 if self.moduleOf(offset: fields[ci].offset) != defMod {
                     if !(self.structHasPubFactory(nameId: sd.nameId)) {
                         compileErrorAt(line: self.lineOf(offset: fields[ci].offset), msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
                     }
                 }
-                ci = fields.count
+                ci = fields.count()
             } else {
                 ci += 1U64
             }
@@ -341,7 +341,7 @@ pub impl Comp {
 
     inout fn structHasPubFactory(nameId: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.decls.pubFactories.count {
+        while i < self.decls.pubFactories.count() {
             if self.decls.pubFactories[i] == nameId {
                 return true
             }

@@ -14,7 +14,7 @@ pub impl LlvmCtx {
         val mf: Func = c.arena.funcs[mfi]
         val margs: Array[U64] = self.llvmInferFnArgs(c: inout c, f: mf, args: args)
         mut val mi: U64 = 0
-        while mi < margs.count {
+        while mi < margs.count() {
             if margs[mi] == 0U64 {
                 return LLVMConstNull(self.ptrty)
             }
@@ -25,7 +25,7 @@ pub impl LlvmCtx {
         // self type still resolves from the receiver name.
         val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
         val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: pinst, ownArgs: [])
-        if gslot < self.genMethK.count {
+        if gslot < self.genMethK.count() {
             return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
         }
         return LLVMConstNull(self.ptrty)
@@ -63,12 +63,12 @@ pub impl LlvmCtx {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
         mut val ai: U64 = 0
-        while ai < args.count {
+        while ai < args.count() {
             av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
             ai += 1
         }
-        mut val di: U64 = args.count
-        while di < mf.params.count {
+        mut val di: U64 = args.count()
+        while di < mf.params.count() {
             av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
             di += 1
         }
@@ -76,7 +76,7 @@ pub impl LlvmCtx {
         c.cur.itemRef = sGi
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
-        return LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count, anon())
+        return LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count(), anon())
     }
 
     // The address of an addressable place (a struct local), for `inout` self. Falls
@@ -89,13 +89,13 @@ pub impl LlvmCtx {
         if ref != 0U64 {
             if c.isGenericInst(ref: ref) {
                 val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
-                if gs < self.genStructRefs.count {
+                if gs < self.genStructRefs.count() {
                     return self.genStructTys[gs]
                 }
             }
         }
         val reg: U64 = self.structRegSlot(c: inout c, start: c.arena.structs[sidx].nameStart, len: c.arena.structs[sidx].nameLen)
-        if reg < self.structIdxs.count {
+        if reg < self.structIdxs.count() {
             return self.structTys[reg]
         }
         return LLVMConstNull(self.ptrty)
@@ -121,9 +121,9 @@ pub impl LlvmCtx {
                     Expr.Ident(start: val bs, len: val bl) => {
                         val bli: U64 = self.findLocal(c: inout c, start: bs, len: bl)
                         val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-                        if bli < self.nLocals && bsi < c.arena.structs.count {
+                        if bli < self.nLocals && bsi < c.arena.structs.count() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                            if fidx < c.arena.structs[bsi].fields.count {
+                            if fidx < c.arena.structs[bsi].fields.count() {
                                 return LLVMBuildStructGEP2(self.b, self.locTy[bli], self.locPtr[bli], fidx, anon())
                             }
                         }
@@ -137,12 +137,12 @@ pub impl LlvmCtx {
                 val basePtr: LLVMValueRef = self.placePtrStrict(c: inout c, id: base)
                 if LLVMIsNull(basePtr) == 0I32 {
                     val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-                    if bsi < c.arena.structs.count {
+                    if bsi < c.arena.structs.count() {
                         val sd: StructDef = c.arena.structs[bsi]
                         val reg: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-                        if reg < self.structIdxs.count {
+                        if reg < self.structIdxs.count() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                            if fidx < c.arena.structs[bsi].fields.count {
+                            if fidx < c.arena.structs[bsi].fields.count() {
                                 return LLVMBuildStructGEP2(self.b, self.structTys[reg], basePtr, fidx, anon())
                             }
                         }
@@ -266,7 +266,7 @@ pub impl LlvmCtx {
                 Expr.Array(val elems) => {
                     mut val argElemRef: U64 = 0
                     if p.ty != 0U64 {
-                        if c.arena.types[p.ty].args.count > 0U64 {
+                        if c.arena.types[p.ty].args.count() > 0U64 {
                             argElemRef = c.arena.types[p.ty].args[0]
                         }
                     }
@@ -315,15 +315,15 @@ pub impl LlvmCtx {
         return out
     }
 
-    // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count.
+    // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count().
     inout fn userFnSlot(idx: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.fnIdx.count {
+        while i < self.fnIdx.count() {
             if self.fnIdx[i] == idx {
                 return i
             }
             i += 1
         }
-        return self.fnIdx.count
+        return self.fnIdx.count()
     }
 }

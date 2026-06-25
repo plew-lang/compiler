@@ -88,7 +88,7 @@ pub impl LlvmCtx {
         // the syntactic `Box[T]`; ground its type args through the active env so it
         // resolves to the registered concrete instance (`Box[I32]`).
         mut val gty: U64 = ty
-        if c.cur.typeParams.count > 0U64 {
+        if c.cur.typeParams.count() > 0U64 {
             gty = c.groundTypeRef(ref: ty)
         }
         // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
@@ -98,12 +98,12 @@ pub impl LlvmCtx {
         // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
         if typeLen == 0U64 {
             if self.expectedTy != 0U64 {
-                if self.expectedTy < c.arena.types.count {
+                if self.expectedTy < c.arena.types.count() {
                     val et: TypeRef = c.arena.types[self.expectedTy]
                     if et.nameLen > 0U64 {
                         if c.arena.bytes[et.nameStart] == 40U8 {
                             val rreg: U64 = self.structRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
-                            if rreg < self.structIdxs.count {
+                            if rreg < self.structIdxs.count() {
                                 self.expectedTy = 0U64
                                 return self.buildStructValue(c: inout c, sd: c.arena.structs[self.structIdxs[rreg]], sty: self.structTys[rreg], fields: fields, errOffset: et.nameStart)
                             }
@@ -140,7 +140,7 @@ pub impl LlvmCtx {
         // a generic struct instance (Box[I32]): build under its substitution env.
         if c.isGenericInst(ref: gty) {
             val gslot: U64 = self.genStructSlot(c: inout c, ref: gty)
-            if gslot < self.genStructRefs.count {
+            if gslot < self.genStructRefs.count() {
                 val sd: StructDef = c.arena.structs[self.genStructDefs[gslot]]
                 val savedP: Array[Bind] = c.cur.typeParams
                 val savedA: Array[U64] = c.cur.typeArgs
@@ -165,7 +165,7 @@ pub impl LlvmCtx {
             rtLen = ntn.nameLen
         }
         val reg: U64 = self.structRegSlot(c: inout c, start: rtStart, len: rtLen)
-        if reg >= self.structIdxs.count {
+        if reg >= self.structIdxs.count() {
             compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -191,17 +191,17 @@ pub impl LlvmCtx {
     }
 
     // The struct index of a `Ref[T]` base's pointee T (for `->field` resolution), or
-    // c.arena.structs.count if the base isn't a Ref to a registered struct.
+    // c.arena.structs.count() if the base isn't a Ref to a registered struct.
     inout fn refPointeeStructIdx(c: inout Comp, base: U64) -> U64 {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         if r != 0U64 {
             val t: TypeRef = c.arena.types[r]
-            if t.args.count > 0U64 {
+            if t.args.count() > 0U64 {
                 val pt: TypeRef = c.arena.types[t.args[0]]
                 return self.localStructIdxFor(c: inout c, start: pt.nameStart, len: pt.nameLen)
             }
         }
-        return c.arena.structs.count
+        return c.arena.structs.count()
     }
 
     // Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
@@ -220,10 +220,10 @@ pub impl LlvmCtx {
         // the pointee value (the `value` field).
         mut val valExpr: U64 = 0
         mut val mi: U64 = 0
-        while mi < fields.count {
+        while mi < fields.count() {
             if rangeEquals(bytes: c.arena.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
                 valExpr = fields[mi].value
-                mi = fields.count
+                mi = fields.count()
             } else {
                 mi += 1
             }
@@ -241,16 +241,16 @@ pub impl LlvmCtx {
     inout fn buildStructValue(c: inout Comp, sd: StructDef, sty: LLVMTypeRef, fields: Array[MakeField], errOffset: U64) -> LLVMValueRef {
         mut val agg: LLVMValueRef = LLVMGetUndef(sty)
         mut val fi: U64 = 0
-        while fi < sd.fields.count {
+        while fi < sd.fields.count() {
             val fld: FieldDef = sd.fields[fi]
             mut val provided: Bool = false
             mut val valExpr: U64 = 0
             mut val mi: U64 = 0
-            while mi < fields.count {
+            while mi < fields.count() {
                 if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
                     provided = true
                     valExpr = fields[mi].value
-                    mi = fields.count
+                    mi = fields.count()
                 } else {
                     mi += 1
                 }

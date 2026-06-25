@@ -24,7 +24,7 @@ pub impl[E] Set[E] {
     assoc fn from(source: Array[E]) -> Set[E] where E: Hash, E: Eq {
         mut val s: Set[E] = <Set items=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() count=0U64 />
         mut val i: U64 = 0
-        while i < source.count {
+        while i < source.count() {
             s.insert(source[i])
             i = i + 1U64
         }

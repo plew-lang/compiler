@@ -14,7 +14,7 @@ pub impl LlvmCtx {
         val hiV: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: hi), target: vty, unsigned: true)
         val islot: LLVMValueRef = self.entryAlloca(ty: vty)
         LLVMBuildStore(self.b, loV, islot)
-        self.pushLocal(nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64)
+        self.pushLocal(nameStart: varStart, nameLen: varLen, ptr: islot, ty: vty, kind: 3U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64)
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "for.cond"))
         val bodyBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "for.body"))
         // a dedicated step block (increment) so `continue` re-runs the step, not skips it.
@@ -70,7 +70,7 @@ pub impl LlvmCtx {
             }
         }
         val isidx: U64 = self.exprStructIdx(c: inout c, id: iter)
-        if isidx >= c.arena.structs.count {
+        if isidx >= c.arena.structs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: for-loop over a non-array (Iterable) not yet supported")
             return
         }
@@ -84,9 +84,9 @@ pub impl LlvmCtx {
         mut val iterStructLen: U64 = isd.nameLen
         val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
         val itfi: U64 = c.findMethod(recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
-        if itfi < c.arena.funcs.count {
+        if itfi < c.arena.funcs.count() {
             val itSlotF: U64 = self.userFnSlot(idx: itfi)
-            if itSlotF >= self.fnIdx.count {
+            if itSlotF >= self.fnIdx.count() {
                 compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
                 return
             }
@@ -99,12 +99,12 @@ pub impl LlvmCtx {
         // next() on the Iter struct -> Optional[Item]
         val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
         val nfi: U64 = c.findMethod(recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
-        if nfi >= c.arena.funcs.count {
+        if nfi >= c.arena.funcs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
             return
         }
         val nSlotF: U64 = self.userFnSlot(idx: nfi)
-        if nSlotF >= self.fnIdx.count {
+        if nSlotF >= self.fnIdx.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
             return
         }
@@ -124,10 +124,10 @@ pub impl LlvmCtx {
         mut val iterInstRef: U64 = recvRef
         val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
         val itfi: U64 = c.findMethod(recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
-        if itfi < c.arena.funcs.count {
+        if itfi < c.arena.funcs.count() {
             // an Iterable: call iterator() and switch the instance ref to the iterator's.
             val itSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: itfi, instRef: recvRef, ownArgs: [])
-            if itSlot >= self.genMethK.count {
+            if itSlot >= self.genMethK.count() {
                 compileErrorAt(line: 0, msg: "LLVM backend: this generic Iterable's iterator method is not emittable yet")
                 return
             }
@@ -147,12 +147,12 @@ pub impl LlvmCtx {
         val it: TypeRef = c.arena.types[iterInstRef]
         val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
         val nfi: U64 = c.findMethod(recvStart: it.nameStart, recvLen: it.nameLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
-        if nfi >= c.arena.funcs.count {
+        if nfi >= c.arena.funcs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
             return
         }
         val nSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: nfi, instRef: iterInstRef, ownArgs: [])
-        if nSlot >= self.genMethK.count {
+        if nSlot >= self.genMethK.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: this generic iterator's next method is not emittable yet")
             return
         }
@@ -179,7 +179,7 @@ pub impl LlvmCtx {
         val savedA: Array[U64] = c.cur.typeArgs
         val didSet: Bool = self.setEnumEnv(c: inout c, ref: optRef)
         val ge: U64 = self.genEnumSlot(c: inout c, ref: optRef)
-        if ge >= self.genEnumRefs.count {
+        if ge >= self.genEnumRefs.count() {
             if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
             compileErrorAt(line: 0, msg: "LLVM backend: iterator next must return a registered Optional instance")
             return
@@ -220,7 +220,7 @@ pub impl LlvmCtx {
         // ground the element type through the active enum env so its kind is concrete
         // (a `map`-to-Bool element is i1 -> kind 2, zero-extended on print, not -1).
         if itemFs[0].ty != 0U64 {
-            if c.cur.typeParams.count > 0U64 {
+            if c.cur.typeParams.count() > 0U64 {
                 val gx: U64 = c.groundTypeRef(ref: itemFs[0].ty)
                 xStart = c.arena.types[gx].nameStart
                 xLen = c.arena.types[gx].nameLen
@@ -246,7 +246,7 @@ pub impl LlvmCtx {
     // advances in place), binding `x` to each `Some` payload until `None`.
     inout fn genLlvmForAnyIter(c: inout Comp, varStart: U64, varLen: U64, iter: U64, anyRef: U64, body: U64) {
         val traitIdx: U64 = c.findTraitIdxByName(start: c.arena.types[anyRef].nameStart, len: c.arena.types[anyRef].nameLen)
-        if traitIdx >= c.decls.traits.count {
+        if traitIdx >= c.decls.traits.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
             return
         }
@@ -262,7 +262,7 @@ pub impl LlvmCtx {
         val savedA: Array[U64] = c.cur.typeArgs
         val didSet: Bool = self.setEnumEnv(c: inout c, ref: optRef)
         val ge: U64 = self.genEnumSlot(c: inout c, ref: optRef)
-        if ge >= self.genEnumRefs.count {
+        if ge >= self.genEnumRefs.count() {
             if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
             compileErrorAt(line: 0, msg: "LLVM backend: `any` iterator next must return a registered Optional instance")
             return
@@ -298,7 +298,7 @@ pub impl LlvmCtx {
         mut val xStart: U64 = itemFs[0].tyStart
         mut val xLen: U64 = itemFs[0].tyLen
         if itemFs[0].ty != 0U64 {
-            if c.cur.typeParams.count > 0U64 {
+            if c.cur.typeParams.count() > 0U64 {
                 val gx: U64 = c.groundTypeRef(ref: itemFs[0].ty)
                 xStart = c.arena.types[gx].nameStart
                 xLen = c.arena.types[gx].nameLen
@@ -335,32 +335,32 @@ pub impl LlvmCtx {
         // `s.m()` in the body dispatches dynamically (spec/08).
         val forElemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: iter)
         if refIsAny(c: inout c, ref: forElemRef) {
-            self.pushLocalR(nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: forElemRef)
+            self.pushLocalR(nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: forElemRef)
         } else {
             // a struct / record element (`for val e in arrayOfStructs { e.field }`): track
             // the element's struct index and TypeRef so a field access / method call on the
             // loop var resolves (a generic-instance element keeps its instance ref).
-            mut val elemSidx: U64 = c.arena.structs.count
+            mut val elemSidx: U64 = c.arena.structs.count()
             if forElemRef != 0U64 {
-                if forElemRef < c.arena.types.count {
+                if forElemRef < c.arena.types.count() {
                     if c.isGenericInst(ref: forElemRef) {
                         val egs: U64 = self.genStructSlot(c: inout c, ref: forElemRef)
-                        if egs < self.genStructRefs.count {
+                        if egs < self.genStructRefs.count() {
                             elemSidx = self.genStructDefs[egs]
                         }
                     } else {
                         // only a backend-registered struct (not a primitive / String): gate on
                         // structRegSlot so an `Array[I32]` element stays a plain scalar.
-                        if self.structRegSlot(c: inout c, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen) < self.structIdxs.count {
+                        if self.structRegSlot(c: inout c, start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen) < self.structIdxs.count() {
                             elemSidx = c.structIndexByName(start: c.arena.types[forElemRef].nameStart, len: c.arena.types[forElemRef].nameLen)
                         }
                     }
                 }
             }
-            if elemSidx < c.arena.structs.count {
+            if elemSidx < c.arena.structs.count() {
                 self.pushLocalR(nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: elemSidx, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: forElemRef)
             } else {
-                self.pushLocal(nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64)
+                self.pushLocal(nameStart: varStart, nameLen: varLen, ptr: vslot, ty: elemTy, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64)
             }
         }
         val condBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "fora.cond"))
@@ -399,7 +399,7 @@ pub impl LlvmCtx {
             return
         }
         val sidx: U64 = self.localStructIdxFor(c: inout c, start: patStart, len: patLen)
-        if sidx >= c.arena.structs.count {
+        if sidx >= c.arena.structs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
             return
         }

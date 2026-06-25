@@ -46,7 +46,7 @@ export fn emptyLock() -> Lock {
 // The scalar string of field `key` in a section (empty if absent / not a scalar).
 fn sectionStr(sec: Section, key: Array[U8]) -> Array[U8] {
     mut val i: U64 = 0
-    while i < sec.fields.count {
+    while i < sec.fields.count() {
         val f: Field = sec.fields[i]
         if bytesEq(a: f.key, b: key) {
             match f.value {
@@ -64,13 +64,13 @@ fn sectionStr(sec: Section, key: Array[U8]) -> Array[U8] {
 fn sectionArr(sec: Section, key: Array[U8]) -> Array[Name] {
     mut val out: Array[Name] = []
     mut val i: U64 = 0
-    while i < sec.fields.count {
+    while i < sec.fields.count() {
         val f: Field = sec.fields[i]
         if bytesEq(a: f.key, b: key) {
             match f.value {
                 Value.Arr(val items) => {
                     mut val j: U64 = 0
-                    while j < items.count {
+                    while j < items.count() {
                         out.append(<Name s=items[j].str />)
                         j += 1
                     }
@@ -89,7 +89,7 @@ export fn parseLock(bytes: Array[U8]) -> Lock {
     mut val pkgs: Array[LockPkg] = []
     mut val refs: Array[Name] = []
     mut val si: U64 = 0
-    while si < doc.sections.count {
+    while si < doc.sections.count() {
         val sec: Section = doc.sections[si]
         if sec.isArrayElem {
             if bytesEq(a: sec.header, b: "package".bytes()) {
@@ -108,7 +108,7 @@ export fn parseLock(bytes: Array[U8]) -> Lock {
 // Look up a package by git URL; returns its commit (empty if not in the lock).
 export fn lockCommitFor(lock: Lock, git: Array[U8]) -> Array[U8] {
     mut val i: U64 = 0
-    while i < lock.pkgs.count {
+    while i < lock.pkgs.count() {
         val p: LockPkg = lock.pkgs[i]
         if bytesEq(a: p.git, b: git) {
             return p.commit
@@ -125,7 +125,7 @@ export fn lockCommitFor(lock: Lock, git: Array[U8]) -> Array[U8] {
 // the constraint is empty.
 export fn lockCommitForConstraint(lock: Lock, git: Array[U8], constraint: Array[U8]) -> Array[U8] {
     mut val i: U64 = 0
-    while i < lock.pkgs.count {
+    while i < lock.pkgs.count() {
         val p: LockPkg = lock.pkgs[i]
         if bytesEq(a: p.git, b: git) {
             if satisfies(constraint: constraint, candidate: p.version) {
@@ -142,9 +142,9 @@ export fn lockCommitForConstraint(lock: Lock, git: Array[U8], constraint: Array[
 // Lexicographic byte comparison: true when a < b.
 fn bytesLess(a: Array[U8], b: Array[U8]) -> Bool {
     mut val i: U64 = 0
-    mut val n: U64 = a.count
-    if b.count < n {
-        n = b.count
+    mut val n: U64 = a.count()
+    if b.count() < n {
+        n = b.count()
     }
     while i < n {
         if a[i] < b[i] {
@@ -155,7 +155,7 @@ fn bytesLess(a: Array[U8], b: Array[U8]) -> Bool {
         }
         i += 1
     }
-    return a.count < b.count
+    return a.count() < b.count()
 }
 
 // A package sorts before another by git URL, then by version (spec/17: a
@@ -174,13 +174,13 @@ fn pkgLess(a: LockPkg, b: LockPkg) -> Bool {
 fn sortPkgs(pkgs: Array[LockPkg]) -> Array[LockPkg] {
     mut val out: Array[LockPkg] = []
     mut val i: U64 = 0
-    while i < pkgs.count {
+    while i < pkgs.count() {
         val p: LockPkg = pkgs[i]
         // insert p into out keeping order
-        mut val pos: U64 = out.count
+        mut val pos: U64 = out.count()
         mut val j: U64 = 0
         mut val found: Bool = false
-        while j < out.count {
+        while j < out.count() {
             if !found {
                 if pkgLess(a: p, b: out[j]) {
                     pos = j
@@ -192,14 +192,14 @@ fn sortPkgs(pkgs: Array[LockPkg]) -> Array[LockPkg] {
         // build a new array with p inserted at pos
         mut val next: Array[LockPkg] = []
         mut val k: U64 = 0
-        while k < out.count {
+        while k < out.count() {
             if k == pos {
                 next.append(p)
             }
             next.append(out[k])
             k += 1
         }
-        if pos == out.count {
+        if pos == out.count() {
             next.append(p)
         }
         out = next
@@ -219,7 +219,7 @@ fn emitArr(into: inout Array[U8], key: Array[U8], names: Array[Name]) {
     appendBytes(into: inout into, from: key)
     appendBytes(into: inout into, from: " = [".bytes())
     mut val i: U64 = 0
-    while i < names.count {
+    while i < names.count() {
         if i > 0 {
             appendBytes(into: inout into, from: ", ".bytes())
         }
@@ -237,11 +237,11 @@ export fn writeLock(pkgs: Array[LockPkg], referrers: Array[Name]) -> Array[U8] {
     appendBytes(into: inout out, from: "version = 1\n".bytes())
     val sorted: Array[LockPkg] = sortPkgs(pkgs: pkgs)
     mut val i: U64 = 0
-    while i < sorted.count {
+    while i < sorted.count() {
         val p: LockPkg = sorted[i]
         appendBytes(into: inout out, from: "\n[[package]]\n".bytes())
         emitStr(into: inout out, key: "git".bytes(), value: p.git)
-        if p.version.count > 0 {
+        if p.version.count() > 0 {
             emitStr(into: inout out, key: "version".bytes(), value: p.version)
         }
         emitStr(into: inout out, key: "commit".bytes(), value: p.commit)
@@ -249,7 +249,7 @@ export fn writeLock(pkgs: Array[LockPkg], referrers: Array[Name]) -> Array[U8] {
         i += 1
     }
     mut val r: U64 = 0
-    while r < referrers.count {
+    while r < referrers.count() {
         appendBytes(into: inout out, from: "\n[[referrer]]\n".bytes())
         emitStr(into: inout out, key: "path".bytes(), value: referrers[r].s)
         r += 1

@@ -1,6 +1,6 @@
 // Part of the LLVM backend (root: _.pw): deinit emission, scope drop, and block execution.
 
-// The `deinit` method index of struct `sidx`, or c.arena.funcs.count if it has none.
+// The `deinit` method index of struct `sidx`, or c.arena.funcs.count() if it has none.
 
 pub impl LlvmCtx {
 
@@ -8,7 +8,7 @@ pub impl LlvmCtx {
     // items: Array[S] }` at codegen): push on entry to a struct's release/retain emission,
     // pop on exit; a struct already on the stack is skipped (its deeper level leaks).
     inout fn arcPush(sidx: U64) {
-        if self.arcDepth < self.arcStack.count {
+        if self.arcDepth < self.arcStack.count() {
             self.arcStack[self.arcDepth] = sidx
         } else {
             self.arcStack.append(sidx)
@@ -34,12 +34,12 @@ pub impl LlvmCtx {
     // Whether destroying a value of struct `sidx` runs any deinit — its own, or a
     // (registered, non-array) field's, recursively (spec/03).
     inout fn structNeedsDeinit(c: inout Comp, sidx: U64) -> Bool {
-        if structDeinitFi(c: inout c, sidx: sidx) < c.arena.funcs.count {
+        if structDeinitFi(c: inout c, sidx: sidx) < c.arena.funcs.count() {
             return true
         }
         val sd: StructDef = c.arena.structs[sidx]
         mut val i: U64 = 0
-        while i < sd.fields.count {
+        while i < sd.fields.count() {
             val fd: FieldDef = sd.fields[i]
             // an array OR Buffer field owns an rc-managed buffer that must be released. This
             // now INCLUDES the Array struct itself (`struct { data: Buffer[T] }`): its single
@@ -54,7 +54,7 @@ pub impl LlvmCtx {
                 return true
             }
             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-            if fsi < c.arena.structs.count {
+            if fsi < c.arena.structs.count() {
                 if !(c.arena.structs[fsi].isExtern) {
                     if self.structNeedsDeinit(c: inout c, sidx: fsi) {
                         return true
@@ -66,29 +66,29 @@ pub impl LlvmCtx {
         return false
     }
 
-    // The dropWit* slot for struct `sidx`, or dropWitSidx.count if none declared yet.
+    // The dropWit* slot for struct `sidx`, or dropWitSidx.count() if none declared yet.
     inout fn dropWitSlot(sidx: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.dropWitSidx.count {
+        while i < self.dropWitSidx.count() {
             if self.dropWitSidx[i] == sidx {
                 return i
             }
             i += 1
         }
-        return self.dropWitSidx.count
+        return self.dropWitSidx.count()
     }
 
     // The registered struct-type slot (index into structIdxs/structTys) for struct `sidx`,
-    // or structIdxs.count if `sidx` is not a registered struct.
+    // or structIdxs.count() if `sidx` is not a registered struct.
     inout fn structSlotForSidx(sidx: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.structIdxs.count {
+        while i < self.structIdxs.count() {
             if self.structIdxs[i] == sidx {
                 return i
             }
             i += 1
         }
-        return self.structIdxs.count
+        return self.structIdxs.count()
     }
 
     // Ensure the per-type drop witness `void @pwdrop<sidx>(structVal)` is declared, and
@@ -96,7 +96,7 @@ pub impl LlvmCtx {
     // must have checked `sidx` is a registered struct.
     inout fn structDropWitness(c: inout Comp, sidx: U64) -> U64 {
         val found: U64 = self.dropWitSlot(sidx: sidx)
-        if found < self.dropWitSidx.count {
+        if found < self.dropWitSidx.count() {
             return found
         }
         val reg: U64 = self.structSlotForSidx(sidx: sidx)
@@ -111,7 +111,7 @@ pub impl LlvmCtx {
         self.dropWitSidx.append(sidx)
         self.dropWitVal.append(fv)
         self.dropWitTy.append(fty)
-        return self.dropWitSidx.count - 1U64
+        return self.dropWitSidx.count() - 1U64
     }
 
     // Destroy a struct VALUE `v` of struct `sidx` (spec/03): run its own `deinit` body
@@ -120,7 +120,7 @@ pub impl LlvmCtx {
     // ONCE per type instead of inlined at every drop site (collapsing the IR).
     inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64) {
         // registered struct: call its drop witness instead of inlining the walker.
-        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
+        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count() {
             val slot: U64 = self.structDropWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
@@ -142,16 +142,16 @@ pub impl LlvmCtx {
         self.arcPush(sidx: sidx)
         val sd: StructDef = c.arena.structs[sidx]
         val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
-        if fi < c.arena.funcs.count {
+        if fi < c.arena.funcs.count() {
             val slot: U64 = self.userFnSlot(idx: fi)
-            if slot < self.fnIdx.count {
+            if slot < self.fnIdx.count() {
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
                 LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), 1U64, anon())
             }
         }
         mut val i: U64 = 0
-        while i < sd.fields.count {
+        while i < sd.fields.count() {
             val fd: FieldDef = sd.fields[i]
             if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
                 // release the field's rc-managed array/Buffer buffer (its elements cascade
@@ -169,7 +169,7 @@ pub impl LlvmCtx {
                 self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety, elemRef: er)
             } else {
                 val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                if fsi < c.arena.structs.count {
+                if fsi < c.arena.structs.count() {
                     if !(c.arena.structs[fsi].isExtern) {
                         if self.structNeedsDeinit(c: inout c, sidx: fsi) {
                             self.emitDeinitValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), sidx: fsi)
@@ -187,7 +187,7 @@ pub impl LlvmCtx {
     // growing cursor — a walk may declare further sub-struct witnesses (appended to the
     // tables), which this same loop then picks up. Called once after the main emit pass.
     inout fn emitDropWitnessBodies(c: inout Comp) {
-        while self.dropWitDone < self.dropWitSidx.count {
+        while self.dropWitDone < self.dropWitSidx.count() {
             val s: U64 = self.dropWitDone
             val sidx: U64 = self.dropWitSidx[s]
             val fv: LLVMValueRef = self.dropWitVal[s]
@@ -201,12 +201,12 @@ pub impl LlvmCtx {
 
     // Whether any witness table has an undrained body pending (count past its cursor).
     inout fn witnessPending() -> Bool {
-        if self.dropWitDone < self.dropWitSidx.count { return true }
-        if self.retWitDone < self.retWitSidx.count { return true }
-        if self.copyWitDone < self.copyWitSidx.count { return true }
-        if self.enumRelWitDone < self.enumRelWitEid.count { return true }
-        if self.enumRetWitDone < self.enumRetWitEid.count { return true }
-        if self.enumCopyWitDone < self.enumCopyWitEid.count { return true }
+        if self.dropWitDone < self.dropWitSidx.count() { return true }
+        if self.retWitDone < self.retWitSidx.count() { return true }
+        if self.copyWitDone < self.copyWitSidx.count() { return true }
+        if self.enumRelWitDone < self.enumRelWitEid.count() { return true }
+        if self.enumRetWitDone < self.enumRetWitEid.count() { return true }
+        if self.enumCopyWitDone < self.enumCopyWitEid.count() { return true }
         return false
     }
 
@@ -271,7 +271,7 @@ pub impl LlvmCtx {
                 if li >= self.curBodyMark {
                     val bdata: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
                     mut val ber: U64 = 0
-                    if c.arena.types[self.locTypeRef[li]].args.count > 0U64 {
+                    if c.arena.types[self.locTypeRef[li]].args.count() > 0U64 {
                         ber = c.arena.types[self.locTypeRef[li]].args[0]
                     }
                     if self.arrElemNeedsValueArc(c: inout c, elemRef: ber) {
@@ -286,7 +286,7 @@ pub impl LlvmCtx {
         // a `Ref[T]` local with a deinit-bearing pointee: release the shared cell; when
         // the last owner drops (refcount hits 0), destroy the pointee (spec/03).
         val rpsi: U64 = self.refDeinitPointeeSidx(c: inout c, refTy: self.locTypeRef[li])
-        if rpsi < c.arena.structs.count {
+        if rpsi < c.arena.structs.count() {
             val cell: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
             val newcount: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
             val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), newcount, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
@@ -301,7 +301,7 @@ pub impl LlvmCtx {
             return
         }
         val sidx: U64 = self.locStructIdx[li]
-        if sidx >= c.arena.structs.count {
+        if sidx >= c.arena.structs.count() {
             // an owned enum BODY local: release its active variant's payload heap. Gated on
             // li >= curBodyMark like arrays/structs (params / globals / captures excluded).
             if li >= self.curBodyMark {
@@ -336,7 +336,7 @@ pub impl LlvmCtx {
         val mark: U64 = self.nLocals
         val blk: Block = c.arena.blocks[id]
         mut val i: U64 = 0
-        while i < blk.stmts.count {
+        while i < blk.stmts.count() {
             if self.terminated {
                 self.nLocals = mark
                 return

@@ -43,12 +43,12 @@ pub impl Comp {
                                 // arg (`Array[I64]` -> I64) if structured, else by name.
                                 mut val elemRef: U64 = 0
                                 if ty != 0U64 {
-                                    if self.arena.types[ty].args.count > 0U64 {
+                                    if self.arena.types[ty].args.count() > 0U64 {
                                         elemRef = self.arena.types[ty].args[0]
                                     }
                                 }
                                 mut val ek: U64 = 0
-                                while ek < elems.count {
+                                while ek < elems.count() {
                                     self.tcCheckValue(expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
                                     ek += 1
                                 }
@@ -61,7 +61,7 @@ pub impl Comp {
                                 // concrete primitives (a struct/generic element is left to the
                                 // existing machinery — conservative).
                                 if ty != 0U64 {
-                                    if self.arena.types[ty].args.count > 0U64 {
+                                    if self.arena.types[ty].args.count() > 0U64 {
                                         val de: TypeRef = self.arena.types[self.arena.types[ty].args[0]]
                                         val it: TypeInfo = self.typeOf(id: init)
                                         if it.kind == 3 {
@@ -215,7 +215,7 @@ pub impl Comp {
                                 compileErrorAt(line: self.lineOf(offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
                             }
                             mut val bi: U64 = 0
-                            while bi < binds.count {
+                            while bi < binds.count() {
                                 val bd: Bind = binds[bi]
                                 val ft: TypeInfo = self.forBindFieldType(et: et, bd: bd)
                                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
@@ -240,7 +240,7 @@ pub impl Comp {
                     compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 }
                 mut val ai: U64 = 0
-                while ai < arms.count {
+                while ai < arms.count() {
                     val armMark: U64 = self.scopeMark()
                     val savedArmBB: U64 = self.cur.branchBase
                     self.cur.branchBase = armMark

@@ -9,14 +9,14 @@
 pub impl LlvmCtx {
 
     // If expression `recv` has an existential `any P` type, the trait def index of P;
-    // else c.decls.traits.count. (Resolved later than refIsAny so the forward reference to
+    // else c.decls.traits.count(). (Resolved later than refIsAny so the forward reference to
     // findTraitIdxByName is fine — the module is one compilation unit.)
     inout fn anyRecvTraitIdx(c: inout Comp, recv: U64) -> U64 {
         val r: U64 = self.exprTypeRef(c: inout c, id: recv)
         if refIsAny(c: inout c, ref: r) {
             return c.findTraitIdxByName(start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
         }
-        return c.decls.traits.count
+        return c.decls.traits.count()
     }
 }
 
@@ -32,7 +32,7 @@ pub impl LlvmCtx {
         // (the front-end models it as one, but the LLVM array machinery — literal /
         // append / for / index — all use arrayTy). Mapping it here keeps a function
         // param/return/field of array type consistent with that machinery.
-        if ref < c.arena.types.count {
+        if ref < c.arena.types.count() {
             val at: TypeRef = c.arena.types[ref]
             if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
                 return self.arrayTy
@@ -44,17 +44,17 @@ pub impl LlvmCtx {
             // (registerGenStructNames skips it). Ask the representation question once here.
             val gat: TypeRef = c.arena.types[ref]
             val gxi: U64 = c.genericStructIndex(nameStart: gat.nameStart, nameLen: gat.nameLen)
-            if gxi < c.arena.structs.count {
+            if gxi < c.arena.structs.count() {
                 if c.arena.structs[gxi].isExtern {
                     return self.ptrty
                 }
             }
             val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
-            if gs < self.genStructRefs.count {
+            if gs < self.genStructRefs.count() {
                 return self.genStructTys[gs]
             }
             val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
-            if ge < self.genEnumRefs.count {
+            if ge < self.genEnumRefs.count() {
                 return self.genEnumTys[ge]
             }
         }
@@ -206,7 +206,7 @@ pub impl LlvmCtx {
 
     // The c.arena.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
     // for a struct/enum lhs operand (so `money + money` dispatches to the user's
-    // `impl Money as Add`), or c.arena.funcs.count when the lhs isn't a registered
+    // `impl Money as Add`), or c.arena.funcs.count() when the lhs isn't a registered
     // aggregate (a primitive — the caller keeps the built-in op). Mirrors the C
     // backend's findBinTraitWitness, but recovers the rhs type via the LLVM env
     // (typeOf can't see locals here), so `a + b` (rhs Vec2) picks `Add[Vec2]` over
@@ -215,12 +215,12 @@ pub impl LlvmCtx {
         mut val ownStart: U64 = 0
         mut val ownLen: U64 = 0
         val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
-        if sidx < c.arena.structs.count {
+        if sidx < c.arena.structs.count() {
             ownStart = c.arena.structs[sidx].nameStart
             ownLen = c.arena.structs[sidx].nameLen
         } else {
             val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-            if eid < c.arena.enums.count {
+            if eid < c.arena.enums.count() {
                 ownStart = c.arena.enums[eid].nameStart
                 ownLen = c.arena.enums[eid].nameLen
             } else {
@@ -232,7 +232,7 @@ pub impl LlvmCtx {
                     ownStart = ss.nameStart
                     ownLen = ss.nameLen
                 } else {
-                    return c.arena.funcs.count
+                    return c.arena.funcs.count()
                 }
             }
         }
@@ -243,34 +243,34 @@ pub impl LlvmCtx {
         mut val rhsId: U64 = 0
         mut val rhsKnown: Bool = false
         val rsidx: U64 = self.exprStructIdx(c: inout c, id: rhs)
-        if rsidx < c.arena.structs.count {
+        if rsidx < c.arena.structs.count() {
             rhsId = intern(c: inout c, start: c.arena.structs[rsidx].nameStart, len: c.arena.structs[rsidx].nameLen)
             rhsKnown = true
         } else {
             val reid: U64 = self.exprEnumIdx(c: inout c, id: rhs)
-            if reid < c.arena.enums.count {
+            if reid < c.arena.enums.count() {
                 rhsId = intern(c: inout c, start: c.arena.enums[reid].nameStart, len: c.arena.enums[reid].nameLen)
                 rhsKnown = true
             }
         }
-        mut val firstMatch: U64 = c.arena.funcs.count
-        mut val intMatch: U64 = c.arena.funcs.count
+        mut val firstMatch: U64 = c.arena.funcs.count()
+        mut val intMatch: U64 = c.arena.funcs.count()
         mut val i: U64 = 0
-        while i < c.arena.funcs.count {
+        while i < c.arena.funcs.count() {
             val f: Func = c.arena.funcs[i]
             if f.isAssoc {
                 if f.recvId == qType {
                     if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                        if firstMatch == c.arena.funcs.count {
+                        if firstMatch == c.arena.funcs.count() {
                             firstMatch = i
                         }
-                        if f.params.count >= 2U64 {
+                        if f.params.count() >= 2U64 {
                             if rhsKnown {
                                 if f.params[1].tyNameId == rhsId {
                                     return i
                                 }
                             }
-                            if intMatch == c.arena.funcs.count {
+                            if intMatch == c.arena.funcs.count() {
                                 if c.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
                                     intMatch = i
                                 }
@@ -282,7 +282,7 @@ pub impl LlvmCtx {
             i += 1
         }
         if !(rhsKnown) {
-            if intMatch < c.arena.funcs.count {
+            if intMatch < c.arena.funcs.count() {
                 return intMatch
             }
         }
@@ -291,39 +291,39 @@ pub impl LlvmCtx {
 
     // The c.arena.funcs index of the `Eq` witness `T.eq(lhs:rhs:)` for the `==`/`!=`
     // operand `lhs` (a registered struct/enum, or the String lang-item detected by
-    // value-kind), or c.arena.funcs.count when the operand carries no Eq witness (a
+    // value-kind), or c.arena.funcs.count() when the operand carries no Eq witness (a
     // scalar — compared by `icmp` directly — or a non-`@[Eq]` enum — tag-compared).
     // Comparison is trait sugar like arithmetic (spec/12), but `Eq.eq` has a fixed
     // selector, so this resolves by name rather than via `binTraitMethodName`.
     inout fn eqWitnessFn(c: inout Comp, lhs: U64) -> U64 {
         val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
-        if sidx < c.arena.structs.count {
+        if sidx < c.arena.structs.count() {
             return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: "eq")
         }
         val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-        if eid < c.arena.enums.count {
+        if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "eq")
         }
         if self.valueKind(c: inout c, id: lhs) == 1U64 {
             val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
             return c.findAssocByName(typeStart: ss.nameStart, typeLen: ss.nameLen, name: "eq")
         }
-        return c.arena.funcs.count
+        return c.arena.funcs.count()
     }
 
     // The c.arena.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
-    // for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count
+    // for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count()
     // when the operand isn't a registered aggregate.
     inout fn unaryWitnessFn(c: inout Comp, op: I64, operand: U64) -> U64 {
         val sidx: U64 = self.exprStructIdx(c: inout c, id: operand)
-        if sidx < c.arena.structs.count {
+        if sidx < c.arena.structs.count() {
             return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
         }
         val eid: U64 = self.exprEnumIdx(c: inout c, id: operand)
-        if eid < c.arena.enums.count {
+        if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
         }
-        return c.arena.funcs.count
+        return c.arena.funcs.count()
     }
 
     // Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
@@ -331,13 +331,13 @@ pub impl LlvmCtx {
     // operator witnesses); a missing slot is a loud not-yet-emittable error.
     inout fn emitWitnessCall(c: inout Comp, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
         mut val aslot: U64 = self.userFnSlot(idx: fi)
-        if aslot >= self.fnIdx.count {
+        if aslot >= self.fnIdx.count() {
             // a witness on a lang-item the upfront pass doesn't emit (`String.add` for
             // `"a" + "b"` — String isn't a registered struct, so isPlainUserFn skips it):
             // declare it lazily like a provided method and queue its body for emission.
             aslot = self.ensureFreeFnDeclared(c: inout c, fi: fi)
         }
-        if aslot >= self.fnIdx.count {
+        if aslot >= self.fnIdx.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -347,6 +347,6 @@ pub impl LlvmCtx {
         if binary {
             av.append(self.genArgValue(c: inout c, argExpr: rhs, p: af.params[1]))
         }
-        return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count, anon())
+        return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count(), anon())
     }
 }

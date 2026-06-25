@@ -50,8 +50,8 @@ export fn finishModulePath(base: Array[U8]) -> Array[U8] {
     }
     mut val under: Array[U8] = []
     appendBytes(into: inout under, from: base)
-    if base.count > 0 {
-        if base[base.count - 1] == 47 {
+    if base.count() > 0 {
+        if base[base.count() - 1] == 47 {
             appendBytes(into: inout under, from: "_.pw".bytes())
         } else {
             appendBytes(into: inout under, from: "/_.pw".bytes())
@@ -155,7 +155,7 @@ export fn extractSpan(buf: Array[U8], start: U64, len: U64) -> Array[U8] {
 export fn dirPrefixLen(path: Array[U8]) -> U64 {
     mut val pre: U64 = 0
     mut val k: U64 = 0
-    while k < path.count {
+    while k < path.count() {
         if path[k] == 47 {
             pre = k + 1
         }
@@ -227,7 +227,7 @@ export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
 // `src/` (manifest may override later); only the manifest's *location* is used.
 export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     val dir: Array[U8] = findPkgDir(entry: entry)
-    if dir.count == 0 {
+    if dir.count() == 0 {
         return dir
     }
     mut val sr: Array[U8] = []
@@ -240,7 +240,7 @@ export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
 // `path` does not end in `.pw` (46='.', 112='p', 119='w').
 export fn genSiblingPath(path: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
-    val n: U64 = path.count
+    val n: U64 = path.count()
     if n < 3 {
         return out
     }
@@ -261,12 +261,12 @@ export fn genSiblingPath(path: Array[U8]) -> Array[U8] {
 // import edge to the specific module a path resolved to.
 export fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> U64 {
     mut val i: U64 = 0
-    while i < loaded.count {
+    while i < loaded.count() {
         val b: Bind = loaded[i]
-        if b.nameLen == path.count {
+        if b.nameLen == path.count() {
             mut val eq: Bool = true
             mut val j: U64 = 0
-            while j < path.count {
+            while j < path.count() {
                 if buf[b.nameStart + j] != path[j] {
                     eq = false
                 }
@@ -285,12 +285,12 @@ export fn moduleIdOfPath(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -
 // Dedup keeps a module included once and makes import cycles terminate.
 export fn pathSeen(buf: Array[U8], loaded: Array[Bind], path: Array[U8]) -> Bool {
     mut val i: U64 = 0
-    while i < loaded.count {
+    while i < loaded.count() {
         val b: Bind = loaded[i]
-        if b.nameLen == path.count {
+        if b.nameLen == path.count() {
             mut val eq: Bool = true
             mut val j: U64 = 0
-            while j < path.count {
+            while j < path.count() {
                 if buf[b.nameStart + j] != path[j] {
                     eq = false
                 }

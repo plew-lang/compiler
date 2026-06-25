@@ -7,7 +7,7 @@
 pub impl Comp {
     inout fn verifyArgs(args: Array[Arg]) {
         mut val i: U64 = 0
-        while i < args.count {
+        while i < args.count() {
             self.verifyExpr(id: args[i].expr)
             i += 1
         }
@@ -16,10 +16,10 @@ pub impl Comp {
         // is the syntactic case ① (identical place expressions); distinct-provability for
         // subscripts (case ②/③) is a separate lint/runtime concern.
         mut val a: U64 = 0
-        while a < args.count {
+        while a < args.count() {
             if args[a].isInout {
                 mut val b: U64 = a + 1U64
-                while b < args.count {
+                while b < args.count() {
                     if args[b].isInout {
                         if self.exprSyntaxEq(a: args[a].expr, b: args[b].expr) {
                             compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: args[b].expr)), msg: "two `inout` arguments refer to the same place in one call; overlapping `inout` is forbidden (last-write-wins would be a silent bug)")
@@ -92,7 +92,7 @@ pub impl Comp {
             // inspects the impl block's visibility); skip if unresolved (a separate
             // "no such method" diagnostic covers that).
             val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-            if mi < self.arena.funcs.count {
+            if mi < self.arena.funcs.count() {
                 self.checkMethodVis(ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: self.arena.funcs[mi], offset: nameStart)
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
                 // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
@@ -108,7 +108,7 @@ pub impl Comp {
                     // position, so an `inout` argument naming the same place as the receiver
                     // overlaps — last-write-wins would be a silent bug.
                     mut val k: U64 = 0
-                    while k < args.count {
+                    while k < args.count() {
                         if args[k].isInout {
                             if self.exprSyntaxEq(a: recv, b: args[k].expr) {
                                 compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: args[k].expr)), msg: "the receiver of an `inout fn` and an `inout` argument refer to the same place; overlapping `inout` is forbidden (last-write-wins would be a silent bug)")

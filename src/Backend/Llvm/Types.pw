@@ -18,10 +18,10 @@ pub impl LlvmCtx {
         // generic substitution: a type-parameter name (T) in scope resolves to its
         // concrete argument (the monomorphization env curTypeParams -> curTypeArgs,
         // set while emitting a generic instance). No-op outside a generic context.
-        if c.cur.typeParams.count > 0U64 {
+        if c.cur.typeParams.count() > 0U64 {
             val qid: U64 = intern(c: inout c, start: tyStart, len: tyLen)
             mut val ti: U64 = 0
-            while ti < c.cur.typeParams.count {
+            while ti < c.cur.typeParams.count() {
                 if c.cur.typeParams[ti].nameId == qid {
                     // a type param bound to a generic instance (`I -> MapIter[Counter,…]`)
                     // must resolve to that registered instance type — recursing on the
@@ -80,12 +80,12 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "U32") { return self.i32ty }
         // a registered (all-primitive-field) user struct -> its named LLVM struct type.
         val reg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if reg < self.structIdxs.count {
+        if reg < self.structIdxs.count() {
             return self.structTys[reg]
         }
         // a registered enum -> its named tagged-union type.
         val ereg: U64 = self.enumRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if ereg < self.enumIdxs.count {
+        if ereg < self.enumIdxs.count() {
             return self.enumTys[ereg]
         }
         // an extern(c) opaque foreign-C handle type (`type LLVMTypeRef`) — the C
@@ -93,7 +93,7 @@ pub impl LlvmCtx {
         // (`_llvm.pw`) passes these (LLVMValueRef/LLVMTypeRef/…) pervasively, so the
         // backend must lower them to `ptr` to self-compile.
         val cxi: U64 = c.structIndexByName(start: tyStart, len: tyLen)
-        if cxi < c.arena.structs.count {
+        if cxi < c.arena.structs.count() {
             if c.arena.structs[cxi].isCExtern {
                 return self.ptrty
             }
@@ -102,19 +102,19 @@ pub impl LlvmCtx {
     }
 
     // Index into st.struct* for a registered struct named (start,len), or
-    // st.structIdxs.count if the type is not a registered struct.
+    // st.structIdxs.count() if the type is not a registered struct.
     inout fn structRegSlot(c: inout Comp, start: U64, len: U64) -> U64 {
         val sidx: U64 = c.structIndexByName(start: start, len: len)
-        if sidx < c.arena.structs.count {
+        if sidx < c.arena.structs.count() {
             mut val i: U64 = 0
-            while i < self.structIdxs.count {
+            while i < self.structIdxs.count() {
                 if self.structIdxs[i] == sidx {
                     return i
                 }
                 i += 1
             }
         }
-        return self.structIdxs.count
+        return self.structIdxs.count()
     }
 }
 
@@ -130,7 +130,7 @@ pub impl LlvmCtx {
     // body pass regardless of declaration order.
     inout fn registerStructNames(c: inout Comp) {
         mut val i: U64 = 0
-        while i < c.arena.structs.count {
+        while i < c.arena.structs.count() {
             if structRegisterable(c: inout c, sidx: i) {
                 self.structIdxs.append(i)
                 // `String` is the canonical single-`Buffer` struct: its VALUE rep is the shared
@@ -159,7 +159,7 @@ pub impl LlvmCtx {
     // named type (llvmTypeFor -> llvmScalarTy finds the registered enum/struct).
     inout fn registerStructBodies(c: inout Comp) {
         mut val s: U64 = 0
-        while s < self.structIdxs.count {
+        while s < self.structIdxs.count() {
             val sd: StructDef = c.arena.structs[self.structIdxs[s]]
             // `String`'s registered type is the shared strty (a literal struct whose `{ptr}`
             // body is fixed at creation); LLVMStructSetBody is only valid on a named struct,
@@ -169,7 +169,7 @@ pub impl LlvmCtx {
             } else {
             mut val elems: Array[LLVMTypeRef] = []
             mut val fi: U64 = 0
-            while fi < sd.fields.count {
+            while fi < sd.fields.count() {
                 // a boxed (recursive) field is stored as a heap pointer.
                 if c.fieldIsBoxed(f: sd.fields[fi]) {
                     elems.append(self.ptrty)
@@ -178,7 +178,7 @@ pub impl LlvmCtx {
                 }
                 fi += 1
             }
-            LLVMStructSetBody(self.structTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
+            LLVMStructSetBody(self.structTys[s], arrayCPtr(elems), sd.fields.count(), 0I32)
             s += 1
             }
         }

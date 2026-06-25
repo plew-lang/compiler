@@ -16,13 +16,13 @@ pub impl Comp {
             if f.isAsync {
                 if rangeEquals(bytes: self.arena.bytes, start: rStart, len: rLen, kw: "Promise") {
                     if rTy != 0U64 {
-                        if rTy < self.arena.types.count {
+                        if rTy < self.arena.types.count() {
                             val pt: TypeRef = self.arena.types[rTy]
-                            if pt.args.count >= 1U64 {
+                            if pt.args.count() >= 1U64 {
                                 val innerRef: U64 = pt.args[0]
                                 rTy = innerRef
                                 rArr = false
-                                if innerRef < self.arena.types.count {
+                                if innerRef < self.arena.types.count() {
                                     rStart = self.arena.types[innerRef].nameStart
                                     rLen = self.arena.types[innerRef].nameLen
                                 }
@@ -58,7 +58,7 @@ pub impl Comp {
         self.seedGlobalLocals()
         self.checkGenericArity(ref: f.retTy, offset: f.nameStart)
         mut val pi: U64 = 0
-        while pi < f.params.count {
+        while pi < f.params.count() {
             val p: Param = f.params[pi]
             self.checkGenericArity(ref: p.ty, offset: p.nameStart)
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: p.isMove)
@@ -69,7 +69,7 @@ pub impl Comp {
 
     inout fn verifyMarkMoved(idx: U64) {
         mut val i: U64 = 0
-        while i < self.cur.verifyMovedIdx.count {
+        while i < self.cur.verifyMovedIdx.count() {
             if self.cur.verifyMovedIdx[i] == idx {
                 return
             }
@@ -80,7 +80,7 @@ pub impl Comp {
 
     inout fn verifyIsMoved(idx: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.cur.verifyMovedIdx.count {
+        while i < self.cur.verifyMovedIdx.count() {
             if self.cur.verifyMovedIdx[i] == idx {
                 return true
             }
@@ -92,7 +92,7 @@ pub impl Comp {
     inout fn verifyUnmarkMoved(idx: U64) {
         mut val kept: Array[U64] = []
         mut val i: U64 = 0
-        while i < self.cur.verifyMovedIdx.count {
+        while i < self.cur.verifyMovedIdx.count() {
             if self.cur.verifyMovedIdx[i] != idx {
                 kept.append(self.cur.verifyMovedIdx[i])
             }
@@ -104,7 +104,7 @@ pub impl Comp {
     inout fn verifyDropMovedAbove(mark: U64) {
         mut val kept: Array[U64] = []
         mut val i: U64 = 0
-        while i < self.cur.verifyMovedIdx.count {
+        while i < self.cur.verifyMovedIdx.count() {
             if self.cur.verifyMovedIdx[i] < mark {
                 kept.append(self.cur.verifyMovedIdx[i])
             }
@@ -117,7 +117,7 @@ pub impl Comp {
         val mark: U64 = self.scopeMark()
         val b: Block = self.arena.blocks[blockId]
         mut val i: U64 = 0
-        while i < b.stmts.count {
+        while i < b.stmts.count() {
             self.verifyStmt(stmtId: b.stmts[i])
             i += 1
         }
@@ -137,7 +137,7 @@ pub impl Comp {
     inout fn exprIsUnit(id: U64) -> Bool {
         match self.arena.exprs[id] {
             Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
-                return typeLen == 0U64 && fields.count == 0U64
+                return typeLen == 0U64 && fields.count() == 0U64
             }
             _ => {
                 return false
@@ -148,10 +148,10 @@ pub impl Comp {
     inout fn checkIndexKeyType(base: U64, index: U64) {
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.ref != 0U64 {
-            if bt.ref < self.arena.types.count {
+            if bt.ref < self.arena.types.count() {
                 val t: TypeRef = self.arena.types[bt.ref]
                 if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Dictionary") {
-                    if t.args.count >= 1U64 {
+                    if t.args.count() >= 1U64 {
                         self.tcCheckValue(expectedRef: t.args[0], valueExpr: index, pos: "dict key")
                     }
                 }

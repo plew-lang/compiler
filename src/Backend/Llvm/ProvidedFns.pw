@@ -2,28 +2,28 @@
 
 // Lazily declare a (non-generic) provided trait method `fi` reached at a call site:
 // add its `pf<fi>` symbol with the self-first method signature and queue its body
-// for emission (provEmit). Returns the fnIdx slot, or st.fnIdx.count if it can't be
+// for emission (provEmit). Returns the fnIdx slot, or st.fnIdx.count() if it can't be
 // emitted (generic / non-struct receiver). Idempotent (returns the existing slot).
 
 pub impl LlvmCtx {
     inout fn ensureProvidedDeclared(c: inout Comp, fi: U64) -> U64 {
         val existing: U64 = self.userFnSlot(idx: fi)
-        if existing < self.fnIdx.count {
+        if existing < self.fnIdx.count() {
             return existing
         }
         val f: Func = c.arena.funcs[fi]
-        if f.typeParams.count > 0U64 {
-            return self.fnIdx.count
+        if f.typeParams.count() > 0U64 {
+            return self.fnIdx.count()
         }
         if !(f.hasRecv) {
-            return self.fnIdx.count
+            return self.fnIdx.count()
         }
         // a registered struct receiver, or a primitive lang-item (String / a fixed-width
         // integer) — all have a well-defined self LLVM type.
-        if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count {
+        if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count() {
             if !(rangeEquals(bytes: c.arena.bytes, start: f.recvStart, len: f.recvLen, kw: "String")) {
                 if !(isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen)) {
-                    return self.fnIdx.count
+                    return self.fnIdx.count()
                 }
             }
         }
@@ -38,11 +38,11 @@ pub impl LlvmCtx {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.selfParamTy(c: inout c, f: f))
         mut val pi: U64 = 0
-        while pi < f.params.count {
+        while pi < f.params.count() {
             ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count(), 0I32)
         c.cur.selfRef = savedPS
         c.cur.itemRef = savedPI
         mut val nm: Array[U8] = []
@@ -54,37 +54,37 @@ pub impl LlvmCtx {
         self.fnVal.append(fv)
         self.fnTy.append(fty)
         self.provEmit.append(fi)
-        return self.fnIdx.count - 1U64
+        return self.fnIdx.count() - 1U64
     }
 
     // Declare a non-generic free function on demand and queue its body — a std free
     // function (digitByteI, called by I64.format) reached from an emitted body but
     // gated out of the eager pass (entry-module only). Reachability-driven, so an
     // uncalled std fn with unsupported constructs is never emitted. Returns the slot
-    // or st.fnIdx.count.
+    // or st.fnIdx.count().
     inout fn ensureFreeFnDeclared(c: inout Comp, fi: U64) -> U64 {
         val existing: U64 = self.userFnSlot(idx: fi)
-        if existing < self.fnIdx.count {
+        if existing < self.fnIdx.count() {
             return existing
         }
         val f: Func = c.arena.funcs[fi]
-        if f.typeParams.count > 0U64 { return self.fnIdx.count }
+        if f.typeParams.count() > 0U64 { return self.fnIdx.count() }
         // an assoc fn (`Trait.banner()`) has a receiver type but no self param — emit it
         // like a free function; a real method (self) is not handled here.
         if f.hasRecv {
             if !(f.isAssoc) {
-                return self.fnIdx.count
+                return self.fnIdx.count()
             }
         }
-        if f.isExtern { return self.fnIdx.count }
-        if c.nameIsMain(f: f) { return self.fnIdx.count }
+        if f.isExtern { return self.fnIdx.count() }
+        if c.nameIsMain(f: f) { return self.fnIdx.count() }
         mut val ptys: Array[LLVMTypeRef] = []
         mut val pi: U64 = 0
-        while pi < f.params.count {
+        while pi < f.params.count() {
             ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pf".bytes())
         appendU64Dec(into: inout nm, n: fi)
@@ -94,7 +94,7 @@ pub impl LlvmCtx {
         self.fnVal.append(fv)
         self.fnTy.append(fty)
         self.provEmit.append(fi)
-        return self.fnIdx.count - 1U64
+        return self.fnIdx.count() - 1U64
     }
 }
 
@@ -105,7 +105,7 @@ pub impl LlvmCtx {
     // symbol `gf<k>` with its signature built under the instance's substitution env.
     inout fn declareGenFns(c: inout Comp) {
         mut val k: U64 = 0
-        while k < c.monoWork.fnInsts.count {
+        while k < c.monoWork.fnInsts.count() {
             val fin: FnInst = c.monoWork.fnInsts[k]
             // free-function instances only (recvInstRef == 0); methods are a later step.
             // restrict to the entry module: a std generic fn (print[T] etc.) has a body
@@ -120,11 +120,11 @@ pub impl LlvmCtx {
                     c.cur.typeArgs = fin.args
                     mut val ptys: Array[LLVMTypeRef] = []
                     mut val pi: U64 = 0
-                    while pi < f.params.count {
+                    while pi < f.params.count() {
                         ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
                         pi += 1
                     }
-                    val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), f.params.count, 0I32)
+                    val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), f.params.count(), 0I32)
                     mut val nm: Array[U8] = []
                     appendBytes(into: inout nm, from: "gf".bytes())
                     appendU64Dec(into: inout nm, n: k)
@@ -144,7 +144,7 @@ pub impl LlvmCtx {
     // Emit each generic free-function instance body under its env.
     inout fn emitGenFns(c: inout Comp) {
         mut val slot: U64 = 0
-        while slot < self.genFnK.count {
+        while slot < self.genFnK.count() {
             val fin: FnInst = c.monoWork.fnInsts[self.genFnK[slot]]
             val f: Func = c.arena.funcs[fin.fnIdx]
             val savedP: Array[Bind] = c.cur.typeParams
@@ -172,7 +172,7 @@ pub impl LlvmCtx {
                 mut val fargs: Array[U64] = []
                 fargs.append(retTy)
                 mut val pj: U64 = 0
-                while pj < params.count {
+                while pj < params.count() {
                     fargs.append(params[pj].ty)
                     pj += 1
                 }
@@ -196,7 +196,7 @@ pub impl LlvmCtx {
             return tr
         }
         val si: U64 = self.exprStructIdx(c: inout c, id: argExpr)
-        if si < c.arena.structs.count {
+        if si < c.arena.structs.count() {
             return c.findOrAddTypeRef(nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
         }
         val t: TypeInfo = c.typeOf(id: argExpr)
@@ -216,15 +216,15 @@ pub impl LlvmCtx {
     inout fn llvmInferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
         mut val out: Array[U64] = []
         mut val ti: U64 = 0
-        while ti < f.typeParams.count {
+        while ti < f.typeParams.count() {
             val tp: Bind = f.typeParams[ti]
             mut val found: U64 = 0
             mut val pi: U64 = 0
-            while pi < f.params.count {
+            while pi < f.params.count() {
                 val p: Param = f.params[pi]
                 if p.tyIsArray {
                     if p.tyNameId == tp.nameId {
-                        if pi < args.count {
+                        if pi < args.count() {
                             if found == 0U64 {
                                 // recover the array arg's element ref via LLVM-side tracking
                                 // (locElemTypeRef); c.cur.locals is unpopulated in this backend.
@@ -233,7 +233,7 @@ pub impl LlvmCtx {
                         }
                     }
                 } else {
-                    if pi < args.count {
+                    if pi < args.count() {
                         if found == 0U64 {
                             val argRef: U64 = self.llvmArgTypeRef(c: inout c, argExpr: args[pi].expr)
                             found = c.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
@@ -264,11 +264,11 @@ pub impl LlvmCtx {
         if !(spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: recvStart, bLen: recvLen)) {
             return
         }
-        if et.args.count != inferred.count {
+        if et.args.count() != inferred.count() {
             return
         }
         mut val i: U64 = 0
-        while i < inferred.count {
+        while i < inferred.count() {
             // unfound (0) OR a width-less recovery (a nameless ref, e.g. an integer field
             // whose width the structural pass couldn't name): the expected type's arg is
             // the authoritative ground for this param, so override.

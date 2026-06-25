@@ -15,7 +15,7 @@
 pub impl LlvmCtx {
     inout fn markReachAssoc(fi: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.reachAssoc.count {
+        while i < self.reachAssoc.count() {
             if self.reachAssoc[i] == fi {
                 return false
             }
@@ -30,7 +30,7 @@ pub impl LlvmCtx {
 
     inout fn inReachAssoc(fi: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.reachAssoc.count {
+        while i < self.reachAssoc.count() {
             if self.reachAssoc[i] == fi {
                 return true
             }
@@ -46,35 +46,35 @@ pub impl LlvmCtx {
             Expr.Binary(op: _, val lhs, val rhs) => { self.scanExprAssoc(c: inout c, id: lhs) self.scanExprAssoc(c: inout c, id: rhs) }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count { self.scanExprAssoc(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.count() { self.scanExprAssoc(c: inout c, id: args[i].expr) i += 1 }
             }
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.scanExprAssoc(c: inout c, id: base) }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count { self.scanExprAssoc(c: inout c, id: fields[i].value) i += 1 }
+                while i < fields.count() { self.scanExprAssoc(c: inout c, id: fields[i].value) i += 1 }
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count { self.scanExprAssoc(c: inout c, id: elems[i]) i += 1 }
+                while i < elems.count() { self.scanExprAssoc(c: inout c, id: elems[i]) i += 1 }
             }
             Expr.Index(val base, val index) => { self.scanExprAssoc(c: inout c, id: base) self.scanExprAssoc(c: inout c, id: index) }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 val arn: Bind = c.assocRecvName(recv: recv)
                 if arn.nameLen != 0U64 {
                     val afi: U64 = c.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if afi < c.arena.funcs.count {
+                    if afi < c.arena.funcs.count() {
                         self.markReachAssoc(fi: afi)
                     }
                 } else {
                     self.scanExprAssoc(c: inout c, id: recv)
                 }
                 mut val i: U64 = 0
-                while i < args.count { self.scanExprAssoc(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.count() { self.scanExprAssoc(c: inout c, id: args[i].expr) i += 1 }
             }
             Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
                 self.scanExprAssoc(c: inout c, id: recv)
                 mut val i: U64 = 0
-                while i < args.count { self.scanExprAssoc(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.count() { self.scanExprAssoc(c: inout c, id: args[i].expr) i += 1 }
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
                 self.scanExprAssoc(c: inout c, id: recv)
@@ -83,7 +83,7 @@ pub impl LlvmCtx {
             Expr.MatchExpr(val scrut, val arms) => {
                 self.scanExprAssoc(c: inout c, id: scrut)
                 mut val i: U64 = 0
-                while i < arms.count {
+                while i < arms.count() {
                     self.scanBlockAssoc(c: inout c, id: arms[i].body)
                     i += 1
                 }
@@ -123,7 +123,7 @@ pub impl LlvmCtx {
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprAssoc(c: inout c, id: scrut)
                 mut val i: U64 = 0
-                while i < arms.count {
+                while i < arms.count() {
                     self.scanBlockAssoc(c: inout c, id: arms[i].body)
                     i += 1
                 }
@@ -140,7 +140,7 @@ pub impl LlvmCtx {
         }
         val blk: Block = c.arena.blocks[id]
         mut val i: U64 = 0
-        while i < blk.stmts.count {
+        while i < blk.stmts.count() {
             self.scanStmtAssoc(c: inout c, id: blk.stmts[i])
             i += 1
         }
@@ -152,7 +152,7 @@ pub impl LlvmCtx {
     // declareUserFns, which only emits an assoc fn that is reachable.
     inout fn collectReachableAssoc(c: inout Comp) {
         mut val fi: U64 = 0
-        while fi < c.arena.funcs.count {
+        while fi < c.arena.funcs.count() {
             if c.arena.funcs[fi].isAssoc {
                 // an operator-trait witness (add/sub/.../neg/not/bitnot) is reached
                 // structurally, not by call-graph: operator desugar (`a + b`, `-x`)
@@ -168,11 +168,11 @@ pub impl LlvmCtx {
             }
             fi += 1
         }
-        mut val prev: U64 = c.arena.funcs.count + 1U64
-        while self.reachAssoc.count != prev {
-            prev = self.reachAssoc.count
+        mut val prev: U64 = c.arena.funcs.count() + 1U64
+        while self.reachAssoc.count() != prev {
+            prev = self.reachAssoc.count()
             mut val ri: U64 = 0
-            while ri < self.reachAssoc.count {
+            while ri < self.reachAssoc.count() {
                 self.scanBlockAssoc(c: inout c, id: c.arena.funcs[self.reachAssoc[ri]].body)
                 ri += 1
             }
@@ -192,7 +192,7 @@ pub impl LlvmCtx {
         // never gets emitted. The body offset can't tell std from entry reliably here, so
         // reachability is the gate, not module membership.
         if f.isProvided { return false }
-        if f.typeParams.count > 0 { return false }
+        if f.typeParams.count() > 0 { return false }
         if f.isAssoc {
             // an associated function (`Type.name(args)`, no self) is emitted like a
             // free function, gated to a registered owner type in the entry module AND
@@ -203,10 +203,10 @@ pub impl LlvmCtx {
                 return false
             }
             if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.structIdxs.count {
+            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.structIdxs.count() {
                 return c.methodInEntryModule(f: f)
             }
-            if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count {
+            if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count() {
                 return c.methodInEntryModule(f: f)
             }
             return false
@@ -218,8 +218,8 @@ pub impl LlvmCtx {
             // original source offsets, to recover the defining module — this keeps std
             // struct methods, full of not-yet-supported constructs, from being emitted.)
             if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count {
-                if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.enumIdxs.count {
+            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count() {
+                if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.enumIdxs.count() {
                     return false
                 }
             }
@@ -248,7 +248,7 @@ pub impl LlvmCtx {
         }
         // ground a generic-instance param type (`Box[T]`) through the active env.
         mut val pt: U64 = p.ty
-        if c.cur.typeParams.count > 0U64 {
+        if c.cur.typeParams.count() > 0U64 {
             pt = c.groundTypeRef(ref: pt)
         }
         if c.isGenericInst(ref: pt) {
@@ -286,7 +286,7 @@ pub impl LlvmCtx {
             // `first() -> Optional[Item]` on Counter grounds Item -> I64 via curItemRef,
             // even though Counter has no type params).
             mut val rt: U64 = f.retTy
-            if c.cur.typeParams.count > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
+            if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
                 rt = c.groundTypeRef(ref: rt)
             }
             if c.isGenericInst(ref: rt) {
@@ -301,7 +301,7 @@ pub impl LlvmCtx {
     // caching (idx -> value, type) so calls resolve without name mangling.
     inout fn declareUserFns(c: inout Comp) {
         mut val fi: U64 = 0
-        while fi < c.arena.funcs.count {
+        while fi < c.arena.funcs.count() {
             val f: Func = c.arena.funcs[fi]
             if self.isPlainUserFn(c: inout c, fi: fi) {
                 // a plain method's `Self` (in `-> Self` / a `Self` param) resolves to the
@@ -315,7 +315,7 @@ pub impl LlvmCtx {
                     ptys.append(self.selfParamTy(c: inout c, f: f))
                 }
                 mut val pi: U64 = 0
-                while pi < f.params.count {
+                while pi < f.params.count() {
                     ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
                     pi += 1
                 }
@@ -323,7 +323,7 @@ pub impl LlvmCtx {
                 if didSelf {
                     c.clearSelfItemEnv()
                 }
-                val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+                val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "pf".bytes())
                 appendU64Dec(into: inout nm, n: fi)

@@ -2,25 +2,25 @@
 
 // ---- function-value thunks ----
 //
-// Index into st.thunk* for a function index, or st.thunkIdx.count.
+// Index into st.thunk* for a function index, or st.thunkIdx.count().
 
 pub impl LlvmCtx {
     inout fn thunkSlot(fi: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.thunkIdx.count {
+        while i < self.thunkIdx.count() {
             if self.thunkIdx[i] == fi {
                 return i
             }
             i += 1
         }
-        return self.thunkIdx.count
+        return self.thunkIdx.count()
     }
 
     // Declare a thunk `__fnthunk<fi>(ptr env, params...)` for plain user function `fi`
     // (so a bare reference to it can be the {fn, env} value). Idempotent; only declares
     // for a function the backend actually emits (a plain user fn).
     inout fn declareThunk(c: inout Comp, fi: U64) {
-        if self.thunkSlot(fi: fi) < self.thunkIdx.count {
+        if self.thunkSlot(fi: fi) < self.thunkIdx.count() {
             return
         }
         if !(self.isPlainUserFn(c: inout c, fi: fi)) {
@@ -33,11 +33,11 @@ pub impl LlvmCtx {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         mut val pi: U64 = 0
-        while pi < f.params.count {
+        while pi < f.params.count() {
             ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "__fnthunk".bytes())
         appendU64Dec(into: inout nm, n: fi)
@@ -52,13 +52,13 @@ pub impl LlvmCtx {
     // function-as-value use; over-approx is harmless — an unused thunk just sits).
     inout fn collectThunks(c: inout Comp) {
         mut val i: U64 = 0
-        while i < c.arena.exprs.count {
+        while i < c.arena.exprs.count() {
             match c.arena.exprs[i] {
                 Expr.Ident(val start, val len) => {
                     val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
-                    if fvi < c.arena.funcs.count {
+                    if fvi < c.arena.funcs.count() {
                         val f: Func = c.arena.funcs[fvi]
-                        if !(f.hasRecv || f.isAssoc || f.typeParams.count > 0U64) {
+                        if !(f.hasRecv || f.isAssoc || f.typeParams.count() > 0U64) {
                             self.declareThunk(c: inout c, fi: fvi)
                         }
                     }
@@ -73,7 +73,7 @@ pub impl LlvmCtx {
     // function pf<fi>, returning its result.
     inout fn emitThunks(c: inout Comp) {
         mut val s: U64 = 0
-        while s < self.thunkIdx.count {
+        while s < self.thunkIdx.count() {
             val fi: U64 = self.thunkIdx[s]
             val fv: LLVMValueRef = self.thunkVal[s]
             val f: Func = c.arena.funcs[fi]
@@ -82,11 +82,11 @@ pub impl LlvmCtx {
             val callSlot: U64 = self.userFnSlot(idx: fi)
             mut val av: Array[LLVMValueRef] = []
             mut val pi: U64 = 0
-            while pi < f.params.count {
+            while pi < f.params.count() {
                 av.append(LLVMGetParam(fv, pi + 1U64))
                 pi += 1
             }
-            val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[callSlot], self.fnVal[callSlot], arrayCPtr(av), av.count, anon())
+            val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[callSlot], self.fnVal[callSlot], arrayCPtr(av), av.count(), anon())
             if f.hasRet {
                 LLVMBuildRet(self.b, r)
             } else {

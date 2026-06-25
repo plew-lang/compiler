@@ -17,7 +17,7 @@ pub impl LlvmCtx {
     // pushed). Globals are program-lifetime, so they are never deinit'd (no scope-exit
     // drop here — the same leak level as a top-level array/String value).
     inout fn genLlvmInitGlobals(c: inout Comp) {
-        if c.arena.globals.count == 0U64 {
+        if c.arena.globals.count() == 0U64 {
             return
         }
         mut val noParams: Array[LLVMTypeRef] = []
@@ -44,7 +44,7 @@ pub impl LlvmCtx {
         self.locOwned = []
         self.locMoved = []
         mut val gi: U64 = 0
-        while gi < c.arena.globals.count {
+        while gi < c.arena.globals.count() {
             self.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
             val li: U64 = self.nLocals - 1U64
             val lty: LLVMTypeRef = self.locTy[li]
@@ -78,7 +78,7 @@ pub impl LlvmCtx {
     // (findLocal returns the most-recently pushed match).
     inout fn seedGlobals(c: inout Comp) {
         mut val gi: U64 = 0
-        while gi < self.gvalRef.count {
+        while gi < self.gvalRef.count() {
             self.pushLocalR(nameStart: c.arena.globals[gi].nameStart, nameLen: c.arena.globals[gi].nameLen, ptr: self.gvalRef[gi], ty: self.gvalLty[gi], kind: self.gvalKind[gi], structIdx: self.gvalSidx[gi], isArr: self.gvalIsArr[gi], elemTy: self.gvalElemTy[gi], elemKind: self.gvalElemKind[gi], typeRef: self.gvalTref[gi])
             self.setLocalElemStruct(esi: self.gvalElemStructIdx[gi])
             self.setLocalElemTypeRef(ref: self.gvalElemTypeRef[gi])
@@ -139,7 +139,7 @@ pub impl LlvmCtx {
 
     // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).
     inout fn callInitGlobals(c: inout Comp) {
-        if c.arena.globals.count == 0U64 {
+        if c.arena.globals.count() == 0U64 {
             return
         }
         mut val noParams: Array[LLVMTypeRef] = []

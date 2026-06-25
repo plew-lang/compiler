@@ -22,7 +22,7 @@ pub impl Comp {
         // an empty array, never a dict — `[:]` is the empty-dictionary literal (spec/02). An
         // empty `[]` here used to coincidentally read count 0 in a let binding yet reinterpret
         // to garbage as an argument; reject it with a clear pointer to `[:]`.
-        if expectedRef < self.arena.types.count {
+        if expectedRef < self.arena.types.count() {
             if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[expectedRef].nameStart, len: self.arena.types[expectedRef].nameLen, kw: "Dictionary") {
                 match self.arena.exprs[valueExpr] {
                     Expr.Array(elems: _) => {
@@ -57,15 +57,15 @@ pub impl Comp {
             }
             Expr.MatchExpr(scrut: _, val arms) => {
                 mut val ai: U64 = 0
-                while ai < arms.count {
+                while ai < arms.count() {
                     // skip an arm that binds payload fields: its binds are not in scope at
                     // this (the match-expr) position and may shadow an outer name, so
                     // inferType on the arm body would resolve the shadowed name wrongly.
                     // a diverging arm (`=> panic`) yields no value to check.
                     if !(arms[ai].isDiverge) {
-                        if arms[ai].binds.count == 0U64 {
+                        if arms[ai].binds.count() == 0U64 {
                             val g: U64 = self.blockGiveExpr(blkId: arms[ai].body)
-                            if g < self.arena.exprs.count {
+                            if g < self.arena.exprs.count() {
                                 self.tcCheckValue(expectedRef: expectedRef, valueExpr: g, pos: "match-branch")
                             }
                         }
@@ -79,12 +79,12 @@ pub impl Comp {
                 // the expected element type. Recurses, so arbitrary nesting is covered —
                 // inferType doesn't precisely type a literal's element, so this is the
                 // element check. (Only when the expected type is a known `Array[E]`.)
-                if expectedRef < self.arena.types.count {
+                if expectedRef < self.arena.types.count() {
                     val et: TypeRef = self.arena.types[expectedRef]
                     if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Array") {
-                        if et.args.count > 0U64 {
+                        if et.args.count() > 0U64 {
                             mut val ei: U64 = 0
-                            while ei < elems.count {
+                            while ei < elems.count() {
                                 self.tcCheckValue(expectedRef: et.args[0], valueExpr: elems[ei], pos: "element")
                                 ei += 1
                             }
@@ -149,7 +149,7 @@ pub impl Comp {
         if l == 0U64 || r == 0U64 {
             return
         }
-        if l >= self.arena.types.count || r >= self.arena.types.count {
+        if l >= self.arena.types.count() || r >= self.arena.types.count() {
             return
         }
         // comparison is `Eq`/`Ord` on the SAME type (no Rhs), so the operands must match
@@ -173,7 +173,7 @@ pub impl Comp {
     }
 
     inout fn tcIsUnsignedInt(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count {
+        if ref == 0U64 || ref >= self.arena.types.count() {
             return false
         }
         val t: TypeRef = self.arena.types[ref]
@@ -200,7 +200,7 @@ pub impl Comp {
 
     inout fn tcCheckUnary(op: I64, operand: U64) {
         val t: U64 = self.inferType(id: operand)
-        if t == 0U64 || t >= self.arena.types.count {
+        if t == 0U64 || t >= self.arena.types.count() {
             return
         }
         val tn: TypeRef = self.arena.types[t]
@@ -236,7 +236,7 @@ pub impl Comp {
     }
 
     inout fn tcIsPrimInt(ref: U64) -> Bool {
-        if ref == 0U64 || ref >= self.arena.types.count {
+        if ref == 0U64 || ref >= self.arena.types.count() {
             return false
         }
         return self.isIntType(start: self.arena.types[ref].nameStart, len: self.arena.types[ref].nameLen)
@@ -247,7 +247,7 @@ pub impl Comp {
             return
         }
         val l: U64 = self.inferType(id: target)
-        if l == 0U64 || l >= self.arena.types.count {
+        if l == 0U64 || l >= self.arena.types.count() {
             return
         }
         // a primitive numeric target forces the value to match (same as the binop it
@@ -270,10 +270,10 @@ pub impl Comp {
         }
         val br: U64 = self.inferType(id: base)
         if br != 0U64 {
-            if br < self.arena.types.count {
+            if br < self.arena.types.count() {
                 val bref: TypeRef = self.arena.types[br]
                 if rangeEquals(bytes: self.arena.bytes, start: bref.nameStart, len: bref.nameLen, kw: "Dictionary") {
-                    if bref.args.count >= 1U64 {
+                    if bref.args.count() >= 1U64 {
                         self.tcCheckValue(expectedRef: bref.args[0], valueExpr: index, pos: "dictkey")
                     }
                 }
@@ -282,25 +282,25 @@ pub impl Comp {
     }
 
     inout fn tcBlockGiveValue(blockId: U64) -> U64 {
-        if blockId == 0U64 || blockId >= self.arena.blocks.count {
+        if blockId == 0U64 || blockId >= self.arena.blocks.count() {
             return 0U64
         }
         val stmts: Array[U64] = self.arena.blocks[blockId].stmts
-        if stmts.count == 0U64 {
+        if stmts.count() == 0U64 {
             return 0U64
         }
-        match self.arena.stmts[stmts[stmts.count - 1U64]] {
+        match self.arena.stmts[stmts[stmts.count() - 1U64]] {
             Stmt.Give(val value) => { return value }
             _ => { return 0U64 }
         }
     }
 
     inout fn tcCheckMakeFields(expectedRef: U64, makeId: U64) {
-        if expectedRef >= self.arena.types.count {
+        if expectedRef >= self.arena.types.count() {
             return
         }
         val et: TypeRef = self.arena.types[expectedRef]
-        if et.args.count == 0U64 {
+        if et.args.count() == 0U64 {
             return
         }
         match self.arena.exprs[makeId] {
@@ -312,9 +312,9 @@ pub impl Comp {
                 // the struct lookup below misses them. Their `value` field is T — check it
                 // (`<Ref[I64] value=true/>` would otherwise box a Bool as an I64).
                 if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
-                    if et.args.count >= 1U64 {
+                    if et.args.count() >= 1U64 {
                         mut val rfi: U64 = 0
-                        while rfi < fields.count {
+                        while rfi < fields.count() {
                             if rangeEquals(bytes: self.arena.bytes, start: fields[rfi].nameStart, len: fields[rfi].nameLen, kw: "value") {
                                 self.tcCheckValue(expectedRef: et.args[0], valueExpr: fields[rfi].value, pos: "ref value")
                             }
@@ -325,17 +325,17 @@ pub impl Comp {
                 }
                 if isEnum {
                     val ei: U64 = self.genericEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                    if ei >= self.arena.enums.count {
+                    if ei >= self.arena.enums.count() {
                         return
                     }
                     val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
-                    if vi >= self.arena.enums[ei].variants.count {
+                    if vi >= self.arena.enums[ei].variants.count() {
                         return
                     }
                     self.tcCheckFieldsUnder(params: self.arena.enums[ei].typeParams, targs: et.args, defFields: self.arena.enums[ei].variants[vi].fields, makeFields: fields)
                 } else {
                     val si: U64 = self.genericStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
-                    if si >= self.arena.structs.count {
+                    if si >= self.arena.structs.count() {
                         return
                     }
                     self.tcCheckFieldsUnder(params: self.arena.structs[si].typeParams, targs: et.args, defFields: self.arena.structs[si].fields, makeFields: fields)
@@ -347,9 +347,9 @@ pub impl Comp {
 
     inout fn tcCheckFieldsUnder(params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: Array[MakeField]) {
         mut val mi: U64 = 0
-        while mi < makeFields.count {
+        while mi < makeFields.count() {
             mut val di: U64 = 0
-            while di < defFields.count {
+            while di < defFields.count() {
                 if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeFields[mi].nameStart, bLen: makeFields[mi].nameLen) {
                     if defFields[di].ty != 0U64 {
                         val savedP: Array[Bind] = self.cur.typeParams
@@ -361,7 +361,7 @@ pub impl Comp {
                         self.cur.typeArgs = savedA
                         self.tcCheckValue(expectedRef: grounded, valueExpr: makeFields[mi].value, pos: "ginst-field")
                     }
-                    di = defFields.count
+                    di = defFields.count()
                 } else {
                     di += 1
                 }
@@ -426,7 +426,7 @@ pub impl Comp {
     }
 
     inout fn tcRefName(ref: U64) -> String {
-        if ref == 0U64 || ref >= self.arena.types.count {
+        if ref == 0U64 || ref >= self.arena.types.count() {
             return "?"
         }
         val t: TypeRef = self.arena.types[ref]

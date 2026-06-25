@@ -12,7 +12,7 @@ pub impl Comp {
             compileErrorAt(line: self.lineOf(offset: e.abiSpan.start), msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
         }
         mut val fi: U64 = 0
-        while fi < e.fns.count {
+        while fi < e.fns.count() {
             // extern(c) functions take no argument labels (a C function has none — the
             // label would be invented provenance). The author must mark each parameter
             // label-suppressed `name~:` EXPLICITLY (spec/15): a labelled param is an
@@ -21,7 +21,7 @@ pub impl Comp {
             if e.abiC {
                 val sig: SigAst = e.fns[fi]
                 mut val pj: U64 = 0
-                while pj < sig.params.count {
+                while pj < sig.params.count() {
                     if !(sig.params[pj].noLabel) {
                         compileErrorAt(line: self.lineOf(offset: sig.params[pj].span.start), msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
                     }
@@ -32,14 +32,14 @@ pub impl Comp {
             fi += 1
         }
         mut val si: U64 = 0
-        while si < e.structNames.count {
+        while si < e.structNames.count() {
             val nm: Bind = self.internBytes(s: e.structNames[si])
             // generic params for a generic opaque intrinsic (`struct Buffer[T]`): the
             // StructDef carries them like an ordinary generic struct, so `Buffer[E]` is a
             // genuine generic instance dispatched through the uniform path. Empty for the
             // non-generic intrinsics (`Ref`/`WeakRef`/the scalar lang-items) and FFI types.
             mut val externTP: Array[Bind] = []
-            if si < e.structTypeParams.count {
+            if si < e.structTypeParams.count() {
                 externTP = self.lowerTypeParamNames(names: e.structTypeParams[si])
             }
             val noFields: Array[FieldDef] = []
@@ -49,7 +49,7 @@ pub impl Comp {
             // from @Std/Core — would fail `moduleOf(0)` and read as out-of-scope; it only
             // ever worked because the whole compiler is module 0 and `moduleOf(0)==0`.
             mut val defOff: U64 = 0
-            if si < e.structSpans.count { defOff = e.structSpans[si].start }
+            if si < e.structSpans.count() { defOff = e.structSpans[si].start }
             // `String` is the one intrinsic that is really a value-semantics struct over a
             // single `Array[U8]` buffer (spec/02): register it as a NON-extern struct with a
             // synthetic private `buffer: Array[U8]` field so the generic struct+Array ARC frees
@@ -68,9 +68,9 @@ pub impl Comp {
             // a `@[...]` derive on this opaque extern type (spec/16): lower its directive to
             // pending derives and drain them onto this type, with the `struct Name` span as
             // the item source so the harness `parseItem` recovers a `Decl` (name = the type).
-            if si < e.structDirectives.count {
+            if si < e.structDirectives.count() {
                 val dir: DirectiveAst = e.structDirectives[si]
-                if dir.reqs.count > 0U64 {
+                if dir.reqs.count() > 0U64 {
                     self.lowerDirective(dir: dir)
                     val sp: Span = e.structSpans[si]
                     self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: sp.start, declEnd: sp.end)
@@ -93,7 +93,7 @@ pub impl Comp {
         // namespace; `Io.print(args)` then resolves to `print` from that module. A path
         // alias `import @Std/Io as IO` binds `IO` instead (spec/15).
         if imp.isImport {
-            if imp.names.count == 0 {
+            if imp.names.count() == 0 {
                 mut val nsStart: U64 = imp.segSpan.start
                 mut val nsEnd: U64 = imp.segSpan.end
                 if imp.aliasSpan.end > imp.aliasSpan.start {
@@ -106,11 +106,11 @@ pub impl Comp {
             }
         }
         mut val i: U64 = 0
-        while i < imp.names.count {
+        while i < imp.names.count() {
             val nspan: Span = imp.nameSpans[i]
             self.markImport(segStart: imp.segSpan.start, segLen: imp.segSpan.end - imp.segSpan.start, nameStart: nspan.start, nameLen: nspan.end - nspan.start)
             // `real as alias`: record the local alias -> real-name mapping (spec/15).
-            if i < imp.nameAliasSpans.count {
+            if i < imp.nameAliasSpans.count() {
                 val al: Span = imp.nameAliasSpans[i]
                 if al.end > al.start {
                     self.decls.importAliases.append(<Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
@@ -122,11 +122,11 @@ pub impl Comp {
 
     inout fn lowerReExport(imp: ImportAst) {
         mut val i: U64 = 0
-        while i < imp.names.count {
+        while i < imp.names.count() {
             val nspan: Span = imp.nameSpans[i]
             mut val exStart: U64 = nspan.start
             mut val exLen: U64 = nspan.end - nspan.start
-            if i < imp.nameAliasSpans.count {
+            if i < imp.nameAliasSpans.count() {
                 val al: Span = imp.nameAliasSpans[i]
                 if al.end > al.start {
                     exStart = al.start
@@ -141,7 +141,7 @@ pub impl Comp {
     inout fn isNamespaceName(name: String) -> Bool {
         val nb: Bind = self.internBytes(s: name)
         mut val i: U64 = 0
-        while i < self.decls.namespaces.count {
+        while i < self.decls.namespaces.count() {
             if spansEqual(c: inout self, aStart: self.decls.namespaces[i].nameStart, aLen: self.decls.namespaces[i].nameLen, bStart: nb.nameStart, bLen: nb.nameLen) {
                 return true
             }
@@ -152,7 +152,7 @@ pub impl Comp {
 
     inout fn lowerDirective(dir: DirectiveAst) {
         mut val i: U64 = 0
-        while i < dir.reqs.count {
+        while i < dir.reqs.count() {
             val r: DeriveReqAst = dir.reqs[i]
             val args: Array[MakeField] = self.lowerMakeFields(fields: r.args, typeName: "", variant: "", isEnum: false)
             self.parseScratch.pendingDerives.append(<DeriveReq typeStart=0 typeLen=0 isEnum=false nameStart=r.nameSpan.start nameLen=r.nameSpan.end - r.nameSpan.start declStart=0 declEnd=0 args=args />)
@@ -163,24 +163,24 @@ pub impl Comp {
     inout fn lowerExportItem(inner: TopItemAst) {
         match inner {
             TopItemAst.Extern(val e) => {
-                val xfB: U64 = self.arena.funcs.count
-                val xsB: U64 = self.arena.structs.count
+                val xfB: U64 = self.arena.funcs.count()
+                val xsB: U64 = self.arena.structs.count()
                 self.lowerExtern(e: e)
                 mut val xi: U64 = xfB
-                while xi < self.arena.funcs.count {
+                while xi < self.arena.funcs.count() {
                     self.recordExport(nameStart: self.arena.funcs[xi].nameStart, nameLen: self.arena.funcs[xi].nameLen)
                     xi += 1
                 }
                 mut val xj: U64 = xsB
-                while xj < self.arena.structs.count {
+                while xj < self.arena.structs.count() {
                     self.recordExport(nameStart: self.arena.structs[xj].nameStart, nameLen: self.arena.structs[xj].nameLen)
                     xj += 1
                 }
             }
             TopItemAst.Decl(val d) => {
-                val sB: U64 = self.arena.structs.count
-                val eB: U64 = self.arena.enums.count
-                val fB: U64 = self.arena.funcs.count
+                val sB: U64 = self.arena.structs.count()
+                val eB: U64 = self.arena.enums.count()
+                val fB: U64 = self.arena.funcs.count()
                 self.lowerDecl(d: d)
                 match d.kind {
                     DeclKind.Struct => { self.recordExport(nameStart: self.arena.structs[sB].nameStart, nameLen: self.arena.structs[sB].nameLen) }
@@ -189,23 +189,23 @@ pub impl Comp {
                 }
             }
             TopItemAst.Trait(val t) => {
-                val tB: U64 = self.decls.traits.count
+                val tB: U64 = self.decls.traits.count()
                 self.lowerTrait(t: t)
                 self.recordExport(nameStart: self.decls.traits[tB].nameStart, nameLen: self.decls.traits[tB].nameLen)
             }
             TopItemAst.GlobalVal(val s) => {
-                val gB: U64 = self.arena.globals.count
+                val gB: U64 = self.arena.globals.count()
                 self.lowerGlobalVal(s: s)
-                if self.arena.globals.count > gB {
+                if self.arena.globals.count() > gB {
                     self.recordExport(nameStart: self.arena.globals[gB].nameStart, nameLen: self.arena.globals[gB].nameLen)
                 }
             }
             TopItemAst.NewType(val name, val ty, isPub: _, val span) => {
                 // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
                 // then record its name as exported so other modules can import it.
-                val ntB: U64 = self.arena.newtypes.count
+                val ntB: U64 = self.arena.newtypes.count()
                 self.lowerNewtype(name: name, ty: ty, defOffset: span.start)
-                if self.arena.newtypes.count > ntB {
+                if self.arena.newtypes.count() > ntB {
                     self.recordExport(nameStart: self.arena.newtypes[ntB].nameStart, nameLen: self.arena.newtypes[ntB].nameLen)
                 }
             }

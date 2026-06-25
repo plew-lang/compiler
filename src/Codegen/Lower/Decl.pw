@@ -7,14 +7,14 @@ pub impl Comp {
     inout fn lowerTypeParamNames(names: Array[String]) -> Array[Bind] {
         mut val out: Array[Bind] = []
         mut val i: U64 = 0
-        while i < names.count {
+        while i < names.count() {
             val b: Bind = self.internBytes(s: names[i])
             // a generic's own bracket list must have distinct names (spec/06): `f[T, T]`
             // is ambiguous. Checked per RAW list (not the merged impl++method list, where
             // an impl param and a method param may legitimately share a name = shadowing).
             val bId: U64 = intern(c: inout self, start: b.nameStart, len: b.nameLen)
             mut val k: U64 = 0
-            while k < out.count {
+            while k < out.count() {
                 if intern(c: inout self, start: out[k].nameStart, len: out[k].nameLen) == bId {
                     compileErrorAt(line: self.lineOf(offset: b.nameStart), msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)")
                 }
@@ -32,7 +32,7 @@ pub impl Comp {
         mut val tyLen: U64 = 0
         mut val tyIsArray: Bool = false
         mut val tyRef: U64 = 0
-        if f.ty.name.bytes().count > 0 || f.ty.isRecord {
+        if f.ty.name.bytes().count() > 0 || f.ty.isRecord {
             val pt: PType = self.lowerType(t: f.ty)
             tyStart = pt.start
             tyLen = pt.len
@@ -57,7 +57,7 @@ pub impl Comp {
         self.cur.typeParams = typeParams
         mut val fields: Array[FieldDef] = []
         mut val i: U64 = 0
-        while i < d.fields.count {
+        while i < d.fields.count() {
             fields.append(self.lowerFieldDef(f: d.fields[i]))
             i += 1
         }
@@ -78,7 +78,7 @@ pub impl Comp {
         // methods join this type's bare resolution surface (findMethod).
         val tid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val di: U64 = 0
-        while di < d.defaultExts.count {
+        while di < d.defaultExts.count() {
             val extN: Bind = self.internBytes(s: d.defaultExts[di])
             self.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout self, start: extN.nameStart, len: extN.nameLen) />)
             di += 1
@@ -95,12 +95,12 @@ pub impl Comp {
         self.cur.typeParams = typeParams
         mut val variants: Array[Variant] = []
         mut val i: U64 = 0
-        while i < d.variants.count {
+        while i < d.variants.count() {
             val v: VariantAst = d.variants[i]
             val vn: Bind = self.internBytes(s: v.name)
             mut val vfields: Array[FieldDef] = []
             mut val j: U64 = 0
-            while j < v.fields.count {
+            while j < v.fields.count() {
                 vfields.append(self.lowerFieldDef(f: v.fields[j]))
                 j += 1
             }
@@ -112,7 +112,7 @@ pub impl Comp {
         // the extension's methods join this enum's bare resolution surface (findMethod).
         val tid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val di: U64 = 0
-        while di < d.defaultExts.count {
+        while di < d.defaultExts.count() {
             val extN: Bind = self.internBytes(s: d.defaultExts[di])
             self.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout self, start: extN.nameStart, len: extN.nameLen) />)
             di += 1
@@ -146,10 +146,10 @@ pub impl Comp {
         val body: U64 = self.lowerBlock(b: d.body)
         self.cur.lowerRetTy = savedRet
         self.cur.typeParams = savedTP
-        val fnIdx: U64 = self.arena.funcs.count
+        val fnIdx: U64 = self.arena.funcs.count()
         self.arena.funcs.append(<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false />)
         mut val wi: U64 = 0
-        while wi < d.whereParams.count {
+        while wi < d.whereParams.count() {
             val pn: Bind = self.internBytes(s: d.whereParams[wi])
             val tn: Bind = self.internBytes(s: d.whereTraits[wi])
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
@@ -162,7 +162,7 @@ pub impl Comp {
 
     inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String]) {
         mut val i: U64 = 0
-        while i < params.count {
+        while i < params.count() {
             val pn: Bind = self.internBytes(s: params[i])
             val tn: Bind = self.internBytes(s: traits[i])
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)

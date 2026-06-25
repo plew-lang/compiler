@@ -34,16 +34,16 @@ pub impl LlvmCtx {
         // into the existential (the slot's signature returns the fat pointer).
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
         val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
-        if wfi >= c.arena.funcs.count {
+        if wfi >= c.arena.funcs.count() {
             return LLVMConstNull(self.ptrty)
         }
         val wslot: U64 = self.userFnSlot(idx: wfi)
-        if wslot >= self.fnIdx.count {
+        if wslot >= self.fnIdx.count() {
             return LLVMConstNull(self.ptrty)
         }
         val sd: StructDef = c.arena.structs[sidx]
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-        if regSlot >= self.structIdxs.count {
+        if regSlot >= self.structIdxs.count() {
             return LLVMConstNull(self.ptrty)
         }
         val concreteTy: LLVMTypeRef = self.structTys[regSlot]
@@ -63,7 +63,7 @@ pub impl LlvmCtx {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         mut val pi: U64 = 0
-        while pi < req.params.count {
+        while pi < req.params.count() {
             ptys.append(self.paramLlvmTy(c: inout c, p: req.params[pi]))
             pi += 1
         }
@@ -76,7 +76,7 @@ pub impl LlvmCtx {
         if retsSelf {
             rty = self.anyTy
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvt".bytes())
         appendU64Dec(into: inout nm, n: sidx)
@@ -99,11 +99,11 @@ pub impl LlvmCtx {
         mut val av: Array[LLVMValueRef] = []
         av.append(selfArg)
         mut val ai: U64 = 0
-        while ai < req.params.count {
+        while ai < req.params.count() {
             av.append(LLVMGetParam(fv, ai + 1U64))
             ai += 1
         }
-        val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[wslot], self.fnVal[wslot], arrayCPtr(av), av.count, anon())
+        val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[wslot], self.fnVal[wslot], arrayCPtr(av), av.count(), anon())
         if req.hasRet {
             if retsSelf {
                 // re-erase: box the witness's concrete result (the same concrete type as
@@ -127,7 +127,7 @@ pub impl LlvmCtx {
     inout fn buildAnyCopyThunk(c: inout Comp, sidx: U64) -> LLVMValueRef {
         val sd: StructDef = c.arena.structs[sidx]
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-        if regSlot >= self.structIdxs.count {
+        if regSlot >= self.structIdxs.count() {
             return LLVMConstNull(self.ptrty)
         }
         val concreteTy: LLVMTypeRef = self.structTys[regSlot]
@@ -196,7 +196,7 @@ pub impl LlvmCtx {
         anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout envP, outArgs: inout envA)
         val bindKey: U64 = anyBindKey(c: inout c, args: envA)
         mut val ci: U64 = 0
-        while ci < self.anyVtType.count {
+        while ci < self.anyVtType.count() {
             if self.anyVtType[ci] == sidx && self.anyVtTrait[ci] == traitIdx && self.anyVtBindKey[ci] == bindKey {
                 return self.anyVtVal[ci]
             }
@@ -206,7 +206,7 @@ pub impl LlvmCtx {
         // pre-create the global (with its final array type) and CACHE it before building
         // thunks, so a `-> Self` re-erasure thunk that re-boxes into this same existential
         // resolves to this vtable instead of recursing into ensureAnyVtable forever.
-        val slotCount: U64 = 1U64 + t.reqs.count
+        val slotCount: U64 = 1U64 + t.reqs.count()
         val arrTy: LLVMTypeRef = LLVMArrayType2(self.ptrty, slotCount)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvtbl".bytes())
@@ -225,11 +225,11 @@ pub impl LlvmCtx {
         mut val slots: Array[LLVMValueRef] = []
         slots.append(self.buildAnyCopyThunk(c: inout c, sidx: sidx))
         mut val ri: U64 = 0
-        while ri < t.reqs.count {
+        while ri < t.reqs.count() {
             slots.append(self.buildAnyThunk(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
             ri += 1
         }
-        LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count))
+        LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count()))
         return g
     }
 }
@@ -267,12 +267,12 @@ pub impl LlvmCtx {
             return LLVMConstNull(self.ptrty)
         }
         val sidx: U64 = self.exprStructIdx(c: inout c, id: valueExpr)
-        if sidx >= c.arena.structs.count {
+        if sidx >= c.arena.structs.count() {
             return LLVMConstNull(self.ptrty)
         }
         val tr: TypeRef = c.arena.types[targetRef]
         val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
-        if traitIdx >= c.decls.traits.count {
+        if traitIdx >= c.decls.traits.count() {
             return LLVMConstNull(self.ptrty)
         }
         // value semantics: boxing a concrete PLACE (`val a: any P = h`) deep-copies its
@@ -290,7 +290,7 @@ pub impl LlvmCtx {
     inout fn genLlvmAnyDispatch(c: inout Comp, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
         val tr: TypeRef = c.arena.types[anyRef]
         val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
-        if traitIdx >= c.decls.traits.count {
+        if traitIdx >= c.decls.traits.count() {
             compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -331,7 +331,7 @@ pub impl LlvmCtx {
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         mut val pi: U64 = 0
-        while pi < req.params.count {
+        while pi < req.params.count() {
             ptys.append(self.paramLlvmTy(c: inout c, p: req.params[pi]))
             pi += 1
         }
@@ -344,15 +344,15 @@ pub impl LlvmCtx {
         if retsSelf {
             rty = self.anyTy
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
         mut val av: Array[LLVMValueRef] = []
         av.append(dataPtr)
         mut val ai: U64 = 0
-        while ai < args.count {
+        while ai < args.count() {
             av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: req.params[ai]))
             ai += 1
         }
-        return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count, anon())
+        return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count(), anon())
     }
 
     inout fn genLlvmFunc(c: inout Comp, fi: U64) {
@@ -418,7 +418,7 @@ pub impl LlvmCtx {
                 recvRef = self.curRecvInstRef
                 recvTy = self.llvmTypeOfRef(c: inout c, ref: self.curRecvInstRef)
                 val gs: U64 = self.genStructSlot(c: inout c, ref: self.curRecvInstRef)
-                if gs < self.genStructRefs.count {
+                if gs < self.genStructRefs.count() {
                     recvSidx = self.genStructDefs[gs]
                 } else {
                     // a method-own-type-param pseudo instance (`Pair[Bag]` where Pair is
@@ -427,23 +427,30 @@ pub impl LlvmCtx {
                 }
             }
             // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the
-            // {ptr,i64} array value, bound as an array so `self.get`/`self.count` resolve.
+            // `{ptr}` array value, bound as an array so `self.get`/`self.count()` resolve.
             mut val selfIsArr: Bool = false
             mut val selfElemTy: LLVMTypeRef = self.i64ty
             if self.curRecvInstRef != 0U64 {
                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.curRecvInstRef].nameStart, len: c.arena.types[self.curRecvInstRef].nameLen, kw: "Array") {
                     recvTy = self.arrayTy
                     selfIsArr = true
-                    if c.arena.types[self.curRecvInstRef].args.count > 0U64 {
+                    if c.arena.types[self.curRecvInstRef].args.count() > 0U64 {
                         selfElemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.types[self.curRecvInstRef].args[0])
                     }
+                    // Array's `{ptr}` value IS `struct Array[T] { data: Buffer[T] }` (Buffer
+                    // is a bare ptr — buffer-floor.md §6), so its sole field `data` is field 0.
+                    // Pin recvSidx to Array's arena struct def (Array is NOT backend-registered
+                    // as a normal struct, so localStructIdxFor/genStructSlot may miss it), so a
+                    // method body's `self.data.count()` resolves the field → Buffer[T] and
+                    // dispatches the floor method (collections.md E2b). Mirrors the layout match.
+                    recvSidx = c.structDefByNameAny(start: f.recvStart, len: f.recvLen)
                 }
             }
             // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
             // bare `match self` / `self == …` in the body recovers the enum.
             if recvRef == 0U64 {
-                if recvSidx >= c.arena.structs.count {
-                    if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count {
+                if recvSidx >= c.arena.structs.count() {
+                    if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count() {
                         recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                     }
                 }
@@ -479,7 +486,7 @@ pub impl LlvmCtx {
             base = 1U64
         }
         mut val pi: U64 = 0
-        while pi < f.params.count {
+        while pi < f.params.count() {
             self.bindOneParam(c: inout c, p: f.params[pi], fv: fv, argIdx: pi + base)
             // a `move` param is owned (deinit'd here); inout/borrow/by-value are not.
             self.setLocalOwned(owned: f.params[pi].isMove)

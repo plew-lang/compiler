@@ -99,7 +99,7 @@ pub impl Comp {
     // it is not a recorded element (genCElem falls back to the name path then).
     inout fn arrayElemRef(start: U64, len: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.monoWork.arrayElems.count {
+        while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
             if spansEqual(c: inout self, aStart: ae.nameStart, aLen: ae.nameLen, bStart: start, bLen: len) {
                 return ae.fieldStart
@@ -114,7 +114,7 @@ pub impl Comp {
     // type's head name. Used to recover a nested array's element name in exprType.
     inout fn arrayElemNameForRef(elemRef: U64) -> Bind {
         mut val i: U64 = 0
-        while i < self.monoWork.arrayElems.count {
+        while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
             // match by mangle (type refs are not interned, so the same type can have
             // a different index than the one stored at registration). Skip a non-ground
@@ -132,7 +132,7 @@ pub impl Comp {
             }
             i += 1
         }
-        if elemRef < self.arena.types.count {
+        if elemRef < self.arena.types.count() {
             val t: TypeRef = self.arena.types[elemRef]
             return <Bind nameStart=t.nameStart nameLen=t.nameLen fieldStart=elemRef fieldLen=0 />
         }
@@ -151,12 +151,12 @@ pub impl Comp {
     // If (start, len) names a `newtype` (spec/10), its underlying type's TypeRef; else 0.
     // Codegen resolves a newtype to its underlying for representation / method dispatch.
     inout fn newtypeUnderRef(start: U64, len: U64) -> U64 {
-        if self.arena.newtypes.count == 0U64 {
+        if self.arena.newtypes.count() == 0U64 {
             return 0U64
         }
         val nid: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.newtypes.count {
+        while i < self.arena.newtypes.count() {
             if self.arena.newtypes[i].nameId == nid {
                 return self.arena.newtypes[i].underRef
             }
@@ -168,10 +168,10 @@ pub impl Comp {
     // The underlying type's head-name span for a `newtype` named (start, len), or the
     // input span unchanged when it is not a newtype.
     inout fn newtypeUnderName(start: U64, len: U64) -> Bind {
-        if self.arena.newtypes.count != 0U64 {
+        if self.arena.newtypes.count() != 0U64 {
             val nid: U64 = intern(c: inout self, start: start, len: len)
             mut val i: U64 = 0
-            while i < self.arena.newtypes.count {
+            while i < self.arena.newtypes.count() {
                 if self.arena.newtypes[i].nameId == nid {
                     return <Bind nameStart=self.arena.newtypes[i].underStart nameLen=self.arena.newtypes[i].underLen fieldStart=0 fieldLen=0 />
                 }

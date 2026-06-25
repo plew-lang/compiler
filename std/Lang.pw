@@ -121,7 +121,7 @@ pub impl[T, E] Result[T, E] {
 // is a non-ambient floor primitive imported from @Std/Core above): a single growable
 // buffer whose heap header `[cap][count][rc]` carries capacity, the live element count,
 // and the CoW refcount. Array holds NO count field of its own (buffer-floor.md §6) —
-// `.count` reads the buffer header (O(1)), so the Array value is a single pointer. This
+// `.count()` reads the buffer header (O(1)), so the Array value is a single pointer. This
 // is the type literals `[…]`, indexing `[i]`, and `for` lower to; the compiler still
 // special-cases that lang syntax and Array's value semantics (deep, count+element-aware).
 struct Array[T] {

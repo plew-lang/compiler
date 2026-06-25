@@ -7,7 +7,7 @@
 pub impl Comp {
     inout fn isExportedName(nameStart: U64, nameLen: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.modules.exports.count {
+        while i < self.modules.exports.count() {
             val e: Bind = self.modules.exports[i]
             if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
                 return true
@@ -23,7 +23,7 @@ pub impl Comp {
     // the name is absent from the exported set) — is a compile error.
     inout fn checkImports() {
         mut val i: U64 = 0
-        while i < self.modules.imports.count {
+        while i < self.modules.imports.count() {
             val im: Bind = self.modules.imports[i]
             if !(self.isExportedName(nameStart: im.nameStart, nameLen: im.nameLen)) {
                 compileErrorAt(line: self.lineOf(offset: im.nameStart), msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
@@ -35,7 +35,7 @@ pub impl Comp {
     // Was the name `(nameStart,nameLen)` imported into module `mod` via `import … with`?
     inout fn isImportedInto(mod: U64, nameStart: U64, nameLen: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.modules.imports.count {
+        while i < self.modules.imports.count() {
             val im: Bind = self.modules.imports[i]
             if im.fieldStart == mod {
                 if spansEqual(c: inout self, aStart: im.nameStart, aLen: im.nameLen, bStart: nameStart, bLen: nameLen) {
@@ -58,15 +58,15 @@ pub impl Comp {
     // visibility is a separate axis.
     inout fn checkUseVisibility() {
         mut val i: U64 = 0
-        while i < self.arena.exprs.count {
+        while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Call(val nameStart, val nameLen, val args) => {
                     val useMod: U64 = self.moduleOf(offset: nameStart)
                     // The name is in scope iff some free fn of this name is visible from the
                     // call's module (scoped resolution). If so, any remaining mismatch is an
                     // overload/label/type error reported elsewhere — not a visibility issue.
-                    if self.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= self.arena.funcs.count {
-                        if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.funcs.count {
+                    if self.firstVisibleFuncByName(useMod: useMod, nameStart: nameStart, nameLen: nameLen) >= self.arena.funcs.count() {
+                        if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.funcs.count() {
                             // a free fn of this name exists only in other (loaded) modules and
                             // was not imported here — the use needs an import.
                             compileErrorAt(line: self.lineOf(offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
@@ -106,7 +106,7 @@ pub impl Comp {
     inout fn typeDeclVisibleFrom(useMod: U64, start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.structs.count {
+        while i < self.arena.structs.count() {
             val sd: StructDef = self.arena.structs[i]
             if sd.nameId == qId {
                 if self.defModuleVisible(defOffset: sd.defOffset, useMod: useMod) { return true }
@@ -114,7 +114,7 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count {
+        while i < self.arena.enums.count() {
             val ed: EnumDef = self.arena.enums[i]
             if ed.nameId == qId {
                 if self.defModuleVisible(defOffset: ed.defOffset, useMod: useMod) { return true }
@@ -122,7 +122,7 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.decls.traits.count {
+        while i < self.decls.traits.count() {
             val td: TraitDef = self.decls.traits[i]
             if td.nameId == qId {
                 if self.defModuleVisible(defOffset: td.nameStart, useMod: useMod) { return true }
@@ -130,7 +130,7 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count {
+        while i < self.arena.newtypes.count() {
             val nt: NewtypeDef = self.arena.newtypes[i]
             if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
                 if self.defModuleVisible(defOffset: nt.defOffset, useMod: useMod) { return true }
@@ -149,16 +149,16 @@ pub impl Comp {
     // which have no global declaration.)
     inout fn typeDeclExistsGlobally(start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        if self.structIndexByName(start: start, len: len) < self.arena.structs.count { return true }
-        if self.enumIndexByName(start: start, len: len) < self.arena.enums.count { return true }
+        if self.structIndexByName(start: start, len: len) < self.arena.structs.count() { return true }
+        if self.enumIndexByName(start: start, len: len) < self.arena.enums.count() { return true }
         mut val i: U64 = 0
-        while i < self.decls.traits.count {
+        while i < self.decls.traits.count() {
             val td: TraitDef = self.decls.traits[i]
             if td.nameId == qId { return true }
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count {
+        while i < self.arena.newtypes.count() {
             val nt: NewtypeDef = self.arena.newtypes[i]
             if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) { return true }
             i += 1
@@ -181,7 +181,7 @@ pub impl Comp {
     // (imported + exported) succeed for an aliased type use.
     inout fn realTypeNameInModule(useMod: U64, start: U64, len: U64) -> Bind {
         mut val ai: U64 = 0
-        while ai < self.decls.importAliases.count {
+        while ai < self.decls.importAliases.count() {
             val al: Bind = self.decls.importAliases[ai]
             if spansEqual(c: inout self, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
                 if self.moduleOf(offset: al.nameStart) == useMod {
@@ -216,7 +216,7 @@ pub impl Comp {
     // (compiler-built) or a type-parameter head — both skipped.
     inout fn checkTypeVisibility() {
         mut val i: U64 = 0
-        while i < self.arena.types.count {
+        while i < self.arena.types.count() {
             val t: TypeRef = self.arena.types[i]
             if t.siteOffset != 0U64 {
                 if self.offsetIsLoaded(offset: t.siteOffset) {
@@ -236,13 +236,13 @@ pub impl Comp {
     // `import … with { name }` record into a module→module dependency edge.
     inout fn definingModuleOfName(start: U64, len: U64) -> U64 {
         val fi: U64 = self.firstFuncByName(nameStart: start, nameLen: len)
-        if fi < self.arena.funcs.count {
+        if fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             return self.moduleOf(offset: f.nameStart)
         }
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.arena.structs.count {
+        while i < self.arena.structs.count() {
             val sd: StructDef = self.arena.structs[i]
             if sd.nameId == qId {
                 if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
@@ -250,7 +250,7 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count {
+        while i < self.arena.enums.count() {
             val ed: EnumDef = self.arena.enums[i]
             if ed.nameId == qId {
                 if ed.defOffset != 0U64 { return self.moduleOf(offset: ed.defOffset) }
@@ -258,13 +258,13 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.decls.traits.count {
+        while i < self.decls.traits.count() {
             val td: TraitDef = self.decls.traits[i]
             if td.nameId == qId { return self.moduleOf(offset: td.nameStart) }
             i += 1
         }
         i = 0
-        while i < self.arena.newtypes.count {
+        while i < self.arena.newtypes.count() {
             val nt: NewtypeDef = self.arena.newtypes[i]
             if spansEqual(c: inout self, aStart: nt.nameStart, aLen: nt.nameLen, bStart: start, bLen: len) {
                 if nt.defOffset != 0U64 { return self.moduleOf(offset: nt.defOffset) }
@@ -282,7 +282,7 @@ pub impl Comp {
     inout fn dfsImportCycle(node: U64, color: inout Array[U64], ef: Array[U64], et: Array[U64], eo: Array[U64]) {
         color[node] = 1U64
         mut val k: U64 = 0
-        while k < ef.count {
+        while k < ef.count() {
             if ef[k] == node {
                 val w: U64 = et[k]
                 if color[w] == 1U64 {
@@ -304,7 +304,7 @@ pub impl Comp {
     inout fn detectImportCycles() {
         mut val maxId: U64 = 0
         mut val ri: U64 = 0
-        while ri < self.modules.ranges.count {
+        while ri < self.modules.ranges.count() {
             val r: Bind = self.modules.ranges[ri]
             if r.fieldStart > maxId { maxId = r.fieldStart }
             ri += 1
@@ -314,7 +314,7 @@ pub impl Comp {
         mut val et: Array[U64] = []
         mut val eo: Array[U64] = []
         mut val ii: U64 = 0
-        while ii < self.modules.imports.count {
+        while ii < self.modules.imports.count() {
             val im: Bind = self.modules.imports[ii]
             val from: U64 = im.fieldStart
             val to: U64 = self.definingModuleOfName(start: im.nameStart, len: im.nameLen)

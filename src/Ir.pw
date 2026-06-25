@@ -850,7 +850,7 @@ export struct TypeCache {
     // a type parameter is opaque (spec/06), so an overload can never be selected via
     // a type-parameter arg, hence the result is stable per call-expr id. Sentinel
     // `calleeUnfilled()` marks an uncomputed slot; a filled slot may legitimately
-    // hold `funcs.count` ("resolves to no declared function" — a call through a fn
+    // hold `funcs.count()` ("resolves to no declared function" — a call through a fn
     // value/local), which is itself stable, so it is cached too.
     pub mut val callee: Array[U64] = []
 }
@@ -965,7 +965,7 @@ pub impl NewtypeDef { factory }
 // in the shared IR leaf rather than any one pass.
 export fn appendBytes(into: inout Array[U8], from: Array[U8]) {
     mut val i: U64 = 0
-    while i < from.count {
+    while i < from.count() {
         into.append(from[i])
         i += 1
     }

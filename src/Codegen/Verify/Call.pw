@@ -20,14 +20,14 @@ pub impl Comp {
         val ar: Bind = self.aliasReal(start: start, len: len)
         val q: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         val si: U64 = self.structIndexByName(start: ar.nameStart, len: ar.nameLen)
-        if si < self.arena.structs.count {
+        if si < self.arena.structs.count() {
             if self.arena.structs[si].isCExtern {
                 return 0U64
             }
             return q
         }
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count {
+        while ei < self.arena.enums.count() {
             if self.arena.enums[ei].nameId == q {
                 return q
             }
@@ -36,7 +36,7 @@ pub impl Comp {
         // a `newtype` (spec/10) is a distinct named type: give it its own id so the type
         // checker keeps it apart from its underlying (`val x: I64 = meter` needs `as`).
         mut val ni: U64 = 0
-        while ni < self.arena.newtypes.count {
+        while ni < self.arena.newtypes.count() {
             if self.arena.newtypes[ni].nameId == q {
                 return q
             }
@@ -55,14 +55,14 @@ pub impl Comp {
             return
         }
         val nq: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val theFi: U64 = self.arena.funcs.count
+        mut val theFi: U64 = self.arena.funcs.count()
         mut val count: U64 = 0
         mut val anyOther: Bool = false
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count {
+        while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             if f.hasRecv && f.nameId == nq && f.recvId == rId {
-                if f.typeParams.count > 0U64 || f.isProvided || f.extId != 0U64 {
+                if f.typeParams.count() > 0U64 || f.isProvided || f.extId != 0U64 {
                     anyOther = true
                 } else {
                     count += 1U64
@@ -75,30 +75,30 @@ pub impl Comp {
             return
         }
         val cf: Func = self.arena.funcs[theFi]
-        if args.count != cf.params.count {
+        if args.count() != cf.params.count() {
             return
         }
         mut val ai: U64 = 0
-        while ai < args.count {
+        while ai < args.count() {
             mut val pIdx: U64 = ai
             if args[ai].hasLabel {
                 val lq: U64 = intern(c: inout self, start: args[ai].labelStart, len: args[ai].labelLen)
                 mut val pj: U64 = 0
                 mut val found: Bool = false
-                while pj < cf.params.count {
+                while pj < cf.params.count() {
                     if cf.params[pj].nameId == lq {
                         pIdx = pj
                         found = true
-                        pj = cf.params.count
+                        pj = cf.params.count()
                     } else {
                         pj += 1
                     }
                 }
                 if !(found) {
-                    pIdx = cf.params.count
+                    pIdx = cf.params.count()
                 }
             }
-            if pIdx < cf.params.count {
+            if pIdx < cf.params.count() {
                 self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
             }
             ai += 1
@@ -107,14 +107,14 @@ pub impl Comp {
 
     inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: Array[Arg]) {
         val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val theFi: U64 = self.arena.funcs.count
+        mut val theFi: U64 = self.arena.funcs.count()
         mut val count: U64 = 0
         mut val anyGen: Bool = false
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count {
+        while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             if f.nameId == q && !f.hasRecv && !f.isExtern {
-                if f.typeParams.count > 0U64 {
+                if f.typeParams.count() > 0U64 {
                     anyGen = true
                 } else {
                     count += 1U64
@@ -127,31 +127,31 @@ pub impl Comp {
             return
         }
         val cf: Func = self.arena.funcs[theFi]
-        if args.count != cf.params.count {
+        if args.count() != cf.params.count() {
             return
         }
         mut val ai: U64 = 0
-        while ai < args.count {
+        while ai < args.count() {
             // resolve the parameter this argument fills: by label if given, else position.
             mut val pIdx: U64 = ai
             if args[ai].hasLabel {
                 val lq: U64 = intern(c: inout self, start: args[ai].labelStart, len: args[ai].labelLen)
                 mut val pj: U64 = 0
                 mut val found: Bool = false
-                while pj < cf.params.count {
+                while pj < cf.params.count() {
                     if cf.params[pj].nameId == lq {
                         pIdx = pj
                         found = true
-                        pj = cf.params.count
+                        pj = cf.params.count()
                     } else {
                         pj += 1
                     }
                 }
                 if !(found) {
-                    pIdx = cf.params.count
+                    pIdx = cf.params.count()
                 }
             }
-            if pIdx < cf.params.count {
+            if pIdx < cf.params.count() {
                 self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
             }
             ai += 1
@@ -165,11 +165,11 @@ pub impl Comp {
         val qEnum: U64 = intern(c: inout self, start: arE.nameStart, len: arE.nameLen)
         val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count {
+        while ei < self.arena.enums.count() {
             if self.arena.enums[ei].nameId == qEnum {
                 val vars: Array[Variant] = self.arena.enums[ei].variants
                 mut val vi: U64 = 0
-                while vi < vars.count {
+                while vi < vars.count() {
                     if vars[vi].nameId == qVar {
                         return true
                     }
@@ -191,7 +191,7 @@ pub impl Comp {
             return
         }
         mut val ai: U64 = 0
-        while ai < arms.count {
+        while ai < arms.count() {
             val a: MatchArm = arms[ai]
             if !(a.isWildcard || a.isStruct || a.enumLen == 0U64) {
                 val aId: U64 = self.knownNamedTypeId(start: a.enumStart, len: a.enumLen)

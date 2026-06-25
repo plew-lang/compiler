@@ -10,7 +10,7 @@
 pub impl Comp {
     inout fn moduleOf(offset: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.modules.ranges.count {
+        while i < self.modules.ranges.count() {
             val r: Bind = self.modules.ranges[i]
             if offset >= r.nameStart {
                 if offset < r.nameStart + r.nameLen {
@@ -43,7 +43,7 @@ pub impl Comp {
             return false
         }
         val blk: Block = self.arena.blocks[f.body]
-        if blk.stmts.count == 0U64 {
+        if blk.stmts.count() == 0U64 {
             return false
         }
         return self.moduleOf(offset: self.stmtPrincipalOffset(sid: blk.stmts[0])) == 0U64
@@ -57,7 +57,7 @@ pub impl Comp {
         // looks for a LANG-owned declaration specifically (not the first match), so a user's
         // own `enum Optional` in module 0 does not mask Lang's ownership (→ redefinition gate).
         mut val i: U64 = 0
-        while i < self.arena.structs.count {
+        while i < self.arena.structs.count() {
             val sd: StructDef = self.arena.structs[i]
             if sd.nameId == qId {
                 if sd.defOffset != 0U64 {
@@ -67,7 +67,7 @@ pub impl Comp {
             i += 1
         }
         i = 0
-        while i < self.arena.enums.count {
+        while i < self.arena.enums.count() {
             val ed: EnumDef = self.arena.enums[i]
             if ed.nameId == qId {
                 if ed.defOffset != 0U64 {
@@ -80,7 +80,7 @@ pub impl Comp {
         // records the forwarded name as exported by Lang (`fieldStart` = the Lang module),
         // using the name's span in Lang's own source (so `moduleOf` is reliable).
         i = 0
-        while i < self.modules.exports.count {
+        while i < self.modules.exports.count() {
             val e: Bind = self.modules.exports[i]
             if e.fieldStart == lm {
                 if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: start, bLen: len) { return true }
@@ -92,7 +92,7 @@ pub impl Comp {
 
     inout fn offsetIsLoaded(offset: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.modules.ranges.count {
+        while i < self.modules.ranges.count() {
             val r: Bind = self.modules.ranges[i]
             if offset >= r.nameStart {
                 if offset < r.nameStart + r.nameLen {
@@ -127,7 +127,7 @@ pub impl Comp {
     // `import <path>` resolving to that module)? Drives the coexistence tiebreak.
     inout fn hasImportEdge(useMod: U64, targetMod: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.modules.importEdges.count {
+        while i < self.modules.importEdges.count() {
             val e: Bind = self.modules.importEdges[i]
             if e.fieldStart == useMod {
                 if e.fieldLen == targetMod {
@@ -161,19 +161,19 @@ pub impl Comp {
         // candidates are additionally preferred so a module's own private fn wins over an
         // imported one of the same name.
         val useMod: U64 = self.moduleOf(offset: nameStart)
-        mut val firstLabel: U64 = self.arena.funcs.count
-        mut val typeMatch: U64 = self.arena.funcs.count
-        mut val typeMatch2: U64 = self.arena.funcs.count
-        mut val firstLabelSame: U64 = self.arena.funcs.count
-        mut val typeMatchSame: U64 = self.arena.funcs.count
-        mut val typeMatch2Same: U64 = self.arena.funcs.count
+        mut val firstLabel: U64 = self.arena.funcs.count()
+        mut val typeMatch: U64 = self.arena.funcs.count()
+        mut val typeMatch2: U64 = self.arena.funcs.count()
+        mut val firstLabelSame: U64 = self.arena.funcs.count()
+        mut val typeMatchSame: U64 = self.arena.funcs.count()
+        mut val typeMatch2Same: U64 = self.arena.funcs.count()
         // candidates whose module the use's module DIRECTLY imported — preferred over a
         // merely name-visible one so coexisting versions bind their own export.
-        mut val firstLabelEdge: U64 = self.arena.funcs.count
-        mut val typeMatchEdge: U64 = self.arena.funcs.count
+        mut val firstLabelEdge: U64 = self.arena.funcs.count()
+        mut val typeMatchEdge: U64 = self.arena.funcs.count()
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             // a bare call never resolves to a method (`hasRecv`) or an associated fn
             // (`isAssoc`, e.g. an operator witness `add`): both require `Type.` (or
@@ -186,41 +186,41 @@ pub impl Comp {
                         val visible: Bool = same || self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen)
                         val edged: Bool = visible && self.hasImportEdge(useMod: useMod, targetMod: self.moduleOf(offset: f.nameStart))
                         if visible {
-                            if firstLabel == self.arena.funcs.count {
+                            if firstLabel == self.arena.funcs.count() {
                                 firstLabel = i
                             }
                         }
                         if edged {
-                            if firstLabelEdge == self.arena.funcs.count {
+                            if firstLabelEdge == self.arena.funcs.count() {
                                 firstLabelEdge = i
                             }
                         }
                         if same {
-                            if firstLabelSame == self.arena.funcs.count {
+                            if firstLabelSame == self.arena.funcs.count() {
                                 firstLabelSame = i
                             }
                         }
                         if self.paramsTypesMatch(params: f.params, args: args) {
                             if visible {
-                                if typeMatch == self.arena.funcs.count {
+                                if typeMatch == self.arena.funcs.count() {
                                     typeMatch = i
                                 } else {
-                                    if typeMatch2 == self.arena.funcs.count {
+                                    if typeMatch2 == self.arena.funcs.count() {
                                         typeMatch2 = i
                                     }
                                 }
                             }
                             if same {
-                                if typeMatchSame == self.arena.funcs.count {
+                                if typeMatchSame == self.arena.funcs.count() {
                                     typeMatchSame = i
                                 } else {
-                                    if typeMatch2Same == self.arena.funcs.count {
+                                    if typeMatch2Same == self.arena.funcs.count() {
                                         typeMatch2Same = i
                                     }
                                 }
                             }
                             if edged {
-                                if typeMatchEdge == self.arena.funcs.count {
+                                if typeMatchEdge == self.arena.funcs.count() {
                                     typeMatchEdge = i
                                 }
                             }
@@ -231,29 +231,29 @@ pub impl Comp {
             i += 1
         }
         // same-module first
-        if typeMatchSame != self.arena.funcs.count {
+        if typeMatchSame != self.arena.funcs.count() {
             self.checkOverloadAmbiguity(a: typeMatchSame, b: typeMatch2Same, args: args)
             return typeMatchSame
         }
-        if firstLabelSame != self.arena.funcs.count {
+        if firstLabelSame != self.arena.funcs.count() {
             return firstLabelSame
         }
         // then a DIRECTLY-imported module's candidate (prefer the version this module
         // actually imported when a name is shared across coexisting versions).
-        if typeMatchEdge != self.arena.funcs.count {
+        if typeMatchEdge != self.arena.funcs.count() {
             return typeMatchEdge
         }
-        if firstLabelEdge != self.arena.funcs.count {
+        if firstLabelEdge != self.arena.funcs.count() {
             return firstLabelEdge
         }
         // no same-module candidate: fall back to an in-scope imported one (the general
         // accumulators only recorded `nameVisibleFrom` candidates, so an out-of-scope
         // cross-module fn is never returned — it simply doesn't resolve here).
-        if typeMatch != self.arena.funcs.count {
+        if typeMatch != self.arena.funcs.count() {
             self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return typeMatch
         }
-        if firstLabel != self.arena.funcs.count {
+        if firstLabel != self.arena.funcs.count() {
             return firstLabel
         }
         // gen mode (spec/16): the synthesized derive-runner harness calls force-loaded std
@@ -265,9 +265,9 @@ pub impl Comp {
         // type match preferred. Normal compilation never reaches this — it returns
         // "not found" (firstLabel == count) so checkUseVisibility can demand an import.
         if self.genMode {
-            mut val gLabel: U64 = self.arena.funcs.count
+            mut val gLabel: U64 = self.arena.funcs.count()
             mut val gj: U64 = 0
-            while gj < self.arena.funcs.count {
+            while gj < self.arena.funcs.count() {
                 val gf: Func = self.arena.funcs[gj]
                 if !(gf.hasRecv || gf.isAssoc) {
                     if gf.nameId == qId {
@@ -275,7 +275,7 @@ pub impl Comp {
                             if self.paramsTypesMatch(params: gf.params, args: args) {
                                 return gj
                             }
-                            if gLabel == self.arena.funcs.count {
+                            if gLabel == self.arena.funcs.count() {
                                 gLabel = gj
                             }
                         }
@@ -291,7 +291,7 @@ pub impl Comp {
     inout fn firstFuncByName(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             // skip methods and associated fns: a bare name only names a free fn (see
             // findFunc — operator witnesses like `add` are assoc, not free).
@@ -302,13 +302,13 @@ pub impl Comp {
             }
             i += 1
         }
-        return self.arena.funcs.count
+        return self.arena.funcs.count()
     }
 
     inout fn firstVisibleFuncByName(useMod: U64, nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
@@ -319,13 +319,13 @@ pub impl Comp {
             }
             i += 1
         }
-        return self.arena.funcs.count
+        return self.arena.funcs.count()
     }
 
     inout fn firstMethodRetType(typeStart: U64, typeLen: U64, name: String) -> TypeInfo {
         val qRecv: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 if f.recvId == qRecv {
@@ -344,7 +344,7 @@ pub impl Comp {
 
     inout fn isDefaultExt(typeId: U64, extId: U64) -> Bool {
         mut val i: U64 = 0
-        while i < self.decls.defaultExts.count {
+        while i < self.decls.defaultExts.count() {
             if self.decls.defaultExts[i].typeId == typeId {
                 if self.decls.defaultExts[i].extId == extId {
                     return true
@@ -356,13 +356,13 @@ pub impl Comp {
     }
 
     inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-        mut val firstLabel: U64 = self.arena.funcs.count
-        mut val typeMatch: U64 = self.arena.funcs.count
-        mut val typeMatch2: U64 = self.arena.funcs.count
+        mut val firstLabel: U64 = self.arena.funcs.count()
+        mut val typeMatch: U64 = self.arena.funcs.count()
+        mut val typeMatch2: U64 = self.arena.funcs.count()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 // an extension method does not join bare resolution (spec/09): it is
@@ -377,14 +377,14 @@ pub impl Comp {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
                         if self.paramsLabelsOk(params: f.params, args: args) {
-                            if firstLabel == self.arena.funcs.count {
+                            if firstLabel == self.arena.funcs.count() {
                                 firstLabel = i
                             }
                             if self.paramsTypesMatch(params: f.params, args: args) {
-                                if typeMatch == self.arena.funcs.count {
+                                if typeMatch == self.arena.funcs.count() {
                                     typeMatch = i
                                 } else {
-                                    if typeMatch2 == self.arena.funcs.count {
+                                    if typeMatch2 == self.arena.funcs.count() {
                                         typeMatch2 = i
                                     }
                                 }
@@ -397,13 +397,13 @@ pub impl Comp {
             }
             i += 1
         }
-        if typeMatch != self.arena.funcs.count {
+        if typeMatch != self.arena.funcs.count() {
             // two provided-method copies from DIFFERENT source traits matching the same
             // bare selector: the bare call is ambiguous (spec/08) — select the source
             // with `a#P.foo()`. (Only this case errors here; ordinary arg-type overloads
             // are disambiguated by the args, and identical-trait copies are the same
             // method.)
-            if typeMatch2 != self.arena.funcs.count {
+            if typeMatch2 != self.arena.funcs.count() {
                 if self.arena.funcs[typeMatch].srcTraitId != 0U64 {
                     if self.arena.funcs[typeMatch2].srcTraitId != 0U64 {
                         if self.arena.funcs[typeMatch].srcTraitId != self.arena.funcs[typeMatch2].srcTraitId {
@@ -415,13 +415,13 @@ pub impl Comp {
             self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return typeMatch
         }
-        if firstLabel != self.arena.funcs.count {
+        if firstLabel != self.arena.funcs.count() {
             return firstLabel
         }
         // no direct method: a trait `via` alias may redirect this requirement name to
         // a real member (spec/08). Retry resolution under the real name.
         mut val ai: U64 = 0
-        while ai < self.decls.methodAliases.count {
+        while ai < self.decls.methodAliases.count() {
             val al: MethodAlias = self.decls.methodAliases[ai]
             if al.recvId == qRecvId {
                 if al.aliasId == qNameId {
@@ -430,7 +430,7 @@ pub impl Comp {
             }
             ai += 1
         }
-        return self.arena.funcs.count
+        return self.arena.funcs.count()
     }
 
     inout fn findExtMethod(recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
@@ -442,7 +442,7 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 if f.extId != 0U64 {
@@ -462,7 +462,7 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 if f.viewOnly {
@@ -482,16 +482,16 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val qSrcId: U64 = srcId
-        mut val firstLabel: U64 = self.arena.funcs.count
+        mut val firstLabel: U64 = self.arena.funcs.count()
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 if f.extId == qSrcId || f.srcTraitId == qSrcId {
                     if f.nameId == qNameId {
                         if f.recvId == qRecvId {
                             if self.paramsLabelsOk(params: f.params, args: args) {
-                                if firstLabel == self.arena.funcs.count {
+                                if firstLabel == self.arena.funcs.count() {
                                     firstLabel = i
                                 }
                                 if self.paramsTypesMatch(params: f.params, args: args) {
@@ -508,29 +508,29 @@ pub impl Comp {
     }
 
     inout fn findAssoc(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-        mut val firstLabel: U64 = self.arena.funcs.count
-        mut val typeMatch: U64 = self.arena.funcs.count
-        mut val typeMatch2: U64 = self.arena.funcs.count
+        mut val firstLabel: U64 = self.arena.funcs.count()
+        mut val typeMatch: U64 = self.arena.funcs.count()
+        mut val typeMatch2: U64 = self.arena.funcs.count()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         // a newtype inherits the underlying's assoc fns/factories (spec/10): resolve the
         // receiver name to the underlying so `Brand.checked(…)` finds Rgb's `checked`.
         val rnu: Bind = self.newtypeUnderName(start: recvStart, len: recvLen)
         val qRecvId: U64 = intern(c: inout self, start: rnu.nameStart, len: rnu.nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.isAssoc {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
                         if self.paramsLabelsOk(params: f.params, args: args) {
-                            if firstLabel == self.arena.funcs.count {
+                            if firstLabel == self.arena.funcs.count() {
                                 firstLabel = i
                             }
                             if self.paramsTypesMatch(params: f.params, args: args) {
-                                if typeMatch == self.arena.funcs.count {
+                                if typeMatch == self.arena.funcs.count() {
                                     typeMatch = i
                                 } else {
-                                    if typeMatch2 == self.arena.funcs.count {
+                                    if typeMatch2 == self.arena.funcs.count() {
                                         typeMatch2 = i
                                     }
                                 }
@@ -541,7 +541,7 @@ pub impl Comp {
             }
             i += 1
         }
-        if typeMatch != self.arena.funcs.count {
+        if typeMatch != self.arena.funcs.count() {
             self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return typeMatch
         }
@@ -549,7 +549,7 @@ pub impl Comp {
     }
 
     inout fn isTypeName(start: U64, len: U64) -> Bool {
-        if self.structIndexByName(start: start, len: len) < self.arena.structs.count {
+        if self.structIndexByName(start: start, len: len) < self.arena.structs.count() {
             return true
         }
         // an import alias (`with { Real as Alias }`) names the same type as `Real`.
@@ -558,14 +558,14 @@ pub impl Comp {
         // a newtype name is a type name too (it can be an assoc-fn/factory receiver
         // through its inherited assoc fns — `Brand.gray(…)`, spec/10).
         mut val nti: U64 = 0
-        while nti < self.arena.newtypes.count {
+        while nti < self.arena.newtypes.count() {
             if self.arena.newtypes[nti].nameId == qId {
                 return true
             }
             nti += 1
         }
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count {
+        while ei < self.arena.enums.count() {
             if self.arena.enums[ei].nameId == qId {
                 return true
             }
@@ -577,13 +577,13 @@ pub impl Comp {
         // `Hash.derive(input)` rides on this). This is `isTypeName`'s only caller
         // (assocRecvName), so traits qualify only for that routing.
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count {
+        while ti < self.decls.traits.count() {
             if self.decls.traits[ti].nameId == qId {
                 return true
             }
             ti += 1
         }
-        return self.genericStructIndex(nameStart: ar.nameStart, nameLen: ar.nameLen) < self.arena.structs.count
+        return self.genericStructIndex(nameStart: ar.nameStart, nameLen: ar.nameLen) < self.arena.structs.count()
     }
 
     inout fn typeHasAssocFn(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
@@ -593,7 +593,7 @@ pub impl Comp {
         val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
         val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             if self.arena.funcs[i].isAssoc {
                 if self.arena.funcs[i].recvId == tId {
                     if self.arena.funcs[i].nameId == nId {
@@ -607,7 +607,7 @@ pub impl Comp {
     }
 
     inout fn typeRefHasFromFactory(errRef: U64) -> Bool {
-        if errRef >= self.arena.types.count {
+        if errRef >= self.arena.types.count() {
             return false
         }
         val eNameId: U64 = self.arena.types[errRef].nameId
@@ -616,7 +616,7 @@ pub impl Comp {
         }
         val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             if self.arena.funcs[i].isAssoc {
                 if self.arena.funcs[i].recvId == eNameId {
                     if self.arena.funcs[i].nameId == fromN.nameId {
@@ -630,16 +630,16 @@ pub impl Comp {
     }
 
     inout fn typeRefFromFactoryIdx(errRef: U64) -> U64 {
-        if errRef >= self.arena.types.count {
-            return self.arena.funcs.count
+        if errRef >= self.arena.types.count() {
+            return self.arena.funcs.count()
         }
         val eNameId: U64 = self.arena.types[errRef].nameId
         if eNameId == 0U64 {
-            return self.arena.funcs.count
+            return self.arena.funcs.count()
         }
         val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             if self.arena.funcs[i].isAssoc {
                 if self.arena.funcs[i].recvId == eNameId {
                     if self.arena.funcs[i].nameId == fromN.nameId {
@@ -649,12 +649,12 @@ pub impl Comp {
             }
             i += 1
         }
-        return self.arena.funcs.count
+        return self.arena.funcs.count()
     }
 
     inout fn resultErrArgRef(ref: U64) -> U64 {
-        if ref < self.arena.types.count {
-            if self.arena.types[ref].args.count >= 2U64 {
+        if ref < self.arena.types.count() {
+            if self.arena.types[ref].args.count() >= 2U64 {
                 return self.arena.types[ref].args[1]
             }
         }
@@ -663,7 +663,7 @@ pub impl Comp {
 
     inout fn rewriteAssocValReads() {
         mut val i: U64 = 0
-        while i < self.arena.exprs.count {
+        while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Field(val base, val nameStart, val nameLen) => {
                     match self.arena.exprs[base] {

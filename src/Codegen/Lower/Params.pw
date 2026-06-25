@@ -5,7 +5,7 @@ pub impl Comp {
     inout fn lowerParams(params: Array[ParamAst]) -> Array[Param] {
         mut val out: Array[Param] = []
         mut val i: U64 = 0
-        while i < params.count {
+        while i < params.count() {
             val p: ParamAst = params[i]
             val nm: Bind = self.internBytes(s: p.name)
             mut val tyStart: U64 = 0
@@ -14,7 +14,7 @@ pub impl Comp {
             mut val tyRef: U64 = 0
             // a record type has an empty `name` (its fields ride in args/argLabels), so gate
             // on isRecord too — else a record-typed param keeps no type and `p.field` fails.
-            if p.ty.name.bytes().count > 0 || p.ty.isRecord {
+            if p.ty.name.bytes().count() > 0 || p.ty.isRecord {
                 val pt: PType = self.lowerType(t: p.ty)
                 tyStart = pt.start
                 tyLen = pt.len
@@ -38,7 +38,7 @@ pub impl Comp {
     inout fn lowerBinds(binds: Array[BindAst]) -> Array[Bind] {
         mut val out: Array[Bind] = []
         mut val i: U64 = 0
-        while i < binds.count {
+        while i < binds.count() {
             val b: BindAst = binds[i]
             val nm: Bind = self.internBytes(s: b.name)
             val fd: Bind = self.internBytes(s: b.field)
@@ -57,7 +57,7 @@ pub impl Comp {
         val en: Bind = self.internBytes(s: p.typeName)
         mut val vStart: U64 = 0
         mut val vLen: U64 = 0
-        if p.variant.bytes().count > 0 {
+        if p.variant.bytes().count() > 0 {
             val vb: Bind = self.internBytes(s: p.variant)
             vStart = vb.nameStart
             vLen = vb.nameLen

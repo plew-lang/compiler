@@ -105,12 +105,12 @@ pub impl Comp {
         // means a definite int context (bits/sgn known); the recursion below propagates
         // the same context to operands, so the whole arith subtree is recorded.
         if eKind == 1 {
-            if id < self.typeCache.intCtx.count {
+            if id < self.typeCache.intCtx.count() {
                 self.typeCache.intCtx[id] = intCtxCode(bits: eBits, sgn: eSgn)
             }
         }
         if eKind == 2 {
-            if id < self.typeCache.intCtx.count {
+            if id < self.typeCache.intCtx.count() {
                 self.typeCache.intCtx[id] = floatCtxCode(bits: eBits)
             }
         }
@@ -230,7 +230,7 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count {
+                while i < elems.count() {
                     self.checkLitCtx(id: elems[i], eKind: eKind, eBits: eBits, eSgn: eSgn)
                     i += 1
                 }
@@ -240,22 +240,22 @@ pub impl Comp {
                 // surrounding context flows to each give (an else-if chain recurses here
                 // via the nested IfExpr give). The condition is self-typed (Bool).
                 val tg: U64 = self.blockGiveExpr(blkId: thenBlk)
-                if tg < self.arena.exprs.count {
+                if tg < self.arena.exprs.count() {
                     self.checkLitCtx(id: tg, eKind: eKind, eBits: eBits, eSgn: eSgn)
                 }
                 val eg: U64 = self.blockGiveExpr(blkId: elseBlk)
-                if eg < self.arena.exprs.count {
+                if eg < self.arena.exprs.count() {
                     self.checkLitCtx(id: eg, eKind: eKind, eBits: eBits, eSgn: eSgn)
                 }
             }
             Expr.MatchExpr(val scrut, val arms) => {
                 self.checkLitCtx(id: scrut, eKind: 0, eBits: 0, eSgn: false)
                 mut val i: U64 = 0
-                while i < arms.count {
+                while i < arms.count() {
                     // context flows to each value arm's `give` value; diverging arms have none.
                     if !(arms[i].isDiverge) {
                         val g: U64 = self.blockGiveExpr(blkId: arms[i].body)
-                        if g < self.arena.exprs.count {
+                        if g < self.arena.exprs.count() {
                             // bring the arm's payload binds into scope so a give-value that
                             // references them (`Shape.Square(val s) => s * s`) resolves to
                             // their real type, not a shadowing outer name — the operator /
@@ -300,12 +300,12 @@ pub impl Comp {
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val seen: Array[U64] = []
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.isAssoc {
                 if f.recvId == qType {
                     if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                        if f.params.count >= 2 {
+                        if f.params.count() >= 2 {
                             if self.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
                                 if !(u64ArrayHas(a: seen, v: f.params[1].tyNameId)) {
                                     seen.append(f.params[1].tyNameId)
@@ -317,7 +317,7 @@ pub impl Comp {
             }
             i += 1
         }
-        return seen.count
+        return seen.count()
     }
 
     inout fn checkBinTraitRhs(op: I64, lhs: U64, rhs: U64) -> Bool {
@@ -335,9 +335,9 @@ pub impl Comp {
                 }
             }
             val fi: U64 = self.findBinTraitWitness(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op), rhs: rhs)
-            if fi < self.arena.funcs.count {
+            if fi < self.arena.funcs.count() {
                 val f: Func = self.arena.funcs[fi]
-                if f.params.count >= 2 {
+                if f.params.count() >= 2 {
                     val pit: IntTy = self.spanIntTy(start: f.params[1].tyStart, len: f.params[1].tyLen)
                     if pit.known {
                         self.checkLitCtx(id: rhs, eKind: 1, eBits: pit.bits, eSgn: pit.sgn)
@@ -352,9 +352,9 @@ pub impl Comp {
     }
 
     // Recover an expression's integer type as (bits, sgn). Covers what exprType
-    // reports width-less but is nonetheless integer-typed: `arr.count` (U64) and an
+    // reports width-less but is nonetheless integer-typed: `arr.count()` (U64) and an
     // array element read `arr[i]` (the element's int type) — so a literal sibling in
-    // `0 ..< arr.count` infers U64 and is not flagged ambiguous.
+    // `0 ..< arr.count()` infers U64 and is not flagged ambiguous.
     inout fn exprIntTy(id: U64) -> IntTy {
         val ti: TypeInfo = self.exprType(id: id)
         if self.tiIsInt(ti: ti) {
@@ -479,7 +479,7 @@ pub impl Comp {
         match e {
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count {
+                while i < elems.count() {
                     self.checkLitSpan(id: elems[i], tyStart: elemStart, tyLen: elemLen, isArray: false)
                     i += 1
                 }

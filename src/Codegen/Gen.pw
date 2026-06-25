@@ -30,7 +30,7 @@ pub impl Comp {
     }
 
     inout fn internSourceLiteral(from: U64, to: U64) -> Bind {
-        val start: U64 = self.arena.bytes.count
+        val start: U64 = self.arena.bytes.count()
         self.arena.bytes.append('"')
         mut val i: U64 = from
         while i < to {
@@ -64,13 +64,13 @@ pub impl Comp {
             i += 1
         }
         self.arena.bytes.append('"')
-        val len: U64 = self.arena.bytes.count - start
+        val len: U64 = self.arena.bytes.count() - start
         return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
 
     inout fn checkDirectiveArgsPublic(d: DeriveReq) {
         mut val ai: U64 = 0
-        while ai < d.args.count {
+        while ai < d.args.count() {
             val mf: MakeField = d.args[ai]
             val v: U64 = self.fieldVis(structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             if v == 0U64 {
@@ -92,7 +92,7 @@ pub impl Comp {
         val mainN: Bind = self.internBytes(s: "main")
         mut val stmts: Array[U64] = []
         mut val i: U64 = 0
-        while i < self.decls.derives.count {
+        while i < self.decls.derives.count() {
             val d: DeriveReq = self.decls.derives[i]
             // only generate from the ENTRY file's annotations (module 0), not those of its
             // dependencies (spec/16: `plew gen <file>` processes <file>, not the libraries it
@@ -124,7 +124,7 @@ pub impl Comp {
                 // directly (assoc `Derive`); `@[X(args)]` constructs `<X args/>` first
                 // (instance `ParameterizedDerive`, `self` = the config).
                 mut val recv: U64 = 0
-                if d.args.count == 0 {
+                if d.args.count() == 0 {
                     recv = self.pushExpr(e: <Expr.Ident start=d.nameStart len=d.nameLen />)
                 } else {
                     recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=d.args />)
@@ -141,11 +141,11 @@ pub impl Comp {
             }
             i += 1
         }
-        val blkId: U64 = self.arena.blocks.count
+        val blkId: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         val noTP: Array[Bind] = []
         val noParams: Array[Param] = []
-        self.genMainIdx = self.arena.funcs.count
+        self.genMainIdx = self.arena.funcs.count()
         self.arena.funcs.append(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen nameId=intern(c: inout self, start: mainN.nameStart, len: mainN.nameLen) typeParams=noTP params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     }
 }

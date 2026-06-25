@@ -45,7 +45,7 @@ pub impl LlvmCtx {
                     // a compound element (`Array[Ref[Box]]`, `Array[Box[I32]]`) has a
                     // mangled tyStart llvmScalarTy can't resolve — use the element ref.
                     if ty != 0U64 {
-                        if c.arena.types[ty].args.count > 0U64 {
+                        if c.arena.types[ty].args.count() > 0U64 {
                             elemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.types[ty].args[0])
                         }
                     }
@@ -54,14 +54,14 @@ pub impl LlvmCtx {
                     match c.arena.exprs[init] {
                         Expr.Array(val elems) => {
                             isArr = true
-                            if elems.count > 0U64 {
+                            if elems.count() > 0U64 {
                                 elemTy = self.exprLlvmType(c: inout c, id: elems[0])
                                 elemKind = self.valueKind(c: inout c, id: elems[0])
                             }
                         }
                         _ => {
                             // an un-annotated array-valued initializer (`val bs = s.bytes()`):
-                            // track it as an array so `bs.count` / `bs[i]` resolve.
+                            // track it as an array so `bs.count()` / `bs[i]` resolve.
                             if self.exprIsArray(c: inout c, id: init) {
                                 isArr = true
                                 elemTy = self.arrElemTyOf(c: inout c, id: init)
@@ -79,7 +79,7 @@ pub impl LlvmCtx {
                         Expr.Array(val elems) => {
                             mut val litElemRef: U64 = 0
                             if ty != 0U64 {
-                                if c.arena.types[ty].args.count > 0U64 {
+                                if c.arena.types[ty].args.count() > 0U64 {
                                     litElemRef = c.arena.types[ty].args[0]
                                 }
                             }
@@ -113,7 +113,7 @@ pub impl LlvmCtx {
                 // body or for an already-concrete annotation.
                 mut val gty: U64 = ty
                 if ty != 0U64 {
-                    if c.cur.typeParams.count > 0U64 {
+                    if c.cur.typeParams.count() > 0U64 {
                         gty = c.groundTypeRef(ref: ty)
                     }
                 }
@@ -158,11 +158,11 @@ pub impl LlvmCtx {
                 mut val tref: U64 = 0
                 if c.isGenericInst(ref: gty) {
                     val gslot: U64 = self.genStructSlot(c: inout c, ref: gty)
-                    if gslot < self.genStructRefs.count {
+                    if gslot < self.genStructRefs.count() {
                         sidx = self.genStructDefs[gslot]
                         tref = gty
                     } else {
-                        if self.genEnumSlot(c: inout c, ref: gty) < self.genEnumRefs.count {
+                        if self.genEnumSlot(c: inout c, ref: gty) < self.genEnumRefs.count() {
                             tref = gty
                         }
                     }
@@ -194,11 +194,11 @@ pub impl LlvmCtx {
                             val rref: U64 = self.exprResultRef(c: inout c, id: init)
                             if c.isGenericInst(ref: rref) {
                                 val gslot2: U64 = self.genStructSlot(c: inout c, ref: rref)
-                                if gslot2 < self.genStructRefs.count {
+                                if gslot2 < self.genStructRefs.count() {
                                     sidx = self.genStructDefs[gslot2]
                                     tref = rref
                                 } else {
-                                    if self.genEnumSlot(c: inout c, ref: rref) < self.genEnumRefs.count {
+                                    if self.genEnumSlot(c: inout c, ref: rref) < self.genEnumRefs.count() {
                                         tref = rref
                                     }
                                 }
@@ -210,7 +210,7 @@ pub impl LlvmCtx {
                 // the enum (typeOf can't see locals — c.cur.locals is unpopulated here).
                 if tref == 0U64 {
                     if tyLen > 0U64 {
-                        if self.enumRegSlot(c: inout c, start: tyStart, len: tyLen) < self.enumIdxs.count {
+                        if self.enumRegSlot(c: inout c, start: tyStart, len: tyLen) < self.enumIdxs.count() {
                             tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                         }
                     }
@@ -282,7 +282,7 @@ pub impl LlvmCtx {
                 self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
                 // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the
                 // shared cell so the pointee deinits only when the LAST owner drops.
-                if self.refDeinitPointeeSidx(c: inout c, refTy: tref) < c.arena.structs.count {
+                if self.refDeinitPointeeSidx(c: inout c, refTy: tref) < c.arena.structs.count() {
                     if arrayExprIsPlace(c: inout c, id: init) {
                         self.rawbufRetain(c: inout c, cell: v)
                     }
@@ -292,7 +292,7 @@ pub impl LlvmCtx {
                 if isArr {
                     if tyLen > 0U64 {
                         val esi: U64 = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
-                        if esi < c.arena.structs.count {
+                        if esi < c.arena.structs.count() {
                             self.setLocalElemStruct(esi: esi)
                         }
                     }
@@ -301,7 +301,7 @@ pub impl LlvmCtx {
                     if tyIsArray {
                         if ty != 0U64 {
                             val at: TypeRef = c.arena.types[ty]
-                            if at.args.count > 0U64 {
+                            if at.args.count() > 0U64 {
                                 self.setLocalElemTypeRef(ref: at.args[0])
                             }
                         }
@@ -356,7 +356,7 @@ pub impl LlvmCtx {
                                 if self.locOwned[li] {
                                     if !(self.locMoved[li]) {
                                         val osi: U64 = self.locStructIdx[li]
-                                        if osi < c.arena.structs.count {
+                                        if osi < c.arena.structs.count() {
                                             if self.structNeedsDeinit(c: inout c, sidx: osi) {
                                                 self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()), sidx: osi)
                                             }
@@ -389,7 +389,7 @@ pub impl LlvmCtx {
                         // compound form `g[i] OP= v` desugars `v` to `g[i] OP v` first).
                         if !(self.exprIsArray(c: inout c, id: ibase)) {
                             val ibsi: U64 = self.exprStructIdx(c: inout c, id: ibase)
-                            if ibsi < c.arena.structs.count {
+                            if ibsi < c.arena.structs.count() {
                                 // a Dictionary `d[k] = v` lowers to `d.insert(key:, value:)`.
                                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
                                     // `d[k] = v` -> d.insert(key: k, value: v). A compound
@@ -457,9 +457,9 @@ pub impl LlvmCtx {
                             Expr.Ident(start: val bs, len: val bl) => {
                                 val li: U64 = self.findLocal(c: inout c, start: bs, len: bl)
                                 val sidx: U64 = self.exprStructIdx(c: inout c, id: fbase)
-                                if li < self.nLocals && sidx < c.arena.structs.count {
+                                if li < self.nLocals && sidx < c.arena.structs.count() {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: fnameStart, len: fnameLen)
-                                    if fidx < c.arena.structs[sidx].fields.count {
+                                    if fidx < c.arena.structs[sidx].fields.count() {
                                         val fld: FieldDef = c.arena.structs[sidx].fields[fidx]
                                         val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.locTy[li], self.locPtr[li], fidx, anon())
                                         // a boxed (recursive) field (`a.next = <Optional.None/>`):
@@ -520,9 +520,9 @@ pub impl LlvmCtx {
                                 // the base struct pointer via placePtrOf, then GEP the field.
                                 val bsi: U64 = self.exprStructIdx(c: inout c, id: fbase)
                                 mut val handled: Bool = false
-                                if bsi < c.arena.structs.count {
+                                if bsi < c.arena.structs.count() {
                                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fnameStart, len: fnameLen)
-                                    if fidx < c.arena.structs[bsi].fields.count {
+                                    if fidx < c.arena.structs[bsi].fields.count() {
                                         val baseTy: LLVMTypeRef = self.structLlvmTyOfExpr(c: inout c, structExpr: fbase, sidx: bsi)
                                         if LLVMIsNull(baseTy) == 0I32 {
                                             val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
@@ -562,9 +562,9 @@ pub impl LlvmCtx {
                         // store. The cell is shared, so the write is visible through any
                         // alias of the Ref.
                         val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: abase)
-                        if psidx < c.arena.structs.count {
+                        if psidx < c.arena.structs.count() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: ans, len: anl)
-                            if fidx < c.arena.structs[psidx].fields.count {
+                            if fidx < c.arena.structs[psidx].fields.count() {
                                 val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
                                 val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: self.exprRefTypeRef(c: inout c, id: abase))
                                 val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: abase)
@@ -674,7 +674,7 @@ pub impl LlvmCtx {
                                     mut val retElemRef: U64 = 0
                                     mut val retElemTy: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: self.curRetTyStart, tyLen: self.curRetTyLen)
                                     if self.curRetRef != 0U64 {
-                                        if c.arena.types[self.curRetRef].args.count > 0U64 {
+                                        if c.arena.types[self.curRetRef].args.count() > 0U64 {
                                             retElemRef = c.arena.types[self.curRetRef].args[0]
                                             if refIsAny(c: inout c, ref: retElemRef) {
                                                 retElemTy = self.anyTy

@@ -7,7 +7,7 @@ pub impl Comp {
     // Called once before emission; expr ids are stable by then.
     inout fn buildExprTyTable() {
         mut val i: U64 = 0
-        while i < self.arena.exprs.count {
+        while i < self.arena.exprs.count() {
             self.typeCache.kind.append(typeUnfilled())
             self.typeCache.start.append(0)
             self.typeCache.len.append(0)
@@ -22,7 +22,7 @@ pub impl Comp {
 pub impl Comp {
 
     // Pre-resolved free-function callee for the call expression `id`: the `findFunc`
-    // result (`funcs.count` if it resolves to no declared function), memoized in
+    // result (`funcs.count()` if it resolves to no declared function), memoized in
     // `typeCache.callee`. The single choke point through which every pass reads call
     // resolution — the first pass to ask fills the slot, the rest read it, so the
     // backend stops re-running overload resolution during emission. The result is
@@ -31,19 +31,19 @@ pub impl Comp {
     // past the table, i.e. a node synthesized after buildExprTyTable) resolves directly
     // without caching.
     inout fn resolvedCallee(id: U64) -> U64 {
-        if id < self.typeCache.callee.count {
+        if id < self.typeCache.callee.count() {
             if self.typeCache.callee[id] != calleeUnfilled() {
                 return self.typeCache.callee[id]
             }
         }
-        mut val r: U64 = self.arena.funcs.count
+        mut val r: U64 = self.arena.funcs.count()
         match self.arena.exprs[id] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 r = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
             }
             _ => {}
         }
-        if id < self.typeCache.callee.count {
+        if id < self.typeCache.callee.count() {
             self.typeCache.callee.set(i: id, value: r)
         }
         return r
@@ -55,11 +55,11 @@ pub impl Comp {
     // The TypeInfo for `id`'s recorded int context (scalarInfo if none) — the fallback
     // `typeOf` uses for a width-less expression whose type came only from context.
     inout fn exprIntCtxTypeInfo(id: U64) -> TypeInfo {
-        if id < self.typeCache.intCtx.count {
+        if id < self.typeCache.intCtx.count() {
             val code: U64 = self.typeCache.intCtx[id]
             if code != 0 {
                 val kw: String = intCtxKw(code: code)
-                val b: Bind = self.kwSpan(kw: kw, kwLen: kw.bytes().count)
+                val b: Bind = self.kwSpan(kw: kw, kwLen: kw.bytes().count())
                 if b.nameLen != 0 {
                     return <TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 />
                 }
@@ -82,7 +82,7 @@ pub impl Comp {
     // match's internal bindings (needed for a nested `a?.x?.y`).
     inout fn chainResultRef(exprId: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.decls.chainResults.count {
+        while i < self.decls.chainResults.count() {
             if self.decls.chainResults[i].nameStart == exprId {
                 return self.decls.chainResults[i].fieldStart
             }
@@ -93,7 +93,7 @@ pub impl Comp {
 
     inout fn typeOf(id: U64) -> TypeInfo {
         mut val t: TypeInfo = scalarInfo()
-        if id < self.typeCache.kind.count {
+        if id < self.typeCache.kind.count() {
             if self.typeCache.kind[id] == typeUnfilled() {
                 t = self.exprType(id: id)
                 self.typeCache.kind[id] = t.kind

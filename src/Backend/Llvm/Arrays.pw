@@ -29,9 +29,9 @@ pub impl LlvmCtx {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count {
+                if sidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count {
+                    if fidx < c.arena.structs[sidx].fields.count() {
                         return self.fieldLlvmTy(c: inout c, fd: c.arena.structs[sidx].fields[fidx])
                     }
                 }
@@ -44,16 +44,16 @@ pub impl LlvmCtx {
                 // an `any P` receiver: the result LLVM type is the requirement's return,
                 // grounded under the existential's bindings.
                 val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
-                if atIdx < c.decls.traits.count {
+                if atIdx < c.decls.traits.count() {
                     val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                     if rr != 0U64 {
                         return self.llvmTypeOfRef(c: inout c, ref: rr)
                     }
                 }
                 val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
-                if rsidx < c.arena.structs.count {
+                if rsidx < c.arena.structs.count() {
                     val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mfi < c.arena.funcs.count {
+                    if mfi < c.arena.funcs.count() {
                         return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
                     }
                 }
@@ -61,9 +61,9 @@ pub impl LlvmCtx {
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
                 val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
-                if rsidx < c.arena.structs.count {
+                if rsidx < c.arena.structs.count() {
                     val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mfi < c.arena.funcs.count {
+                    if mfi < c.arena.funcs.count() {
                         return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
                     }
                 }
@@ -74,7 +74,7 @@ pub impl LlvmCtx {
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count {
+                if cfi < c.arena.funcs.count() {
                     return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[cfi])
                 }
                 return self.i64ty
@@ -94,7 +94,7 @@ pub impl LlvmCtx {
         }
     }
 
-    // Whether an expression is array-typed (for routing `.count`/`.append`/index).
+    // Whether an expression is array-typed (for routing `.count()`/`.append`/index).
     inout fn exprIsArray(c: inout Comp, id: U64) -> Bool {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
@@ -105,9 +105,9 @@ pub impl LlvmCtx {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count {
+                if sidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count {
+                    if fidx < c.arena.structs[sidx].fields.count() {
                         val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
                         if fd.tyIsArray {
                             return true
@@ -119,9 +119,9 @@ pub impl LlvmCtx {
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
-                if psidx < c.arena.structs.count {
+                if psidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[psidx].fields.count {
+                    if fidx < c.arena.structs[psidx].fields.count() {
                         return c.arena.structs[psidx].fields[fidx].tyIsArray
                     }
                 }
@@ -138,7 +138,7 @@ pub impl LlvmCtx {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 // an array-returning call (`val a = mk()`): tracked as an array.
                 val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count {
+                if cfi < c.arena.funcs.count() {
                     return c.arena.funcs[cfi].retIsArray
                 }
             }
@@ -174,9 +174,9 @@ pub impl LlvmCtx {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count {
+                if sidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count {
+                    if fidx < c.arena.structs[sidx].fields.count() {
                         val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
                         // an array field's element type, resolved under the base's instance
                         // env (`Holder[I64].items : Array[Box[T]]` -> Box[I64]; a generic
@@ -191,9 +191,9 @@ pub impl LlvmCtx {
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
-                if psidx < c.arena.structs.count {
+                if psidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[psidx].fields.count {
+                    if fidx < c.arena.structs[psidx].fields.count() {
                         return self.llvmScalarTy(c: inout c, tyStart: c.arena.structs[psidx].fields[fidx].tyStart, tyLen: c.arena.structs[psidx].fields[fidx].tyLen)
                     }
                 }
@@ -205,7 +205,7 @@ pub impl LlvmCtx {
                 if r != 0U64 {
                     val t: TypeRef = c.arena.types[r]
                     if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                        if t.args.count > 0U64 {
+                        if t.args.count() > 0U64 {
                             return self.llvmTypeOfRef(c: inout c, ref: t.args[0])
                         }
                     }
@@ -215,7 +215,7 @@ pub impl LlvmCtx {
                 // an array-returning call's element type (`val a = mk()` -> element of
                 // mk's Array return).
                 val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count {
+                if cfi < c.arena.funcs.count() {
                     if c.arena.funcs[cfi].retIsArray {
                         return self.llvmScalarTy(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
                     }
@@ -230,7 +230,7 @@ pub impl LlvmCtx {
                 if r != 0U64 {
                     val t: TypeRef = c.arena.types[r]
                     if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                        if t.args.count > 0U64 {
+                        if t.args.count() > 0U64 {
                             return self.llvmTypeOfRef(c: inout c, ref: t.args[0])
                         }
                     }
@@ -330,7 +330,7 @@ pub impl LlvmCtx {
             // GENERIC field (`next: Optional[N[T]]` in `N[I64]`) grounds to the registered
             // concrete instance (`Optional[N[I64]]`) instead of the ungrounded template.
             mut val bg: U64 = fld.ty
-            if c.cur.typeParams.count > 0U64 {
+            if c.cur.typeParams.count() > 0U64 {
                 bg = c.groundTypeRef(ref: fld.ty)
             }
             self.expectedTy = bg
@@ -348,7 +348,7 @@ pub impl LlvmCtx {
         // the instance's type args (genLlvmMakeEnum / genLlvmMake consume self.expectedTy).
         if fld.ty != 0U64 {
             mut val g: U64 = fld.ty
-            if c.cur.typeParams.count > 0U64 {
+            if c.cur.typeParams.count() > 0U64 {
                 g = c.groundTypeRef(ref: fld.ty)
             }
             if c.isGenericInst(ref: g) {
@@ -369,7 +369,7 @@ pub impl LlvmCtx {
         // is independent of the source (else the bit-copy below shares the source's array
         // fields and the source's drop frees them under the new struct).
         val fsi2: U64 = self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen)
-        if fsi2 < c.arena.structs.count {
+        if fsi2 < c.arena.structs.count() {
             if self.structNeedsDeinit(c: inout c, sidx: fsi2) {
                 if structExprIsPlace(c: inout c, id: valExpr) {
                     // CoW-SHARE the struct place into the field (rc++ its heap fields under the
@@ -385,7 +385,7 @@ pub impl LlvmCtx {
         // Array[U8]), from a place: deep-copy its payload so the constructed struct's field is
         // independent (else the source enum's drop frees the shared payload → UAF). Generic
         // enum instances are handled by the isGenericInst path above.
-        if self.enumRegSlot(c: inout c, start: fld.tyStart, len: fld.tyLen) < self.enumIdxs.count {
+        if self.enumRegSlot(c: inout c, start: fld.tyStart, len: fld.tyLen) < self.enumIdxs.count() {
             if structExprIsPlace(c: inout c, id: valExpr) {
                 // CoW-SHARE the enum place into the field (rc++ its active variant's heap);
                 // the gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
@@ -594,7 +594,7 @@ pub impl LlvmCtx {
     inout fn deepCopyStructValue(c: inout Comp, v: LLVMValueRef, sidx: U64) -> LLVMValueRef {
         // a concrete registered struct: call its copy witness (fields are concrete, so the
         // witness body is env-independent). A generic struct walks inline under the caller's env.
-        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
+        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count() {
             val slot: U64 = self.structCopyWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
@@ -610,7 +610,7 @@ pub impl LlvmCtx {
         val sd: StructDef = c.arena.structs[sidx]
         mut val agg: LLVMValueRef = v
         mut val fi: U64 = 0
-        while fi < sd.fields.count {
+        while fi < sd.fields.count() {
             val fd: FieldDef = sd.fields[fi]
             // an array or Buffer field (declared `Array[E]`/`Buffer[E]` or a type param
             // grounding to one): deep-copy the backing buffer. The buffer COPY is shared
@@ -635,7 +635,7 @@ pub impl LlvmCtx {
                     // copy of the cyclic graph is a later ARC refinement).
                 } else {
                     val nsi: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
-                    if nsi < c.arena.structs.count {
+                    if nsi < c.arena.structs.count() {
                         val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
                         agg = LLVMBuildInsertValue(self.b, agg, self.deepCopyStructValue(c: inout c, v: elem, sidx: nsi), fi, anon())
                     } else {
@@ -644,7 +644,7 @@ pub impl LlvmCtx {
                         // copy is independent (closes the struct<->enum recursion). A non-enum
                         // field passes through deepCopyEnumRef unchanged.
                         mut val gref: U64 = fd.ty
-                        if c.cur.typeParams.count > 0U64 {
+                        if c.cur.typeParams.count() > 0U64 {
                             gref = c.groundTypeRef(ref: fd.ty)
                         }
                         val elem: LLVMValueRef = LLVMBuildExtractValue(self.b, agg, fi, anon())
@@ -657,16 +657,16 @@ pub impl LlvmCtx {
         return agg
     }
 
-    // The copyWit* slot for struct `sidx`, or copyWitSidx.count if none declared yet.
+    // The copyWit* slot for struct `sidx`, or copyWitSidx.count() if none declared yet.
     inout fn copyWitSlot(sidx: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.copyWitSidx.count {
+        while i < self.copyWitSidx.count() {
             if self.copyWitSidx[i] == sidx {
                 return i
             }
             i += 1
         }
-        return self.copyWitSidx.count
+        return self.copyWitSidx.count()
     }
 
     // Ensure the per-type copy witness `structTy @pwcopy<sidx>(structTy)` is declared, and
@@ -674,7 +674,7 @@ pub impl LlvmCtx {
     // checked `sidx` is a registered struct.
     inout fn structCopyWitness(c: inout Comp, sidx: U64) -> U64 {
         val found: U64 = self.copyWitSlot(sidx: sidx)
-        if found < self.copyWitSidx.count {
+        if found < self.copyWitSidx.count() {
             return found
         }
         val reg: U64 = self.structSlotForSidx(sidx: sidx)
@@ -690,14 +690,14 @@ pub impl LlvmCtx {
         self.copyWitSidx.append(sidx)
         self.copyWitVal.append(fv)
         self.copyWitTy.append(fty)
-        return self.copyWitSidx.count - 1U64
+        return self.copyWitSidx.count() - 1U64
     }
 
     // Emit the body of every declared copy witness: the deep-copy walker over its single
     // struct-value parameter, returning the independent copy. Drained by a growing cursor
     // (a walk may declare sub-struct witnesses). Called once after the main emit pass.
     inout fn emitCopyWitnessBodies(c: inout Comp) {
-        while self.copyWitDone < self.copyWitSidx.count {
+        while self.copyWitDone < self.copyWitSidx.count() {
             val s: U64 = self.copyWitDone
             val sidx: U64 = self.copyWitSidx[s]
             val fv: LLVMValueRef = self.copyWitVal[s]
@@ -765,7 +765,7 @@ pub impl LlvmCtx {
         }
         if structExprIsPlace(c: inout c, id: expr) {
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
-            if sidx < c.arena.structs.count {
+            if sidx < c.arena.structs.count() {
                 // 1-3a (struct class): CoW-SHARE the struct place — retain its heap fields
                 // (rc++) instead of deep-copying them; the first in-place mutation of a field
                 // CoWs via the slot (gateway). emitStructRetain rc-bumps exactly the buffers
@@ -931,7 +931,7 @@ pub impl LlvmCtx {
         // lookup so a GENERIC struct element (`Array[I64]` — an ordinary `struct { data: Buffer }`)
         // is resolved by name and its Buffer field counts via structNeedsDeinit (collections.md §3-付録3).
         val sidx: U64 = c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        if sidx < c.arena.structs.count {
+        if sidx < c.arena.structs.count() {
             if !(c.arena.structs[sidx].isExtern) {
                 return self.structNeedsDeinit(c: inout c, sidx: sidx)
             }
@@ -939,11 +939,11 @@ pub impl LlvmCtx {
         // an enum element that owns heap (a variant with a non-boxed array/struct field):
         // its elements are retained on outer CoW and released on outer drop (like structs).
         val gei: U64 = self.genEnumSlot(c: inout c, ref: elemRef)
-        if gei < self.genEnumRefs.count {
+        if gei < self.genEnumRefs.count() {
             return self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[gei])
         }
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
-        if reg < self.enumIdxs.count {
+        if reg < self.enumIdxs.count() {
             return self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg])
         }
         return false
@@ -982,7 +982,7 @@ pub impl LlvmCtx {
                 self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
             } else {
                 mut val innerRef: U64 = 0
-                if t.args.count > 0U64 {
+                if t.args.count() > 0U64 {
                     innerRef = t.args[0]
                 }
                 val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
@@ -1004,7 +1004,7 @@ pub impl LlvmCtx {
         // any-arity lookup: a generic struct value (`Array[I64]`) resolves by name, with its
         // instance env supplied below (setStructEnv) for grounding the field recursion.
         val sidx: U64 = c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        if sidx < c.arena.structs.count {
+        if sidx < c.arena.structs.count() {
             if !(c.arena.structs[sidx].isExtern) {
                 // ground this value's own instance env (`Array[String]` -> T=String) so a
                 // generic field (`data: Buffer[T]`) resolves to its concrete element while the
@@ -1047,7 +1047,7 @@ pub impl LlvmCtx {
         // a concrete registered struct: call its retain witness instead of inlining the
         // walker (fields are concrete, so the witness body is env-independent). A generic
         // struct stays unregistered and is walked inline under the caller's env.
-        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count {
+        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count() {
             val slot: U64 = self.structRetainWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
@@ -1067,7 +1067,7 @@ pub impl LlvmCtx {
         self.arcPush(sidx: sidx)
         val sd: StructDef = c.arena.structs[sidx]
         mut val i: U64 = 0
-        while i < sd.fields.count {
+        while i < sd.fields.count() {
             val fd: FieldDef = sd.fields[i]
             val er: U64 = arrayOrBufferFieldElemRef(c: inout c, f: fd)
             if er != 0U64 {
@@ -1078,7 +1078,7 @@ pub impl LlvmCtx {
                     // a boxed (recursive) field is a shared heap pointer — leave it (like Ref).
                 } else {
                     val nsi: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
-                    if nsi < c.arena.structs.count {
+                    if nsi < c.arena.structs.count() {
                         // skip a no-heap struct field (nothing to retain) — coverage-neutral but
                         // cuts the inline expansion (matches emitDeinitValue's drop-side gate).
                         if self.structNeedsDeinit(c: inout c, sidx: nsi) {
@@ -1088,7 +1088,7 @@ pub impl LlvmCtx {
                         // an enum field (generic instance like `Optional[Array]` or a plain enum):
                         // retain its active variant's payload heap. A non-enum field is a no-op.
                         mut val gref: U64 = fd.ty
-                        if c.cur.typeParams.count > 0U64 {
+                        if c.cur.typeParams.count() > 0U64 {
                             gref = c.groundTypeRef(ref: fd.ty)
                         }
                         self.emitEnumRetainRef(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), ref: gref)
@@ -1100,16 +1100,16 @@ pub impl LlvmCtx {
         self.arcPop()
     }
 
-    // The retWit* slot for struct `sidx`, or retWitSidx.count if none declared yet.
+    // The retWit* slot for struct `sidx`, or retWitSidx.count() if none declared yet.
     inout fn retWitSlot(sidx: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.retWitSidx.count {
+        while i < self.retWitSidx.count() {
             if self.retWitSidx[i] == sidx {
                 return i
             }
             i += 1
         }
-        return self.retWitSidx.count
+        return self.retWitSidx.count()
     }
 
     // Ensure the per-type retain witness `void @pwretain<sidx>(structVal)` is declared, and
@@ -1117,7 +1117,7 @@ pub impl LlvmCtx {
     // checked `sidx` is a registered struct.
     inout fn structRetainWitness(c: inout Comp, sidx: U64) -> U64 {
         val found: U64 = self.retWitSlot(sidx: sidx)
-        if found < self.retWitSidx.count {
+        if found < self.retWitSidx.count() {
             return found
         }
         val reg: U64 = self.structSlotForSidx(sidx: sidx)
@@ -1132,14 +1132,14 @@ pub impl LlvmCtx {
         self.retWitSidx.append(sidx)
         self.retWitVal.append(fv)
         self.retWitTy.append(fty)
-        return self.retWitSidx.count - 1U64
+        return self.retWitSidx.count() - 1U64
     }
 
     // Emit the body of every declared retain witness: the field-retain walker over its single
     // struct-value parameter. Drained by a growing cursor (a walk may declare sub-struct
     // witnesses). Called once after the main emit pass, alongside the drop witnesses.
     inout fn emitRetainWitnessBodies(c: inout Comp) {
-        while self.retWitDone < self.retWitSidx.count {
+        while self.retWitDone < self.retWitSidx.count() {
             val s: U64 = self.retWitDone
             val sidx: U64 = self.retWitSidx[s]
             val fv: LLVMValueRef = self.retWitVal[s]
@@ -1181,7 +1181,7 @@ pub impl LlvmCtx {
         self.emitArrayElemLoop(c: inout c, data: data, count: count, elemTy: elemTy, elemRef: elemRef, retain: true)
     }
 
-    // Emit `for i in 0..count { v = data[i]; retain ? retainValue(v) : releaseValue(v) }`.
+    // Emit `for i in 0..count() { v = data[i]; retain ? retainValue(v) : releaseValue(v) }`.
     inout fn emitArrayElemLoop(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64, retain: Bool) {
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
         LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, 0U64, 0I32), iSlot)
@@ -1225,20 +1225,20 @@ pub impl LlvmCtx {
     }
 
     // The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
-    // that needs a deinit, else c.arena.structs.count.
+    // that needs a deinit, else c.arena.structs.count().
     inout fn refDeinitPointeeSidx(c: inout Comp, refTy: U64) -> U64 {
         if c.isRefInst(ref: refTy) {
-            if c.arena.types[refTy].args.count > 0U64 {
+            if c.arena.types[refTy].args.count() > 0U64 {
                 val pt: TypeRef = c.arena.types[c.arena.types[refTy].args[0]]
                 val psi: U64 = c.structIndexByName(start: pt.nameStart, len: pt.nameLen)
-                if psi < c.arena.structs.count {
+                if psi < c.arena.structs.count() {
                     if self.structNeedsDeinit(c: inout c, sidx: psi) {
                         return psi
                     }
                 }
             }
         }
-        return c.arena.structs.count
+        return c.arena.structs.count()
     }
 
     // Bounds-check `i` against `count` via the runtime (panics on out-of-range).

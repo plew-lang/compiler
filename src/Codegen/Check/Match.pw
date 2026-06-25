@@ -12,19 +12,19 @@ pub impl Comp {
         }
         if a.isStruct {
             val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
-            if si < self.arena.structs.count {
+            if si < self.arena.structs.count() {
                 self.checkBindsInFields(binds: a.binds, fields: self.arena.structs[si].fields)
             }
             return
         }
         val ei: U64 = self.enumIndexByName(start: a.enumStart, len: a.enumLen)
-        if ei >= self.arena.enums.count {
+        if ei >= self.arena.enums.count() {
             return
         }
         val variants: Array[Variant] = self.arena.enums[ei].variants
         val qVar: U64 = intern(c: inout self, start: a.variantStart, len: a.variantLen)
         mut val vi: U64 = 0
-        while vi < variants.count {
+        while vi < variants.count() {
             if variants[vi].nameId == qVar {
                 self.checkBindsInFields(binds: a.binds, fields: variants[vi].fields)
                 return
@@ -35,11 +35,11 @@ pub impl Comp {
 
     inout fn checkMatchBinds() {
         mut val si: U64 = 0
-        while si < self.arena.stmts.count {
+        while si < self.arena.stmts.count() {
             match self.arena.stmts[si] {
                 Stmt.Match(val scrut, val arms) => {
                     mut val ai: U64 = 0
-                    while ai < arms.count {
+                    while ai < arms.count() {
                         self.checkArmBinds(a: arms[ai])
                         ai += 1
                     }
@@ -49,11 +49,11 @@ pub impl Comp {
             si += 1
         }
         mut val xi: U64 = 0
-        while xi < self.arena.exprs.count {
+        while xi < self.arena.exprs.count() {
             match self.arena.exprs[xi] {
                 Expr.MatchExpr(val scrut, val arms) => {
                     mut val ai: U64 = 0
-                    while ai < arms.count {
+                    while ai < arms.count() {
                         self.checkArmBinds(a: arms[ai])
                         ai += 1
                     }

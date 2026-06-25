@@ -117,20 +117,20 @@ pub impl Comp {
     // lowered, so original-offset name spans resolve into it).
     inout fn appendSrc(from: Array[U8]) {
         mut val i: U64 = 0
-        while i < from.count {
+        while i < from.count() {
             self.arena.bytes.append(from[i])
             i += 1
         }
     }
     // Append an expression node, returning its arena index.
     inout fn pushExpr(e: Expr) -> U64 {
-        val id: U64 = self.arena.exprs.count
+        val id: U64 = self.arena.exprs.count()
         self.arena.exprs.append(e)
         return id
     }
     // Append a statement node, returning its arena index.
     inout fn pushStmt(s: Stmt) -> U64 {
-        val id: U64 = self.arena.stmts.count
+        val id: U64 = self.arena.stmts.count()
         self.arena.stmts.append(s)
         return id
     }
@@ -139,7 +139,7 @@ pub impl Comp {
     // is interned here so every TypeRef carries its `nameId`, regardless of which
     // construction site (lowerType / Mono substitution / Self synthesis) built it.
     inout fn pushType(t: TypeRef) -> U64 {
-        val id: U64 = self.arena.types.count
+        val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
         self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels siteOffset=t.siteOffset />)
         return id
@@ -184,8 +184,8 @@ fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
 // stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
 fn internGrow(c: inout Comp) {
     mut val newCap: U64 = 8
-    if c.interner.buckets.count > 0 {
-        newCap = c.interner.buckets.count * 2
+    if c.interner.buckets.count() > 0 {
+        newCap = c.interner.buckets.count() * 2
     }
     mut val nb: Array[U64] = []
     mut val k: U64 = 0
@@ -209,15 +209,15 @@ fn internGrow(c: inout Comp) {
 // Intern a name span to its stable 1-based id (equal content ⇒ equal id; 0 is
 // never returned, so a `nameId` field's default 0 is a pure "unfilled" sentinel).
 export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
-    if c.interner.buckets.count == 0 {
+    if c.interner.buckets.count() == 0 {
         internGrow(c: inout c)
     } else {
-        if (c.interner.count + 1) * 4 > c.interner.buckets.count * 3 {
+        if (c.interner.count + 1) * 4 > c.interner.buckets.count() * 3 {
             internGrow(c: inout c)
         }
     }
     val code: U64 = internHash(c: inout c, start: start, len: len)
-    val cap: U64 = c.interner.buckets.count
+    val cap: U64 = c.interner.buckets.count()
     mut val slot: U64 = code & (cap - 1)
     while true {
         val b: U64 = c.interner.buckets[slot]
@@ -259,7 +259,7 @@ part ./Loader
 
 fn u64ArrayHas(a: Array[U64], v: U64) -> Bool {
     mut val i: U64 = 0
-    while i < a.count {
+    while i < a.count() {
         if a[i] == v {
             return true
         }
@@ -318,7 +318,7 @@ fn intCtxCode(bits: U64, sgn: Bool) -> U64 {
 // Whether interned id `id` is in `set`.
 fn idInSet(set: Array[U64], id: U64) -> Bool {
     mut val i: U64 = 0
-    while i < set.count {
+    while i < set.count() {
         if set[i] == id {
             return true
         }
@@ -406,9 +406,9 @@ export fn runFrontend() -> Comp {
         // imported deep inside a dependency — resolves its commit from THIS lock; the
         // dependency's own manifest only supplies the git URL + phantom check.
         val entryLock: Lock = loadLock(pkgDir: findPkgDir(entry: entryBytes))
-        val es: U64 = pathBuf.count
+        val es: U64 = pathBuf.count()
         appendBytes(into: inout pathBuf, from: entryBytes)
-        loaded.append(<Bind nameStart=es nameLen=entryBytes.count fieldStart=0 fieldLen=entryBytes.count />)
+        loaded.append(<Bind nameStart=es nameLen=entryBytes.count() fieldStart=0 fieldLen=entryBytes.count() />)
         // Force-load @Std/Lang FIRST: it is THE ambient module (spec/15) — it declares the
         // language's built-in types (the lang items), in scope everywhere without an import.
         // Loaded before Core/Hash/Prelude so the foundational types resolve for them. Its
@@ -418,9 +418,9 @@ export fn runFrontend() -> Comp {
         appendBytes(into: inout langPath, from: stdRoot)
         appendBytes(into: inout langPath, from: "Lang.pw".bytes())
         if fileExists(path: langPath) {
-            val lps: U64 = pathBuf.count
+            val lps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: langPath)
-            loaded.append(<Bind nameStart=lps nameLen=langPath.count fieldStart=nextModuleId fieldLen=langPath.count />)
+            loaded.append(<Bind nameStart=lps nameLen=langPath.count() fieldStart=nextModuleId fieldLen=langPath.count() />)
             c.modules.langModule = nextModuleId
             nextModuleId = nextModuleId + 1
         }
@@ -435,9 +435,9 @@ export fn runFrontend() -> Comp {
         appendBytes(into: inout corePath, from: stdRoot)
         appendBytes(into: inout corePath, from: "Core.pw".bytes())
         if fileExists(path: corePath) {
-            val cps: U64 = pathBuf.count
+            val cps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: corePath)
-            loaded.append(<Bind nameStart=cps nameLen=corePath.count fieldStart=nextModuleId fieldLen=corePath.count />)
+            loaded.append(<Bind nameStart=cps nameLen=corePath.count() fieldStart=nextModuleId fieldLen=corePath.count() />)
             nextModuleId = nextModuleId + 1
         }
         // Force-load @Std/Hash: the implicit prelude's `Dictionary` lang item is built on
@@ -450,9 +450,9 @@ export fn runFrontend() -> Comp {
         appendBytes(into: inout hashPath, from: stdRoot)
         appendBytes(into: inout hashPath, from: "Hash.pw".bytes())
         if fileExists(path: hashPath) {
-            val hps: U64 = pathBuf.count
+            val hps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: hashPath)
-            loaded.append(<Bind nameStart=hps nameLen=hashPath.count fieldStart=nextModuleId fieldLen=hashPath.count />)
+            loaded.append(<Bind nameStart=hps nameLen=hashPath.count() fieldStart=nextModuleId fieldLen=hashPath.count() />)
             nextModuleId = nextModuleId + 1
         }
         // gen mode: force-load @Std/Io as its own module so the synthesized harness
@@ -462,9 +462,9 @@ export fn runFrontend() -> Comp {
             appendBytes(into: inout ioPath, from: stdRoot)
             appendBytes(into: inout ioPath, from: "Io.pw".bytes())
             if fileExists(path: ioPath) {
-                val ios: U64 = pathBuf.count
+                val ios: U64 = pathBuf.count()
                 appendBytes(into: inout pathBuf, from: ioPath)
-                loaded.append(<Bind nameStart=ios nameLen=ioPath.count fieldStart=nextModuleId fieldLen=ioPath.count />)
+                loaded.append(<Bind nameStart=ios nameLen=ioPath.count() fieldStart=nextModuleId fieldLen=ioPath.count() />)
                 nextModuleId = nextModuleId + 1
             }
             // force-load @Plew/Syntax too: the harness calls `parseItem` and the derive
@@ -476,16 +476,16 @@ export fn runFrontend() -> Comp {
             val synName: Array[U8] = "@Plew/Syntax".bytes()
             val genPkgDir: Array[U8] = findPkgDir(entry: entryBytes)
             val genDeps: Array[Dep] = loadManifestDeps(pkgDir: genPkgDir)
-            mut val synPath: Array[U8] = resolveDepImport(src: synName, pStart: 0, pLen: synName.count, deps: genDeps, pkgDir: genPkgDir)
-            if synPath.count == 0 {
-                synPath = resolveGitDepImport(src: synName, pStart: 0, pLen: synName.count, deps: genDeps, cacheRoot: cacheRootBytes, lock: entryLock)
+            mut val synPath: Array[U8] = resolveDepImport(src: synName, pStart: 0, pLen: synName.count(), deps: genDeps, pkgDir: genPkgDir)
+            if synPath.count() == 0 {
+                synPath = resolveGitDepImport(src: synName, pStart: 0, pLen: synName.count(), deps: genDeps, cacheRoot: cacheRootBytes, lock: entryLock)
             }
-            if synPath.count != 0 {
+            if synPath.count() != 0 {
                 if fileExists(path: synPath) {
                     if !(pathSeen(buf: pathBuf, loaded: loaded, path: synPath)) {
-                        val sys: U64 = pathBuf.count
+                        val sys: U64 = pathBuf.count()
                         appendBytes(into: inout pathBuf, from: synPath)
-                        loaded.append(<Bind nameStart=sys nameLen=synPath.count fieldStart=nextModuleId fieldLen=synPath.count />)
+                        loaded.append(<Bind nameStart=sys nameLen=synPath.count() fieldStart=nextModuleId fieldLen=synPath.count() />)
                         nextModuleId = nextModuleId + 1
                     }
                 }
@@ -497,19 +497,19 @@ export fn runFrontend() -> Comp {
         // same id is a `part` — used to enforce the spec/15 "part = impl only" rule.
         mut val rootSeen: Array[U64] = []
         mut val qi: U64 = 0
-        while qi < loaded.count {
+        while qi < loaded.count() {
             val ent: Bind = loaded[qi]
             qi += 1
             val moduleId: U64 = ent.fieldStart
             val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
             val src: String = readFileBytes(path)
             val sb: Array[U8] = src.bytes()
-            if c.arena.bytes.count > 0 {
+            if c.arena.bytes.count() > 0 {
                 c.arena.bytes.append(10)
             }
-            val fileStart: U64 = c.arena.bytes.count
+            val fileStart: U64 = c.arena.bytes.count()
             c.appendSrc(from: sb)
-            c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count - fileStart fieldStart=moduleId fieldLen=0 />)
+            c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count() - fileStart fieldStart=moduleId fieldLen=0 />)
             // parse the file and lower its items; the returned tree drives discovery.
             val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: sb, fileStart: fileStart)
             // spec/15: a `part` file (a non-root file of an already-seen module) may
@@ -530,29 +530,29 @@ export fn runFrontend() -> Comp {
             // `@[...]` directive so the generated sibling can be auto-parted.
             mut val sawDirective: Bool = false
             mut val ii: U64 = 0
-            while ii < items.count {
+            while ii < items.count() {
                 match items[ii] {
                     TopItemAst.Import(val imp) => {
-                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
                         // a non-`@Std` `@dep` import is unresolved by @Path (returns
                         // empty); resolve it against this package's [dependencies] —
                         // path deps directly, git deps via the lock's pinned commit in
                         // the global cache.
-                        if childPath.count == 0 {
+                        if childPath.count() == 0 {
                             childPath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
                         }
-                        if childPath.count == 0 {
+                        if childPath.count() == 0 {
                             childPath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
                         }
                         // phantom-dependency rule (spec/17): an external `@<name>` import
                         // that no declared dependency backs is a loud error (provenance:
                         // you may only import what the manifest declares + `@Std`).
-                        if childPath.count == 0 {
+                        if childPath.count() == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
                                 compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)")
                             }
                         }
-                        if childPath.count != 0 {
+                        if childPath.count() != 0 {
                             val seen: Bool = pathSeen(buf: pathBuf, loaded: loaded, path: childPath)
                             // a `part` link must reach a NOT-yet-loaded file: a file is
                             // parted by exactly one parent (spec/15). If its target is
@@ -579,9 +579,9 @@ export fn runFrontend() -> Comp {
                                     childModule = nextModuleId
                                     nextModuleId = nextModuleId + 1
                                 }
-                                val cs: U64 = pathBuf.count
+                                val cs: U64 = pathBuf.count()
                                 appendBytes(into: inout pathBuf, from: childPath)
-                                loaded.append(<Bind nameStart=cs nameLen=childPath.count fieldStart=childModule fieldLen=childPath.count />)
+                                loaded.append(<Bind nameStart=cs nameLen=childPath.count() fieldStart=childModule fieldLen=childPath.count() />)
                             }
                             // record the import edge (this module -> the module the path
                             // resolved to), whether the target is newly loaded or deduped,
@@ -601,30 +601,30 @@ export fn runFrontend() -> Comp {
                         // (its declarations + own exports must exist for the forward to
                         // resolve). It always starts a fresh module (like an import). Binds
                         // nothing locally — that's lowerReExport's job (export surface only).
-                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count, stdRoot: stdRoot, stdRootLen: stdRoot.count)
+                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
                         // a re-export may forward a dependency's lib face (`export @Dep
                         // with { … }`); resolve `@dep` the same way as an import.
-                        if rePath.count == 0 {
+                        if rePath.count() == 0 {
                             rePath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
                         }
-                        if rePath.count == 0 {
+                        if rePath.count() == 0 {
                             rePath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
                         }
-                        if rePath.count == 0 {
+                        if rePath.count() == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
                                 compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)")
                             }
                         }
-                        if rePath.count != 0 {
+                        if rePath.count() != 0 {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
                                 if !(fileExists(path: rePath)) {
                                     compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "cannot open module file: the re-export path does not resolve to an existing file")
                                 }
                                 val rm: U64 = nextModuleId
                                 nextModuleId = nextModuleId + 1
-                                val rs: U64 = pathBuf.count
+                                val rs: U64 = pathBuf.count()
                                 appendBytes(into: inout pathBuf, from: rePath)
-                                loaded.append(<Bind nameStart=rs nameLen=rePath.count fieldStart=rm fieldLen=rePath.count />)
+                                loaded.append(<Bind nameStart=rs nameLen=rePath.count() fieldStart=rm fieldLen=rePath.count() />)
                             }
                         }
                     }
@@ -635,8 +635,8 @@ export fn runFrontend() -> Comp {
                         // not at top level — scan its per-struct directives too so the
                         // generated sibling is auto-parted.
                         mut val di: U64 = 0
-                        while di < e.structDirectives.count {
-                            if e.structDirectives[di].reqs.count > 0U64 {
+                        while di < e.structDirectives.count() {
+                            if e.structDirectives[di].reqs.count() > 0U64 {
                                 sawDirective = true
                             }
                             di += 1
@@ -652,12 +652,12 @@ export fn runFrontend() -> Comp {
             if !(genMode) {
                 if sawDirective {
                     val genPath: Array[U8] = genSiblingPath(path: path)
-                    if genPath.count != 0 {
+                    if genPath.count() != 0 {
                         if fileExists(path: genPath) {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: genPath)) {
-                                val gs: U64 = pathBuf.count
+                                val gs: U64 = pathBuf.count()
                                 appendBytes(into: inout pathBuf, from: genPath)
-                                loaded.append(<Bind nameStart=gs nameLen=genPath.count fieldStart=moduleId fieldLen=genPath.count />)
+                                loaded.append(<Bind nameStart=gs nameLen=genPath.count() fieldStart=moduleId fieldLen=genPath.count() />)
                             }
                         }
                     }
@@ -666,9 +666,9 @@ export fn runFrontend() -> Comp {
         }
     } else {
         val s: String = readStdin()
-        val fileStart: U64 = c.arena.bytes.count
+        val fileStart: U64 = c.arena.bytes.count()
         c.appendSrc(from: s.bytes())
-        c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count - fileStart fieldStart=0 fieldLen=0 />)
+        c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count() - fileStart fieldStart=0 fieldLen=0 />)
         val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: s.bytes(), fileStart: fileStart)
     }
     // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried
@@ -823,7 +823,7 @@ fn litFitsBits(value: U64, neg: Bool, bits: U64, sgn: Bool) -> Bool {
 // must go through the enum emitter, not the scalar desugar).
 fn matchHasEnumOrStruct(arms: Array[MatchArmAst]) -> Bool {
     mut val i: U64 = 0
-    while i < arms.count {
+    while i < arms.count() {
         val p: PatternAst = arms[i].pattern
         if !(p.isWildcard) {
             if !(p.isLiteral) {
@@ -842,7 +842,7 @@ fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
     mut val sawTrue: Bool = false
     mut val sawFalse: Bool = false
     mut val i: U64 = 0
-    while i < arms.count {
+    while i < arms.count() {
         val p: PatternAst = arms[i].pattern
         if p.isWildcard {
             return false
@@ -872,7 +872,7 @@ fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
 }
 
 fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
-    if arm.body.stmts.count > 0 {
+    if arm.body.stmts.count() > 0 {
         match arm.body.stmts[0] {
             StmtAst.Give(val value, val span) => { return value }
             _ => {}
@@ -883,8 +883,8 @@ fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
 
 fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
     mut val i: U64 = 0
-    while i < arms.count {
-        if arms[i].pattern.captureName.bytes().count > 0 {
+    while i < arms.count() {
+        if arms[i].pattern.captureName.bytes().count() > 0 {
             return true
         }
         i += 1
@@ -895,10 +895,10 @@ fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
 // True if a value-match arm block diverges (`=> panic …` / `=> return …`) rather
 // than giving a value — its terminal statement is not a `give`.
 fn armBlockDiverges(b: BlockAst) -> Bool {
-    if b.stmts.count == 0 {
+    if b.stmts.count() == 0 {
         return false
     }
-    match b.stmts[b.stmts.count - 1] {
+    match b.stmts[b.stmts.count() - 1] {
         StmtAst.Give(value: _, span: _) => { return false }
         _ => { return true }
     }
@@ -913,8 +913,8 @@ fn spanLen(s: Span) -> U64 {
 // record's fields by name into a canonical layout.
 fn stringGt(a: String, b: String) -> Bool {
     mut val i: U64 = 0
-    while i < a.bytes().count {
-        if i >= b.bytes().count {
+    while i < a.bytes().count() {
+        if i >= b.bytes().count() {
             return true
         }
         if a.bytes()[i] > b.bytes()[i] {
@@ -930,7 +930,7 @@ fn stringGt(a: String, b: String) -> Bool {
 
 fn containsU64(xs: Array[U64], v: U64) -> Bool {
     mut val i: U64 = 0
-    while i < xs.count {
+    while i < xs.count() {
         if xs[i] == v {
             return true
         }
@@ -951,7 +951,7 @@ fn typeUnfilled() -> I64 {
 }
 
 // Sentinel `typeCache.callee` value marking an uncomputed callee slot. U64 max can
-// never be a real `arena.funcs` index nor the `funcs.count` not-found marker.
+// never be a real `arena.funcs` index nor the `funcs.count()` not-found marker.
 fn calleeUnfilled() -> U64 {
     return 18446744073709551615U64
 }
@@ -987,7 +987,7 @@ fn scalarInfo() -> TypeInfo {
 // offset (set by lowerBinds) if present, else the (possibly re-interned) pattern
 // type-name offset as a fallback.
 fn armDiagOffset(a: MatchArm) -> U64 {
-    if a.binds.count > 0U64 {
+    if a.binds.count() > 0U64 {
         if a.binds[0].offset > 0U64 {
             return a.binds[0].offset
         }

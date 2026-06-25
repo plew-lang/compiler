@@ -10,17 +10,17 @@ pub impl Comp {
             val qVar: U64 = intern(c: inout self, start: variantStart, len: variantLen)
             val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
             mut val ei: U64 = 0
-            while ei < self.arena.enums.count {
+            while ei < self.arena.enums.count() {
                 val en: EnumDef = self.arena.enums[ei]
                 if en.nameId == qType {
                     val vars: Array[Variant] = en.variants
                     mut val vi: U64 = 0
-                    while vi < vars.count {
+                    while vi < vars.count() {
                         val v: Variant = vars[vi]
                         if v.nameId == qVar {
                             val fs: Array[FieldDef] = v.fields
                             mut val fj: U64 = 0
-                            while fj < fs.count {
+                            while fj < fs.count() {
                                 val fd: FieldDef = fs[fj]
                                 if fd.nameId == qField {
                                     return self.typeInfoOfName(start: fd.tyStart, len: fd.tyLen, isArray: fd.tyIsArray)
@@ -40,12 +40,12 @@ pub impl Comp {
 
     inout fn checkMakeFieldExists(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, mf: MakeField) {
         if isEnum {
-            if self.concreteEnumIndex(nStart: typeStart, nLen: typeLen) >= self.arena.enums.count {
+            if self.concreteEnumIndex(nStart: typeStart, nLen: typeLen) >= self.arena.enums.count() {
                 return
             }
         } else {
             val si: U64 = self.structIndexByName(start: typeStart, len: typeLen)
-            if si >= self.arena.structs.count {
+            if si >= self.arena.structs.count() {
                 return
             }
             if self.arena.structs[si].isExtern {
@@ -66,7 +66,7 @@ pub impl Comp {
 
     inout fn checkMakeFields(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) {
         mut val i: U64 = 0
-        while i < fields.count {
+        while i < fields.count() {
             val mf: MakeField = fields[i]
             self.checkMakeFieldExists(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, mf: mf)
             // a unique field value must be moved/constructed in, not copied from a
@@ -100,12 +100,12 @@ pub impl Comp {
 
     inout fn checkBindsInFields(binds: Array[Bind], fields: Array[FieldDef]) {
         mut val i: U64 = 0
-        while i < binds.count {
+        while i < binds.count() {
             val bd: Bind = binds[i]
             val qBd: U64 = intern(c: inout self, start: bd.fieldStart, len: bd.fieldLen)
             mut val found: Bool = false
             mut val fj: U64 = 0
-            while fj < fields.count {
+            while fj < fields.count() {
                 if fields[fj].nameId == qBd {
                     found = true
                 }

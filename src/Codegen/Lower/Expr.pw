@@ -11,7 +11,7 @@
 pub impl Comp {
     inout fn lowerExprWithCtx(e: ExprAst, ctxRef: U64) -> U64 {
         if ctxRef != 0 {
-            if ctxRef < self.arena.types.count {
+            if ctxRef < self.arena.types.count() {
                 val ct: TypeRef = self.arena.types[ctxRef]
                 // a record literal adopting an annotated record type (`val p: (x: I64, y:
                 // I64) = (x: 1, y: 2)`): the context already lowered to the synthetic record
@@ -32,7 +32,7 @@ pub impl Comp {
                         }
                     }
                 }
-                if ct.args.count > 0 {
+                if ct.args.count() > 0 {
                     match e {
                         ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
                             if !(isEnum) {
@@ -62,7 +62,7 @@ pub impl Comp {
             ExprAst.IntLit(val value, val isBool, val tySuffix, val span) => {
                 mut val sStart: U64 = 0
                 mut val sLen: U64 = 0
-                if tySuffix.bytes().count > 0 {
+                if tySuffix.bytes().count() > 0 {
                     val sf: Bind = self.internBytes(s: tySuffix)
                     sStart = sf.nameStart
                     sLen = sf.nameLen
@@ -73,7 +73,7 @@ pub impl Comp {
                 val tb: Bind = self.internBytes(s: text)
                 mut val sStart: U64 = 0
                 mut val sLen: U64 = 0
-                if tySuffix.bytes().count > 0 {
+                if tySuffix.bytes().count() > 0 {
                     val sf: Bind = self.internBytes(s: tySuffix)
                     sStart = sf.nameStart
                     sLen = sf.nameLen
@@ -101,7 +101,7 @@ pub impl Comp {
                             if !(isBool) {
                                 mut val sStart: U64 = 0
                                 mut val sLen: U64 = 0
-                                if tySuffix.bytes().count > 0 {
+                                if tySuffix.bytes().count() > 0 {
                                     val sf: Bind = self.internBytes(s: tySuffix)
                                     sStart = sf.nameStart
                                     sLen = sf.nameLen
@@ -126,7 +126,7 @@ pub impl Comp {
             ExprAst.Call(val name, val args, val span) => {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
                 val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
-                result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes().count args=a />)
+                result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes().count() args=a />)
             }
             ExprAst.Field(val base, val name, val span) => {
                 val b: U64 = self.lowerExpr(e: base)
@@ -149,8 +149,8 @@ pub impl Comp {
                 }
                 if isNsCall {
                     val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
-                    self.markImport(segStart: nameSpan.start, segLen: name.bytes().count, nameStart: nameSpan.start, nameLen: name.bytes().count)
-                    result = self.pushExpr(e: <Expr.Call nameStart=nameSpan.start nameLen=name.bytes().count args=a />)
+                    self.markImport(segStart: nameSpan.start, segLen: name.bytes().count(), nameStart: nameSpan.start, nameLen: name.bytes().count())
+                    result = self.pushExpr(e: <Expr.Call nameStart=nameSpan.start nameLen=name.bytes().count() args=a />)
                 } else {
                     val r: U64 = self.lowerExpr(e: recv)
                     val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)

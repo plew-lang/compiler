@@ -31,27 +31,27 @@ pub impl LlvmCtx {
 pub impl LlvmCtx {
 
     // The env struct type for closure `cloId` (its captures in order). Caller guards on
-    // caps.count > 0 before using it.
+    // caps.count() > 0 before using it.
     inout fn closureEnvTy(c: inout Comp, caps: Array[CaptureEntry]) -> LLVMTypeRef {
         mut val elems: Array[LLVMTypeRef] = []
         mut val i: U64 = 0
-        while i < caps.count {
+        while i < caps.count() {
             elems.append(self.captureSlotTy(c: inout c, cap: caps[i]))
             i += 1
         }
-        return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count, 0I32)
+        return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
     }
 
-    // Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count.
+    // Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count().
     inout fn closureSlot(id: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.cloIdx.count {
+        while i < self.cloIdx.count() {
             if self.cloIdx[i] == id {
                 return i
             }
             i += 1
         }
-        return self.cloIdx.count
+        return self.cloIdx.count()
     }
 }
 
@@ -61,7 +61,7 @@ pub impl LlvmCtx {
     // uniform closure ABI) and cache it. Idempotent (skips an already-declared id);
     // a closure with an unsupported (boxed) capture is left undeclared.
     inout fn declareClosure(c: inout Comp, id: U64) {
-        if self.closureSlot(id: id) < self.cloIdx.count {
+        if self.closureSlot(id: id) < self.cloIdx.count() {
             return
         }
         if !(closureSupported(c: inout c, cloId: id)) {
@@ -72,7 +72,7 @@ pub impl LlvmCtx {
                 mut val ptys: Array[LLVMTypeRef] = []
                 ptys.append(self.ptrty)
                 mut val pi: U64 = 0
-                while pi < params.count {
+                while pi < params.count() {
                     ptys.append(self.paramLlvmTy(c: inout c, p: params[pi]))
                     pi += 1
                 }
@@ -84,7 +84,7 @@ pub impl LlvmCtx {
                         rty = self.llvmTypeFor(c: inout c, tyStart: retStart, tyLen: retLen, isArray: retIsArray)
                     }
                 }
-                val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
+                val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
                 mut val nm: Array[U8] = []
                 appendBytes(into: inout nm, from: "__closure".bytes())
                 appendU64Dec(into: inout nm, n: id)
@@ -109,17 +109,17 @@ pub impl LlvmCtx {
             Expr.Binary(op: _, val lhs, val rhs) => { self.scanExprClosures(c: inout c, id: lhs) self.scanExprClosures(c: inout c, id: rhs) }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
             }
             Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
                 self.scanExprClosures(c: inout c, id: recv)
                 mut val i: U64 = 0
-                while i < args.count { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
             }
             Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
                 self.scanExprClosures(c: inout c, id: recv)
                 mut val i: U64 = 0
-                while i < args.count { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
                 self.scanExprClosures(c: inout c, id: recv)
@@ -127,18 +127,18 @@ pub impl LlvmCtx {
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count { self.scanExprClosures(c: inout c, id: fields[i].value) i += 1 }
+                while i < fields.count() { self.scanExprClosures(c: inout c, id: fields[i].value) i += 1 }
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count { self.scanExprClosures(c: inout c, id: elems[i]) i += 1 }
+                while i < elems.count() { self.scanExprClosures(c: inout c, id: elems[i]) i += 1 }
             }
             Expr.Index(val base, val index) => { self.scanExprClosures(c: inout c, id: base) self.scanExprClosures(c: inout c, id: index) }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.scanExprClosures(c: inout c, id: operand) }
             Expr.MatchExpr(val scrut, val arms) => {
                 self.scanExprClosures(c: inout c, id: scrut)
                 mut val i: U64 = 0
-                while i < arms.count {
+                while i < arms.count() {
                     self.scanBlockClosures(c: inout c, id: arms[i].body)
                     i += 1
                 }
@@ -177,7 +177,7 @@ pub impl LlvmCtx {
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprClosures(c: inout c, id: scrut)
                 mut val i: U64 = 0
-                while i < arms.count {
+                while i < arms.count() {
                     self.scanBlockClosures(c: inout c, id: arms[i].body)
                     i += 1
                 }
@@ -194,7 +194,7 @@ pub impl LlvmCtx {
         }
         val blk: Block = c.arena.blocks[id]
         mut val i: U64 = 0
-        while i < blk.stmts.count {
+        while i < blk.stmts.count() {
             self.scanStmtClosures(c: inout c, id: blk.stmts[i])
             i += 1
         }
@@ -204,14 +204,14 @@ pub impl LlvmCtx {
     // fixpoint over declared closures' own bodies (nested closures). Run before bodies.
     inout fn collectClosures(c: inout Comp) {
         mut val fi: U64 = 0
-        while fi < c.arena.funcs.count {
+        while fi < c.arena.funcs.count() {
             if c.nameIsMain(f: c.arena.funcs[fi]) || self.isPlainUserFn(c: inout c, fi: fi) {
                 self.scanBlockClosures(c: inout c, id: c.arena.funcs[fi].body)
             }
             fi += 1
         }
         mut val seen: U64 = 0
-        while seen < self.cloIdx.count {
+        while seen < self.cloIdx.count() {
             val cid: U64 = self.cloIdx[seen]
             match c.arena.exprs[cid] {
                 Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
@@ -227,7 +227,7 @@ pub impl LlvmCtx {
     // non-capturing closure), the closure params follow at 1.., then the body.
     inout fn emitClosures(c: inout Comp) {
         mut val s: U64 = 0
-        while s < self.cloIdx.count {
+        while s < self.cloIdx.count() {
             val cid: U64 = self.cloIdx[s]
             val fv: LLVMValueRef = self.cloVal[s]
             match c.arena.exprs[cid] {
@@ -279,11 +279,11 @@ pub impl LlvmCtx {
                     // accesses resolve normally. (Immutable captures are by-value; a
                     // boxed `mut val` capture binds the cell pointer as a Ref-like local.)
                     val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: cid)
-                    if caps.count > 0U64 {
+                    if caps.count() > 0U64 {
                         val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
                         val envPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
                         mut val ci: U64 = 0
-                        while ci < caps.count {
+                        while ci < caps.count() {
                             val cap: CaptureEntry = caps[ci]
                             val slotTy: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: cap)
                             val cv: LLVMValueRef = LLVMBuildLoad2(self.b, slotTy, LLVMBuildStructGEP2(self.b, envTy, envPtr, ci, anon()), anon())
@@ -292,7 +292,7 @@ pub impl LlvmCtx {
                             // in the body go through the same cell as the enclosing scope.
                             if cap.boxed {
                                 val valTy: LLVMTypeRef = self.captureValueTy(c: inout c, cap: cap)
-                                self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
+                                self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
                                 ci += 1
                             } else {
                             val a: LLVMValueRef = self.entryAlloca(ty: slotTy)
@@ -304,7 +304,7 @@ pub impl LlvmCtx {
                                 if c.isGenericInst(ref: cap.ty) {
                                     cRef = cap.ty
                                 } else {
-                                    if self.enumRegSlot(c: inout c, start: cap.tyStart, len: cap.tyLen) < self.enumIdxs.count {
+                                    if self.enumRegSlot(c: inout c, start: cap.tyStart, len: cap.tyLen) < self.enumIdxs.count() {
                                         cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
                                     }
                                 }
@@ -319,7 +319,7 @@ pub impl LlvmCtx {
                         }
                     }
                     mut val pi: U64 = 0
-                    while pi < params.count {
+                    while pi < params.count() {
                         self.bindOneParam(c: inout c, p: params[pi], fv: fv, argIdx: pi + 1U64)
                         pi += 1
                     }

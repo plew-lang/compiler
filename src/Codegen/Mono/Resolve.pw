@@ -5,14 +5,14 @@
 
 pub impl Comp {
     inout fn isGenericEnumInst(ref: U64) -> Bool {
-        if ref >= self.arena.types.count {
+        if ref >= self.arena.types.count() {
             return false
         }
         val t: TypeRef = self.arena.types[ref]
-        if t.args.count == 0 {
+        if t.args.count() == 0 {
             return false
         }
-        return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enums.count
+        return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enums.count()
     }
 
     inout fn typeRefEq(a: U64, b: U64) -> Bool {
@@ -30,11 +30,11 @@ pub impl Comp {
         if ta.viewExtId != tb.viewExtId {
             return false
         }
-        if ta.args.count != tb.args.count {
+        if ta.args.count() != tb.args.count() {
             return false
         }
         mut val i: U64 = 0
-        while i < ta.args.count {
+        while i < ta.args.count() {
             if !(self.typeRefEq(a: ta.args[i], b: tb.args[i])) {
                 return false
             }
@@ -51,7 +51,7 @@ pub impl Comp {
             j += 1
         }
         mut val i: U64 = 0
-        while i < t.args.count {
+        while i < t.args.count() {
             self.arena.bytes.append(95)
             self.appendMangle(ref: t.args[i])
             i += 1
@@ -59,19 +59,19 @@ pub impl Comp {
     }
 
     inout fn appendMangleSpan(ref: U64) -> Bind {
-        val start: U64 = self.arena.bytes.count
+        val start: U64 = self.arena.bytes.count()
         self.appendMangle(ref: ref)
-        val n: U64 = self.arena.bytes.count
+        val n: U64 = self.arena.bytes.count()
         return <Bind nameStart=start nameLen=(n - start) fieldStart=ref fieldLen=0 />
     }
 
     inout fn sameMangle(refA: U64, refB: U64) -> Bool {
         val ra: U64 = self.resolveTy(tyRef: refA)
         val rb: U64 = self.resolveTy(tyRef: refB)
-        if ra >= self.arena.types.count {
+        if ra >= self.arena.types.count() {
             return false
         }
-        if rb >= self.arena.types.count {
+        if rb >= self.arena.types.count() {
             return false
         }
         val a: TypeRef = self.arena.types[ra]
@@ -79,11 +79,11 @@ pub impl Comp {
         if a.nameId != b.nameId {
             return false
         }
-        if a.args.count != b.args.count {
+        if a.args.count() != b.args.count() {
             return false
         }
         mut val i: U64 = 0
-        while i < a.args.count {
+        while i < a.args.count() {
             if !(self.sameMangle(refA: a.args[i], refB: b.args[i])) {
                 return false
             }
@@ -94,18 +94,18 @@ pub impl Comp {
 
     inout fn isCompoundType(ref: U64) -> Bool {
         val r: U64 = self.resolveTy(tyRef: ref)
-        if r >= self.arena.types.count {
+        if r >= self.arena.types.count() {
             return false
         }
-        return self.arena.types[r].args.count > 0
+        return self.arena.types[r].args.count() > 0
     }
 
     inout fn resolveTy(tyRef: U64) -> U64 {
-        if tyRef >= self.arena.types.count {
+        if tyRef >= self.arena.types.count() {
             return tyRef
         }
         val t: TypeRef = self.arena.types[tyRef]
-        if t.args.count == 0 {
+        if t.args.count() == 0 {
             // `Self`/`Item` as types (provided methods on a trait): resolve to the
             // receiver type and its associated `Item` binding (set per method).
             if self.cur.selfRef != 0 {
@@ -124,12 +124,12 @@ pub impl Comp {
             // method-own `B` (the accumulator) must shadow the conformer's `B` (the item).
             // With all-distinct names first-match and last-match agree, so this only changes
             // the collision case, resolving it the way lexical shadowing requires.
-            mut val i: U64 = self.cur.typeParams.count
+            mut val i: U64 = self.cur.typeParams.count()
             while i > 0U64 {
                 i -= 1
                 val p: Bind = self.cur.typeParams[i]
                 if t.nameId == p.nameId {
-                    if i < self.cur.typeArgs.count {
+                    if i < self.cur.typeArgs.count() {
                         return self.cur.typeArgs[i]
                     }
                 }
@@ -145,8 +145,8 @@ pub impl Comp {
         // a template's own parameter is resolved by the active env before this matters.
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val ni: U64 = 0
-        while ni < self.arena.structs.count {
-            if self.arena.structs[ni].typeParams.count == 0 {
+        while ni < self.arena.structs.count() {
+            if self.arena.structs[ni].typeParams.count() == 0 {
                 if self.arena.structs[ni].nameId == qId {
                     return false
                 }
@@ -154,8 +154,8 @@ pub impl Comp {
             ni += 1
         }
         mut val nj: U64 = 0
-        while nj < self.arena.enums.count {
-            if self.arena.enums[nj].typeParams.count == 0 {
+        while nj < self.arena.enums.count() {
+            if self.arena.enums[nj].typeParams.count() == 0 {
                 if self.arena.enums[nj].nameId == qId {
                     return false
                 }
@@ -163,10 +163,10 @@ pub impl Comp {
             nj += 1
         }
         mut val si: U64 = 0
-        while si < self.arena.structs.count {
+        while si < self.arena.structs.count() {
             val tp: Array[Bind] = self.arena.structs[si].typeParams
             mut val k: U64 = 0
-            while k < tp.count {
+            while k < tp.count() {
                 if tp[k].nameId == qId {
                     return true
                 }
@@ -175,10 +175,10 @@ pub impl Comp {
             si += 1
         }
         mut val ei: U64 = 0
-        while ei < self.arena.enums.count {
+        while ei < self.arena.enums.count() {
             val tp2: Array[Bind] = self.arena.enums[ei].typeParams
             mut val k2: U64 = 0
-            while k2 < tp2.count {
+            while k2 < tp2.count() {
                 if tp2[k2].nameId == qId {
                     return true
                 }
@@ -187,10 +187,10 @@ pub impl Comp {
             ei += 1
         }
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count {
+        while fi < self.arena.funcs.count() {
             val tp3: Array[Bind] = self.arena.funcs[fi].typeParams
             mut val k3: U64 = 0
-            while k3 < tp3.count {
+            while k3 < tp3.count() {
                 if tp3[k3].nameId == qId {
                     return true
                 }
@@ -202,7 +202,7 @@ pub impl Comp {
     }
 
     inout fn tyRefIsGround(ref: U64) -> Bool {
-        if ref >= self.arena.types.count {
+        if ref >= self.arena.types.count() {
             return true
         }
         val t: TypeRef = self.arena.types[ref]
@@ -218,7 +218,7 @@ pub impl Comp {
             return false
         }
         mut val i: U64 = 0
-        while i < t.args.count {
+        while i < t.args.count() {
             if !(self.tyRefIsGround(ref: t.args[i])) {
                 return false
             }

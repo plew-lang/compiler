@@ -24,7 +24,7 @@ pub impl Comp {
             compileErrorAt(line: self.lineOf(offset: p.errOff), msg: p.errMsg)
         }
         mut val i: U64 = 0
-        while i < items.count {
+        while i < items.count() {
             self.lowerTopItem(item: items[i])
             i += 1
         }
@@ -39,7 +39,7 @@ pub impl Comp {
     // module across files" mechanism (the role split is `import`=layer, `part`=impl).
     inout fn checkPartImplOnly(items: Array[TopItemAst]) {
         mut val i: U64 = 0
-        while i < items.count {
+        while i < items.count() {
             self.rejectNonImplPartItem(item: items[i])
             i += 1
         }

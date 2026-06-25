@@ -12,7 +12,7 @@ pub impl LlvmCtx {
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a struct destructuring match `match s { S { val x } => … }` is irrefutable
         // (one arm, no tag): store the scrutinee, bind its fields, emit the body.
-        if arms.count > 0U64 {
+        if arms.count() > 0U64 {
             if arms[0].isStruct {
                 val ssidx: U64 = self.exprStructIdx(c: inout c, id: scrut)
                 val savedSP: Array[Bind] = c.cur.typeParams
@@ -39,19 +39,19 @@ pub impl LlvmCtx {
         val savedMP: Array[Bind] = c.cur.typeParams
         val savedMA: Array[U64] = c.cur.typeArgs
         // the enum: from the first non-wildcard, non-struct arm.
-        mut val eid: U64 = c.arena.enums.count
+        mut val eid: U64 = c.arena.enums.count()
         mut val ai0: U64 = 0
-        while ai0 < arms.count {
+        while ai0 < arms.count() {
             if !(arms[ai0].isWildcard) {
                 if !(arms[ai0].isStruct) {
-                    if eid == c.arena.enums.count {
+                    if eid == c.arena.enums.count() {
                         eid = c.enumIdxByName(start: arms[ai0].enumStart, len: arms[ai0].enumLen)
                     }
                 }
             }
             ai0 += 1
         }
-        if eid >= c.arena.enums.count {
+        if eid >= c.arena.enums.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: match is only supported on a registered enum (so far)")
             return
         }
@@ -67,7 +67,7 @@ pub impl LlvmCtx {
         mut val lastWasWildcard: Bool = false
         mut val anyFallthrough: Bool = false
         mut val ai: U64 = 0
-        while ai < arms.count {
+        while ai < arms.count() {
             val arm: MatchArm = arms[ai]
             val armBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "arm"))
             LLVMPositionBuilderAtEnd(self.b, checkBB)
@@ -126,7 +126,7 @@ pub impl LlvmCtx {
     // Bind a match arm's payload fields as locals: read the variant payload struct
     // back from the scrutinee's payload area and extractvalue each bound field.
     inout fn bindMatchPayload(c: inout Comp, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
-        if arm.binds.count == 0U64 {
+        if arm.binds.count() == 0U64 {
             return
         }
         val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
@@ -134,24 +134,24 @@ pub impl LlvmCtx {
         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, 1U64, anon()), anon())
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         mut val bi: U64 = 0
-        while bi < arm.binds.count {
+        while bi < arm.binds.count() {
             val b: Bind = arm.binds[bi]
             // resolve which variant field this bind reads (by field name = b.fieldStart).
-            mut val fidx: U64 = fs.count
+            mut val fidx: U64 = fs.count()
             mut val fj: U64 = 0
-            while fj < fs.count {
+            while fj < fs.count() {
                 if spansEqual(c: inout c, aStart: fs[fj].nameStart, aLen: fs[fj].nameLen, bStart: b.fieldStart, bLen: b.fieldLen) {
                     fidx = fj
-                    fj = fs.count
+                    fj = fs.count()
                 } else {
                     fj += 1
                 }
             }
-            if fidx < fs.count {
+            if fidx < fs.count() {
                 val fd: FieldDef = fs[fidx]
                 // an array-typed payload field (declared `Array[E]` or a type param that
                 // grounds to one): the bound local is the {ptr,i64} array value, tracked
-                // as an array so `v[i]` / `v.count` work in the arm body.
+                // as an array so `v[i]` / `v.count()` work in the arm body.
                 val elemRef: U64 = arrayFieldElemRef(c: inout c, f: fd)
                 mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
                 mut val isArrF: Bool = false
@@ -172,7 +172,7 @@ pub impl LlvmCtx {
                 if elemRef == 0U64 {
                     if fd.ty != 0U64 {
                         mut val gfp: U64 = fd.ty
-                        if c.cur.typeParams.count > 0U64 {
+                        if c.cur.typeParams.count() > 0U64 {
                             gfp = c.groundTypeRef(ref: fd.ty)
                         }
                         if c.isGenericInst(ref: gfp) {
@@ -207,10 +207,16 @@ pub impl LlvmCtx {
                 // below so no scope-exit release runs. This keeps the refcount neutral while
                 // removing a retain + a release per bind (the dominant ARC cost in plewc).
                 // an enum-typed bind carries a bare enum TypeRef so a nested match on it
-                // (the recursive case) recovers the enum (typeOf can't see this local).
+                // (the recursive case) recovers the enum (typeOf can't see this local). Skip
+                // for an array field (`elems: Array[E]`): there fd.tyStart/tyLen names the
+                // ELEMENT (`E`), so this would wrongly type the array bind as the element enum
+                // — the bind is an array, tracked via locElemTypeRef (set below), and its
+                // locTypeRef must stay 0 so a `.count()`/index over it routes the array path.
                 mut val tref: U64 = 0
-                if self.enumRegSlot(c: inout c, start: fd.tyStart, len: fd.tyLen) < self.enumIdxs.count {
-                    tref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
+                if !(isArrF) {
+                    if self.enumRegSlot(c: inout c, start: fd.tyStart, len: fd.tyLen) < self.enumIdxs.count() {
+                        tref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
+                    }
                 }
                 // a generic-instance payload bind carries the full instance TypeRef so a
                 // nested match / field access on it recovers the substitution env.
@@ -223,7 +229,7 @@ pub impl LlvmCtx {
                 // (which would miscompile the bound {ptr,i64} value at the arm's use site).
                 mut val bindKind: U64 = kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
                 if fd.ty != 0U64 {
-                    if c.cur.typeParams.count > 0U64 {
+                    if c.cur.typeParams.count() > 0U64 {
                         val gft: U64 = c.groundTypeRef(ref: fd.ty)
                         if gft != 0U64 {
                             bindKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[gft].nameStart, tyLen: c.arena.types[gft].nameLen)
@@ -238,7 +244,7 @@ pub impl LlvmCtx {
                 if genFieldRef != 0U64 {
                     if c.isGenericInst(ref: genFieldRef) {
                         val gbs: U64 = self.genStructSlot(c: inout c, ref: genFieldRef)
-                        if gbs < self.genStructRefs.count {
+                        if gbs < self.genStructRefs.count() {
                             bindStructIdx = self.genStructDefs[gbs]
                         }
                     }
@@ -255,7 +261,7 @@ pub impl LlvmCtx {
                     if elemRef != 0U64 {
                         val et2: TypeRef = c.arena.types[elemRef]
                         val esi: U64 = self.localStructIdxFor(c: inout c, start: et2.nameStart, len: et2.nameLen)
-                        if esi < c.arena.structs.count {
+                        if esi < c.arena.structs.count() {
                             self.setLocalElemStruct(esi: esi)
                         }
                         self.setLocalElemTypeRef(ref: elemRef)
@@ -274,23 +280,23 @@ pub impl LlvmCtx {
     inout fn bindStructPattern(c: inout Comp, sidx: U64, binds: Array[Bind], scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
         val fs: Array[FieldDef] = c.arena.structs[sidx].fields
         mut val bi: U64 = 0
-        while bi < binds.count {
+        while bi < binds.count() {
             val b: Bind = binds[bi]
             if b.nameLen == 0U64 {
                 bi += 1
             } else {
                 // resolve which field this bind reads (by field name = b.fieldStart).
-                mut val fidx: U64 = fs.count
+                mut val fidx: U64 = fs.count()
                 mut val fj: U64 = 0
-                while fj < fs.count {
+                while fj < fs.count() {
                     if spansEqual(c: inout c, aStart: fs[fj].nameStart, aLen: fs[fj].nameLen, bStart: b.fieldStart, bLen: b.fieldLen) {
                         fidx = fj
-                        fj = fs.count
+                        fj = fs.count()
                     } else {
                         fj += 1
                     }
                 }
-                if fidx < fs.count {
+                if fidx < fs.count() {
                     val fld: FieldDef = fs[fidx]
                     val fty: LLVMTypeRef = self.llvmTypeFor(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen, isArray: fld.tyIsArray)
                     val fv: LLVMValueRef = LLVMBuildLoad2(self.b, fty, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, fidx, anon()), anon())

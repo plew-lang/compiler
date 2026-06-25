@@ -16,12 +16,12 @@ pub impl Comp {
         }
         val trN: Bind = self.internBytes(s: binTraitName(op: op))
         mut val i: U64 = 0
-        while i < self.decls.assocBindings.count {
+        while i < self.decls.assocBindings.count() {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.traitId == trN.nameId {
                 if spansEqual(c: inout self, aStart: ab.recvStart, aLen: ab.recvLen, bStart: lt.nameStart, bLen: lt.nameLen) {
                     if rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
-                        if ab.ty < self.arena.types.count {
+                        if ab.ty < self.arena.types.count() {
                             if ab.ty != 0U64 {
                                 return self.typeInfoOfRef(ref: ab.ty)
                             }

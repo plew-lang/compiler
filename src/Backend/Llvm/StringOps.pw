@@ -8,7 +8,7 @@
 pub impl LlvmCtx {
     inout fn getOrDeclare(c: inout Comp, name: String, nameId: U64, fnTy: LLVMTypeRef) -> LLVMValueRef {
         mut val i: U64 = 0
-        while i < self.declId.count {
+        while i < self.declId.count() {
             if self.declId[i] == nameId {
                 return self.declFn[i]
             }
@@ -33,21 +33,21 @@ pub impl LlvmCtx {
     // String ops (which read only {ptr,len}). The global is mutable so rc is writable.
     inout fn genLlvmStr(c: inout Comp, start: U64, len: U64) -> LLVMValueRef {
         mut val bytes: Array[U8] = strDecodeBytes(c: inout c, start: start, len: len)
-        val n: U64 = bytes.count - 1
+        val n: U64 = bytes.count() - 1
         val i8ty: LLVMTypeRef = LLVMInt8TypeInContext(self.ctx)
         mut val cvals: Array[LLVMValueRef] = []
         // rawbuf header (3 i64 words, matching plew_rawbuf_alloc): cap = buffer byte count,
         // count = the live string length (n), rc = never-free sentinel. The String VALUE is
         // the data pointer (offset 24); arrValCount reads `count` straight from this header.
-        appendU64Le(into: inout cvals, n: bytes.count, i8ty: i8ty)
+        appendU64Le(into: inout cvals, n: bytes.count(), i8ty: i8ty)
         appendU64Le(into: inout cvals, n: n, i8ty: i8ty)
         appendU64Le(into: inout cvals, n: 4611686018427387904U64, i8ty: i8ty)
         mut val j: U64 = 0
-        while j < bytes.count {
+        while j < bytes.count() {
             cvals.append(LLVMConstInt(i8ty, bytes[j] as U64, 0I32))
             j += 1
         }
-        val m: U64 = 24U64 + bytes.count
+        val m: U64 = 24U64 + bytes.count()
         val arrTy: LLVMTypeRef = LLVMArrayType2(i8ty, m)
         val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, cstr(s: "str"))
         LLVMSetInitializer(g, LLVMConstArray2(i8ty, arrayCPtr(cvals), m))
@@ -115,15 +115,15 @@ pub impl LlvmCtx {
     // declared/queued lazily if the upfront pass did not emit it (a lang-item method).
     inout fn emitFormatPrint(c: inout Comp, argExpr: U64, tyStart: U64, tyLen: U64) -> LLVMValueRef {
         val ffi: U64 = c.findMethodByName(typeStart: tyStart, typeLen: tyLen, name: "format")
-        if ffi >= c.arena.funcs.count {
+        if ffi >= c.arena.funcs.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a type that does not conform to Format")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         mut val slot: U64 = self.userFnSlot(idx: ffi)
-        if slot >= self.fnIdx.count {
+        if slot >= self.fnIdx.count() {
             slot = self.ensureProvidedDeclared(c: inout c, fi: ffi)
         }
-        if slot >= self.fnIdx.count {
+        if slot >= self.fnIdx.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: Format witness not emittable yet")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -162,7 +162,7 @@ pub impl LlvmCtx {
         // a (non-String) struct value: route through its own `Format` witness, or reject
         // loudly if the type does not conform (no built-in struct printer).
         val psi: U64 = self.exprStructIdx(c: inout c, id: argExpr)
-        if psi < c.arena.structs.count {
+        if psi < c.arena.structs.count() {
             return self.emitFormatPrint(c: inout c, argExpr: argExpr, tyStart: c.arena.structs[psi].nameStart, tyLen: c.arena.structs[psi].nameLen)
         }
         // scalar value-kinds keep their built-in runtime sinks (observably identical to a
@@ -224,7 +224,7 @@ pub impl LlvmCtx {
             return self.emitStrEqValues(c: inout c, a: a, b: b)
         }
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if sreg < self.structIdxs.count {
+        if sreg < self.structIdxs.count() {
             return self.emitStructEq(c: inout c, a: a, b: b, sidx: self.structIdxs[sreg])
         }
         return LLVMBuildICmp(self.b, llvmIntEq(), a, b, anon())
@@ -235,7 +235,7 @@ pub impl LlvmCtx {
         val sd: StructDef = c.arena.structs[sidx]
         mut val acc: LLVMValueRef = LLVMConstInt(self.i1ty, 1U64, 0I32)
         mut val i: U64 = 0
-        while i < sd.fields.count {
+        while i < sd.fields.count() {
             val fl: LLVMValueRef = LLVMBuildExtractValue(self.b, a, i, anon())
             val fr: LLVMValueRef = LLVMBuildExtractValue(self.b, b, i, anon())
             acc = LLVMBuildAnd(self.b, acc, self.cmpFieldEq(c: inout c, a: fl, b: fr, tyStart: sd.fields[i].tyStart, tyLen: sd.fields[i].tyLen), anon())
@@ -249,7 +249,7 @@ pub impl LlvmCtx {
     // are deferred (structOrdSupported gates them out).
     inout fn cmpFieldOrd(c: inout Comp, a: LLVMValueRef, b: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if sreg < self.structIdxs.count {
+        if sreg < self.structIdxs.count() {
             return self.emitStructCmp(c: inout c, a: a, b: b, sidx: self.structIdxs[sreg])
         }
         val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
@@ -275,7 +275,7 @@ pub impl LlvmCtx {
     inout fn emitStructCmp(c: inout Comp, a: LLVMValueRef, b: LLVMValueRef, sidx: U64) -> LLVMValueRef {
         val sd: StructDef = c.arena.structs[sidx]
         mut val acc: LLVMValueRef = LLVMConstInt(self.i32ty, 0U64, 0I32)
-        mut val i: U64 = sd.fields.count
+        mut val i: U64 = sd.fields.count()
         while i > 0U64 {
             i -= 1
             val fl: LLVMValueRef = LLVMBuildExtractValue(self.b, a, i, anon())
@@ -292,7 +292,7 @@ pub impl LlvmCtx {
     inout fn structOrdSupported(c: inout Comp, sidx: U64) -> Bool {
         val sd: StructDef = c.arena.structs[sidx]
         mut val i: U64 = 0
-        while i < sd.fields.count {
+        while i < sd.fields.count() {
             if sd.fields[i].tyIsArray {
                 return false
             }
@@ -303,7 +303,7 @@ pub impl LlvmCtx {
                 return false
             }
             val sreg: U64 = self.structRegSlot(c: inout c, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen)
-            if sreg < self.structIdxs.count {
+            if sreg < self.structIdxs.count() {
                 if !(self.structOrdSupported(c: inout c, sidx: self.structIdxs[sreg])) {
                     return false
                 }
@@ -325,7 +325,7 @@ pub impl LlvmCtx {
         return LLVMBuildICmp(self.b, pred, ord, zero, anon())
     }
 
-    // The c.arena.enums index of an expression's enum type, or c.arena.enums.count. A JSX enum
+    // The c.arena.enums index of an expression's enum type, or c.arena.enums.count(). A JSX enum
     // construction (`<Kind.LParen />`) carries the enum name directly; otherwise the
     // typed-AST cache supplies a named type (kind 2). (Opaque extern LLVMTypeRefs
     // can't be `==`-compared in Plew, so detection is via the AST, not the value type.)
@@ -343,7 +343,7 @@ pub impl LlvmCtx {
         if tr != 0U64 {
             val tt: TypeRef = c.arena.types[tr]
             val ei: U64 = c.enumIdxByName(start: tt.nameStart, len: tt.nameLen)
-            if ei < c.arena.enums.count {
+            if ei < c.arena.enums.count() {
                 return ei
             }
         }
@@ -351,7 +351,7 @@ pub impl LlvmCtx {
         if t.kind == 2 {
             return c.enumIdxByName(start: t.nameStart, len: t.nameLen)
         }
-        return c.arena.enums.count
+        return c.arena.enums.count()
     }
 }
 
@@ -363,11 +363,11 @@ pub impl LlvmCtx {
         val ed: EnumDef = c.arena.enums[eid]
         mut val maxW: U64 = 0
         mut val vi: U64 = 0
-        while vi < ed.variants.count {
+        while vi < ed.variants.count() {
             val fs: Array[FieldDef] = ed.variants[vi].fields
             mut val w: U64 = 0
             mut val fj: U64 = 0
-            while fj < fs.count {
+            while fj < fs.count() {
                 w = w + self.fieldWordsF(c: inout c, f: fs[fj])
                 fj += 1
             }
@@ -383,14 +383,14 @@ pub impl LlvmCtx {
     inout fn enumEqWordable(c: inout Comp, eid: U64) -> Bool {
         val ed: EnumDef = c.arena.enums[eid]
         mut val vi: U64 = 0
-        while vi < ed.variants.count {
+        while vi < ed.variants.count() {
             val fs: Array[FieldDef] = ed.variants[vi].fields
             mut val fj: U64 = 0
-            while fj < fs.count {
+            while fj < fs.count() {
                 if fs[fj].tyIsArray { return false }
                 if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
                 if c.isEnumName(start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
-                if self.structRegSlot(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) < self.structIdxs.count { return false }
+                if self.structRegSlot(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) < self.structIdxs.count() { return false }
                 fj += 1
             }
             vi += 1
@@ -423,15 +423,15 @@ pub impl LlvmCtx {
     inout fn enumOrdSupported(c: inout Comp, eid: U64) -> Bool {
         val ed: EnumDef = c.arena.enums[eid]
         mut val vi: U64 = 0
-        while vi < ed.variants.count {
+        while vi < ed.variants.count() {
             val fs: Array[FieldDef] = ed.variants[vi].fields
             mut val fj: U64 = 0
-            while fj < fs.count {
+            while fj < fs.count() {
                 if fs[fj].tyIsArray { return false }
                 if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
                 if c.isEnumName(start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
                 val sreg: U64 = self.structRegSlot(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
-                if sreg < self.structIdxs.count {
+                if sreg < self.structIdxs.count() {
                     if !(self.structOrdSupported(c: inout c, sidx: self.structIdxs[sreg])) {
                         return false
                     }
@@ -449,7 +449,7 @@ pub impl LlvmCtx {
     inout fn emitVariantPayloadCmp(c: inout Comp, eid: U64, vi: U64, pA: LLVMValueRef, pB: LLVMValueRef) -> LLVMValueRef {
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         mut val acc: LLVMValueRef = LLVMConstInt(self.i32ty, 0U64, 0I32)
-        mut val i: U64 = fs.count
+        mut val i: U64 = fs.count()
         while i > 0U64 {
             i -= 1
             val fl: LLVMValueRef = LLVMBuildExtractValue(self.b, pA, i, anon())
@@ -476,8 +476,8 @@ pub impl LlvmCtx {
         mut val payloadOrd: LLVMValueRef = LLVMConstInt(self.i32ty, 0U64, 0I32)
         val ed: EnumDef = c.arena.enums[eid]
         mut val vi: U64 = 0
-        while vi < ed.variants.count {
-            if ed.variants[vi].fields.count > 0U64 {
+        while vi < ed.variants.count() {
+            if ed.variants[vi].fields.count() > 0U64 {
                 val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
                 val pA: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, LLVMBuildStructGEP2(self.b, sty, aslot, 1U64, anon()), anon())
                 val pB: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, LLVMBuildStructGEP2(self.b, sty, bslot, 1U64, anon()), anon())
@@ -511,7 +511,7 @@ pub impl LlvmCtx {
     inout fn structEqSupported(c: inout Comp, sidx: U64) -> Bool {
         val sd: StructDef = c.arena.structs[sidx]
         mut val i: U64 = 0
-        while i < sd.fields.count {
+        while i < sd.fields.count() {
             if sd.fields[i].tyIsArray {
                 return false
             }

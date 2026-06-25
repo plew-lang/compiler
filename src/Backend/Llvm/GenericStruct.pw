@@ -18,7 +18,7 @@ pub impl LlvmCtx {
         // instance type (an adapter wrapping another: FilterIter's inner = MapIter[…], or
         // an explicit `Optional[I64]` member) resolves to the already-created named type.
         mut val k: U64 = 0
-        while k < c.monoWork.genInsts.count {
+        while k < c.monoWork.genInsts.count() {
             val ref: U64 = c.monoWork.genInsts[k]
             if c.isGenericInst(ref: ref) {
                 val t: TypeRef = c.arena.types[ref]
@@ -26,7 +26,7 @@ pub impl LlvmCtx {
                 // an extern generic struct (`Buffer[T]`) is an OPAQUE intrinsic represented
                 // as a pointer — it has no struct layout, so register no `%gs` type for it
                 // (llvmTypeOfRef returns ptrty for it). Mirrors Array's exclusion.
-                if defIdx < c.arena.structs.count && !(c.arena.structs[defIdx].isExtern) {
+                if defIdx < c.arena.structs.count() && !(c.arena.structs[defIdx].isExtern) {
                     self.genStructRefs.append(ref)
                     // `Array[T]`'s VALUE rep is the shared `{ptr}` aggregate `arrayTy`, not a
                     // fresh named `%gsN` — the same representation pin as `String`->`strty`
@@ -55,7 +55,7 @@ pub impl LlvmCtx {
     // type created in registerGenStructNames). Run after ALL names (plain + generic).
     inout fn registerGenStructBodies(c: inout Comp) {
         mut val s: U64 = 0
-        while s < self.genStructRefs.count {
+        while s < self.genStructRefs.count() {
             val ref: U64 = self.genStructRefs[s]
             val sd: StructDef = c.arena.structs[self.genStructDefs[s]]
             // `Array[T]` is pinned to the literal `arrayTy` (set at creation); LLVMStructSetBody
@@ -70,7 +70,7 @@ pub impl LlvmCtx {
             c.cur.typeArgs = c.arena.types[ref].args
             mut val elems: Array[LLVMTypeRef] = []
             mut val fi: U64 = 0
-            while fi < sd.fields.count {
+            while fi < sd.fields.count() {
                 // a boxed (recursive) field is a heap pointer — matching the non-generic
                 // registerStructBodies and the value built in genFieldValue. Required for a
                 // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
@@ -82,7 +82,7 @@ pub impl LlvmCtx {
                 }
                 fi += 1
             }
-            LLVMStructSetBody(self.genStructTys[s], arrayCPtr(elems), sd.fields.count, 0I32)
+            LLVMStructSetBody(self.genStructTys[s], arrayCPtr(elems), sd.fields.count(), 0I32)
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
             s += 1
@@ -90,28 +90,28 @@ pub impl LlvmCtx {
     }
 
     // Index into st.genStruct* for the registered instance structurally equal to `ref`,
-    // or st.genStructRefs.count.
+    // or st.genStructRefs.count().
     inout fn genStructSlot(c: inout Comp, ref: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.genStructRefs.count {
+        while i < self.genStructRefs.count() {
             if c.typeRefEq(a: self.genStructRefs[i], b: ref) {
                 return i
             }
             i += 1
         }
-        return self.genStructRefs.count
+        return self.genStructRefs.count()
     }
 
     // Register each concrete generic-enum instantiation as a named tagged-union type
     // `{ i64 tag, [maxWords(args) x i64] payload }` with type parameters substituted.
     inout fn registerGenEnums(c: inout Comp) {
         mut val k: U64 = 0
-        while k < c.monoWork.genInsts.count {
+        while k < c.monoWork.genInsts.count() {
             val ref: U64 = c.monoWork.genInsts[k]
             if c.isGenericInst(ref: ref) {
                 val t: TypeRef = c.arena.types[ref]
                 val defIdx: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-                if defIdx < c.arena.enums.count {
+                if defIdx < c.arena.enums.count() {
                     val e: EnumDef = c.arena.enums[defIdx]
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
@@ -119,11 +119,11 @@ pub impl LlvmCtx {
                     c.cur.typeArgs = t.args
                     mut val maxWords: U64 = 0
                     mut val vi: U64 = 0
-                    while vi < e.variants.count {
+                    while vi < e.variants.count() {
                         val fs: Array[FieldDef] = e.variants[vi].fields
                         mut val w: U64 = 0
                         mut val fj: U64 = 0
-                        while fj < fs.count {
+                        while fj < fs.count() {
                             // fieldWordsF (not fieldWords) so a boxed / array / nested
                             // generic-instance payload field is sized correctly under the env.
                             w = w + self.fieldWordsF(c: inout c, f: fs[fj])
@@ -176,9 +176,9 @@ pub impl LlvmCtx {
                 // the instance ref (grounded under any active env) so a match on the
                 // field read recovers the enum's substitution env.
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count {
+                if sidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count {
+                    if fidx < c.arena.structs[sidx].fields.count() {
                         val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
                         // ground the field type under the BASE's instance env (so `bb.v`
                         // with bb: Box[Box[I32]] yields Box[I32]) AND any active env (a
@@ -189,7 +189,7 @@ pub impl LlvmCtx {
                         val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
                         mut val g: U64 = fd.ty
                         if fd.ty != 0U64 {
-                            if c.cur.typeParams.count > 0U64 {
+                            if c.cur.typeParams.count() > 0U64 {
                                 g = c.groundTypeRef(ref: fd.ty)
                             }
                         }
@@ -224,9 +224,9 @@ pub impl LlvmCtx {
                         // an array struct field's element (`hc.items[0]` for
                         // items: Array[Ref[Cell]]): the field's grounded element ref.
                         val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                        if bsi < c.arena.structs.count {
+                        if bsi < c.arena.structs.count() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns2, len: fnl2)
-                            if fidx < c.arena.structs[bsi].fields.count {
+                            if fidx < c.arena.structs[bsi].fields.count() {
                                 return self.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
                             }
                         }
@@ -238,7 +238,7 @@ pub impl LlvmCtx {
                         if br != 0U64 {
                             val bt: TypeRef = c.arena.types[br]
                             if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Array") {
-                                if bt.args.count > 0U64 {
+                                if bt.args.count() > 0U64 {
                                     return bt.args[0]
                                 }
                             }
@@ -263,7 +263,7 @@ pub impl LlvmCtx {
                     return c.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
                 }
                 val si: U64 = self.exprStructIdx(c: inout c, id: recv)
-                if si < c.arena.structs.count {
+                if si < c.arena.structs.count() {
                     mut val noArgs: Array[U64] = []
                     return c.pushType(t: <TypeRef nameStart=c.arena.structs[si].nameStart nameLen=c.arena.structs[si].nameLen args=noArgs viewExtId=vid />)
                 }
@@ -273,7 +273,7 @@ pub impl LlvmCtx {
                 // the existential's bindings (so a `match it.next()` on `any Iter[Item=I64]`
                 // recovers `Optional[I64]`).
                 val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
-                if atIdx < c.decls.traits.count {
+                if atIdx < c.decls.traits.count() {
                     val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: margs)
                     if rr != 0U64 {
                         return rr
@@ -295,7 +295,7 @@ pub impl LlvmCtx {
                 // `Pow` Output is the base type for the integer conformances), so a print /
                 // assignment recovers the right width and signedness.
                 if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
-                    if args.count == 2U64 {
+                    if args.count() == 2U64 {
                         return self.llvmArgTypeRef(c: inout c, argExpr: args[0].expr)
                     }
                 }
@@ -304,7 +304,7 @@ pub impl LlvmCtx {
                 // result recovers the array (and its element). Array-returning free fns in the
                 // compiler are concrete (no generic ones), so retTy needs no grounding.
                 val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count {
+                if cfi < c.arena.funcs.count() {
                     val rt: U64 = c.arena.funcs[cfi].retTy
                     if rt != 0U64 {
                         val t: TypeRef = c.arena.types[rt]
@@ -329,12 +329,12 @@ pub impl LlvmCtx {
         // a String-kind receiver (a plain String, a newtype over String, or a String-valued
         // subscript like `dict[k]`) whose structural type ref doesn't resolve below: resolve
         // the method on `String` so `s.bytes()`'s `Array[U8]` return is recovered (and a chained
-        // `.bytes().count` / index tracks as an array). String has no type params, so its
+        // `.bytes().count()` / index tracks as an array). String has no type params, so its
         // declared return ref is already concrete.
         if self.valueKind(c: inout c, id: recv) == 1U64 {
             val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
             val smfi: U64 = c.findMethod(recvStart: ss.nameStart, recvLen: ss.nameLen, nameStart: nameStart, nameLen: nameLen, args: margs)
-            if smfi < c.arena.funcs.count {
+            if smfi < c.arena.funcs.count() {
                 val smf: Func = c.arena.funcs[smfi]
                 if smf.hasRet {
                     if smf.retTy != 0U64 {
@@ -353,7 +353,7 @@ pub impl LlvmCtx {
             headLen = c.arena.types[recvRef].nameLen
         } else {
             val si: U64 = self.exprStructIdx(c: inout c, id: recv)
-            if si < c.arena.structs.count {
+            if si < c.arena.structs.count() {
                 headStart = c.arena.structs[si].nameStart
                 headLen = c.arena.structs[si].nameLen
             } else {
@@ -361,7 +361,7 @@ pub impl LlvmCtx {
             }
         }
         val mfi: U64 = c.findMethod(recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
-        if mfi < c.arena.funcs.count {
+        if mfi < c.arena.funcs.count() {
             val mf: Func = c.arena.funcs[mfi]
             if mf.hasRet {
                 if mf.retTy != 0U64 {
@@ -394,21 +394,21 @@ pub impl LlvmCtx {
     inout fn optChainResultRefLL(c: inout Comp, base: U64, memberStart: U64, memberLen: U64) -> U64 {
         val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
         if baseRef == 0U64 { return 0U64 }
-        if baseRef >= c.arena.types.count {
+        if baseRef >= c.arena.types.count() {
             return 0U64
         }
         val bt: TypeRef = c.arena.types[baseRef]
         if !(rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
             return 0U64
         }
-        if bt.args.count < 1U64 { return 0U64 }
+        if bt.args.count() < 1U64 { return 0U64 }
         val tName: TypeRef = c.arena.types[bt.args[0]]
         val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
-        if tSidx >= c.arena.structs.count {
+        if tSidx >= c.arena.structs.count() {
             return 0U64
         }
         val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
-        if fidx >= c.arena.structs[tSidx].fields.count {
+        if fidx >= c.arena.structs[tSidx].fields.count() {
             return 0U64
         }
         val fd: FieldDef = c.arena.structs[tSidx].fields[fidx]
@@ -433,7 +433,7 @@ pub impl LlvmCtx {
             return false
         }
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
-        if ge < self.genEnumRefs.count {
+        if ge < self.genEnumRefs.count() {
             c.cur.typeParams = c.arena.enums[self.genEnumDefs[ge]].typeParams
             c.cur.typeArgs = c.arena.types[ref].args
             return true
@@ -449,7 +449,7 @@ pub impl LlvmCtx {
             return false
         }
         val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
-        if gs < self.genStructRefs.count {
+        if gs < self.genStructRefs.count() {
             c.cur.typeParams = c.arena.structs[self.genStructDefs[gs]].typeParams
             c.cur.typeArgs = c.arena.types[ref].args
             return true
@@ -460,12 +460,12 @@ pub impl LlvmCtx {
     // Index into st.genEnum* for the registered instance structurally equal to `ref`.
     inout fn genEnumSlot(c: inout Comp, ref: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.genEnumRefs.count {
+        while i < self.genEnumRefs.count() {
             if c.typeRefEq(a: self.genEnumRefs[i], b: ref) {
                 return i
             }
             i += 1
         }
-        return self.genEnumRefs.count
+        return self.genEnumRefs.count()
     }
 }

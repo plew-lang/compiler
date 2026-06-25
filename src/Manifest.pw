@@ -42,11 +42,11 @@ export fn parseManifest(bytes: Array[U8]) -> Manifest {
     val name: Array[U8] = topStr(doc: doc, key: "name".bytes())
     mut val deps: Array[Dep] = []
     mut val si: U64 = 0
-    while si < doc.sections.count {
+    while si < doc.sections.count() {
         val sec: Section = doc.sections[si]
         if bytesEq(a: sec.header, b: "dependencies".bytes()) {
             mut val fi: U64 = 0
-            while fi < sec.fields.count {
+            while fi < sec.fields.count() {
                 val f: Field = sec.fields[fi]
                 match f.value {
                     Value.Inline(val kvs) => {
@@ -55,7 +55,7 @@ export fn parseManifest(bytes: Array[U8]) -> Manifest {
                         val version: Array[U8] = inlineGet(kvs: kvs, key: "version".bytes())
                         mut val kind: U8 = 0
                         mut val loc: Array[U8] = path
-                        if path.count == 0 {
+                        if path.count() == 0 {
                             kind = 1
                             loc = git
                         }
@@ -76,7 +76,7 @@ export fn parseManifest(bytes: Array[U8]) -> Manifest {
 // file resolves its `@dep` imports against its own manifest.
 export fn loadManifestDeps(pkgDir: Array[U8]) -> Array[Dep] {
     mut val deps: Array[Dep] = []
-    if pkgDir.count == 0 {
+    if pkgDir.count() == 0 {
         return deps
     }
     mut val maniPath: Array[U8] = []
@@ -133,7 +133,7 @@ export fn resolveDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Array[D
     val nameStart: U64 = pStart + 1
     val nameLen: U64 = pLen - 1
     mut val i: U64 = 0
-    while i < deps.count {
+    while i < deps.count() {
         val d: Dep = deps[i]
         if spanEqArr(a: d.key, src: src, start: nameStart, len: nameLen) {
             if d.kind == 0 {
@@ -165,12 +165,12 @@ export fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Arra
     val nameStart: U64 = pStart + 1
     val nameLen: U64 = pLen - 1
     mut val i: U64 = 0
-    while i < deps.count {
+    while i < deps.count() {
         val d: Dep = deps[i]
         if spanEqArr(a: d.key, src: src, start: nameStart, len: nameLen) {
             if d.kind == 1 {
                 val commit: Array[U8] = lockCommitForConstraint(lock: lock, git: d.loc, constraint: d.version)
-                if commit.count == 0 {
+                if commit.count() == 0 {
                     return out
                 }
                 appendBytes(into: inout out, from: srcDir(cacheRoot: cacheRoot, url: d.loc, commit: commit))
@@ -187,7 +187,7 @@ export fn resolveGitDepImport(src: Array[U8], pStart: U64, pLen: U64, deps: Arra
 // Read and parse `<pkgDir>Plew.lock` (empty lock when absent). The loader reads it
 // per package to back git `@dep` imports with their pinned commits.
 export fn loadLock(pkgDir: Array[U8]) -> Lock {
-    if pkgDir.count > 0 {
+    if pkgDir.count() > 0 {
         mut val lockPath: Array[U8] = []
         appendBytes(into: inout lockPath, from: pkgDir)
         appendBytes(into: inout lockPath, from: "Plew.lock".bytes())

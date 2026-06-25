@@ -51,9 +51,9 @@ pub impl LlvmCtx {
                 // a bare reference to a free function (`val g = twice`): the closure
                 // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
                 val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
-                if fvi < c.arena.funcs.count {
+                if fvi < c.arena.funcs.count() {
                     val ts: U64 = self.thunkSlot(fi: fvi)
-                    if ts < self.thunkIdx.count {
+                    if ts < self.thunkIdx.count() {
                         mut val cv: LLVMValueRef = LLVMGetUndef(self.closureTy)
                         cv = LLVMBuildInsertValue(self.b, cv, self.thunkVal[ts], 0U64, anon())
                         cv = LLVMBuildInsertValue(self.b, cv, LLVMConstNull(self.ptrty), 1U64, anon())
@@ -83,7 +83,7 @@ pub impl LlvmCtx {
                 // `eq` to the inline structural path below.
                 if op == opEq() || op == opNe() {
                     val eqFi: U64 = self.eqWitnessFn(c: inout c, lhs: lhs)
-                    if eqFi < c.arena.funcs.count {
+                    if eqFi < c.arena.funcs.count() {
                         val wv: LLVMValueRef = self.emitWitnessCall(c: inout c, fi: eqFi, lhs: lhs, rhs: rhs, binary: true)
                         if op == opNe() {
                             return LLVMBuildNot(self.b, wv, anon())
@@ -97,7 +97,7 @@ pub impl LlvmCtx {
                 // aggregate witness (binWitnessFn -> none) and falls through.
                 if isBinTraitOp(op: op) {
                     val wfi: U64 = self.binWitnessFn(c: inout c, op: op, lhs: lhs, rhs: rhs)
-                    if wfi < c.arena.funcs.count {
+                    if wfi < c.arena.funcs.count() {
                         return self.emitWitnessCall(c: inout c, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
@@ -106,7 +106,7 @@ pub impl LlvmCtx {
                 // struct ==/!= : structural (field-by-field) equality (the Eq witness).
                 if op == opEq() || op == opNe() {
                     val sidxE: U64 = self.exprStructIdx(c: inout c, id: lhs)
-                    if sidxE < c.arena.structs.count {
+                    if sidxE < c.arena.structs.count() {
                         if self.structEqSupported(c: inout c, sidx: sidxE) {
                             val eqv: LLVMValueRef = self.emitStructEq(c: inout c, a: l, b: r, sidx: sidxE)
                             if op == opNe() {
@@ -118,10 +118,10 @@ pub impl LlvmCtx {
                     // enum ==/!= : a payload-less enum compares by tag (field 0). A
                     // payload-carrying enum needs a per-variant switch (deferred).
                     mut val eidE: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-                    if eidE >= c.arena.enums.count {
+                    if eidE >= c.arena.enums.count() {
                         eidE = self.exprEnumIdx(c: inout c, id: rhs)
                     }
-                    if eidE < c.arena.enums.count {
+                    if eidE < c.arena.enums.count() {
                         if enumPayloadless(c: inout c, eid: eidE) {
                             val tagL: LLVMValueRef = LLVMBuildExtractValue(self.b, l, 0U64, anon())
                             val tagR: LLVMValueRef = LLVMBuildExtractValue(self.b, r, 0U64, anon())
@@ -146,17 +146,17 @@ pub impl LlvmCtx {
                 // witness) -> an i32 ordering compared against 0.
                 if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
                     val sidxO: U64 = self.exprStructIdx(c: inout c, id: lhs)
-                    if sidxO < c.arena.structs.count {
+                    if sidxO < c.arena.structs.count() {
                         if self.structOrdSupported(c: inout c, sidx: sidxO) {
                             return self.emitStructOrdOp(c: inout c, op: op, a: l, b: r, sidx: sidxO)
                         }
                     }
                     // enum ordering (`< <= > >=`): tag-then-payload lexicographic compare.
                     mut val eidO: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-                    if eidO >= c.arena.enums.count {
+                    if eidO >= c.arena.enums.count() {
                         eidO = self.exprEnumIdx(c: inout c, id: rhs)
                     }
-                    if eidO < c.arena.enums.count {
+                    if eidO < c.arena.enums.count() {
                         if self.enumOrdSupported(c: inout c, eid: eidO) {
                             return self.emitEnumOrdOp(c: inout c, op: op, a: l, b: r, eid: eidO, sty: LLVMTypeOf(l))
                         }
@@ -194,7 +194,7 @@ pub impl LlvmCtx {
             }
             Expr.Array(val elems) => {
                 mut val et: LLVMTypeRef = self.i64ty
-                if elems.count > 0U64 {
+                if elems.count() > 0U64 {
                     et = self.exprLlvmType(c: inout c, id: elems[0])
                 }
                 return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et)
@@ -203,7 +203,7 @@ pub impl LlvmCtx {
                 return self.genLlvmIndex(c: inout c, base: base, index: index)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                // `arr.count` — an array's count is field 1.
+                // `arr.count()` — an array's count is field 1.
                 if self.exprIsArray(c: inout c, id: base) {
                     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                         val av: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
@@ -214,9 +214,9 @@ pub impl LlvmCtx {
                 // (collections.md §3-付録4); their bodies forward to bufferCount/bufferCapacity
                 // intrinsics, so no Expr.Field property interception here.
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count {
+                if sidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count {
+                    if fidx < c.arena.structs[sidx].fields.count() {
                         val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
                         val raw: LLVMValueRef = LLVMBuildExtractValue(self.b, self.genLlvmExpr(c: inout c, id: base), fidx, anon())
                         // a boxed (recursive) field holds a heap pointer; deref it to the
@@ -231,7 +231,7 @@ pub impl LlvmCtx {
                             val savedBA: Array[U64] = c.cur.typeArgs
                             val didSetB: Bool = self.setStructEnv(c: inout c, ref: bRef)
                             mut val pg: U64 = fd.ty
-                            if c.cur.typeParams.count > 0U64 {
+                            if c.cur.typeParams.count() > 0U64 {
                                 pg = c.groundTypeRef(ref: fd.ty)
                             }
                             val pteTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: pg)
@@ -253,14 +253,14 @@ pub impl LlvmCtx {
                 // struct and copies each captured value (or the shared cell pointer for a
                 // `mut val` capture) into it; a non-capturing one has a NULL env.
                 val slot: U64 = self.closureSlot(id: id)
-                if slot < self.cloIdx.count {
+                if slot < self.cloIdx.count() {
                     mut val env: LLVMValueRef = LLVMConstNull(self.ptrty)
                     val caps: Array[CaptureEntry] = closureCaptures(c: inout c, cloId: id)
-                    if caps.count > 0U64 {
+                    if caps.count() > 0U64 {
                         val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
                         env = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                         mut val ci: U64 = 0
-                        while ci < caps.count {
+                        while ci < caps.count() {
                             val cap: CaptureEntry = caps[ci]
                             val li: U64 = self.findLocal(c: inout c, start: cap.nameStart, len: cap.nameLen)
                             if li < self.nLocals {
@@ -279,7 +279,7 @@ pub impl LlvmCtx {
                                         cv2 = self.copyArrayValue(c: inout c, arrVal: cv2, elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
                                     } else {
                                         val csi: U64 = self.locStructIdx[li]
-                                        if csi < c.arena.structs.count {
+                                        if csi < c.arena.structs.count() {
                                             cv2 = self.deepCopyStructValue(c: inout c, v: cv2, sidx: csi)
                                         }
                                     }
@@ -302,9 +302,9 @@ pub impl LlvmCtx {
                 // (an array field yields the {ptr,i64} value, whose buffer is shared, so
                 // `r->arr[i] = v` mutates through any alias).
                 val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
-                if psidx < c.arena.structs.count {
+                if psidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[psidx].fields.count {
+                    if fidx < c.arena.structs[psidx].fields.count() {
                         return LLVMBuildExtractValue(self.b, self.loadRefPointee(c: inout c, base: base), fidx, anon())
                     }
                 }
@@ -398,7 +398,7 @@ pub impl LlvmCtx {
                 // (`-money` -> `Money.neg(value:)`, `!switch` -> `Switch.not`). A
                 // primitive operand has no aggregate witness and keeps the LLVM op.
                 val uwfi: U64 = self.unaryWitnessFn(c: inout c, op: op, operand: operand)
-                if uwfi < c.arena.funcs.count {
+                if uwfi < c.arena.funcs.count() {
                     return self.emitWitnessCall(c: inout c, fi: uwfi, lhs: operand, rhs: operand, binary: false)
                 }
                 if op == opSub() {

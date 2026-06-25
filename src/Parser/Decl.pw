@@ -16,7 +16,7 @@
 pub impl Comp {
     inout fn drainDerives(typeStart: U64, typeLen: U64, isEnum: Bool, declStart: U64, declEnd: U64) {
         mut val i: U64 = 0
-        while i < self.parseScratch.pendingDerives.count {
+        while i < self.parseScratch.pendingDerives.count() {
             val d: DeriveReq = self.parseScratch.pendingDerives[i]
             self.decls.derives.append(<DeriveReq typeStart=typeStart typeLen=typeLen isEnum=isEnum nameStart=d.nameStart nameLen=d.nameLen declStart=declStart declEnd=declEnd args=d.args />)
             i += 1
@@ -31,22 +31,22 @@ pub impl Comp {
     inout fn synthGiveBlock(valueExpr: U64) -> U64 {
         mut val ss: Array[U64] = []
         ss.append(self.pushStmt(s: <Stmt.Give value=valueExpr />))
-        val id: U64 = self.arena.blocks.count
+        val id: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=ss />)
         return id
     }
 
     // synthetic identifier names referenced by derived code (#5: `@[Eq]`/`@[Ord]`).
     inout fn internBytes(s: String) -> Bind {
-        val start: U64 = self.arena.bytes.count
+        val start: U64 = self.arena.bytes.count()
         val sb: Array[U8] = s.bytes()
         mut val i: U64 = 0
-        while i < sb.count {
+        while i < sb.count() {
             self.arena.bytes.append(sb[i])
             i += 1
         }
-        val nid: U64 = intern(c: inout self, start: start, len: sb.count)
-        return <Bind nameStart=start nameLen=sb.count nameId=nid fieldStart=start fieldLen=sb.count />
+        val nid: U64 = intern(c: inout self, start: start, len: sb.count())
+        return <Bind nameStart=start nameLen=sb.count() nameId=nid fieldStart=start fieldLen=sb.count() />
     }
 
     // A type-typed parameter `name: Type` (copyable, no mode/default) for a
@@ -62,7 +62,7 @@ pub impl Comp {
     // type (scalar/String built-in; a struct field needs its own Eq).
     inout fn synthStructEq(d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, boolN: Bind, eqTrait: Bind) {
         val si: U64 = self.structIndexByName(start: d.typeStart, len: d.typeLen)
-        if si >= self.arena.structs.count {
+        if si >= self.arena.structs.count() {
             return
         }
         val fields: Array[FieldDef] = self.arena.structs[si].fields
@@ -74,7 +74,7 @@ pub impl Comp {
         mut val acc: U64 = 0
         mut val first: Bool = true
         mut val fi: U64 = 0
-        while fi < fields.count {
+        while fi < fields.count() {
             val f: FieldDef = fields[fi]
             val lf: U64 = self.pushExpr(e: <Expr.Field base=lhsId nameStart=f.nameStart nameLen=f.nameLen />)
             val rf: U64 = self.pushExpr(e: <Expr.Field base=rhsId nameStart=f.nameStart nameLen=f.nameLen />)
@@ -93,7 +93,7 @@ pub impl Comp {
         val ret: U64 = self.pushStmt(s: <Stmt.Return value=acc hasValue=true offset=0U64 />)
         mut val stmts: Array[U64] = []
         stmts.append(ret)
-        val blkId: U64 = self.arena.blocks.count
+        val blkId: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         val noTP: Array[Bind] = []
         self.arena.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout self, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout self, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
@@ -113,26 +113,26 @@ pub impl Comp {
 
     // Intern a fresh synthetic name `<prefix><n>` (e.g. `L0`, `R3`) for a match bind.
     inout fn internName(prefix: U8, n: U64) -> Bind {
-        val start: U64 = self.arena.bytes.count
+        val start: U64 = self.arena.bytes.count()
         self.arena.bytes.append(prefix)
         self.appendU64Digits(n: n)
-        val len: U64 = self.arena.bytes.count - start
+        val len: U64 = self.arena.bytes.count() - start
         return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
     }
 
-    // Index of the enum named (start,len), or c.arena.enums.count if none.
+    // Index of the enum named (start,len), or c.arena.enums.count() if none.
     inout fn enumIndexByName(start: U64, len: U64) -> U64 {
         // an import alias (`with { Real as Alias }`) names the same enum as `Real` (spec/15).
         val ar: Bind = self.aliasReal(start: start, len: len)
         val qId: U64 = intern(c: inout self, start: ar.nameStart, len: ar.nameLen)
         mut val i: U64 = 0
-        while i < self.arena.enums.count {
+        while i < self.arena.enums.count() {
             if self.arena.enums[i].nameId == qId {
                 return i
             }
             i += 1
         }
-        return self.arena.enums.count
+        return self.arena.enums.count()
     }
 
     // A `true`/`false` Bool literal expression. `v` is the literal magnitude (0/1),
@@ -148,7 +148,7 @@ pub impl Comp {
     // mismatch. Plus a derived `Conform(E, Eq)`.
     inout fn synthEnumEq(d: DeriveReq, eqN: Bind, lhsN: Bind, rhsN: Bind, boolN: Bind, eqTrait: Bind) {
         val ei: U64 = self.enumIndexByName(start: d.typeStart, len: d.typeLen)
-        if ei >= self.arena.enums.count {
+        if ei >= self.arena.enums.count() {
             return
         }
         val variants: Array[Variant] = self.arena.enums[ei].variants
@@ -160,7 +160,7 @@ pub impl Comp {
         mut val counter: U64 = 0
         mut val outerArms: Array[MatchArm] = []
         mut val vi: U64 = 0
-        while vi < variants.count {
+        while vi < variants.count() {
             val v: Variant = variants[vi]
             val flds: Array[FieldDef] = v.fields
             // lhs/rhs payload binds (fresh names L<n>/R<n>) + the field comparison.
@@ -169,7 +169,7 @@ pub impl Comp {
             mut val payload: U64 = 0
             mut val firstp: Bool = true
             mut val fj: U64 = 0
-            while fj < flds.count {
+            while fj < flds.count() {
                 val f: FieldDef = flds[fj]
                 val ln: Bind = self.internName(prefix: 76, n: counter)
                 counter += 1
@@ -204,7 +204,7 @@ pub impl Comp {
         val ret: U64 = self.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true offset=0U64 />)
         mut val stmts: Array[U64] = []
         stmts.append(ret)
-        val blkId: U64 = self.arena.blocks.count
+        val blkId: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         val noTP: Array[Bind] = []
         self.arena.funcs.append(<Func nameStart=eqN.nameStart nameLen=eqN.nameLen nameId=intern(c: inout self, start: eqN.nameStart, len: eqN.nameLen) recvId=intern(c: inout self, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=boolN.nameStart retLen=boolN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
@@ -223,7 +223,7 @@ pub impl Comp {
         val ret: U64 = self.pushStmt(s: <Stmt.Return value=value hasValue=true offset=0U64 />)
         mut val stmts: Array[U64] = []
         stmts.append(ret)
-        val blkId: U64 = self.arena.blocks.count
+        val blkId: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         return blkId
     }
@@ -235,7 +235,7 @@ pub impl Comp {
     // derived Conform(T, Ord). Requires `enum Ordering` in scope.
     inout fn synthStructOrd(d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind, ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind, ordTrait: Bind) {
         val si: U64 = self.structIndexByName(start: d.typeStart, len: d.typeLen)
-        if si >= self.arena.structs.count {
+        if si >= self.arena.structs.count() {
             return
         }
         val fields: Array[FieldDef] = self.arena.structs[si].fields
@@ -246,7 +246,7 @@ pub impl Comp {
         val rhsId: U64 = self.pushExpr(e: <Expr.Ident start=rhsN.nameStart len=rhsN.nameLen />)
         mut val stmts: Array[U64] = []
         mut val fi: U64 = 0
-        while fi < fields.count {
+        while fi < fields.count() {
             val f: FieldDef = fields[fi]
             val lf1: U64 = self.pushExpr(e: <Expr.Field base=lhsId nameStart=f.nameStart nameLen=f.nameLen />)
             val rf1: U64 = self.pushExpr(e: <Expr.Field base=rhsId nameStart=f.nameStart nameLen=f.nameLen />)
@@ -261,7 +261,7 @@ pub impl Comp {
             fi += 1
         }
         stmts.append(self.pushStmt(s: <Stmt.Return value=self.synthOrdering(ordN: ordN, variantN: equalN) hasValue=true offset=0U64 />))
-        val blkId: U64 = self.arena.blocks.count
+        val blkId: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         val noTP: Array[Bind] = []
         self.arena.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout self, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout self, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
@@ -274,7 +274,7 @@ pub impl Comp {
         val g: U64 = self.pushStmt(s: <Stmt.Give value=value />)
         mut val stmts: Array[U64] = []
         stmts.append(g)
-        val blkId: U64 = self.arena.blocks.count
+        val blkId: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         return blkId
     }
@@ -285,7 +285,7 @@ pub impl Comp {
     // `<`/`>` lowers per the field type (scalar built-in, or an Ord-bearing field).
     inout fn synthOrdChainExpr(lhsNames: Array[Bind], rhsNames: Array[Bind], ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind) -> U64 {
         mut val acc: U64 = self.synthOrdering(ordN: ordN, variantN: equalN)
-        mut val k: U64 = lhsNames.count
+        mut val k: U64 = lhsNames.count()
         while k > 0 {
             k -= 1
             val l1: U64 = self.pushExpr(e: <Expr.Ident start=lhsNames[k].nameStart len=lhsNames[k].nameLen />)
@@ -309,7 +309,7 @@ pub impl Comp {
     // `enum Ordering` in scope. Mirrors synthEnumEq's two-level match shape.
     inout fn synthEnumOrd(d: DeriveReq, cmpN: Bind, lhsN: Bind, rhsN: Bind, ordN: Bind, lessN: Bind, greaterN: Bind, equalN: Bind, ordTrait: Bind) {
         val ei: U64 = self.enumIndexByName(start: d.typeStart, len: d.typeLen)
-        if ei >= self.arena.enums.count {
+        if ei >= self.arena.enums.count() {
             return
         }
         val variants: Array[Variant] = self.arena.enums[ei].variants
@@ -321,13 +321,13 @@ pub impl Comp {
         mut val counter: U64 = 0
         mut val outerArms: Array[MatchArm] = []
         mut val oi: U64 = 0
-        while oi < variants.count {
+        while oi < variants.count() {
             val lv: Variant = variants[oi]
             // bind lhs payloads of this variant to fresh L<n> names.
             mut val lhsBinds: Array[Bind] = []
             mut val lhsNames: Array[Bind] = []
             mut val lf: U64 = 0
-            while lf < lv.fields.count {
+            while lf < lv.fields.count() {
                 val f: FieldDef = lv.fields[lf]
                 val ln: Bind = self.internName(prefix: 76, n: counter)
                 counter += 1
@@ -338,12 +338,12 @@ pub impl Comp {
             // inner match on rhs: an arm per rhs variant, comparing tags then payloads.
             mut val innerArms: Array[MatchArm] = []
             mut val oj: U64 = 0
-            while oj < variants.count {
+            while oj < variants.count() {
                 val rv: Variant = variants[oj]
                 mut val rhsBinds: Array[Bind] = []
                 mut val rhsNames: Array[Bind] = []
                 mut val rf: U64 = 0
-                while rf < rv.fields.count {
+                while rf < rv.fields.count() {
                     val f: FieldDef = rv.fields[rf]
                     val rn: Bind = self.internName(prefix: 82, n: counter)
                     counter += 1
@@ -372,7 +372,7 @@ pub impl Comp {
         val ret: U64 = self.pushStmt(s: <Stmt.Return value=outerMatch hasValue=true offset=0U64 />)
         mut val stmts: Array[U64] = []
         stmts.append(ret)
-        val blkId: U64 = self.arena.blocks.count
+        val blkId: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         val noTP: Array[Bind] = []
         self.arena.funcs.append(<Func nameStart=cmpN.nameStart nameLen=cmpN.nameLen nameId=intern(c: inout self, start: cmpN.nameStart, len: cmpN.nameLen) recvId=intern(c: inout self, start: d.typeStart, len: d.typeLen) typeParams=noTP params=params hasRet=true retStart=ordN.nameStart retLen=ordN.nameLen retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=d.typeStart recvLen=d.typeLen selfInout=false selfMove=false isAssoc=true isAsync=false isExtern=false />)
@@ -384,7 +384,7 @@ pub impl Comp {
     // (so `@[Ord]`, which implies Eq via `Ord: Eq`, must not synthesize Eq twice).
     inout fn hasEqDeriveFor(d: DeriveReq) -> Bool {
         mut val i: U64 = 0
-        while i < self.decls.derives.count {
+        while i < self.decls.derives.count() {
             val e: DeriveReq = self.decls.derives[i]
             if rangeEquals(bytes: self.arena.bytes, start: e.nameStart, len: e.nameLen, kw: "Eq") {
                 if spansEqual(c: inout self, aStart: e.typeStart, aLen: e.typeLen, bStart: d.typeStart, bLen: d.typeLen) {
@@ -399,7 +399,7 @@ pub impl Comp {
     // Synthesize all recorded `@[...]` derives (#5): `@[Eq]` (struct + enum) and
     // `@[Ord]` (struct). `@[Ord]` requires `enum Ordering` in scope.
     inout fn synthesizeDerives() {
-        if self.decls.derives.count == 0 {
+        if self.decls.derives.count() == 0 {
             return
         }
         val eqN: Bind = self.internBytes(s: "eq")
@@ -414,7 +414,7 @@ pub impl Comp {
         val equalN: Bind = self.internBytes(s: "Equal")
         val ordTrait: Bind = self.internBytes(s: "Ord")
         mut val i: U64 = 0
-        while i < self.decls.derives.count {
+        while i < self.decls.derives.count() {
             val d: DeriveReq = self.decls.derives[i]
             if rangeEquals(bytes: self.arena.bytes, start: d.nameStart, len: d.nameLen, kw: "Eq") {
                 if d.isEnum {
@@ -424,7 +424,7 @@ pub impl Comp {
                 }
             }
             if rangeEquals(bytes: self.arena.bytes, start: d.nameStart, len: d.nameLen, kw: "Ord") {
-                if self.enumIndexByName(start: ordN.nameStart, len: ordN.nameLen) >= self.arena.enums.count {
+                if self.enumIndexByName(start: ordN.nameStart, len: ordN.nameLen) >= self.arena.enums.count() {
                     compileErrorAt(line: self.lineOf(offset: d.nameStart), msg: "deriving `Ord` requires `enum Ordering` to be in scope")
                 } else {
                     if d.isEnum {

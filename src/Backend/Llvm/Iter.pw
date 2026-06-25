@@ -20,20 +20,20 @@ pub impl LlvmCtx {
         val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
         val recvSidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         mut val gi: U64 = 0
-        while gi < c.monoWork.genInsts.count {
+        while gi < c.monoWork.genInsts.count() {
             val ref: U64 = c.monoWork.genInsts[gi]
             val t: TypeRef = c.arena.types[ref]
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: headKw) {
-                if t.args.count > 0U64 {
+                if t.args.count() > 0U64 {
                     val arg0: U64 = t.args[0]
                     if recvRef != 0U64 {
                         if c.typeRefEq(a: arg0, b: recvRef) {
                             return ref
                         }
                     } else {
-                        if recvSidx < c.arena.structs.count {
+                        if recvSidx < c.arena.structs.count() {
                             val a0: TypeRef = c.arena.types[arg0]
-                            if a0.args.count == 0U64 {
+                            if a0.args.count() == 0U64 {
                                 if spansEqual(c: inout c, aStart: a0.nameStart, aLen: a0.nameLen, bStart: c.arena.structs[recvSidx].nameStart, bLen: c.arena.structs[recvSidx].nameLen) {
                                     return ref
                                 }
@@ -75,7 +75,7 @@ pub impl LlvmCtx {
     // `<MapIter inner=self f=f />` with `self` = the receiver.
     inout fn genLlvmAdapterWrap(c: inout Comp, recv: U64, args: Array[Arg], adapterRef: U64) -> LLVMValueRef {
         val gslot: U64 = self.genStructSlot(c: inout c, ref: adapterRef)
-        if gslot >= self.genStructRefs.count {
+        if gslot >= self.genStructRefs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -84,8 +84,8 @@ pub impl LlvmCtx {
         // field 0 = inner = the receiver expression.
         fields.append(<MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv />)
         mut val i: U64 = 1
-        while i < sd.fields.count {
-            if i - 1U64 < args.count {
+        while i < sd.fields.count() {
+            if i - 1U64 < args.count() {
                 fields.append(<MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=args[i - 1U64].expr />)
             }
             i += 1

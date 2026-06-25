@@ -11,7 +11,7 @@ pub impl Comp {
     inout fn recordArrayElem(ty: PType) {
         if ty.isArray {
             mut val i: U64 = 0
-            while i < self.monoWork.arrayElems.count {
+            while i < self.monoWork.arrayElems.count() {
                 val e: Bind = self.monoWork.arrayElems[i]
                 if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: ty.start, bLen: ty.len) {
                     return
@@ -19,9 +19,9 @@ pub impl Comp {
                 i += 1
             }
             mut val elemRef: U64 = 0
-            if ty.ref < self.arena.types.count {
+            if ty.ref < self.arena.types.count() {
                 val at: TypeRef = self.arena.types[ty.ref]
-                if at.args.count > 0 {
+                if at.args.count() > 0 {
                     elemRef = at.args[0]
                 }
             }
@@ -46,12 +46,12 @@ pub impl Comp {
             out.append(self.arena.bytes[pty.start + i])
             i += 1
         }
-        if pty.ref < self.arena.types.count {
+        if pty.ref < self.arena.types.count() {
             val tr: TypeRef = self.arena.types[pty.ref]
-            if tr.args.count > 0U64 {
+            if tr.args.count() > 0U64 {
                 appendBytes(into: inout out, from: "[".bytes())
                 mut val a: U64 = 0
-                while a < tr.args.count {
+                while a < tr.args.count() {
                     if a > 0U64 {
                         appendBytes(into: inout out, from: ",".bytes())
                     }
@@ -80,14 +80,14 @@ pub impl Comp {
         // sort field indices by name (insertion sort — field counts are tiny).
         mut val order: Array[U64] = []
         mut val i: U64 = 0
-        while i < fieldNames.count {
+        while i < fieldNames.count() {
             order.append(i)
             i += 1
         }
         mut val a: U64 = 0
-        while a < order.count {
+        while a < order.count() {
             mut val b: U64 = a + 1U64
-            while b < order.count {
+            while b < order.count() {
                 if stringGt(a: fieldNames[order[a]], b: fieldNames[order[b]]) {
                     val tmp: U64 = order[a]
                     order[a] = order[b]
@@ -101,7 +101,7 @@ pub impl Comp {
         mut val cn: Array[U8] = []
         appendBytes(into: inout cn, from: "(".bytes())
         mut val j: U64 = 0
-        while j < order.count {
+        while j < order.count() {
             if j > 0U64 {
                 appendBytes(into: inout cn, from: ",".bytes())
             }
@@ -115,7 +115,7 @@ pub impl Comp {
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         // already registered?
         mut val si: U64 = 0
-        while si < self.arena.structs.count {
+        while si < self.arena.structs.count() {
             if self.arena.structs[si].nameId == nid {
                 return nm
             }
@@ -124,7 +124,7 @@ pub impl Comp {
         // build the StructDef with fields in canonical (sorted) order.
         mut val fields: Array[FieldDef] = []
         mut val f: U64 = 0
-        while f < order.count {
+        while f < order.count() {
             val fn2: Bind = self.internBytes(s: fieldNames[order[f]])
             val fty: PType = fieldTys[order[f]]
             fields.append(<FieldDef nameStart=fn2.nameStart nameLen=fn2.nameLen nameId=intern(c: inout self, start: fn2.nameStart, len: fn2.nameLen) tyStart=fty.start tyLen=fty.len tyNameId=intern(c: inout self, start: fty.start, len: fty.len) tyIsArray=fty.isArray ty=fty.ref isMut=false hasDefault=false defaultVal=0 vis=2 />)
@@ -141,7 +141,7 @@ pub impl Comp {
         if t.isRecord {
             mut val fieldTys: Array[PType] = []
             mut val fi: U64 = 0
-            while fi < t.args.count {
+            while fi < t.args.count() {
                 fieldTys.append(self.lowerType(t: t.args[fi]))
                 fi += 1
             }
@@ -153,14 +153,14 @@ pub impl Comp {
         mut val args: Array[U64] = []
         mut val argPtys: Array[PType] = []
         mut val i: U64 = 0
-        while i < t.args.count {
+        while i < t.args.count() {
             val ap: PType = self.lowerType(t: t.args[i])
             argPtys.append(ap)
             args.append(ap.ref)
             i += 1
         }
         mut val viewExtId: U64 = 0
-        if t.extView.bytes().count > 0 {
+        if t.extView.bytes().count() > 0 {
             val evN: Bind = self.internBytes(s: t.extView)
             viewExtId = intern(c: inout self, start: evN.nameStart, len: evN.nameLen)
         }
@@ -168,8 +168,8 @@ pub impl Comp {
         // to args; 0 for a positional argument.
         mut val argLabels: Array[U64] = []
         mut val li: U64 = 0
-        while li < t.argLabels.count {
-            if t.argLabels[li].bytes().count > 0 {
+        while li < t.argLabels.count() {
+            if t.argLabels[li].bytes().count() > 0 {
                 val lblN: Bind = self.internBytes(s: t.argLabels[li])
                 argLabels.append(intern(c: inout self, start: lblN.nameStart, len: lblN.nameLen))
             } else {
@@ -183,7 +183,7 @@ pub impl Comp {
         // a binder, not a module-scoped type — exclude it from the visibility walk.
         mut val site: U64 = t.span.start
         mut val tpi: U64 = 0
-        while tpi < self.cur.typeParams.count {
+        while tpi < self.cur.typeParams.count() {
             val tp: Bind = self.cur.typeParams[tpi]
             if spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
                 site = 0U64
@@ -192,7 +192,7 @@ pub impl Comp {
         }
         val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
-        if t.args.count > 0 {
+        if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
                 if self.isCompoundType(ref: args[0]) {
                     val mn: Bind = self.appendMangleSpan(ref: args[0])
@@ -213,10 +213,10 @@ pub impl Comp {
     // declared before any body that calls it (source order), so its param types are
     // registered TypeRefs here. Used to give a call-argument literal its context type.
     inout fn callArgType(fnName: String, argLabel: String) -> U64 {
-        if fnName.bytes().count == 0U64 {
+        if fnName.bytes().count() == 0U64 {
             return 0U64
         }
-        if argLabel.bytes().count == 0U64 {
+        if argLabel.bytes().count() == 0U64 {
             return 0U64
         }
         val fnB: Bind = self.internBytes(s: fnName)
@@ -226,14 +226,14 @@ pub impl Comp {
         mut val matchCount: U64 = 0
         mut val resultTy: U64 = 0
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count {
+        while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             if f.nameId == fnId {
                 if !(f.hasRecv) {
-                    if f.typeParams.count == 0U64 {
+                    if f.typeParams.count() == 0U64 {
                         matchCount += 1
                         mut val pi: U64 = 0
-                        while pi < f.params.count {
+                        while pi < f.params.count() {
                             if intern(c: inout self, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
                                 resultTy = f.params[pi].ty
                             }
@@ -256,10 +256,10 @@ pub impl Comp {
     // single param type unambiguously) is the type adopted — otherwise 0 (context-free,
     // no guess). Gives a record/dict/`()` literal method-argument its context type.
     inout fn methodArgType(methodName: String, argLabel: String) -> U64 {
-        if methodName.bytes().count == 0U64 {
+        if methodName.bytes().count() == 0U64 {
             return 0U64
         }
-        if argLabel.bytes().count == 0U64 {
+        if argLabel.bytes().count() == 0U64 {
             return 0U64
         }
         val mnB: Bind = self.internBytes(s: methodName)
@@ -269,14 +269,14 @@ pub impl Comp {
         mut val matchCount: U64 = 0
         mut val resultTy: U64 = 0
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count {
+        while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             if f.hasRecv {
                 if f.nameId == mnId {
-                    if f.typeParams.count == 0U64 {
+                    if f.typeParams.count() == 0U64 {
                         matchCount += 1
                         mut val pi: U64 = 0
-                        while pi < f.params.count {
+                        while pi < f.params.count() {
                             if intern(c: inout self, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
                                 resultTy = f.params[pi].ty
                             }
@@ -296,7 +296,7 @@ pub impl Comp {
     inout fn lowerArgs(args: Array[ArgAst], fnName: String) -> Array[Arg] {
         mut val out: Array[Arg] = []
         mut val i: U64 = 0
-        while i < args.count {
+        while i < args.count() {
             val a: ArgAst = args[i]
             // flow the resolved parameter's type to a context-typed argument literal (a dict
             // / record / `()` whose type is only known from the parameter). Defensive: 0
@@ -327,7 +327,7 @@ pub impl Comp {
     inout fn lowerMethodArgs(args: Array[ArgAst], methodName: String) -> Array[Arg] {
         mut val out: Array[Arg] = []
         mut val i: U64 = 0
-        while i < args.count {
+        while i < args.count() {
             val a: ArgAst = args[i]
             val actx: U64 = self.methodArgType(methodName: methodName, argLabel: a.label)
             mut val e: U64 = 0
@@ -364,10 +364,10 @@ pub impl Comp {
         // construction type name to the underlying struct so `<Brand code=255 />` finds the
         // `code` field's type for the literal's context (Brand = Rgb).
         mut val ntI: U64 = 0
-        while ntI < self.arena.newtypes.count {
+        while ntI < self.arena.newtypes.count() {
             if self.arena.newtypes[ntI].nameId == tid {
                 tid = intern(c: inout self, start: self.arena.newtypes[ntI].underStart, len: self.arena.newtypes[ntI].underLen)
-                ntI = self.arena.newtypes.count
+                ntI = self.arena.newtypes.count()
             } else {
                 ntI += 1
             }
@@ -378,13 +378,13 @@ pub impl Comp {
             val vn: Bind = self.internBytes(s: variant)
             val vid: U64 = intern(c: inout self, start: vn.nameStart, len: vn.nameLen)
             mut val ei: U64 = 0
-            while ei < self.arena.enums.count {
+            while ei < self.arena.enums.count() {
                 if self.arena.enums[ei].nameId == tid {
                     mut val vi: U64 = 0
-                    while vi < self.arena.enums[ei].variants.count {
+                    while vi < self.arena.enums[ei].variants.count() {
                         if intern(c: inout self, start: self.arena.enums[ei].variants[vi].nameStart, len: self.arena.enums[ei].variants[vi].nameLen) == vid {
                             mut val fj: U64 = 0
-                            while fj < self.arena.enums[ei].variants[vi].fields.count {
+                            while fj < self.arena.enums[ei].variants[vi].fields.count() {
                                 if intern(c: inout self, start: self.arena.enums[ei].variants[vi].fields[fj].nameStart, len: self.arena.enums[ei].variants[vi].fields[fj].nameLen) == fid {
                                     return self.arena.enums[ei].variants[vi].fields[fj].ty
                                 }
@@ -399,10 +399,10 @@ pub impl Comp {
             return 0U64
         }
         mut val si: U64 = 0
-        while si < self.arena.structs.count {
+        while si < self.arena.structs.count() {
             if self.arena.structs[si].nameId == tid {
                 mut val fk: U64 = 0
-                while fk < self.arena.structs[si].fields.count {
+                while fk < self.arena.structs[si].fields.count() {
                     if intern(c: inout self, start: self.arena.structs[si].fields[fk].nameStart, len: self.arena.structs[si].fields[fk].nameLen) == fid {
                         return self.arena.structs[si].fields[fk].ty
                     }
@@ -420,7 +420,7 @@ pub impl Comp {
     inout fn lowerMakeFields(fields: Array[MakeFieldAst], typeName: String, variant: String, isEnum: Bool) -> Array[MakeField] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0
-        while i < fields.count {
+        while i < fields.count() {
             val f: MakeFieldAst = fields[i]
             // flow the field's declared type to its value so a context-typed literal in a
             // construction field infers (a dict / record / `()` whose type is only known
@@ -493,10 +493,10 @@ pub impl Comp {
     inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> U64 {
         mut val ok: Bool = false
         if ctxRef != 0 {
-            if ctxRef < self.arena.types.count {
+            if ctxRef < self.arena.types.count() {
                 val ct: TypeRef = self.arena.types[ctxRef]
                 if rangeEquals(bytes: self.arena.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
-                    if ct.args.count >= 2 {
+                    if ct.args.count() >= 2 {
                         ok = true
                     }
                 }
@@ -515,7 +515,7 @@ pub impl Comp {
         val keyL: Bind = self.internBytes(s: "key")
         val valL: Bind = self.internBytes(s: "value")
         mut val i: U64 = 0
-        while i < keys.count {
+        while i < keys.count() {
             val kId: U64 = self.lowerExpr(e: keys[i])
             val vId: U64 = self.lowerExpr(e: vals[i])
             val recv: U64 = self.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
@@ -529,12 +529,12 @@ pub impl Comp {
         val giveRecv: U64 = self.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
         val mv: U64 = self.pushExpr(e: <Expr.Move operand=giveRecv isBorrow=false />)
         stmts.append(self.pushStmt(s: <Stmt.Give value=mv />))
-        val thenBlk: U64 = self.arena.blocks.count
+        val thenBlk: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         mut val elseStmts: Array[U64] = []
         val elseDict: U64 = self.synthEmptyDict(ctxRef: ctxRef)
         elseStmts.append(self.pushStmt(s: <Stmt.Give value=elseDict />))
-        val elseBlk: U64 = self.arena.blocks.count
+        val elseBlk: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=elseStmts />)
         val cond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
         return self.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)

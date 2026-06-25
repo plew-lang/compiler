@@ -9,11 +9,11 @@ pub impl Comp {
     inout fn lowerMatchArms(arms: Array[MatchArmAst], isExpr: Bool) -> Array[MatchArm] {
         mut val out: Array[MatchArm] = []
         mut val i: U64 = 0
-        while i < arms.count {
+        while i < arms.count() {
             val arm: MatchArmAst = arms[i]
             // capture arms are desugared by lowerEnumMatchCapture{Into,Expr} before reaching
             // here (the arm body binds the name), so any capture left is a desugar gap.
-            if arm.pattern.captureName.bytes().count > 0 {
+            if arm.pattern.captureName.bytes().count() > 0 {
                 compileErrorAt(line: self.lineOf(offset: arm.pattern.span.start), msg: "internal: enum-match capture binding was not desugared")
             }
             val pi: PatInfo = self.lowerPatternInfo(p: arm.pattern)
@@ -44,7 +44,7 @@ pub impl Comp {
 pub impl Comp {
 
     inout fn blockOfStmts(stmts: Array[U64]) -> U64 {
-        val id: U64 = self.arena.blocks.count
+        val id: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         return id
     }
@@ -70,9 +70,9 @@ pub impl Comp {
     // value, so binding them up front makes them visible to every arm's body.
     inout fn bindScalarCapturesInto(arms: Array[MatchArmAst], srcStart: U64, srcLen: U64, stmts: inout Array[U64]) {
         mut val i: U64 = 0
-        while i < arms.count {
+        while i < arms.count() {
             val cn: String = arms[i].pattern.captureName
-            if cn.bytes().count > 0 {
+            if cn.bytes().count() > 0 {
                 val cap: Bind = self.internBytes(s: cn)
                 val recv: U64 = self.pushExpr(e: <Expr.Ident start=srcStart len=srcLen />)
                 stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
@@ -82,19 +82,19 @@ pub impl Comp {
     }
 
     // Find the terminal `else` arm of a scalar match: the first wildcard, or (for an
-    // exhaustive Bool match) the last arm. Returns arms.count if none.
+    // exhaustive Bool match) the last arm. Returns arms.count() if none.
     inout fn scalarMatchElseIdx(arms: Array[MatchArmAst]) -> U64 {
         mut val i: U64 = 0
-        while i < arms.count {
+        while i < arms.count() {
             if arms[i].pattern.isWildcard {
                 return i
             }
             i += 1
         }
         if litArmsAreBoolExhaustive(arms: arms) {
-            return arms.count - 1U64
+            return arms.count() - 1U64
         }
-        return arms.count
+        return arms.count()
     }
 
     // Desugar a statement-position scalar (literal) match into `val __mtmp = scrut` + an
@@ -108,7 +108,7 @@ pub impl Comp {
         self.bindScalarCapturesInto(arms: arms, srcStart: tmp.nameStart, srcLen: tmp.nameLen, stmts: inout stmts)
         val elseIdx: U64 = self.scalarMatchElseIdx(arms: arms)
         mut val elseBlkId: U64 = 0
-        if elseIdx < arms.count {
+        if elseIdx < arms.count() {
             elseBlkId = self.lowerBlock(b: arms[elseIdx].body)
         } else {
             // no terminal else: a literal match can't be structurally exhaustive without a
@@ -119,7 +119,7 @@ pub impl Comp {
         }
         mut val headStmt: U64 = 0
         mut val haveHead: Bool = false
-        mut val k: U64 = arms.count
+        mut val k: U64 = arms.count()
         while k > 0 {
             k -= 1
             if k != elseIdx {
@@ -173,7 +173,7 @@ pub impl Comp {
             lhsLen = tmp.nameLen
         }
         val elseIdx: U64 = self.scalarMatchElseIdx(arms: arms)
-        val haveElse: Bool = elseIdx < arms.count
+        val haveElse: Bool = elseIdx < arms.count()
         if !(haveElse) {
             compileErrorAt(line: self.lineOf(offset: span.start), msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
         }
@@ -181,7 +181,7 @@ pub impl Comp {
         // wrapper (any value arm has the match's result type).
         mut val valueGive: ExprAst = emptyExpr()
         mut val mi: U64 = 0
-        while mi < arms.count {
+        while mi < arms.count() {
             if !(armBlockDiverges(b: arms[mi].body)) {
                 valueGive = armGiveExprAst(arm: arms[mi])
             }
@@ -199,7 +199,7 @@ pub impl Comp {
         }
         mut val headExpr: U64 = 0
         mut val haveHead: Bool = false
-        mut val k: U64 = arms.count
+        mut val k: U64 = arms.count()
         while k > 0 {
             k -= 1
             if k != elseIdx {
@@ -260,7 +260,7 @@ pub impl Comp {
     inout fn lowerCaptureArms(arms: Array[MatchArmAst], isExpr: Bool, scapStart: U64, scapLen: U64) -> Array[MatchArm] {
         mut val ma: Array[MatchArm] = []
         mut val i: U64 = 0
-        while i < arms.count {
+        while i < arms.count() {
             val arm: MatchArmAst = arms[i]
             val pi: PatInfo = self.lowerPatternInfo(p: arm.pattern)
             mut val bodyIdx: U64 = self.lowerBlock(b: arm.body)
@@ -268,14 +268,14 @@ pub impl Comp {
             if isExpr {
                 diverge = armBlockDiverges(b: arm.body)
             }
-            if arm.pattern.captureName.bytes().count > 0 {
+            if arm.pattern.captureName.bytes().count() > 0 {
                 val capN: Bind = self.internBytes(s: arm.pattern.captureName)
                 val scapId: U64 = self.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
                 val capLet: U64 = self.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
                 mut val ns: Array[U64] = []
                 ns.append(capLet)
                 mut val k: U64 = 0
-                while k < self.arena.blocks[bodyIdx].stmts.count {
+                while k < self.arena.blocks[bodyIdx].stmts.count() {
                     ns.append(self.arena.blocks[bodyIdx].stmts[k])
                     k += 1
                 }
@@ -370,7 +370,7 @@ pub impl Comp {
                     val inner: U64 = self.lowerBlock(b: body)
                     mut val bstmts: Array[U64] = []
                     mut val bi: U64 = 0
-                    while bi < binds.count {
+                    while bi < binds.count() {
                         val fldName: Bind = self.internBytes(s: binds[bi].field)
                         val nameB: Bind = self.internBytes(s: binds[bi].name)
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=fe.nameStart len=fe.nameLen />)
@@ -379,18 +379,18 @@ pub impl Comp {
                         bi += 1
                     }
                     mut val ob: U64 = 0
-                    while ob < self.arena.blocks[inner].stmts.count {
+                    while ob < self.arena.blocks[inner].stmts.count() {
                         bstmts.append(self.arena.blocks[inner].stmts[ob])
                         ob += 1
                     }
-                    val bd2: U64 = self.arena.blocks.count
+                    val bd2: U64 = self.arena.blocks.count()
                     self.arena.blocks.append(<Block stmts=bstmts />)
                     result = self.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
                     return result
                 }
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
-                if varName.bytes().count > 0 {
+                if varName.bytes().count() > 0 {
                     val vb: Bind = self.internBytes(s: varName)
                     vStart = vb.nameStart
                     vLen = vb.nameLen
@@ -410,7 +410,7 @@ pub impl Comp {
                 val bd: U64 = self.lowerBlock(b: body)
                 mut val pStart: U64 = 0
                 mut val pLen: U64 = 0
-                if patType.bytes().count > 0 {
+                if patType.bytes().count() > 0 {
                     val pb: Bind = self.internBytes(s: patType)
                     pStart = pb.nameStart
                     pLen = pb.nameLen
@@ -453,7 +453,7 @@ pub impl Comp {
         val iv: U64 = self.lowerExpr(e: init)
         stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
         mut val bi: U64 = 0
-        while bi < binds.count {
+        while bi < binds.count() {
             val fldName: Bind = self.internBytes(s: binds[bi].field)
             val nameB: Bind = self.internBytes(s: binds[bi].name)
             val recv: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
@@ -466,7 +466,7 @@ pub impl Comp {
     inout fn lowerBlock(b: BlockAst) -> U64 {
         mut val stmts: Array[U64] = []
         mut val i: U64 = 0
-        while i < b.stmts.count {
+        while i < b.stmts.count() {
             // a destructuring statement expands to several arena statements (temp + fields).
             match b.stmts[i] {
                 StmtAst.Destructure(val binds, val init, val span) => {
@@ -489,7 +489,7 @@ pub impl Comp {
             }
             i += 1
         }
-        val id: U64 = self.arena.blocks.count
+        val id: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=stmts />)
         return id
     }

@@ -7,7 +7,7 @@ pub impl LlvmCtx {
         self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: ptr, ty: ty, kind: kind, structIdx: structIdx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: 0U64)
     }
     inout fn pushLocalR(nameStart: U64, nameLen: U64, ptr: LLVMValueRef, ty: LLVMTypeRef, kind: U64, structIdx: U64, isArr: Bool, elemTy: LLVMTypeRef, elemKind: U64, typeRef: U64) {
-        if self.nLocals < self.locStart.count {
+        if self.nLocals < self.locStart.count() {
             self.locStart[self.nLocals] = nameStart
             self.locLen[self.nLocals] = nameLen
             self.locPtr[self.nLocals] = ptr
@@ -79,7 +79,7 @@ pub impl LlvmCtx {
     // Push a loop's (break, continue) target blocks (overwrite-in-place; loopDepth is
     // the live count). Break/Continue branch to the top of this stack.
     inout fn pushLoop(breakBB: LLVMBasicBlockRef, contBB: LLVMBasicBlockRef) {
-        if self.loopDepth < self.loopBreakBB.count {
+        if self.loopDepth < self.loopBreakBB.count() {
             self.loopBreakBB[self.loopDepth] = breakBB
             self.loopContBB[self.loopDepth] = contBB
         } else {
@@ -202,9 +202,9 @@ pub impl LlvmCtx {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count {
+                if sidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count {
+                    if fidx < c.arena.structs[sidx].fields.count() {
                         val ffd: FieldDef = c.arena.structs[sidx].fields[fidx]
                         // ground a type-parameter field under the BASE's instance env (a
                         // generic struct's `v: T` on `L[String]` must resolve T -> String, not
@@ -215,7 +215,7 @@ pub impl LlvmCtx {
                             val savedFA: Array[U64] = c.cur.typeArgs
                             val didSetF: Bool = self.setStructEnv(c: inout c, ref: fBaseRef)
                             mut val fg: U64 = ffd.ty
-                            if c.cur.typeParams.count > 0U64 {
+                            if c.cur.typeParams.count() > 0U64 {
                                 fg = c.groundTypeRef(ref: ffd.ty)
                             }
                             val fk: U64 = kindFromTySpan(c: inout c, tyStart: c.arena.types[fg].nameStart, tyLen: c.arena.types[fg].nameLen)
@@ -233,16 +233,16 @@ pub impl LlvmCtx {
                 // an `any P` receiver: the result kind is the requirement's return,
                 // grounded under the existential's bindings (`Out`/`Item` -> concrete).
                 val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
-                if atIdx < c.decls.traits.count {
+                if atIdx < c.decls.traits.count() {
                     val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
                     if rr != 0U64 {
                         return kindFromTySpan(c: inout c, tyStart: c.arena.types[rr].nameStart, tyLen: c.arena.types[rr].nameLen)
                     }
                 }
                 val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
-                if rsidx < c.arena.structs.count {
+                if rsidx < c.arena.structs.count() {
                     val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mfi < c.arena.funcs.count {
+                    if mfi < c.arena.funcs.count() {
                         if c.arena.funcs[mfi].hasRet {
                             // ground a type-parameter return under the receiver's instance
                             // env (a generic struct local resolves to its def here, so
@@ -260,7 +260,7 @@ pub impl LlvmCtx {
                 if rRef != 0U64 {
                     val rt: TypeRef = c.arena.types[rRef]
                     val gmfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if gmfi < c.arena.funcs.count {
+                    if gmfi < c.arena.funcs.count() {
                         if c.arena.funcs[gmfi].hasRet {
                             return self.methodReturnKind(c: inout c, recv: recv, mfi: gmfi)
                         }
@@ -274,7 +274,7 @@ pub impl LlvmCtx {
                 val primRecvK: Bind = self.primLangItemRecvName(c: inout c, recv: recv)
                 if primRecvK.nameLen != 0U64 {
                     val pmfi: U64 = c.findMethod(recvStart: primRecvK.nameStart, recvLen: primRecvK.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if pmfi < c.arena.funcs.count {
+                    if pmfi < c.arena.funcs.count() {
                         if c.arena.funcs[pmfi].hasRet {
                             return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[pmfi].retStart, tyLen: c.arena.funcs[pmfi].retLen)
                         }
@@ -283,9 +283,9 @@ pub impl LlvmCtx {
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
                 val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
-                if rsidx < c.arena.structs.count {
+                if rsidx < c.arena.structs.count() {
                     val mfi: U64 = c.findExtMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mfi < c.arena.funcs.count {
+                    if mfi < c.arena.funcs.count() {
                         if c.arena.funcs[mfi].hasRet {
                             return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[mfi].retStart, tyLen: c.arena.funcs[mfi].retLen)
                         }
@@ -302,7 +302,7 @@ pub impl LlvmCtx {
                 if cli < self.nLocals {
                     if c.isFnType(ref: self.locTypeRef[cli]) {
                         val ft: TypeRef = c.arena.types[self.locTypeRef[cli]]
-                        if ft.args.count > 0U64 {
+                        if ft.args.count() > 0U64 {
                             val rt: TypeRef = c.arena.types[ft.args[0]]
                             return kindFromTySpan(c: inout c, tyStart: rt.nameStart, tyLen: rt.nameLen)
                         }
@@ -310,7 +310,7 @@ pub impl LlvmCtx {
                 }
                 // a regular function call: the callee's return-type kind.
                 val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count {
+                if cfi < c.arena.funcs.count() {
                     if c.arena.funcs[cfi].hasRet {
                         return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
                     }
@@ -335,7 +335,7 @@ pub impl LlvmCtx {
                 // method call genLlvmIndex emits, so a String/Bool value isn't defaulted to
                 // int (which would miscompile the {ptr,i64} at the use site).
                 val ibsi: U64 = self.exprStructIdx(c: inout c, id: base)
-                if ibsi < c.arena.structs.count {
+                if ibsi < c.arena.structs.count() {
                     if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
                         val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
                         return self.valueKind(c: inout c, id: m)

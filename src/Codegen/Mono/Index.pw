@@ -1,65 +1,65 @@
 // Part of monomorphization (root: _.pw): generic struct / enum index lookup.
 
 // Index in c.arena.structs of a generic struct named (nameStart,nameLen), or
-// c.arena.structs.count if there is no such generic struct.
+// c.arena.structs.count() if there is no such generic struct.
 
 pub impl Comp {
     inout fn genericStructIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.structs.count {
+        while i < self.arena.structs.count() {
             val s: StructDef = self.arena.structs[i]
-            if s.typeParams.count > 0 {
+            if s.typeParams.count() > 0 {
                 if s.nameId == qId {
                     return i
                 }
             }
             i += 1
         }
-        return self.arena.structs.count
+        return self.arena.structs.count()
     }
 
     // Index in c.arena.structs of ANY struct named (nameStart,nameLen) — generic OR
-    // not — or c.arena.structs.count. Unlike genericStructIndex this does NOT filter on
+    // not — or c.arena.structs.count(). Unlike genericStructIndex this does NOT filter on
     // typeParams>0, so the arity check can catch a 0-param struct used with type
     // arguments (`struct Bar` then `Bar[I32]`), which the generic-only lookup misses.
     inout fn anyStructIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.structs.count {
+        while i < self.arena.structs.count() {
             if self.arena.structs[i].nameId == qId {
                 return i
             }
             i += 1
         }
-        return self.arena.structs.count
+        return self.arena.structs.count()
     }
 
     // Index in c.arena.enums of ANY enum named (nameStart,nameLen) — generic or not.
     inout fn anyEnumIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.enums.count {
+        while i < self.arena.enums.count() {
             if self.arena.enums[i].nameId == qId {
                 return i
             }
             i += 1
         }
-        return self.arena.enums.count
+        return self.arena.enums.count()
     }
 
     inout fn genericEnumIndex(nameStart: U64, nameLen: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < self.arena.enums.count {
+        while i < self.arena.enums.count() {
             val e: EnumDef = self.arena.enums[i]
-            if e.typeParams.count > 0 {
+            if e.typeParams.count() > 0 {
                 if e.nameId == qId {
                     return i
                 }
             }
             i += 1
         }
-        return self.arena.enums.count
+        return self.arena.enums.count()
     }
 }

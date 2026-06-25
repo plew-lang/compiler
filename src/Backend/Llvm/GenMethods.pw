@@ -8,12 +8,12 @@
 // (method func idx, receiver instance ref). Restricted to entry-module,
 // non-provided methods (std combinators / provided Iterator methods are deferred).
 
-// The st.genMeth* slot for (mfi, instRef), or st.genMethK.count if not registered.
+// The st.genMeth* slot for (mfi, instRef), or st.genMethK.count() if not registered.
 
 pub impl LlvmCtx {
     inout fn genMethSlotFor(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
         mut val i: U64 = 0
-        while i < self.genMethK.count {
+        while i < self.genMethK.count() {
             if self.genMethK[i] == mfi {
                 if c.typeRefEq(a: self.genMethInst[i], b: instRef) {
                     // a method-own-param terminal (`fold[B]`) is keyed by its own args too,
@@ -26,25 +26,25 @@ pub impl LlvmCtx {
             }
             i += 1
         }
-        return self.genMethK.count
+        return self.genMethK.count()
     }
 
     // Declare an LLVM function for each (generic instance, matching method): self + the
     // method's params, return type — all under the receiver's substitution env.
     inout fn declareGenMethods(c: inout Comp) {
         mut val gi: U64 = 0
-        while gi < c.monoWork.genInsts.count {
+        while gi < c.monoWork.genInsts.count() {
             val instRef: U64 = c.monoWork.genInsts[gi]
             val gt: TypeRef = c.arena.types[instRef]
             // Array instances keep their methods on the array-special path; skip here.
             if !(rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array")) {
                 mut val mfi: U64 = 0
-                while mfi < c.arena.funcs.count {
+                while mfi < c.arena.funcs.count() {
                     val mf: Func = c.arena.funcs[mfi]
                     if c.methodMatchesInst(f: mf, instRef: instRef) {
                         if !(mf.isProvided) {
                             if c.methodInEntryModule(f: mf) {
-                                if self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: []) == self.genMethK.count {
+                                if self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: []) == self.genMethK.count() {
                                     self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: [])
                                 }
                             }
@@ -83,11 +83,11 @@ pub impl LlvmCtx {
             ptys.append(self.llvmTypeOfRef(c: inout c, ref: instRef))
         }
         mut val pi: U64 = 0
-        while pi < mf.params.count {
+        while pi < mf.params.count() {
             ptys.append(self.paramLlvmTy(c: inout c, p: mf.params[pi]))
             pi += 1
         }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: mf), arrayCPtr(ptys), ptys.count, 0I32)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: mf), arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "gm".bytes())
         appendU64Dec(into: inout nm, n: mfi)
@@ -141,7 +141,7 @@ pub impl LlvmCtx {
     // Emit each eagerly-declared generic-method instance body under its receiver's env.
     inout fn emitGenMethods(c: inout Comp) {
         mut val slot: U64 = 0
-        while slot < self.genMethK.count {
+        while slot < self.genMethK.count() {
             self.emitOneGenMethod(c: inout c, slot: slot)
             slot += 1
         }
@@ -149,23 +149,23 @@ pub impl LlvmCtx {
 
     // Declare a generic-method instance on demand — a std / non-entry-module generic
     // method (Optional.unwrapOr, MapIter.next) reached by a call — and queue its body
-    // for the post-pass drain. Returns the genMeth* slot, or genMethK.count if it
+    // for the post-pass drain. Returns the genMeth* slot, or genMethK.count() if it
     // can't be declared (the method has its own type params beyond the receiver
     // instance's — provided map[B]/filter is handled separately). Idempotent.
     inout fn ensureGenMethodDeclared(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
         val existing: U64 = self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
-        if existing < self.genMethK.count {
+        if existing < self.genMethK.count() {
             return existing
         }
         // the method's type params must pair 1:1 with the instance's args plus the
         // method-own args inferred at the call (`fold[B]`: receiver [I,F,B] + own [B]).
         // A still-mismatched count means own params we couldn't infer — leave undeclared.
         val mf: Func = c.arena.funcs[mfi]
-        if mf.typeParams.count != c.arena.types[instRef].args.count + ownArgs.count {
-            return self.genMethK.count
+        if mf.typeParams.count() != c.arena.types[instRef].args.count() + ownArgs.count() {
+            return self.genMethK.count()
         }
         self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
-        val slot: U64 = self.genMethK.count - 1U64
+        val slot: U64 = self.genMethK.count() - 1U64
         self.genMethEmit.append(slot)
         return slot
     }
@@ -211,10 +211,10 @@ pub impl LlvmCtx {
         // verbatim, so its viewExtId survives grounding.
         if pRef == 0U64 {
             if p.ty != 0U64 {
-                if c.cur.typeParams.count > 0U64 {
+                if c.cur.typeParams.count() > 0U64 {
                     val pgv: U64 = c.groundTypeRef(ref: p.ty)
                     if pgv != p.ty {
-                        if pgv < c.arena.types.count {
+                        if pgv < c.arena.types.count() {
                             if c.arena.types[pgv].viewExtId != 0U64 {
                                 pRef = pgv
                             }
@@ -235,7 +235,7 @@ pub impl LlvmCtx {
             pElem = pty
             // an `Array[any P]` param: its element is the existential fat pointer.
             if p.ty != 0U64 {
-                if c.arena.types[p.ty].args.count > 0U64 {
+                if c.arena.types[p.ty].args.count() > 0U64 {
                     if refIsAny(c: inout c, ref: c.arena.types[p.ty].args[0]) {
                         pElem = self.anyTy
                     }
@@ -247,7 +247,7 @@ pub impl LlvmCtx {
                 pty = self.llvmTypeOfRef(c: inout c, ref: p.ty)
                 pRef = p.ty
                 val pgs: U64 = self.genStructSlot(c: inout c, ref: p.ty)
-                if pgs < self.genStructRefs.count {
+                if pgs < self.genStructRefs.count() {
                     pSidx = self.genStructDefs[pgs]
                 }
             }
@@ -262,7 +262,7 @@ pub impl LlvmCtx {
             }
             if pRef == 0U64 {
                 // grounded span so a `Self` param on an enum receiver tracks the enum.
-                if self.enumRegSlot(c: inout c, start: pgStart, len: pgLen) < self.enumIdxs.count {
+                if self.enumRegSlot(c: inout c, start: pgStart, len: pgLen) < self.enumIdxs.count() {
                     pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
                 }
             }
@@ -278,7 +278,7 @@ pub impl LlvmCtx {
                 mut val gs2: U64 = p.tyStart
                 mut val gl2: U64 = p.tyLen
                 if p.ty != 0U64 {
-                    if c.cur.typeParams.count > 0U64 {
+                    if c.cur.typeParams.count() > 0U64 {
                         val pg2: U64 = c.groundTypeRef(ref: p.ty)
                         gs2 = c.arena.types[pg2].nameStart
                         gl2 = c.arena.types[pg2].nameLen
@@ -291,7 +291,7 @@ pub impl LlvmCtx {
                     pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                 }
                 if pRef == 0U64 {
-                    if self.enumRegSlot(c: inout c, start: gs2, len: gl2) < self.enumIdxs.count {
+                    if self.enumRegSlot(c: inout c, start: gs2, len: gl2) < self.enumIdxs.count() {
                         pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                     }
                 }
@@ -303,7 +303,7 @@ pub impl LlvmCtx {
         mut val pKindStart: U64 = pgStart
         mut val pKindLen: U64 = pgLen
         if p.ty != 0U64 {
-            if c.cur.typeParams.count > 0U64 {
+            if c.cur.typeParams.count() > 0U64 {
                 val pg: U64 = c.groundTypeRef(ref: p.ty)
                 pKindStart = c.arena.types[pg].nameStart
                 pKindLen = c.arena.types[pg].nameLen
@@ -322,13 +322,21 @@ pub impl LlvmCtx {
         // left this unset, breaking field access on a struct-array param's element).
         if p.tyIsArray {
             val esi: U64 = self.localStructIdxFor(c: inout c, start: p.tyStart, len: p.tyLen)
-            if esi < c.arena.structs.count {
+            if esi < c.arena.structs.count() {
                 self.setLocalElemStruct(esi: esi)
             }
-            // element TypeRef (a Ref / nested-array / generic element): Array[E]'s first arg.
+            // element TypeRef (a Ref / nested-array / generic element): Array[E]'s first arg,
+            // GROUNDED under the active instantiation env so a generic element `Array[E]` in
+            // `impl[E]` records the concrete element (`I64` for `Box[I64].from`), not the bare
+            // param `E` — else a `.count()`/index over the param can't synthesize its Array
+            // receiver (the element ref must be a concrete type). Mirrors pKind's grounding.
             if p.ty != 0U64 {
-                val at: TypeRef = c.arena.types[p.ty]
-                if at.args.count > 0U64 {
+                mut val gpty: U64 = p.ty
+                if c.cur.typeParams.count() > 0U64 {
+                    gpty = c.groundTypeRef(ref: p.ty)
+                }
+                val at: TypeRef = c.arena.types[gpty]
+                if at.args.count() > 0U64 {
                     self.setLocalElemTypeRef(ref: at.args[0])
                 }
             }

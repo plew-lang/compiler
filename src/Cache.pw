@@ -11,7 +11,7 @@ import ./Toml with { appendBytes }
 
 // Trim trailing spaces / CR / LF from a byte buffer.
 export fn trimEnd(b: Array[U8]) -> Array[U8] {
-    mut val n: U64 = b.count
+    mut val n: U64 = b.count()
     mut val go: Bool = true
     while go {
         if n > 0 {
@@ -57,7 +57,7 @@ export fn cacheRoot() -> Array[U8] {
 export fn sanitizeUrl(url: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     mut val i: U64 = 0
-    while i < url.count {
+    while i < url.count() {
         val c: U8 = url[i]
         mut val ok: Bool = false
         if c >= 65U8 {

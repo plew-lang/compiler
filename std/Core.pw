@@ -676,7 +676,7 @@ pub impl[T] Buffer[T] {
     inout fn clear() {
         bufferClear(buffer: inout self)
     }
-    // Drop the suffix `[count, self.count)` when `count < self.count` (else a no-op).
+    // Drop the suffix `[count, self.count())` when `count < self.count()` (else a no-op).
     inout fn truncate(count: U64) {
         bufferTruncate(buffer: inout self, count: count)
     }
@@ -757,7 +757,7 @@ pub impl String {
     }
     // Is the string empty (zero bytes)?
     fn isEmpty() -> Bool {
-        return self.bytes().count == 0
+        return self.bytes().count() == 0
     }
 }
 
@@ -821,7 +821,7 @@ pub impl I64 as Format {
         if neg {
             out.append(45)
         }
-        mut val i: U64 = digits.count
+        mut val i: U64 = digits.count()
         while i > 0 {
             i = i - 1
             out.append(digits[i])
@@ -843,7 +843,7 @@ pub impl U64 as Format {
             n = n / 10
         }
         mut val out: Array[U8] = []
-        mut val i: U64 = digits.count
+        mut val i: U64 = digits.count()
         while i > 0 {
             i = i - 1
             out.append(digits[i])
@@ -910,7 +910,7 @@ pub impl String as Add[String] {
         mut val out: Array[U8] = lhs.bytes()
         val rb: Array[U8] = rhs.bytes()
         mut val i: U64 = 0
-        while i < rb.count {
+        while i < rb.count() {
             out.append(rb[i])
             i = i + 1U64
         }
@@ -1236,9 +1236,9 @@ fn utf8IsCont(b: U8) -> Bool {
 
 // The byte offset of the first ill-formed byte in `bytes` under the Unicode
 // well-formed-UTF-8 table (rejects overlong forms, surrogates U+D800..U+DFFF, and
-// code points > U+10FFFF), or `bytes.count` when the whole sequence is valid.
+// code points > U+10FFFF), or `bytes.count()` when the whole sequence is valid.
 fn utf8FirstInvalid(bytes: Array[U8]) -> U64 {
-    val n: U64 = bytes.count
+    val n: U64 = bytes.count()
     mut val i: U64 = 0
     while i < n {
         val b0: U8 = bytes[i]
@@ -1296,7 +1296,7 @@ pub impl String as TryFrom[Array[U8]] {
     type Error = Utf8Error
     result[Utf8Error] factory checked(source: Array[U8]) {
         val bad: U64 = utf8FirstInvalid(bytes: source)
-        if bad == source.count {
+        if bad == source.count() {
             return <Result[String, Utf8Error].Ok value=stringFromBytesUnchecked(source) />
         }
         return <Result[String, Utf8Error].Err error=<Utf8Error index=bad /> />
@@ -1318,7 +1318,7 @@ pub impl I64 as TryFrom[String] {
     type Error = ParseError
     result[ParseError] factory checked(source: String) {
         val bs: Array[U8] = source.bytes()
-        if bs.count == 0U64 {
+        if bs.count() == 0U64 {
             return <Result[I64, ParseError].Err error=<ParseError input=source /> />
         }
         mut val i: U64 = 0
@@ -1331,11 +1331,11 @@ pub impl I64 as TryFrom[String] {
                 i = 1U64
             }
         }
-        if i >= bs.count {
+        if i >= bs.count() {
             return <Result[I64, ParseError].Err error=<ParseError input=source /> />
         }
         mut val acc: I64 = 0I64
-        while i < bs.count {
+        while i < bs.count() {
             val b: U8 = bs[i]
             if b < 48U8 {
                 return <Result[I64, ParseError].Err error=<ParseError input=source /> />

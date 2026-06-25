@@ -146,15 +146,15 @@ struct LlvmCtx {
     // unsigned int), so String ==/!= and print pick the right lowering without
     // c.cur.locals (which the LLVM backend doesn't populate, so typeOf can't see locals).
     pub mut val locKind: Array[U64]
-    // per-local owning struct index (c.arena.structs.count = not a struct), so field
+    // per-local owning struct index (c.arena.structs.count() = not a struct), so field
     // access x.field can resolve the layout from a struct-typed local.
     pub mut val locStructIdx: Array[U64]
-    // per-local array element type + is-array flag (for arr[i] / .append / .count).
+    // per-local array element type + is-array flag (for arr[i] / .append / .count()).
     pub mut val locIsArr: Array[Bool]
     pub mut val locElemTy: Array[LLVMTypeRef]
     pub mut val locElemKind: Array[U64]
     pub mut val locTypeRef: Array[U64]
-    // per-array-local element struct index (c.arena.structs.count = element is not a
+    // per-array-local element struct index (c.arena.structs.count() = element is not a
     // struct), so `arr[i].field` on an array-of-struct LOCAL resolves the element.
     pub mut val locElemStructIdx: Array[U64]
     // per-array-local element TypeRef (0 = none), so `arr[i]` recovers the element's
@@ -345,7 +345,7 @@ extern(c) {
     fn LLVMArrayType2(elemTy~: LLVMTypeRef, count~: U64) -> LLVMTypeRef
     fn LLVMBuildStructGEP2(b~: LLVMBuilderRef, ty~: LLVMTypeRef, ptr~: LLVMValueRef, idx~: U64, name~: CPtr[U8]) -> LLVMValueRef
     // count is the C API's `unsigned`; declared U64 here because Plew has no
-    // narrowing `as` yet (an Array.count is U64). Safe on LP64 (arm64/x86-64):
+    // narrowing `as` yet (an Array.count() is U64). Safe on LP64 (arm64/x86-64):
     // the callee reads the low 32 bits, and our counts are tiny. Revisit once
     // integer narrowing (wrapping / TryFrom) lands.
     fn LLVMFunctionType(ret~: LLVMTypeRef, params~: CPtr[LLVMTypeRef], count~: U64, isVarArg~: I32) -> LLVMTypeRef
@@ -434,11 +434,11 @@ part ./Backend/Llvm
 // ---- relocated free helpers (were in parts; kept at module root so parts are impl-only) ----
 
 fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
-    if a.count != b.count {
+    if a.count() != b.count() {
         return false
     }
     mut val i: U64 = 0
-    while i < a.count {
+    while i < a.count() {
         if a[i].nameId != b[i].nameId {
             return false
         }
@@ -448,12 +448,12 @@ fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
 }
 
 // The witness method on concrete struct `sidx` for trait requirement `req` (matched
-// by name + param labels). c.arena.funcs.count if none.
+// by name + param labels). c.arena.funcs.count() if none.
 fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
     val sd: StructDef = c.arena.structs[sidx]
     val recvId: U64 = intern(c: inout c, start: sd.nameStart, len: sd.nameLen)
     mut val i: U64 = 0
-    while i < c.arena.funcs.count {
+    while i < c.arena.funcs.count() {
         val f: Func = c.arena.funcs[i]
         if f.hasRecv && f.extId == 0U64 && !f.isAssoc {
             if f.nameId == req.nameId && f.recvId == recvId {
@@ -464,7 +464,7 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
         }
         i += 1
     }
-    return c.arena.funcs.count
+    return c.arena.funcs.count()
 }
 
 // Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
@@ -472,7 +472,7 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
 // share a concrete type, so a `Self` argument cannot be supplied).
 fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
     mut val i: U64 = 0
-    while i < req.params.count {
+    while i < req.params.count() {
         if rangeEquals(bytes: c.arena.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
             return true
         }
@@ -509,7 +509,7 @@ fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, arg
     val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
     val t: TraitDef = c.decls.traits[traitIdx]
     mut val ri: U64 = 0
-    while ri < t.reqs.count {
+    while ri < t.reqs.count() {
         if t.reqs[ri].nameId == qNameId {
             if c.paramsLabelsOk(params: t.reqs[ri].params, args: args) {
                 return ri + 1U64
@@ -675,11 +675,11 @@ fn llvmIntUge() -> U32 { return 35U32 }
 // Whether two parameter lists have the same type-name heads (ignoring views) —
 // i.e. they are the same overload signature differing only by a `#Ext` view.
 fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
-    if a.count != b.count {
+    if a.count() != b.count() {
         return false
     }
     mut val i: U64 = 0
-    while i < a.count {
+    while i < a.count() {
         if a[i].tyNameId != b[i].tyNameId {
             return false
         }
@@ -698,18 +698,18 @@ fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
 // call (inferFnArgs) and return the entries beyond the receiver's arg count.
 fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: Array[Arg]) -> Array[U64] {
     val mf: Func = c.arena.funcs[mfi]
-    val rcount: U64 = c.arena.types[instRef].args.count
-    if mf.typeParams.count <= rcount {
+    val rcount: U64 = c.arena.types[instRef].args.count()
+    if mf.typeParams.count() <= rcount {
         return []
     }
     val inferred: Array[U64] = c.inferFnArgs(f: mf, args: args)
     mut val out: Array[U64] = []
     mut val i: U64 = rcount
-    while i < inferred.count {
+    while i < inferred.count() {
         // a failed inference (0) or out-of-range ref would seed the env with the index-0
         // dummy type and crash emission; bail to an empty list so the caller leaves the
         // method undeclared and reports the honest "not emittable yet" instead.
-        if inferred[i] == 0U64 || inferred[i] >= c.arena.types.count {
+        if inferred[i] == 0U64 || inferred[i] >= c.arena.types.count() {
             return []
         }
         // only a primitive (int / float) own argument is supported for now: a scalar
@@ -739,7 +739,7 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
     if c.isPrimType(start: start, len: len) {
         return true
     }
-    if c.structIndexByName(start: start, len: len) < c.arena.structs.count {
+    if c.structIndexByName(start: start, len: len) < c.arena.structs.count() {
         return true
     }
     if c.isEnumName(start: start, len: len) {
@@ -747,7 +747,7 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
     }
     val qid: U64 = intern(c: inout c, start: start, len: len)
     mut val nti: U64 = 0
-    while nti < c.arena.newtypes.count {
+    while nti < c.arena.newtypes.count() {
         if c.arena.newtypes[nti].nameId == qid {
             return true
         }
@@ -759,7 +759,7 @@ fn tyNameConcrete(c: inout Comp, start: U64, len: U64) -> Bool {
 fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
     mut val out: Array[CaptureEntry] = []
     mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
+    while i < c.monoWork.captures.count() {
         if c.monoWork.captures[i].closureId == cloId {
             out.append(c.monoWork.captures[i])
         }
@@ -773,7 +773,7 @@ fn closureCaptures(c: inout Comp, cloId: U64) -> Array[CaptureEntry] {
 // outlives the declaring scope (Swift-style reference capture).
 fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
+    while i < c.monoWork.captures.count() {
         if c.monoWork.captures[i].boxed {
             if spansEqual(c: inout c, aStart: c.monoWork.captures[i].nameStart, aLen: c.monoWork.captures[i].nameLen, bStart: start, bLen: len) {
                 return true
@@ -789,7 +789,7 @@ fn localIsBoxedCapture(c: inout Comp, start: U64, len: U64) -> Bool {
 // literal rejects loudly (a clean unsupported, not a miscompile).
 fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
     mut val i: U64 = 0
-    while i < c.monoWork.captures.count {
+    while i < c.monoWork.captures.count() {
         if c.monoWork.captures[i].closureId == cloId {
             // a boxed (mut) capture is supported for a scalar/Bool cell; a boxed
             // array/struct/generic-instance cell isn't modeled yet.
@@ -856,7 +856,7 @@ export fn emitLlvm(c: inout Comp) {
         curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopDepth=0 />
 
     // a "self" byte span (appended past the source) to bind method receivers.
-    st.selfStart = c.arena.bytes.count
+    st.selfStart = c.arena.bytes.count()
     c.appendSrc(from: "self".bytes())
     st.selfLen = 4U64
 
@@ -902,7 +902,7 @@ export fn emitLlvm(c: inout Comp) {
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
     mut val foundMain: Bool = false
-    while fi < c.arena.funcs.count {
+    while fi < c.arena.funcs.count() {
         // gen mode (spec/16): the program is the synthesized harness main at
         // `genMainIdx`; the user's own `main` is dead (it calls macro-generated
         // functions that don't exist in this build), so it is neither the entry
@@ -949,16 +949,16 @@ export fn emitLlvm(c: inout Comp) {
     mut val genmDone: U64 = 0
     mut val draining: Bool = true
     while draining {
-        while provDone < st.provEmit.count {
+        while provDone < st.provEmit.count() {
             st.genLlvmFuncBody(c: inout c, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])])
             provDone += 1
         }
-        while genmDone < st.genMethEmit.count {
+        while genmDone < st.genMethEmit.count() {
             st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone])
             genmDone += 1
         }
-        if provDone >= st.provEmit.count {
-            if genmDone >= st.genMethEmit.count {
+        if provDone >= st.provEmit.count() {
+            if genmDone >= st.genMethEmit.count() {
                 draining = false
             }
         }
@@ -1014,11 +1014,11 @@ fn bufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
         return 0U64
     }
     mut val g: U64 = f.ty
-    if c.cur.typeParams.count > 0U64 {
+    if c.cur.typeParams.count() > 0U64 {
         g = c.groundTypeRef(ref: f.ty)
     }
     val t: TypeRef = c.arena.types[g]
-    if t.args.count > 0U64 {
+    if t.args.count() > 0U64 {
         return t.args[0]
     }
     return 0U64
@@ -1040,18 +1040,18 @@ fn arrayFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
     if f.tyIsArray {
         if f.ty != 0U64 {
             val t: TypeRef = c.arena.types[f.ty]
-            if t.args.count > 0U64 {
+            if t.args.count() > 0U64 {
                 return t.args[0]
             }
         }
         return 0U64
     }
     if f.ty != 0U64 {
-        if c.cur.typeParams.count > 0U64 {
+        if c.cur.typeParams.count() > 0U64 {
             val g: U64 = c.groundTypeRef(ref: f.ty)
             val gt: TypeRef = c.arena.types[g]
             if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
-                if gt.args.count > 0U64 {
+                if gt.args.count() > 0U64 {
                     return gt.args[0]
                 }
             }
@@ -1100,7 +1100,7 @@ fn exprFormName2(c: inout Comp, id: U64) -> String {
 }
 
 fn refIsAny(c: inout Comp, ref: U64) -> Bool {
-    if ref < c.arena.types.count {
+    if ref < c.arena.types.count() {
         return c.arena.types[ref].isAny
     }
     return false
@@ -1131,9 +1131,9 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
     // positional binding refs (argLabels entry 0), in source order.
     mut val positional: Array[U64] = []
     mut val ai: U64 = 0
-    while ai < ar.args.count {
+    while ai < ar.args.count() {
         mut val lbl: U64 = 0
-        if ai < ar.argLabels.count {
+        if ai < ar.argLabels.count() {
             lbl = ar.argLabels[ai]
         }
         if lbl == 0U64 {
@@ -1144,13 +1144,13 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
     mut val posIdx: U64 = 0
     // type parameters: a named binding wins, else the next positional.
     mut val tpi: U64 = 0
-    while tpi < t.typeParams.count {
+    while tpi < t.typeParams.count() {
         val tp: Bind = t.typeParams[tpi]
         mut val ref: U64 = 0
         mut val found: Bool = false
         mut val bi: U64 = 0
-        while bi < ar.args.count {
-            if bi < ar.argLabels.count {
+        while bi < ar.args.count() {
+            if bi < ar.argLabels.count() {
                 if ar.argLabels[bi] == tp.nameId && tp.nameId != 0U64 {
                     ref = ar.args[bi]
                     found = true
@@ -1159,7 +1159,7 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
             bi += 1
         }
         if !(found) {
-            if posIdx < positional.count {
+            if posIdx < positional.count() {
                 ref = positional[posIdx]
                 posIdx += 1
                 found = true
@@ -1174,13 +1174,13 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
     }
     // associated types: named binding only.
     mut val asi: U64 = 0
-    while asi < t.assocTypes.count {
+    while asi < t.assocTypes.count() {
         val at: Bind = t.assocTypes[asi]
         mut val ref2: U64 = 0
         mut val found2: Bool = false
         mut val bj: U64 = 0
-        while bj < ar.args.count {
-            if bj < ar.argLabels.count {
+        while bj < ar.args.count() {
+            if bj < ar.argLabels.count() {
                 if ar.argLabels[bj] == at.nameId && at.nameId != 0U64 {
                     ref2 = ar.args[bj]
                     found2 = true
@@ -1204,9 +1204,9 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
 fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
     mut val k: U64 = 0
     mut val i: U64 = 0
-    while i < args.count {
+    while i < args.count() {
         mut val nid: U64 = 0
-        if args[i] < c.arena.types.count {
+        if args[i] < c.arena.types.count() {
             nid = c.arena.types[args[i]].nameId
         }
         k = k * 1000003U64 + nid + 1U64
@@ -1266,17 +1266,17 @@ fn isUnsignedName(c: inout Comp, start: U64, len: U64) -> Bool {
     return false
 }
 
-// The declared index of field (start,len) in struct sidx, or sd.fields.count.
+// The declared index of field (start,len) in struct sidx, or sd.fields.count().
 fn structFieldIndex(c: inout Comp, sidx: U64, start: U64, len: U64) -> U64 {
     val sd: StructDef = c.arena.structs[sidx]
     mut val i: U64 = 0
-    while i < sd.fields.count {
+    while i < sd.fields.count() {
         if spansEqual(c: inout c, aStart: sd.fields[i].nameStart, aLen: sd.fields[i].nameLen, bStart: start, bLen: len) {
             return i
         }
         i += 1
     }
-    return sd.fields.count
+    return sd.fields.count()
 }
 
 // If field `fld` is a (non-array) generic-instance type by value, its grounded
@@ -1291,7 +1291,7 @@ fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
         return 0U64
     }
     mut val g: U64 = fld.ty
-    if c.cur.typeParams.count > 0U64 {
+    if c.cur.typeParams.count() > 0U64 {
         g = c.groundTypeRef(ref: fld.ty)
     }
     if c.isGenericInst(ref: g) {
@@ -1312,28 +1312,28 @@ fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
 fn concatParams(add: Array[Bind], base: Array[Bind]) -> Array[Bind] {
     mut val r: Array[Bind] = []
     mut val i: U64 = 0
-    while i < add.count { r.append(add[i])  i += 1 }
+    while i < add.count() { r.append(add[i])  i += 1 }
     mut val j: U64 = 0
-    while j < base.count { r.append(base[j])  j += 1 }
+    while j < base.count() { r.append(base[j])  j += 1 }
     return r
 }
 
 fn concatArgs(add: Array[U64], base: Array[U64]) -> Array[U64] {
     mut val r: Array[U64] = []
     mut val i: U64 = 0
-    while i < add.count { r.append(add[i])  i += 1 }
+    while i < add.count() { r.append(add[i])  i += 1 }
     mut val j: U64 = 0
-    while j < base.count { r.append(base[j])  j += 1 }
+    while j < base.count() { r.append(base[j])  j += 1 }
     return r
 }
 
 // Element-wise structural equality of two type-argument lists.
 fn typeArgsEq(c: inout Comp, a: Array[U64], b: Array[U64]) -> Bool {
-    if a.count != b.count {
+    if a.count() != b.count() {
         return false
     }
     mut val i: U64 = 0
-    while i < a.count {
+    while i < a.count() {
         if !(c.typeRefEq(a: a[i], b: b[i])) {
             return false
         }
@@ -1382,7 +1382,7 @@ fn appendU64Le(into: inout Array[LLVMValueRef], n: U64, i8ty: LLVMTypeRef) {
 // Find the registered generic-fn instance slot for (fnIdx, args), or count.
 fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) -> U64 {
     mut val slot: U64 = 0
-    while slot < st.genFnK.count {
+    while slot < st.genFnK.count() {
         val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
         if fin.fnIdx == fnIdx {
             if typeArgsEq(c: inout c, a: fin.args, b: args) {
@@ -1391,7 +1391,7 @@ fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) 
         }
         slot += 1
     }
-    return st.genFnK.count
+    return st.genFnK.count()
 }
 
 fn wOvf(p: String, ct: String, name: String, bi: String) {
@@ -1705,8 +1705,8 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
 fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
     val ed: EnumDef = c.arena.enums[eid]
     mut val i: U64 = 0
-    while i < ed.variants.count {
-        if ed.variants[i].fields.count > 0U64 {
+    while i < ed.variants.count() {
+        if ed.variants[i].fields.count() > 0U64 {
             return false
         }
         i += 1
@@ -1722,12 +1722,12 @@ fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
 // modeled. Value types cannot be cyclic by value, so the recursion terminates.
 fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
     val sd: StructDef = c.arena.structs[sidx]
-    if sd.typeParams.count > 0 { return false }
+    if sd.typeParams.count() > 0 { return false }
     if sd.isExtern { return false }
     // unique structs are now registerable (same field layout); their deinit runs at
     // scope-exit drop (emitted via the synthetic `deinit` method).
     mut val i: U64 = 0
-    while i < sd.fields.count {
+    while i < sd.fields.count() {
         val f: FieldDef = sd.fields[i]
         // a boxed (recursive) field is a heap pointer regardless of its pointee
         // type — always representable, and it breaks the recursion cycle (we don't
@@ -1748,13 +1748,13 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
                 // registration order doesn't matter; non-boxed value cycles are a
                 // front-end error, so the mutual recursion terminates).
                 val feid: U64 = c.enumIdxByName(start: f.tyStart, len: f.tyLen)
-                if feid < c.arena.enums.count {
+                if feid < c.arena.enums.count() {
                     if !(enumRepresentable(c: inout c, eid: feid)) {
                         return false
                     }
                 } else {
                     val fsi: U64 = c.structIndexByName(start: f.tyStart, len: f.tyLen)
-                    if fsi < c.arena.structs.count {
+                    if fsi < c.arena.structs.count() {
                         // an extern struct field is a primitive lang-item (ok); a real
                         // nested struct must itself be registerable (recursively).
                         if !(c.arena.structs[fsi].isExtern) {
@@ -1779,12 +1779,12 @@ fn structRegisterable(c: inout Comp, sidx: U64) -> Bool {
 // mutual recursion with structRegisterable terminates.
 fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
     val e: EnumDef = c.arena.enums[eid]
-    if e.typeParams.count > 0 { return false }
+    if e.typeParams.count() > 0 { return false }
     mut val vi: U64 = 0
-    while vi < e.variants.count {
+    while vi < e.variants.count() {
         val fs: Array[FieldDef] = e.variants[vi].fields
         mut val fj: U64 = 0
-        while fj < fs.count {
+        while fj < fs.count() {
             if c.fieldIsBoxed(f: fs[fj]) {
                 fj += 1
             } else {
@@ -1796,13 +1796,13 @@ fn enumRepresentable(c: inout Comp, eid: U64) -> Bool {
                     fj += 1
                 } else {
                     val peid: U64 = c.enumIdxByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
-                    if peid < c.arena.enums.count {
+                    if peid < c.arena.enums.count() {
                         if !(enumRepresentable(c: inout c, eid: peid)) {
                             return false
                         }
                     } else {
                         val si: U64 = c.structIndexByName(start: fs[fj].tyStart, len: fs[fj].tyLen)
-                        if si < c.arena.structs.count {
+                        if si < c.arena.structs.count() {
                             if !(c.arena.structs[si].isExtern) {
                                 if !(structRegisterable(c: inout c, sidx: si)) {
                                     return false

@@ -14,11 +14,11 @@
 pub impl Comp {
     inout fn appendTraitAssocTypes(scope: inout Array[Bind], nameId: U64) {
         mut val ti: U64 = 0
-        while ti < self.decls.traits.count {
+        while ti < self.decls.traits.count() {
             val td: TraitDef = self.decls.traits[ti]
             if td.nameId == nameId {
                 mut val ai: U64 = 0
-                while ai < td.assocTypes.count {
+                while ai < td.assocTypes.count() {
                     scope.append(td.assocTypes[ai])
                     ai += 1
                 }
@@ -32,13 +32,13 @@ pub impl Comp {
         // typeParams = impl's `[T]` (in scope for every member) ++ the method's own.
         mut val typeParams: Array[Bind] = []
         mut val ipi: U64 = 0
-        while ipi < implParamBinds.count {
+        while ipi < implParamBinds.count() {
             typeParams.append(implParamBinds[ipi])
             ipi += 1
         }
         val ownParams: Array[Bind] = self.lowerTypeParamNames(names: m.typeParams)
         mut val opi: U64 = 0
-        while opi < ownParams.count {
+        while opi < ownParams.count() {
             typeParams.append(ownParams[opi])
             opi += 1
         }
@@ -51,7 +51,7 @@ pub impl Comp {
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val skipScope: Array[Bind] = savedTP
         mut val ski: U64 = 0
-        while ski < ownParams.count {
+        while ski < ownParams.count() {
             skipScope.append(ownParams[ski])
             ski += 1
         }
@@ -118,15 +118,15 @@ pub impl Comp {
         self.cur.lowerRetTy = retRef
         val body: U64 = self.lowerBlock(b: m.body)
         self.cur.lowerRetTy = savedRet
-        val fnIdx: U64 = self.arena.funcs.count
+        val fnIdx: U64 = self.arena.funcs.count()
         // an extension method (spec/09) is tagged with its extension's name id so it is
         // excluded from bare resolution (reachable only via `value#Ext.m()`).
         mut val extId: U64 = 0
-        if im.extName.bytes().count > 0 {
+        if im.extName.bytes().count() > 0 {
             val extN: Bind = self.internBytes(s: im.extName)
             extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
         }
-        self.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count />)
+        self.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() />)
         self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
         self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
         self.cur.typeParams = savedTP
@@ -142,7 +142,7 @@ pub impl Comp {
         // (each method then adds its own `[U]` in lowerMethodMember, restoring to this).
         mut val implScope: Array[Bind] = []
         mut val ipb: U64 = 0
-        while ipb < implParamBinds.count {
+        while ipb < implParamBinds.count() {
             implScope.append(implParamBinds[ipb])
             ipb += 1
         }
@@ -155,7 +155,7 @@ pub impl Comp {
         self.cur.typeParams = implScope
         mut val witnessed: Array[Func] = []
         mut val mi: U64 = 0
-        while mi < im.members.count {
+        while mi < im.members.count() {
             val m: MemberAst = im.members[mi]
             match m.kind {
                 MemberKind.Method => {
@@ -176,7 +176,7 @@ pub impl Comp {
                     val pt: PType = self.lowerType(t: m.assocTy)
                     val atN: Bind = self.internBytes(s: m.name)
                     mut val trId: U64 = 0
-                    if im.traitName.bytes().count > 0 {
+                    if im.traitName.bytes().count() > 0 {
                         val trN: Bind = self.internBytes(s: im.traitName)
                         trId = trN.nameId
                     }
@@ -196,13 +196,13 @@ pub impl Comp {
             val traitN: Bind = self.internBytes(s: im.traitName)
             mut val traitArgs: Array[U64] = []
             mut val ti: U64 = 0
-            while ti < im.traitArgs.count {
+            while ti < im.traitArgs.count() {
                 val pt: PType = self.lowerType(t: im.traitArgs[ti])
                 traitArgs.append(pt.ref)
                 ti += 1
             }
             mut val cfExtId: U64 = 0
-            if im.extName.bytes().count > 0 {
+            if im.extName.bytes().count() > 0 {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
@@ -223,7 +223,7 @@ pub impl Comp {
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = savedTP
         mut val stpi: U64 = 0
-        while stpi < typeParams.count {
+        while stpi < typeParams.count() {
             scopeTP.append(typeParams[stpi])
             stpi += 1
         }
@@ -249,7 +249,7 @@ pub impl Comp {
         val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
         mut val supertraits: Array[Bind] = []
         mut val si: U64 = 0
-        while si < t.supertraits.count {
+        while si < t.supertraits.count() {
             supertraits.append(self.internBytes(s: t.supertraits[si]))
             si += 1
         }
@@ -259,7 +259,7 @@ pub impl Comp {
         // scope so lowerType skips those heads. (`Self` has no global decl, so it self-skips.)
         mut val assocTypes: Array[Bind] = []
         mut val ai: U64 = 0
-        while ai < t.assocTypes.count {
+        while ai < t.assocTypes.count() {
             assocTypes.append(self.internBytes(s: t.assocTypes[ai]))
             ai += 1
         }
@@ -267,19 +267,19 @@ pub impl Comp {
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = []
         mut val stpi: U64 = 0
-        while stpi < typeParams.count {
+        while stpi < typeParams.count() {
             scopeTP.append(typeParams[stpi])
             stpi += 1
         }
         mut val sai: U64 = 0
-        while sai < assocTypes.count {
+        while sai < assocTypes.count() {
             scopeTP.append(assocTypes[sai])
             sai += 1
         }
         self.cur.typeParams = scopeTP
         mut val reqs: Array[Func] = []
         mut val ri: U64 = 0
-        while ri < t.reqs.count {
+        while ri < t.reqs.count() {
             reqs.append(self.lowerSigToFunc(sig: t.reqs[ri], isExtern: false, isCExtern: false))
             ri += 1
         }

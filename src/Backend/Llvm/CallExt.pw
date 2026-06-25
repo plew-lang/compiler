@@ -57,9 +57,9 @@ pub impl LlvmCtx {
                 // a primitive-typed struct field (`self.a` where a: U64): its field type
                 // name, for dispatching a method on the primitive (`self.a.absorb[S](…)`).
                 val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-                if bsi < c.arena.structs.count {
+                if bsi < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[bsi].fields.count {
+                    if fidx < c.arena.structs[bsi].fields.count() {
                         val fd: FieldDef = c.arena.structs[bsi].fields[fidx]
                         if isPrimIntName(c: inout c, start: fd.tyStart, len: fd.tyLen) {
                             return <Bind nameStart=fd.tyStart nameLen=fd.tyLen fieldStart=fd.tyStart fieldLen=fd.tyLen />
@@ -122,8 +122,8 @@ pub impl LlvmCtx {
     inout fn funcViewsMatch(c: inout Comp, fi: U64, args: Array[Arg]) -> Bool {
         val f: Func = c.arena.funcs[fi]
         mut val i: U64 = 0
-        while i < args.count {
-            if i < f.params.count {
+        while i < args.count() {
+            if i < f.params.count() {
                 mut val pv: U64 = 0
                 if f.params[i].ty != 0U64 {
                     pv = c.arena.types[f.params[i].ty].viewExtId
@@ -143,7 +143,7 @@ pub impl LlvmCtx {
     // view-mismatch enforcement at genArgValue then reports it).
     inout fn findFuncViewAware(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
         val base: U64 = c.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
-        if base >= c.arena.funcs.count {
+        if base >= c.arena.funcs.count() {
             return base
         }
         if self.funcViewsMatch(c: inout c, fi: base, args: args) {
@@ -156,7 +156,7 @@ pub impl LlvmCtx {
         // makes `f(a: P)` / `f(a: P#Ext)` select on the call's views.
         val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
         mut val i: U64 = 0
-        while i < c.arena.funcs.count {
+        while i < c.arena.funcs.count() {
             val f: Func = c.arena.funcs[i]
             if !(f.hasRecv) {
                 if !(f.isAssoc) {
@@ -194,7 +194,7 @@ pub impl LlvmCtx {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 // a call to a `-> Type#Ext` function yields a viewed value.
                 val fi: U64 = c.resolvedCallee(id: id)
-                if fi < c.arena.funcs.count {
+                if fi < c.arena.funcs.count() {
                     if c.arena.funcs[fi].retTy != 0U64 {
                         return c.arena.types[c.arena.funcs[fi].retTy].viewExtId
                     }

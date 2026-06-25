@@ -13,12 +13,12 @@ pub impl Comp {
             return true
         }
         val si: U64 = self.structIndexByName(start: start, len: len)
-        if si >= self.arena.structs.count {
+        if si >= self.arena.structs.count() {
             return false
         }
         val s: StructDef = self.arena.structs[si]
         mut val i: U64 = 0
-        while i < s.fields.count {
+        while i < s.fields.count() {
             val f: FieldDef = s.fields[i]
             if self.fieldIsBoxed(f: f) {
                 // a boxed (recursive) field is behind indirection (like an array); its
@@ -42,11 +42,11 @@ pub impl Comp {
     // unsound (copies would multi-run deinit).
     inout fn checkFieldContagion() {
         mut val i: U64 = 0
-        while i < self.arena.structs.count {
+        while i < self.arena.structs.count() {
             val s: StructDef = self.arena.structs[i]
             if !(s.isUnique) {
                 mut val j: U64 = 0
-                while j < s.fields.count {
+                while j < s.fields.count() {
                     val f: FieldDef = s.fields[j]
                     if !(f.tyIsArray) {
                         if self.typeIsTransitivelyUnique(start: f.tyStart, len: f.tyLen) {
@@ -97,7 +97,7 @@ pub impl Comp {
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     if self.exprMentionsAny(exprId: args[i].expr, forbidden: forbidden) {
                         return true
                     }
@@ -110,7 +110,7 @@ pub impl Comp {
                     return true
                 }
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     if self.exprMentionsAny(exprId: args[i].expr, forbidden: forbidden) {
                         return true
                     }
@@ -123,7 +123,7 @@ pub impl Comp {
                     return true
                 }
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     if self.exprMentionsAny(exprId: args[i].expr, forbidden: forbidden) {
                         return true
                     }
@@ -136,7 +136,7 @@ pub impl Comp {
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count {
+                while i < fields.count() {
                     if self.exprMentionsAny(exprId: fields[i].value, forbidden: forbidden) {
                         return true
                     }
@@ -146,7 +146,7 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count {
+                while i < elems.count() {
                     if self.exprMentionsAny(exprId: elems[i], forbidden: forbidden) {
                         return true
                     }
@@ -192,12 +192,12 @@ pub impl Comp {
     // whose type is not a unique struct. Reported at the struct's declaration.
     inout fn checkDeinitOnlyOnUnique() {
         mut val i: U64 = 0
-        while i < self.decls.deinits.count {
+        while i < self.decls.deinits.count() {
             val d: Bind = self.decls.deinits[i]
             if !(self.typeIsUnique(start: d.nameStart, len: d.nameLen)) {
                 val si: U64 = self.structIndexByName(start: d.nameStart, len: d.nameLen)
                 mut val off: U64 = d.nameStart
-                if si < self.arena.structs.count {
+                if si < self.arena.structs.count() {
                     off = self.arena.structs[si].defOffset
                 }
                 compileErrorAt(line: self.lineOf(offset: off), msg: "`deinit` is only allowed on a `unique` type (a copyable type would run it on every copy — spec/03)")
@@ -208,19 +208,19 @@ pub impl Comp {
 
     inout fn checkFieldDefaults() {
         mut val i: U64 = 0
-        while i < self.arena.structs.count {
+        while i < self.arena.structs.count() {
             val s: StructDef = self.arena.structs[i]
             // sibling field names + `self` — a field default may reference none of them.
             mut val forbidden: Array[U64] = []
             mut val fk: U64 = 0
-            while fk < s.fields.count {
+            while fk < s.fields.count() {
                 forbidden.append(intern(c: inout self, start: s.fields[fk].nameStart, len: s.fields[fk].nameLen))
                 fk += 1
             }
             val selfBind: Bind = self.internBytes(s: "self")
             forbidden.append(intern(c: inout self, start: selfBind.nameStart, len: selfBind.nameLen))
             mut val j: U64 = 0
-            while j < s.fields.count {
+            while j < s.fields.count() {
                 val f: FieldDef = s.fields[j]
                 if f.hasDefault {
                     self.checkDefaultSelfContained(exprId: f.defaultVal, forbidden: forbidden, offset: f.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
@@ -245,7 +245,7 @@ pub impl Comp {
     // (copyable in v1) and not mode-checked here.
     inout fn checkParamModes(params: Array[Param]) {
         mut val i: U64 = 0
-        while i < params.count {
+        while i < params.count() {
             val p: Param = params[i]
             if !(p.tyIsArray) {
                 if self.typeIsUnique(start: p.tyStart, len: p.tyLen) {
@@ -273,7 +273,7 @@ pub impl Comp {
     // passes (the element head is `Ref`, not the unique type).
     inout fn checkArrayElemsNotUnique() {
         mut val i: U64 = 0
-        while i < self.monoWork.arrayElems.count {
+        while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
             if self.typeIsUnique(start: ae.nameStart, len: ae.nameLen) {
                 compileErrorAt(line: self.lineOf(offset: ae.nameStart), msg: "a unique type cannot be stored in an Array; wrap it in Ref[T]")
@@ -290,12 +290,12 @@ pub impl Comp {
     // are covered too; generic templates carry type-param args (not unique) and pass.
     inout fn checkGenericUniqueArgs() {
         mut val i: U64 = 0
-        while i < self.arena.types.count {
+        while i < self.arena.types.count() {
             val t: TypeRef = self.arena.types[i]
-            if t.args.count != 0 {
+            if t.args.count() != 0 {
                 if !(self.isRefInst(ref: i)) {
                     mut val j: U64 = 0
-                    while j < t.args.count {
+                    while j < t.args.count() {
                         val ai: TypeInfo = self.typeInfoOfRef(ref: t.args[j])
                         if ai.kind == 2 {
                             if self.typeIsUnique(start: ai.nameStart, len: ai.nameLen) {
@@ -313,7 +313,7 @@ pub impl Comp {
     // Run param-mode validity over every function/method declaration.
     inout fn checkAllParamModes() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             self.checkParamModes(params: self.arena.funcs[i].params)
             i += 1
         }
@@ -325,19 +325,19 @@ pub impl Comp {
     // so the full type-check catches it). Skipped for array params (separate machinery).
     inout fn checkParamDefaults() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val ps: Array[Param] = self.arena.funcs[i].params
             // sibling parameter names + `self` — a parameter default may reference none.
             mut val forbidden: Array[U64] = []
             mut val pk: U64 = 0
-            while pk < ps.count {
+            while pk < ps.count() {
                 forbidden.append(intern(c: inout self, start: ps[pk].nameStart, len: ps[pk].nameLen))
                 pk += 1
             }
             val selfBind: Bind = self.internBytes(s: "self")
             forbidden.append(intern(c: inout self, start: selfBind.nameStart, len: selfBind.nameLen))
             mut val j: U64 = 0
-            while j < ps.count {
+            while j < ps.count() {
                 val p: Param = ps[j]
                 if p.hasDefault {
                     self.checkDefaultSelfContained(exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")

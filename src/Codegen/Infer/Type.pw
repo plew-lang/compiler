@@ -48,13 +48,13 @@ pub impl Comp {
         if expected == 0U64 || inferred == 0U64 {
             return true
         }
-        if expected >= self.arena.types.count || inferred >= self.arena.types.count {
+        if expected >= self.arena.types.count() || inferred >= self.arena.types.count() {
             return true
         }
         // ground the expected type through any active generic env (a `-> T` return / `T`
         // param resolves to the concrete instantiation argument); inferred is grounded.
         val exp: U64 = self.groundTypeRef(ref: expected)
-        if exp >= self.arena.types.count {
+        if exp >= self.arena.types.count() {
             return true
         }
         val te: TypeRef = self.arena.types[exp]
@@ -157,9 +157,9 @@ pub impl Comp {
             return false
         }
         // same head: a generic head must agree on its type arguments.
-        if te.args.count == tin.args.count {
+        if te.args.count() == tin.args.count() {
             mut val i: U64 = 0
-            while i < te.args.count {
+            while i < te.args.count() {
                 if !(self.typesCompatible(expected: te.args[i], inferred: tin.args[i])) {
                     return false
                 }
@@ -173,7 +173,7 @@ pub impl Comp {
         match self.arena.exprs[id] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 val fi: U64 = self.resolvedCallee(id: id)
-                if fi < self.arena.funcs.count {
+                if fi < self.arena.funcs.count() {
                     return !self.arena.funcs[fi].hasRet
                 }
             }
@@ -181,7 +181,7 @@ pub impl Comp {
                 val rt: TypeInfo = self.exprType(id: recv)
                 if rt.kind == 2 {
                     val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mi != self.arena.funcs.count {
+                    if mi != self.arena.funcs.count() {
                         return !self.arena.funcs[mi].hasRet
                     }
                 }

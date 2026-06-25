@@ -55,7 +55,7 @@ struct Scan {
 
 // Whether `a` equals the byte span `src[start .. start+len]`.
 export fn spanEqArr(a: Array[U8], src: Array[U8], start: U64, len: U64) -> Bool {
-    if a.count != len {
+    if a.count() != len {
         return false
     }
     mut val i: U64 = 0
@@ -70,7 +70,7 @@ export fn spanEqArr(a: Array[U8], src: Array[U8], start: U64, len: U64) -> Bool 
 
 // Whether two byte arrays are equal.
 export fn bytesEq(a: Array[U8], b: Array[U8]) -> Bool {
-    return spanEqArr(a: a, src: b, start: 0, len: b.count)
+    return spanEqArr(a: a, src: b, start: 0, len: b.count())
 }
 
 // Append all of `from` onto `into` (the byte-buffer extend the package toolchain
@@ -78,7 +78,7 @@ export fn bytesEq(a: Array[U8], b: Array[U8]) -> Bool {
 // compiler arena and can be imported by the standalone resolver tool).
 export fn appendBytes(into: inout Array[U8], from: Array[U8]) {
     mut val i: U64 = 0
-    while i < from.count {
+    while i < from.count() {
         into.append(from[i])
         i += 1
     }
@@ -289,7 +289,7 @@ export fn parseToml(bytes: Array[U8]) -> TomlDoc {
     mut val curHeader: Array[U8] = []
     mut val curIsArr: Bool = false
     mut val curFields: Array[Field] = []
-    val n: U64 = bytes.count
+    val n: U64 = bytes.count()
     mut val i: U64 = 0
     while i < n {
         mut val e: U64 = i
@@ -355,7 +355,7 @@ export fn parseToml(bytes: Array[U8]) -> TomlDoc {
 // The string value of `key` in an inline table's KV list (empty if absent).
 export fn inlineGet(kvs: Array[KV], key: Array[U8]) -> Array[U8] {
     mut val i: U64 = 0
-    while i < kvs.count {
+    while i < kvs.count() {
         val kv: KV = kvs[i]
         if bytesEq(a: kv.key, b: key) {
             return kv.str
@@ -368,11 +368,11 @@ export fn inlineGet(kvs: Array[KV], key: Array[U8]) -> Array[U8] {
 // The string value of a top-level (header "") field `key`, empty if absent.
 export fn topStr(doc: TomlDoc, key: Array[U8]) -> Array[U8] {
     mut val si: U64 = 0
-    while si < doc.sections.count {
+    while si < doc.sections.count() {
         val sec: Section = doc.sections[si]
-        if sec.header.count == 0 {
+        if sec.header.count() == 0 {
             mut val fi: U64 = 0
-            while fi < sec.fields.count {
+            while fi < sec.fields.count() {
                 val f: Field = sec.fields[fi]
                 if bytesEq(a: f.key, b: key) {
                     match f.value {

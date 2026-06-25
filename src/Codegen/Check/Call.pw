@@ -24,23 +24,23 @@ pub impl Comp {
 
     inout fn checkUniqueArgModes(args: Array[Arg]) {
         mut val i: U64 = 0
-        while i < args.count {
+        while i < args.count() {
             self.checkUniquePlaceCopy(exprId: args[i].expr, inoutOk: args[i].isInout)
             i += 1
         }
     }
 
     inout fn tcCheckGenericArgConsistency(f: Func, args: Array[Arg]) {
-        if f.typeParams.count == 0U64 {
+        if f.typeParams.count() == 0U64 {
             return
         }
         mut val tpi: U64 = 0
-        while tpi < f.typeParams.count {
+        while tpi < f.typeParams.count() {
             val tpId: U64 = f.typeParams[tpi].nameId
             mut val firstRef: U64 = 0
             mut val ai: U64 = 0
-            while ai < args.count {
-                if ai < f.params.count {
+            while ai < args.count() {
+                if ai < f.params.count() {
                     val p: Param = f.params[ai]
                     if p.tyLen > 0U64 {
                         if intern(c: inout self, start: p.tyStart, len: p.tyLen) == tpId {
@@ -87,7 +87,7 @@ pub impl Comp {
 
     inout fn checkFnSigAgainst(ft: TypeRef, params: Array[Param], retTy: U64, offset: U64) {
         // return type: ft.args[0].
-        if ft.args.count >= 1U64 {
+        if ft.args.count() >= 1U64 {
             if retTy != 0U64 {
                 if !(self.typesCompatible(expected: ft.args[0], inferred: retTy)) {
                     compileErrorAt(line: self.lineOf(offset: offset), msg: "function value's return type does not match the expected function type (spec/04)")
@@ -95,8 +95,8 @@ pub impl Comp {
             }
         }
         mut val k: U64 = 0
-        while k < params.count {
-            if k + 1U64 < ft.args.count {
+        while k < params.count() {
+            if k + 1U64 < ft.args.count() {
                 if params[k].ty != 0U64 {
                     if !(self.typesCompatible(expected: ft.args[k + 1U64], inferred: params[k].ty)) {
                         compileErrorAt(line: self.lineOf(offset: offset), msg: "function value's parameter type does not match the expected function type (spec/04)")
@@ -118,7 +118,7 @@ pub impl Comp {
             }
             Expr.Ident(start: val s, len: val l) => {
                 val fi: U64 = self.firstFuncByName(nameStart: s, nameLen: l)
-                if fi < self.arena.funcs.count {
+                if fi < self.arena.funcs.count() {
                     self.checkFnSigAgainst(ft: ft, params: self.arena.funcs[fi].params, retTy: self.arena.funcs[fi].retTy, offset: self.exprOffset(id: init))
                 }
             }
@@ -128,7 +128,7 @@ pub impl Comp {
 
     inout fn localTypeRefByName(nameStart: U64, nameLen: U64) -> U64 {
         val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val i: U64 = self.cur.locals.count
+        mut val i: U64 = self.cur.locals.count()
         while i > 0U64 {
             i -= 1
             if self.cur.locals[i].nameId == q {
@@ -141,7 +141,7 @@ pub impl Comp {
     inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
         self.checkUniqueArgModes(args: args)
         val fi: U64 = self.resolvedCallee(id: id)
-        if fi == self.arena.funcs.count {
+        if fi == self.arena.funcs.count() {
             // calling a function VALUE (`val f: fn(x: I64)->I64 = …; f(x: true)`): the name
             // is a local, not a declared function, so check each arg against the fn type's
             // parameter types (the TypeRef stores args as [return, param0, param1, …]).
@@ -150,8 +150,8 @@ pub impl Comp {
                 if self.isFnType(ref: lty) {
                     val ft: TypeRef = self.arena.types[lty]
                     mut val k: U64 = 0
-                    while k < args.count {
-                        if k + 1U64 < ft.args.count {
+                    while k < args.count() {
+                        if k + 1U64 < ft.args.count() {
                             self.tcCheckValue(expectedRef: ft.args[k + 1U64], valueExpr: args[k].expr, pos: "fn-value arg")
                         }
                         k += 1
@@ -160,7 +160,7 @@ pub impl Comp {
                 }
             }
             mut val i: U64 = 0
-            while i < args.count {
+            while i < args.count() {
                 self.checkLitCtx(id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
                 i += 1
             }
@@ -170,8 +170,8 @@ pub impl Comp {
         self.tcCheckGenericArgConsistency(f: f, args: args)
         val ps: Array[Param] = f.params
         mut val i: U64 = 0
-        while i < args.count {
-            if i < ps.count {
+        while i < args.count() {
+            if i < ps.count() {
                 val p: Param = ps[i]
                 self.checkArgInoutMode(p: p, arg: args[i])
                 self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
@@ -198,9 +198,9 @@ pub impl Comp {
         }
         match self.arena.exprs[argExpr] {
             Expr.Closure(val params, val hasRet, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
-                val want: U64 = self.arena.types[p.ty].args.count
+                val want: U64 = self.arena.types[p.ty].args.count()
                 if want > 0U64 {
-                    if params.count == want - 1U64 {
+                    if params.count() == want - 1U64 {
                         // each closure-literal parameter label must equal the expected
                         // function type's label (spec/04: labels are part of a function
                         // type's identity — no relabel coercion, to prevent a silent
@@ -209,8 +209,8 @@ pub impl Comp {
                         // unlabeled (`~:`) position, which the closure must also leave bare.
                         val expLabels: Array[U64] = self.arena.types[p.ty].argLabels
                         mut val pj: U64 = 0
-                        while pj < params.count {
-                            if pj + 1U64 < expLabels.count {
+                        while pj < params.count() {
+                            if pj + 1U64 < expLabels.count() {
                                 val expLbl: U64 = expLabels[pj + 1U64]
                                 if expLbl != 0U64 {
                                     if params[pj].nameId != expLbl {
@@ -245,12 +245,12 @@ pub impl Comp {
 
     inout fn recvOwnParamCount(rt: TypeInfo) -> U64 {
         val si: U64 = self.genericStructIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
-        if si < self.arena.structs.count {
-            return self.arena.structs[si].typeParams.count
+        if si < self.arena.structs.count() {
+            return self.arena.structs[si].typeParams.count()
         }
         val ei: U64 = self.genericEnumIndex(nameStart: rt.nameStart, nameLen: rt.nameLen)
-        if ei < self.arena.enums.count {
-            return self.arena.enums[ei].typeParams.count
+        if ei < self.arena.enums.count() {
+            return self.arena.enums[ei].typeParams.count()
         }
         return 0U64
     }
@@ -264,17 +264,17 @@ pub impl Comp {
         // value->V directly here (mirrors checkIndexKeyType for subscripts). spec/02.
         if rt.kind == 2 {
             if rt.ref != 0U64 {
-                if rt.ref < self.arena.types.count {
+                if rt.ref < self.arena.types.count() {
                     val drt: TypeRef = self.arena.types[rt.ref]
                     if rangeEquals(bytes: self.arena.bytes, start: drt.nameStart, len: drt.nameLen, kw: "Dictionary") {
-                        if drt.args.count >= 2U64 {
+                        if drt.args.count() >= 2U64 {
                             // the generic-receiver arg grounding is incomplete, so check the
                             // Dictionary's key/value args directly by LABEL: a `key` arg must
                             // be K, a `value`/`fallback` arg must be V. Covers insert / get /
                             // getOr / contains / at / remove (`d.get(key: 5I64)` on a
                             // Dictionary[String,_]). spec/02.
                             mut val dai: U64 = 0
-                            while dai < args.count {
+                            while dai < args.count() {
                                 if args[dai].hasLabel {
                                     if rangeEquals(bytes: self.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "key") {
                                         self.tcCheckValue(expectedRef: drt.args[0], valueExpr: args[dai].expr, pos: "dict key")
@@ -292,14 +292,14 @@ pub impl Comp {
         }
         if rt.kind == 2 {
             val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-            if mi != self.arena.funcs.count {
+            if mi != self.arena.funcs.count() {
                 val mf: Func = self.arena.funcs[mi]
                 self.tcCheckGenericArgConsistency(f: mf, args: args)
                 val ps: Array[Param] = mf.params
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
                 mut val i: U64 = 0
-                while i < args.count {
-                    if i < ps.count {
+                while i < args.count() {
+                    if i < ps.count() {
                         val p: Param = ps[i]
                         self.checkArgInoutMode(p: p, arg: args[i])
                         if genericRecv {
@@ -332,7 +332,7 @@ pub impl Comp {
                                     val nConf: U64 = self.recvOwnParamCount(rt: rt)
                                     val headId: U64 = self.arena.types[p.ty].nameId
                                     mut val mk: U64 = nConf
-                                    while mk < mf.typeParams.count {
+                                    while mk < mf.typeParams.count() {
                                         if mf.typeParams[mk].nameId == headId {
                                             headMethodOwn = true
                                         }
@@ -374,10 +374,10 @@ pub impl Comp {
                 val er: U64 = self.arrayElemRef(start: rt.nameStart, len: rt.nameLen)
                 if er != 0 {
                     val rr: U64 = self.resolveTy(tyRef: er)
-                    if rr < self.arena.types.count {
+                    if rr < self.arena.types.count() {
                         val rtp: TypeRef = self.arena.types[rr]
                         if rangeEquals(bytes: self.arena.bytes, start: rtp.nameStart, len: rtp.nameLen, kw: "Array") {
-                            if rtp.args.count > 0 {
+                            if rtp.args.count() > 0 {
                                 val xn: Bind = self.arrayElemNameForRef(elemRef: rtp.args[0])
                                 innerArr = true
                                 innerStart = xn.nameStart
@@ -387,7 +387,7 @@ pub impl Comp {
                     }
                 }
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     if innerArr {
                         self.checkLitArray(id: args[i].expr, elemStart: innerStart, elemLen: innerLen)
                     } else {
@@ -412,11 +412,11 @@ pub impl Comp {
         match self.arena.exprs[recv] {
             Expr.Ident(start: val rStart, len: val rLen) => {
                 val ai: U64 = self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                if ai < self.arena.funcs.count {
+                if ai < self.arena.funcs.count() {
                     val aps: Array[Param] = self.arena.funcs[ai].params
                     mut val k: U64 = 0
-                    while k < args.count {
-                        if k < aps.count {
+                    while k < args.count() {
+                        if k < aps.count() {
                             val ap: Param = aps[k]
                             self.checkArgInoutMode(p: ap, arg: args[k])
                             self.checkLitSpan(id: args[k].expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
@@ -430,7 +430,7 @@ pub impl Comp {
             _ => {}
         }
         mut val i: U64 = 0
-        while i < args.count {
+        while i < args.count() {
             self.checkLitCtx(id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
             i += 1
         }

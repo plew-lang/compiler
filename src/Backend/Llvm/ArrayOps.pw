@@ -6,7 +6,7 @@
 
 pub impl LlvmCtx {
     inout fn genLlvmArrayLit(c: inout Comp, elems: Array[U64], elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
-        val n: U64 = elems.count
+        val n: U64 = elems.count()
         if n == 0U64 {
             return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32))
         }
@@ -46,7 +46,7 @@ pub impl LlvmCtx {
         // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
         if !(self.exprIsArray(c: inout c, id: base)) {
             val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-            if bsi < c.arena.structs.count {
+            if bsi < c.arena.structs.count() {
                 // a Dictionary subscript `d[k]` lowers to the panicking accessor
                 // `d.at(key: k)` (spec/02); a user Index type uses `index`.
                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
@@ -91,9 +91,9 @@ pub impl LlvmCtx {
             }
             Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
                 val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                if bsi < c.arena.structs.count {
+                if bsi < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                    if fidx < c.arena.structs[bsi].fields.count {
+                    if fidx < c.arena.structs[bsi].fields.count() {
                         return self.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
                     }
                 }
@@ -107,7 +107,7 @@ pub impl LlvmCtx {
         if r != 0U64 {
             val t: TypeRef = c.arena.types[r]
             if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                if t.args.count > 0U64 {
+                if t.args.count() > 0U64 {
                     return t.args[0]
                 }
             }
@@ -140,9 +140,9 @@ pub impl LlvmCtx {
             // declared type from the base's struct.
             Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
                 val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                if bsi < c.arena.structs.count {
+                if bsi < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                    if fidx < c.arena.structs[bsi].fields.count {
+                    if fidx < c.arena.structs[bsi].fields.count() {
                         return fieldIsBufferType(c: inout c, f: c.arena.structs[bsi].fields[fidx])
                     }
                 }
@@ -161,7 +161,7 @@ pub impl LlvmCtx {
                 if li < self.nLocals {
                     val tr: U64 = self.locTypeRef[li]
                     if tr != 0U64 {
-                        if c.arena.types[tr].args.count > 0U64 {
+                        if c.arena.types[tr].args.count() > 0U64 {
                             return c.arena.types[tr].args[0]
                         }
                     }
@@ -169,9 +169,9 @@ pub impl LlvmCtx {
             }
             Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
                 val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                if bsi < c.arena.structs.count {
+                if bsi < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                    if fidx < c.arena.structs[bsi].fields.count {
+                    if fidx < c.arena.structs[bsi].fields.count() {
                         return bufferFieldElemRef(c: inout c, f: c.arena.structs[bsi].fields[fidx])
                     }
                 }

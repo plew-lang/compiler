@@ -9,7 +9,7 @@ pub impl Comp {
         val blk: Block = self.arena.blocks[blkId]
         val stmts: Array[U64] = blk.stmts
         mut val i: U64 = 0
-        while i < stmts.count {
+        while i < stmts.count() {
             if self.stmtDiverges(stmtId: stmts[i]) {
                 return true
             }
@@ -22,7 +22,7 @@ pub impl Comp {
         val blk: Block = self.arena.blocks[blkId]
         val stmts: Array[U64] = blk.stmts
         mut val i: U64 = 0
-        while i < stmts.count {
+        while i < stmts.count() {
             if self.stmtHasLoopBreak(stmtId: stmts[i]) {
                 return true
             }
@@ -45,7 +45,7 @@ pub impl Comp {
             }
             Stmt.Match(val scrut, val arms) => {
                 mut val i: U64 = 0
-                while i < arms.count {
+                while i < arms.count() {
                     if self.blockHasLoopBreak(blkId: arms[i].body) {
                         return true
                     }
@@ -72,11 +72,11 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 // match is exhaustive (checkMatchBinds / structural exhaustiveness), so
                 // it diverges iff every arm's block diverges.
-                if arms.count == 0 {
+                if arms.count() == 0 {
                     return false
                 }
                 mut val i: U64 = 0
-                while i < arms.count {
+                while i < arms.count() {
                     if !(self.blockDiverges(blkId: arms[i].body)) {
                         return false
                     }
@@ -97,7 +97,7 @@ pub impl Comp {
     }
 
     inout fn condIsLiteralTrue(id: U64) -> Bool {
-        if id >= self.arena.exprs.count {
+        if id >= self.arena.exprs.count() {
             return false
         }
         match self.arena.exprs[id] {
@@ -110,7 +110,7 @@ pub impl Comp {
 
     inout fn checkReturns() {
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             // exempt: `()`-returning (hasRet false), `main` (returns int), extern (no
             // body), provided/abstract (body 0), and async (state-machine return).

@@ -17,13 +17,13 @@ pub impl Comp {
     // take; rarer block-bearing forms (match/if/closure) contribute nothing — at worst a
     // forward reference there stays declaration-ordered, never misordered.
     inout fn collectGlobalDeps(id: U64, into: inout Array[U64]) {
-        if id >= self.arena.exprs.count {
+        if id >= self.arena.exprs.count() {
             return
         }
         match self.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
                 mut val gi: U64 = 0
-                while gi < self.arena.globals.count {
+                while gi < self.arena.globals.count() {
                     if spansEqual(c: inout self, aStart: self.arena.globals[gi].nameStart, aLen: self.arena.globals[gi].nameLen, bStart: start, bLen: len) {
                         if !(u64ArrayHas(a: into, v: gi)) {
                             into.append(gi)
@@ -39,12 +39,12 @@ pub impl Comp {
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count { self.collectGlobalDeps(id: args[i].expr, into: inout into) i += 1 }
+                while i < args.count() { self.collectGlobalDeps(id: args[i].expr, into: inout into) i += 1 }
             }
             Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
                 self.collectGlobalDeps(id: recv, into: inout into)
                 mut val i: U64 = 0
-                while i < args.count { self.collectGlobalDeps(id: args[i].expr, into: inout into) i += 1 }
+                while i < args.count() { self.collectGlobalDeps(id: args[i].expr, into: inout into) i += 1 }
             }
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.collectGlobalDeps(id: base, into: inout into) }
             Expr.Index(val base, val index) => {
@@ -53,11 +53,11 @@ pub impl Comp {
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count { self.collectGlobalDeps(id: fields[i].value, into: inout into) i += 1 }
+                while i < fields.count() { self.collectGlobalDeps(id: fields[i].value, into: inout into) i += 1 }
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count { self.collectGlobalDeps(id: elems[i], into: inout into) i += 1 }
+                while i < elems.count() { self.collectGlobalDeps(id: elems[i], into: inout into) i += 1 }
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.collectGlobalDeps(id: operand, into: inout into) }
             Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.collectGlobalDeps(id: base, into: inout into) }
@@ -85,7 +85,7 @@ pub impl Comp {
         mut val d: Array[U64] = []
         self.collectGlobalDeps(id: self.globalInitExpr(g: self.arena.globals[i]), into: inout d)
         mut val k: U64 = 0
-        while k < d.count {
+        while k < d.count() {
             self.globalDfs(i: d[k], state: inout state, order: inout order)
             k += 1
         }
@@ -94,7 +94,7 @@ pub impl Comp {
     }
 
     inout fn orderGlobalsByDependency() {
-        val n: U64 = self.arena.globals.count
+        val n: U64 = self.arena.globals.count()
         if n <= 1U64 {
             return
         }
@@ -113,7 +113,7 @@ pub impl Comp {
         // rebuild self.arena.globals in dependency order (deps before dependents).
         mut val reordered: Array[Global] = []
         mut val o: U64 = 0
-        while o < order.count {
+        while o < order.count() {
             reordered.append(self.arena.globals[order[o]])
             o += 1
         }
@@ -128,7 +128,7 @@ pub impl Comp {
     inout fn rewriteFactoryConstruction() {
         val fromN: Bind = self.internBytes(s: "from")
         mut val i: U64 = 0
-        while i < self.arena.exprs.count {
+        while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                     if isEnum {
@@ -136,7 +136,7 @@ pub impl Comp {
                             val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                             mut val args: Array[Arg] = []
                             mut val fi: U64 = 0
-                            while fi < fields.count {
+                            while fi < fields.count() {
                                 args.append(<Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
                                 fi += 1
                             }
@@ -146,7 +146,7 @@ pub impl Comp {
                         // `<T from=x/>` From form (spec/12): a single `from=…` field routes
                         // to T's `from` factory. Scoped to the `from` label so memberwise
                         // constructions are untouched.
-                        if fields.count == 1U64 {
+                        if fields.count() == 1U64 {
                             if spansEqual(c: inout self, aStart: fields[0].nameStart, aLen: fields[0].nameLen, bStart: fromN.nameStart, bLen: fromN.nameLen) {
                                 if self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: fromN.nameStart, nameLen: fromN.nameLen) {
                                     val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
@@ -181,20 +181,20 @@ pub impl Comp {
     // the normal name resolution and import-visibility checks. (Function-call uses only;
     // type/value aliases are additive.)
     inout fn rewriteImportAliases() {
-        if self.decls.importAliases.count == 0U64 {
+        if self.decls.importAliases.count() == 0U64 {
             return
         }
         mut val i: U64 = 0
-        while i < self.arena.exprs.count {
+        while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
                 Expr.Call(val nameStart, val nameLen, val args) => {
                     mut val ai: U64 = 0
-                    while ai < self.decls.importAliases.count {
+                    while ai < self.decls.importAliases.count() {
                         val al: Bind = self.decls.importAliases[ai]
                         if spansEqual(c: inout self, aStart: al.nameStart, aLen: al.nameLen, bStart: nameStart, bLen: nameLen) {
                             if self.moduleOf(offset: al.nameStart) == self.moduleOf(offset: nameStart) {
                                 self.arena.exprs[i] = <Expr.Call nameStart=al.fieldStart nameLen=al.fieldLen args=args />
-                                ai = self.decls.importAliases.count
+                                ai = self.decls.importAliases.count()
                             } else {
                                 ai += 1
                             }
@@ -217,11 +217,11 @@ pub impl Comp {
     // name a local alias (returns the input span unchanged). The alias is module-scoped:
     // only a use in the same module as the `with` clause resolves.
     inout fn aliasReal(start: U64, len: U64) -> Bind {
-        if self.decls.importAliases.count == 0U64 {
+        if self.decls.importAliases.count() == 0U64 {
             return <Bind nameStart=start nameLen=len fieldStart=start fieldLen=len />
         }
         mut val ai: U64 = 0
-        while ai < self.decls.importAliases.count {
+        while ai < self.decls.importAliases.count() {
             val al: Bind = self.decls.importAliases[ai]
             if spansEqual(c: inout self, aStart: al.nameStart, aLen: al.nameLen, bStart: start, bLen: len) {
                 if self.moduleOf(offset: al.nameStart) == self.moduleOf(offset: start) {
@@ -242,7 +242,7 @@ pub impl Comp {
                 if self.isSelfRef(start: start, len: len) {
                     return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
                 }
-                if self.localIndexByName(start: start, len: len) < self.cur.locals.count {
+                if self.localIndexByName(start: start, len: len) < self.cur.locals.count() {
                     return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
                 }
                 if self.isTypeName(start: start, len: len) {

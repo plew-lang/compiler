@@ -26,11 +26,11 @@ pub impl Comp {
             return true
         }
         val si: U64 = self.structIndexByName(start: lo.tyStart, len: lo.tyLen)
-        if si < self.arena.structs.count {
+        if si < self.arena.structs.count() {
             if self.arena.structs[si].isUnique {
                 return false
             }
-            if self.arena.structs[si].typeParams.count > 0 {
+            if self.arena.structs[si].typeParams.count() > 0 {
                 return false
             }
             return true
@@ -41,7 +41,7 @@ pub impl Comp {
     inout fn recordCapture(closureId: U64, localIdx: U64) {
         val lo: Local = self.cur.locals[localIdx]
         mut val i: U64 = 0
-        while i < self.monoWork.captures.count {
+        while i < self.monoWork.captures.count() {
             val e: CaptureEntry = self.monoWork.captures[i]
             if e.closureId == closureId {
                 if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: lo.nameStart, bLen: lo.nameLen) {
@@ -94,7 +94,7 @@ pub impl Comp {
         val fromCall: U64 = self.pushExpr(e: <Expr.Method recv=fromRecv nameStart=fromValueN.nameStart nameLen=fromValueN.nameLen args=fromArgs />)
         mut val someStmts: Array[U64] = []
         someStmts.append(self.pushStmt(s: <Stmt.Give value=fromCall />))
-        val someBlk: U64 = self.arena.blocks.count
+        val someBlk: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=someStmts />)
         mut val someBinds: Array[Bind] = []
         someBinds.append(<Bind nameStart=cvN.nameStart nameLen=cvN.nameLen nameId=cvN.nameId fieldStart=vFieldN.nameStart fieldLen=vFieldN.nameLen offset=memberStart />)
@@ -104,7 +104,7 @@ pub impl Comp {
         val emptyCall: U64 = self.pushExpr(e: <Expr.Method recv=emptyRecv nameStart=emptyN.nameStart nameLen=emptyN.nameLen args=noArgs />)
         mut val noneStmts: Array[U64] = []
         noneStmts.append(self.pushStmt(s: <Stmt.Give value=emptyCall />))
-        val noneBlk: U64 = self.arena.blocks.count
+        val noneBlk: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=noneStmts />)
         val noBinds: Array[Bind] = []
         val noneArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=noneN.nameStart variantLen=noneN.nameLen binds=noBinds body=noneBlk isStruct=false isDiverge=false />
@@ -115,10 +115,10 @@ pub impl Comp {
     }
 
     inout fn registerChainResultInsts(exprId: U64, baseRef: U64, memberStart: U64, memberLen: U64, headStart: U64, headLen: U64) {
-        if baseRef >= self.arena.types.count {
+        if baseRef >= self.arena.types.count() {
             return
         }
-        if self.arena.types[baseRef].args.count < 1 {
+        if self.arena.types[baseRef].args.count() < 1 {
             return
         }
         val vRef: U64 = self.arena.types[baseRef].args[0]
@@ -162,7 +162,7 @@ pub impl Comp {
 
     inout fn registerChainFactoryInst(headStart: U64, headLen: U64, name: String, uRef: U64) {
         val fi: U64 = self.findAssocByName(recvStart: headStart, recvLen: headLen, name: name)
-        if fi >= self.arena.funcs.count {
+        if fi >= self.arena.funcs.count() {
             return
         }
         if !(self.isGenericFreeFn(fi: fi)) {
@@ -180,7 +180,7 @@ pub impl Comp {
         val nm: Bind = self.internBytes(s: name)
         val qName: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val i: U64 = 0
-        while i < self.arena.funcs.count {
+        while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if !(f.hasRecv) {
                 if f.recvId == qRecv {
@@ -191,7 +191,7 @@ pub impl Comp {
             }
             i += 1
         }
-        return self.arena.funcs.count
+        return self.arena.funcs.count()
     }
 
     inout fn scanExprInsts(exprId: U64) {
@@ -203,8 +203,8 @@ pub impl Comp {
                     val li: U64 = self.localIndexByName(start: start, len: len)
                     if li < self.cur.captureMark {
                         // a module-level variable (spec/15) seeded at the locals base
-                        // (index < globals.count) is globally accessible — not a capture.
-                        if li >= self.arena.globals.count {
+                        // (index < globals.count()) is globally accessible — not a capture.
+                        if li >= self.arena.globals.count() {
                             self.recordCapture(closureId: self.cur.closureId, localIdx: li)
                         }
                     }
@@ -228,7 +228,7 @@ pub impl Comp {
                 self.cur.inClosure = true
                 self.cur.captureMark = enclMark
                 mut val pi: U64 = 0
-                while pi < params.count {
+                while pi < params.count() {
                     val p: Param = params[pi]
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                     pi += 1
@@ -246,7 +246,7 @@ pub impl Comp {
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     self.scanExprInsts(exprId: args[i].expr)
                     i += 1
                 }
@@ -255,7 +255,7 @@ pub impl Comp {
             Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
                 self.scanExprInsts(exprId: recv)
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     self.scanExprInsts(exprId: args[i].expr)
                     i += 1
                 }
@@ -266,7 +266,7 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.scanExprInsts(exprId: recv)
                 mut val i: U64 = 0
-                while i < args.count {
+                while i < args.count() {
                     self.scanExprInsts(exprId: args[i].expr)
                     i += 1
                 }
@@ -296,7 +296,7 @@ pub impl Comp {
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count {
+                while i < fields.count() {
                     self.scanExprInsts(exprId: fields[i].value)
                     i += 1
                 }
@@ -310,7 +310,7 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count {
+                while i < elems.count() {
                     self.scanExprInsts(exprId: elems[i])
                     i += 1
                 }
@@ -355,7 +355,7 @@ pub impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 self.scanExprInsts(exprId: scrut)
                 mut val ai: U64 = 0
-                while ai < arms.count {
+                while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
@@ -372,14 +372,14 @@ pub impl Comp {
     inout fn scanAddArmBinds(a: MatchArm, scrutTi: TypeInfo) {
         // a struct-destructure arm `S { val x }`: bind each field from the scrutinee
         // struct (mirrors codegen's addForStructBinds), so a generic call on a bound
-        // field (`print(items.count)`) recovers its type.
+        // field (`print(items.count())`) recovers its type.
         if a.isStruct {
             self.addForStructBinds(et: scrutTi, binds: a.binds)
             return
         }
         val genericMatch: Bool = self.isGenericEnumInst(ref: scrutTi.ref)
         mut val bi: U64 = 0
-        while bi < a.binds.count {
+        while bi < a.binds.count() {
             val bd: Bind = a.binds[bi]
             if genericMatch {
                 val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
@@ -467,7 +467,7 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprInsts(exprId: scrut)
                 mut val ai: U64 = 0
-                while ai < arms.count {
+                while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
@@ -487,7 +487,7 @@ pub impl Comp {
         val mark: U64 = self.scopeMark()
         val stmts: Array[U64] = self.arena.blocks[blkId].stmts
         mut val i: U64 = 0
-        while i < stmts.count {
+        while i < stmts.count() {
             self.scanStmtInsts(stmtId: stmts[i])
             i += 1
         }
@@ -496,14 +496,14 @@ pub impl Comp {
 
     inout fn scanGenInstMethodBodies() {
         mut val gi: U64 = 0
-        while gi < self.monoWork.genInsts.count {
+        while gi < self.monoWork.genInsts.count() {
             val instRef: U64 = self.monoWork.genInsts[gi]
             val inst: TypeRef = self.arena.types[instRef]
             // Array A: Array's own generic methods (append/get/set/removeLast, pure Plew
             // over self.data) are scanned like any other generic instance, so the transitive
             // `Buffer[T]` method instances their bodies call get discovered and declared.
             mut val mfi: U64 = 0
-            while mfi < self.arena.funcs.count {
+            while mfi < self.arena.funcs.count() {
                 val mf: Func = self.arena.funcs[mfi]
                 if self.methodMatchesInst(f: mf, instRef: instRef) {
                     // provided combinators (`map[B]`) instantiate from call sites, not here.
@@ -520,7 +520,7 @@ pub impl Comp {
                             self.cur.typeArgs = inst.args
                             self.setSelfItemEnv(recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
                             mut val pi: U64 = 0
-                            while pi < mf.params.count {
+                            while pi < mf.params.count() {
                                 val p: Param = mf.params[pi]
                                 self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                                 pi += 1

@@ -47,7 +47,7 @@ pub impl Comp {
                         // self inside an `impl Array[T]` method types as an array (kind 3,
                         // element name) so the array/raw intrinsics dispatch on it.
                         if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
-                            if rt.args.count == 1 {
+                            if rt.args.count() == 1 {
                                 val en: Bind = self.arrayElemNameForRef(elemRef: rt.args[0])
                                 return <TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=self.cur.recvInstRef />
                             }
@@ -60,7 +60,7 @@ pub impl Comp {
                 // type from the capture entry (so field/index dispatch on it works).
                 if self.cur.inClosure {
                     mut val ci: U64 = 0
-                    while ci < self.monoWork.captures.count {
+                    while ci < self.monoWork.captures.count() {
                         val ce: CaptureEntry = self.monoWork.captures[ci]
                         if ce.closureId == self.cur.closureId {
                             if spansEqual(c: inout self, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
@@ -75,14 +75,14 @@ pub impl Comp {
                     }
                 }
                 val qLocal: U64 = intern(c: inout self, start: start, len: len)
-                mut val i: U64 = self.cur.locals.count
+                mut val i: U64 = self.cur.locals.count()
                 while i > 0 {
                     i -= 1
                     val lo: Local = self.cur.locals[i]
                     if lo.nameId == qLocal {
                         // an array local stays kind 3 (element by name) even though
                         // `Array[E]` is now a genInst struct — all the array-special
-                        // codegen (index/for/.count/methods/value-semantics) keys off
+                        // codegen (index/for/.count()/methods/value-semantics) keys off
                         // kind 3, so it must not be reported as a kind-2 instantiation.
                         if lo.isArray {
                             return self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: true)
@@ -106,7 +106,7 @@ pub impl Comp {
                         // for method dispatch inside a generic instance body).
                         if !(lo.isArray) {
                             mut val k: U64 = 0
-                            while k < self.cur.typeParams.count {
+                            while k < self.cur.typeParams.count() {
                                 val tp: Bind = self.cur.typeParams[k]
                                 if lo.tyNameId == tp.nameId {
                                     return self.typeInfoOfRef(ref: self.cur.typeArgs[k])
@@ -117,7 +117,7 @@ pub impl Comp {
                         // an `any P` local: keep the structured ref so its method calls can
                         // resolve through the trait P (the name-only form loses isAny).
                         if lo.ty != 0U64 {
-                            if lo.ty < self.arena.types.count {
+                            if lo.ty < self.arena.types.count() {
                                 if self.arena.types[lo.ty].isAny {
                                     return <TypeInfo kind=2 nameStart=self.arena.types[lo.ty].nameStart nameLen=self.arena.types[lo.ty].nameLen ref=lo.ty />
                                 }
@@ -169,7 +169,7 @@ pub impl Comp {
                 // cases here.)
                 // resolve the right overload (by labels + arg types) for its return.
                 val fi: U64 = self.resolvedCallee(id: id)
-                if fi < self.arena.funcs.count {
+                if fi < self.arena.funcs.count() {
                     val f: Func = self.arena.funcs[fi]
                     if f.hasRet {
                         // a generic free function returning a bare type parameter:
@@ -180,10 +180,10 @@ pub impl Comp {
                                 val qRet: U64 = intern(c: inout self, start: f.retStart, len: f.retLen)
 
                                 mut val k: U64 = 0
-                                while k < f.typeParams.count {
+                                while k < f.typeParams.count() {
                                     val tp: Bind = f.typeParams[k]
                                     if qRet == tp.nameId {
-                                        if k < inferred.count {
+                                        if k < inferred.count() {
                                             if inferred[k] != 0 {
                                                 return self.typeInfoOfRef(ref: inferred[k])
                                             }
@@ -210,11 +210,11 @@ pub impl Comp {
                 // generic call like `print(closure(x))` can't recover the arg type and
                 // misses its instantiation (and `val r = closure(x)` mis-infers r).
                 val lvi: U64 = self.localIndexByName(start: nameStart, len: nameLen)
-                if lvi < self.cur.locals.count {
+                if lvi < self.cur.locals.count() {
                     val lty: U64 = self.cur.locals[lvi].ty
                     if self.isFnType(ref: lty) {
                         val ftr: TypeRef = self.arena.types[lty]
-                        if ftr.args.count > 0 {
+                        if ftr.args.count() > 0 {
                             return self.typeInfoOfRef(ref: ftr.args[0])
                         }
                     }
@@ -225,8 +225,8 @@ pub impl Comp {
                 val bt: TypeInfo = self.exprType(id: base)
                 // (`s.bytes()` is now an ordinary method returning Array[U8] — collections.md
                 // §3-付録4 — so it is typed through method resolution, not a field branch.)
-                // `arr.count` is U64 (spec/02). Recover a "U64" span so a generic call
-                // like `print(arr.count)` infers T = U64.
+                // `arr.count()` is U64 (spec/02). Recover a "U64" span so a generic call
+                // like `print(arr.count())` infers T = U64.
                 if bt.kind == 3 {
                     if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
                         val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3)
@@ -262,10 +262,10 @@ pub impl Comp {
                     val er: U64 = self.arrayElemRef(start: bt.nameStart, len: bt.nameLen)
                     if er != 0 {
                         val rr: U64 = self.resolveTy(tyRef: er)
-                        if rr < self.arena.types.count {
+                        if rr < self.arena.types.count() {
                             val rt: TypeRef = self.arena.types[rr]
                             if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
-                                if rt.args.count > 0 {
+                                if rt.args.count() > 0 {
                                     val xn: Bind = self.arrayElemNameForRef(elemRef: rt.args[0])
                                     return <TypeInfo kind=3 nameStart=xn.nameStart nameLen=xn.nameLen ref=0 />
                                 }
@@ -286,7 +286,7 @@ pub impl Comp {
                 // desugars to `.at(key:) -> V`.
                 if self.isDictionaryType(ti: bt) {
                     val dt: TypeRef = self.arena.types[bt.ref]
-                    if dt.args.count > 1 {
+                    if dt.args.count() > 1 {
                         return self.typeInfoOfRef(ref: dt.args[1])
                     }
                 }
@@ -295,7 +295,7 @@ pub impl Comp {
                 if self.isBufferType(ti: bt) {
                     if bt.ref != 0 {
                         val bft: TypeRef = self.arena.types[bt.ref]
-                        if bft.args.count > 0 {
+                        if bft.args.count() > 0 {
                             return self.typeInfoOfRef(ref: bft.args[0])
                         }
                     }
@@ -317,7 +317,7 @@ pub impl Comp {
                 val rt: TypeInfo = self.exprType(id: recv)
                 if rt.kind == 2 {
                     val mfi: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mfi < self.arena.funcs.count {
+                    if mfi < self.arena.funcs.count() {
                         val mf: Func = self.arena.funcs[mfi]
                         if mf.hasRet {
                             return self.typeInfoOfName(start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
@@ -331,7 +331,7 @@ pub impl Comp {
                 val arn: Bind = self.assocRecvName(recv: recv)
                 if arn.nameLen != 0 {
                     val afi: U64 = self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if afi == self.arena.funcs.count {
+                    if afi == self.arena.funcs.count() {
                         return scalarInfo()
                     }
                     val af: Func = self.arena.funcs[afi]
@@ -371,11 +371,11 @@ pub impl Comp {
                         val sTrait: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
                         val sMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
                         mut val sti: U64 = 0
-                        while sti < self.decls.traits.count {
+                        while sti < self.decls.traits.count() {
                             if self.decls.traits[sti].nameId == sTrait {
                                 val sreqs: Array[Func] = self.decls.traits[sti].reqs
                                 mut val sri: U64 = 0
-                                while sri < sreqs.count {
+                                while sri < sreqs.count() {
                                     if sreqs[sri].nameId == sMethod {
                                         if sreqs[sri].hasRet {
                                             if !(sreqs[sri].retIsArray) {
@@ -399,16 +399,16 @@ pub impl Comp {
                     // CONCRETE primitive/String return (Self / associated / generic returns
                     // stay unknown — conservative, and avoids disturbing existential codegen).
                     if rt.ref != 0U64 {
-                        if rt.ref < self.arena.types.count {
+                        if rt.ref < self.arena.types.count() {
                             if self.arena.types[rt.ref].isAny {
                                 val qTrait: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
                                 val qMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
                                 mut val ti: U64 = 0
-                                while ti < self.decls.traits.count {
+                                while ti < self.decls.traits.count() {
                                     if self.decls.traits[ti].nameId == qTrait {
                                         val reqs: Array[Func] = self.decls.traits[ti].reqs
                                         mut val ri: U64 = 0
-                                        while ri < reqs.count {
+                                        while ri < reqs.count() {
                                             if reqs[ri].nameId == qMethod {
                                                 if reqs[ri].hasRet {
                                                     if !(reqs[ri].retIsArray) {
@@ -429,7 +429,7 @@ pub impl Comp {
                         }
                     }
                     val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mi == self.arena.funcs.count {
+                    if mi == self.arena.funcs.count() {
                         return scalarInfo()
                     }
                     val mf: Func = self.arena.funcs[mi]
@@ -440,7 +440,7 @@ pub impl Comp {
                         if self.isGenericInst(ref: rt.ref) {
                             val gt: TypeRef = self.arena.types[rt.ref]
                             val gsi: U64 = self.genericStructIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
-                            if gsi < self.arena.structs.count {
+                            if gsi < self.arena.structs.count() {
                                 // ground the return type through the receiver's instantiation
                                 // AND the method's own type params (a combinator on a generic
                                 // receiver: `filterIter.map(f) -> MapIter[Self, …, B]`). The
@@ -451,19 +451,19 @@ pub impl Comp {
                                 self.setSelfItemEnv(recvStart: gt.nameStart, recvLen: gt.nameLen, recvInstRef: rt.ref)
                                 val gSavedP: Array[Bind] = self.cur.typeParams
                                 val gSavedA: Array[U64] = self.cur.typeArgs
-                                val rcount: U64 = self.arena.structs[gsi].typeParams.count
+                                val rcount: U64 = self.arena.structs[gsi].typeParams.count()
                                 mut val gfa: Array[U64] = []
                                 mut val gri: U64 = 0
                                 while gri < rcount {
-                                    if gri < gt.args.count {
+                                    if gri < gt.args.count() {
                                         gfa.append(gt.args[gri])
                                     }
                                     gri += 1
                                 }
-                                if mf.typeParams.count > rcount {
+                                if mf.typeParams.count() > rcount {
                                     val ginf: Array[U64] = self.inferFnArgs(f: mf, args: args)
                                     mut val goi: U64 = rcount
-                                    while goi < ginf.count {
+                                    while goi < ginf.count() {
                                         gfa.append(ginf[goi])
                                         goi += 1
                                     }
@@ -477,7 +477,7 @@ pub impl Comp {
                                 return self.typeInfoOfRef(ref: gr)
                             }
                             val gei: U64 = self.genericEnumIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
-                            if gei < self.arena.enums.count {
+                            if gei < self.arena.enums.count() {
                                 return self.substTypeInfo(instRef: rt.ref, params: self.arena.enums[gei].typeParams, tyRef: mf.retTy)
                             }
                         }
@@ -494,7 +494,7 @@ pub impl Comp {
                             // `MapIter[Self,…,B]` grounds to `MapIter[Counter,…,I64]`.
                             val savedTP: Array[Bind] = self.cur.typeParams
                             val savedTA: Array[U64] = self.cur.typeArgs
-                            if mf.typeParams.count > 0 {
+                            if mf.typeParams.count() > 0 {
                                 self.cur.typeParams = mf.typeParams
                                 self.cur.typeArgs = self.inferFnArgs(f: mf, args: args)
                             }
@@ -514,13 +514,13 @@ pub impl Comp {
                     // the type parameter T with the array's element type E.
                     val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
                     val mi: U64 = self.findMethod(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mi == self.arena.funcs.count {
+                    if mi == self.arena.funcs.count() {
                         return scalarInfo()
                     }
                     val mf: Func = self.arena.funcs[mi]
                     if mf.hasRet {
-                        if mf.typeParams.count >= 1 {
-                            if mf.retTy < self.arena.types.count {
+                        if mf.typeParams.count() >= 1 {
+                            if mf.retTy < self.arena.types.count() {
                                 val rtt: TypeRef = self.arena.types[mf.retTy]
                                 if rtt.nameId == mf.typeParams[0].nameId {
                                     return self.typeInfoOfName(start: rt.nameStart, len: rt.nameLen, isArray: false)
@@ -545,10 +545,10 @@ pub impl Comp {
                 }
                 // the result type is the give value of the first non-diverging arm.
                 mut val mai: U64 = 0
-                while mai < arms.count {
+                while mai < arms.count() {
                     if !(arms[mai].isDiverge) {
                         val mg: U64 = self.blockGiveExpr(blkId: arms[mai].body)
-                        if mg < self.arena.exprs.count {
+                        if mg < self.arena.exprs.count() {
                             return self.exprType(id: mg)
                         }
                     }
@@ -558,7 +558,7 @@ pub impl Comp {
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 val g: U64 = self.blockGiveExpr(blkId: thenBlk)
-                if g < self.arena.exprs.count {
+                if g < self.arena.exprs.count() {
                     return self.exprType(id: g)
                 }
                 return scalarInfo()
@@ -576,7 +576,7 @@ pub impl Comp {
                 val rt: TypeInfo = self.exprType(id: expr)
                 if self.isGenericInst(ref: rt.ref) {
                     val inst: TypeRef = self.arena.types[rt.ref]
-                    if inst.args.count > 0 {
+                    if inst.args.count() > 0 {
                         return self.typeInfoOfRef(ref: inst.args[0])
                     }
                 }
@@ -610,7 +610,7 @@ pub impl Comp {
                 val ot: TypeInfo = self.exprType(id: operand)
                 if ot.ref != 0 {
                     val tr: TypeRef = self.arena.types[ot.ref]
-                    if tr.args.count > 0 {
+                    if tr.args.count() > 0 {
                         return self.typeInfoOfRef(ref: tr.args[0])
                     }
                 }
