@@ -389,6 +389,13 @@ pub impl LlvmCtx {
             if c.cur.typeParams.count() > 0U64 {
                 g = c.groundTypeRef(ref: fd.ty)
             }
+            // a type param bound to an existential (`T = any Drawable` in `Optional[any
+            // Drawable]`): the payload is the fat pointer, not the i64 the head-name path
+            // below would default to. The ungrounded `fd.ty` (a bare `T`) is not `any`, so
+            // this grounded re-check is what catches it.
+            if refIsAny(c: inout c, ref: g) {
+                return self.anyTy
+            }
             if c.isGenericInst(ref: g) {
                 return self.llvmTypeOfRef(c: inout c, ref: g)
             }

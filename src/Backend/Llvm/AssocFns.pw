@@ -251,6 +251,11 @@ pub impl LlvmCtx {
         if c.cur.typeParams.count() > 0U64 {
             pt = c.groundTypeRef(ref: pt)
         }
+        // a type param bound to an existential (`T = any P`): the fat pointer. The
+        // ungrounded `p.ty` (a bare `T`) is not `any`, so this grounded re-check catches it.
+        if refIsAny(c: inout c, ref: pt) {
+            return self.anyTy
+        }
         if c.isGenericInst(ref: pt) {
             return self.llvmTypeOfRef(c: inout c, ref: pt)
         }
@@ -288,6 +293,11 @@ pub impl LlvmCtx {
             mut val rt: U64 = f.retTy
             if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
                 rt = c.groundTypeRef(ref: rt)
+            }
+            // a type param bound to an existential (`get() -> T` with `T = any P`): the fat
+            // pointer. The ungrounded `f.retTy` (a bare `T`) is not `any`, so re-check here.
+            if refIsAny(c: inout c, ref: rt) {
+                return self.anyTy
             }
             if c.isGenericInst(ref: rt) {
                 return self.llvmTypeOfRef(c: inout c, ref: rt)

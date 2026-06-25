@@ -846,7 +846,11 @@ pub impl LlvmCtx {
                     if isRange {
                         self.genLlvmForRange(c: inout c, varStart: varStart, varLen: varLen, varTyStart: varTyStart, varTyLen: varTyLen, inclusive: inclusive, lo: iter, hi: rangeHi, body: body)
                     } else {
-                        self.genLlvmForArray(c: inout c, varStart: varStart, varLen: varLen, iter: iter, body: body)
+                        // collections.md E3: a non-range `for x in e` rides the `Iterable`
+                        // protocol uniformly — an array is no longer a special case (it carries
+                        // `recvRef = Array[E]`, so genLlvmForIterable -> genLlvmForGenIterable
+                        // calls Array's `iterator()` witness and drives `next()`).
+                        self.genLlvmForIterable(c: inout c, varStart: varStart, varLen: varLen, iter: iter, body: body)
                     }
                 }
             }

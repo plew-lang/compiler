@@ -15,7 +15,7 @@
 // (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash. `Array`'s
 // storage floor `Buffer` is a non-ambient primitive imported from @Std/Core.
 import @Std/Hash with { Hash, Hasher, SipHasher }
-import @Std/Core with { Buffer, Index, IndexSet }
+import @Std/Core with { Buffer, Index, IndexSet, Iterator, Iterable }
 
 // Re-export the primitive scalar types from @Std/Core (where they are DEFINED, with
 // their operator/conversion witnesses — coherent). The re-export makes them ambient:
@@ -178,6 +178,33 @@ pub impl[T] Array[T] as IndexSet[U64] {
     type Value = T
     inout fn indexSet(key: U64, value: T) {
         self.set(i: key, value)
+    }
+}
+// The iteration witnesses (collections.md E3): `for x in arr` desugars to the `Iterable`
+// protocol `it = arr.iterator(); while { match it.next() { Some(v) => …; None => break } }`,
+// so the backend drives arrays through the same iterator path as any user `Iterable` — no
+// Array type-name branch in the for-loop. ArrayIter holds the array (value semantics; the
+// CoW buffer is shared, not copied — iteration does not mutate) and a cursor.
+struct ArrayIter[T] {
+    val arr: Array[T]
+    mut val idx: U64
+}
+pub impl[T] ArrayIter[T] as Iterator {
+    type Item = T
+    inout fn next() -> Optional[T] {
+        if self.idx < self.arr.count() {
+            val v: T = self.arr.get(i: self.idx)
+            self.idx = self.idx + 1U64
+            return <Optional.Some v=v />
+        }
+        return <Optional.None />
+    }
+}
+pub impl[T] Array[T] as Iterable {
+    type Item = T
+    type Iter = ArrayIter[T]
+    fn iterator() -> ArrayIter[T] {
+        return <ArrayIter arr=self idx=0U64 />
     }
 }
 

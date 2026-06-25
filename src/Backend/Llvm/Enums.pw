@@ -30,6 +30,11 @@ pub impl LlvmCtx {
             while ti < c.cur.typeParams.count() {
                 if c.cur.typeParams[ti].nameId == qid {
                     val at: TypeRef = c.arena.types[c.cur.typeArgs[ti]]
+                    // an existential argument (`T -> any P`) is the fat pointer (2 words);
+                    // recursing on `at`'s bare trait name would size it as 1 word.
+                    if refIsAny(c: inout c, ref: c.cur.typeArgs[ti]) {
+                        return 2U64
+                    }
                     // an array argument (`T -> Array[I32]`) is the {ptr,i64} value (2 words).
                     if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
                         return 2U64
@@ -108,6 +113,12 @@ pub impl LlvmCtx {
             mut val g: U64 = f.ty
             if c.cur.typeParams.count() > 0U64 {
                 g = c.groundTypeRef(ref: f.ty)
+            }
+            // a type param bound to an existential (`Some(T)` with `T = any P`): the fat
+            // pointer is 2 words (data + vtable). The head-name path below sizes a bare `T`
+            // as 1 word, undersizing the enclosing enum's `[N x i64]` payload area.
+            if refIsAny(c: inout c, ref: g) {
+                return 2U64
             }
             if c.isGenericInst(ref: g) {
                 // Array[E] is the {ptr,i64} value type, not an inline instance.
