@@ -224,16 +224,10 @@ pub impl LlvmCtx {
                 ownStart = c.arena.enums[eid].nameStart
                 ownLen = c.arena.enums[eid].nameLen
             } else {
-                // a String operand under an arithmetic op resolves the String lang-item's
-                // witness (`String.add` for `"a" + "b"`, spec/02,12). String isn't a
-                // registered struct/enum, so detect it by value-kind.
-                if self.valueKind(c: inout c, id: lhs) == 1U64 {
-                    val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
-                    ownStart = ss.nameStart
-                    ownLen = ss.nameLen
-                } else {
-                    return c.arena.funcs.count()
-                }
+                // not a registered aggregate (a primitive) — the caller keeps the built-in
+                // op. (A String operand `"a" + "b"` is already a registered-struct lhs via
+                // exprStructIdx above, so it resolves `String.add` on the normal path.)
+                return c.arena.funcs.count()
             }
         }
         val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
@@ -304,10 +298,8 @@ pub impl LlvmCtx {
         if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "eq")
         }
-        if self.valueKind(c: inout c, id: lhs) == 1U64 {
-            val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
-            return c.findAssocByName(typeStart: ss.nameStart, typeLen: ss.nameLen, name: "eq")
-        }
+        // (a String operand resolves as a registered-struct lhs via exprStructIdx above, so
+        // its `String.eq` witness is found on the normal path — no value-kind special-case.)
         return c.arena.funcs.count()
     }
 

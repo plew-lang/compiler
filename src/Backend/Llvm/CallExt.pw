@@ -69,9 +69,6 @@ pub impl LlvmCtx {
             }
             _ => {}
         }
-        if self.valueKind(c: inout c, id: recv) == 1U64 {
-            return c.kwSpan(kw: "String", kwLen: 6U64)
-        }
         // a Bool receiver (`b.hash[H](…)`, `flag.eq(…)`): the backend models Bool method
         // dispatch like a primitive lang-item. Recover the type from the grounded env
         // (`exprTypeRef` applies the instance args, so a generic `K` param bound to Bool

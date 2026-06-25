@@ -360,25 +360,10 @@ pub impl LlvmCtx {
     // or method can't be resolved or the return isn't a generic instance — so a plain
     // (non-generic) return leaves the caller's behavior unchanged.
     inout fn methodResultRef(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, margs: Array[Arg]) -> U64 {
-        // a String-kind receiver (a plain String, a newtype over String, or a String-valued
-        // subscript like `dict[k]`) whose structural type ref doesn't resolve below: resolve
-        // the method on `String` so `s.bytes()`'s `Array[U8]` return is recovered (and a chained
-        // `.bytes().count()` / index tracks as an array). String has no type params, so its
-        // declared return ref is already concrete.
-        if self.valueKind(c: inout c, id: recv) == 1U64 {
-            val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
-            val smfi: U64 = c.findMethod(recvStart: ss.nameStart, recvLen: ss.nameLen, nameStart: nameStart, nameLen: nameLen, args: margs)
-            if smfi < c.arena.funcs.count() {
-                val smf: Func = c.arena.funcs[smfi]
-                if smf.hasRet {
-                    if smf.retTy != 0U64 {
-                        if c.isGenericInst(ref: smf.retTy) {
-                            return smf.retTy
-                        }
-                    }
-                }
-            }
-        }
+        // (a String-kind receiver — plain String, newtype over String, or a String-valued
+        // subscript like `dict[k]` — resolves as the registered String struct via the
+        // exprStructIdx fallback below, so `s.bytes()`'s `Array[U8]` return is recovered on
+        // the normal path; String has no type params, so its declared return ref is concrete.)
         val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
         mut val headStart: U64 = 0
         mut val headLen: U64 = 0
@@ -394,6 +379,13 @@ pub impl LlvmCtx {
                 return 0U64
             }
         }
+        // a newtype head (`UserId = String`) inherits the underlying's members (spec/10), so
+        // resolve to the underlying name before lookup — `u.bytes()` finds String's `bytes`.
+        // (recvRef stays the newtype ref for grounding; a newtype has no type params, so this
+        // is a no-op for the env.)
+        val ntu: Bind = c.newtypeUnderName(start: headStart, len: headLen)
+        headStart = ntu.nameStart
+        headLen = ntu.nameLen
         val mfi: U64 = c.findMethod(recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
         if mfi < c.arena.funcs.count() {
             val mf: Func = c.arena.funcs[mfi]

@@ -267,6 +267,17 @@ pub impl LlvmCtx {
             val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
             return c.structDefByNameAny(start: ab.nameStart, len: ab.nameLen)
         }
+        // a fall-through String value (a `"…"` literal, a concat result, a String-typed
+        // local/field/call whose ref didn't resolve above) is a `String` struct value —
+        // resolve to the registered String struct so its methods / `==` / `+` ride the
+        // uniform `exprStructIdx -> findMethod` witness path, replacing the scattered
+        // `valueKind==1` String dispatch fallbacks. String's value rep is pinned to strty
+        // (a representation residue, collections.md §3-付録3), but its DISPATCH is structural
+        // like any other registered struct.
+        if self.valueKind(c: inout c, id: id) == 1U64 {
+            val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+            return c.structDefByNameAny(start: sb.nameStart, len: sb.nameLen)
+        }
         return c.arena.structs.count()
     }
 
