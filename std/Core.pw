@@ -620,6 +620,13 @@ pub impl[T] Buffer[T] {
     assoc fn new() -> Buffer[T] {
         return bufferNew()
     }
+    // A fresh empty buffer with room reserved for at least `capacity` elements (count == 0,
+    // resulting capacity >= the request). Whether allocation actually happens is unspecified.
+    assoc fn withCapacity(capacity: U64) -> Buffer[T] {
+        mut val b: Buffer[T] = bufferNew()
+        bufferReserve(buffer: inout b, additionalCapacity: capacity)
+        return b
+    }
     // The live element count (collections.md §3-付録4: a method, not a no-paren property —
     // Plew has no computed properties; the body forwards to the floor intrinsic).
     fn count() -> U64 {
@@ -661,6 +668,18 @@ pub impl[T] Buffer[T] {
     // capacity; only the live count shrinks. The returned value is independently owned.
     inout fn removeLast() -> T {
         return bufferRemoveLast(buffer: inout self)
+    }
+    // Remove and return the last element, or `Optional.None` when empty (the non-panicking
+    // companion to removeLast). The returned value is independently owned. (The emptiness
+    // check forwards to the floor intrinsic directly — like every other method here — rather
+    // than a sibling `self.isEmpty()`, which the opaque Buffer receiver can't dispatch.)
+    inout fn pop() -> Optional[T] {
+        val liveCount: U64 = bufferCount(buffer: self)
+        if liveCount == 0U64 {
+            return <Optional.None />
+        }
+        val last: T = bufferRemoveLast(buffer: inout self)
+        return <Optional.Some v=last />
     }
     // Remove the element at `index` and return it, shifting the following elements left
     // to keep order (O(n)). Panics when `index >= count`.

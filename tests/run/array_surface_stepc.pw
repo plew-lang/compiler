@@ -1,0 +1,46 @@
+import @Std/Io with { print }
+
+// The canonical Array removal/insert surface (collections.md step C / spec/02 §Buffer):
+// removeLast()->T, pop()->Optional[T], insertAt, removeAt, swapRemove, clear, truncate,
+// isEmpty — all pure-Plew forwards to the Buffer floor (value semantics preserved).
+fn main() {
+    mut val xs: Array[I64] = [10, 20, 30, 40]
+
+    // removeLast now returns the moved-out element.
+    val last: I64 = xs.removeLast()
+    print(last)                       // 40
+    print(xs.count())                 // 3
+
+    // insertAt shifts right (order preserved); index == count is append.
+    xs.insertAt(index: 1, 99)
+    print(xs[1])                      // 99
+    print(xs[2])                      // 20
+    print(xs.count())                 // 4   ([10, 99, 20, 30])
+
+    // removeAt shifts left.
+    val mid: I64 = xs.removeAt(index: 1)
+    print(mid)                        // 99
+    print(xs[1])                      // 20   ([10, 20, 30])
+
+    // swapRemove moves the last element into the hole (order not preserved).
+    val sr: I64 = xs.swapRemove(index: 0)
+    print(sr)                         // 10
+    print(xs[0])                      // 30   ([30, 20])
+
+    // pop returns Optional.
+    val p: Optional[I64] = xs.pop()
+    print(p.unwrapOr(fallback: -1))    // 20
+    print(xs.count())                 // 1
+
+    // truncate drops the suffix.
+    mut val ys: Array[I64] = [1, 2, 3, 4, 5]
+    ys.truncate(count: 2)
+    print(ys.count())                 // 2
+    print(ys[1])                      // 2
+
+    // clear empties; isEmpty reflects it; pop on empty is None.
+    ys.clear()
+    print(ys.isEmpty())               // 1 (true)
+    val none: Optional[I64] = ys.pop()
+    print(none.unwrapOr(fallback: -7)) // -7
+}

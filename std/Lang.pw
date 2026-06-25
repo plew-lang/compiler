@@ -144,9 +144,18 @@ pub impl[T] Array[T] {
     fn count() -> U64 {
         return self.data.count()
     }
+    // Whether the array holds no elements (`count == 0`).
+    fn isEmpty() -> Bool {
+        return self.data.isEmpty()
+    }
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
         self.data.append(value)
+    }
+    // Insert a copy of `value` at `i`, shifting the following elements right to keep order
+    // (`i == count` is append). Panics when `i > count`.
+    inout fn insertAt(index: U64, value~: T) {
+        self.data.insertAt(index: index, value)
     }
     // The element at `i` (panics when out of range — same as `xs[i]`).
     fn get(i: U64) -> T {
@@ -156,11 +165,33 @@ pub impl[T] Array[T] {
     inout fn set(i: U64, value: T) {
         self.data.set(index: i, value)
     }
-    // Remove the last element (panics when empty). The storage keeps its capacity;
-    // only the live `count` shrinks. Used by Dictionary/Set `remove` to compact the
-    // dense entry arrays after a deletion. (The moved-out tail is dropped here.)
-    inout fn removeLast() {
-        self.data.removeLast()
+    // Remove the last element and return it (panics when empty). The storage keeps its
+    // capacity; only the live `count` shrinks. The returned value is independently owned.
+    inout fn removeLast() -> T {
+        return self.data.removeLast()
+    }
+    // Remove and return the last element, or `Optional.None` when empty (the non-panicking
+    // companion to removeLast).
+    inout fn pop() -> Optional[T] {
+        return self.data.pop()
+    }
+    // Remove the element at `i` and return it, shifting the following elements left to keep
+    // order (O(n)). Panics when `i >= count`.
+    inout fn removeAt(index: U64) -> T {
+        return self.data.removeAt(index: index)
+    }
+    // Remove the element at `i` and return it, moving the last element into its slot (O(1),
+    // order not preserved). Panics when `i >= count`.
+    inout fn swapRemove(index: U64) -> T {
+        return self.data.swapRemove(index: index)
+    }
+    // Remove all elements (`count -> 0`). The capacity afterward is unspecified.
+    inout fn clear() {
+        self.data.clear()
+    }
+    // Drop the suffix `[count, self.count())` when `count < self.count()` (else a no-op).
+    inout fn truncate(count: U64) {
+        self.data.truncate(count: count)
     }
 }
 // The subscript witnesses (collections.md E3): `arr[i]` is the `Index` value read and
