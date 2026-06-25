@@ -1,0 +1,5 @@
+// A compound assignment's RHS literal is typed by the target — out of range rejects.
+fn main() {
+    mut val a: U8 = 1
+    a += 300
+}

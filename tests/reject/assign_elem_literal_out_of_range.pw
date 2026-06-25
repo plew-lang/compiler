@@ -1,0 +1,7 @@
+// An out-of-range integer literal assigned to a U8 array element must be rejected,
+// exactly like `val x: U8 = 300` — the assignment target's type is the literal's
+// context (no silent i64 default). collections.md E3 / assignment-RHS determination.
+fn main() {
+    mut val xs: Array[U8] = [1, 0]
+    xs[0] = 300
+}

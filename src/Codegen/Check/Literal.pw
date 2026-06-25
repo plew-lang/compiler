@@ -464,6 +464,28 @@ pub impl Comp {
         self.checkLitSpan(id: id, tyStart: tyStart, tyLen: tyLen, isArray: isArray)
     }
 
+    // The assignment / compound-assignment RHS is subject to the same literal
+    // type-determination as a `val` initializer: propagate the target place's type as
+    // the expected context, so a determinable literal types at the target width and is
+    // range-checked, and an undetermined literal is a compile error (spec/02 — no type
+    // from context) rather than a silent i64 default that wraps at runtime. `typeOf`
+    // gives the place type: kind 3 for a whole-array place (`xs = [...]`, nameStart names
+    // the element) → propagate the element type to the array literal; an element place
+    // (`xs[0]`) already recovers the element scalar; a generic-instance place carries its
+    // ref so make fields ground. Mirrors Stmt.Let's checkLitSpanCtx.
+    inout fn checkAssignRhsLit(target: U64, value: U64) {
+        val ti: TypeInfo = self.typeOf(id: target)
+        if ti.kind == 3 {
+            self.checkLitSpan(id: value, tyStart: ti.nameStart, tyLen: ti.nameLen, isArray: true)
+            return
+        }
+        if ti.nameLen == 0U64 {
+            self.checkLitCtx(id: value, eKind: 0, eBits: 0, eSgn: false)
+            return
+        }
+        self.checkLitSpanCtx(id: value, tyStart: ti.nameStart, tyLen: ti.nameLen, isArray: false, ctxRef: ti.ref)
+    }
+
     // checkLitCtx against a written type span (annotation / param / field).
     inout fn checkLitSpan(id: U64, tyStart: U64, tyLen: U64, isArray: Bool) {
         if isArray {

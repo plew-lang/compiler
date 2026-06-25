@@ -313,6 +313,10 @@ pub impl Comp {
             _ => {}
         }
         self.checkUniquePlaceCopy(exprId: value, inoutOk: false)
+        // determine the RHS literal type from the target place (the same context a `val`
+        // initializer gets): a determinable literal types at the target width and is
+        // range-checked; an undetermined one is a compile error, not a silent i64 default.
+        self.checkAssignRhsLit(target: target, value: value)
         self.verifyExpr(id: value)
         // a plain reassignment `u = e` reinitializes `u`, so it is live again — clear any
         // use-after-move mark (the value was verified above, so a moved read in `e` is
