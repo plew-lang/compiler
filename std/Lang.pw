@@ -177,7 +177,7 @@ pub impl[T] Array[T] as Index[U64] {
 pub impl[T] Array[T] as IndexSet[U64] {
     type Value = T
     inout fn indexSet(key: U64, value: T) {
-        self.set(i: key, value)
+        self.data.set(index: key, value)
     }
 }
 // The iteration witnesses (collections.md E3): `for x in arr` desugars to the `Iterable`
