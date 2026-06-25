@@ -131,6 +131,26 @@ pub impl Comp {
         }
         return self.arena.funcs.count
     }
+
+    // Like findAssocByName but for a value method (`f.hasRecv`), resolved by receiver
+    // type + selector name only (no argument arity/label match). Used to route `print`
+    // through the type's `Format.format` witness (a single per-type impl, no overload).
+    inout fn findMethodByName(typeStart: U64, typeLen: U64, name: String) -> U64 {
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count {
+            val f: Func = self.arena.funcs[i]
+            if f.hasRecv {
+                if f.recvId == qType {
+                    if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                        return i
+                    }
+                }
+            }
+            i += 1
+        }
+        return self.arena.funcs.count
+    }
 }
 
 pub impl Comp {

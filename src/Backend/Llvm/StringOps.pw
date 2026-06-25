@@ -108,24 +108,65 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
-    // `print(x)` (spec/02): lower by the argument's recovered type to a runtime
-    // formatter that writes the textual form + a newline. This bypasses the Plew
-    // Format trait machinery (generics + methods + arrays) for the built-in scalar /
-    // String types — observably identical. A user type implementing Format is not yet
-    // supported here (rejected loudly).
-    inout fn emitPrint(c: inout Comp, argExpr: U64) -> LLVMValueRef {
-        // `String` is a registered struct now (struct{Array[U8]}), but print(String) is the
-        // built-in string sink (k==1 below), NOT a Format witness — only a non-String struct
-        // is rejected here.
-        val psi: U64 = self.exprStructIdx(c: inout c, id: argExpr)
-        if psi < c.arena.structs.count && !(self.isStringStruct(c: inout c, sidx: psi)) {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a struct (Format witness) not yet supported")
+    // Print a value through its `Format` witness: call `<Type>.format("")` (the format
+    // spec is unused by the current impls) to get a String, then write its bytes via the
+    // string sink. The receiver is passed by value (like any non-`inout` method self) and
+    // the empty format spec is a null-data String (release is a no-op). The witness is
+    // declared/queued lazily if the upfront pass did not emit it (a lang-item method).
+    inout fn emitFormatPrint(c: inout Comp, argExpr: U64, tyStart: U64, tyLen: U64) -> LLVMValueRef {
+        val ffi: U64 = c.findMethodByName(typeStart: tyStart, typeLen: tyLen, name: "format")
+        if ffi >= c.arena.funcs.count {
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a type that does not conform to Format")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val k: U64 = self.valueKind(c: inout c, id: argExpr)
-        if k == 1U64 {
-            return self.emitStrSink(c: inout c, rtName: "plew_print_str", rtId: 5U64, argExpr: argExpr)
+        mut val slot: U64 = self.userFnSlot(idx: ffi)
+        if slot >= self.fnIdx.count {
+            slot = self.ensureProvidedDeclared(c: inout c, fi: ffi)
         }
+        if slot >= self.fnIdx.count {
+            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: Format witness not emittable yet")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val recvVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
+        val emptyFmt: LLVMValueRef = self.arrValWrap(c: inout c, data: LLVMConstNull(self.ptrty))
+        mut val cav: Array[LLVMValueRef] = []
+        cav.append(recvVal)
+        cav.append(emptyFmt)
+        val sval: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(cav), 2U64, anon())
+        val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sval)
+        val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sval)
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_print_str", nameId: 5U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(ptr)
+        av.append(len)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+
+    // `print(x)` (spec/02): scalar value-kinds lower to a runtime sink directly; String
+    // and any struct route through their `Format` witness (emitFormatPrint). Observably a
+    // textual form + newline.
+    inout fn emitPrint(c: inout Comp, argExpr: U64) -> LLVMValueRef {
+        val k: U64 = self.valueKind(c: inout c, id: argExpr)
+        // `String`: print through its `impl String as Format` witness (collections.md
+        // §3-付録4). No `isStringStruct` type-name branch — String is recognized as the
+        // String value-kind and routed through `Format` like any conforming type; its
+        // witness returns the bytes, which the sink writes.
+        if k == 1U64 {
+            val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+            return self.emitFormatPrint(c: inout c, argExpr: argExpr, tyStart: ss.nameStart, tyLen: ss.nameLen)
+        }
+        // a (non-String) struct value: route through its own `Format` witness, or reject
+        // loudly if the type does not conform (no built-in struct printer).
+        val psi: U64 = self.exprStructIdx(c: inout c, id: argExpr)
+        if psi < c.arena.structs.count {
+            return self.emitFormatPrint(c: inout c, argExpr: argExpr, tyStart: c.arena.structs[psi].nameStart, tyLen: c.arena.structs[psi].nameLen)
+        }
+        // scalar value-kinds keep their built-in runtime sinks (observably identical to a
+        // Format witness; the floor concern is only the String/Array type-name dispatch).
         if k == 2U64 {
             val bv: LLVMValueRef = LLVMBuildZExt(self.b, self.genLlvmExpr(c: inout c, id: argExpr), self.i64ty, anon())
             return self.emitI64Sink(c: inout c, rtName: "plew_print_bool", rtId: 6U64, v: bv)

@@ -66,17 +66,6 @@ pub impl LlvmCtx {
         return false
     }
 
-    // Whether struct `sidx` is the lang-item `String` (a transparent single-field wrapper
-    // whose flat {ptr,i64} VALUE is its `Array[U8]` buffer — released/copied as the array,
-    // not via field-extract, since the value has the buffer's layout, not a nested struct).
-    inout fn isStringStruct(c: inout Comp, sidx: U64) -> Bool {
-        if sidx >= c.arena.structs.count {
-            return false
-        }
-        val sd: StructDef = c.arena.structs[sidx]
-        return rangeEquals(bytes: c.arena.bytes, start: sd.nameStart, len: sd.nameLen, kw: "String")
-    }
-
     // The dropWit* slot for struct `sidx`, or dropWitSidx.count if none declared yet.
     inout fn dropWitSlot(sidx: U64) -> U64 {
         mut val i: U64 = 0
