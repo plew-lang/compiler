@@ -74,24 +74,21 @@ pub impl LlvmCtx {
                 if self.valueKind(c: inout c, id: lhs) == 4U64 || self.valueKind(c: inout c, id: rhs) == 4U64 {
                     return self.genLlvmFloatBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
                 }
-                // String ==/!= compares bytes via a runtime call (the operands are
-                // {ptr,i64} structs, not icmp-able). A 2-field struct (`Pair{a:I64,b:I64}`)
-                // shares String's `{ptr,i64}` LLVM layout, so valueKind can read it as a
-                // String — only take the byte-compare path when lhs is NOT a registered
-                // struct (else it is a struct Eq, handled by the witness path below). This
-                // surfaces with a grounded generic-`K` struct key (`self.keys[idx] == key`
-                // in a monomorphized `Dictionary[Pair].find`), which otherwise reinterprets
-                // the struct's fields as a {ptr,len} String and dereferences garbage.
+                // ==/!= : dispatch to the operand type's `Eq` witness (spec/12 — comparison
+                // is trait sugar). `String.eq` rides its `buffer: Buffer[U8]` field through
+                // `bufferEq`; a user `@[Eq]` struct/enum rides its synthesized `eq`. No
+                // String/Array type-name branch here: detection is "does this type carry an
+                // `eq` witness". A scalar (none) falls to the `icmp` path below; a non-`@[Eq]`
+                // enum to the tag-compare path; a non-`@[Eq]` struct field inside a synthesized
+                // `eq` to the inline structural path below.
                 if op == opEq() || op == opNe() {
-                    if self.valueKind(c: inout c, id: lhs) == 1U64 {
-                        // `String` is itself a registered struct now (struct{Array[U8]}), so
-                        // also take the byte-compare path when lhs IS String — only a DIFFERENT
-                        // registered struct that happens to share the {ptr,i64} layout falls
-                        // through to its own Eq witness.
-                        val esi: U64 = self.exprStructIdx(c: inout c, id: lhs)
-                        if esi >= c.arena.structs.count || self.isStringStruct(c: inout c, sidx: esi) {
-                            return self.emitStrEq(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                    val eqFi: U64 = self.eqWitnessFn(c: inout c, lhs: lhs)
+                    if eqFi < c.arena.funcs.count {
+                        val wv: LLVMValueRef = self.emitWitnessCall(c: inout c, fi: eqFi, lhs: lhs, rhs: rhs, binary: true)
+                        if op == opNe() {
+                            return LLVMBuildNot(self.b, wv, anon())
                         }
+                        return wv
                     }
                 }
                 // struct/enum arithmetic / bitwise / shift: dispatch to the user's

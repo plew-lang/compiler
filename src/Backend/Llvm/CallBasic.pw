@@ -147,6 +147,9 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferTruncate") {
             return self.genLlvmBufferTruncate(c: inout c, recv: args[0].expr, countExpr: args[1].expr)
         }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferEq") {
+            return self.genLlvmBufferEq(c: inout c, lhs: args[0].expr, rhs: args[1].expr)
+        }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "print") {
             return self.emitPrint(c: inout c, argExpr: args[0].expr)
         }

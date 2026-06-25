@@ -289,6 +289,28 @@ pub impl LlvmCtx {
         return firstMatch
     }
 
+    // The c.arena.funcs index of the `Eq` witness `T.eq(lhs:rhs:)` for the `==`/`!=`
+    // operand `lhs` (a registered struct/enum, or the String lang-item detected by
+    // value-kind), or c.arena.funcs.count when the operand carries no Eq witness (a
+    // scalar — compared by `icmp` directly — or a non-`@[Eq]` enum — tag-compared).
+    // Comparison is trait sugar like arithmetic (spec/12), but `Eq.eq` has a fixed
+    // selector, so this resolves by name rather than via `binTraitMethodName`.
+    inout fn eqWitnessFn(c: inout Comp, lhs: U64) -> U64 {
+        val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
+        if sidx < c.arena.structs.count {
+            return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: "eq")
+        }
+        val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
+        if eid < c.arena.enums.count {
+            return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "eq")
+        }
+        if self.valueKind(c: inout c, id: lhs) == 1U64 {
+            val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+            return c.findAssocByName(typeStart: ss.nameStart, typeLen: ss.nameLen, name: "eq")
+        }
+        return c.arena.funcs.count
+    }
+
     // The c.arena.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
     // for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count
     // when the operand isn't a registered aggregate.

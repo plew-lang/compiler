@@ -12,18 +12,6 @@ pub impl Comp {
         }
     }
 
-    // Whether `lhs OP rhs` is a String `==` / `!=` (which lowers to PlewString_eq
-    // rather than a C struct comparison).
-    inout fn isStringEq(op: I64, lhs: U64) -> Bool {
-        if op != opEq() {
-            if op != opNe() {
-                return false
-            }
-        }
-        val lt: TypeInfo = self.typeOf(id: lhs)
-        return lt.kind == 2 && rangeEquals(bytes: self.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "String")
-    }
-
     inout fn isEnumName(start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val ei: U64 = 0

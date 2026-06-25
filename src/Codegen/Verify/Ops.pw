@@ -160,9 +160,9 @@ pub impl Comp {
             }
             return
         }
-        if self.isStringEq(op: op, lhs: lhs) {
-            return
-        }
+        // String `==`/`!=` is no longer a name-special case: String conforms to `Eq`
+        // (`impl String as Eq` in Core, riding `bufferEq`), so it is accepted by the
+        // general witness path below like any other Eq type (collections.md §3-付録4).
         if self.hasCompareWitness(op: op, lhs: lhs, rhs: rhs) {
             return
         }

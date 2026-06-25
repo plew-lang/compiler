@@ -175,6 +175,13 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
             return self.emitStrEqValues(c: inout c, a: a, b: b)
         }
+        // a `Buffer` field is compared element-wise (the floor's `==`, NOT pointer identity):
+        // byte-compare its data. String's `@[Eq]` rides this through its `buffer: Buffer[U8]`
+        // field. (U8 element here; element-size-general comparison lives in `bufferEq`, used
+        // when a buffer value is compared directly via `impl Buffer as Eq`.)
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Buffer") {
+            return self.emitStrEqValues(c: inout c, a: a, b: b)
+        }
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
         if sreg < self.structIdxs.count {
             return self.emitStructEq(c: inout c, a: a, b: b, sidx: self.structIdxs[sreg])
@@ -475,32 +482,4 @@ pub impl LlvmCtx {
         return true
     }
 
-    // String ==/!= : decompose both operands to (ptr,len) and call a byte-compare
-    // runtime, yielding an i1 (so it works in both condition and Bool-value contexts).
-    inout fn emitStrEq(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
-        val a: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
-        val b: LLVMValueRef = self.genLlvmExpr(c: inout c, id: rhs)
-        val pa: LLVMValueRef = self.arrValData(c: inout c, arr: a)
-        val la: LLVMValueRef = self.arrValCount(c: inout c, arr: a)
-        val pb: LLVMValueRef = self.arrValData(c: inout c, arr: b)
-        val lb: LLVMValueRef = self.arrValCount(c: inout c, arr: b)
-        mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.ptrty)
-        ptys.append(self.i64ty)
-        ptys.append(self.ptrty)
-        ptys.append(self.i64ty)
-        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 4U64, 0I32)
-        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
-        mut val av: Array[LLVMValueRef] = []
-        av.append(pa)
-        av.append(la)
-        av.append(pb)
-        av.append(lb)
-        val r: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 4U64, anon())
-        mut val pred: U32 = llvmIntNe()
-        if op == opNe() {
-            pred = llvmIntEq()
-        }
-        return LLVMBuildICmp(self.b, pred, r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
-    }
 }

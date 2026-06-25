@@ -444,6 +444,34 @@ pub impl LlvmCtx {
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
+    // `bufferEq(lhs, rhs)`: element-wise equality (spec/02 — the floor's `==` is NOT pointer
+    // identity). For a POD element type this is a byte compare of `count * sizeof(T)` bytes
+    // (lengths differ -> unequal). `Array`/`String` `@[Eq]` ride this through their buffer
+    // field. (Element types that own heap would need element-wise Eq; covered as the element
+    // is itself `@[Eq]` and `cmpFieldEq` recurses — POD is the common floor case here.)
+    inout fn genLlvmBufferEq(c: inout Comp, lhs: U64, rhs: U64) -> LLVMValueRef {
+        val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: lhs)
+        val size: LLVMValueRef = LLVMSizeOf(elemTy)
+        val pa: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
+        val la: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: pa), size, anon())
+        val pb: LLVMValueRef = self.genLlvmExpr(c: inout c, id: rhs)
+        val lb: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: pb), size, anon())
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        ptys.append(self.ptrty)
+        ptys.append(self.i64ty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 4U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(pa)
+        av.append(la)
+        av.append(pb)
+        av.append(lb)
+        val r: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 4U64, anon())
+        return LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+    }
+
     // `buf.insertAt(index, value)`: shift [index, count) right by one and insert a copy of
     // `value` at `index` (panics when `index > count`; `index == count` is append). Grows
     // the storage if full. The shift is a pure memmove (relocation, no element ARC); only

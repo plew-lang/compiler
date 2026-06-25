@@ -606,6 +606,10 @@ export extern "plew-intrinsic" {
     fn bufferSwapRemove[T](buffer: inout Buffer[T], index: U64) -> T
     fn bufferClear[T](buffer: inout Buffer[T])
     fn bufferTruncate[T](buffer: inout Buffer[T], count: U64)
+    // Element-wise equality of two buffers (same count AND each element equal). For a POD
+    // element type this is a byte compare of `count * sizeof(T)`; it is the floor primitive
+    // that `Array`/`String` equality (`@[Eq]`) ride via the `buffer` field. (collections.md §1.)
+    fn bufferEq[T](lhs: Buffer[T], rhs: Buffer[T]) -> Bool
 }
 
 // Methods on the Buffer floor, in pure Plew over the intrinsics above. Like Array's
@@ -671,6 +675,23 @@ pub impl[T] Buffer[T] {
     // Drop the suffix `[count, self.count)` when `count < self.count` (else a no-op).
     inout fn truncate(count: U64) {
         bufferTruncate(buffer: inout self, count: count)
+    }
+}
+
+// Buffer equality (spec/02): the floor's `==` is element-wise (NOT pointer identity) — a
+// `@[Eq]` struct over a Buffer field (`Array`/`String`) compares its buffer through this.
+pub impl[T] Buffer[T] as Eq {
+    assoc fn eq(lhs: Self, rhs: Self) -> Bool {
+        return bufferEq(lhs: lhs, rhs: rhs)
+    }
+}
+
+// String equality rides its `buffer` field through Buffer's element-wise Eq. Written
+// explicitly (not `@[Eq]`) so String — a pervasive stdlib type — stays clear of the
+// derive-synthesis path while still conforming to Eq for the witness/acceptance layer.
+pub impl String as Eq {
+    assoc fn eq(lhs: String, rhs: String) -> Bool {
+        return bufferEq(lhs: lhs.buffer, rhs: rhs.buffer)
     }
 }
 
