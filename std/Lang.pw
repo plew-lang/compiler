@@ -180,8 +180,8 @@ pub impl[K, V] Dictionary[K, V] {
     // by its stored hash. Entry order is preserved (dense arrays untouched).
     inout fn grow() where K: Hash {
         mut val newCap: U64 = 8U64
-        if self.buckets.count > 0U64 {
-            newCap = self.buckets.count * 2U64
+        if self.buckets.count() > 0U64 {
+            newCap = self.buckets.count() * 2U64
         }
         mut val nb: Buffer[U64] = Buffer.new()
         mut val j: U64 = 0
@@ -190,7 +190,7 @@ pub impl[K, V] Dictionary[K, V] {
             j = j + 1U64
         }
         mut val i: U64 = 0
-        while i < self.keys.count {
+        while i < self.keys.count() {
             val code: U64 = self.hashes[i]
             mut val slot: U64 = code & (newCap - 1U64)
             while nb[slot] != 0U64 {
@@ -203,15 +203,15 @@ pub impl[K, V] Dictionary[K, V] {
     }
     // Insert or update `key -> value`.
     inout fn insert(key: K, value: V) where K: Hash, K: Eq {
-        if self.buckets.count == 0U64 {
+        if self.buckets.count() == 0U64 {
             self.grow()
         } else {
-            if (self.count + 1U64) * 4U64 > self.buckets.count * 3U64 {
+            if (self.count + 1U64) * 4U64 > self.buckets.count() * 3U64 {
                 self.grow()
             }
         }
         val code: U64 = self.hashOf(key: key)
-        val cap: U64 = self.buckets.count
+        val cap: U64 = self.buckets.count()
         mut val slot: U64 = code & (cap - 1U64)
         while true {
             val b: U64 = self.buckets[slot]
@@ -219,7 +219,7 @@ pub impl[K, V] Dictionary[K, V] {
                 self.keys.append(key)
                 self.vals.append(value)
                 self.hashes.append(code)
-                self.buckets.set(index: slot, self.keys.count)
+                self.buckets.set(index: slot, self.keys.count())
                 self.count = self.count + 1U64
                 return
             }
@@ -235,11 +235,11 @@ pub impl[K, V] Dictionary[K, V] {
     }
     // Entry index + 1 for `key` (0 = absent).
     fn find(key: K) -> U64 where K: Hash, K: Eq {
-        if self.buckets.count == 0U64 {
+        if self.buckets.count() == 0U64 {
             return 0U64
         }
         val code: U64 = self.hashOf(key: key)
-        val cap: U64 = self.buckets.count
+        val cap: U64 = self.buckets.count()
         mut val slot: U64 = code & (cap - 1U64)
         while true {
             val b: U64 = self.buckets[slot]
@@ -291,10 +291,10 @@ pub impl[K, V] Dictionary[K, V] {
     // slot (no tombstones, so lookups never degrade), then (2) swap the last dense entry
     // into the freed position and drop the tail.
     inout fn remove(key: K) where K: Hash, K: Eq {
-        if self.buckets.count == 0U64 {
+        if self.buckets.count() == 0U64 {
             return
         }
-        val cap: U64 = self.buckets.count
+        val cap: U64 = self.buckets.count()
         val code: U64 = self.hashOf(key: key)
         // locate the slot holding `key` (linear probe from its ideal slot).
         mut val s: U64 = code & (cap - 1U64)

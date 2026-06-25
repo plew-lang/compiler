@@ -620,11 +620,15 @@ pub impl[T] Buffer[T] {
     assoc fn new() -> Buffer[T] {
         return bufferNew()
     }
-    // `count` (live element count) and `capacity` are compiler-recognised PROPERTIES
-    // (`buf.count` / `buf.capacity`, no parens), not methods — Plew has no general
-    // computed properties, so the floor's are special-cased like Array's `.count`
-    // (frontend exprType + backend Expr.Field). A `count()` method would collide with
-    // the property name ("a method cannot be used as a value"), so none is declared.
+    // The live element count (collections.md §3-付録4: a method, not a no-paren property —
+    // Plew has no computed properties; the body forwards to the floor intrinsic).
+    fn count() -> U64 {
+        return bufferCount(buffer: self)
+    }
+    // The allocated capacity (>= count; never shrinks implicitly).
+    fn capacity() -> U64 {
+        return bufferCapacity(buffer: self)
+    }
     // Whether the buffer holds no live elements.
     fn isEmpty() -> Bool {
         // (count bound to a local first: `intrinsic(...) == 0` would chain an operator on a

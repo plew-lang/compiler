@@ -40,8 +40,8 @@ pub impl[E] Set[E] {
     // stored hash. Entry order is preserved (dense arrays untouched).
     inout fn grow() where E: Hash {
         mut val newCap: U64 = 8U64
-        if self.buckets.count > 0U64 {
-            newCap = self.buckets.count * 2U64
+        if self.buckets.count() > 0U64 {
+            newCap = self.buckets.count() * 2U64
         }
         mut val nb: Buffer[U64] = Buffer.new()
         mut val j: U64 = 0
@@ -50,7 +50,7 @@ pub impl[E] Set[E] {
             j = j + 1U64
         }
         mut val i: U64 = 0
-        while i < self.items.count {
+        while i < self.items.count() {
             val code: U64 = self.hashes[i]
             mut val slot: U64 = code & (newCap - 1U64)
             while nb[slot] != 0U64 {
@@ -63,22 +63,22 @@ pub impl[E] Set[E] {
     }
     // Add `value` (a no-op when already present).
     inout fn insert(value~: E) where E: Hash, E: Eq {
-        if self.buckets.count == 0U64 {
+        if self.buckets.count() == 0U64 {
             self.grow()
         } else {
-            if (self.count + 1U64) * 4U64 > self.buckets.count * 3U64 {
+            if (self.count + 1U64) * 4U64 > self.buckets.count() * 3U64 {
                 self.grow()
             }
         }
         val code: U64 = self.hashOf(value: value)
-        val cap: U64 = self.buckets.count
+        val cap: U64 = self.buckets.count()
         mut val slot: U64 = code & (cap - 1U64)
         while true {
             val b: U64 = self.buckets[slot]
             if b == 0U64 {
                 self.items.append(value)
                 self.hashes.append(code)
-                self.buckets.set(index: slot, self.items.count)
+                self.buckets.set(index: slot, self.items.count())
                 self.count = self.count + 1U64
                 return
             }
@@ -93,11 +93,11 @@ pub impl[E] Set[E] {
     }
     // Entry index + 1 for `value` (0 = absent).
     fn find(value: E) -> U64 where E: Hash, E: Eq {
-        if self.buckets.count == 0U64 {
+        if self.buckets.count() == 0U64 {
             return 0U64
         }
         val code: U64 = self.hashOf(value: value)
-        val cap: U64 = self.buckets.count
+        val cap: U64 = self.buckets.count()
         mut val slot: U64 = code & (cap - 1U64)
         while true {
             val b: U64 = self.buckets[slot]
@@ -123,10 +123,10 @@ pub impl[E] Set[E] {
     // tombstones, so lookups never degrade), then (2) swap the last dense entry into the
     // freed position and drop the tail.
     inout fn remove(value~: E) where E: Hash, E: Eq {
-        if self.buckets.count == 0U64 {
+        if self.buckets.count() == 0U64 {
             return
         }
-        val cap: U64 = self.buckets.count
+        val cap: U64 = self.buckets.count()
         val code: U64 = self.hashOf(value: value)
         mut val s: U64 = code & (cap - 1U64)
         mut val found: Bool = false

@@ -244,17 +244,8 @@ pub impl Comp {
                         }
                     }
                 }
-                // `buf.count` / `buf.capacity` are U64 — the Buffer floor's compiler-
-                // recognised properties (Plew has no general computed properties; these
-                // are special-cased like Array's `.count`).
-                if self.isBufferType(ti: bt) {
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "count") || rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "capacity") {
-                        val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3)
-                        if u64.nameLen != 0 {
-                            return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
-                        }
-                    }
-                }
+                // `buf.count()` / `buf.capacity()` are ordinary methods now (collections.md
+                // §3-付録4), resolved through normal method typing below — no property branch.
                 // a generic struct instantiation's field type is substituted.
                 if self.isGenericInst(ref: bt.ref) {
                     return self.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
