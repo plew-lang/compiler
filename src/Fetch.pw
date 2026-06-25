@@ -17,7 +17,7 @@ import ./Cache with { repoDir, srcDir, trimEnd, cacheRoot }
 // is available from `execCode()` immediately after.
 fn run(cmd: Array[U8]) -> Array[U8] {
     val out: String = execOut(cmd: stringFromBytesUnchecked(cmd))
-    return out.bytes
+    return out.bytes()
 }
 
 // Append `'s'` (single-quoted) so a path/URL interpolates as one shell word.
@@ -32,15 +32,15 @@ fn q(into: inout Array[U8], s: Array[U8]) {
 export fn ensureMirror(cacheRoot: Array[U8], url: Array[U8]) -> I64 {
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val cmd: Array[U8] = []
-    appendBytes(into: inout cmd, from: "if [ -d ".bytes)
+    appendBytes(into: inout cmd, from: "if [ -d ".bytes())
     q(into: inout cmd, s: rd)
-    appendBytes(into: inout cmd, from: " ]; then git -C ".bytes)
+    appendBytes(into: inout cmd, from: " ]; then git -C ".bytes())
     q(into: inout cmd, s: rd)
-    appendBytes(into: inout cmd, from: " fetch --tags --prune --quiet; else git clone --bare --quiet ".bytes)
+    appendBytes(into: inout cmd, from: " fetch --tags --prune --quiet; else git clone --bare --quiet ".bytes())
     q(into: inout cmd, s: url)
-    appendBytes(into: inout cmd, from: " ".bytes)
+    appendBytes(into: inout cmd, from: " ".bytes())
     q(into: inout cmd, s: rd)
-    appendBytes(into: inout cmd, from: "; fi".bytes)
+    appendBytes(into: inout cmd, from: "; fi".bytes())
     run(cmd: cmd)
     return execCode()
 }
@@ -49,9 +49,9 @@ export fn ensureMirror(cacheRoot: Array[U8], url: Array[U8]) -> I64 {
 export fn listTags(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val cmd: Array[U8] = []
-    appendBytes(into: inout cmd, from: "git -C ".bytes)
+    appendBytes(into: inout cmd, from: "git -C ".bytes())
     q(into: inout cmd, s: rd)
-    appendBytes(into: inout cmd, from: " tag".bytes)
+    appendBytes(into: inout cmd, from: " tag".bytes())
     return run(cmd: cmd)
 }
 
@@ -60,11 +60,11 @@ export fn resolveCommit(cacheRoot: Array[U8], url: Array[U8], ref: Array[U8]) ->
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val refExpr: Array[U8] = []
     appendBytes(into: inout refExpr, from: ref)
-    appendBytes(into: inout refExpr, from: "^{commit}".bytes)
+    appendBytes(into: inout refExpr, from: "^{commit}".bytes())
     mut val cmd: Array[U8] = []
-    appendBytes(into: inout cmd, from: "git -C ".bytes)
+    appendBytes(into: inout cmd, from: "git -C ".bytes())
     q(into: inout cmd, s: rd)
-    appendBytes(into: inout cmd, from: " rev-parse ".bytes)
+    appendBytes(into: inout cmd, from: " rev-parse ".bytes())
     q(into: inout cmd, s: refExpr)
     return trimEnd(b: run(cmd: cmd))
 }
@@ -76,15 +76,15 @@ export fn materialize(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -
     val sd: Array[U8] = srcDir(cacheRoot: cacheRoot, url: url, commit: commit)
     val rd: Array[U8] = repoDir(cacheRoot: cacheRoot, url: url)
     mut val cmd: Array[U8] = []
-    appendBytes(into: inout cmd, from: "if [ -e ".bytes)
+    appendBytes(into: inout cmd, from: "if [ -e ".bytes())
     q(into: inout cmd, s: sd)
-    appendBytes(into: inout cmd, from: "/Plew.toml ]; then exit 0; fi; mkdir -p ".bytes)
+    appendBytes(into: inout cmd, from: "/Plew.toml ]; then exit 0; fi; mkdir -p ".bytes())
     q(into: inout cmd, s: sd)
-    appendBytes(into: inout cmd, from: " && git -C ".bytes)
+    appendBytes(into: inout cmd, from: " && git -C ".bytes())
     q(into: inout cmd, s: rd)
-    appendBytes(into: inout cmd, from: " archive ".bytes)
+    appendBytes(into: inout cmd, from: " archive ".bytes())
     q(into: inout cmd, s: commit)
-    appendBytes(into: inout cmd, from: " | tar -x -C ".bytes)
+    appendBytes(into: inout cmd, from: " | tar -x -C ".bytes())
     q(into: inout cmd, s: sd)
     run(cmd: cmd)
     return execCode()

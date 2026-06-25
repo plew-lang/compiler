@@ -60,7 +60,7 @@ pub impl LlvmCtx {
                             }
                         }
                         _ => {
-                            // an un-annotated array-valued initializer (`val bs = s.bytes`):
+                            // an un-annotated array-valued initializer (`val bs = s.bytes()`):
                             // track it as an array so `bs.count` / `bs[i]` resolve.
                             if self.exprIsArray(c: inout c, id: init) {
                                 isArr = true

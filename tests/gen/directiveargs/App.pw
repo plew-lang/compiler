@@ -32,7 +32,7 @@ pub impl Tagged as ParameterizedDerive {
 }
 
 fn pushStr(into: inout Array[U8], s: String) {
-    val b: Array[U8] = s.bytes
+    val b: Array[U8] = s.bytes()
     mut val i: U64 = 0
     while i < b.count {
         into.append(b[i])

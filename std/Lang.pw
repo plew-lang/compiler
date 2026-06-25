@@ -133,6 +133,13 @@ struct Array[T] {
 // Buffer floor — the inner `buffer*` intrinsics are lowered by function identity, and the
 // dispatch rides the uniform generic-method path, no Array type-name branching).
 pub impl[T] Array[T] {
+    // An array over an existing buffer (O(1), shares storage via CoW). The memberwise
+    // `<Array data=buf />` can't be used from another module (`data` is private), so this
+    // is the blessed cross-module wrapper — e.g. `String.bytes()` viewing its `Buffer[U8]`
+    // backing as an `Array[U8]`.
+    factory overBuffer(buffer: Buffer[T]) {
+        return <Array data=buffer />
+    }
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
         self.data.append(value)

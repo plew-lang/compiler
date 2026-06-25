@@ -67,7 +67,7 @@ export struct TypeRef {
 }
 
 // A variable binding in scope during codegen (param, let, or match bind), used
-// to recover an expression's type for monomorphization and `.bytes` dispatch.
+// to recover an expression's type for monomorphization and `.bytes()` dispatch.
 // One enclosing local captured by a closure (value capture, immutable scalars
 // only for now). Flat list keyed by `closureId` (the Closure node's arena
 // index); querying a closure's captures filters by it. The capture becomes a

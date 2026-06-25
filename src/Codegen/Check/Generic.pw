@@ -152,7 +152,7 @@ pub impl Comp {
                 if ut.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
                         val need: String = self.unOpTraitName(op: op)
-                        if need.bytes.count != 0U64 {
+                        if need.bytes().count != 0U64 {
                             if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ut.nameStart, tpLen: ut.nameLen, traitName: need)) {
                                 compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "this unary operator on a type parameter needs the matching bound (add `where T: Neg` / `: Not` / `: BitNot`) (spec/12)")
                             }
@@ -183,10 +183,10 @@ pub impl Comp {
                             }
                         }
                         // arithmetic / bitwise / shift desugar to their operator trait.
-                        if need.bytes.count == 0U64 {
+                        if need.bytes().count == 0U64 {
                             need = self.binOpTraitName(op: op)
                         }
-                        if need.bytes.count != 0U64 {
+                        if need.bytes().count != 0U64 {
                             if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
                                 compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                             }
@@ -279,7 +279,7 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: base)
                 // a field access on a type-parameter value is invalid: `T` is opaque and
                 // traits declare methods, not fields, so a bound cannot grant a field
-                // (spec/06). `.count`/`.bytes` etself. on a `T` value have no meaning.
+                // (spec/06). `.count`/`.bytes()` etself. on a `T` value have no meaning.
                 val bt: TypeInfo = self.exprType(id: base)
                 if bt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {

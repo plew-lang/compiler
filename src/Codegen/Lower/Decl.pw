@@ -32,7 +32,7 @@ pub impl Comp {
         mut val tyLen: U64 = 0
         mut val tyIsArray: Bool = false
         mut val tyRef: U64 = 0
-        if f.ty.name.bytes.count > 0 || f.ty.isRecord {
+        if f.ty.name.bytes().count > 0 || f.ty.isRecord {
             val pt: PType = self.lowerType(t: f.ty)
             tyStart = pt.start
             tyLen = pt.len

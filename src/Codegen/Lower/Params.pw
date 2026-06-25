@@ -14,7 +14,7 @@ pub impl Comp {
             mut val tyRef: U64 = 0
             // a record type has an empty `name` (its fields ride in args/argLabels), so gate
             // on isRecord too — else a record-typed param keeps no type and `p.field` fails.
-            if p.ty.name.bytes.count > 0 || p.ty.isRecord {
+            if p.ty.name.bytes().count > 0 || p.ty.isRecord {
                 val pt: PType = self.lowerType(t: p.ty)
                 tyStart = pt.start
                 tyLen = pt.len
@@ -57,7 +57,7 @@ pub impl Comp {
         val en: Bind = self.internBytes(s: p.typeName)
         mut val vStart: U64 = 0
         mut val vLen: U64 = 0
-        if p.variant.bytes.count > 0 {
+        if p.variant.bytes().count > 0 {
             val vb: Bind = self.internBytes(s: p.variant)
             vStart = vb.nameStart
             vLen = vb.nameLen

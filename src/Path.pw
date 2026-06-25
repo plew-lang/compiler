@@ -44,7 +44,7 @@ export fn stripParents(path: Array[U8], baseLen: U64, n: U64) -> U64 {
 export fn finishModulePath(base: Array[U8]) -> Array[U8] {
     mut val withPw: Array[U8] = []
     appendBytes(into: inout withPw, from: base)
-    appendBytes(into: inout withPw, from: ".pw".bytes)
+    appendBytes(into: inout withPw, from: ".pw".bytes())
     if fileExists(path: withPw) {
         return withPw
     }
@@ -52,12 +52,12 @@ export fn finishModulePath(base: Array[U8]) -> Array[U8] {
     appendBytes(into: inout under, from: base)
     if base.count > 0 {
         if base[base.count - 1] == 47 {
-            appendBytes(into: inout under, from: "_.pw".bytes)
+            appendBytes(into: inout under, from: "_.pw".bytes())
         } else {
-            appendBytes(into: inout under, from: "/_.pw".bytes)
+            appendBytes(into: inout under, from: "/_.pw".bytes())
         }
     } else {
-        appendBytes(into: inout under, from: "/_.pw".bytes)
+        appendBytes(into: inout under, from: "/_.pw".bytes())
     }
     if fileExists(path: under) {
         return under
@@ -86,7 +86,7 @@ export fn resolveImport(src: Array[U8], pStart: U64, pLen: U64, importer: Array[
                 }
                 appendBytes(into: inout out, from: stdRoot)
                 appendBytes(into: inout out, from: extractSpan(buf: src, start: pStart + 5, len: end - (pStart + 5)))
-                appendBytes(into: inout out, from: ".pw".bytes)
+                appendBytes(into: inout out, from: ".pw".bytes())
                 return out
             }
         }
@@ -170,7 +170,7 @@ export fn computeStdRoot(arg0: Array[U8]) -> Array[U8] {
     val pre: U64 = dirPrefixLen(path: arg0)
     mut val out: Array[U8] = []
     appendBytes(into: inout out, from: extractSpan(buf: arg0, start: 0, len: pre))
-    appendBytes(into: inout out, from: "std/".bytes)
+    appendBytes(into: inout out, from: "std/".bytes())
     return out
 }
 
@@ -189,7 +189,7 @@ export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
             mani.append(entry[i])
             i += 1
         }
-        val mn: Array[U8] = "Plew.toml".bytes
+        val mn: Array[U8] = "Plew.toml".bytes()
         appendBytes(into: inout mani, from: mn)
         if fileExists(path: mani) {
             // manifest in the entry's own directory (a relative entry like `src/_.pw`
@@ -197,7 +197,7 @@ export fn findPkgDir(entry: Array[U8]) -> Array[U8] {
             // `./` (not "") so loadManifestDeps/loadLock don't read it as "no package"
             // — the package IS the cwd. Path deps then resolve under `./`.
             if dirLen == 0 {
-                return "./".bytes
+                return "./".bytes()
             }
             mut val dir: Array[U8] = []
             mut val j: U64 = 0
@@ -232,7 +232,7 @@ export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     }
     mut val sr: Array[U8] = []
     appendBytes(into: inout sr, from: dir)
-    appendBytes(into: inout sr, from: "src/".bytes)
+    appendBytes(into: inout sr, from: "src/".bytes())
     return sr
 }
 
@@ -248,7 +248,7 @@ export fn genSiblingPath(path: Array[U8]) -> Array[U8] {
         if path[n - 2] == 112 {
             if path[n - 1] == 119 {
                 appendBytes(into: inout out, from: extractSpan(buf: path, start: 0, len: n - 3))
-                appendBytes(into: inout out, from: ".gen.pw".bytes)
+                appendBytes(into: inout out, from: ".gen.pw".bytes())
                 return out
             }
         }

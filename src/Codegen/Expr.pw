@@ -55,12 +55,12 @@ pub impl Comp {
     // re-implementing it. The label/method names are recovered from arena.bytes (the
     // Dictionary prelude source contains them).
     inout fn synthDictMethod(recv: U64, name: String, arg0Label: String, arg0: U64, hasArg1: Bool, arg1Label: String, arg1: U64) -> U64 {
-        val nm: Bind = self.kwSpan(kw: name, kwLen: name.bytes.count)
-        val l0: Bind = self.kwSpan(kw: arg0Label, kwLen: arg0Label.bytes.count)
+        val nm: Bind = self.kwSpan(kw: name, kwLen: name.bytes().count)
+        val l0: Bind = self.kwSpan(kw: arg0Label, kwLen: arg0Label.bytes().count)
         mut val args: Array[Arg] = []
         args.append(<Arg expr=arg0 isInout=false labelStart=l0.nameStart labelLen=l0.nameLen hasLabel=true />)
         if hasArg1 {
-            val l1: Bind = self.kwSpan(kw: arg1Label, kwLen: arg1Label.bytes.count)
+            val l1: Bind = self.kwSpan(kw: arg1Label, kwLen: arg1Label.bytes().count)
             args.append(<Arg expr=arg1 isInout=false labelStart=l1.nameStart labelLen=l1.nameLen hasLabel=true />)
         }
         return self.pushExpr(e: <Expr.Method recv=recv nameStart=nm.nameStart nameLen=nm.nameLen args=args />)

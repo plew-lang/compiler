@@ -73,11 +73,11 @@ pub impl Comp {
             i += 1
         }
         if tr.args.count > 0U64 {
-            appendBytes(into: inout out, from: "[".bytes)
+            appendBytes(into: inout out, from: "[".bytes())
             mut val a: U64 = 0
             while a < tr.args.count {
                 if a > 0U64 {
-                    appendBytes(into: inout out, from: ",".bytes)
+                    appendBytes(into: inout out, from: ",".bytes())
                 }
                 val ar: TypeRef = self.arena.types[tr.args[a]]
                 mut val k: U64 = 0
@@ -87,7 +87,7 @@ pub impl Comp {
                 }
                 a += 1
             }
-            appendBytes(into: inout out, from: "]".bytes)
+            appendBytes(into: inout out, from: "]".bytes())
         }
         return out
     }
@@ -106,12 +106,12 @@ pub impl Comp {
         }
         val sd: StructDef = self.arena.structs[si]
         mut val cn: Array[U8] = []
-        appendBytes(into: inout cn, from: "(".bytes)
+        appendBytes(into: inout cn, from: "(".bytes())
         mut val changed: Bool = false
         mut val j: U64 = 0
         while j < sd.fields.count {
             if j > 0U64 {
-                appendBytes(into: inout cn, from: ",".bytes)
+                appendBytes(into: inout cn, from: ",".bytes())
             }
             val fd: FieldDef = sd.fields[j]
             mut val k: U64 = 0
@@ -119,7 +119,7 @@ pub impl Comp {
                 cn.append(self.arena.bytes[fd.nameStart + k])
                 k += 1
             }
-            appendBytes(into: inout cn, from: ":".bytes)
+            appendBytes(into: inout cn, from: ":".bytes())
             val g: U64 = self.groundTypeRef(ref: fd.ty)
             if g != fd.ty {
                 changed = true
@@ -127,7 +127,7 @@ pub impl Comp {
             appendBytes(into: inout cn, from: self.recordTypeKeyFromRef(ref: g))
             j += 1
         }
-        appendBytes(into: inout cn, from: ")".bytes)
+        appendBytes(into: inout cn, from: ")".bytes())
         if !(changed) {
             return ref
         }

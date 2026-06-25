@@ -2,7 +2,7 @@ import @Std/Io with { print, readStdin }
 
 fn main() {
     val s: String = readStdin()
-    val bs: Array[U8] = s.bytes
+    val bs: Array[U8] = s.bytes()
     mut val n: I64 = 0
     for val b in bs {
         if b == 97 {

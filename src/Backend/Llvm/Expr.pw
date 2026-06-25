@@ -203,11 +203,6 @@ pub impl LlvmCtx {
                 return self.genLlvmIndex(c: inout c, base: base, index: index)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                // `s.bytes` on a String: the String value IS the {ptr,i64} byte array
-                // (same layout), so the view is the value itself (no copy).
-                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
-                    return self.genLlvmExpr(c: inout c, id: base)
-                }
                 // `arr.count` — an array's count is field 1.
                 if self.exprIsArray(c: inout c, id: base) {
                     if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {

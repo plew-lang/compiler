@@ -27,7 +27,7 @@ pub impl LlvmCtx {
     // Build a String value (strty `{i8*, i64}`) from a literal. The bytes live in a
     // rawbuf-SHAPED global `[i64 cap][i64 rc][bytes…]` (the same layout plew_rawbuf_alloc
     // produces) with rc = a huge sentinel, and the String's pointer is at the bytes
-    // (offset 16). This unifies String buffers onto rawbuf so `.bytes` views and the
+    // (offset 16). This unifies String buffers onto rawbuf so `.bytes()` views and the
     // scope-exit drop (plew_rawbuf_drop: dec rc, free at 0) work uniformly — the sentinel
     // rc means a literal is never freed (program-lifetime), and the header is invisible to
     // String ops (which read only {ptr,len}). The global is mutable so rc is writable.

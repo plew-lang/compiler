@@ -47,7 +47,7 @@ export fn trimEnd(b: Array[U8]) -> Array[U8] {
 // into it) and the compiler's loader (reading from it) compute it the same way.
 export fn cacheRoot() -> Array[U8] {
     val out: String = execOut(cmd: "printf %s \"${PLEW_CACHE:-$HOME/.plew/cache}\"")
-    return trimEnd(b: out.bytes)
+    return trimEnd(b: out.bytes())
 }
 
 // Turn a git URL into a single filesystem-safe path component: every byte that is
@@ -99,7 +99,7 @@ export fn sanitizeUrl(url: Array[U8]) -> Array[U8] {
 export fn repoDir(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     appendBytes(into: inout out, from: cacheRoot)
-    appendBytes(into: inout out, from: "/repos/".bytes)
+    appendBytes(into: inout out, from: "/repos/".bytes())
     appendBytes(into: inout out, from: sanitizeUrl(url: url))
     return out
 }
@@ -110,9 +110,9 @@ export fn repoDir(cacheRoot: Array[U8], url: Array[U8]) -> Array[U8] {
 export fn srcDir(cacheRoot: Array[U8], url: Array[U8], commit: Array[U8]) -> Array[U8] {
     mut val out: Array[U8] = []
     appendBytes(into: inout out, from: cacheRoot)
-    appendBytes(into: inout out, from: "/src/".bytes)
+    appendBytes(into: inout out, from: "/src/".bytes())
     appendBytes(into: inout out, from: sanitizeUrl(url: url))
-    appendBytes(into: inout out, from: "/".bytes)
+    appendBytes(into: inout out, from: "/".bytes())
     appendBytes(into: inout out, from: commit)
     return out
 }

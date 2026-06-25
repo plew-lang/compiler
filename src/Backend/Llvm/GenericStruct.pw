@@ -38,7 +38,7 @@ pub impl LlvmCtx {
                         self.genStructTys.append(self.arrayTy)
                     } else {
                         mut val nm: Array[U8] = []
-                        appendBytes(into: inout nm, from: "gs".bytes)
+                        appendBytes(into: inout nm, from: "gs".bytes())
                         appendU64Dec(into: inout nm, n: k)
                         nm.append(0)
                         self.genStructTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
@@ -135,7 +135,7 @@ pub impl LlvmCtx {
                         vi += 1
                     }
                     mut val nm: Array[U8] = []
-                    appendBytes(into: inout nm, from: "ge".bytes)
+                    appendBytes(into: inout nm, from: "ge".bytes())
                     appendU64Dec(into: inout nm, n: k)
                     nm.append(0)
                     val ty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
@@ -312,6 +312,25 @@ pub impl LlvmCtx {
     // or method can't be resolved or the return isn't a generic instance — so a plain
     // (non-generic) return leaves the caller's behavior unchanged.
     inout fn methodResultRef(c: inout Comp, recv: U64, nameStart: U64, nameLen: U64, margs: Array[Arg]) -> U64 {
+        // a String-kind receiver (a plain String, a newtype over String, or a String-valued
+        // subscript like `dict[k]`) whose structural type ref doesn't resolve below: resolve
+        // the method on `String` so `s.bytes()`'s `Array[U8]` return is recovered (and a chained
+        // `.bytes().count` / index tracks as an array). String has no type params, so its
+        // declared return ref is already concrete.
+        if self.valueKind(c: inout c, id: recv) == 1U64 {
+            val ss: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+            val smfi: U64 = c.findMethod(recvStart: ss.nameStart, recvLen: ss.nameLen, nameStart: nameStart, nameLen: nameLen, args: margs)
+            if smfi < c.arena.funcs.count {
+                val smf: Func = c.arena.funcs[smfi]
+                if smf.hasRet {
+                    if smf.retTy != 0U64 {
+                        if c.isGenericInst(ref: smf.retTy) {
+                            return smf.retTy
+                        }
+                    }
+                }
+            }
+        }
         val recvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
         mut val headStart: U64 = 0
         mut val headLen: U64 = 0

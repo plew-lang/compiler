@@ -49,11 +49,11 @@ pub impl Comp {
         if pty.ref < self.arena.types.count {
             val tr: TypeRef = self.arena.types[pty.ref]
             if tr.args.count > 0U64 {
-                appendBytes(into: inout out, from: "[".bytes)
+                appendBytes(into: inout out, from: "[".bytes())
                 mut val a: U64 = 0
                 while a < tr.args.count {
                     if a > 0U64 {
-                        appendBytes(into: inout out, from: ",".bytes)
+                        appendBytes(into: inout out, from: ",".bytes())
                     }
                     val ar: TypeRef = self.arena.types[tr.args[a]]
                     mut val k: U64 = 0
@@ -63,7 +63,7 @@ pub impl Comp {
                     }
                     a += 1
                 }
-                appendBytes(into: inout out, from: "]".bytes)
+                appendBytes(into: inout out, from: "]".bytes())
             }
         }
         return out
@@ -99,18 +99,18 @@ pub impl Comp {
         }
         // canonical name `(n1:key1,n2:key2,...)` over the sorted fields.
         mut val cn: Array[U8] = []
-        appendBytes(into: inout cn, from: "(".bytes)
+        appendBytes(into: inout cn, from: "(".bytes())
         mut val j: U64 = 0
         while j < order.count {
             if j > 0U64 {
-                appendBytes(into: inout cn, from: ",".bytes)
+                appendBytes(into: inout cn, from: ",".bytes())
             }
-            appendBytes(into: inout cn, from: fieldNames[order[j]].bytes)
-            appendBytes(into: inout cn, from: ":".bytes)
+            appendBytes(into: inout cn, from: fieldNames[order[j]].bytes())
+            appendBytes(into: inout cn, from: ":".bytes())
             appendBytes(into: inout cn, from: self.recordTypeKey(pty: fieldTys[order[j]]))
             j += 1
         }
-        appendBytes(into: inout cn, from: ")".bytes)
+        appendBytes(into: inout cn, from: ")".bytes())
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(b: cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         // already registered?
@@ -160,7 +160,7 @@ pub impl Comp {
             i += 1
         }
         mut val viewExtId: U64 = 0
-        if t.extView.bytes.count > 0 {
+        if t.extView.bytes().count > 0 {
             val evN: Bind = self.internBytes(s: t.extView)
             viewExtId = intern(c: inout self, start: evN.nameStart, len: evN.nameLen)
         }
@@ -169,7 +169,7 @@ pub impl Comp {
         mut val argLabels: Array[U64] = []
         mut val li: U64 = 0
         while li < t.argLabels.count {
-            if t.argLabels[li].bytes.count > 0 {
+            if t.argLabels[li].bytes().count > 0 {
                 val lblN: Bind = self.internBytes(s: t.argLabels[li])
                 argLabels.append(intern(c: inout self, start: lblN.nameStart, len: lblN.nameLen))
             } else {
@@ -213,10 +213,10 @@ pub impl Comp {
     // declared before any body that calls it (source order), so its param types are
     // registered TypeRefs here. Used to give a call-argument literal its context type.
     inout fn callArgType(fnName: String, argLabel: String) -> U64 {
-        if fnName.bytes.count == 0U64 {
+        if fnName.bytes().count == 0U64 {
             return 0U64
         }
-        if argLabel.bytes.count == 0U64 {
+        if argLabel.bytes().count == 0U64 {
             return 0U64
         }
         val fnB: Bind = self.internBytes(s: fnName)
@@ -256,10 +256,10 @@ pub impl Comp {
     // single param type unambiguously) is the type adopted — otherwise 0 (context-free,
     // no guess). Gives a record/dict/`()` literal method-argument its context type.
     inout fn methodArgType(methodName: String, argLabel: String) -> U64 {
-        if methodName.bytes.count == 0U64 {
+        if methodName.bytes().count == 0U64 {
             return 0U64
         }
-        if argLabel.bytes.count == 0U64 {
+        if argLabel.bytes().count == 0U64 {
             return 0U64
         }
         val mnB: Bind = self.internBytes(s: methodName)

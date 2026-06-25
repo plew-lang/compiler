@@ -146,7 +146,7 @@ pub impl Bool as Hash {
 }
 pub impl String as Hash {
     fn hash[H](hasher: inout H) where H: Hasher {
-        val bs: Array[U8] = self.bytes
+        val bs: Array[U8] = self.bytes()
         val n: U64 = bs.count
         mut val i: U64 = 0
         mut val word: U64 = 0

@@ -4,7 +4,7 @@
 // a struct. A `pub impl UserId { ... }` must therefore be rejected.
 newtype UserId = String
 pub impl UserId {
-    fn len() -> U64 { return self.bytes.count }
+    fn len() -> U64 { return self.bytes().count }
 }
 fn main() {
     val u: UserId = "alice" as UserId

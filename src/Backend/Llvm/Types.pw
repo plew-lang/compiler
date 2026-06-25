@@ -144,7 +144,7 @@ pub impl LlvmCtx {
                     self.structTys.append(self.strty)
                 } else {
                     mut val nm: Array[U8] = []
-                    appendBytes(into: inout nm, from: "st".bytes)
+                    appendBytes(into: inout nm, from: "st".bytes())
                     appendU64Dec(into: inout nm, n: i)
                     nm.append(0)
                     self.structTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))

@@ -54,7 +54,7 @@ pub impl Comp {
                                 }
                             }
                             _ => {
-                                // a NON-literal array value (`val b: Array[I64] = s.bytes`):
+                                // a NON-literal array value (`val b: Array[I64] = s.bytes()`):
                                 // inferType reports arrays as kind 0 (deferred), so tcCheckValue
                                 // above can't compare element types. Compare the init's element
                                 // type to the declared one directly, but only when BOTH are

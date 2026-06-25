@@ -39,7 +39,7 @@ pub impl Comp {
     // synthetic identifier names referenced by derived code (#5: `@[Eq]`/`@[Ord]`).
     inout fn internBytes(s: String) -> Bind {
         val start: U64 = self.arena.bytes.count
-        val sb: Array[U8] = s.bytes
+        val sb: Array[U8] = s.bytes()
         mut val i: U64 = 0
         while i < sb.count {
             self.arena.bytes.append(sb[i])

@@ -189,7 +189,7 @@ pub impl LlvmCtx {
                 if self.enumAllPrimitive(c: inout c, eid: ei) {
                     val maxWords: U64 = self.enumPayloadWords(c: inout c, eid: ei)
                     mut val nm: Array[U8] = []
-                    appendBytes(into: inout nm, from: "en".bytes)
+                    appendBytes(into: inout nm, from: "en".bytes())
                     appendU64Dec(into: inout nm, n: ei)
                     nm.append(0)
                     val ty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
@@ -464,7 +464,7 @@ pub impl LlvmCtx {
         ptys.append(ety)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pwenumrel".bytes)
+        appendBytes(into: inout nm, from: "pwenumrel".bytes())
         appendU64Dec(into: inout nm, n: eid)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
@@ -504,7 +504,7 @@ pub impl LlvmCtx {
         ptys.append(ety)
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pwenumret".bytes)
+        appendBytes(into: inout nm, from: "pwenumret".bytes())
         appendU64Dec(into: inout nm, n: eid)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
@@ -544,7 +544,7 @@ pub impl LlvmCtx {
         ptys.append(ety)
         val fty: LLVMTypeRef = LLVMFunctionType(ety, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pwenumcopy".bytes)
+        appendBytes(into: inout nm, from: "pwenumcopy".bytes())
         appendU64Dec(into: inout nm, n: eid)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)

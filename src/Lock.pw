@@ -92,11 +92,11 @@ export fn parseLock(bytes: Array[U8]) -> Lock {
     while si < doc.sections.count {
         val sec: Section = doc.sections[si]
         if sec.isArrayElem {
-            if bytesEq(a: sec.header, b: "package".bytes) {
-                pkgs.append(<LockPkg git=sectionStr(sec: sec, key: "git".bytes) version=sectionStr(sec: sec, key: "version".bytes) commit=sectionStr(sec: sec, key: "commit".bytes) deps=sectionArr(sec: sec, key: "dependencies".bytes) />)
+            if bytesEq(a: sec.header, b: "package".bytes()) {
+                pkgs.append(<LockPkg git=sectionStr(sec: sec, key: "git".bytes()) version=sectionStr(sec: sec, key: "version".bytes()) commit=sectionStr(sec: sec, key: "commit".bytes()) deps=sectionArr(sec: sec, key: "dependencies".bytes()) />)
             } else {
-                if bytesEq(a: sec.header, b: "referrer".bytes) {
-                    refs.append(<Name s=sectionStr(sec: sec, key: "path".bytes) />)
+                if bytesEq(a: sec.header, b: "referrer".bytes()) {
+                    refs.append(<Name s=sectionStr(sec: sec, key: "path".bytes()) />)
                 }
             }
         }
@@ -210,48 +210,48 @@ fn sortPkgs(pkgs: Array[LockPkg]) -> Array[LockPkg] {
 
 fn emitStr(into: inout Array[U8], key: Array[U8], value: Array[U8]) {
     appendBytes(into: inout into, from: key)
-    appendBytes(into: inout into, from: " = \"".bytes)
+    appendBytes(into: inout into, from: " = \"".bytes())
     appendBytes(into: inout into, from: value)
-    appendBytes(into: inout into, from: "\"\n".bytes)
+    appendBytes(into: inout into, from: "\"\n".bytes())
 }
 
 fn emitArr(into: inout Array[U8], key: Array[U8], names: Array[Name]) {
     appendBytes(into: inout into, from: key)
-    appendBytes(into: inout into, from: " = [".bytes)
+    appendBytes(into: inout into, from: " = [".bytes())
     mut val i: U64 = 0
     while i < names.count {
         if i > 0 {
-            appendBytes(into: inout into, from: ", ".bytes)
+            appendBytes(into: inout into, from: ", ".bytes())
         }
-        appendBytes(into: inout into, from: "\"".bytes)
+        appendBytes(into: inout into, from: "\"".bytes())
         appendBytes(into: inout into, from: names[i].s)
-        appendBytes(into: inout into, from: "\"".bytes)
+        appendBytes(into: inout into, from: "\"".bytes())
         i += 1
     }
-    appendBytes(into: inout into, from: "]\n".bytes)
+    appendBytes(into: inout into, from: "]\n".bytes())
 }
 
 // Serialize a lock to its `Plew.lock` byte form (deterministic, sorted).
 export fn writeLock(pkgs: Array[LockPkg], referrers: Array[Name]) -> Array[U8] {
     mut val out: Array[U8] = []
-    appendBytes(into: inout out, from: "version = 1\n".bytes)
+    appendBytes(into: inout out, from: "version = 1\n".bytes())
     val sorted: Array[LockPkg] = sortPkgs(pkgs: pkgs)
     mut val i: U64 = 0
     while i < sorted.count {
         val p: LockPkg = sorted[i]
-        appendBytes(into: inout out, from: "\n[[package]]\n".bytes)
-        emitStr(into: inout out, key: "git".bytes, value: p.git)
+        appendBytes(into: inout out, from: "\n[[package]]\n".bytes())
+        emitStr(into: inout out, key: "git".bytes(), value: p.git)
         if p.version.count > 0 {
-            emitStr(into: inout out, key: "version".bytes, value: p.version)
+            emitStr(into: inout out, key: "version".bytes(), value: p.version)
         }
-        emitStr(into: inout out, key: "commit".bytes, value: p.commit)
-        emitArr(into: inout out, key: "dependencies".bytes, names: p.deps)
+        emitStr(into: inout out, key: "commit".bytes(), value: p.commit)
+        emitArr(into: inout out, key: "dependencies".bytes(), names: p.deps)
         i += 1
     }
     mut val r: U64 = 0
     while r < referrers.count {
-        appendBytes(into: inout out, from: "\n[[referrer]]\n".bytes)
-        emitStr(into: inout out, key: "path".bytes, value: referrers[r].s)
+        appendBytes(into: inout out, from: "\n[[referrer]]\n".bytes())
+        emitStr(into: inout out, key: "path".bytes(), value: referrers[r].s)
         r += 1
     }
     return out

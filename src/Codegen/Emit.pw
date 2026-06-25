@@ -93,7 +93,7 @@ pub impl Comp {
     // Emit the C *element* type for a type-name span (no Array wrapper). Each Plew
     // integer type maps to its exact-width C stdint type so storage width and
     // signedness match the declared type (no hidden widening); U8 -> unsigned char
-    // (== uint8_t, keeps byte arrays aliasing a char buffer for String.bytes);
+    // (== uint8_t, keeps byte arrays aliasing a char buffer for String.bytes());
     // Bool -> long long (width irrelevant); String -> PlewString; named -> echoed.
     // The element ref recorded for the array-element name span (start,len), or 0 if
     // it is not a recorded element (genCElem falls back to the name path then).

@@ -372,7 +372,7 @@ pub impl Comp {
 
     inout fn tcFieldPos(prefix: String, nameStart: U64, nameLen: U64) -> String {
         mut val bs: Array[U8] = []
-        appendBytes(into: inout bs, from: prefix.bytes)
+        appendBytes(into: inout bs, from: prefix.bytes())
         mut val i: U64 = 0
         while i < nameLen {
             bs.append(self.arena.bytes[nameStart + i])
@@ -387,7 +387,7 @@ pub impl Comp {
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return "Method" }
             Expr.Field(base: _, val nameStart, val nameLen) => {
                 mut val bs: Array[U8] = []
-                appendBytes(into: inout bs, from: "Field:".bytes)
+                appendBytes(into: inout bs, from: "Field:".bytes())
                 mut val i: U64 = 0
                 while i < nameLen {
                     bs.append(self.arena.bytes[nameStart + i])
@@ -399,7 +399,7 @@ pub impl Comp {
             Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
             Expr.Ident(val start, val len) => {
                 mut val bs: Array[U8] = []
-                appendBytes(into: inout bs, from: "Ident:".bytes)
+                appendBytes(into: inout bs, from: "Ident:".bytes())
                 mut val i: U64 = 0
                 while i < len {
                     bs.append(self.arena.bytes[start + i])
@@ -412,7 +412,7 @@ pub impl Comp {
             Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
             Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
                 mut val bs: Array[U8] = []
-                appendBytes(into: inout bs, from: "Int:".bytes)
+                appendBytes(into: inout bs, from: "Int:".bytes())
                 mut val i: U64 = 0
                 while i < tyLen {
                     bs.append(self.arena.bytes[tyStart + i])

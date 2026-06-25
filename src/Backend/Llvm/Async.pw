@@ -143,7 +143,7 @@ pub impl LlvmCtx {
         }
         self.collectAsyncFieldTys(c: inout c, blockId: f.body, tys: inout tys)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "__af".bytes)
+        appendBytes(into: inout nm, from: "__af".bytes())
         appendU64Dec(into: inout nm, n: fi)
         nm.append(0)
         val frameTy: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
@@ -171,9 +171,9 @@ pub impl LlvmCtx {
                 rptys.append(self.ptrty)
                 val resumeTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(rptys), 1U64, 0I32)
                 mut val rnm: Array[U8] = []
-                appendBytes(into: inout rnm, from: "__af".bytes)
+                appendBytes(into: inout rnm, from: "__af".bytes())
                 appendU64Dec(into: inout rnm, n: fi)
-                appendBytes(into: inout rnm, from: "_resume".bytes)
+                appendBytes(into: inout rnm, from: "_resume".bytes())
                 rnm.append(0)
                 val resumeFn: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(rnm), resumeTy)
                 self.asyncFnIdx.append(fi)
@@ -189,7 +189,7 @@ pub impl LlvmCtx {
                     }
                     val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), ptys.count, 0I32)
                     mut val enm: Array[U8] = []
-                    appendBytes(into: inout enm, from: "pf".bytes)
+                    appendBytes(into: inout enm, from: "pf".bytes())
                     appendU64Dec(into: inout enm, n: fi)
                     enm.append(0)
                     val entryFn: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(enm), fty)

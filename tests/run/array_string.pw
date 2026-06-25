@@ -13,7 +13,7 @@ fn sum(b: Box) -> I64 {
     return s
 }
 fn countA(s: String) -> I64 {
-    val bs: Array[U8] = s.bytes
+    val bs: Array[U8] = s.bytes()
     mut val n: I64 = 0
     mut val i: U64 = 0
     while i < bs.count {

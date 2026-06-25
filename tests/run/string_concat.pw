@@ -14,7 +14,7 @@ fn main() {
     print(a + b + a)                // foobarfoo  (left-associative chain)
     print("x" + "y")                // xy         (two literals)
     print(greet(name: "Plew"))      // Hello, Plew!
-    print((a + b).bytes.count)      // 6          (a method on the concat result)
+    print((a + b).bytes().count)      // 6          (a method on the concat result)
     print((a + b).isEmpty())        // 0
     print(("" + "").isEmpty())      // 1          (empty + empty stays empty)
     mut val s: String = ""

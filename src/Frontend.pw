@@ -377,7 +377,7 @@ export fn runFrontend() -> Comp {
         // Each file's `part`/`import` paths resolve relative to that file's own
         // directory; every distinct file is appended once (single-arena / single-C).
         val rootPath: String = argAt(entryArgIdx)
-        val entryBytes: Array[U8] = rootPath.bytes
+        val entryBytes: Array[U8] = rootPath.bytes()
         // Loud-fail on a missing entry file: without this readFileBytes returns an
         // empty string and the compiler silently emits an empty program (exit 0),
         // which hides a typo'd path. (Acceptance soundness: never silently accept.)
@@ -397,7 +397,7 @@ export fn runFrontend() -> Comp {
         // not the entry's — the right foundation for transitive resolution.
         // std library root for `@Std/…`: the `std/` directory next to the plewc
         // binary (argv[0]'s directory), so `@Std/Core` -> `<plewcdir>/std/Core.pw`.
-        val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes)
+        val stdRoot: Array[U8] = computeStdRoot(arg0: argAt(0).bytes())
         // the global package cache root (for git `@dep` source lookup via the lock),
         // resolved once for the whole build.
         val cacheRootBytes: Array[U8] = cacheRoot()
@@ -416,7 +416,7 @@ export fn runFrontend() -> Comp {
         // here as ambient. Guarded by fileExists (a freshly-seeded compiler may lack it).
         mut val langPath: Array[U8] = []
         appendBytes(into: inout langPath, from: stdRoot)
-        appendBytes(into: inout langPath, from: "Lang.pw".bytes)
+        appendBytes(into: inout langPath, from: "Lang.pw".bytes())
         if fileExists(path: langPath) {
             val lps: U64 = pathBuf.count
             appendBytes(into: inout pathBuf, from: langPath)
@@ -433,7 +433,7 @@ export fn runFrontend() -> Comp {
         // cross-module call (only types/operators are ambient, not free functions).
         mut val corePath: Array[U8] = []
         appendBytes(into: inout corePath, from: stdRoot)
-        appendBytes(into: inout corePath, from: "Core.pw".bytes)
+        appendBytes(into: inout corePath, from: "Core.pw".bytes())
         if fileExists(path: corePath) {
             val cps: U64 = pathBuf.count
             appendBytes(into: inout pathBuf, from: corePath)
@@ -448,7 +448,7 @@ export fn runFrontend() -> Comp {
         // prelude itself imports it; a target that also imports it dedups via pathSeen.
         mut val hashPath: Array[U8] = []
         appendBytes(into: inout hashPath, from: stdRoot)
-        appendBytes(into: inout hashPath, from: "Hash.pw".bytes)
+        appendBytes(into: inout hashPath, from: "Hash.pw".bytes())
         if fileExists(path: hashPath) {
             val hps: U64 = pathBuf.count
             appendBytes(into: inout pathBuf, from: hashPath)
@@ -460,7 +460,7 @@ export fn runFrontend() -> Comp {
         if genMode {
             mut val ioPath: Array[U8] = []
             appendBytes(into: inout ioPath, from: stdRoot)
-            appendBytes(into: inout ioPath, from: "Io.pw".bytes)
+            appendBytes(into: inout ioPath, from: "Io.pw".bytes())
             if fileExists(path: ioPath) {
                 val ios: U64 = pathBuf.count
                 appendBytes(into: inout pathBuf, from: ioPath)
@@ -473,7 +473,7 @@ export fn runFrontend() -> Comp {
             // like a normal `@dep` import, so the macro's pinned Syntax version is the one
             // loaded. Its `part`s + `import @Std/Core` are followed by the BFS below; a
             // target file that also imports it dedups via pathSeen.
-            val synName: Array[U8] = "@Plew/Syntax".bytes
+            val synName: Array[U8] = "@Plew/Syntax".bytes()
             val genPkgDir: Array[U8] = findPkgDir(entry: entryBytes)
             val genDeps: Array[Dep] = loadManifestDeps(pkgDir: genPkgDir)
             mut val synPath: Array[U8] = resolveDepImport(src: synName, pStart: 0, pLen: synName.count, deps: genDeps, pkgDir: genPkgDir)
@@ -503,7 +503,7 @@ export fn runFrontend() -> Comp {
             val moduleId: U64 = ent.fieldStart
             val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
             val src: String = readFileBytes(path)
-            val sb: Array[U8] = src.bytes
+            val sb: Array[U8] = src.bytes()
             if c.arena.bytes.count > 0 {
                 c.arena.bytes.append(10)
             }
@@ -667,9 +667,9 @@ export fn runFrontend() -> Comp {
     } else {
         val s: String = readStdin()
         val fileStart: U64 = c.arena.bytes.count
-        c.appendSrc(from: s.bytes)
+        c.appendSrc(from: s.bytes())
         c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count - fileStart fieldStart=0 fieldLen=0 />)
-        val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: s.bytes, fileStart: fileStart)
+        val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: s.bytes(), fileStart: fileStart)
     }
     // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried
     // — Array/Dictionary — now live in @Std/Lang, the single ambient module force-loaded
@@ -884,7 +884,7 @@ fn armGiveExprAst(arm: MatchArmAst) -> ExprAst {
 fn matchHasCapture(arms: Array[MatchArmAst]) -> Bool {
     mut val i: U64 = 0
     while i < arms.count {
-        if arms[i].pattern.captureName.bytes.count > 0 {
+        if arms[i].pattern.captureName.bytes().count > 0 {
             return true
         }
         i += 1
@@ -913,14 +913,14 @@ fn spanLen(s: Span) -> U64 {
 // record's fields by name into a canonical layout.
 fn stringGt(a: String, b: String) -> Bool {
     mut val i: U64 = 0
-    while i < a.bytes.count {
-        if i >= b.bytes.count {
+    while i < a.bytes().count {
+        if i >= b.bytes().count {
             return true
         }
-        if a.bytes[i] > b.bytes[i] {
+        if a.bytes()[i] > b.bytes()[i] {
             return true
         }
-        if a.bytes[i] < b.bytes[i] {
+        if a.bytes()[i] < b.bytes()[i] {
             return false
         }
         i += 1
@@ -970,7 +970,7 @@ fn intCtxKw(code: U64) -> String {
     return "F32"
 }
 
-// ---- lightweight type recovery (for monomorphization + .bytes dispatch) ----
+// ---- lightweight type recovery (for monomorphization + .bytes() dispatch) ----
 fn scalarInfo() -> TypeInfo {
     return <TypeInfo kind=0 nameStart=0 nameLen=0 ref=0 />
 }

@@ -94,16 +94,6 @@ pub impl LlvmCtx {
         }
     }
 
-    // `s.bytes` on a String value: String is `{i8*, i64}`, layout-identical to
-    // Array[U8] `{ptr, i64}`, so `.bytes` is the String value viewed as a U8 array
-    // (O(1), no copy — spec/02). The view's element type is i8 (unsigned).
-    inout fn isStringBytesField(c: inout Comp, base: U64, nameStart: U64, nameLen: U64) -> Bool {
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bytes") {
-            return self.valueKind(c: inout c, id: base) == 1U64
-        }
-        return false
-    }
-
     // Whether an expression is array-typed (for routing `.count`/`.append`/index).
     inout fn exprIsArray(c: inout Comp, id: U64) -> Bool {
         match c.arena.exprs[id] {
@@ -114,9 +104,6 @@ pub impl LlvmCtx {
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
-                    return true
-                }
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
                 if sidx < c.arena.structs.count {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
@@ -186,9 +173,6 @@ pub impl LlvmCtx {
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
-                    return self.i8ty
-                }
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
                 if sidx < c.arena.structs.count {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
@@ -237,6 +221,21 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                // an array-returning method call's element type (`s.bytes()[i]` -> U8): the
+                // grounded result ref heads `Array[E]`, so its first arg is the element ref.
+                // (Mirrors the Index arm; without it the element defaults to i64 and the
+                // load stride/width is wrong — e.g. reading U8 bytes 8 at a time.)
+                val r: U64 = self.exprTypeRef(c: inout c, id: id)
+                if r != 0U64 {
+                    val t: TypeRef = c.arena.types[r]
+                    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                        if t.args.count > 0U64 {
+                            return self.llvmTypeOfRef(c: inout c, ref: t.args[0])
+                        }
+                    }
+                }
+            }
             _ => {}
         }
         return self.i64ty
@@ -250,11 +249,6 @@ pub impl LlvmCtx {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
                     if self.locIsArr[li] { return self.locElemKind[li] }
-                }
-            }
-            Expr.Field(val base, val nameStart, val nameLen) => {
-                if self.isStringBytesField(c: inout c, base: base, nameStart: nameStart, nameLen: nameLen) {
-                    return 3U64
                 }
             }
             _ => {}
@@ -689,7 +683,7 @@ pub impl LlvmCtx {
         ptys.append(sty)
         val fty: LLVMTypeRef = LLVMFunctionType(sty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pwcopy".bytes)
+        appendBytes(into: inout nm, from: "pwcopy".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
@@ -1131,7 +1125,7 @@ pub impl LlvmCtx {
         ptys.append(self.structTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pwretain".bytes)
+        appendBytes(into: inout nm, from: "pwretain".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)

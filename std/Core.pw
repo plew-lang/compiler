@@ -579,7 +579,7 @@ export extern "plew-intrinsic" {
 // representation is the single buffer pointer (the backend pins String's LLVM type to the
 // shared `{ptr}` aggregate `strty`, like `Array`'s `arrayTy`), so copy/drop/retain ride the
 // generic struct field-recursion through `buffer`. The String-specific surface — the `"…"`
-// literal (byte construction), `==` (byte compare), `print` (ptr+count read), `.bytes`
+// literal (byte construction), `==` (byte compare), `print` (ptr+count read), `.bytes()`
 // (buffer → Array[U8]) — lowers through intrinsics / trait impls, with no type-name dispatch.
 export struct String {
     val buffer: Buffer[U8]
@@ -749,9 +749,15 @@ export extern "plew-intrinsic" {
 // String methods, written in pure Plew over the exposed `bytes` view (spec/02:
 // `String` is an owned lang-item that Core owns, so it carries inherent methods).
 pub impl String {
+    // The UTF-8 bytes as an `Array[U8]` view over the backing buffer (O(1), no copy —
+    // CoW-shares `buffer`; spec/02). A method, not a no-paren property (Plew has no
+    // computed properties — collections.md §3-付録4).
+    fn bytes() -> Array[U8] {
+        return <Array.overBuffer buffer=self.buffer />
+    }
     // Is the string empty (zero bytes)?
     fn isEmpty() -> Bool {
-        return self.bytes.count == 0
+        return self.bytes().count == 0
     }
 }
 
@@ -901,8 +907,8 @@ pub impl String as Format {
 pub impl String as Add[String] {
     type Output = String
     assoc fn add(lhs: String, rhs: String) -> String {
-        mut val out: Array[U8] = lhs.bytes
-        val rb: Array[U8] = rhs.bytes
+        mut val out: Array[U8] = lhs.bytes()
+        val rb: Array[U8] = rhs.bytes()
         mut val i: U64 = 0
         while i < rb.count {
             out.append(rb[i])
@@ -1311,7 +1317,7 @@ export struct ParseError {
 pub impl I64 as TryFrom[String] {
     type Error = ParseError
     result[ParseError] factory checked(source: String) {
-        val bs: Array[U8] = source.bytes
+        val bs: Array[U8] = source.bytes()
         if bs.count == 0U64 {
             return <Result[I64, ParseError].Err error=<ParseError input=source /> />
         }

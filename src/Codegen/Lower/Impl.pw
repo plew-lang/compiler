@@ -122,7 +122,7 @@ pub impl Comp {
         // an extension method (spec/09) is tagged with its extension's name id so it is
         // excluded from bare resolution (reachable only via `value#Ext.m()`).
         mut val extId: U64 = 0
-        if im.extName.bytes.count > 0 {
+        if im.extName.bytes().count > 0 {
             val extN: Bind = self.internBytes(s: im.extName)
             extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
         }
@@ -176,7 +176,7 @@ pub impl Comp {
                     val pt: PType = self.lowerType(t: m.assocTy)
                     val atN: Bind = self.internBytes(s: m.name)
                     mut val trId: U64 = 0
-                    if im.traitName.bytes.count > 0 {
+                    if im.traitName.bytes().count > 0 {
                         val trN: Bind = self.internBytes(s: im.traitName)
                         trId = trN.nameId
                     }
@@ -202,7 +202,7 @@ pub impl Comp {
                 ti += 1
             }
             mut val cfExtId: U64 = 0
-            if im.extName.bytes.count > 0 {
+            if im.extName.bytes().count > 0 {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }

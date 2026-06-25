@@ -219,7 +219,7 @@ pub impl Comp {
 
     // A source span whose bytes read `kw` (length `kwLen`). The type system recovers
     // a named type from a (start,len) span; some values have a known type with no
-    // source span to point at (a string literal's `String`, `.bytes`'s `U8`). Reuse
+    // source span to point at (a string literal's `String`, `.bytes()`'s `U8`). Reuse
     // any occurrence of `kw` in the source as a label span (the match is purely the
     // bytes; a comment/string occurrence works too). nameLen=0 if `kw` never appears.
     // Append `kw`'s bytes to `c.arena.bytes` and record their span in `c.decls.kwCache`, so a
@@ -227,7 +227,7 @@ pub impl Comp {
     // span without scanning (or planting a comment in) the source.
     inout fn addKwSpan(kw: String) {
         val start: U64 = self.arena.bytes.count
-        val b: Array[U8] = kw.bytes
+        val b: Array[U8] = kw.bytes()
         mut val i: U64 = 0
         while i < b.count {
             self.arena.bytes.append(b[i])

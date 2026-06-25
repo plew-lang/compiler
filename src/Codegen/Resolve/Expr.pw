@@ -59,7 +59,7 @@ pub impl Comp {
             val code: U64 = self.typeCache.intCtx[id]
             if code != 0 {
                 val kw: String = intCtxKw(code: code)
-                val b: Bind = self.kwSpan(kw: kw, kwLen: kw.bytes.count)
+                val b: Bind = self.kwSpan(kw: kw, kwLen: kw.bytes().count)
                 if b.nameLen != 0 {
                     return <TypeInfo kind=0 nameStart=b.nameStart nameLen=b.nameLen ref=0 />
                 }

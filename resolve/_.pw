@@ -77,9 +77,9 @@ fn depEdges(deps: Array[Dep]) -> Array[Name] {
 fn readCachedManifest(cr: Array[U8], url: Array[U8], commit: Array[U8]) -> Manifest {
     mut val p: Array[U8] = []
     appendBytes(into: inout p, from: srcDir(cacheRoot: cr, url: url, commit: commit))
-    appendBytes(into: inout p, from: "/Plew.toml".bytes)
+    appendBytes(into: inout p, from: "/Plew.toml".bytes())
     val src: String = readFileBytes(path: p)
-    return parseManifest(bytes: src.bytes)
+    return parseManifest(bytes: src.bytes())
 }
 
 fn fail(msg: Array[U8]) {
@@ -92,8 +92,8 @@ fn fail(msg: Array[U8]) {
 fn main() {
     val cr: Array[U8] = cacheRoot()
     // root manifest from the current directory.
-    val rootSrc: String = readFileBytes(path: "Plew.toml".bytes)
-    val root: Manifest = parseManifest(bytes: rootSrc.bytes)
+    val rootSrc: String = readFileBytes(path: "Plew.toml".bytes())
+    val root: Manifest = parseManifest(bytes: rootSrc.bytes())
 
     // BFS worklist of git dependencies (path deps are local — not fetched/locked).
     mut val work: Array[Dep] = []

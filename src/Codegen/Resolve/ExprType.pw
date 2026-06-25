@@ -223,17 +223,8 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val bt: TypeInfo = self.exprType(id: base)
-                // `String.bytes` is an `Array[U8]` view, so a chained `.count` /
-                // index / `val bs = s.bytes` inference sees an array (else `.count`
-                // wouldn't lower to `.len`). Recover a "U8" span to name the element.
-                if bt.kind == 2 && rangeEquals(bytes: self.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "String") {
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bytes") {
-                        val u8: Bind = self.kwSpan(kw: "U8", kwLen: 2)
-                        if u8.nameLen != 0 {
-                            return <TypeInfo kind=3 nameStart=u8.nameStart nameLen=u8.nameLen ref=0 />
-                        }
-                    }
-                }
+                // (`s.bytes()` is now an ordinary method returning Array[U8] — collections.md
+                // §3-付録4 — so it is typed through method resolution, not a field branch.)
                 // `arr.count` is U64 (spec/02). Recover a "U64" span so a generic call
                 // like `print(arr.count)` infers T = U64.
                 if bt.kind == 3 {

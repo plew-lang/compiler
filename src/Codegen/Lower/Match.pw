@@ -13,7 +13,7 @@ pub impl Comp {
             val arm: MatchArmAst = arms[i]
             // capture arms are desugared by lowerEnumMatchCapture{Into,Expr} before reaching
             // here (the arm body binds the name), so any capture left is a desugar gap.
-            if arm.pattern.captureName.bytes.count > 0 {
+            if arm.pattern.captureName.bytes().count > 0 {
                 compileErrorAt(line: self.lineOf(offset: arm.pattern.span.start), msg: "internal: enum-match capture binding was not desugared")
             }
             val pi: PatInfo = self.lowerPatternInfo(p: arm.pattern)
@@ -72,7 +72,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < arms.count {
             val cn: String = arms[i].pattern.captureName
-            if cn.bytes.count > 0 {
+            if cn.bytes().count > 0 {
                 val cap: Bind = self.internBytes(s: cn)
                 val recv: U64 = self.pushExpr(e: <Expr.Ident start=srcStart len=srcLen />)
                 stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=cap.nameStart nameLen=cap.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=recv />))
@@ -268,7 +268,7 @@ pub impl Comp {
             if isExpr {
                 diverge = armBlockDiverges(b: arm.body)
             }
-            if arm.pattern.captureName.bytes.count > 0 {
+            if arm.pattern.captureName.bytes().count > 0 {
                 val capN: Bind = self.internBytes(s: arm.pattern.captureName)
                 val scapId: U64 = self.pushExpr(e: <Expr.Ident start=scapStart len=scapLen />)
                 val capLet: U64 = self.pushStmt(s: <Stmt.Let mutable=false nameStart=capN.nameStart nameLen=capN.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=scapId />)
@@ -390,7 +390,7 @@ pub impl Comp {
                 }
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0
-                if varName.bytes.count > 0 {
+                if varName.bytes().count > 0 {
                     val vb: Bind = self.internBytes(s: varName)
                     vStart = vb.nameStart
                     vLen = vb.nameLen
@@ -410,7 +410,7 @@ pub impl Comp {
                 val bd: U64 = self.lowerBlock(b: body)
                 mut val pStart: U64 = 0
                 mut val pLen: U64 = 0
-                if patType.bytes.count > 0 {
+                if patType.bytes().count > 0 {
                     val pb: Bind = self.internBytes(s: patType)
                     pStart = pb.nameStart
                     pLen = pb.nameLen

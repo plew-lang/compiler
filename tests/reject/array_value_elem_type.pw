@@ -2,5 +2,5 @@
 // String's bytes (Array[U8]) reinterprets U8 elements as I64 (no conversion).
 fn main() {
     val s: String = "abc"
-    val b: Array[I64] = s.bytes
+    val b: Array[I64] = s.bytes()
 }

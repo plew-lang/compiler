@@ -78,11 +78,11 @@ pub impl LlvmCtx {
         }
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pfvt".bytes)
+        appendBytes(into: inout nm, from: "pfvt".bytes())
         appendU64Dec(into: inout nm, n: sidx)
-        appendBytes(into: inout nm, from: "_".bytes)
+        appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: idx)
-        appendBytes(into: inout nm, from: "_".bytes)
+        appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: anyBindKey(c: inout c, args: envArgs))
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
@@ -135,7 +135,7 @@ pub impl LlvmCtx {
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pfvtcopy".bytes)
+        appendBytes(into: inout nm, from: "pfvtcopy".bytes())
         appendU64Dec(into: inout nm, n: sidx)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
@@ -209,11 +209,11 @@ pub impl LlvmCtx {
         val slotCount: U64 = 1U64 + t.reqs.count
         val arrTy: LLVMTypeRef = LLVMArrayType2(self.ptrty, slotCount)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "pfvtbl".bytes)
+        appendBytes(into: inout nm, from: "pfvtbl".bytes())
         appendU64Dec(into: inout nm, n: sidx)
-        appendBytes(into: inout nm, from: "_".bytes)
+        appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: traitIdx)
-        appendBytes(into: inout nm, from: "_".bytes)
+        appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: bindKey)
         nm.append(0)
         val g: LLVMValueRef = LLVMAddGlobal(self.mod, arrTy, arrayCPtr(nm))

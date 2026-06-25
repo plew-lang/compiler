@@ -89,9 +89,9 @@ pub impl LlvmCtx {
         }
         val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: mf), arrayCPtr(ptys), ptys.count, 0I32)
         mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "gm".bytes)
+        appendBytes(into: inout nm, from: "gm".bytes())
         appendU64Dec(into: inout nm, n: mfi)
-        appendBytes(into: inout nm, from: "_".bytes)
+        appendBytes(into: inout nm, from: "_".bytes())
         appendU64Dec(into: inout nm, n: instRef)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)

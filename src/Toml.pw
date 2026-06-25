@@ -218,7 +218,7 @@ fn readUntil(bytes: Array[U8], p: U64, to: U64, stop: U8) -> Scan {
 // inline table `{ … }`. Array elements are stored as KV with an empty key.
 fn readValue(bytes: Array[U8], p: U64, to: U64) -> Value {
     if p >= to {
-        return <Value.SVal s="".bytes />
+        return <Value.SVal s="".bytes() />
     }
     val c: U8 = bytes[p]
     if c == 91 {
@@ -236,7 +236,7 @@ fn readValue(bytes: Array[U8], p: U64, to: U64) -> Value {
                         i += 1
                     } else {
                         val ss: Scan = readScalar(bytes: bytes, p: i, to: to)
-                        items.append(<KV key="".bytes str=ss.text />)
+                        items.append(<KV key="".bytes() str=ss.text />)
                         i = ss.next
                     }
                 }
