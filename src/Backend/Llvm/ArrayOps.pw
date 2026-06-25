@@ -42,22 +42,24 @@ pub impl LlvmCtx {
         if self.exprIsBuffer(c: inout c, id: base) {
             return self.genLlvmBufferGet(c: inout c, recv: base, indexExpr: index)
         }
-        // only a built-in Array is indexed directly; a user `Index`-impl subscript
-        // (struct `g[i]`) desugars to `g.index(key: i)` via the Index witness (spec/12).
-        if !(self.exprIsArray(c: inout c, id: base)) {
-            val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-            if bsi < c.arena.structs.count() {
-                // a Dictionary subscript `d[k]` lowers to the panicking accessor
-                // `d.at(key: k)` (spec/02); a user Index type uses `index`.
-                if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
-                    val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                    return self.genLlvmExpr(c: inout c, id: m)
-                }
-                if c.typeHasMethodNamed(typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
-                    val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                    return self.genLlvmExpr(c: inout c, id: m)
-                }
+        // `recv[i]` (read) desugars to the `Index` witness `recv.index(key: i)` (spec/12) —
+        // uniform across Array and user `Index` types (collections.md E3: no Array type-name
+        // branch). A Dictionary subscript `d[k]` lowers to the panicking accessor `d.at(key:k)`
+        // (spec/02). The built-in Array direct path below is a fallback only for array exprs
+        // whose struct index can't be recovered here (a literal `[1,2,3][i]`, a chained call
+        // result) — those carry no struct binding to dispatch the witness through.
+        val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
+        if bsi < c.arena.structs.count() {
+            if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
+                val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                return self.genLlvmExpr(c: inout c, id: m)
             }
+            if c.typeHasMethodNamed(typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
+                val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
+                return self.genLlvmExpr(c: inout c, id: m)
+            }
+        }
+        if !(self.exprIsArray(c: inout c, id: base)) {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }

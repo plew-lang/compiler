@@ -15,7 +15,7 @@
 // (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash. `Array`'s
 // storage floor `Buffer` is a non-ambient primitive imported from @Std/Core.
 import @Std/Hash with { Hash, Hasher, SipHasher }
-import @Std/Core with { Buffer }
+import @Std/Core with { Buffer, Index, IndexSet }
 
 // Re-export the primitive scalar types from @Std/Core (where they are DEFINED, with
 // their operator/conversion witnesses — coherent). The re-export makes them ambient:
@@ -161,6 +161,23 @@ pub impl[T] Array[T] {
     // dense entry arrays after a deletion. (The moved-out tail is dropped here.)
     inout fn removeLast() {
         self.data.removeLast()
+    }
+}
+// The subscript witnesses (collections.md E3): `arr[i]` is the `Index` value read and
+// `arr[i] = v` the `IndexSet` whole-element write — ordinary collection-trait methods over
+// the Buffer floor, so the backend routes `[]` through the uniform witness path with no
+// Array type-name branch. (Place-based element mutation `arr[i].field = v` / `inout arr[i]`
+// keeps the place model, which addresses the backing directly.)
+pub impl[T] Array[T] as Index[U64] {
+    type Output = T
+    fn index(key: U64) -> T {
+        return self.get(i: key)
+    }
+}
+pub impl[T] Array[T] as IndexSet[U64] {
+    type Value = T
+    inout fn indexSet(key: U64, value: T) {
+        self.set(i: key, value)
     }
 }
 
