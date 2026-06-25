@@ -140,6 +140,10 @@ pub impl[T] Array[T] {
     factory overBuffer(buffer: Buffer[T]) {
         return <Array data=buffer />
     }
+    // The number of live elements (O(1) — forwards to the buffer floor's count).
+    fn count() -> U64 {
+        return self.data.count()
+    }
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
         self.data.append(value)

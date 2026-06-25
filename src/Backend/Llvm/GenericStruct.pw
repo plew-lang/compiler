@@ -299,6 +299,20 @@ pub impl LlvmCtx {
                         return self.llvmArgTypeRef(c: inout c, argExpr: args[0].expr)
                     }
                 }
+                // an `Array[E]`-returning free call (`mk().count()` / `mk()[i]`): yield the
+                // callee's declared `Array[E]` return ref so a chained method/index over the
+                // result recovers the array (and its element). Array-returning free fns in the
+                // compiler are concrete (no generic ones), so retTy needs no grounding.
+                val cfi: U64 = c.resolvedCallee(id: id)
+                if cfi < c.arena.funcs.count {
+                    val rt: U64 = c.arena.funcs[cfi].retTy
+                    if rt != 0U64 {
+                        val t: TypeRef = c.arena.types[rt]
+                        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                            return rt
+                        }
+                    }
+                }
             }
             _ => {}
         }
