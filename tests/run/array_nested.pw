@@ -1,5 +1,5 @@
 // F11 nested arrays `Array[Array[T]]`: dependency ordering (inner runtime first)
-// and nested indexing (`m[i][j]`, `m[i].count`). Appending works with a variable
+// and nested indexing (`m[i][j]`, `m[i].count()`). Appending works with a variable
 // row and with a bare array literal (`m.append([1,2,3])`), including deeper
 // nesting where the appended element is itself a nested array.
 import @Std/Io with { print }
@@ -11,13 +11,13 @@ fn main() {
     m.append(r1)
     print(m[0][1])
     print(m[1][0])
-    print(m.count)
-    print(m[0].count)
+    print(m.count())
+    print(m[0].count())
 
     mut val t: Array[Array[Array[I32]]] = []
     mut val inner: Array[Array[I32]] = []
     inner.append([7, 8])
     t.append(inner)
     print(t[0][0][1])
-    print(t.count)
+    print(t.count())
 }

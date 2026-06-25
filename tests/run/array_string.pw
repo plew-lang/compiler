@@ -6,7 +6,7 @@ struct Box {
 fn sum(b: Box) -> I64 {
     mut val s: I64 = 0
     mut val i: U64 = 0
-    while i < b.xs.count {
+    while i < b.xs.count() {
         s += b.xs[i]
         i += 1
     }
@@ -16,7 +16,7 @@ fn countA(s: String) -> I64 {
     val bs: Array[U8] = s.bytes()
     mut val n: I64 = 0
     mut val i: U64 = 0
-    while i < bs.count {
+    while i < bs.count() {
         if bs[i] == 97 {
             n += 1
         }

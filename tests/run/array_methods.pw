@@ -5,7 +5,7 @@ import @Std/Io with { print }
 impl[T] Array[T] {
     fn first() -> T { return self.get(i: 0U64) }
     fn second() -> T { return self.get(i: 1U64) }
-    fn size() -> U64 { return self.count }
+    fn size() -> U64 { return self.count() }
 }
 fn main() {
     mut val xs: Array[I64] = []

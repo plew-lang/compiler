@@ -98,6 +98,18 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            Expr.Arrow(base: val ab, nameStart: val ans, nameLen: val anl) => {
+                // an array field through a `Ref` deref (`s->items` with items: Array[E]): the
+                // field's element ref, so `s->items.count()`/`s->items[i]` synthesize their
+                // `Array[elem]` receiver (mirrors the Field arm via the ref's pointee struct).
+                val psi: U64 = self.refPointeeStructIdx(c: inout c, base: ab)
+                if psi < c.arena.structs.count() {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psi, start: ans, len: anl)
+                    if fidx < c.arena.structs[psi].fields.count() {
+                        return arrayFieldElemRef(c: inout c, f: c.arena.structs[psi].fields[fidx])
+                    }
+                }
+            }
             _ => {}
         }
         // fallback (a nested element `m[i]`, a call result): unwrap the expression's own

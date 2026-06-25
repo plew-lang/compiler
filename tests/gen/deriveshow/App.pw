@@ -20,7 +20,7 @@ pub impl DeriveShow as Derive {
                 s.put(d.name)
                 s.put(" { ")
                 mut val i: U64 = 0
-                while i < d.fields.count {
+                while i < d.fields.count() {
                     s.put(d.fields[i].name)
                     s.put(" ")
                     i += 1

@@ -13,7 +13,7 @@ pub impl MethodList as Derive {
                 mut val s: Src = newSrc()
                 s.put("fn methodNames() -> String {\n    return \"")
                 mut val i: U64 = 0
-                while i < im.members.count {
+                while i < im.members.count() {
                     s.put(im.members[i].name)
                     s.put(",")
                     i += 1

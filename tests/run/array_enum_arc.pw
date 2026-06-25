@@ -37,11 +37,11 @@ fn main() {
     print(first(w: xs[0]))
     print(first(w: xs[1]))
     print(first(w: xs[2]))
-    print(xs.count)
+    print(xs.count())
     // CoW: copy then mutate the copy; the source is untouched
     mut val ys: Array[Word] = xs
     ys.append(<Word.Tagged tags=[99] />)
-    print(xs.count)
-    print(ys.count)
+    print(xs.count())
+    print(ys.count())
     print(first(w: ys[3]))
 }

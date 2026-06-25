@@ -8,12 +8,12 @@ fn main() {
     mut val a: Word = <Word.Tagged tags=[1, 2, 3] />
     mut val b: Word = a                 // CoW-share: b co-owns a's buffer
     a = <Word.Tagged tags=[1, 2, 3, 4] />  // replace a; b must stay [1,2,3]
-    match b { Word.Tagged(val tags) => { print(tags.count) }  Word.Empty => { print(-1I64) } }
-    match a { Word.Tagged(val tags) => { print(tags.count) }  Word.Empty => { print(-1I64) } }
+    match b { Word.Tagged(val tags) => { print(tags.count()) }  Word.Empty => { print(-1I64) } }
+    match a { Word.Tagged(val tags) => { print(tags.count()) }  Word.Empty => { print(-1I64) } }
     mut val xs: Array[Word] = [a, b]
     mut val ys: Array[Word] = xs        // share the array
     ys.append(<Word.Empty />)            // CoW at the array level; xs unchanged
-    print(xs.count)
-    print(ys.count)
-    match xs[0] { Word.Tagged(val tags) => { print(tags.count) }  Word.Empty => { print(-1I64) } }
+    print(xs.count())
+    print(ys.count())
+    match xs[0] { Word.Tagged(val tags) => { print(tags.count()) }  Word.Empty => { print(-1I64) } }
 }

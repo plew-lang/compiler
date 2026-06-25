@@ -16,7 +16,7 @@ pub impl FieldList as Derive {
                 mut val out: Array[U8] = []
                 pushStr(into: inout out, s: "fn fieldNames() -> String {\n    return \"")
                 mut val i: U64 = 0
-                while i < d.fields.count {
+                while i < d.fields.count() {
                     pushStr(into: inout out, s: d.fields[i].name)
                     out.append(',')
                     i += 1
@@ -32,7 +32,7 @@ pub impl FieldList as Derive {
 fn pushStr(into: inout Array[U8], s: String) {
     val b: Array[U8] = s.bytes()
     mut val i: U64 = 0
-    while i < b.count {
+    while i < b.count() {
         into.append(b[i])
         i += 1
     }

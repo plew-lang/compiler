@@ -11,6 +11,6 @@ fn main() {
     a.append(4)
     print(a[0])
     print(b[0])
-    print(a.count)
-    print(b.count)
+    print(a.count())
+    print(b.count())
 }

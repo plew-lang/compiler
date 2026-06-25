@@ -305,6 +305,15 @@ pub impl LlvmCtx {
                                 self.setLocalElemTypeRef(ref: at.args[0])
                             }
                         }
+                    } else {
+                        // an un-annotated array initializer (`val bs = s.bytes()`): recover the
+                        // element ref from the initializer so a later `bs.count()`/`bs[i]` can
+                        // synthesize its `Array[elem]` receiver (the annotated path above gets
+                        // it from the type ref; here only the initializer carries it).
+                        val ier: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: init)
+                        if ier != 0U64 {
+                            self.setLocalElemTypeRef(ref: ier)
+                        }
                     }
                 }
             }

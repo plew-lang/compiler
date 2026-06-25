@@ -14,7 +14,7 @@ fn first[T](xs: Array[T]) -> T {
 }
 
 fn lengthOf[T](xs: Array[T]) -> U64 {
-    return xs.count
+    return xs.count()
 }
 
 fn main() {

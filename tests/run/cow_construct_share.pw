@@ -10,7 +10,7 @@ fn main() {
     mut val arr: Array[I32] = [1, 2, 3]
     val h: Bag = <Bag items=arr />   // h co-owns arr's buffer (CoW-share)
     arr.append(4)                     // gateway CoWs; h.items stays [1,2,3]
-    print(arr.count)        // 4
-    print(h.items.count)    // 3
+    print(arr.count())        // 4
+    print(h.items.count())    // 3
     print(h.items[0])       // 1
 }

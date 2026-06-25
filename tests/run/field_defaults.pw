@@ -14,10 +14,10 @@ fn main() {
     val a: Config = <Config />
     print(a.timeout)
     print(a.retries)
-    print(a.tags.count)
+    print(a.tags.count())
     // override some, default the rest
     val b: Config = <Config timeout=99 tags=[1, 2] />
     print(b.timeout)
     print(b.retries)
-    print(b.tags.count)
+    print(b.tags.count())
 }

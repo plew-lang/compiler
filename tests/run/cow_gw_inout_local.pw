@@ -11,7 +11,7 @@ fn main() {
     mut val a: Array[I32] = [1, 2]
     val b: Array[I32] = a
     grow(x: inout a)
-    print(a.count)
-    print(b.count)
+    print(a.count())
+    print(b.count())
     print(a[2])
 }

@@ -1,0 +1,10 @@
+// `count` is a METHOD on Array (`arr.count()`), forwarding to the buffer floor —
+// Plew has no computed properties (collections.md §3-付録4). A bare no-paren
+// `arr.count` is therefore not a property read and must be rejected (Array's only
+// field is the private `data`).
+import @Std/Io with { print }
+
+fn main() {
+    val xs: Array[I64] = [1, 2, 3]
+    print(xs.count)
+}

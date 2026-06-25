@@ -8,7 +8,7 @@ struct BoxIter[T] {
 pub impl[T] BoxIter[T] as Iterator {
     type Item = T
     inout fn next() -> Optional[T] {
-        if self.i >= self.items.count {
+        if self.i >= self.items.count() {
             return <Optional.None />
         }
         val v: T = self.items[self.i]

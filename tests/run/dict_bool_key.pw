@@ -17,5 +17,5 @@ fn main() {
     // a fresh single-key dict.
     mut val flags: Dictionary[Bool, String] = [:]
     flags[true] = "on"
-    print(flags[true].bytes().count)       // 2  ("on")
+    print(flags[true].bytes().count())       // 2  ("on")
 }

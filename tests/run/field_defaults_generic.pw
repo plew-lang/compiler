@@ -13,8 +13,8 @@ fn main() {
     val a: Box[I32] = <Box[I32] v=5 />
     print(a.v)
     print(a.tag)
-    print(a.tags.count)
+    print(a.tags.count())
     val b: Box[I32] = <Box[I32] v=7 tag=1 tags=[1, 2] />
     print(b.tag)
-    print(b.tags.count)
+    print(b.tags.count())
 }

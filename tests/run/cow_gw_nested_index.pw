@@ -13,6 +13,6 @@ fn main() {
     a[1].append(6)
     print(a[0][1])
     print(b[0][1])
-    print(a[1].count)
-    print(b[1].count)
+    print(a[1].count())
+    print(b[1].count())
 }

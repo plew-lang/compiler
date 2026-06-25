@@ -30,7 +30,7 @@ fn main() {
     match o {
         Outer { val tag, val items, val inner } => {
             print(tag)
-            print(items.count)
+            print(items.count())
             print(items[2])
             print(inner.n)
         }

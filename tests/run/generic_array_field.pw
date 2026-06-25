@@ -12,7 +12,7 @@ pub impl[T] Box[T] {
         return self.items[i]
     }
     fn size() -> U64 {
-        return self.items.count
+        return self.items.count()
     }
 }
 

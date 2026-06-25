@@ -14,8 +14,8 @@ fn main() {
     print(b[1])                     // beta   (b unchanged — value semantics)
 
     a.removeLast()                  // commit count-- then release "gamma" in a
-    print(a.count)                  // 2
-    print(b.count)                  // 3
+    print(a.count())                  // 2
+    print(b.count())                  // 3
     print(b[2])                     // gamma  (b intact)
 
     a[0] = "first"                  // overwrite again, release old "alpha" in a

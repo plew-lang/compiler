@@ -11,7 +11,7 @@ pub impl Holder {
 
 fn main() {
     val h: Holder = <Holder xs=[10I64, 20I64, 30I64] />
-    print(h.items().count)        // chained property/length off the call result
+    print(h.items().count())        // chained property/length off the call result
     print(h.items()[1])           // index off the call result
     for v in h.items() {          // for over the call result
         print(v)

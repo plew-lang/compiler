@@ -223,18 +223,10 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val bt: TypeInfo = self.exprType(id: base)
-                // (`s.bytes()` is now an ordinary method returning Array[U8] — collections.md
-                // §3-付録4 — so it is typed through method resolution, not a field branch.)
-                // `arr.count()` is U64 (spec/02). Recover a "U64" span so a generic call
-                // like `print(arr.count())` infers T = U64.
-                if bt.kind == 3 {
-                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
-                        val u64: Bind = self.kwSpan(kw: "U64", kwLen: 3)
-                        if u64.nameLen != 0 {
-                            return <TypeInfo kind=0 nameStart=u64.nameStart nameLen=u64.nameLen ref=0 />
-                        }
-                    }
-                }
+                // (`s.bytes()`/`arr.count()` are ordinary methods now — collections.md §3-付録4 —
+                // typed through method resolution, not a field branch. A bare no-paren `arr.count`
+                // has no property branch: it falls to field-type lookup, which finds no `count`
+                // field on Array and rejects, per "Plew has no computed properties".)
                 // `buf.count()` / `buf.capacity()` are ordinary methods now (collections.md
                 // §3-付録4), resolved through normal method typing below — no property branch.
                 // a generic struct instantiation's field type is substituted.

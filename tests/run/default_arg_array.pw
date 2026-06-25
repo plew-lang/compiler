@@ -6,13 +6,13 @@ import @Std/Io with { print }
 fn tally(xs: Array[I32] = []) -> U64 {
     mut val ys: Array[I32] = xs
     ys.append(1)
-    return ys.count
+    return ys.count()
 }
 
 fn total(xs: Array[I32] = [10, 20]) -> I32 {
     mut val s: I32 = 0
     mut val i: U64 = 0
-    while i < xs.count {
+    while i < xs.count() {
         s += xs[i]
         i += 1
     }

@@ -7,5 +7,5 @@ fn main() {
     r->items[0] = 99
     print(r->items[0])
     print(s->items[0])
-    print(s->items.count)
+    print(s->items.count())
 }

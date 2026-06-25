@@ -16,7 +16,7 @@ fn main() {
     mut val h = <Holder[I64] items=[] />
     h.items.append(<Box[I64] v=5 />)
     h.items.append(<Box[I64] v=9 />)
-    print(h.items.count)
+    print(h.items.count())
     print(h.items[0].v)
     print(h.items[1].v)
 }

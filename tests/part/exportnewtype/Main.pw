@@ -6,6 +6,6 @@ import /Models/User with { UserId, makeUser }
 fn main() {
     val u: UserId = makeUser("alice")
     print(u as String)       // alice  (unwrap re-tag)
-    print(u.bytes().count)     // 5      (inherited String field)
+    print(u.bytes().count())     // 5      (inherited String field)
     print(u.isEmpty())       // 0      (inherited String method)
 }

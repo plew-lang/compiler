@@ -15,8 +15,8 @@ fn main() {
     a.append(<Bag items=[1, 2] />)
     val b: Array[Bag] = a
     a[0].items = [9, 9, 9]
-    print(a[0].items.count)
-    print(b[0].items.count)
+    print(a[0].items.count())
+    print(b[0].items.count())
     print(a[0].items[0])
     print(b[0].items[0])
 }

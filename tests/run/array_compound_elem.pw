@@ -22,7 +22,7 @@ fn main() {
     r->v = 88
     print(cells[0]->v)
     print(cells[1]->v)
-    print(cells.count)
+    print(cells.count())
     // Array[Box[T]]: a generic-struct element (value semantics)
     mut val boxes: Array[Box[I32]] = []
     boxes.append(<Box[I32] v=10 />)

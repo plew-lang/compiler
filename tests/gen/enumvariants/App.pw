@@ -11,10 +11,10 @@ pub impl VariantNames as Derive {
                 mut val s: Src = newSrc()
                 s.put("fn variantNames() -> String {\n    return \"")
                 mut val i: U64 = 0
-                while i < d.variants.count {
+                while i < d.variants.count() {
                     s.put(d.variants[i].name)
                     s.put("(")
-                    s.putInt(d.variants[i].fields.count)
+                    s.putInt(d.variants[i].fields.count())
                     s.put(")")
                     s.putByte(44)
                     i += 1

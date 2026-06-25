@@ -30,7 +30,7 @@ fn main() {
     val groups: Array[Group] = [<Group members=[1, 2, 3] />, <Group members=[4] />]
     mut val total: U64 = 0
     for Group { val members } in groups {
-        total += members.count
+        total += members.count()
     }
     print(total)        // 3+1 = 4
 }

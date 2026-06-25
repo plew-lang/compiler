@@ -12,7 +12,7 @@ fn main() {
     // unwrap re-tag: a UserId value flows back to a String (representation-identical).
     print(u as String)          // alice
     // inherited field: String's `bytes` (Array[U8]) view, O(1).
-    print(u.bytes().count)        // 5
+    print(u.bytes().count())        // 5
     print(u.bytes()[0])           // 97  ('a')
     // inherited method, Bool return correctly kinded (not int-defaulted).
     print(u.isEmpty())          // 0  (false)
@@ -21,5 +21,5 @@ fn main() {
     // the re-tag is a pure view: round-tripping preserves the value.
     val back: String = u as String
     val again: UserId = back as UserId
-    print(again.bytes().count)    // 5
+    print(again.bytes().count())    // 5
 }

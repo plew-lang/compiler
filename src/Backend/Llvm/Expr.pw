@@ -203,17 +203,11 @@ pub impl LlvmCtx {
                 return self.genLlvmIndex(c: inout c, base: base, index: index)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                // a bare `arr.count` property read (no parens): still accepted for arrays as a
-                // convenience that lowers to the buffer-header count. collections.md §3-付録4
-                // decides count is a METHOD (`arr.count()`, no computed properties); disallowing
-                // the bare form is a pending language-surface call (it would reject existing
-                // `arr.count` usages). Keeping the interception until that is decided.
-                if self.exprIsArray(c: inout c, id: base) {
-                    if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "count") {
-                        val av: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
-                        return self.arrValCount(c: inout c, arr: av)
-                    }
-                }
+                // (a bare `arr.count` no longer reads a property: count is the METHOD
+                // `arr.count()` forwarding to the buffer floor — collections.md §3-付録4, Plew
+                // has no computed properties. The Array/Buffer `.count` Field interception is
+                // gone; a no-paren `.count` now falls through to ordinary field access, which
+                // rejects since Array's only field is `data`.)
                 // `buf.count()` / `buf.capacity()` are ordinary Buffer methods now
                 // (collections.md §3-付録4); their bodies forward to bufferCount/bufferCapacity
                 // intrinsics, so no Expr.Field property interception here.

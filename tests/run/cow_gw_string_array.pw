@@ -8,6 +8,6 @@ fn main() {
     a[0] = "changed"
     print(a[0])
     print(b[0])
-    print(a.count)
-    print(b.count)
+    print(a.count())
+    print(b.count())
 }

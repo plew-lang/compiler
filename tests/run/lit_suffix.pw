@@ -1,5 +1,5 @@
 // Type suffixes give a context-free literal its type (spec: no default type).
-// A suffix on one operand/bound flows to its sibling; `.count` is U64, so a
+// A suffix on one operand/bound flows to its sibling; `.count()` is U64, so a
 // range over it needs no suffix; `true`/`false` are Bool, never ambiguous.
 import @Std/Io with { print }
 
@@ -10,7 +10,7 @@ fn main() {
     print(y as U64)           // 255
     val xs: Array[I64] = [10, 20, 30]
     mut val sum: I64 = 0
-    for val i in 0..<xs.count {   // count is U64 -> 0 infers U64, no suffix
+    for val i in 0..<xs.count() {   // count is U64 -> 0 infers U64, no suffix
         sum += xs[i]
     }
     print(sum)                // 60

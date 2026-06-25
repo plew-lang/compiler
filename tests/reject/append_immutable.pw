@@ -5,5 +5,5 @@ import @Std/Io with { print }
 fn main() {
     val xs: Array[I64] = [1, 2]
     xs.append(3)
-    print(xs.count)
+    print(xs.count())
 }

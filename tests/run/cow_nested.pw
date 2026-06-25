@@ -8,5 +8,5 @@ fn main() {
     b[0] = <Bag items=[9, 9, 9] />
     print(a[0].items[0])
     print(b[0].items[0])
-    print(a.count)
+    print(a.count())
 }

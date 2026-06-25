@@ -13,8 +13,8 @@ fn main() {
     a.append([3])
     val b: Array[Array[I32]] = a
     bump(x: inout a[0])
-    print(a[0].count)
-    print(b[0].count)
-    print(a[1].count)
+    print(a[0].count())
+    print(b[0].count())
+    print(a[1].count())
     print(a[0][2])
 }

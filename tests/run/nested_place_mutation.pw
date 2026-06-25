@@ -25,7 +25,7 @@ fn setN(c: inout Comp, v: I64) { c.arena.n = v }
 // pass a nested-field array as an `inout` argument (mutated in place by the callee)
 fn bumpAll(items: inout Array[I64]) {
     mut val i: U64 = 0
-    while i < items.count {
+    while i < items.count() {
         items.set(i: i, value: items[i] + 100I64)
         i += 1
     }
@@ -37,7 +37,7 @@ fn main() {
     pushItem(c: inout c, v: 1I64)
     pushItem(c: inout c, v: 2I64)
     pushItem(c: inout c, v: 3I64)
-    print(c.arena.items.count)   // 3
+    print(c.arena.items.count())   // 3
     setFirst(c: inout c, v: 10I64)
     print(c.arena.items[0])      // 10
     setIdx(c: inout c, i: 1U64, v: 20I64)

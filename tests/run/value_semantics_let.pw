@@ -4,8 +4,8 @@ fn main() {
     mut val b: Array[I32] = a
     b.append(4)
     b[0] = 99
-    print(a.count)
+    print(a.count())
     print(a[0])
-    print(b.count)
+    print(b.count())
     print(b[0])
 }

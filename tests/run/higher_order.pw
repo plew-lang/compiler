@@ -14,5 +14,5 @@ fn main() {
     for val d in doubled {
         print(d)
     }
-    print(nums.count)
+    print(nums.count())
 }
