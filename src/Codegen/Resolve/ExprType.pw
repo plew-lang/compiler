@@ -586,6 +586,18 @@ pub impl Comp {
                 }
                 return scalarInfo()
             }
+            Expr.Deref(val base) => {
+                // `*ref` (the receiver of `ref->method()`): the pointee type T of base: Ref[T],
+                // so method resolution / arg inference runs against T like a normal receiver.
+                val bt: TypeInfo = self.exprType(id: base)
+                if self.isRefInst(ref: bt.ref) {
+                    val inst: TypeRef = self.arena.types[bt.ref]
+                    if inst.args.count() > 0 {
+                        return self.typeInfoOfRef(ref: inst.args[0])
+                    }
+                }
+                return scalarInfo()
+            }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
                 // a closure literal's type is `fn(params) -> ret`; recover it so a
                 // generic call can structurally infer a type parameter from it

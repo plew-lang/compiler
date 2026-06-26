@@ -1,0 +1,12 @@
+// spec/03: `->` is the POINTEE operator and is `Ref`-only. A `WeakRef` has no direct deref
+// (its referent may already be gone), so a pointee method call / field access through a
+// `WeakRef` must be rejected — the referent is reached via `upgrade() -> Optional[Ref[T]]`.
+import @Std/Io with { print }
+import @Std/Core with { Ref, WeakRef }
+struct C { val v: I32 }
+pub impl C { fn get() -> I32 { return self.v } }
+fn main() {
+    val r: Ref[C] = <Ref[C] value=<C v=7 /> />
+    val w: WeakRef[C] = r.weak()
+    print(w->get())
+}

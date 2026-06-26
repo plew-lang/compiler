@@ -163,6 +163,15 @@ pub impl LlvmCtx {
                     return self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
                 }
             }
+            Expr.Deref(val base) => {
+                // `*ref` as a WRITE place (an `inout`/mutating pointee method's self): the
+                // pointee struct lives AT the cell pointer, so the cell pointer IS the place.
+                // The cell is intentionally SHARED (no CoW privatize — that is the point of a
+                // `Ref`), so mutation is visible through every alias of the Ref.
+                if self.exprRefTypeRef(c: inout c, id: base) != 0U64 {
+                    return self.genLlvmExpr(c: inout c, id: base)
+                }
+            }
             _ => {}
         }
         return LLVMConstNull(self.ptrty)

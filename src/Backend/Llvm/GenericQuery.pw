@@ -256,6 +256,12 @@ pub impl LlvmCtx {
                     return ei
                 }
             }
+            Expr.Deref(val base) => {
+                // `*ref` (the pointee place behind `ref->method()`): the pointee struct index,
+                // so a registered-struct method on the pointee dispatches like a local receiver.
+                // (A generic-instance pointee resolves via exprTypeRef in the generic path.)
+                return self.refPointeeStructIdx(c: inout c, base: base)
+            }
             _ => {}
         }
         // a fall-through array-typed expr (an array struct field `s.items`, an array-returning

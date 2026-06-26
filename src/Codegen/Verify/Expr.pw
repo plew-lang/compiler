@@ -246,6 +246,25 @@ pub impl Comp {
             }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => {
                 self.verifyExpr(id: base)
+                // `r->field` is `Ref`-only too: a `WeakRef` field read/write must go through
+                // `upgrade()` (spec/03). Same pointed diagnostic as the `->method()` case.
+                val abt: TypeInfo = self.exprType(id: base)
+                if self.isWeakRefInst(ref: abt.ref) {
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                }
+            }
+            Expr.Deref(val base) => {
+                self.verifyExpr(id: base)
+                // `->` is the POINTEE operator and is `Ref`-only (spec/03). A `WeakRef` has no
+                // direct deref — its referent may be dead — so it must be `upgrade()`d to an
+                // `Optional[Ref[T]]` first. Reject `w->…` with a pointed message rather than the
+                // opaque backend "not a registered struct" error.
+                val bt: TypeInfo = self.exprType(id: base)
+                if self.isWeakRefInst(ref: bt.ref) {
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                } else if !(self.isRefInst(ref: bt.ref)) {
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "`->` requires a `Ref[T]` on the left (it dereferences a Ref's pointee)")
+                }
             }
             Expr.OptChain(val base, memberStart: _, memberLen: _) => {
                 self.verifyExpr(id: base)

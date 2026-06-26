@@ -309,6 +309,11 @@ pub impl LlvmCtx {
                 compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
+            Expr.Deref(val base) => {
+                // `*ref` as a VALUE (a by-value / `borrow` pointee method's self): the loaded
+                // pointee struct. (`inout` self instead takes the cell pointer via placePtrOf.)
+                return self.loadRefPointee(c: inout c, base: base)
+            }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 return self.genLlvmCall(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
             }

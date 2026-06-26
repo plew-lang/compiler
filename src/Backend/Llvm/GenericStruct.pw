@@ -244,6 +244,18 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            Expr.Deref(val base) => {
+                // `*ref` (the pointee place behind `ref->method()`): the pointee TypeRef T of
+                // `base: Ref[T]`, so method dispatch resolves on T (a registered struct, an
+                // enum, or a generic instance like `Box[I32]`) with the cell as the receiver.
+                val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
+                if r != 0U64 {
+                    val t: TypeRef = c.arena.types[r]
+                    if t.args.count() > 0U64 {
+                        return t.args[0]
+                    }
+                }
+            }
             Expr.Index(val base, index: _) => {
                 // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
                 // -> `ys[i]->v`, a generic element, or a nested-array element).

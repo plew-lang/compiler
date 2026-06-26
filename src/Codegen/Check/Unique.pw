@@ -166,6 +166,9 @@ pub impl Comp {
             Expr.Arrow(val base, nameStart: _, nameLen: _) => {
                 return self.exprMentionsAny(exprId: base, forbidden: forbidden)
             }
+            Expr.Deref(val base) => {
+                return self.exprMentionsAny(exprId: base, forbidden: forbidden)
+            }
             Expr.Move(val operand, isBorrow: _) => {
                 return self.exprMentionsAny(exprId: operand, forbidden: forbidden)
             }

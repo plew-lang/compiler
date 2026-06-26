@@ -356,6 +356,7 @@ pub impl Comp {
             Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprIsPlace(id: base) }
             Expr.Index(val base, index: _) => { return self.exprIsPlace(id: base) }
             Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
+            Expr.Deref(base: _) => { return true }
             _ => { return false }
         }
     }

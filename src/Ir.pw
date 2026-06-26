@@ -239,6 +239,12 @@ export enum Expr {
     // a C `T*`, so this is C's `ref->field`. `->` is spec's pointee accessor;
     // the bare handle is `.` (rare). Shared mutation is visible at `->`.
     Arrow(base: U64, nameStart: U64, nameLen: U64)
+    // `*ref` as a place — the POINTEE of a `Ref[T]` (the receiver of `ref->method()`).
+    // Resolves to the pointee struct/enum: its type is T, its address is the cell pointer,
+    // its value is the loaded pointee. Used only as a method receiver so the existing
+    // dispatch (struct/enum/generic/inout) drives `->` method calls; `ref->field` stays
+    // `Arrow`. Built by lowering `ExprAst.ArrowMethod`; `base` must be a `Ref[T]` expr.
+    Deref(base: U64)
     // a closure literal `fn(params) -> ret { body }`. Lambda-lifted to a
     // top-level C function named `__closure<exprIndex>` taking a leading env
     // pointer. The expression value is a fat PlewClosure {fn, env, rc, drop}.

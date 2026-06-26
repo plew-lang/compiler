@@ -158,6 +158,16 @@ pub impl Comp {
                     result = self.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
                 }
             }
+            ExprAst.ArrowMethod(val recv, val name, val nameSpan, val args, val span) => {
+                // `recv->name(args)`: a pointee method call. Lower the receiver, wrap it in a
+                // `Deref` (the pointee place), and dispatch `name` on it like a normal `Method`
+                // — the backend resolves `Deref`'s struct/type and self-place from the cell.
+                val r: U64 = self.lowerExpr(e: recv)
+                val d: U64 = self.pushExpr(e: <Expr.Deref base=r />)
+                val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)
+                val nm: Bind = self.internBytes(s: name)
+                result = self.pushExpr(e: <Expr.Method recv=d nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+            }
             ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
                 val a: Array[Arg] = self.lowerArgs(args: args, fnName: "")
