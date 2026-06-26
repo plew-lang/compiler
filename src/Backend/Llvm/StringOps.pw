@@ -59,7 +59,7 @@ pub impl LlvmCtx {
         // the data pointer at offset 24 is the String buffer (count is baked in the header
         // above); wrap it into the `{ptr}` String/Array VALUE aggregate (Array A).
         val data: LLVMValueRef = LLVMBuildGEP2(self.b, arrTy, g, arrayCPtr(idxs), 2U64, anon())
-        return self.arrValWrap(c: inout c, data: data)
+        return self.arrValWrap(c: inout c, data: data, aggTy: self.stringLlvmTy(c: inout c))
     }
 
     // Decompose a String value to (i8* data, i64 len) and call a 2-arg runtime sink
@@ -128,7 +128,7 @@ pub impl LlvmCtx {
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val recvVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
-        val emptyFmt: LLVMValueRef = self.arrValWrap(c: inout c, data: LLVMConstNull(self.ptrty))
+        val emptyFmt: LLVMValueRef = self.arrValWrap(c: inout c, data: LLVMConstNull(self.ptrty), aggTy: self.stringLlvmTy(c: inout c))
         mut val cav: Array[LLVMValueRef] = []
         cav.append(recvVal)
         cav.append(emptyFmt)

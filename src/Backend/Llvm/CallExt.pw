@@ -10,7 +10,7 @@ pub impl LlvmCtx {
             return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
         }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "String") {
-            return self.strty
+            return self.stringLlvmTy(c: inout c)
         }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Bool") {
             return self.i1ty

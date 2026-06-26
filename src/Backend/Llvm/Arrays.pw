@@ -16,7 +16,7 @@ pub impl LlvmCtx {
                 }
                 return self.i64ty
             }
-            Expr.Str(start: _, len: _) => { return self.strty }
+            Expr.Str(start: _, len: _) => { return self.stringLlvmTy(c: inout c) }
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
@@ -553,16 +553,16 @@ pub impl LlvmCtx {
     // Wrap a bare data pointer into the `{ptr}` array/string VALUE aggregate WITHOUT touching
     // the heap header (the count is already correct — e.g. a baked string literal whose count
     // is in its constant header).
-    inout fn arrValWrap(c: inout Comp, data: LLVMValueRef) -> LLVMValueRef {
-        return LLVMBuildInsertValue(self.b, LLVMGetUndef(self.arrayTy), data, 0U64, anon())
+    inout fn arrValWrap(c: inout Comp, data: LLVMValueRef, aggTy: LLVMTypeRef) -> LLVMValueRef {
+        return LLVMBuildInsertValue(self.b, LLVMGetUndef(aggTy), data, 0U64, anon())
     }
     // Build an array/string VALUE from a data pointer and a count: stamp `count` into the
     // heap header, then wrap into the `{ptr}` aggregate. Callers pass a buffer that already
     // owns the elements (a fresh rawbuf_alloc, an arr_copy, or a baked literal); set_count is
     // a no-op on null and idempotent when the header already holds `count`.
-    inout fn arrValMake(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef) -> LLVMValueRef {
+    inout fn arrValMake(c: inout Comp, data: LLVMValueRef, count: LLVMValueRef, aggTy: LLVMTypeRef) -> LLVMValueRef {
         self.rawbufSetCount(c: inout c, data: data, n: count)
-        return self.arrValWrap(c: inout c, data: data)
+        return self.arrValWrap(c: inout c, data: data, aggTy: aggTy)
     }
     // Load the data pointer from an array STORAGE SLOT (an array local / field alloca): the
     // slot holds the single data pointer.
@@ -607,7 +607,14 @@ pub impl LlvmCtx {
         if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
             self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
         }
-        return self.arrValMake(c: inout c, data: nd, count: count)
+        // Preserve the source value's aggregate type (`{ptr}` String `%st` / Array `arrayTy`)
+        // so the copy round-trips to the same LLVM type; a bare-ptr source (a Buffer value)
+        // has no aggregate, so fall back to the shared arrayTy `{ptr}`.
+        mut val aggTy: LLVMTypeRef = self.arrayTy
+        if LLVMGetTypeKind(LLVMTypeOf(arrVal)) == 10U32 {
+            aggTy = LLVMTypeOf(arrVal)
+        }
+        return self.arrValMake(c: inout c, data: nd, count: count, aggTy: aggTy)
     }
 }
 

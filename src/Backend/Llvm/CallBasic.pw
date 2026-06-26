@@ -204,7 +204,7 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argAt") {
             mut val ptys: Array[LLVMTypeRef] = []
             ptys.append(self.i64ty)
-            val fty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ptys), 1U64, 0I32)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(ptys), 1U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argAt", nameId: 51U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             av.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: false))
@@ -291,10 +291,10 @@ pub impl LlvmCtx {
         // -> String / fileExists(path: Array[U8]) -> Bool: the path argument is a
         // {ptr,i64} value (String or Array[U8], same layout), passed as two args.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFile") {
-            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFile", rtId: 55U64, retTy: self.strty, pathExpr: args[0].expr)
+            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFile", rtId: 55U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: args[0].expr)
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readFileBytes") {
-            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.strty, pathExpr: args[0].expr)
+            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_readFileBytes", rtId: 53U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: args[0].expr)
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") {
             val r: LLVMValueRef = self.emitPathStrIntrinsic(c: inout c, rtName: "plew_fileExists", rtId: 54U64, retTy: self.i64ty, pathExpr: args[0].expr)
@@ -304,7 +304,7 @@ pub impl LlvmCtx {
         // @Std/Process execOut(cmd: String) -> String: run `sh -c cmd`, capture stdout
         // (the cmd String is a {ptr,i64} value, same path-intrinsic shape).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "execOut") {
-            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.strty, pathExpr: args[0].expr)
+            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: args[0].expr)
         }
         // execCode() -> I64: the exit status of the last execOut.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "execCode") {
@@ -330,7 +330,7 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") {
             mut val ptys: Array[LLVMTypeRef] = []
             ptys.append(self.ptrty)
-            val fty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ptys), 1U64, 0I32)
+            val fty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(ptys), 1U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_stringFromCString", nameId: 30U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             av.append(self.genLlvmExpr(c: inout c, id: args[0].expr))
@@ -355,14 +355,14 @@ pub impl LlvmCtx {
                 }
                 _ => {}
             }
-            return self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: arr), count: self.arrValCount(c: inout c, arr: arr))
+            return self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: arr), count: self.arrValCount(c: inout c, arr: arr), aggTy: self.stringLlvmTy(c: inout c))
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "floatToString") {
             // a double -> String via the runtime (snprintf %g into a malloc'd buffer).
             val fv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
             mut val ftys: Array[LLVMTypeRef] = []
             ftys.append(self.f64ty)
-            val ffty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(ftys), 1U64, 0I32)
+            val ffty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(ftys), 1U64, 0I32)
             val fcallee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_f64_to_str", nameId: 9140U64, fnTy: ffty)
             mut val fav: Array[LLVMValueRef] = []
             fav.append(fv)
@@ -371,7 +371,7 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "readStdin") {
             // read all of stdin into a String (strty {i8*,i64}) via the runtime.
             mut val rtys: Array[LLVMTypeRef] = []
-            val rfty: LLVMTypeRef = LLVMFunctionType(self.strty, arrayCPtr(rtys), 0U64, 0I32)
+            val rfty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(rtys), 0U64, 0I32)
             val rcallee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_readStdin", nameId: 27U64, fnTy: rfty)
             mut val rav: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, rfty, rcallee, arrayCPtr(rav), 0U64, anon())
