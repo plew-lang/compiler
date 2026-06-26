@@ -1,0 +1,12 @@
+// spec/03: a `Ref` shares mutation through a `val` handle, but the Ref exception waives only
+// the BINDING's mutability — the pointee FIELD's own `val`/`mut val` still applies. A `val`
+// (immutable) field must NOT be writable through a `Ref`, or value-semantics' val-immutability
+// would leak away for any Ref-shared type. (`mut val` fields ARE writable via `->`, even
+// through a `val` Ref binding — that case is exercised by tests/run/unique_ref.pw.)
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+struct C { pub val n: I32 }   // pub but NOT mut: readable everywhere, never reassignable
+fn main() {
+    val r: Ref[C] = <Ref[C] value=<C n=5 /> />
+    r->n = 9I32
+}

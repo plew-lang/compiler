@@ -244,13 +244,22 @@ pub impl Comp {
                     i += 1
                 }
             }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
                 self.verifyExpr(id: base)
                 // `r->field` is `Ref`-only too: a `WeakRef` field read/write must go through
                 // `upgrade()` (spec/03). Same pointed diagnostic as the `->method()` case.
                 val abt: TypeInfo = self.exprType(id: base)
                 if self.isWeakRefInst(ref: abt.ref) {
                     compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                } else if self.isRefInst(ref: abt.ref) {
+                    // `->` touches the POINTEE's field, so it obeys the pointee type's field
+                    // visibility exactly like `.` does (spec/05) — `->` must not be a privacy
+                    // escape hatch.
+                    val inst: TypeRef = self.arena.types[abt.ref]
+                    val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
+                    if pt.kind == 2 {
+                        self.checkFieldReadVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                    }
                 }
             }
             Expr.Deref(val base) => {

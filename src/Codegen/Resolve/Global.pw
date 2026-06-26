@@ -63,6 +63,7 @@ pub impl Comp {
             Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.collectGlobalDeps(id: base, into: inout into) }
             Expr.Try(val expr) => { self.collectGlobalDeps(id: expr, into: inout into) }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.collectGlobalDeps(id: base, into: inout into) }
+            Expr.Deref(val base) => { self.collectGlobalDeps(id: base, into: inout into) }
             Expr.Move(val operand, isBorrow: _) => { self.collectGlobalDeps(id: operand, into: inout into) }
             Expr.Await(val operand) => { self.collectGlobalDeps(id: operand, into: inout into) }
             _ => {}

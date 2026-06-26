@@ -5,7 +5,7 @@ import @Std/Core with { Ref }
 // (unique values cannot go in generics/arrays directly). The last Ref to drop
 // runs the pointee's deinit exactly once (spec/03).
 unique struct File {
-    val fd: I64
+    pub mut val fd: I64
     deinit { print(self.fd) }
 }
 

@@ -1,6 +1,6 @@
 import @Std/Io with { print }
 import @Std/Core with { Ref }
-struct Bag { mut val items: Array[I32] }
+struct Bag { pub mut val items: Array[I32] }
 fn main() {
     val r: Ref[Bag] = <Ref[Bag] value=<Bag items=[1, 2, 3] /> />
     val s: Ref[Bag] = r

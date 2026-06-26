@@ -330,6 +330,7 @@ pub impl Comp {
             Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.checkBoundsExpr(exprId: base) }
             Expr.Try(val expr) => { self.checkBoundsExpr(exprId: expr) }
             Expr.Arrow(val base, val nameStart, val nameLen) => { self.checkBoundsExpr(exprId: base) }
+            Expr.Deref(val base) => { self.checkBoundsExpr(exprId: base) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 self.checkBoundsExpr(exprId: cond)
                 self.checkBoundsBlock(blkId: thenBlk)

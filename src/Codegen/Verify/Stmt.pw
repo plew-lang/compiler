@@ -306,8 +306,26 @@ pub impl Comp {
                     compileErrorAt(line: self.lineOf(offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
                 }
             }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => {
-                // a Ref pointee is always mutable through `->`.
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                // a Ref pointee is always mutable through `->`. But a `WeakRef` has no direct
+                // deref (its referent may be gone — spec/03), and `->` must obey the pointee
+                // type's field WRITE visibility just like `.` (spec/05) rather than slipping
+                // past it into the opaque backend "not a registered struct" error.
+                val abt: TypeInfo = self.exprType(id: base)
+                if self.isWeakRefInst(ref: abt.ref) {
+                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                } else if self.isRefInst(ref: abt.ref) {
+                    // the pointee FIELD must be `mut val` — the Ref exception waives only the
+                    // binding's mutability, not the field's (spec/03 `val` immutability).
+                    if !(self.placeIsMutable(id: target)) {
+                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: target)), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `Ref` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)")
+                    }
+                    val inst: TypeRef = self.arena.types[abt.ref]
+                    val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
+                    if pt.kind == 2 {
+                        self.checkFieldWriteVis(ownerStart: pt.nameStart, ownerLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
+                    }
+                }
                 self.verifyExpr(id: base)
             }
             _ => {}

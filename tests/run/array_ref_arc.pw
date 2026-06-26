@@ -6,7 +6,7 @@ import @Std/Io with { print }
 import @Std/Core with { Ref }
 
 struct Cell {
-    val v: I32
+    pub val v: I32
 }
 
 fn main() {

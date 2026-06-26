@@ -12,7 +12,7 @@ import @Std/Io with { print }
 import @Std/Core with { Ref, WeakRef }
 
 unique struct Cell {
-    val v: I32
+    pub val v: I32
     deinit { print(self.v) }
 }
 
@@ -41,7 +41,7 @@ fn danglingWatcher() -> Watcher {
 // Child weakly observes Parent (up). Without the weak the strong cycle would leak both cells;
 // with it, dropping `p`/`c` frees both (Child deinit, then Parent deinit).
 unique struct Parent {
-    mut val child: Optional[Ref[Child]]
+    pub mut val child: Optional[Ref[Child]]
     deinit { print(70I32) }
 }
 unique struct Child {

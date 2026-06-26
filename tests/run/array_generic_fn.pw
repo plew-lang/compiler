@@ -6,7 +6,7 @@ import @Std/Io with { print }
 import @Std/Core with { Ref }
 
 struct Cell {
-    mut val v: I32
+    pub mut val v: I32
 }
 
 fn first[T](xs: Array[T]) -> T {

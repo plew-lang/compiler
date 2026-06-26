@@ -1,0 +1,11 @@
+// `->` touches the POINTEE's field, so it obeys the pointee type's field visibility just
+// like `.` (spec/05) — `->` must not be a privacy escape hatch. `n` is private (no `pub`),
+// so reading it through a `Ref` from outside the type must be rejected, exactly as `c.n`
+// would be on a plain value.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+struct C { mut val n: I32 }
+fn main() {
+    val r: Ref[C] = <Ref[C] value=<C n=5 /> />
+    print(r->n)
+}

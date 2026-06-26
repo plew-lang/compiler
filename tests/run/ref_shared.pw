@@ -1,6 +1,6 @@
 import @Std/Io with { print }
 import @Std/Core with { Ref }
-struct Counter { mut val n: I32 }
+struct Counter { pub mut val n: I32 }
 fn bump(c: Ref[Counter]) {
     c->n = c->n + 1
 }

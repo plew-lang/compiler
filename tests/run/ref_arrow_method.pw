@@ -9,7 +9,7 @@ import @Std/Io with { print }
 import @Std/Core with { Ref }
 
 unique struct Counter {
-    mut val n: I32
+    pub mut val n: I32          // pub so `r->n` R/W is reachable from `main` (spec/05: `->` obeys field visibility)
     deinit { print(99I32) }
 }
 pub impl Counter {

@@ -381,8 +381,19 @@ pub impl Comp {
                 return self.placeIsMutable(id: base)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                // a Ref's pointee is mutable even through a `val` Ref binding (spec:
-                // `->` is not gated by val/mut; sharing is the Ref's purpose).
+                // A Ref's pointee is writable through a `val` Ref BINDING — the Ref exception
+                // (spec/03) waives only the binding's val/mut (sharing is the Ref's purpose),
+                // NOT the pointee field's own mutability. A `val` field stays immutable even
+                // through a Ref, or value-semantics' val-immutability would leak away for any
+                // Ref-shared type.
+                val bt: TypeInfo = self.exprType(id: base)
+                if self.isRefInst(ref: bt.ref) {
+                    val inst: TypeRef = self.arena.types[bt.ref]
+                    val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
+                    if pt.kind == 2 {
+                        return self.fieldDeclaredMut(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+                    }
+                }
                 return true
             }
             _ => { return true }
