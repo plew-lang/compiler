@@ -41,6 +41,21 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
     }
 
+    // Is `ref` a `WeakRef[T]` instantiation? A WeakRef is the same control-block cell as
+    // its Ref (a single opaque pointer) but owns a WEAK count, not a strong one — the
+    // pointee deinit fires at strong 0 regardless of live weaks, and the cell is freed only
+    // when both counters reach 0. Lowered like Ref to an opaque pointer.
+    inout fn isWeakRefInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count() {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count() != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRef")
+    }
+
     // Is `ref` a `Buffer[T]` instantiation? `Buffer` is the blessed safe storage
     // floor (a cap+count+rc growable buffer that Array's storage is built on),
     // lowered like `Ref` to a C `T*` (with a {cap,rc} header before data) — not a

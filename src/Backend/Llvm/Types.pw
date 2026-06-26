@@ -58,6 +58,11 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Ref") {
             return self.ptrty
         }
+        // a `WeakRef[T]` is the same cell pointer as its Ref (opaque ptr) — owns a weak count
+        // rather than a strong one, but the value representation is identical.
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "WeakRef") {
+            return self.ptrty
+        }
         // a `Buffer[T]` is the raw data pointer (the storage floor; opaque ptr).
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Buffer") {
             return self.ptrty

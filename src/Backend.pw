@@ -1022,6 +1022,21 @@ fn fieldIsRefType(c: inout Comp, f: FieldDef) -> Bool {
     return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Ref")
 }
 
+// A `WeakRef[T]` field: declared `WeakRef[...]` directly (name "WeakRef"). It owns one WEAK
+// count on its shared cell, released (weak--; free iff strong also 0) at the owning struct's
+// drop. Like Ref, the cell is an extern opaque pointer the struct field-recursion can't
+// descend into, so it is handled explicitly. A name check (no grounding) keeps it safe inside
+// the recursive structNeedsDeinit, and weakRelease needs only the cell (no pointee type).
+fn fieldIsWeakRefType(c: inout Comp, f: FieldDef) -> Bool {
+    if f.tyIsArray {
+        return false
+    }
+    if f.ty == 0U64 {
+        return false
+    }
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "WeakRef")
+}
+
 // The (grounded) `Ref[T]` instance TypeRef of a Ref field — for emitRefRelease's pointee
 // deinit dispatch. Grounds under the active env so a `Ref[T]` field in a generic struct
 // resolves its concrete pointee. 0 if the field is not a Ref.
@@ -1052,6 +1067,26 @@ fn fieldGroundedRefTy(c: inout Comp, f: FieldDef) -> U64 {
         g = c.groundTypeRef(ref: f.ty)
     }
     if c.isRefInst(ref: g) {
+        return g
+    }
+    return 0U64
+}
+
+// Like fieldGroundedRefTy but for `WeakRef[T]`: grounds the field type (so a type-param
+// payload `v: T` in `Optional[WeakRef[Cell]]` resolves to its concrete WeakRef instance)
+// and returns it if a WeakRef instance, else 0. Used by the enum-payload WeakRef ARC walks.
+fn fieldGroundedWeakTy(c: inout Comp, f: FieldDef) -> U64 {
+    if f.tyIsArray {
+        return 0U64
+    }
+    if f.ty == 0U64 {
+        return 0U64
+    }
+    mut val g: U64 = f.ty
+    if c.cur.typeParams.count() > 0U64 {
+        g = c.groundTypeRef(ref: f.ty)
+    }
+    if c.isWeakRefInst(ref: g) {
         return g
     }
     return 0U64
@@ -1580,6 +1615,9 @@ export fn emitLlvmRuntime() {
     // upgrade(): if the pointee is still alive (strong>0) take a new strong owner and return
     // the cell (a `Ref`); else return null (the pointee was destroyed) → `Optional.None`.
     write(s: "void* plew_ref_upgrade(void* p){ if(p && ((long long*)p)[-1]>0){ ((long long*)p)[-1]++; return p; } return 0; }\n")
+    // alive(): the current strong count (0 once the pointee was destroyed) — `weakAlive` tests
+    // `> 0` to decide upgrade's Some/None without taking an owner.
+    write(s: "long long plew_ref_strong(void* p){ return p ? ((long long*)p)[-1] : 0; }\n")
     // strong release reached 0 (pointee deinit已 run by codegen): free the cell ONLY when no
     // weak observers remain; otherwise keep the allocation so a later upgrade reads strong==0.
     write(s: "void plew_ref_dispose_strong(void* p){ if(!p) return; if(((long long*)p)[-2]==0) free((long long*)p-3); }\n")

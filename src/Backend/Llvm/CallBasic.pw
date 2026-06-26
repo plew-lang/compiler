@@ -150,6 +150,21 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferEq") {
             return self.genLlvmBufferEq(c: inout c, lhs: args[0].expr, rhs: args[1].expr)
         }
+        // `Ref`/`WeakRef` control-block intrinsics (spec/03), backing weak()/upgrade(). The
+        // cell value IS the argument's value (an opaque pointer); each op touches a counter.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "refWeak") {
+            // r.weak(): bump the weak count, yield the same cell as a WeakRef handle.
+            return self.refWeakDowngrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "weakAlive") {
+            // strong > 0 — the pointee is still alive (i1).
+            return LLVMBuildICmp(self.b, llvmIntNe(), self.refStrongCount(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr)), LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "weakLock") {
+            // take a new strong owner of the (wrapper-guaranteed-alive) cell, yield it as a
+            // Ref (refUpgrade re-checks strong>0 then bumps; returns the cell).
+            return self.refUpgrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
+        }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "print") {
             return self.emitPrint(c: inout c, argExpr: args[0].expr)
         }

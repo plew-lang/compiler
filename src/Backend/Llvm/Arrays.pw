@@ -684,6 +684,10 @@ pub impl LlvmCtx {
                 // retains its strong rc. Keeps the field pointer, bumps the count. Balanced by
                 // emitRefRelease at the copy's drop.
                 self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, agg, fi, anon()))
+            } else if fieldIsWeakRefType(c: inout c, f: fd) {
+                // a `WeakRef` field copy SHARES the same cell and bumps the WEAK count (not
+                // strong) — balanced by weakRelease at the copy's drop.
+                self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, agg, fi, anon()))
             } else {
                 if c.fieldIsBoxed(f: fd) {
                     // a boxed (recursive) field is a shared heap pointer — leave it (deep
@@ -818,6 +822,19 @@ pub impl LlvmCtx {
         if c.isRefInst(ref: rr) {
             if arrayExprIsPlace(c: inout c, id: expr) {
                 self.rawbufRetain(c: inout c, cell: v)
+            }
+            return v
+        }
+        // 1-3a (WeakRef class): copying a `WeakRef` PLACE into a new owner shares the cell and
+        // bumps the WEAK count (not strong) — balanced by the owner's weakRelease at drop. A
+        // fresh `r.weak()` result is a non-place (already owns one weak) and passes through.
+        mut val wr: U64 = typeRef
+        if !(c.isWeakRefInst(ref: wr)) {
+            wr = self.exprTypeRef(c: inout c, id: expr)
+        }
+        if c.isWeakRefInst(ref: wr) {
+            if arrayExprIsPlace(c: inout c, id: expr) {
+                self.refWeakDowngrade(c: inout c, cell: v)
             }
             return v
         }
@@ -958,6 +975,18 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
+    // `w.upgrade` alive-test: the cell's current strong count (0 once the pointee was
+    // destroyed). `weakAlive` compares `> 0`.
+    inout fn refStrongCount(c: inout Comp, cell: LLVMValueRef) -> LLVMValueRef {
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 1U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_ref_strong", nameId: 9174U64, fnTy: fty)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(cell)
+        return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+    }
+
     // drop one weak observer (`WeakRef` scope exit): weak--; free at weak==0 && strong==0.
     inout fn weakRelease(c: inout Comp, cell: LLVMValueRef) {
         mut val ptys: Array[LLVMTypeRef] = []
@@ -1066,6 +1095,13 @@ pub impl LlvmCtx {
         // CoW duplicates the buffer, released (pointee deinit + free at strong 0) when the
         // buffer is freed or the element is overwritten. valueArc's Ref case does both.
         if c.isRefInst(ref: elemRef) {
+            return true
+        }
+        // a `WeakRef[T]` element owns one WEAK rc on its shared cell — bumped when an outer
+        // CoW duplicates the buffer, released when the buffer is freed or the element is
+        // overwritten (cell freed iff both strong and weak reach 0). valueArc's WeakRef case
+        // does both (refWeakDowngrade / weakRelease).
+        if c.isWeakRefInst(ref: elemRef) {
             return true
         }
         val t: TypeRef = c.arena.types[elemRef]
@@ -1178,6 +1214,18 @@ pub impl LlvmCtx {
             }
             return
         }
+        // a `WeakRef[T]` value: the cell pointer with a WEAK rc. retain = bump weak (shallow
+        // share — does NOT keep the pointee alive); release = decrement weak, and free the
+        // cell only when BOTH strong and weak are 0. Like Ref, an extern struct, so handled
+        // HERE before the registered-struct lookup (which skips externs).
+        if c.isWeakRefInst(ref: typeRef) {
+            if retain {
+                self.refWeakDowngrade(c: inout c, cell: v)
+            } else {
+                self.weakRelease(c: inout c, cell: v)
+            }
+            return
+        }
         // any-arity lookup: a generic struct value (`Array[I64]`) resolves by name, with its
         // instance env supplied below (setStructEnv) for grounding the field recursion.
         val sidx: U64 = c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
@@ -1256,6 +1304,10 @@ pub impl LlvmCtx {
                 // is a DIFFERENT shared pointer — the compiler's auto-box, not a user Ref —
                 // and is intentionally left alone; value semantics hold via deep-copy there.)
                 self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()))
+            } else if fieldIsWeakRefType(c: inout c, f: fd) {
+                // a `WeakRef` field: bump the WEAK count (shallow share), balancing weakRelease
+                // in the drop walker.
+                self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()))
             } else {
                 if c.fieldIsBoxed(f: fd) {
                     // a boxed (recursive) field is a shared heap pointer — leave it (like Ref).

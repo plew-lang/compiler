@@ -181,6 +181,11 @@ pub impl LlvmCtx {
                 if c.isRefInst(ref: ty) {
                     tref = ty
                 }
+                // a `WeakRef[T]` local: track the instance so `w.upgrade()` dispatches its
+                // opaque-intrinsic method and the weak-count drop fires at scope exit.
+                if c.isWeakRefInst(ref: ty) {
+                    tref = ty
+                }
                 // a `Buffer[T]` local: track its type so the floor intrinsics recover
                 // the element type T (the buffer is just a data pointer).
                 if ty != 0U64 {
@@ -592,6 +597,17 @@ pub impl LlvmCtx {
                                     self.expectedTy = gfr3
                                     val gv3: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
                                     self.expectedTy = 0U64
+                                    // the shared pointee field is overwritten in place: release the
+                                    // OLD occupant (one owner drops) and, when the RHS is a PLACE,
+                                    // retain the NEW value (the field becomes a co-owner; a temporary
+                                    // is moved in as-is). Covers Ref/WeakRef/Array/struct/enum-bearing
+                                    // fields — without it a Ref-carrying value stored here is double-
+                                    // freed (the field and the source both release the one cell).
+                                    val gfTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: gfr3)
+                                    self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, gfTy, gep, anon()), typeRef: gfr3, retain: false)
+                                    if structExprIsPlace(c: inout c, id: value) {
+                                        self.valueArc(c: inout c, v: gv3, typeRef: gfr3, retain: true)
+                                    }
                                     LLVMBuildStore(self.b, gv3, gep)
                                     return
                                 }

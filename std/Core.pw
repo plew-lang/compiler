@@ -574,6 +574,40 @@ export extern "plew-intrinsic" {
     struct Buffer[T]
 }
 
+// `Ref`/`WeakRef` control-block intrinsics (spec/03): the weak downgrade + the alive-test
+// and strong-lock that `upgrade` composes. Lowered by the compiler to the two-counter cell
+// ops (strong = the header rc, weak = the unused count slot); the wrapper methods below are
+// intercepted at the call site, so these bodies are never emitted.
+export extern "plew-intrinsic" {
+    // bump the weak count, yield the same cell as a non-owning WeakRef handle.
+    fn refWeak[T](r: Ref[T]) -> WeakRef[T]
+    // is the pointee still alive (some strong owner remains)?
+    fn weakAlive[T](w: WeakRef[T]) -> Bool
+    // take a new strong owner of a (known-alive) cell and yield it as a Ref.
+    fn weakLock[T](w: WeakRef[T]) -> Ref[T]
+}
+
+// `r.weak()` — a non-owning weak handle to the same cell (spec/03). The pointee's `deinit`
+// still runs when the last STRONG owner drops; the cell's memory is reclaimed only once no
+// weak handles remain either.
+pub impl[T] Ref[T] {
+    fn weak() -> WeakRef[T] {
+        return refWeak(r: self)
+    }
+}
+
+// `w.upgrade()` — `Some` of a fresh strong `Ref` while the pointee is alive, else `None`
+// (the pointee was destroyed when the last strong owner dropped). A `WeakRef` has no direct
+// deref (`w->x` does not exist): observing the pointee requires upgrading first.
+pub impl[T] WeakRef[T] {
+    fn upgrade() -> Optional[Ref[T]] {
+        if weakAlive(w: self) {
+            return <Optional.Some v=weakLock(w: self) />
+        }
+        return <Optional.None />
+    }
+}
+
 // `String` (spec/02): an immutable, UTF-8-valid value type over the `Buffer[U8]` floor —
 // an ordinary `struct { buffer }` like `Array`, NOT a compiler-opaque primitive. Its value
 // representation is the single buffer pointer (the backend pins String's LLVM type to the

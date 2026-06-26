@@ -34,6 +34,7 @@ void plew_rawbuf_drop(void* p){ if(!p) return; if(--((long long*)p)[-1]==0) free
 void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-3); }
 void* plew_ref_weak(void* p){ if(p) ((long long*)p)[-2]++; return p; }
 void* plew_ref_upgrade(void* p){ if(p && ((long long*)p)[-1]>0){ ((long long*)p)[-1]++; return p; } return 0; }
+long long plew_ref_strong(void* p){ return p ? ((long long*)p)[-1] : 0; }
 void plew_ref_dispose_strong(void* p){ if(!p) return; if(((long long*)p)[-2]==0) free((long long*)p-3); }
 void plew_weak_release(void* p){ if(!p) return; if(--((long long*)p)[-2]==0 && ((long long*)p)[-1]==0) free((long long*)p-3); }
 void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && ((long long*)data)[-1]>1){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } ((long long*)data)[-1]--; return nd; } return data; }

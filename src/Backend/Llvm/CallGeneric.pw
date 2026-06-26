@@ -327,9 +327,9 @@ pub impl LlvmCtx {
             } else if structExprIsPlace(c: inout c, id: argExpr) {
                 val atr: U64 = self.exprTypeRef(c: inout c, id: argExpr)
                 // struct / String / enum place args shallow-retain (their param's deferred
-                // release is a tolerated leak, never a UAF). A Ref place is diverted above
-                // (refTy != 0); the guard is defensive in case argRefTypeRef missed it.
-                if !(c.isRefInst(ref: atr)) {
+                // release is a tolerated leak, never a UAF). A Ref/WeakRef place is diverted
+                // above (refTy != 0); the guard is defensive in case argRefTypeRef missed it.
+                if !(c.isRefInst(ref: atr)) && !(c.isWeakRefInst(ref: atr)) {
                     self.valueArc(c: inout c, v: out, typeRef: atr, retain: true)
                 }
             }
@@ -350,14 +350,25 @@ pub impl LlvmCtx {
                         g = c.groundTypeRef(ref: mty)
                     }
                 }
-                if c.isRefInst(ref: g) {
+                if c.isRefInst(ref: g) || c.isWeakRefInst(ref: g) {
                     return g
                 }
                 return 0U64
             }
             _ => {}
         }
-        return self.exprRefTypeRef(c: inout c, id: argExpr)
+        val rt: U64 = self.exprRefTypeRef(c: inout c, id: argExpr)
+        if rt != 0U64 {
+            return rt
+        }
+        // a `WeakRef[T]` temporary (e.g. `f(r.weak())`): its scope-exit drop must release the
+        // weak count, so register it as an owned local too (emitDeinitCall routes WeakRef to
+        // weakRelease). exprRefTypeRef only recognises Ref, so resolve WeakRef separately.
+        val et: U64 = self.exprTypeRef(c: inout c, id: argExpr)
+        if c.isWeakRefInst(ref: et) {
+            return et
+        }
+        return 0U64
     }
 
     // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count().

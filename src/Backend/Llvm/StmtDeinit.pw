@@ -59,6 +59,11 @@ pub impl LlvmCtx {
             if fieldIsRefType(c: inout c, f: fd) {
                 return true
             }
+            // a `WeakRef[T]` field owns a weak count to release at the owning struct's drop
+            // (extern opaque pointer — handled explicitly like Ref/Buffer).
+            if fieldIsWeakRefType(c: inout c, f: fd) {
+                return true
+            }
             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
             if fsi < c.arena.structs.count() {
                 if !(c.arena.structs[fsi].isExtern) {
@@ -177,6 +182,10 @@ pub impl LlvmCtx {
                 // release the field's `Ref` cell (strong--; pointee deinit + free at 0).
                 // Balanced by the rawbufRetain at every struct-place CoW-share / field init.
                 self.emitRefRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()), refTy: refFieldTypeRef(c: inout c, f: fd))
+            } else if fieldIsWeakRefType(c: inout c, f: fd) {
+                // release the field's `WeakRef` (weak--; free iff strong also 0). Balanced by
+                // the weak retain (refWeakDowngrade) at every struct-place share / field init.
+                self.weakRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()))
             } else {
                 val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                 if fsi < c.arena.structs.count() {
@@ -305,6 +314,15 @@ pub impl LlvmCtx {
             // it here would under-count the strong rc and free a cell the caller still owns.
             if li >= self.curBodyMark {
                 self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
+            }
+            return
+        }
+        // a `WeakRef[T]` local: drop one weak observer — decrement the weak count and free the
+        // cell only when BOTH counters are 0 (the pointee deinit already ran at strong 0). Same
+        // curBodyMark borrow gate as Ref. Balances the weak retain at each WeakRef place-copy.
+        if c.isWeakRefInst(ref: self.locTypeRef[li]) {
+            if li >= self.curBodyMark {
+                self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
             }
             return
         }

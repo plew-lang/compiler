@@ -181,6 +181,13 @@ pub impl LlvmCtx {
                                 pty = self.llvmTypeOfRef(c: inout c, ref: gfp)
                             }
                         }
+                        // a `Ref[T]` / `WeakRef[T]` payload (e.g. `Optional[Ref[T]]` from
+                        // `WeakRef.upgrade`): track the opaque instance so the bind's `s->field`
+                        // deref / `s.weak()` dispatch resolve (Ref/WeakRef aren't generic insts).
+                        if c.isRefInst(ref: gfp) || c.isWeakRefInst(ref: gfp) {
+                            genFieldRef = gfp
+                            pty = self.ptrty
+                        }
                     }
                 }
                 // a boxed (recursive) payload field holds a heap pointer; load the boxed
