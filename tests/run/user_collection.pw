@@ -1,22 +1,19 @@
 // collections.md §6 point-7 go/no-go: a user-authored generic collection built
 // ENTIRELY on the `Buffer[T]` floor — the compiler has no `Stack` knowledge, so
 // this proves a safe collection closes over the public floor op-set alone
-// (push/pop/peek/count/isEmpty). It covers v1's element scope (copyable T, spec/03
-// L58): a scalar (`I64`) and an ARC value (`String`). push retains, peek value-returns
-// (retains an ARC element), pop moves the live element out to the caller, and a
-// value-semantics copy CoW-shares the backing while a mutation privatizes it — so
-// every String element is freed exactly once. Verified ASan-clean on self-compile +
-// run: no UAF, no double-free.
+// (push/pop/peek/replaceTop/count/isEmpty). It covers v1's element scope (copyable
+// T, spec/03 L58): a scalar (`I64`) and an ARC value (`String`). The String case
+// exercises the lifecycle the safety theorem cares about — push retains, `replaceTop`
+// forwards to `Buffer.set` which is commit-then-release (§6-4: the old element is freed
+// only after the new value is committed, so a re-entrant deinit never observes a torn
+// slot), peek value-returns (retains), and pop moves the live value out to the caller.
+// A value-semantics copy CoW-shares the backing; a mutation privatizes it. Verified
+// ASan-clean on self-compile + run: every String element is freed exactly once (no
+// leak, no UAF, no double-free).
 //
-// Scope notes (intentionally NOT exercised here — pre-existing gaps orthogonal to the
-// type-name-dispatch endpoint this floor work completed):
-//   - An in-place element mutator that forwards to `Buffer.set` (e.g. `replaceTop`):
-//     a generic struct method calling `self.data.set(...)` currently breaks sibling
-//     generic-method resolution (a mono instantiation bug). `Buffer.set`'s own
-//     commit-then-release lifecycle (§6-4) is covered directly by buffer_cow_field.pw.
-//   - A `Ref[unique T]` element's pointee deinit on container drop: a documented v1
-//     leaked-but-safe limitation (design-decisions.md CoW-share channel-A note +
-//     provisional.md "deep release of heap-owning Ref pointees"); no UAF.
+// Scope note: a `Ref[unique T]` element's pointee deinit on container drop is NOT
+// exercised — a documented v1 leaked-but-safe limitation (design-decisions.md CoW-share
+// channel-A note + provisional.md "deep release of heap-owning Ref pointees"); no UAF.
 import @Std/Io with { print }
 import @Std/Core with { Buffer }
 
@@ -44,6 +41,10 @@ pub impl[T] Stack[T] {
         val last: U64 = self.data.count() - 1U64
         return self.data.get(index: last)
     }
+    inout fn replaceTop(value~: T) {
+        val last: U64 = self.data.count() - 1U64
+        self.data.set(index: last, value)
+    }
 }
 
 fn main() {
@@ -55,32 +56,38 @@ fn main() {
     val ncount: U64 = nums.count()
     val ntop: I64 = nums.peek()
     print("nums count=" + ncount.format(format: "") + " top=" + ntop.format(format: ""))
+    nums.replaceTop(99I64)
+    val ntop2: I64 = nums.peek()
     val a: I64 = nums.pop()
     val b: I64 = nums.pop()
     val empty: Bool = nums.isEmpty()
     val emptyStr: String = if empty { give "y" } else { give "n" }
-    print("popped " + a.format(format: "") + "," + b.format(format: "") + " empty=" + emptyStr)
+    print("replaced top=" + ntop2.format(format: "") + " popped " + a.format(format: "") + "," + b.format(format: "") + " empty=" + emptyStr)
 
-    // (2) ARC element (String): push retains, peek value-returns (retains), pop moves
-    // the live String out to the caller. Every element freed exactly once.
+    // (2) ARC element (String): push retains, replaceTop is commit-then-release (§6-4),
+    // peek value-returns (retains), pop moves the live String out to the caller.
     mut val words: Stack[String] = Stack.new()
     words.push("alpha")
     words.push("beta")
     val top0: String = words.peek()
+    print("top=" + top0)
+    words.replaceTop("BETA")          // old "beta" freed only after "BETA" is committed
+    val top1: String = words.peek()
     val wcount: U64 = words.count()
-    print("top=" + top0 + " count=" + wcount.format(format: ""))
+    print("top now=" + top1 + " count=" + wcount.format(format: ""))
     val w: String = words.pop()
     val rem: String = words.peek()
     print("popped=" + w + " remaining=" + rem)
 
     // (3) value semantics: a copy CoW-shares the backing; a mutation on one side
     // privatizes so the two diverge (the floor's CoW gateway, driven through a user
-    // collection's own methods — push only, no element mutator).
+    // collection's own methods).
     mut val src: Stack[String] = Stack.new()
     src.push("x")
     src.push("y")
     mut val dup: Stack[String] = src         // CoW-share the backing buffer
     dup.push("z")                            // privatize dup -> diverges from src
+    dup.replaceTop("Z")                      // mutate dup's top; src unaffected
     val sc: U64 = src.count()
     val dc: U64 = dup.count()
     val st: String = src.peek()

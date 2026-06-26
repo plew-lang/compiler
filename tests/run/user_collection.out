@@ -1,5 +1,6 @@
 nums count=3 top=30
-popped 30,20 empty=n
-top=beta count=2
-popped=beta remaining=alpha
-src count=2 top=y | dup count=3 top=z
+replaced top=99 popped 99,20 empty=n
+top=beta
+top now=BETA count=2
+popped=BETA remaining=alpha
+src count=2 top=y | dup count=3 top=Z
