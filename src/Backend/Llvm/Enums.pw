@@ -120,6 +120,17 @@ pub impl LlvmCtx {
             if refIsAny(c: inout c, ref: g) {
                 return 2U64
             }
+            // a `Ref[T]` / `Buffer[T]` payload (possibly reached via a type param `Some(v: T)`,
+            // T -> Ref[Cell]) is a single opaque pointer (1 word). Checked before isGenericInst:
+            // Ref/Buffer carry type args (so isGenericInst is true) but are extern intrinsics,
+            // not registered generic structs, so genInstWords would size them as 0 — collapsing
+            // the enum's payload area to [0 x i64] and dropping the pointer on copy.
+            if c.isRefInst(ref: g) {
+                return 1U64
+            }
+            if c.isRawBufInst(ref: g) {
+                return 1U64
+            }
             if c.isGenericInst(ref: g) {
                 // Array[E] is the {ptr,i64} value type, not an inline instance.
                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
@@ -247,8 +258,17 @@ pub impl LlvmCtx {
         }
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
         if ge < self.genEnumRefs.count() {
+            // set the instance env so a payload field of type-param type (`Some(v: T)`,
+            // T -> Ref[Cell]) grounds in variantHasHeap / emitEnumRelease (fieldGroundedRefTy).
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            val didSet: Bool = self.setEnumEnv(c: inout c, ref: ref)
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[ge]) {
                 self.emitEnumRelease(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
+            }
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
             }
             return true
         }
@@ -274,10 +294,19 @@ pub impl LlvmCtx {
         }
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
         if ge < self.genEnumRefs.count() {
+            // instance env so a type-param `Ref` payload grounds (see emitEnumReleaseRef).
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            val didSet: Bool = self.setEnumEnv(c: inout c, ref: ref)
+            mut val res: LLVMValueRef = v
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[ge]) {
-                return self.deepCopyEnumValue(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
+                res = self.deepCopyEnumValue(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
             }
-            return v
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
+            }
+            return res
         }
         val t: TypeRef = c.arena.types[ref]
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
@@ -303,6 +332,12 @@ pub impl LlvmCtx {
             val fd: FieldDef = fs[fj]
             if !(c.fieldIsBoxed(f: fd)) {
                 if fd.tyIsArray {
+                    return true
+                }
+                // ground first (fieldGroundedRefTy) so a generic payload `v: T` with T -> Ref
+                // is recognised — a name-check on the declared `T` would miss it. Requires the
+                // caller (emitEnumReleaseRef etc.) to have set the enum instance env.
+                if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
                     return true
                 }
                 val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
@@ -370,6 +405,8 @@ pub impl LlvmCtx {
                                 ety2 = self.llvmTypeOfRef(c: inout c, ref: er)
                             }
                             self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety2, elemRef: er)
+                        } else if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
+                            self.emitRefRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()), refTy: fieldGroundedRefTy(c: inout c, f: fd))
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                             if fsi < c.arena.structs.count() {
@@ -422,6 +459,8 @@ pub impl LlvmCtx {
                     if !(c.fieldIsBoxed(f: fd)) {
                         if fd.tyIsArray {
                             self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: LLVMBuildExtractValue(self.b, pv, fj, anon())))
+                        } else if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
+                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                             if fsi < c.arena.structs.count() {
@@ -597,8 +636,16 @@ pub impl LlvmCtx {
         }
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
         if ge < self.genEnumRefs.count() {
+            // instance env so a type-param `Ref` payload grounds (see emitEnumReleaseRef).
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            val didSet: Bool = self.setEnumEnv(c: inout c, ref: ref)
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[ge]) {
                 self.emitEnumRetain(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
+            }
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
             }
             return true
         }
@@ -648,6 +695,9 @@ pub impl LlvmCtx {
                             }
                             val nf: LLVMValueRef = self.copyArrayValue(c: inout c, arrVal: LLVMBuildExtractValue(self.b, pv, fj, anon()), elemTy: ety2, elemRef: er)
                             pv = LLVMBuildInsertValue(self.b, pv, nf, fj, anon())
+                        } else if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
+                            // a `Ref` payload is shared on copy: keep the cell, retain its rc.
+                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                             if fsi < c.arena.structs.count() {

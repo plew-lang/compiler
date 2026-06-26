@@ -26,7 +26,7 @@ pub impl LlvmCtx {
             } else {
                 // value semantics: copy an array/struct PLACE element (`[a, b]` for
                 // Array[Array[T]]) so the literal is independent of the source bindings.
-                ev = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elems[i]), elemTy: elemTy), valueExpr: elems[i])
+                ev = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elems[i]), elemTy: elemTy), expr: elems[i], typeRef: elemRef)
             }
             LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1
@@ -249,17 +249,29 @@ pub impl LlvmCtx {
         val newdata: LLVMValueRef = LLVMBuildCall2(self.b, gfty, grow, arrayCPtr(gav), 3U64, anon())
         LLVMBuildStore(self.b, newdata, slot)
         // value semantics: a struct/array/String PLACE element copies (a literal / call
-        // result already owns its buffer and passes through).
-        val ev: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
+        // result already owns its buffer and passes through). A `Ref` element place is
+        // RETAINED (shared) on store — keyed off the buffer's grounded element ref `er`
+        // (the value expr is `bufferAppend`'s generic param `value: T`, which does not
+        // ground to `Ref` on its own), so the buffer co-owns the cell.
+        val er: U64 = self.bufElemRef(c: inout c, id: recv)
+        val ev: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: er)
         LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: newdata, idx: count))
         self.rawbufSetCount(c: inout c, data: newdata, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
     // `buf.get(index)`: bounds-checked element read (panics when out of range). The read
-    // is value-return (buffer-floor.md §4.1): an ARC-bearing element is RETAINED so the
-    // returned value independently owns it (CoW-shared) — its drop balances this retain,
-    // and the buffer's own element release at drop is unaffected. (A scalar passes through.)
+    // is value-return (buffer-floor.md §4.1): a copyable ARC-bearing element (String / nested
+    // buffer / array-field struct) is RETAINED so the returned value independently owns it
+    // (CoW-shared) — its drop balances this retain, and the buffer's own element release at
+    // drop is unaffected. (A scalar passes through.)
+    //
+    // A `Ref[T]` element is the EXCEPTION: the read BORROWS (no retain). A Ref is shared-
+    // mutable (not value-copied), so reading it yields a borrow of the cell, and the single
+    // strong retain is taken by the CONSUMER (consumeIntoOwned, when the read value is bound /
+    // stored / passed / returned). A transient read (`xs[i]->field`) is then a pure borrow
+    // with no leak; binding (`val r = xs[i]`) retains exactly once at the bind. Retaining here
+    // too would double-count (the buffer's element release would never reach strong 0).
     inout fn genLlvmBufferGet(c: inout Comp, recv: U64, indexExpr: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
         val er: U64 = self.bufElemRef(c: inout c, id: recv)
@@ -269,7 +281,9 @@ pub impl LlvmCtx {
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
         if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
-            self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
+            if !(c.isRefInst(ref: er)) {
+                self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
+            }
         }
         return elem
     }
@@ -306,7 +320,7 @@ pub impl LlvmCtx {
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-        val rv: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
+        val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: er)
         val slotPtr: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
         if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
             val old: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, slotPtr, anon())
@@ -492,7 +506,9 @@ pub impl LlvmCtx {
         LLVMBuildStore(self.b, data, slot)
         // open a hole at idx: shift [idx, count) up by one (n = count - idx; n=0 -> no-op).
         self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: LLVMBuildAdd(self.b, idx, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), src: idx, n: LLVMBuildSub(self.b, count, idx, anon()))
-        val ev: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), valueExpr: valueExpr)
+        // keyed off the grounded element ref so a `Ref` place element is retained on store
+        // (the value expr is the generic `value: T` param — see genLlvmBufferAppend).
+        val ev: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: self.bufElemRef(c: inout c, id: recv))
         LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx))
         self.rawbufSetCount(c: inout c, data: data, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
         return LLVMConstInt(self.i64ty, 0U64, 0I32)

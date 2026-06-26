@@ -308,11 +308,56 @@ pub impl LlvmCtx {
         // AST args. A `move` arg transfers ownership (markLocalMoved above) and a literal /
         // call result already owns its value (not a place), so neither is retained.
         if !(p.isMove) {
-            if structExprIsPlace(c: inout c, id: argExpr) {
-                self.valueArc(c: inout c, v: out, typeRef: self.exprTypeRef(c: inout c, id: argExpr), retain: true)
+            // a `Ref` by-value arg (place OR temporary): the callee's param is a BORROW (not
+            // released at callee scope — curBodyMark-gated); storing / returning it inside the
+            // callee retains via consumeIntoOwned. A PLACE arg (`r`) is owned by the caller's
+            // own binding, which drops at its scope — nothing to do here. A TEMPORARY (`<Ref
+            // .../>` literal / call result) has no home binding, so register it as an owned
+            // anonymous local: the enclosing block's scope-exit drop releases it (strong--,
+            // pointee deinit + free at 0), balancing the construction's initial rc and any
+            // store-retain the callee took. This makes Ref EXACT (no leak, no UAF) where
+            // struct / String / enum place args still shallow-retain (a tolerated leak).
+            val refTy: U64 = self.argRefTypeRef(c: inout c, argExpr: argExpr)
+            if refTy != 0U64 {
+                if !(arrayExprIsPlace(c: inout c, id: argExpr)) {
+                    val slot: LLVMValueRef = self.entryAlloca(ty: self.ptrty)
+                    LLVMBuildStore(self.b, out, slot)
+                    self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: self.ptrty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: refTy)
+                }
+            } else if structExprIsPlace(c: inout c, id: argExpr) {
+                val atr: U64 = self.exprTypeRef(c: inout c, id: argExpr)
+                // struct / String / enum place args shallow-retain (their param's deferred
+                // release is a tolerated leak, never a UAF). A Ref place is diverted above
+                // (refTy != 0); the guard is defensive in case argRefTypeRef missed it.
+                if !(c.isRefInst(ref: atr)) {
+                    self.valueArc(c: inout c, v: out, typeRef: atr, retain: true)
+                }
             }
         }
         return out
+    }
+
+    // The grounded `Ref[T]` TypeRef of a by-value argument expression, or 0 if it is not a
+    // Ref. A `<Ref[T] .../>` construction carries its type on the Make node (which
+    // exprRefTypeRef can't see); a place / call result resolves via exprRefTypeRef. Grounds
+    // a generic literal type (`<Ref[U] .../>` inside a generic caller) under the caller env.
+    inout fn argRefTypeRef(c: inout Comp, argExpr: U64) -> U64 {
+        match c.arena.exprs[argExpr] {
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: val mty, fields: _) => {
+                mut val g: U64 = mty
+                if g != 0U64 {
+                    if c.cur.typeParams.count() > 0U64 {
+                        g = c.groundTypeRef(ref: mty)
+                    }
+                }
+                if c.isRefInst(ref: g) {
+                    return g
+                }
+                return 0U64
+            }
+            _ => {}
+        }
+        return self.exprRefTypeRef(c: inout c, id: argExpr)
     }
 
     // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count().

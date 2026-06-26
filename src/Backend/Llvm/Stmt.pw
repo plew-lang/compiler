@@ -313,13 +313,9 @@ pub impl LlvmCtx {
                 }
                 LLVMBuildStore(self.b, v, slot)
                 self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
-                // sharing a Ref to a deinit-bearing pointee (`val r2 = r`): retain the
-                // shared cell so the pointee deinits only when the LAST owner drops.
-                if self.refDeinitPointeeSidx(c: inout c, refTy: tref) < c.arena.structs.count() {
-                    if arrayExprIsPlace(c: inout c, id: init) {
-                        self.rawbufRetain(c: inout c, cell: v)
-                    }
-                }
+                // (`val r2 = r` Ref share-retain now rides the general copyValueIfPlace path
+                // above — consumeIntoOwned's Ref class rawbufRetains a Ref place — so no
+                // bespoke retain here. Balanced by emitRefRelease at this local's drop.)
                 // an array-of-struct local (`store: Array[Box]`): track the element struct
                 // so `store[i].field` resolves the element (tyStart names the element type).
                 if isArr {

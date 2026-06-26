@@ -1007,6 +1007,56 @@ fn fieldIsBufferType(c: inout Comp, f: FieldDef) -> Bool {
     return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Buffer")
 }
 
+// A `Ref[T]` field: declared `Ref[...]` directly (name "Ref"). Its cell carries a strong
+// rc that must be released at the owning struct's drop (the cell is an extern opaque
+// pointer, so the struct field-recursion in structNeedsDeinit / the drop witness can't
+// descend into it — Ref is handled explicitly, like Buffer). Name check on the DECLARED
+// type (no grounding) to stay safe inside the recursive structNeedsDeinit.
+fn fieldIsRefType(c: inout Comp, f: FieldDef) -> Bool {
+    if f.tyIsArray {
+        return false
+    }
+    if f.ty == 0U64 {
+        return false
+    }
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Ref")
+}
+
+// The (grounded) `Ref[T]` instance TypeRef of a Ref field — for emitRefRelease's pointee
+// deinit dispatch. Grounds under the active env so a `Ref[T]` field in a generic struct
+// resolves its concrete pointee. 0 if the field is not a Ref.
+fn refFieldTypeRef(c: inout Comp, f: FieldDef) -> U64 {
+    if !(fieldIsRefType(c: inout c, f: f)) {
+        return 0U64
+    }
+    if c.cur.typeParams.count() > 0U64 {
+        return c.groundTypeRef(ref: f.ty)
+    }
+    return f.ty
+}
+
+// The grounded `Ref[T]` instance TypeRef of a field IF it grounds to a Ref under the active
+// env, else 0 — unlike fieldIsRefType / refFieldTypeRef (which name-check the DECLARED type
+// first), this GROUNDS first, so a generic enum/struct payload declared as a bare type param
+// (`Optional.Some(v: T)` with T -> Ref[Cell]) is recognised. Used by the enum ARC walks so a
+// `Ref` payload reached only through a type-param grounding is retained/released exactly.
+fn fieldGroundedRefTy(c: inout Comp, f: FieldDef) -> U64 {
+    if f.tyIsArray {
+        return 0U64
+    }
+    if f.ty == 0U64 {
+        return 0U64
+    }
+    mut val g: U64 = f.ty
+    if c.cur.typeParams.count() > 0U64 {
+        g = c.groundTypeRef(ref: f.ty)
+    }
+    if c.isRefInst(ref: g) {
+        return g
+    }
+    return 0U64
+}
+
 // The element TypeRef of a `Buffer[T]` field (T), or 0 — for the element-cascade in the
 // field ARC paths (Array and Buffer fields are rep-identical, so they share the cascade).
 fn bufferFieldElemRef(c: inout Comp, f: FieldDef) -> U64 {
@@ -1523,6 +1573,19 @@ export fn emitLlvmRuntime() {
     // free a rawbuf cell unconditionally (the caller has already established rc reached 0
     // and released the element heap); a null / sentinel-rc cell is left alone.
     write(s: "void plew_rawbuf_free(void* p){ if(!p) return; if(((long long*)p)[-1]>((long long)1<<61)) return; free((long long*)p-3); }\n")
+    // `Ref`/`WeakRef` two-counter control block (spec/03): the cell reuses the rawbuf
+    // header — strong = [-1] (init 1), weak = [-2] (init 0, the unused Buffer `count` slot).
+    // weak()  : bump the weak count, return the same cell as a `WeakRef` handle.
+    write(s: "void* plew_ref_weak(void* p){ if(p) ((long long*)p)[-2]++; return p; }\n")
+    // upgrade(): if the pointee is still alive (strong>0) take a new strong owner and return
+    // the cell (a `Ref`); else return null (the pointee was destroyed) → `Optional.None`.
+    write(s: "void* plew_ref_upgrade(void* p){ if(p && ((long long*)p)[-1]>0){ ((long long*)p)[-1]++; return p; } return 0; }\n")
+    // strong release reached 0 (pointee deinit已 run by codegen): free the cell ONLY when no
+    // weak observers remain; otherwise keep the allocation so a later upgrade reads strong==0.
+    write(s: "void plew_ref_dispose_strong(void* p){ if(!p) return; if(((long long*)p)[-2]==0) free((long long*)p-3); }\n")
+    // drop one weak observer: decrement the weak count; free the cell when it is the last
+    // reference of either kind (weak==0 AND strong already 0 — the pointee is long gone).
+    write(s: "void plew_weak_release(void* p){ if(!p) return; if(--((long long*)p)[-2]==0 && ((long long*)p)[-1]==0) free((long long*)p-3); }\n")
     // copy-on-write a (scalar-element) array buffer before an in-place mutation: if the
     // buffer is shared (rc>1), allocate a private rc=1 copy of `count` elements, drop one
     // owner from the shared original, and return the copy; otherwise return it unchanged.

@@ -53,6 +53,12 @@ pub impl LlvmCtx {
             if fieldIsBufferType(c: inout c, f: fd) {
                 return true
             }
+            // a `Ref[T]` field owns a strong rc on its shared cell that must be released at
+            // the owning struct's drop (extern opaque pointer — not reachable by the
+            // registered-struct recursion below, so checked explicitly like Buffer).
+            if fieldIsRefType(c: inout c, f: fd) {
+                return true
+            }
             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
             if fsi < c.arena.structs.count() {
                 if !(c.arena.structs[fsi].isExtern) {
@@ -167,6 +173,10 @@ pub impl LlvmCtx {
                     ety = self.llvmTypeOfRef(c: inout c, ref: er)
                 }
                 self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety, elemRef: er)
+            } else if fieldIsRefType(c: inout c, f: fd) {
+                // release the field's `Ref` cell (strong--; pointee deinit + free at 0).
+                // Balanced by the rawbufRetain at every struct-place CoW-share / field init.
+                self.emitRefRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()), refTy: refFieldTypeRef(c: inout c, f: fd))
             } else {
                 val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                 if fsi < c.arena.structs.count() {
@@ -283,21 +293,19 @@ pub impl LlvmCtx {
                 return
             }
         }
-        // a `Ref[T]` local with a deinit-bearing pointee: release the shared cell; when
-        // the last owner drops (refcount hits 0), destroy the pointee (spec/03).
-        val rpsi: U64 = self.refDeinitPointeeSidx(c: inout c, refTy: self.locTypeRef[li])
-        if rpsi < c.arena.structs.count() {
-            val cell: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
-            val newcount: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
-            val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), newcount, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
-            val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refdrop.deinit"))
-            val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refdrop.cont"))
-            LLVMBuildCondBr(self.b, isZero, deinitBB, contBB)
-            LLVMPositionBuilderAtEnd(self.b, deinitBB)
-            val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: self.locTypeRef[li])
-            self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, pty, cell, anon()), sidx: rpsi)
-            LLVMBuildBr(self.b, contBB)
-            LLVMPositionBuilderAtEnd(self.b, contBB)
+        // a `Ref[T]` local: release one strong owner — decrement the cell's strong rc, and at
+        // 0 run the pointee deinit (if its type needs one) then free the cell (spec/03: the
+        // pointee deinit runs when the LAST owner drops). Covers EVERY Ref local (whether or
+        // not the pointee needs a deinit — the cell heap must be freed regardless), balancing
+        // the rawbufRetain consumeIntoOwned emits at each Ref place-copy / by-value arg-pass.
+        if c.isRefInst(ref: self.locTypeRef[li]) {
+            // gated on `li >= curBodyMark` like arrays/structs/enums: a param / capture /
+            // seeded global is a BORROW (the owner lives in the caller / enclosing scope),
+            // and a by-value Ref arg is passed without a retain (genArgValue), so releasing
+            // it here would under-count the strong rc and free a cell the caller still owns.
+            if li >= self.curBodyMark {
+                self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
+            }
             return
         }
         val sidx: U64 = self.locStructIdx[li]

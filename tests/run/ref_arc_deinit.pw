@@ -1,0 +1,49 @@
+// Ref ARC: the pointee `deinit` fires EXACTLY ONCE per cell, at the last strong owner's
+// drop, across the positions that were previously leak/UAF-prone — a Ref TEMPORARY arg
+// (literal passed by value), an array element (place-append + CoW share), a subscript-set
+// overwrite (old released, new retained), and an `Optional[Ref[T]]` enum payload (the
+// shape `WeakRef.upgrade` returns). Each `deinit` prints its tag, so the count + order of
+// markers verifies single-release (no missing deinit = no leak; no extra = no double-free)
+// and the printed values verify no use-after-free. ASan-clean.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    val v: I32
+    deinit { print(self.v) }
+}
+
+// `r` is a place arg = a borrow; `make` reads it and returns a fresh Ref (a temporary the
+// caller must release). Exercises borrow-not-released + return-retains + temporary cleanup.
+fn peek(r: Ref[Cell]) -> I32 {
+    return r->v
+}
+
+fn main() {
+    // array element: a place appended (retained), survives its binding's block, shared by a
+    // CoW copy, freed once when both arrays drop.
+    mut val xs: Array[Ref[Cell]] = []
+    if true {
+        val r: Ref[Cell] = <Ref[Cell] value=<Cell v=10 /> />
+        xs.append(r)
+    }
+    print(xs[0]->v)
+    val ys: Array[Ref[Cell]] = xs
+    print(ys[0]->v)
+
+    // subscript-set overwrite: old (10) released here; new place `a` retained, freed at end.
+    val a: Ref[Cell] = <Ref[Cell] value=<Cell v=20 /> />
+    xs[0] = a
+    print(xs[0]->v)
+
+    // a Ref temporary passed by value to a borrowing fn (released after the call, not leaked).
+    print(peek(r: <Ref[Cell] value=<Cell v=30 /> />))
+
+    // Optional[Ref[T]] payload: construct, match-read, drop (deinit at the enum's drop).
+    val o: Optional[Ref[Cell]] = <Optional.Some v=<Ref[Cell] value=<Cell v=40 /> /> />
+    match o {
+        Optional.Some(v: val c) => { print(c->v) }
+        Optional.None => { print(0I32) }
+    }
+    print(99I32)
+}
