@@ -1,0 +1,89 @@
+// collections.md §6 point-7 go/no-go: a user-authored generic collection built
+// ENTIRELY on the `Buffer[T]` floor — the compiler has no `Stack` knowledge, so
+// this proves a safe collection closes over the public floor op-set alone
+// (push/pop/peek/count/isEmpty). It covers v1's element scope (copyable T, spec/03
+// L58): a scalar (`I64`) and an ARC value (`String`). push retains, peek value-returns
+// (retains an ARC element), pop moves the live element out to the caller, and a
+// value-semantics copy CoW-shares the backing while a mutation privatizes it — so
+// every String element is freed exactly once. Verified ASan-clean on self-compile +
+// run: no UAF, no double-free.
+//
+// Scope notes (intentionally NOT exercised here — pre-existing gaps orthogonal to the
+// type-name-dispatch endpoint this floor work completed):
+//   - An in-place element mutator that forwards to `Buffer.set` (e.g. `replaceTop`):
+//     a generic struct method calling `self.data.set(...)` currently breaks sibling
+//     generic-method resolution (a mono instantiation bug). `Buffer.set`'s own
+//     commit-then-release lifecycle (§6-4) is covered directly by buffer_cow_field.pw.
+//   - A `Ref[unique T]` element's pointee deinit on container drop: a documented v1
+//     leaked-but-safe limitation (design-decisions.md CoW-share channel-A note +
+//     provisional.md "deep release of heap-owning Ref pointees"); no UAF.
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+struct Stack[T] {
+    mut val data: Buffer[T]
+}
+
+pub impl[T] Stack[T] {
+    factory new() {
+        return <Stack data=Buffer.new() />
+    }
+    fn count() -> U64 {
+        return self.data.count()
+    }
+    fn isEmpty() -> Bool {
+        return self.data.isEmpty()
+    }
+    inout fn push(value~: T) {
+        self.data.append(value)
+    }
+    inout fn pop() -> T {
+        return self.data.removeLast()
+    }
+    fn peek() -> T {
+        val last: U64 = self.data.count() - 1U64
+        return self.data.get(index: last)
+    }
+}
+
+fn main() {
+    // (1) scalar element: pure floor mechanics, no ARC.
+    mut val nums: Stack[I64] = Stack.new()
+    nums.push(10I64)
+    nums.push(20I64)
+    nums.push(30I64)
+    val ncount: U64 = nums.count()
+    val ntop: I64 = nums.peek()
+    print("nums count=" + ncount.format(format: "") + " top=" + ntop.format(format: ""))
+    val a: I64 = nums.pop()
+    val b: I64 = nums.pop()
+    val empty: Bool = nums.isEmpty()
+    val emptyStr: String = if empty { give "y" } else { give "n" }
+    print("popped " + a.format(format: "") + "," + b.format(format: "") + " empty=" + emptyStr)
+
+    // (2) ARC element (String): push retains, peek value-returns (retains), pop moves
+    // the live String out to the caller. Every element freed exactly once.
+    mut val words: Stack[String] = Stack.new()
+    words.push("alpha")
+    words.push("beta")
+    val top0: String = words.peek()
+    val wcount: U64 = words.count()
+    print("top=" + top0 + " count=" + wcount.format(format: ""))
+    val w: String = words.pop()
+    val rem: String = words.peek()
+    print("popped=" + w + " remaining=" + rem)
+
+    // (3) value semantics: a copy CoW-shares the backing; a mutation on one side
+    // privatizes so the two diverge (the floor's CoW gateway, driven through a user
+    // collection's own methods — push only, no element mutator).
+    mut val src: Stack[String] = Stack.new()
+    src.push("x")
+    src.push("y")
+    mut val dup: Stack[String] = src         // CoW-share the backing buffer
+    dup.push("z")                            // privatize dup -> diverges from src
+    val sc: U64 = src.count()
+    val dc: U64 = dup.count()
+    val st: String = src.peek()
+    val dt: String = dup.peek()
+    print("src count=" + sc.format(format: "") + " top=" + st + " | dup count=" + dc.format(format: "") + " top=" + dt)
+}
