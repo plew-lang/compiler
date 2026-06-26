@@ -23,7 +23,11 @@ pub impl Comp {
                 while pi < f.params.count() {
                     val p: Param = f.params[pi]
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                    self.scanType(ref: p.ty)
                     pi += 1
+                }
+                if f.hasRet {
+                    self.scanType(ref: f.retTy)
                 }
                 self.scanBlockInsts(blkId: f.body)
             }
@@ -64,7 +68,15 @@ pub impl Comp {
             while gpi < gf.params.count() {
                 val gp: Param = gf.params[gpi]
                 self.addLocal(nameStart: gp.nameStart, nameLen: gp.nameLen, tyStart: gp.tyStart, tyLen: gp.tyLen, isArray: gp.tyIsArray, ty: gp.ty, isInout: gp.isInout, isMut: false, owned: false)
+                // register the grounded param type so an `Array[E]` param (-> `Array[I64]`)
+                // gets its per-instance `%gs` typedef. The method body's `source.count()`
+                // can't register it (registerMethodInst bails on an array receiver), and no
+                // field/return scan reaches a param-only instance.
+                self.scanType(ref: gp.ty)
                 gpi += 1
+            }
+            if gf.hasRet {
+                self.scanType(ref: gf.retTy)
             }
             self.scanBlockInsts(blkId: gf.body)
             if gf.hasRecv {

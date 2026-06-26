@@ -523,7 +523,11 @@ pub impl Comp {
                             while pi < mf.params.count() {
                                 val p: Param = mf.params[pi]
                                 self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                                self.scanType(ref: p.ty)
                                 pi += 1
+                            }
+                            if mf.hasRet {
+                                self.scanType(ref: mf.retTy)
                             }
                             self.scanBlockInsts(blkId: mf.body)
                             self.clearSelfItemEnv()
