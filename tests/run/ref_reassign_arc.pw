@@ -1,0 +1,52 @@
+// Ref/WeakRef ARC at OWNERSHIP-OVERWRITE and MOVE-OUT sites — the cases a third-party review
+// found leaking (the owner's old value was never released, or a returned local over-retained,
+// because these paths keyed on a registered-struct index / array flag that the opaque extern
+// Ref/WeakRef types don't carry). Each `deinit` prints its tag, so the marker count + order
+// proves the old owner is released exactly once on overwrite and a moved-out local is freed
+// once (no leak = every marker present; no double-free = no extra). ASan-clean.
+import @Std/Io with { print }
+import @Std/Core with { Ref, WeakRef }
+
+unique struct Cell {
+    val v: I32
+    deinit { print(self.v) }
+}
+
+struct Box { mut val r: Ref[Cell] }
+pub impl Box {
+    // overwrite a directly-typed `Ref` field via `self.field =` (the Ident-base assign path).
+    inout fn put(r: Ref[Cell]) { self.r = r }
+}
+
+// a returned OWNED Ref local moves its one owner to the caller — no extra retain, freed once.
+fn mk(n: I32) -> Ref[Cell] {
+    val r: Ref[Cell] = <Ref[Cell] value=<Cell v=n /> />
+    return r
+}
+
+fn main() {
+    // (1) plain `mut val` Ref local reassignment: the old cell (1) is released AT the reassign
+    // (deinit 1 fires here), the new cell (2) lives until scope exit.
+    mut val r: Ref[Cell] = <Ref[Cell] value=<Cell v=1 /> />
+    r = <Ref[Cell] value=<Cell v=2 /> />
+
+    // (2) struct `Ref` field reassignment via a `self.field =` setter: old (3) released here.
+    mut val b: Box = <Box r=<Ref[Cell] value=<Cell v=3 /> /> />
+    b.put(r: <Ref[Cell] value=<Cell v=4 /> />)
+
+    // (3) returned owned Ref local: moved out of mk, read here, freed once at x's drop.
+    val x: Ref[Cell] = mk(n: 5I32)
+    print(x->v)
+
+    // (4) WeakRef local reassignment: the old weak observer on s1's cell is released at the
+    // reassign (no deinit — weak doesn't keep the pointee alive); both strongs live to scope
+    // exit, so neither cell leaks (verified by ASan + the deinit markers at scope end).
+    val s1: Ref[Cell] = <Ref[Cell] value=<Cell v=10 /> />
+    val s2: Ref[Cell] = <Ref[Cell] value=<Cell v=20 /> />
+    mut val w: WeakRef[Cell] = s1.weak()
+    w = s2.weak()
+
+    print(0I32)
+    // scope exit (reverse decl order): w (weak release, no deinit), s2 -> 20, s1 -> 10,
+    // x -> 5, b -> 4, r -> 2.
+}

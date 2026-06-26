@@ -403,6 +403,17 @@ pub impl LlvmCtx {
                                             if self.structNeedsDeinit(c: inout c, sidx: osi) {
                                                 self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()), sidx: osi)
                                             }
+                                        } else if c.isRefInst(ref: self.locTypeRef[li]) {
+                                            // a `Ref` local has no registered struct index, so the
+                                            // struct old-drop above misses it: release the PREVIOUS
+                                            // owner (strong--, pointee deinit + free at 0) before the
+                                            // store, balancing the new value's retain (copyValueIfPlace).
+                                            // Without this a reassigned `mut val r: Ref[T]` leaks the old cell.
+                                            self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
+                                        } else if c.isWeakRefInst(ref: self.locTypeRef[li]) {
+                                            // same for a `WeakRef` local: drop the old weak observer
+                                            // (weak--, free iff both counts 0) before the store.
+                                            self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
                                         }
                                     }
                                 }
@@ -513,6 +524,13 @@ pub impl LlvmCtx {
                                                 // A fresh construction RHS is a non-place and passes
                                                 // through. Mirrors the scalar-field path below.
                                                 if op == opAssign() {
+                                                    // release the OLD occupant of this owned field before
+                                                    // overwriting (it loses one owner) — without this a
+                                                    // `Ref`/`WeakRef` (or other heap-bearing generic-inst)
+                                                    // field reassign leaks the old cell. Balances the new
+                                                    // value's retain (copyValueIfPlace) below. Mirrors the
+                                                    // `->` pointee-field-assign path.
+                                                    self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: gfr), gep, anon()), typeRef: gfr, retain: false)
                                                     gv = self.copyValueIfPlace(c: inout c, rv: gv, valueExpr: value)
                                                 }
                                                 LLVMBuildStore(self.b, gv, gep)
@@ -745,6 +763,16 @@ pub impl LlvmCtx {
                                     // excluded from the drop below, so it balances.
                                     if self.locIsArr[li] {
                                         scalarArrMove = true
+                                    } else if c.isRefInst(ref: self.locTypeRef[li]) || c.isWeakRefInst(ref: self.locTypeRef[li]) {
+                                        // a returned OWNED body Ref/WeakRef local likewise MOVES its
+                                        // one owner to the caller: excluded from the drop below, so
+                                        // the move balances without a retain. (A borrowed Ref param —
+                                        // li < curBodyMark — instead RETAINS via copyValueIfPlace so
+                                        // the caller gets a fresh owner.) Without this a `return r`
+                                        // over-retains by one and leaks the cell.
+                                        if self.locOwned[li] && li >= self.curBodyMark {
+                                            scalarArrMove = true
+                                        }
                                     }
                                 }
                             }
