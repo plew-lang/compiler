@@ -9,11 +9,13 @@ pub impl LlvmCtx {
     // The captured variable's own VALUE type (ignoring boxing) — the type stored in
     // the shared cell for a boxed capture, or in the env slot for a by-value one.
     inout fn captureValueTy(c: inout Comp, cap: CaptureEntry) -> LLVMTypeRef {
-        if cap.isArray {
-            return self.arrayTy
-        }
+        // a generic-instance capture (incl. `Array[E]`) resolves to its per-instance type via
+        // the full ref (de-pin); a hand-built array capture with no ref falls back to `{ptr}`.
         if c.isGenericInst(ref: cap.ty) {
             return self.llvmTypeOfRef(c: inout c, ref: cap.ty)
+        }
+        if cap.isArray {
+            return self.arrayTy
         }
         return self.llvmScalarTy(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen)
     }

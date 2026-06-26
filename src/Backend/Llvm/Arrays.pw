@@ -20,9 +20,8 @@ pub impl LlvmCtx {
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
-                    if self.locIsArr[li] {
-                        return self.arrayTy
-                    }
+                    // an array local's locTy already IS its per-instance `%gs` (the init value's
+                    // type), so no array special-case is needed (de-pin).
                     return self.locTy[li]
                 }
                 return self.i64ty
@@ -89,7 +88,7 @@ pub impl LlvmCtx {
                 if op == opNot() { return self.i1ty }
                 return self.exprLlvmType(c: inout c, id: operand)
             }
-            Expr.Array(elems: _) => { return self.arrayTy }
+            Expr.Array(val elems) => { return self.arrayInstTy(c: inout c, elemRef: self.arrayLitElemRef(c: inout c, elems: elems)) }
             _ => { return self.i64ty }
         }
     }
@@ -321,7 +320,23 @@ pub impl LlvmCtx {
         if fld.tyIsArray {
             match c.arena.exprs[valExpr] {
                 Expr.Array(val elems) => {
-                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen))
+                    // the literal builds the SAME per-instance `%gs` the field slot expects.
+                    // Prefer the literal's own (concrete) element type; for an empty `[]` fall
+                    // back to the field's declared element (`fld.ty` = `Array[E]`, args[0] = E),
+                    // grounded through the active env so `Array[T]` resolves to `Array[I64]`.
+                    mut val feRef: U64 = self.arrayLitElemRef(c: inout c, elems: elems)
+                    if feRef == 0U64 {
+                        if fld.ty != 0U64 {
+                            mut val gft: U64 = fld.ty
+                            if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
+                                gft = c.groundTypeRef(ref: fld.ty)
+                            }
+                            if c.arena.types[gft].args.count() == 1U64 {
+                                feRef = c.arena.types[gft].args[0]
+                            }
+                        }
+                    }
+                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), elemRef: feRef)
                 }
                 _ => {}
             }

@@ -28,21 +28,15 @@ pub impl LlvmCtx {
                 // (llvmTypeOfRef returns ptrty for it). Mirrors Array's exclusion.
                 if defIdx < c.arena.structs.count() && !(c.arena.structs[defIdx].isExtern) {
                     self.genStructRefs.append(ref)
-                    // `Array[T]`'s VALUE rep is the shared `{ptr}` aggregate `arrayTy`, not a
-                    // fresh named `%gsN` — the same representation pin as `String`->`strty`
-                    // (collections.md §3-付録2/3). Pinning it here makes a `<Array data=buf />`
-                    // construction (the only Make of an array — e.g. `String.bytes()`) build an
-                    // arrayTy value that matches every array site (literals, returns, fields).
-                    // Its body is already `{ptr}` at arrayTy creation, so the body pass skips it.
-                    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                        self.genStructTys.append(self.arrayTy)
-                    } else {
-                        mut val nm: Array[U8] = []
-                        appendBytes(into: inout nm, from: "gs".bytes())
-                        appendU64Dec(into: inout nm, n: k)
-                        nm.append(0)
-                        self.genStructTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
-                    }
+                    // De-pin: `Array[E]` is an ordinary generic-struct instance — it gets its
+                    // own fresh named `%gsN` (body `{ptr}` from its single `data: Buffer[E]`
+                    // field, set in the body pass). No name->arrayTy representation pin; every
+                    // array site resolves the per-instance type via llvmTypeOfRef/arrayInstTy.
+                    mut val nm: Array[U8] = []
+                    appendBytes(into: inout nm, from: "gs".bytes())
+                    appendU64Dec(into: inout nm, n: k)
+                    nm.append(0)
+                    self.genStructTys.append(LLVMStructCreateNamed(self.ctx, arrayCPtr(nm)))
                     self.genStructDefs.append(defIdx)
                 }
             }
@@ -58,12 +52,6 @@ pub impl LlvmCtx {
         while s < self.genStructRefs.count() {
             val ref: U64 = self.genStructRefs[s]
             val sd: StructDef = c.arena.structs[self.genStructDefs[s]]
-            // `Array[T]` is pinned to the literal `arrayTy` (set at creation); LLVMStructSetBody
-            // is only valid on a named struct, so skip it — same as `String`/`strty`.
-            if rangeEquals(bytes: c.arena.bytes, start: sd.nameStart, len: sd.nameLen, kw: "Array") {
-                s += 1
-                continue
-            }
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             c.cur.typeParams = sd.typeParams
@@ -87,6 +75,31 @@ pub impl LlvmCtx {
             c.cur.typeArgs = savedA
             s += 1
         }
+    }
+
+    // The per-instance LLVM type of `Array[<elemRef>]` — the registered `%gs` of the array
+    // instance whose single element arg is structurally equal to `elemRef` (a SOUND full-ref
+    // match, not element-name). Falls back to the shared arrayTy `{ptr}` when that instance
+    // was not registered (no Array literal/local/field of it reached mono) — harmless since
+    // every Array `%gs` is the same `{ptr}` layout. De-pin: array CONSTRUCTION sites resolve
+    // their value's aggregate type through here so it matches the per-instance type used by
+    // fields/params/returns (llvmTypeOfRef -> genStructSlot).
+    inout fn arrayInstTy(c: inout Comp, elemRef: U64) -> LLVMTypeRef {
+        if elemRef != 0U64 {
+            // Resolve through the SAME canonical genStructSlot match (full-ref typeRefEq) the
+            // type sites use (llvmTypeOfRef -> genStructSlot), so a constructed array VALUE and
+            // its field/param/return TYPE pick the identical `%gs` even when the same `Array[E]`
+            // was registered more than once (element-only matching could pick a different dup).
+            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+            mut val aargs: Array[U64] = []
+            aargs.append(elemRef)
+            val aref: U64 = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+            val gs: U64 = self.genStructSlot(c: inout c, ref: aref)
+            if gs < self.genStructRefs.count() {
+                return self.genStructTys[gs]
+            }
+        }
+        return self.arrayTy
     }
 
     // Index into st.genStruct* for the registered instance structurally equal to `ref`,

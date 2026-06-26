@@ -77,10 +77,18 @@ pub impl LlvmCtx {
                 if isArr {
                     match c.arena.exprs[init] {
                         Expr.Array(val elems) => {
+                            // the annotation's element, GROUNDED under the active instance env
+                            // (`result: Array[Item]` in a generic method with Item=I64 → I64) so
+                            // an empty `[]` builds the same per-instance `%gs` as the grounded
+                            // return/param type (else accumulator `Array[Item]` ≠ return `Array[I64]`).
                             mut val litElemRef: U64 = 0
                             if ty != 0U64 {
-                                if c.arena.types[ty].args.count() > 0U64 {
-                                    litElemRef = c.arena.types[ty].args[0]
+                                mut val gt: U64 = ty
+                                if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
+                                    gt = c.groundTypeRef(ref: ty)
+                                }
+                                if c.arena.types[gt].args.count() > 0U64 {
+                                    litElemRef = c.arena.types[gt].args[0]
                                 }
                             }
                             v = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: elemTy, elemRef: litElemRef)

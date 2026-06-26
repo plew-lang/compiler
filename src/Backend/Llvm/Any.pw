@@ -432,7 +432,7 @@ pub impl LlvmCtx {
             mut val selfElemTy: LLVMTypeRef = self.i64ty
             if self.curRecvInstRef != 0U64 {
                 if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.curRecvInstRef].nameStart, len: c.arena.types[self.curRecvInstRef].nameLen, kw: "Array") {
-                    recvTy = self.arrayTy
+                    recvTy = self.llvmTypeOfRef(c: inout c, ref: self.curRecvInstRef)
                     selfIsArr = true
                     if c.arena.types[self.curRecvInstRef].args.count() > 0U64 {
                         selfElemTy = self.llvmTypeOfRef(c: inout c, ref: c.arena.types[self.curRecvInstRef].args[0])

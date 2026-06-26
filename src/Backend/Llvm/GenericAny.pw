@@ -28,16 +28,6 @@ pub impl LlvmCtx {
         if refIsAny(c: inout c, ref: ref) {
             return self.anyTy
         }
-        // `Array[T]` is the special {ptr,i64} value type, NOT a generic struct instance
-        // (the front-end models it as one, but the LLVM array machinery — literal /
-        // append / for / index — all use arrayTy). Mapping it here keeps a function
-        // param/return/field of array type consistent with that machinery.
-        if ref < c.arena.types.count() {
-            val at: TypeRef = c.arena.types[ref]
-            if rangeEquals(bytes: c.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
-                return self.arrayTy
-            }
-        }
         if c.isGenericInst(ref: ref) {
             // a generic OPAQUE intrinsic (`Buffer[T]`): its representation is a single
             // pointer (like Array/Ref), NOT a struct layout — so it gets no `%gs` type
@@ -56,6 +46,14 @@ pub impl LlvmCtx {
             val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
             if ge < self.genEnumRefs.count() {
                 return self.genEnumTys[ge]
+            }
+            // an `Array[E]` instance that was not separately registered (e.g. it appears only
+            // in a generic fn's signature, never collected as its own genInst): its value rep
+            // is the element-agnostic shared `{ptr}` arrayTy. Deterministic — genStructSlot
+            // misses identically at every site, so every use of THIS instance agrees (vs the
+            // i64 default below, which would corrupt an array value into a scalar).
+            if rangeEquals(bytes: c.arena.bytes, start: gat.nameStart, len: gat.nameLen, kw: "Array") {
+                return self.arrayTy
             }
         }
         val t: TypeRef = c.arena.types[ref]

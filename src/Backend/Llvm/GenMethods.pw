@@ -251,6 +251,8 @@ pub impl LlvmCtx {
                     gpr = c.groundTypeRef(ref: p.ty)
                 }
                 pRef = gpr
+                // de-pin: the param's LLVM type is the per-instance `%gs` of `Array[E]`.
+                pty = self.llvmTypeOfRef(c: inout c, ref: gpr)
             }
             pSidx = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
         } else {

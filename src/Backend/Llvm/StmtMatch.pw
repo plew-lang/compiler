@@ -158,7 +158,7 @@ pub impl LlvmCtx {
                 mut val elemTyF: LLVMTypeRef = self.i64ty
                 mut val elemKindF: U64 = 0U64
                 if elemRef != 0U64 {
-                    pty = self.arrayTy
+                    pty = self.arrayInstTy(c: inout c, elemRef: elemRef)
                     isArrF = true
                     elemTyF = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                     val et: TypeRef = c.arena.types[elemRef]

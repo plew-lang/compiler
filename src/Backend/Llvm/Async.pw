@@ -22,6 +22,10 @@ pub impl LlvmCtx {
     // keeps its declared type (the coerce happens at the store).
     inout fn asyncFieldTy(c: inout Comp, tyStart: U64, tyLen: U64, ty: U64, isArray: Bool) -> LLVMTypeRef {
         if isArray {
+            // de-pin: resolve the per-instance `%gs` via the full `Array[E]` ref when present.
+            if c.isGenericInst(ref: ty) {
+                return self.llvmTypeOfRef(c: inout c, ref: ty)
+            }
             return self.arrayTy
         }
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Promise") {
@@ -114,7 +118,7 @@ pub impl LlvmCtx {
             if fidx < fs.count() {
                 val fd: FieldDef = fs[fidx]
                 if arrayFieldElemRef(c: inout c, f: fd) != 0U64 {
-                    pty = self.arrayTy
+                    pty = self.fieldLlvmTy(c: inout c, fd: fd)
                 } else {
                     if c.fieldIsBoxed(f: fd) {
                         pty = self.ptrty

@@ -8,7 +8,7 @@ pub impl LlvmCtx {
     inout fn genLlvmArrayLit(c: inout Comp, elems: Array[U64], elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
         val n: U64 = elems.count()
         if n == 0U64 {
-            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: self.arrayTy)
+            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
         }
         // an `Array[any P]` literal (spec/08): each concrete element is boxed into the
         // existential fat pointer so heterogeneous concrete types share one element slot.
@@ -31,7 +31,7 @@ pub impl LlvmCtx {
             LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1
         }
-        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, n, 0I32), aggTy: self.arrayTy)
+        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, n, 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
     }
 
     // `arr[i]` read: bounds-checked element load.

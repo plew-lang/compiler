@@ -798,7 +798,7 @@ pub impl LlvmCtx {
                     if gfElem != 0U64 {
                         match c.arena.exprs[valExpr] {
                             Expr.Array(val elems) => {
-                                agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: gfElem)), fj, anon())
+                                agg = LLVMBuildInsertValue(self.b, agg, self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmTypeOfRef(c: inout c, ref: gfElem), elemRef: gfElem), fj, anon())
                             }
                             _ => {
                                 // value semantics: an array payload from a place SHARES the

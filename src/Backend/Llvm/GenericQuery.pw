@@ -429,14 +429,12 @@ pub impl LlvmCtx {
         if refIsAny(c: inout c, ref: fd.ty) {
             return self.anyTy
         }
-        // an array field is the {ptr,i64} value type (element-agnostic).
-        if fd.tyIsArray {
-            return self.arrayTy
-        }
-        // a generic-instance field (`o: Optional[I64]`, `inner: Box[T]`): resolve via the
-        // full TypeRef — the head-name-only path (llvmTypeFor) drops the args and would
-        // miss the registered instance. Ground through the active env first (a generic
-        // struct body's field type may name a type param bound to a concrete instance).
+        // a generic-instance field (`o: Optional[I64]`, `inner: Box[T]`, AND `xs: Array[E]`):
+        // resolve via the full TypeRef — the head-name-only path (llvmTypeFor) drops the args
+        // and would miss the registered instance. Checked BEFORE the tyIsArray fallback so an
+        // array field resolves to its per-instance `%gs` (de-pin). Ground through the active
+        // env first (a generic struct body's field type may name a type param bound to a
+        // concrete instance).
         if fd.ty != 0U64 {
             mut val g: U64 = fd.ty
             if c.cur.typeParams.count() > 0U64 {
@@ -452,6 +450,10 @@ pub impl LlvmCtx {
             if c.isGenericInst(ref: g) {
                 return self.llvmTypeOfRef(c: inout c, ref: g)
             }
+        }
+        // a hand-built array field with no full TypeRef (`ty == 0`): the shared `{ptr}`.
+        if fd.tyIsArray {
+            return self.arrayTy
         }
         return self.llvmTypeFor(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen, isArray: false)
     }
