@@ -497,12 +497,10 @@ pub impl LlvmCtx {
                 if mf.retTy != 0U64 {
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
-                    // the receiver may be a struct OR an enum (`Loaded[Box].chain()` — an
-                    // enum Chain conformer): set whichever env grounds its type params.
-                    mut val didSet: Bool = self.setStructEnv(c: inout c, ref: recvRef)
-                    if !(didSet) {
-                        didSet = self.setEnumEnv(c: inout c, ref: recvRef)
-                    }
+                    // the receiver may be a struct, an enum (`Loaded[Box].chain()` — an enum
+                    // Chain conformer), OR an opaque Ref/WeakRef (`w.upgrade() -> Optional[Ref[T]]`):
+                    // set whichever instance env grounds its type params.
+                    val didSet: Bool = self.setInstanceEnv(c: inout c, ref: recvRef)
                     val g: U64 = c.groundTypeRef(ref: mf.retTy)
                     if didSet {
                         c.cur.typeParams = savedP
@@ -585,6 +583,42 @@ pub impl LlvmCtx {
             return true
         }
         return false
+    }
+
+    // If `ref` is a `Ref[T]` / `WeakRef[T]` instance, set the substitution env from the
+    // (opaque extern) def's type param to the instance's concrete arg — so a method's
+    // `Optional[Ref[T]]` return (`WeakRef.upgrade`) grounds T to the pointee. Ref/WeakRef
+    // are opaque externs, so they have no genStruct/genEnum slot and setStructEnv/setEnumEnv
+    // miss them; the def (with its typeParams) is still in arena.structs.
+    inout fn setRefLikeEnv(c: inout Comp, ref: U64) -> Bool {
+        if ref == 0U64 {
+            return false
+        }
+        if c.isRefInst(ref: ref) || c.isWeakRefInst(ref: ref) {
+            val t: TypeRef = c.arena.types[ref]
+            val di: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+            if di < c.arena.structs.count() {
+                c.cur.typeParams = c.arena.structs[di].typeParams
+                c.cur.typeArgs = t.args
+                return true
+            }
+        }
+        return false
+    }
+
+    // Set the substitution env from ANY generic instance `ref` — struct, enum, or the opaque
+    // Ref/WeakRef externs — to its concrete args. The single env-setup so callers that ground a
+    // method/field result under "the receiver's instance" don't each re-implement the kind
+    // cascade and drift (the resolveField lesson). Returns whether it set the env (caller
+    // restores).
+    inout fn setInstanceEnv(c: inout Comp, ref: U64) -> Bool {
+        if self.setStructEnv(c: inout c, ref: ref) {
+            return true
+        }
+        if self.setEnumEnv(c: inout c, ref: ref) {
+            return true
+        }
+        return self.setRefLikeEnv(c: inout c, ref: ref)
     }
 
     // Index into st.genEnum* for the registered instance structurally equal to `ref`.

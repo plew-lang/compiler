@@ -151,13 +151,11 @@ pub impl LlvmCtx {
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             // ground the return's type param under the receiver's instance env. The receiver
-            // may be a generic STRUCT or a generic ENUM (`Optional[U8].unwrapOr -> T`): the
-            // enum case is what carries an unsigned element through, so without it `T` stays
-            // abstract and the kind defaults to signed (a U8 result printed as -56).
-            mut val didSet: Bool = self.setStructEnv(c: inout c, ref: rRef)
-            if !(didSet) {
-                didSet = self.setEnumEnv(c: inout c, ref: rRef)
-            }
+            // may be a generic STRUCT, a generic ENUM (`Optional[U8].unwrapOr -> T`: the enum
+            // case is what carries an unsigned element through, so without it `T` stays abstract
+            // and the kind defaults to signed — a U8 result printed as -56), or an opaque
+            // Ref/WeakRef.
+            val didSet: Bool = self.setInstanceEnv(c: inout c, ref: rRef)
             val g: U64 = c.groundTypeRef(ref: mf.retTy)
             if didSet {
                 c.cur.typeParams = savedP
