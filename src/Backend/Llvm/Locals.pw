@@ -78,13 +78,21 @@ pub impl LlvmCtx {
 
     // Push a loop's (break, continue) target blocks (overwrite-in-place; loopDepth is
     // the live count). Break/Continue branch to the top of this stack.
-    inout fn pushLoop(breakBB: LLVMBasicBlockRef, contBB: LLVMBasicBlockRef) {
+    // Push a loop's (break, continue) target blocks plus `unwindMark` — the local mark at
+    // the START of the per-iteration scope (everything declared at/after it is dropped by a
+    // `break`/`continue`, mirroring the body's fall-through). For while/range that is the
+    // body-entry mark (nLocals at the call); for the iterator loops it is the mark BEFORE the
+    // loop variable, so a heap-owning loop var is released on every iteration exit. Persistent
+    // loop state (range counter, iterator slot) sits below the mark and is untouched here.
+    inout fn pushLoop(breakBB: LLVMBasicBlockRef, contBB: LLVMBasicBlockRef, unwindMark: U64) {
         if self.loopDepth < self.loopBreakBB.count() {
             self.loopBreakBB[self.loopDepth] = breakBB
             self.loopContBB[self.loopDepth] = contBB
+            self.loopUnwindMark[self.loopDepth] = unwindMark
         } else {
             self.loopBreakBB.append(breakBB)
             self.loopContBB.append(contBB)
+            self.loopUnwindMark.append(unwindMark)
         }
         self.loopDepth = self.loopDepth + 1U64
     }

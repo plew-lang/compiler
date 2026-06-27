@@ -30,7 +30,7 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, pred, iv, hiV, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         self.terminated = false
-        self.pushLoop(breakBB: endBB, contBB: stepBB)
+        self.pushLoop(breakBB: endBB, contBB: stepBB, unwindMark: self.nLocals)
         self.genLlvmBlock(c: inout c, id: body)
         self.popLoop()
         if !(self.terminated) {
@@ -109,7 +109,11 @@ pub impl LlvmCtx {
             return
         }
         val nf: Func = c.arena.funcs[nfi]
-        self.emitIterNextLoop(c: inout c, iterVal: iterVal, optRef: nf.retTy, nextTy: self.fnTy[nSlotF], nextVal: self.fnVal[nSlotF], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
+        // ownsIter=false here: the non-generic Iterable path does not yet thread the iterator
+        // instance ref needed to drop a heap-owning iterator at loop end (rare — all stdlib
+        // collections are generic and take genLlvmForGenIterable). Loop var + body locals are
+        // still released via emitIterNextLoop's per-iteration unwind.
+        self.emitIterNextLoop(c: inout c, iterVal: iterVal, iterInstRef: 0U64, ownsIter: false, optRef: nf.retTy, nextTy: self.fnTy[nSlotF], nextVal: self.fnVal[nSlotF], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
     }
 
     // `for x in genericIterable` where the receiver is a generic instance (`Box[I64]`).
@@ -164,7 +168,11 @@ pub impl LlvmCtx {
         val optRef: U64 = c.groundTypeRef(ref: nf.retTy)
         c.cur.typeParams = sP2
         c.cur.typeArgs = sA2
-        self.emitIterNextLoop(c: inout c, iterVal: iterVal, optRef: optRef, nextTy: self.genMethTy[nSlot], nextVal: self.genMethVal[nSlot], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
+        // we OWN the iterator only when we created it via iterator() (a fresh temp that
+        // shares the source's buffer). When the value IS its own iterator, it is the caller's
+        // place — dropping it here would double-free — so leave it to its own scope.
+        val ownsIter: Bool = itfi < c.arena.funcs.count()
+        self.emitIterNextLoop(c: inout c, iterVal: iterVal, iterInstRef: iterInstRef, ownsIter: ownsIter, optRef: optRef, nextTy: self.genMethTy[nSlot], nextVal: self.genMethVal[nSlot], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
     }
 
     // Bind an iterator-protocol loop variable from a Some payload value already stored in
@@ -194,13 +202,18 @@ pub impl LlvmCtx {
             self.pushLocalR(nameStart: varStart, nameLen: varLen, ptr: slot, ty: ty, kind: 0U64, structIdx: sidx, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: xRef)
             return
         }
-        self.pushLocal(nameStart: varStart, nameLen: varLen, ptr: slot, ty: ty, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64)
+        // carry the element TYPE REF even for the scalar / opaque fallback so a heap-owning
+        // loop variable the iterator handed us by value — a `Ref[T]`/`WeakRef[T]` element —
+        // is recognized by emitDeinitCall and released at each iteration's end (next() yields
+        // a retained copy). A scalar ref is inert there (no Ref/array/struct/enum class), so
+        // this is a no-op for `for i in 0..n` and the like.
+        self.pushLocalR(nameStart: varStart, nameLen: varLen, ptr: slot, ty: ty, kind: kindFromTySpan(c: inout c, tyStart: xStart, tyLen: xLen), structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: xRef)
     }
 
     // Drive the iterator-protocol loop: store `iterVal` in a mutable slot (next() is
     // `inout`), and on each `next()` call (callee `nextTy`/`nextVal`) match the ground
     // `optRef` Optional[Item] — bind x to the Some payload + run body, else break.
-    inout fn emitIterNextLoop(c: inout Comp, iterVal: LLVMValueRef, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], body: U64) {
+    inout fn emitIterNextLoop(c: inout Comp, iterVal: LLVMValueRef, iterInstRef: U64, ownsIter: Bool, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], body: U64) {
         val iterTy: LLVMTypeRef = LLVMTypeOf(iterVal)
         val iterSlot: LLVMValueRef = self.entryAlloca(ty: iterTy)
         LLVMBuildStore(self.b, iterVal, iterSlot)
@@ -274,17 +287,49 @@ pub impl LlvmCtx {
             self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)
         }
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
-        // `continue` -> condBB (next() again), `break` -> endBB.
-        self.pushLoop(breakBB: endBB, contBB: condBB)
+        // `continue` -> condBB (next() again), `break` -> endBB. unwindMark = `mark` (before
+        // the loop var) so a heap-owning loop var is released on every iteration exit.
+        self.pushLoop(breakBB: endBB, contBB: condBB, unwindMark: mark)
         self.genLlvmBlock(c: inout c, id: body)
         self.popLoop()
-        self.nLocals = mark
+        // normal iteration end: release this iteration's per-iteration locals (the loop var
+        // the iterator handed us, owned) before looping back — a return/break/continue inside
+        // the body already released them, so only drop on the fall-through path.
         if !(self.terminated) {
+            self.dropScope(c: inout c, fromMark: mark, excludeLi: 18446744073709551615U64)
+            self.nLocals = mark
             LLVMBuildBr(self.b, condBB)
+        } else {
+            self.nLocals = mark
         }
         LLVMPositionBuilderAtEnd(self.b, endBB)
         self.terminated = false
+        // every loop exit (normal end + break) lands here: release the iterator we own so its
+        // shared source buffer reaches rc 0 and cascade-releases its elements.
+        self.emitOwnedIteratorDrop(c: inout c, iterInstRef: iterInstRef, ownsIter: ownsIter, iterTy: iterTy, iterSlot: iterSlot)
         self.nLocals = mark
+    }
+
+    // Release an iterator created via iterator() at loop exit. It shares the source
+    // collection's buffer (retained when `<ArrayIter arr=self …/>` copied the place), so
+    // dropping it lets that buffer reach rc 0 and cascade-release its elements — otherwise
+    // every for-loop over a heap-owning collection leaks. Called at endBB (the single exit
+    // both normal completion and `break` reach). A non-owned iterator (the value WAS its own
+    // iterator = a caller place) is left to its own scope, so we never double-free.
+    inout fn emitOwnedIteratorDrop(c: inout Comp, iterInstRef: U64, ownsIter: Bool, iterTy: LLVMTypeRef, iterSlot: LLVMValueRef) {
+        if !(ownsIter) { return }
+        if iterInstRef == 0U64 { return }
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        val didSet: Bool = self.setStructEnv(c: inout c, ref: iterInstRef)
+        val igs: U64 = self.genStructSlot(c: inout c, ref: iterInstRef)
+        if igs < self.genStructRefs.count() {
+            val isidx: U64 = self.genStructDefs[igs]
+            if self.structNeedsDeinit(c: inout c, sidx: isidx) {
+                self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, iterTy, iterSlot, anon()), sidx: isidx)
+            }
+        }
+        if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
     }
 
     // `for x in anyIter` where the receiver is an existential `any Iter[Item=…]`: loop
@@ -364,12 +409,17 @@ pub impl LlvmCtx {
             self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)
         }
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
-        self.pushLoop(breakBB: endBB, contBB: condBB)
+        // unwindMark = `mark` (before the loop var) so a heap-owning loop var is released on
+        // every iteration exit (break/continue/return) as well as normal iteration end.
+        self.pushLoop(breakBB: endBB, contBB: condBB, unwindMark: mark)
         self.genLlvmBlock(c: inout c, id: body)
         self.popLoop()
-        self.nLocals = mark
         if !(self.terminated) {
+            self.dropScope(c: inout c, fromMark: mark, excludeLi: 18446744073709551615U64)
+            self.nLocals = mark
             LLVMBuildBr(self.b, condBB)
+        } else {
+            self.nLocals = mark
         }
         LLVMPositionBuilderAtEnd(self.b, endBB)
         self.terminated = false

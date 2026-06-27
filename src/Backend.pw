@@ -307,6 +307,12 @@ struct LlvmCtx {
     // matching the local-scope idiom — Array has no pop).
     pub mut val loopBreakBB: Array[LLVMBasicBlockRef]
     pub mut val loopContBB: Array[LLVMBasicBlockRef]
+    // the loop-body-entry local mark (nLocals at pushLoop), per loop frame. `break` /
+    // `continue` are non-local scope exits: they must release the live body locals of the
+    // current iteration before branching, exactly as the body's fall-through would. Driving
+    // that off this frame-recorded mark (not a hand-picked one) is the single source of
+    // truth for "what to drop on a loop exit" — see emitLoopExitDrops.
+    pub mut val loopUnwindMark: Array[U64]
     pub mut val loopDepth: U64
 }
 
@@ -853,7 +859,7 @@ export fn emitLlvm(c: inout Comp) {
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
-        curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopDepth=0 />
+        curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.arena.bytes.count()

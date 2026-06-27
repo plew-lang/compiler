@@ -833,7 +833,7 @@ pub impl LlvmCtx {
                 LLVMPositionBuilderAtEnd(self.b, bodyBB)
                 self.terminated = false
                 // `break` -> endBB, `continue` -> condBB (re-test) for this loop.
-                self.pushLoop(breakBB: endBB, contBB: condBB)
+                self.pushLoop(breakBB: endBB, contBB: condBB, unwindMark: self.nLocals)
                 self.genLlvmBlock(c: inout c, id: body)
                 self.popLoop()
                 if !(self.terminated) {
@@ -844,6 +844,10 @@ pub impl LlvmCtx {
             }
             Stmt.Break(offset: _) => {
                 if self.loopDepth > 0U64 {
+                    // release this iteration's live body locals before leaving the loop
+                    // (spec/03 deterministic destruction — a non-local exit drops the same
+                    // set the body's fall-through would).
+                    self.emitLoopExitDrops(c: inout c)
                     LLVMBuildBr(self.b, self.loopBreakBB[self.loopDepth - 1U64])
                     self.terminated = true
                 } else {
@@ -852,6 +856,9 @@ pub impl LlvmCtx {
             }
             Stmt.Continue(offset: _) => {
                 if self.loopDepth > 0U64 {
+                    // release this iteration's live body locals before re-entering the loop
+                    // header/step (else they leak each `continue`).
+                    self.emitLoopExitDrops(c: inout c)
                     LLVMBuildBr(self.b, self.loopContBB[self.loopDepth - 1U64])
                     self.terminated = true
                 } else {

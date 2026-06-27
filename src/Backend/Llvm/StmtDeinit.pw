@@ -368,6 +368,20 @@ pub impl LlvmCtx {
         }
     }
 
+    // Scope unwind for a `break`/`continue`: release the live body locals of the current
+    // (innermost) loop iteration — [loop-body mark, nLocals) — before the branch. The mark
+    // is read from the loop frame (recorded at pushLoop = body entry), so this drops EXACTLY
+    // the set the body's fall-through would (loop variable / iterator state sit below the
+    // mark and are NOT touched here — they are managed by the loop itself, consistent with
+    // normal iteration end). Centralizing on the frame mark is why no exit can pick a wrong
+    // mark or forget the drop. Does not change nLocals (the caller branches out; terminated
+    // makes the enclosing block/loop reset the stack without a second drop).
+    inout fn emitLoopExitDrops(c: inout Comp) {
+        if self.loopDepth > 0U64 {
+            self.dropScope(c: inout c, fromMark: self.loopUnwindMark[self.loopDepth - 1U64], excludeLi: 18446744073709551615U64)
+        }
+    }
+
     inout fn genLlvmBlock(c: inout Comp, id: U64) {
         // lexical scope: bindings declared in this block leave scope at its end.
         val mark: U64 = self.nLocals

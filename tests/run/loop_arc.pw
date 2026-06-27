@@ -1,0 +1,43 @@
+// Loop scope-exit ARC: every owned local declared in a loop body, the for-loop variable,
+// and the iterator itself are released on EVERY exit path — normal iteration end, `continue`,
+// and `break` — not just straight-line fall-through. A `break`/`continue` is a non-local exit:
+// the backend unwinds the per-iteration scope (driven by the loop frame's recorded mark)
+// before branching, mirroring the body's fall-through. The for-loop variable the iterator
+// hands over by value (a retained `Ref` copy) is released each iteration, and the iterator —
+// which shares the source collection's buffer — is released at loop exit so that buffer
+// reaches rc 0 and cascade-releases its elements. Each `deinit` prints its tag, so the count
+// of markers proves single release (no leak, no double-free). ASan-clean.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn main() {
+    // 1) while + continue: the owned Ref local is released each iteration, including the
+    // `continue` iteration (which bypasses the body's fall-through drop).
+    mut val i: I32 = 0
+    while i < 3I32 {
+        val r: Ref[Cell] = <Ref[Cell] value=<Cell v=i /> />
+        i += 1I32
+        if i == 2I32 { continue }   // r (v=1) released here, on the continue path
+        print(100I32)
+    }
+    print(777I32)
+
+    // 2) for-in over owned-heap elements with continue + break: the loop variable and the
+    // iterator are released, so every element's cell deinits exactly once at the array's drop.
+    val xs: Array[Ref[Cell]] = [<Ref[Cell] value=<Cell v=10 /> />, <Ref[Cell] value=<Cell v=20 /> />, <Ref[Cell] value=<Cell v=30 /> />]
+    mut val n: I32 = 0
+    for r in xs {
+        n += 1I32
+        if n == 2I32 { continue }
+        if n == 3I32 { break }
+        print(n)
+    }
+    print(999I32)
+    // xs drops here: cells 10, 20, 30 each deinit exactly once (no leak from the iterator's
+    // retained buffer share, no double-free from break/continue).
+}
