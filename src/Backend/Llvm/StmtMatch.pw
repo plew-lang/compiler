@@ -15,11 +15,22 @@ pub impl LlvmCtx {
         if arms.count() > 0U64 {
             if arms[0].isStruct {
                 val ssidx: U64 = self.exprStructIdx(c: inout c, id: scrut)
+                val structScrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
                 val savedSP: Array[Bind] = c.cur.typeParams
                 val savedSA: Array[U64] = c.cur.typeArgs
-                val didSetS: Bool = self.setStructEnv(c: inout c, ref: self.exprTypeRef(c: inout c, id: scrut))
+                val didSetS: Bool = self.setStructEnv(c: inout c, ref: structScrutRef)
                 val sslot0: LLVMValueRef = self.entryAlloca(ty: sty)
                 LLVMBuildStore(self.b, sv, sslot0)
+                // an owned struct-scrutinee temp (a call/construction result, not a place):
+                // register it so its heap (array / Ref / String / sub-struct fields) is
+                // released once — via dropScope on a return/break arm, or explicitly on
+                // fall-through below. A place scrutinee is owned by its local/field elsewhere.
+                val sStructSentinel: U64 = 18446744073709551615U64
+                mut val sStructTempLi: U64 = sStructSentinel
+                if !(arrayExprIsPlace(c: inout c, id: scrut)) {
+                    self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot0, ty: sty, kind: 0U64, structIdx: ssidx, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: structScrutRef)
+                    sStructTempLi = self.nLocals - 1U64
+                }
                 val mark0: U64 = self.nLocals
                 self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
                 self.genLlvmBlock(c: inout c, id: arms[0].body)
@@ -27,6 +38,12 @@ pub impl LlvmCtx {
                 if didSetS {
                     c.cur.typeParams = savedSP
                     c.cur.typeArgs = savedSA
+                }
+                if sStructTempLi != sStructSentinel {
+                    if !(self.terminated) {
+                        self.emitDeinitCall(c: inout c, li: sStructTempLi)
+                    }
+                    self.nLocals = sStructTempLi
                 }
                 return
             }
@@ -58,6 +75,20 @@ pub impl LlvmCtx {
         // store the scrutinee so payload fields can be read back as a variant struct.
         val sslot: LLVMValueRef = self.entryAlloca(ty: sty)
         LLVMBuildStore(self.b, sv, sslot)
+        // If the scrutinee is an owned temporary (a call/construction result, not a place),
+        // the match is its only owner. Register it as an anonymous owned enum local so it is
+        // released on EVERY exit path: a `return`/`break` inside an arm drops it via
+        // dropScope, and fall-through drops it explicitly at contBB below. Its payload binds
+        // borrow it (bindMatchPayload marks them not-owned), so this is the single release of
+        // the matched temp's payload heap (e.g. the strong owner a directly-matched
+        // `w.upgrade()` holds — otherwise that strong leaks). A place scrutinee is skipped:
+        // its real owner (the local/field) releases it at its own scope.
+        val scrutSentinel: U64 = 18446744073709551615U64
+        mut val scrutTempLi: U64 = scrutSentinel
+        if !(arrayExprIsPlace(c: inout c, id: scrut)) {
+            self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot, ty: sty, kind: 0U64, structIdx: scrutSentinel, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: scrutRef)
+            scrutTempLi = self.nLocals - 1U64
+        }
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "match.end"))
         // the tag-test chain lives in `checkBB`; each arm body lives in its own block.
@@ -117,9 +148,17 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, contBB)
         if anyFallthrough {
             self.terminated = false
+            // release the owned scrutinee temp on the fall-through path (return/break arms
+            // already dropped it via dropScope). Drop BEFORE popping it off the env.
+            if scrutTempLi != scrutSentinel {
+                self.emitDeinitCall(c: inout c, li: scrutTempLi)
+            }
         } else {
             LLVMBuildUnreachable(self.b)
             self.terminated = true
+        }
+        if scrutTempLi != scrutSentinel {
+            self.nLocals = scrutTempLi
         }
     }
 

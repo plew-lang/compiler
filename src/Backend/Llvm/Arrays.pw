@@ -1004,17 +1004,34 @@ pub impl LlvmCtx {
     // struct field, array/buffer element, enum payload, set-overwrite. Balances the
     // rawbufRetain emitted by consumeIntoOwned at each Ref place-copy.
     inout fn emitRefRelease(c: inout Comp, cell: LLVMValueRef, refTy: U64) {
-        val newStrong: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
-        val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), newStrong, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
-        val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.zero"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.cont"))
-        LLVMBuildCondBr(self.b, isZero, deinitBB, contBB)
+        // Peek the strong count BEFORE decrementing. If this is the last strong owner
+        // (count == 1), run the pointee deinit while strong is STILL held: the deinit may
+        // release a field that closes a weak back-reference cycle (e.g. a child's
+        // `WeakRef[Parent]`). Were strong already 0, that inner weakRelease would observe
+        // strong==0 && weak→0 and free THIS very cell mid-deinit, so the dispose below
+        // would double-free it (UAF). Holding strong across the deinit keeps the cell alive
+        // until we decrement and dispose exactly once.
+        val cur: LLVMValueRef = self.refStrongCount(c: inout c, cell: cell)
+        val isLast: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), cur, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        val deinitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.last"))
+        val decBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.dec"))
+        LLVMBuildCondBr(self.b, isLast, deinitBB, decBB)
         LLVMPositionBuilderAtEnd(self.b, deinitBB)
         val rpsi: U64 = self.refDeinitPointeeSidx(c: inout c, refTy: refTy)
         if rpsi < c.arena.structs.count() {
             val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
             self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, pty, cell, anon()), sidx: rpsi)
         }
+        LLVMBuildBr(self.b, decBB)
+        LLVMPositionBuilderAtEnd(self.b, decBB)
+        // Now decrement strong. If it reaches 0 (i.e. we just ran the deinit), dispose the
+        // cell — freed iff no weak observers remain.
+        val newStrong: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), newStrong, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        val dispBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.disp"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.cont"))
+        LLVMBuildCondBr(self.b, isZero, dispBB, contBB)
+        LLVMPositionBuilderAtEnd(self.b, dispBB)
         self.refDisposeStrong(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)

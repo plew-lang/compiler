@@ -72,10 +72,15 @@ fn main() {
     val some: Optional[Ref[Child]] = <Optional.Some v=c />
     p->child = some
     print(200I32)
-    // scope exit drops every owner exactly once (ASan-clean, no leak): the Child cell's last
-    // strong owner releases (deinit 80), then the Parent cell's (deinit 70), and finally the
-    // shared Cell held by r (deinit 7). The weak up-pointer never kept Parent alive, so the
-    // strong down-cycle is reclaimed; the weak observers (ws/ow + Child.up) release without
-    // double-freeing. The `p->child = some` store retains the Ref it now co-owns — without
-    // that the Child cell would be freed by the source bindings AND the Parent field (UAF).
+    // scope exit drops every owner exactly once (ASan-clean, no leak). `p` is the last strong
+    // owner of Parent: its release runs Parent's deinit (70) WHILE the strong is still held,
+    // and that deinit releases `p.child`, dropping Child's last strong -> Child deinit (80);
+    // only then is the strong decremented and the cell disposed. So the cycle tears down
+    // Parent-first (70) then Child (80), and finally the shared Cell held by r (deinit 7).
+    // The weak up-pointer never kept Parent alive, so the strong down-cycle is reclaimed; the
+    // weak observers (ws/ow + Child.up) release without double-freeing. Running the deinit
+    // before the strong-decrement is what keeps Child.up's weakRelease (which closes the
+    // cycle) from freeing the Parent cell mid-deinit, which would otherwise double-free it.
+    // The `p->child = some` store retains the Ref it now co-owns — without that the Child cell
+    // would be freed by the source bindings AND the Parent field (UAF).
 }

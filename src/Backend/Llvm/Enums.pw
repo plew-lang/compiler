@@ -897,7 +897,16 @@ pub impl LlvmCtx {
                                 }
                             }
                         }
-                        if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
+                        if c.isRefInst(ref: gpf) || c.isWeakRefInst(ref: gpf) {
+                            // a `Ref[T]`/`WeakRef[T]` payload: route through consumeIntoOwned so
+                            // the constructed enum CO-OWNS it (rc++ a place; a fresh `<Ref …/>` /
+                            // `r.weak()` already owns its count and passes through). This is the
+                            // one canonical "make owned" path shared with binds/args/returns/
+                            // struct fields — Ref was the missing payload class that aliased
+                            // instead, causing the return / match-temp UAF + leak.
+                            val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), expr: valExpr, typeRef: gpf)
+                            agg = LLVMBuildInsertValue(self.b, agg, rv, fj, anon())
+                        } else if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
                             self.expectedTy = gpf
                             val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
                             // a generic enum payload with heap (`A(o: Optional[Array[I64]])`)

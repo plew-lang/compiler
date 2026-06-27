@@ -194,6 +194,17 @@ pub impl LlvmCtx {
                             self.emitDeinitValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), sidx: fsi)
                         }
                     }
+                } else {
+                    // an enum-typed field (`Optional[Ref[Child]]`, `Result`, a plain enum):
+                    // release its active variant's payload heap — SYMMETRIC with the enum branch
+                    // in emitRetainWitnessWalk. Without it a struct's enum field leaked its
+                    // payload (e.g. a `Ref` inside `Optional`): the walker handled Ref/WeakRef/
+                    // array/sub-struct fields but had NO enum case. A no-op off a non-enum field.
+                    mut val gref: U64 = fd.ty
+                    if c.cur.typeParams.count() > 0U64 {
+                        gref = c.groundTypeRef(ref: fd.ty)
+                    }
+                    self.emitEnumReleaseRef(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), ref: gref)
                 }
             }
             i += 1
