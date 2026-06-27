@@ -1,0 +1,22 @@
+import @Std/Core
+import @Std/Io with { print }
+
+// `(try e).method()` where e: Result[T,E] and T is a struct: the unwrapped `Ok`
+// payload is a T, so the method dispatches on T's struct (regression — once
+// rejected as "method call only on a registered struct value").
+struct Box { pub val n: I64 }
+pub impl Box { fn show() -> I64 { return self.n } }
+
+fn mk() -> Result[Box, I64] { return <Result.Ok value=<Box n=9 /> /> }
+
+fn run() -> Result[I64, I64] {
+    val v: I64 = (try mk()).show()
+    return <Result.Ok value=v />
+}
+
+fn main() {
+    match run() {
+        Result.Ok(val value) => { print(value) }
+        Result.Err(val error) => { print(error) }
+    }
+}

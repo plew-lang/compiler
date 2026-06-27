@@ -424,17 +424,35 @@ pub impl LlvmCtx {
             // no instance ref to track here → 0.
             Expr.Unary(op: _, operand: _) => {}
             Expr.Binary(op: _, lhs: _, rhs: _) => {}
-            // these resolve to a non-tracked value in every exercised case → 0: `as` to a
-            // scalar/newtype, `try`/`await` yielding a scalar, an extension-method scalar result.
-            // NOTE (latent gap, mirrors exprStructIdx): the generic-instance-producing sub-case —
-            // `(try f())` / `(await p)` / `(x as Inst)` / `recv#Ext.m()` where the result IS a
-            // generic instance — is not recovered here yet (it would need the Ok/payload/cast/
-            // return ref). Tracked as follow-up; kept explicit (not `_`) so a new Expr variant
+            // `x as T` where T is a generic instance (`x as Box[I32]`): its instance ref, so a
+            // chained method on the cast result recovers the env. A scalar/plain-struct cast has
+            // no tracked instance ref → 0 (resolved via exprStructIdx).
+            Expr.Cast(operand: _, tyStart: _, tyLen: _, val ty) => {
+                if c.isGenericInst(ref: ty) {
+                    return ty
+                }
+            }
+            // `try e` (e: Result[T,E]): the unwrapped value is a T — its instance ref when T is
+            // a generic instance, so `(try mk()).method()` on a generic payload recovers the env.
+            // Couples to @Std/Core's Result shape (Ok payload = the first type arg).
+            Expr.Try(val expr) => {
+                val er: U64 = self.exprTypeRef(c: inout c, id: expr)
+                if er != 0U64 {
+                    val rt: TypeRef = c.arena.types[er]
+                    if rt.args.count() > 0U64 {
+                        if c.isGenericInst(ref: rt.args[0]) {
+                            return rt.args[0]
+                        }
+                    }
+                }
+            }
+            // these resolve to a non-tracked value in every exercised case → 0: an `await`
+            // (statement-head only today), an extension-method scalar result. NOTE (latent gap,
+            // mirrors exprStructIdx): the generic-instance-producing `(await p)` / `recv#Ext.m()`
+            // sub-cases are not recovered here yet; kept explicit (not `_`) so a new Expr variant
             // still forces a decision.
-            Expr.Try(expr: _) => {}
             Expr.Await(operand: _) => {}
             Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {}
-            Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => {}
         }
         return 0U64
     }
