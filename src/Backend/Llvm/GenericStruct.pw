@@ -370,7 +370,71 @@ pub impl LlvmCtx {
                     }
                 }
             }
-            _ => {}
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
+                // a generic struct/enum construction (`<Box[I32] …/>`): its instance ref
+                // (grounded under any active env), so a field access / chained method on the
+                // freshly-built value recovers the substitution env. A non-generic build has no
+                // instance ref to track (its struct is found by name), so → 0.
+                if ty != 0U64 {
+                    mut val g: U64 = ty
+                    if c.cur.typeParams.count() > 0U64 {
+                        g = c.groundTypeRef(ref: ty)
+                    }
+                    if c.isGenericInst(ref: g) {
+                        return g
+                    }
+                }
+            }
+            // a value-position `if`/`match`: its TypeRef is a (non-diverging) branch's `give`
+            // type (every branch has the same type) — delegate so a generic branch recovers its
+            // instance ref and a scalar branch yields 0, like a plain expr.
+            Expr.IfExpr(cond: _, val thenBlk, elseBlk: _) => {
+                val gv: U64 = c.blockGiveExpr(blkId: thenBlk)
+                if gv < c.arena.exprs.count() {
+                    return self.exprTypeRef(c: inout c, id: gv)
+                }
+            }
+            Expr.MatchExpr(scrut: _, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count() {
+                    if !(arms[ai].isDiverge) {
+                        val gv: U64 = c.blockGiveExpr(blkId: arms[ai].body)
+                        if gv < c.arena.exprs.count() {
+                            return self.exprTypeRef(c: inout c, id: gv)
+                        }
+                    }
+                    ai += 1
+                }
+            }
+            // `move x` / `borrow x` evaluates to the operand's value, so its TypeRef is the
+            // operand's.
+            Expr.Move(val operand, isBorrow: _) => {
+                return self.exprTypeRef(c: inout c, id: operand)
+            }
+            // --- exprs carrying no tracked (generic-instance / existential) TypeRef: the front-end
+            // `exprType` carries their actual (primitive / closure / witness-return) type; this
+            // backend resolver only tracks generic-instance refs, so the correct answer is 0.
+            // No `_` catch-all: every Expr variant is classified so a new one forces a decision.
+            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {}
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {}
+            Expr.Str(start: _, len: _) => {}
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {}
+            // a unary/binary operator result: the witness fn's return type drives chaining via
+            // exprStructIdx; in every exercised case it is concrete (not a generic instance), so
+            // no instance ref to track here → 0.
+            Expr.Unary(op: _, operand: _) => {}
+            Expr.Binary(op: _, lhs: _, rhs: _) => {}
+            // these resolve to a non-tracked value in every exercised case → 0: `as` to a
+            // scalar/newtype, `try`/`await` yielding a scalar, an extension-method scalar result.
+            // NOTE (latent gap, mirrors exprStructIdx): the generic-instance-producing sub-case —
+            // `(try f())` / `(await p)` / `(x as Inst)` / `recv#Ext.m()` where the result IS a
+            // generic instance — is not recovered here yet (it would need the Ok/payload/cast/
+            // return ref). Tracked as follow-up; kept explicit (not `_`) so a new Expr variant
+            // still forces a decision.
+            Expr.Try(expr: _) => {}
+            Expr.Await(operand: _) => {}
+            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {}
+            Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => {}
         }
         return 0U64
     }

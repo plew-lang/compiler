@@ -313,7 +313,56 @@ pub impl LlvmCtx {
                 // (A generic-instance pointee resolves via exprTypeRef in the generic path.)
                 return self.refPointeeStructIdx(c: inout c, base: base)
             }
-            _ => {}
+            // --- scalars and non-struct values: the correct answer to "what struct is this?"
+            // is "none" — they are not registered structs (their actual type is carried by the
+            // front-end `exprType`). A `Str` / `Array` literal falls through to the String /
+            // Array tail below. No `_` catch-all: every Expr variant is classified so a new one
+            // forces a decision here (the drift that caused the `->` gaps).
+            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {}
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {}
+            Expr.Str(start: _, len: _) => {}
+            Expr.Array(elems: _) => {}
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {}
+            // a value-position `if`/`match`: its struct is the struct of a (non-diverging)
+            // branch's `give` value (every branch has the same type) — delegate so a scalar
+            // branch yields "none" and a struct branch resolves, like a plain receiver.
+            Expr.IfExpr(cond: _, val thenBlk, elseBlk: _) => {
+                val gv: U64 = c.blockGiveExpr(blkId: thenBlk)
+                if gv < c.arena.exprs.count() {
+                    return self.exprStructIdx(c: inout c, id: gv)
+                }
+            }
+            Expr.MatchExpr(scrut: _, val arms) => {
+                mut val ai: U64 = 0
+                while ai < arms.count() {
+                    if !(arms[ai].isDiverge) {
+                        val gv: U64 = c.blockGiveExpr(blkId: arms[ai].body)
+                        if gv < c.arena.exprs.count() {
+                            return self.exprStructIdx(c: inout c, id: gv)
+                        }
+                    }
+                    ai += 1
+                }
+            }
+            // `move x` / `borrow x` evaluates to the operand's value, so its struct is the
+            // operand's.
+            Expr.Move(val operand, isBorrow: _) => {
+                return self.exprStructIdx(c: inout c, id: operand)
+            }
+            // these resolve to a non-struct value in every exercised case, so the correct
+            // struct answer is "none" (sentinel via the tail): `as` to a scalar/newtype, a
+            // `?.` chain (Optional — an enum, dispatched via exprTypeRef), `try`/`await`
+            // yielding a scalar, an extension-method scalar result. NOTE (latent gap): the
+            // struct-producing sub-case — `(try f()).m()` / `(await p).m()` / `(x as Newtype).m()`
+            // / `recv#Ext.m().field` where the result IS a struct — is not resolved here yet
+            // (it would need the Ok/payload/cast/return type), and currently surfaces as
+            // "not a registered struct" at the use site. Tracked as follow-up; kept explicit
+            // (not `_`) so a new Expr variant still forces a decision.
+            Expr.Try(expr: _) => {}
+            Expr.Await(operand: _) => {}
+            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {}
+            Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => {}
+            Expr.OptChain(base: _, memberStart: _, memberLen: _) => {}
         }
         // a fall-through array-typed expr (an array struct field `s.items`, an array-returning
         // call/method result `mk()` / `s.bytes()`, a nested-array element `m[i]`) is an `Array`

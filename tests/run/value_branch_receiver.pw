@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// A value-position `if`/`match` used directly as a method receiver: the backend
+// struct/type resolvers must reach the branch's `give` value to dispatch the
+// method (regression — these once fell through to the sentinel and were rejected).
+struct Counter { pub val n: I64 }
+pub impl Counter {
+    fn doubled() -> I64 { return self.n * 2 }
+}
+
+fn main() {
+    val a: Counter = <Counter n=3 />
+    val b: Counter = <Counter n=10 />
+    // if-expression as the receiver
+    print((if true { give a } else { give b }).doubled())
+    // match-expression as the receiver
+    print((match 1I64 { 1I64 => a, _ => b }).doubled())
+}
