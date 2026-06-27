@@ -36,6 +36,87 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
+    // SHARED field resolution: given a base value's resolved struct index and grounded
+    // instance TypeRef, resolve `base.field` / `base->field` to BOTH projections at once
+    // (structIdx for dispatch, typeRef for grounding). The single source of truth that
+    // `.`-field (Field) and `->`-pointee-field (Arrow) go through in both exprStructIdx and
+    // exprTypeRef — so the field-grounding logic lives once and the two ops stay in lockstep.
+    // The field type is grounded under the base instance's env (so `bb.v` with bb:
+    // Box[Box[I32]] yields Box[I32]) plus any active monomorphization env.
+    inout fn resolveField(c: inout Comp, baseSi: U64, baseRef: U64, nameStart: U64, nameLen: U64) -> ResolvedExpr {
+        if baseSi >= c.arena.structs.count() {
+            return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
+        }
+        val fidx: U64 = structFieldIndex(c: inout c, sidx: baseSi, start: nameStart, len: nameLen)
+        if fidx >= c.arena.structs[baseSi].fields.count() {
+            return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
+        }
+        val fld: FieldDef = c.arena.structs[baseSi].fields[fidx]
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
+        mut val g: U64 = fld.ty
+        if fld.ty != 0U64 {
+            if c.cur.typeParams.count() > 0U64 {
+                g = c.groundTypeRef(ref: fld.ty)
+            }
+        }
+        if didSet {
+            c.cur.typeParams = savedP
+            c.cur.typeArgs = savedA
+        }
+        // typeRef: a generic-instance or existential field type carries args worth grounding
+        // (an Array field's `Array[E]` instance too — it is gen-instance pinned). A plain
+        // registered-struct field yields 0 here (resolved via structIdx instead).
+        mut val tr: U64 = 0U64
+        if g != 0U64 {
+            if c.isGenericInst(ref: g) {
+                tr = g
+            } else {
+                if refIsAny(c: inout c, ref: g) {
+                    tr = g
+                }
+            }
+        }
+        // structIdx: the field's registered/generic struct def. Array fields are skipped here
+        // (resolved through the array witness via Index / the exprStructIdx array catch).
+        mut val si: U64 = c.arena.structs.count()
+        if !(fld.tyIsArray) {
+            if g != 0U64 {
+                if c.isGenericInst(ref: g) {
+                    val gs: U64 = self.genStructSlot(c: inout c, ref: g)
+                    if gs < self.genStructRefs.count() {
+                        si = self.genStructDefs[gs]
+                    }
+                }
+            }
+            if si == c.arena.structs.count() {
+                mut val tStart: U64 = fld.tyStart
+                mut val tLen: U64 = fld.tyLen
+                if g != 0U64 {
+                    tStart = c.arena.types[g].nameStart
+                    tLen = c.arena.types[g].nameLen
+                }
+                si = self.localStructIdxFor(c: inout c, start: tStart, len: tLen)
+            }
+        }
+        return <ResolvedExpr structIdx=si typeRef=tr />
+    }
+
+    // The pointee TypeRef T of an expression of type `Ref[T]` (for grounding `base->field`
+    // under the pointee's instance env), or 0 if base is not a Ref. Mirror of the Deref
+    // arm's resolution.
+    inout fn refPointeeTypeRef(c: inout Comp, base: U64) -> U64 {
+        val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
+        if r != 0U64 {
+            val t: TypeRef = c.arena.types[r]
+            if t.args.count() > 0U64 {
+                return t.args[0]
+            }
+        }
+        return 0U64
+    }
+
     // The owning struct index of an expression (Ident local / Make), or
     // c.arena.structs.count() if it is not a (resolvable) struct value.
     inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
@@ -68,51 +149,21 @@ pub impl LlvmCtx {
             Expr.Field(val base, val nameStart, val nameLen) => {
                 // a nested-struct field access (`ln.b`): the field's declared type is
                 // itself a (registered) struct, so its struct index drives further
-                // field access / method dispatch on the result.
-                val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-                if bsi < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[bsi].fields.count() {
-                        val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
-                        if !(fld.tyIsArray) {
-                            // ground a generic field type under the BASE's instance env
-                            // (so `bb.v` with bb: Box[Box[I32]] resolves v -> Box[I32]),
-                            // as well as any active env (a monomorphized method's `inner: I`).
-                            val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
-                            val savedP: Array[Bind] = c.cur.typeParams
-                            val savedA: Array[U64] = c.cur.typeArgs
-                            val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
-                            mut val g: U64 = fld.ty
-                            if fld.ty != 0U64 {
-                                if c.cur.typeParams.count() > 0U64 {
-                                    g = c.groundTypeRef(ref: fld.ty)
-                                }
-                            }
-                            mut val result: U64 = c.arena.structs.count()
-                            if g != 0U64 {
-                                if c.isGenericInst(ref: g) {
-                                    val gs: U64 = self.genStructSlot(c: inout c, ref: g)
-                                    if gs < self.genStructRefs.count() {
-                                        result = self.genStructDefs[gs]
-                                    }
-                                }
-                            }
-                            if result == c.arena.structs.count() {
-                                mut val tStart: U64 = fld.tyStart
-                                mut val tLen: U64 = fld.tyLen
-                                if g != 0U64 {
-                                    tStart = c.arena.types[g].nameStart
-                                    tLen = c.arena.types[g].nameLen
-                                }
-                                result = self.localStructIdxFor(c: inout c, start: tStart, len: tLen)
-                            }
-                            if didSet {
-                                c.cur.typeParams = savedP
-                                c.cur.typeArgs = savedA
-                            }
-                            return result
-                        }
-                    }
+                // field access / method dispatch on the result. Shared with `->field` (Arrow)
+                // via resolveField — one source for field grounding.
+                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: self.exprStructIdx(c: inout c, id: base), baseRef: self.exprTypeRef(c: inout c, id: base), nameStart: nameStart, nameLen: nameLen)
+                if rf.structIdx < c.arena.structs.count() {
+                    return rf.structIdx
+                }
+            }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                // a pointee field through a `Ref` deref (`r->inner`): resolves on the pointee
+                // struct exactly like `.`-field does, so `r->inner.method()` dispatches the
+                // result's struct. Same resolveField helper as Field — `->` and `.` field
+                // resolution stay in lockstep (no drift).
+                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: self.refPointeeStructIdx(c: inout c, base: base), baseRef: self.refPointeeTypeRef(c: inout c, base: base), nameStart: nameStart, nameLen: nameLen)
+                if rf.structIdx < c.arena.structs.count() {
+                    return rf.structIdx
                 }
             }
             Expr.Method(recv: val mrecv, nameStart: val mnameStart, nameLen: val mnameLen, args: val margs) => {
