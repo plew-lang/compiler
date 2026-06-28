@@ -20,8 +20,13 @@ pub impl LlvmCtx {
         // set while emitting a generic instance). No-op outside a generic context.
         if c.cur.typeParams.count() > 0U64 {
             val qid: U64 = intern(c: inout c, start: tyStart, len: tyLen)
-            mut val ti: U64 = 0
-            while ti < c.cur.typeParams.count() {
+            // LAST-match (high -> low), consistent with resolveTy: when the env carries a
+            // name collision (`Optional[Optional[I32]]` merges two `T` bindings, the inner
+            // last), the innermost binding must win — lexical shadowing. First-match would
+            // pick the enclosing `T` (outer = Optional[I32]) over this instance's (inner = I32).
+            mut val ti: U64 = c.cur.typeParams.count()
+            while ti > 0U64 {
+                ti -= 1
                 if c.cur.typeParams[ti].nameId == qid {
                     // a type param bound to a generic instance (`I -> MapIter[Counter,…]`)
                     // must resolve to that registered instance type — recursing on the
@@ -37,7 +42,6 @@ pub impl LlvmCtx {
                     }
                     return self.llvmScalarTy(c: inout c, tyStart: at.nameStart, tyLen: at.nameLen)
                 }
-                ti += 1
             }
         }
         // `String` is no longer name-dispatched here: it is a registered struct whose type is

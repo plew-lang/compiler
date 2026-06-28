@@ -1,0 +1,23 @@
+// Depth-2 nested record-component distinction (generic-unification A criterion #4): two
+// record types that differ ONLY at depth 2 — `(v: Optional[Optional[I32]])` vs
+// `(v: Optional[Optional[Bool]])` — must be distinct types (the canonical record key
+// recurses to full depth, so they do NOT collide into one struct), and each must construct
+// and read back correctly (the nested generic construction grounds the innermost param).
+import @Std/Io with { print }
+
+fn main() {
+    val a: (v: Optional[Optional[I32]]) = (v: <Optional.Some v=<Optional.Some v=7I32 /> />)
+    val b: (v: Optional[Optional[Bool]]) = (v: <Optional.Some v=<Optional.Some v=true /> />)
+    match a.v {
+        Optional.Some(v: val ia) => {
+            match ia { Optional.Some(v: val x) => { print(x) } Optional.None => { print(0I32) } }
+        }
+        Optional.None => { print(0I32) }
+    }
+    match b.v {
+        Optional.Some(v: val ib) => {
+            match ib { Optional.Some(v: val y) => { if y { print(1I32) } else { print(2I32) } } Optional.None => { print(0I32) } }
+        }
+        Optional.None => { print(0I32) }
+    }
+}

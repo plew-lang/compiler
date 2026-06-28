@@ -773,8 +773,12 @@ pub impl LlvmCtx {
                 // MERGE the enum's env onto the outer one (don't replace) so a payload
                 // sub-expression referencing the enclosing method's type params still
                 // grounds (e.g. `self.f` in MapIter.next's `<Optional.Some v=self.f(x:v)/>`).
-                c.cur.typeParams = concatParams(add: c.arena.enums[self.genEnumDefs[gslot]].typeParams, base: savedP)
-                c.cur.typeArgs = concatArgs(add: c.arena.types[ty].args, base: savedA)
+                // The enum's OWN params go LAST (highest index): resolveTy is last-match, so a
+                // name collision (`Optional[Optional[I32]]` — both levels' param named `T`)
+                // must resolve to THIS instance's `T` (inner = I32), not the enclosing `T`
+                // (outer = Optional[I32]) — lexical shadowing, innermost wins.
+                c.cur.typeParams = concatParams(add: savedP, base: c.arena.enums[self.genEnumDefs[gslot]].typeParams)
+                c.cur.typeArgs = concatArgs(add: savedA, base: c.arena.types[ty].args)
                 val v: LLVMValueRef = self.buildEnumValue(c: inout c, eid: self.genEnumDefs[gslot], ety: self.genEnumTys[gslot], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
                 c.cur.typeParams = savedP
                 c.cur.typeArgs = savedA

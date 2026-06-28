@@ -1,0 +1,20 @@
+// A doubly-nested generic enum instance (`Optional[Optional[I32]]`): both levels use the
+// SAME enum def, so the construction env merges two bindings of the def's single type param
+// `T` (outer T -> Optional[I32], inner T -> I32). Building the inner `<Optional.Some v=7I32/>`
+// must resolve `T` to ITS instance (I32), not the enclosing one — lexical shadowing, the
+// innermost wins. (Regression: the payload type and the payload VALUE were grounded under
+// different match orders, so the inner payload typed as Optional[I32] while holding an i32.)
+import @Std/Io with { print }
+
+fn main() {
+    val a: Optional[Optional[I32]] = <Optional.Some v=<Optional.Some v=7I32 /> />
+    match a {
+        Optional.Some(v: val inner) => {
+            match inner {
+                Optional.Some(v: val x) => { print(x) }
+                Optional.None => { print(0I32) }
+            }
+        }
+        Optional.None => { print(0I32) }
+    }
+}
