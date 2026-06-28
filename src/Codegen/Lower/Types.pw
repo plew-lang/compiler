@@ -37,8 +37,11 @@ pub impl Comp {
     // array element for monomorphization. (Function types `fn(...)->R` are not modeled
     // by the shared TypeAst yet — they appear only in signatures, not bodies.)
     // A canonical key string for a lowered field type (for the structural record name):
-    // the head name plus, for a generic instance, its argument head names — so
-    // `(x: Optional[I64])` and `(x: Optional[String])` get distinct record types.
+    // the head name plus, for a generic instance, its argument keys recursively — so
+    // `(x: Optional[I64])` and `(x: Optional[String])` get distinct record types, and the
+    // nesting is reflected to full depth (`Box[Box[I32]]` vs `Box[Box[String]]` do NOT
+    // collide). Arg recursion delegates to recordTypeKeyFromRef so the lowered key matches
+    // the one the grounding pass rebuilds for the same type.
     inout fn recordTypeKey(pty: PType) -> Array[U8] {
         mut val out: Array[U8] = []
         mut val i: U64 = 0
@@ -55,12 +58,7 @@ pub impl Comp {
                     if a > 0U64 {
                         appendBytes(into: inout out, from: ",".bytes())
                     }
-                    val ar: TypeRef = self.arena.types[tr.args[a]]
-                    mut val k: U64 = 0
-                    while k < ar.nameLen {
-                        out.append(self.arena.bytes[ar.nameStart + k])
-                        k += 1
-                    }
+                    appendBytes(into: inout out, from: self.recordTypeKeyFromRef(ref: tr.args[a]))
                     a += 1
                 }
                 appendBytes(into: inout out, from: "]".bytes())

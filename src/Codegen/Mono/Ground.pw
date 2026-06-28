@@ -79,12 +79,11 @@ pub impl Comp {
                 if a > 0U64 {
                     appendBytes(into: inout out, from: ",".bytes())
                 }
-                val ar: TypeRef = self.arena.types[tr.args[a]]
-                mut val k: U64 = 0
-                while k < ar.nameLen {
-                    out.append(self.arena.bytes[ar.nameStart + k])
-                    k += 1
-                }
+                // RECURSE into the arg's own structure — a one-level head-name key is lossy
+                // (`Box[Box[I32]]` and `Box[Box[String]]` would both key to `Box[Box]` and
+                // collide). The full nesting must be reflected so distinct nested record
+                // component types stay distinct.
+                appendBytes(into: inout out, from: self.recordTypeKeyFromRef(ref: tr.args[a]))
                 a += 1
             }
             appendBytes(into: inout out, from: "]".bytes())
