@@ -300,6 +300,41 @@ pub impl Comp {
             return
         }
         val et: TypeRef = self.arena.types[expectedRef]
+        // a record literal in a typed record position (`pair: (a:I32,b:I32) = (a:3I32,b:4I32)`):
+        // the literal carries the TEMPLATE record name `(a:T,b:T)` (lowered under the field's
+        // declared type), but `et` is the GROUNDED record whose StructDef fields hold the
+        // concrete types. Records encode their components in the name (no top-level args), so
+        // the generic-args path below misses them — check each field value against the grounded
+        // field type directly (`3I32` vs `I32`). This is the record analog of tcCheckFieldsUnder.
+        if et.nameLen > 0U64 {
+            if self.arena.bytes[et.nameStart] == 40U8 {
+                match self.arena.exprs[makeId] {
+                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                        val rsi: U64 = self.structIndexByName(start: et.nameStart, len: et.nameLen)
+                        if rsi < self.arena.structs.count() {
+                            val rsd: StructDef = self.arena.structs[rsi]
+                            mut val rmi: U64 = 0
+                            while rmi < fields.count() {
+                                mut val rdi: U64 = 0
+                                while rdi < rsd.fields.count() {
+                                    if spansEqual(c: inout self, aStart: rsd.fields[rdi].nameStart, aLen: rsd.fields[rdi].nameLen, bStart: fields[rmi].nameStart, bLen: fields[rmi].nameLen) {
+                                        if rsd.fields[rdi].ty != 0U64 {
+                                            self.tcCheckValue(expectedRef: rsd.fields[rdi].ty, valueExpr: fields[rmi].value, pos: "record-field")
+                                        }
+                                        rdi = rsd.fields.count()
+                                    } else {
+                                        rdi += 1
+                                    }
+                                }
+                                rmi += 1
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return
+            }
+        }
         if et.args.count() == 0U64 {
             return
         }

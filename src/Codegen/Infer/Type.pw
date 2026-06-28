@@ -148,6 +148,62 @@ pub impl Comp {
             }
             return true
         }
+        // two record types compare STRUCTURALLY, field-by-field — the record analog of the
+        // generic-args comparison below. Records encode their components in the name, not in
+        // top-level args, so a grounded `(a:I32,b:I32)` and the inferred template `(a:T,b:T)`
+        // string-differ; recurse per field (`I32` vs `T`) so a type param matches its concrete
+        // instantiation, exactly as `Box[T]` matches `Box[I32]`. Field VALUES are checked
+        // precisely by tcCheckMakeFields; this only governs the type-level shape match.
+        val eRec: Bool = te.nameLen > 0U64
+        if eRec {
+            if self.arena.bytes[te.nameStart] != 40U8 {
+                return self.compatNamed(te: te, tin: tin)
+            }
+        } else {
+            return self.compatNamed(te: te, tin: tin)
+        }
+        val iRec: Bool = tin.nameLen > 0U64
+        if iRec {
+            if self.arena.bytes[tin.nameStart] != 40U8 {
+                return self.compatNamed(te: te, tin: tin)
+            }
+        } else {
+            return self.compatNamed(te: te, tin: tin)
+        }
+        return self.recordsCompatible(teRef: exp, tinRef: inferred)
+    }
+
+    // Structural field-by-field compatibility of two record types (both names begin `(`).
+    inout fn recordsCompatible(teRef: U64, tinRef: U64) -> Bool {
+        val te: TypeRef = self.arena.types[teRef]
+        val tin: TypeRef = self.arena.types[tinRef]
+        val esi: U64 = self.structIndexByName(start: te.nameStart, len: te.nameLen)
+        val isi: U64 = self.structIndexByName(start: tin.nameStart, len: tin.nameLen)
+        if esi >= self.arena.structs.count() || isi >= self.arena.structs.count() {
+            // a record StructDef not (yet) registered: fall back to exact name identity.
+            return spansEqual(c: inout self, aStart: te.nameStart, aLen: te.nameLen, bStart: tin.nameStart, bLen: tin.nameLen)
+        }
+        val esd: StructDef = self.arena.structs[esi]
+        val isd: StructDef = self.arena.structs[isi]
+        if esd.fields.count() != isd.fields.count() {
+            return false
+        }
+        // canonical layout is sorted by field name, so the i-th fields correspond; require
+        // matching names and per-field type compatibility.
+        mut val i: U64 = 0
+        while i < esd.fields.count() {
+            if !(spansEqual(c: inout self, aStart: esd.fields[i].nameStart, aLen: esd.fields[i].nameLen, bStart: isd.fields[i].nameStart, bLen: isd.fields[i].nameLen)) {
+                return false
+            }
+            if !(self.typesCompatible(expected: esd.fields[i].ty, inferred: isd.fields[i].ty)) {
+                return false
+            }
+            i += 1
+        }
+        return true
+    }
+
+    inout fn compatNamed(te: TypeRef, tin: TypeRef) -> Bool {
         val eId: U64 = self.knownNamedTypeId(start: te.nameStart, len: te.nameLen)
         val iId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
         if eId == 0U64 || iId == 0U64 {

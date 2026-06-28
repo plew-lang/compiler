@@ -1,0 +1,15 @@
+// A generic struct whose field is an anonymous RECORD parameterised by the struct's type
+// param (`Holder[T] { pair: (a:T,b:T) }`): constructing `Holder[I32]` must ground the
+// record field to `(a:I32,b:I32)` end-to-end — the type checker accepts the record literal
+// against the grounded field type (records compare structurally, not by template name), and
+// the backend lowers the instance field to the grounded record struct (not the i64-defaulting
+// template). Reading the record's fields back yields the constructed values.
+import @Std/Io with { print }
+
+struct Holder[T] { pub val pair: (a: T, b: T) }
+
+fn main() {
+    val h: Holder[I32] = <Holder[I32] pair=(a: 3I32, b: 4I32) />
+    print(h.pair.a)
+    print(h.pair.b)
+}

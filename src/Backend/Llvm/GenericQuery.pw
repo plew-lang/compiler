@@ -587,6 +587,24 @@ pub impl LlvmCtx {
             if c.isGenericInst(ref: g) {
                 return self.llvmTypeOfRef(c: inout c, ref: g)
             }
+            // a grounded RECORD field (`pair: (a:T,b:T)` -> `(a:I32,b:I32)`): records carry no
+            // top-level args, so the grounded instance is not `isGenericInst` — but its name
+            // changed under the env, and the template `fd.tyStart/tyLen` still spells `(a:T,b:T)`
+            // (i64-defaulting). Lower from the grounded name so the field's `%st` matches the
+            // grounded record struct built at the construction site (genLlvmMake). Restricted
+            // to records (name begins `(`): a lang-item generic (`Ref`/`WeakRef`) also grounds
+            // to a changed `g`, but its head name resolves correctly through the fall-through
+            // below (`Ref[Cell]` -> ptr, NOT the inline pointee struct).
+            if g != fd.ty {
+                if g < c.arena.types.count() {
+                    val gt: TypeRef = c.arena.types[g]
+                    if gt.nameLen > 0U64 {
+                        if c.arena.bytes[gt.nameStart] == 40U8 {
+                            return self.llvmTypeFor(c: inout c, tyStart: gt.nameStart, tyLen: gt.nameLen, isArray: false)
+                        }
+                    }
+                }
+            }
         }
         // a hand-built array field with no full TypeRef (`ty == 0`): the shared `{ptr}`.
         if fd.tyIsArray {
