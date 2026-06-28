@@ -149,7 +149,7 @@ pub impl Comp {
         }
         // the grounded record instance is not yet a real struct: register it (canonical sorted
         // layout inherited from the template) so its fields carry the grounded types
-        // (`value: I32`, not the template's `value: E` i64-defaulting), and registerStructBodies
+        // (`value: I32`, not the template's `value: E` i64-defaulting), and registerGenStructBodies
         // gives it an LLVM body. Registration is the COLLECTION pass's job (inCollection) — it
         // reaches every record instance via scanType — so grounding stays PURE everywhere else
         // (type checker / backend just name the grounded record; the struct already exists from

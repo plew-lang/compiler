@@ -143,12 +143,12 @@ pub impl LlvmCtx {
     // unregistered, so their construction/access is rejected, not miscompiled.)
     // Create the named LLVM struct type for every registerable struct (no bodies yet),
     // so cross-references (struct-of-struct, struct-with-enum-field) resolve in the
-    // body pass regardless of declaration order.
+    // body pass regardless of declaration order. Bodies are set by registerGenStructBodies
+    // (each struct is its own 0-type-arg genStruct instance).
     inout fn registerStructNames(c: inout Comp) {
         mut val i: U64 = 0
         while i < c.arena.structs.count() {
             if structRegisterable(c: inout c, sidx: i) {
-                self.structIdxs.append(i)
                 // De-pin: `String` is an ordinary registered struct — it gets its own fresh
                 // named `%stN` type like every other struct (its body, set in the body pass, is
                 // `{ptr}` from its single `buffer: Buffer[U8]` field). No name->strty pin.
@@ -157,14 +157,11 @@ pub impl LlvmCtx {
                 appendU64Dec(into: inout nm, n: i)
                 nm.append(0)
                 val sty: LLVMTypeRef = LLVMStructCreateNamed(self.ctx, arrayCPtr(nm))
-                self.structTys.append(sty)
-                // B2 (generic-unification): a non-generic struct is the 0-type-arg instance of
-                // itself — register it in the SAME genStruct* tables as generic instances (its
-                // bare-name, no-args TypeRef pointing at the SAME `%st` LLVM type). Consumers
-                // can then resolve every struct through the one genStructSlot path (the `%gs`
-                // mechanism), retiring the parallel `structIdxs`/`structTys`. The body is set
-                // once via registerStructBodies (shared type); registerGenStructBodies skips
-                // these 0-arg entries to avoid a double LLVMStructSetBody.
+                // A non-generic struct is the 0-type-arg instance of itself — register it in the
+                // SAME genStruct* tables as true generic instances (its bare-name, no-args
+                // TypeRef pointing at this `%st` type). Every struct then resolves through the
+                // one genStructSlot/`%gs` path; its body is set by registerGenStructBodies like
+                // any instance (the 0-arg env is empty, so field types resolve identically).
                 mut val zargs: Array[U64] = []
                 val instRef: U64 = c.pushType(t: <TypeRef nameStart=c.arena.structs[i].nameStart nameLen=c.arena.structs[i].nameLen args=zargs />)
                 self.genStructRefs.append(instRef)
@@ -172,29 +169,6 @@ pub impl LlvmCtx {
                 self.genStructDefs.append(i)
             }
             i += 1
-        }
-    }
-
-    // Set the body of every registered struct. Run AFTER registerStructNames AND
-    // registerEnums, so an enum-typed or nested-struct field resolves to an existing
-    // named type (llvmTypeFor -> llvmScalarTy finds the registered enum/struct).
-    inout fn registerStructBodies(c: inout Comp) {
-        mut val s: U64 = 0
-        while s < self.structIdxs.count() {
-            val sd: StructDef = c.arena.structs[self.structIdxs[s]]
-            mut val elems: Array[LLVMTypeRef] = []
-            mut val fi: U64 = 0
-            while fi < sd.fields.count() {
-                // a boxed (recursive) field is stored as a heap pointer.
-                if c.fieldIsBoxed(f: sd.fields[fi]) {
-                    elems.append(self.ptrty)
-                } else {
-                    elems.append(self.fieldLlvmTy(c: inout c, fd: sd.fields[fi]))
-                }
-                fi += 1
-            }
-            LLVMStructSetBody(self.structTys[s], arrayCPtr(elems), sd.fields.count(), 0I32)
-            s += 1
         }
     }
 }

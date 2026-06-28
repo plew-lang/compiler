@@ -44,21 +44,15 @@ pub impl LlvmCtx {
         }
     }
 
-    // Set each generic-struct instance's body (field types under its substitution env; a
-    // generic-instance field now resolves via fieldLlvmTy -> llvmTypeOfRef to the named
-    // type created in registerGenStructNames). Run after ALL names (plain + generic).
+    // Set each struct instance's body (field types under its substitution env; a
+    // generic-instance field resolves via fieldLlvmTy -> llvmTypeOfRef to the named type
+    // created in registerGenStructNames/registerStructNames). Run after ALL names (plain +
+    // generic). A non-generic struct's 0-type-arg instance is bodied here too — its empty env
+    // is a no-op, so its fields resolve exactly as a standalone non-generic pass would.
     inout fn registerGenStructBodies(c: inout Comp) {
         mut val s: U64 = 0
         while s < self.genStructRefs.count() {
             val ref: U64 = self.genStructRefs[s]
-            // B2 (transitional): a 0-type-arg instance is a non-generic struct registered here
-            // for the unified genStructSlot path; its body is already set by registerStructBodies
-            // (the genStructTys entry is the SAME `%st` type object). Skip it to avoid a second
-            // LLVMStructSetBody. (Folded away once registerStructBodies is retired.)
-            if c.arena.types[ref].args.count() == 0U64 {
-                s += 1
-                continue
-            }
             val sd: StructDef = c.arena.structs[self.genStructDefs[s]]
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
@@ -67,8 +61,8 @@ pub impl LlvmCtx {
             mut val elems: Array[LLVMTypeRef] = []
             mut val fi: U64 = 0
             while fi < sd.fields.count() {
-                // a boxed (recursive) field is a heap pointer — matching the non-generic
-                // registerStructBodies and the value built in genFieldValue. Required for a
+                // a boxed (recursive) field is a heap pointer — matching the value built in
+                // genFieldValue. Required for a
                 // recursive GENERIC value type (`N[I64]` with `next: Optional[N[I64]]`), else
                 // the inline layout disagrees with the boxed (ptr) construction value.
                 if c.fieldIsBoxed(f: sd.fields[fi]) {

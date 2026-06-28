@@ -53,7 +53,7 @@ export struct Comp {
     // collection phase (mono): set ONLY while the collection passes run (collectGenInsts /
     // collectFnInsts). Grounding an anonymous record to a concrete instance is otherwise
     // PURE — it just names the grounded record. The one place that may REGISTER a new
-    // grounded-record StructDef (so registerStructBodies later gives it an LLVM body) is the
+    // grounded-record StructDef (so registerGenStructBodies later gives it an LLVM body) is the
     // collection pass, which deterministically reaches every record instance via scanType.
     // Gating registration to this phase keeps grounding side-effect-free everywhere else
     // (type checker, backend), instead of registering on demand as a side effect of
