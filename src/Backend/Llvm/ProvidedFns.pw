@@ -135,28 +135,28 @@ pub impl LlvmCtx {
                     self.genFnK.append(k)
                     self.genFnVal.append(fv)
                     self.genFnTy.append(fty)
+                    self.genFnEmit.append(self.genFnK.count() - 1U64)
                 }
             }
             k += 1
         }
     }
 
-    // Emit each generic free-function instance body under its env.
-    inout fn emitGenFns(c: inout Comp) {
-        mut val slot: U64 = 0
-        while slot < self.genFnK.count() {
-            val fin: FnInst = c.monoWork.fnInsts[self.genFnK[slot]]
-            val f: Func = c.arena.funcs[fin.fnIdx]
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            c.cur.typeParams = f.typeParams
-            c.cur.typeArgs = fin.args
-            self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot])
-            c.cur.typeParams = savedP
-            c.cur.typeArgs = savedA
-            slot += 1
-        }
+    // Emit one free-function instance body (slot into genFn*) under its substitution env
+    // (empty for a non-generic 0-type-arg instance). Shared by the eager emitGenFns pass and
+    // the pass-2 genFnEmit drain (a free fn lazily declared via ensureFnInst).
+    inout fn emitOneGenFn(c: inout Comp, slot: U64) {
+        val fin: FnInst = c.monoWork.fnInsts[self.genFnK[slot]]
+        val f: Func = c.arena.funcs[fin.fnIdx]
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        c.cur.typeParams = f.typeParams
+        c.cur.typeArgs = fin.args
+        self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot])
+        c.cur.typeParams = savedP
+        c.cur.typeArgs = savedA
     }
+
 
     // The TypeRef of a call argument, using the LLVM backend's own local tracking
     // (the front-end `typeOf` can't see locals — the LLVM backend doesn't populate

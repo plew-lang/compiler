@@ -112,10 +112,15 @@ struct LlvmCtx {
     pub mut val fnIdx: Array[U64]
     pub mut val fnVal: Array[LLVMValueRef]
     pub mut val fnTy: Array[LLVMTypeRef]
-    // generic free-function instances (parallel: c.monoWork.fnInsts index -> value, type).
+    // free-function instances (parallel: c.monoWork.fnInsts index -> value, type). A true
+    // generic instance (`id[I32]`) is keyed by its inferred args; a non-generic free fn is
+    // its own 0-type-arg instance (args=[]). Both resolve via genFnSlotFor(fnIdx, args).
     pub mut val genFnK: Array[U64]
     pub mut val genFnVal: Array[LLVMValueRef]
     pub mut val genFnTy: Array[LLVMTypeRef]
+    // slots (into genFn*) declared lazily at a call site via ensureFnInst (a free fn first
+    // reached during body emission), queued for body emission in the pass-2 drain loop.
+    pub mut val genFnEmit: Array[U64]
     // generic-method instances, one per (method func, receiver instantiation):
     // a method on a generic struct/enum (`box.get()`, `maybe.unwrapOr(...)`) is
     // monomorphized per receiver instance, keyed by (genMethK, genMethInst).
@@ -850,7 +855,7 @@ export fn emitLlvm(c: inout Comp) {
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
-        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethOwn=[]
+        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethOwn=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemStructIdx=[] locElemTypeRef=[] locOwned=[] locMoved=[] declId=[] declFn=[] declTy=[] reachAssoc=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitSidx=[] dropWitVal=[] dropWitTy=[] retWitSidx=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitEid=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
@@ -937,8 +942,8 @@ export fn emitLlvm(c: inout Comp) {
     }
     // async fn entry + resume bodies (main's entry drains the loop).
     st.emitAsyncFns(c: inout c)
-    // generic free-function + generic-method instance bodies.
-    st.emitGenFns(c: inout c)
+    // generic-method instance bodies. (Free-function instance bodies — eager `gf` plus any
+    // lazily declared via ensureFnInst — drain through genFnEmit in the fixpoint loop below.)
     st.emitGenMethods(c: inout c)
     // lambda-lifted closure bodies + function-value thunks.
     st.emitClosures(c: inout c)
@@ -949,6 +954,7 @@ export fn emitLlvm(c: inout Comp) {
     // fixpoint: loop until neither queue advances.
     mut val provDone: U64 = 0
     mut val genmDone: U64 = 0
+    mut val genfDone: U64 = 0
     mut val draining: Bool = true
     while draining {
         while provDone < st.provEmit.count() {
@@ -959,9 +965,17 @@ export fn emitLlvm(c: inout Comp) {
             st.emitOneGenMethod(c: inout c, slot: st.genMethEmit[genmDone])
             genmDone += 1
         }
+        // free-function instance bodies (eager `gf` + lazily declared via ensureFnInst); the
+        // queue can grow as a body reaches a not-yet-declared free fn, so drain to fixpoint.
+        while genfDone < st.genFnEmit.count() {
+            st.emitOneGenFn(c: inout c, slot: st.genFnEmit[genfDone])
+            genfDone += 1
+        }
         if provDone >= st.provEmit.count() {
             if genmDone >= st.genMethEmit.count() {
-                draining = false
+                if genfDone >= st.genFnEmit.count() {
+                    draining = false
+                }
             }
         }
     }
