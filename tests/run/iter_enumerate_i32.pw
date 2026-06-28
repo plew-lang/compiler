@@ -1,0 +1,25 @@
+// Regression: an adapter returning `Optional[anonymous-record]` (here `.enumerate()`'s
+// `Optional[(index: U64, value: E)]`) must ground the record component to the REAL
+// element type, not default it to i64. Masked when the element is I64 (the default
+// coincides — see iter_enumerate.pw); an I32 element exposes the bug (the build emitted
+// `insertvalue i32 into an i64 field` = invalid IR). The mono pass now registers the
+// grounded record instance `(index:U64,value:I32)` so its `value` field lowers as i32.
+import @Std/Io with { print }
+import @Std/Core with { Iterator }
+
+struct Counter { pub mut val n: I32 }
+pub impl Counter as Iterator {
+    type Item = I32
+    inout fn next() -> Optional[I32] {
+        if self.n >= 3I32 { return <Optional.None /> }
+        self.n = self.n + 1I32
+        return <Optional.Some v=self.n * 10I32 />
+    }
+}
+
+fn main() {
+    for p in <Counter n=0I32 />.enumerate() {
+        print(p.index)
+        print(p.value)
+    }
+}

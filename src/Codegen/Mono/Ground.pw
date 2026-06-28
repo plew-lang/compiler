@@ -108,6 +108,9 @@ pub impl Comp {
         mut val cn: Array[U8] = []
         appendBytes(into: inout cn, from: "(".bytes())
         mut val changed: Bool = false
+        // collect the grounded field defs alongside the canonical name, so a missing
+        // grounded instance can be registered (not left as the i64-defaulting template).
+        mut val gfields: Array[FieldDef] = []
         mut val j: U64 = 0
         while j < sd.fields.count() {
             if j > 0U64 {
@@ -125,6 +128,8 @@ pub impl Comp {
                 changed = true
             }
             appendBytes(into: inout cn, from: self.recordTypeKeyFromRef(ref: g))
+            val gt: TypeRef = self.arena.types[g]
+            gfields.append(<FieldDef nameStart=fd.nameStart nameLen=fd.nameLen nameId=fd.nameId tyStart=gt.nameStart tyLen=gt.nameLen tyNameId=intern(c: inout self, start: gt.nameStart, len: gt.nameLen) tyIsArray=fd.tyIsArray ty=g isMut=fd.isMut hasDefault=fd.hasDefault defaultVal=fd.defaultVal vis=fd.vis />)
             j += 1
         }
         appendBytes(into: inout cn, from: ")".bytes())
@@ -141,7 +146,15 @@ pub impl Comp {
             }
             gi += 1
         }
-        return ref
+        // the grounded record instance does not exist yet: register it as a real struct
+        // (canonical sorted layout is inherited from the template) so its fields carry the
+        // grounded types (`value: I32`, not the template's `value: E` defaulting to i64).
+        // Mirrors ensureRecordStruct; runs at collection time so registerStructBodies gives
+        // it an LLVM type. Idempotent via the nid scan above.
+        val noTP: Array[Bind] = []
+        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isExtern=false defOffset=sd.defOffset />)
+        mut val noArgs2: Array[U64] = []
+        return self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs2 />)
     }
 
     inout fn groundTypeRef(ref: U64) -> U64 {
@@ -343,6 +356,23 @@ pub impl Comp {
             }
             if !(seen) {
                 self.monoWork.fnTypes.append(ref)
+            }
+        }
+        // an anonymous record `(index:U64, value:I32)` (grounded + registered above by
+        // groundTypeRef -> groundRecordStruct): scan its field types so a nested generic /
+        // array / Ref element registers too. Records carry no type args, so the args loop
+        // above misses their components. Detect by the leading `(`.
+        if t.nameLen > 0U64 {
+            if self.arena.bytes[t.nameStart] == 40U8 {
+                val rsi: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)
+                if rsi < self.arena.structs.count() {
+                    val rfs: Array[FieldDef] = self.arena.structs[rsi].fields
+                    mut val rk: U64 = 0
+                    while rk < rfs.count() {
+                        self.scanType(ref: rfs[rk].ty)
+                        rk += 1
+                    }
+                }
             }
         }
         if self.isGenericInst(ref: ref) {
