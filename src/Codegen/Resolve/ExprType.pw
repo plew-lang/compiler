@@ -172,24 +172,27 @@ pub impl Comp {
                 if fi < self.arena.funcs.count() {
                     val f: Func = self.arena.funcs[fi]
                     if f.hasRet {
-                        // a generic free function returning a bare type parameter:
-                        // substitute it with the inferred concrete type argument.
+                        // a generic free function: ground its declared return type under the
+                        // type args inferred from THIS call, uniformly for a bare type
+                        // parameter (`-> T`), a generic instance (`-> Box[T]`), AND an
+                        // anonymous record (`-> (v: T)`). Records are name-encoded (no
+                        // top-level args), so without grounding their `(v:T)` would be
+                        // compared as an opaque name against `(v:I32)` and wrongly rejected —
+                        // the same treatment named generics already get via their args.
                         if self.isGenericFreeFn(fi: fi) {
                             if !(f.retIsArray) {
-                                val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
-                                val qRet: U64 = intern(c: inout self, start: f.retStart, len: f.retLen)
-
-                                mut val k: U64 = 0
-                                while k < f.typeParams.count() {
-                                    val tp: Bind = f.typeParams[k]
-                                    if qRet == tp.nameId {
-                                        if k < inferred.count() {
-                                            if inferred[k] != 0 {
-                                                return self.typeInfoOfRef(ref: inferred[k])
-                                            }
-                                        }
+                                if f.retTy < self.arena.types.count() {
+                                    val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
+                                    val savedP: Array[Bind] = self.cur.typeParams
+                                    val savedA: Array[U64] = self.cur.typeArgs
+                                    self.cur.typeParams = f.typeParams
+                                    self.cur.typeArgs = inferred
+                                    val gr: U64 = self.groundTypeRef(ref: f.retTy)
+                                    self.cur.typeParams = savedP
+                                    self.cur.typeArgs = savedA
+                                    if gr != f.retTy {
+                                        return self.typeInfoOfRef(ref: gr)
                                     }
-                                    k += 1
                                 }
                             }
                         }
