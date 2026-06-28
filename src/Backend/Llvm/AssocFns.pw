@@ -303,6 +303,20 @@ pub impl LlvmCtx {
             if c.isGenericInst(ref: rt) {
                 return self.llvmTypeOfRef(c: inout c, ref: rt)
             }
+            // lower from the GROUNDED return ref's name (not the declared `f.retStart`
+            // span) ONLY when grounding actually transformed a real ret type — so a
+            // grounded anonymous record (`(v:T)` -> `(v:I32)`) resolves to its concrete
+            // instance's struct type, not the i64-defaulting template. When grounding is a
+            // no-op (`rt == f.retTy`) or there is no structured ret ref (`f.retTy == 0`, a
+            // derived witness carrying only `f.retStart`), fall back to the declared span.
+            if f.retTy != 0U64 {
+                if rt != f.retTy {
+                    if rt < c.arena.types.count() {
+                        val rtT: TypeRef = c.arena.types[rt]
+                        return self.llvmTypeFor(c: inout c, tyStart: rtT.nameStart, tyLen: rtT.nameLen, isArray: f.retIsArray)
+                    }
+                }
+            }
             return self.llvmTypeFor(c: inout c, tyStart: f.retStart, tyLen: f.retLen, isArray: f.retIsArray)
         }
         return self.voidty

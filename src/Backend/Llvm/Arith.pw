@@ -88,7 +88,7 @@ pub impl LlvmCtx {
         // the syntactic `Box[T]`; ground its type args through the active env so it
         // resolves to the registered concrete instance (`Box[I32]`).
         mut val gty: U64 = ty
-        if c.cur.typeParams.count() > 0U64 {
+        if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
             gty = c.groundTypeRef(ref: ty)
         }
         // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
@@ -98,8 +98,16 @@ pub impl LlvmCtx {
         // enum payload (`<Optional.Some v=(index:1, value:2)/>`) can't be built.
         if typeLen == 0U64 {
             if self.expectedTy != 0U64 {
-                if self.expectedTy < c.arena.types.count() {
-                    val et: TypeRef = c.arena.types[self.expectedTy]
+                // ground the expected record type through the active env so a record built
+                // in a generic body (`return (v: x)` where the declared return is `(v: T)`)
+                // resolves to its concrete instance `(v: I32)` — not the i64-defaulting
+                // template. Mirrors the `gty` grounding above for named generic structs.
+                mut val exTy: U64 = self.expectedTy
+                if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
+                    exTy = c.groundTypeRef(ref: exTy)
+                }
+                if exTy < c.arena.types.count() {
+                    val et: TypeRef = c.arena.types[exTy]
                     if et.nameLen > 0U64 {
                         if c.arena.bytes[et.nameStart] == 40U8 {
                             val rreg: U64 = self.structRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
@@ -159,8 +167,18 @@ pub impl LlvmCtx {
         // construction name to the underlying before the registered-struct lookup.
         mut val rtStart: U64 = typeStart
         mut val rtLen: U64 = typeLen
-        val ntn: Bind = c.newtypeUnderName(start: typeStart, len: typeLen)
-        if ntn.nameStart != typeStart || ntn.nameLen != typeLen {
+        // a grounded record/struct (`(v:T)` -> `(v:I32)` in a generic body): build the
+        // concrete instance, not the i64-defaulting template. `gty` carries the grounding;
+        // use its name for the registered-struct lookup (mirrors llvmFnRetTy).
+        if gty != ty {
+            if gty < c.arena.types.count() {
+                val gtyT: TypeRef = c.arena.types[gty]
+                rtStart = gtyT.nameStart
+                rtLen = gtyT.nameLen
+            }
+        }
+        val ntn: Bind = c.newtypeUnderName(start: rtStart, len: rtLen)
+        if ntn.nameStart != rtStart || ntn.nameLen != rtLen {
             rtStart = ntn.nameStart
             rtLen = ntn.nameLen
         }
