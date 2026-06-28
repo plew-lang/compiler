@@ -138,22 +138,30 @@ pub impl Comp {
         val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(b: cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         mut val gi: U64 = 0
+        mut val registered: Bool = false
         while gi < self.arena.structs.count() {
             if self.arena.structs[gi].nameId == nid {
-                mut val noArgs: Array[U64] = []
-                return self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs />)
+                registered = true
+                gi = self.arena.structs.count()
+            } else {
+                gi += 1
             }
-            gi += 1
         }
-        // the grounded record instance does not exist yet: register it as a real struct
-        // (canonical sorted layout is inherited from the template) so its fields carry the
-        // grounded types (`value: I32`, not the template's `value: E` defaulting to i64).
-        // Mirrors ensureRecordStruct; runs at collection time so registerStructBodies gives
-        // it an LLVM type. Idempotent via the nid scan above.
-        val noTP: Array[Bind] = []
-        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isExtern=false defOffset=sd.defOffset />)
-        mut val noArgs2: Array[U64] = []
-        return self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs2 />)
+        // the grounded record instance is not yet a real struct: register it (canonical sorted
+        // layout inherited from the template) so its fields carry the grounded types
+        // (`value: I32`, not the template's `value: E` i64-defaulting), and registerStructBodies
+        // gives it an LLVM body. Registration is the COLLECTION pass's job (inCollection) — it
+        // reaches every record instance via scanType — so grounding stays PURE everywhere else
+        // (type checker / backend just name the grounded record; the struct already exists from
+        // collection). Mirrors ensureRecordStruct; idempotent via the nid scan above.
+        if !(registered) {
+            if self.inCollection {
+                val noTP: Array[Bind] = []
+                self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isExtern=false defOffset=sd.defOffset />)
+            }
+        }
+        mut val noArgs: Array[U64] = []
+        return self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs />)
     }
 
     inout fn groundTypeRef(ref: U64) -> U64 {

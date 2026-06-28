@@ -50,6 +50,15 @@ export struct Comp {
     // rejecting, so its coverage can be developed/triaged against self-compile
     // without breaking the build. Off in a normal build (no behavior change yet).
     pub mut val tcLog: Bool = false
+    // collection phase (mono): set ONLY while the collection passes run (collectGenInsts /
+    // collectFnInsts). Grounding an anonymous record to a concrete instance is otherwise
+    // PURE — it just names the grounded record. The one place that may REGISTER a new
+    // grounded-record StructDef (so registerStructBodies later gives it an LLVM body) is the
+    // collection pass, which deterministically reaches every record instance via scanType.
+    // Gating registration to this phase keeps grounding side-effect-free everywhere else
+    // (type checker, backend), instead of registering on demand as a side effect of
+    // grounding (the old "detour"). See agents/generic-unification.md A-1.
+    pub mut val inCollection: Bool = false
     // name interning (Phase C): a content-keyed table mapping each name span to a
     // stable 1-based id, so name equality is an integer compare (see `Interner`).
     pub mut val interner: Interner = <Interner />
@@ -755,13 +764,17 @@ export fn runFrontend() -> Comp {
     if c.genMode {
         c.synthGenMain()
     }
-    // discover concrete generic instantiations to monomorphize.
+    // discover concrete generic instantiations to monomorphize. The collection passes are
+    // the one phase allowed to REGISTER a grounded-record StructDef (grounding is pure
+    // elsewhere); they reach every record instance via scanType. See inCollection.
+    c.inCollection = true
     c.collectGenInsts()
     // discover concrete instantiations of generic free functions from call sites
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     c.collectFnInsts()
     // discover bare function-value references (need a closure-ABI thunk each).
     c.collectFnThunks()
+    c.inCollection = false
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.
     c.checkFnBounds()
