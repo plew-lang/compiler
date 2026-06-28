@@ -57,11 +57,11 @@ pub impl LlvmCtx {
         return self.fnIdx.count() - 1U64
     }
 
-    // Declare a non-generic free function on demand and queue its body — a std free
-    // function (digitByteI, called by I64.format) reached from an emitted body but
-    // gated out of the eager pass (entry-module only). Reachability-driven, so an
-    // uncalled std fn with unsupported constructs is never emitted. Returns the slot
-    // or st.fnIdx.count().
+    // Declare an assoc fn (`Trait.banner()` — a receiver type but no self param) on demand
+    // and queue its body. (Pure free functions are no longer declared here: they are their
+    // own 0-type-arg `gf` instance via ensureFnInst — B3-1. This path now serves only assoc
+    // fns, which still ride `pf` until methods are unified in B3-2.) Returns the slot or
+    // st.fnIdx.count().
     inout fn ensureFreeFnDeclared(c: inout Comp, fi: U64) -> U64 {
         val existing: U64 = self.userFnSlot(idx: fi)
         if existing < self.fnIdx.count() {
@@ -69,12 +69,13 @@ pub impl LlvmCtx {
         }
         val f: Func = c.arena.funcs[fi]
         if f.typeParams.count() > 0U64 { return self.fnIdx.count() }
-        // an assoc fn (`Trait.banner()`) has a receiver type but no self param — emit it
-        // like a free function; a real method (self) is not handled here.
-        if f.hasRecv {
-            if !(f.isAssoc) {
-                return self.fnIdx.count()
-            }
+        // an assoc fn (`Trait.banner()`) has a receiver type but no self param. A pure free
+        // function (no receiver) is rejected here — it goes through the unified `gf` path.
+        if !(f.hasRecv) {
+            return self.fnIdx.count()
+        }
+        if !(f.isAssoc) {
+            return self.fnIdx.count()
         }
         if f.isExtern { return self.fnIdx.count() }
         if c.nameIsMain(f: f) { return self.fnIdx.count() }

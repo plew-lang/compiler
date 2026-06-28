@@ -23,13 +23,16 @@ pub impl LlvmCtx {
         if self.thunkSlot(fi: fi) < self.thunkIdx.count() {
             return
         }
-        if !(self.isPlainUserFn(c: inout c, fi: fi)) {
-            return
-        }
         val f: Func = c.arena.funcs[fi]
+        // a free function the backend emits as a `gf` instance (its body forwarded to by the
+        // thunk via ensureFnInst): mirror that path's acceptance (extern / main / method /
+        // async are not function-value-able here).
         if f.hasRecv {
             return
         }
+        if f.isExtern { return }
+        if c.nameIsMain(f: f) { return }
+        if f.isAsync { return }
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         mut val pi: U64 = 0
@@ -79,14 +82,26 @@ pub impl LlvmCtx {
             val f: Func = c.arena.funcs[fi]
             val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
             LLVMPositionBuilderAtEnd(self.b, entry)
-            val callSlot: U64 = self.userFnSlot(idx: fi)
             mut val av: Array[LLVMValueRef] = []
             mut val pi: U64 = 0
             while pi < f.params.count() {
                 av.append(LLVMGetParam(fv, pi + 1U64))
                 pi += 1
             }
-            val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[callSlot], self.fnVal[callSlot], arrayCPtr(av), av.count(), anon())
+            // a free function is its 0-type-arg `gf` instance; a method-as-value still
+            // resolves through its `pf` symbol (methods are not yet unified — B3-2).
+            mut val callTy: LLVMTypeRef = self.voidty
+            mut val callVal: LLVMValueRef = LLVMConstNull(self.ptrty)
+            if f.hasRecv {
+                val callSlot: U64 = self.userFnSlot(idx: fi)
+                callTy = self.fnTy[callSlot]
+                callVal = self.fnVal[callSlot]
+            } else {
+                val callSlot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: [])
+                callTy = self.genFnTy[callSlot]
+                callVal = self.genFnVal[callSlot]
+            }
+            val r: LLVMValueRef = LLVMBuildCall2(self.b, callTy, callVal, arrayCPtr(av), av.count(), anon())
             if f.hasRet {
                 LLVMBuildRet(self.b, r)
             } else {

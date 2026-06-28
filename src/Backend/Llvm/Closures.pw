@@ -203,12 +203,26 @@ pub impl LlvmCtx {
         }
     }
 
-    // Declare every closure reachable from emitted code (main + plain user fns), then
-    // fixpoint over declared closures' own bodies (nested closures). Run before bodies.
+    // Declare every closure reachable from emitted code (main + plain user fns + free
+    // functions, which now emit as `gf` instances), then fixpoint over declared closures'
+    // own bodies (nested closures). Run before bodies.
     inout fn collectClosures(c: inout Comp) {
         mut val fi: U64 = 0
         while fi < c.arena.funcs.count() {
-            if c.nameIsMain(f: c.arena.funcs[fi]) || self.isPlainUserFn(c: inout c, fi: fi) {
+            // a free function (no receiver) is emitted as its `gf` instance, so a closure in
+            // its body must be declared here too (isPlainUserFn no longer covers free fns).
+            val f: Func = c.arena.funcs[fi]
+            mut val isFreeFn: Bool = false
+            if !(f.hasRecv) {
+                if !(f.isExtern) {
+                    if !(f.isAsync) {
+                        if !(c.nameIsMain(f: f)) {
+                            isFreeFn = true
+                        }
+                    }
+                }
+            }
+            if c.nameIsMain(f: f) || self.isPlainUserFn(c: inout c, fi: fi) || isFreeFn {
                 self.scanBlockClosures(c: inout c, id: c.arena.funcs[fi].body)
             }
             fi += 1

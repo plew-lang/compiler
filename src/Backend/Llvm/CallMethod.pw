@@ -165,25 +165,30 @@ pub impl LlvmCtx {
                         return LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(gav), gav.count(), anon())
                     }
                 }
+                val af: Func = c.arena.funcs[afi]
+                mut val aav: Array[LLVMValueRef] = []
+                mut val aai: U64 = 0
+                while aai < args.count() {
+                    aav.append(self.genArgValue(c: inout c, argExpr: args[aai].expr, p: af.params[aai]))
+                    aai += 1
+                }
+                mut val adi: U64 = args.count()
+                while adi < af.params.count() {
+                    aav.append(self.genArgValue(c: inout c, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
+                    adi += 1
+                }
+                // a pure free fn (`tryFrom` / a free conformance fn) is its 0-type-arg `gf`
+                // instance; a real assoc fn with a receiver type (`Greeter.banner()`) is
+                // declared lazily on `pf` (no self param), like a free function.
+                val agslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [])
+                if agslot < self.genFnK.count() {
+                    return LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(aav), aav.count(), anon())
+                }
                 mut val aslot: U64 = self.userFnSlot(idx: afi)
-                // a trait/std provided assoc fn (`Greeter.banner()`) is declared+emitted
-                // lazily (no self param), like a free function.
                 if aslot >= self.fnIdx.count() {
                     aslot = self.ensureFreeFnDeclared(c: inout c, fi: afi)
                 }
                 if aslot < self.fnIdx.count() {
-                    val af: Func = c.arena.funcs[afi]
-                    mut val aav: Array[LLVMValueRef] = []
-                    mut val aai: U64 = 0
-                    while aai < args.count() {
-                        aav.append(self.genArgValue(c: inout c, argExpr: args[aai].expr, p: af.params[aai]))
-                        aai += 1
-                    }
-                    mut val adi: U64 = args.count()
-                    while adi < af.params.count() {
-                        aav.append(self.genArgValue(c: inout c, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
-                        adi += 1
-                    }
                     return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(aav), aav.count(), anon())
                 }
                 compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this assoc fn is not emittable yet (generic / std / trait)")

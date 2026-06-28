@@ -76,19 +76,25 @@ pub impl LlvmCtx {
         if afi >= c.arena.funcs.count() {
             return LLVMConstNull(self.ptrty)
         }
-        mut val aslot: U64 = self.userFnSlot(idx: afi)
-        if aslot >= self.fnIdx.count() {
-            aslot = self.ensureFreeFnDeclared(c: inout c, fi: afi)
-        }
-        if aslot >= self.fnIdx.count() {
-            return LLVMConstNull(self.ptrty)
-        }
         val af: Func = c.arena.funcs[afi]
         mut val av: Array[LLVMValueRef] = []
         mut val ai: U64 = 0
         while ai < args.count() {
             av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
             ai += 1
+        }
+        // the `pow` conformance fn is a pure free fn (its 0-type-arg `gf` instance) or an assoc
+        // fn (still on `pf`): resolve through whichever applies.
+        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [])
+        if gslot < self.genFnK.count() {
+            return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av), av.count(), anon())
+        }
+        mut val aslot: U64 = self.userFnSlot(idx: afi)
+        if aslot >= self.fnIdx.count() {
+            aslot = self.ensureFreeFnDeclared(c: inout c, fi: afi)
+        }
+        if aslot >= self.fnIdx.count() {
+            return LLVMConstNull(self.ptrty)
         }
         return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count(), anon())
     }
@@ -436,56 +442,62 @@ pub impl LlvmCtx {
         // arguments' actual views (spec/09) — resolution is otherwise view-blind.
         val cfi: U64 = self.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         if cfi < c.arena.funcs.count() {
-            mut val slot: U64 = self.userFnSlot(idx: cfi)
-            // a std free function reached from an emitted body (digitByteI from
-            // I64.format) is declared+emitted lazily.
-            if slot >= self.fnIdx.count() {
-                if !(c.isGenericFreeFn(fi: cfi)) {
-                    slot = self.ensureFreeFnDeclared(c: inout c, fi: cfi)
+            // a user-defined free function — generic or not — is one `gf` instance keyed by
+            // (cfi, args): a non-generic fn is its 0-type-arg instance (args=[], empty env),
+            // a generic one infers its concrete type args. ensureFnInst declares it lazily on
+            // first reach (it rejects extern/main/method, which fall through to the extern
+            // path / error below). One path, no pf/gf split.
+            if !(c.arena.funcs[cfi].isExtern) {
+                mut val inferred: Array[U64] = []
+                if c.isGenericFreeFn(fi: cfi) {
+                    inferred = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
                 }
-            }
-            if slot < self.fnIdx.count() {
-                val cf: Func = c.arena.funcs[cfi]
-                mut val av2: Array[LLVMValueRef] = []
-                mut val ai: U64 = 0
-                while ai < args.count() {
-                    // coerce each argument to the parameter's integer width.
-                    av2.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
-                    ai += 1
-                }
-                // fill omitted trailing params with their default expressions (spec/04).
-                mut val di: U64 = args.count()
-                while di < cf.params.count() {
-                    av2.append(self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
-                    di += 1
-                }
-                return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av2), av2.count(), anon())
-            }
-            // a generic free-function call: infer its concrete type args, find the
-            // instance, build args under the instance env, and call it.
-            if c.isGenericFreeFn(fi: cfi) {
-                val inferred: Array[U64] = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
-                val gslot: U64 = genFnSlotFor(c: inout c, fnIdx: cfi, args: inferred, st: inout self)
+                val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: cfi, args: inferred)
                 if gslot < self.genFnK.count() {
                     val cf: Func = c.arena.funcs[cfi]
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
                     c.cur.typeParams = cf.typeParams
                     c.cur.typeArgs = inferred
-                    mut val av3: Array[LLVMValueRef] = []
-                    mut val ai3: U64 = 0
-                    while ai3 < args.count() {
-                        av3.append(self.genArgValue(c: inout c, argExpr: args[ai3].expr, p: cf.params[ai3]))
-                        ai3 += 1
+                    mut val av2: Array[LLVMValueRef] = []
+                    mut val ai: U64 = 0
+                    while ai < args.count() {
+                        // coerce each argument to the parameter's type (width / env-grounded).
+                        av2.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
+                        ai += 1
                     }
-                    mut val di3: U64 = args.count()
-                    while di3 < cf.params.count() {
-                        av3.append(self.genArgValue(c: inout c, argExpr: cf.params[di3].defaultExpr, p: cf.params[di3]))
-                        di3 += 1
+                    // fill omitted trailing params with their default expressions (spec/04).
+                    mut val di: U64 = args.count()
+                    while di < cf.params.count() {
+                        av2.append(self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
+                        di += 1
                     }
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
-                    return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av3), av3.count(), anon())
+                    return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
+                }
+                // ensureFnInst declined (an assoc fn `pow(base:,exp:)` reached here, or an
+                // `async fn` whose promise-returning entry is declared by declareAsyncFns):
+                // resolve its `pf` symbol, declaring an assoc fn lazily if needed. (Assoc fns
+                // and async entries still ride `pf` until methods are unified in B3-2.)
+                mut val pslot: U64 = self.userFnSlot(idx: cfi)
+                if pslot >= self.fnIdx.count() {
+                    pslot = self.ensureFreeFnDeclared(c: inout c, fi: cfi)
+                }
+                if pslot < self.fnIdx.count() {
+                    val cf: Func = c.arena.funcs[cfi]
+                    mut val pav: Array[LLVMValueRef] = []
+                    mut val pai: U64 = 0
+                    while pai < args.count() {
+                        pav.append(self.genArgValue(c: inout c, argExpr: args[pai].expr, p: cf.params[pai]))
+                        pai += 1
+                    }
+                    mut val pdi: U64 = args.count()
+                    while pdi < cf.params.count() {
+                        pav.append(self.genArgValue(c: inout c, argExpr: cf.params[pdi].defaultExpr, p: cf.params[pdi]))
+                        pdi += 1
+                    }
+                    return LLVMBuildCall2(self.b, self.fnTy[pslot], self.fnVal[pslot], arrayCPtr(pav), pav.count(), anon())
                 }
             }
         }

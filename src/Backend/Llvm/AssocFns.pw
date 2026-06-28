@@ -226,8 +226,10 @@ pub impl LlvmCtx {
             }
             return c.methodInEntryModule(f: f)
         }
-        // a free function: entry module only (see registerStructs note on reachability).
-        return c.moduleOf(offset: f.nameStart) == 0U64
+        // a free function is no longer declared/emitted as `pf`: it is its own 0-type-arg
+        // `gf` instance, declared lazily on first reach via ensureFnInst (B3-1). Reachability-
+        // driven, so an uncalled free fn emits no dead body.
+        return false
     }
 
     // The LLVM type of a parameter: a pointer for an `inout` parameter (it receives

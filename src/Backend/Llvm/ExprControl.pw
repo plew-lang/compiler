@@ -346,14 +346,21 @@ pub impl LlvmCtx {
                 if c.arena.types[opErrRef].nameId != c.arena.types[fnErrRef].nameId {
                     val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef)
                     if ffi < c.arena.funcs.count() {
-                        mut val fslot: U64 = self.userFnSlot(idx: ffi)
-                        if fslot >= self.fnIdx.count() {
-                            fslot = self.ensureFreeFnDeclared(c: inout c, fi: ffi)
-                        }
-                        if fslot < self.fnIdx.count() {
-                            mut val cav: Array[LLVMValueRef] = []
-                            cav.append(errVal)
-                            convErrVal = LLVMBuildCall2(self.b, self.fnTy[fslot], self.fnVal[fslot], arrayCPtr(cav), cav.count(), anon())
+                        mut val cav: Array[LLVMValueRef] = []
+                        cav.append(errVal)
+                        // the error-conversion factory is a pure free fn (its 0-type-arg `gf`
+                        // instance) or an assoc fn (`pf`): resolve through whichever applies.
+                        val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [])
+                        if fgslot < self.genFnK.count() {
+                            convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
+                        } else {
+                            mut val fslot: U64 = self.userFnSlot(idx: ffi)
+                            if fslot >= self.fnIdx.count() {
+                                fslot = self.ensureFreeFnDeclared(c: inout c, fi: ffi)
+                            }
+                            if fslot < self.fnIdx.count() {
+                                convErrVal = LLVMBuildCall2(self.b, self.fnTy[fslot], self.fnVal[fslot], arrayCPtr(cav), cav.count(), anon())
+                            }
                         }
                     }
                 }
