@@ -207,7 +207,7 @@ pub impl LlvmCtx {
             if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.structIdxs.count() {
                 return c.methodInEntryModule(f: f)
             }
-            if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count() {
+            if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.genEnumRefs.count() {
                 return c.methodInEntryModule(f: f)
             }
             return false
@@ -220,7 +220,7 @@ pub impl LlvmCtx {
             // struct methods, full of not-yet-supported constructs, from being emitted.)
             if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
             if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count() {
-                if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.enumIdxs.count() {
+                if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.genEnumRefs.count() {
                     return false
                 }
             }

@@ -92,10 +92,10 @@ pub impl LlvmCtx {
         if reg < self.structIdxs.count() {
             return self.structTys[reg]
         }
-        // a registered enum -> its named tagged-union type.
+        // a registered enum -> its named tagged-union type (its 0-type-arg genEnum instance).
         val ereg: U64 = self.enumRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if ereg < self.enumIdxs.count() {
-            return self.enumTys[ereg]
+        if ereg < self.genEnumRefs.count() {
+            return self.genEnumTys[ereg]
         }
         // an extern(c) opaque foreign-C handle type (`type LLVMTypeRef`) — the C
         // backend's `typedef void* <Name>` — is an opaque pointer. The LLVM root

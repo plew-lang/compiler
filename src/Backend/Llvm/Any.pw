@@ -450,7 +450,7 @@ pub impl LlvmCtx {
             // bare `match self` / `self == …` in the body recovers the enum.
             if recvRef == 0U64 {
                 if recvSidx >= c.arena.structs.count() {
-                    if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.enumIdxs.count() {
+                    if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.genEnumRefs.count() {
                         recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                     }
                 }

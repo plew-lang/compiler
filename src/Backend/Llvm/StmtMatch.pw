@@ -260,7 +260,7 @@ pub impl LlvmCtx {
                 // locTypeRef must stay 0 so a `.count()`/index over it routes the array path.
                 mut val tref: U64 = 0
                 if !(isArrF) {
-                    if self.enumRegSlot(c: inout c, start: fd.tyStart, len: fd.tyLen) < self.enumIdxs.count() {
+                    if self.enumRegSlot(c: inout c, start: fd.tyStart, len: fd.tyLen) < self.genEnumRefs.count() {
                         tref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
                     }
                 }

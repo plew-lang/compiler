@@ -18,7 +18,7 @@ pub impl LlvmCtx {
             recvNameLen = c.arena.structs[rsidx].nameLen
         } else {
             val erecvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
-            if erecvRef != 0U64 && self.enumRegSlot(c: inout c, start: c.arena.types[erecvRef].nameStart, len: c.arena.types[erecvRef].nameLen) < self.enumIdxs.count() {
+            if erecvRef != 0U64 && self.enumRegSlot(c: inout c, start: c.arena.types[erecvRef].nameStart, len: c.arena.types[erecvRef].nameLen) < self.genEnumRefs.count() {
                 recvNameStart = c.arena.types[erecvRef].nameStart
                 recvNameLen = c.arena.types[erecvRef].nameLen
             } else {
@@ -289,7 +289,7 @@ pub impl LlvmCtx {
             val erecvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
             if erecvRef != 0U64 {
                 val et: TypeRef = c.arena.types[erecvRef]
-                if self.enumRegSlot(c: inout c, start: et.nameStart, len: et.nameLen) < self.enumIdxs.count() {
+                if self.enumRegSlot(c: inout c, start: et.nameStart, len: et.nameLen) < self.genEnumRefs.count() {
                     val emfi: U64 = c.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     if emfi < c.arena.funcs.count() {
                         mut val eslot: U64 = self.userFnSlot(idx: emfi)

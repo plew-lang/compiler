@@ -2,21 +2,21 @@
 
 // ---- enums (tagged unions) ----
 
-// Index into st.enum* for a registered enum named (start,len), or st.enumIdxs.count().
+// The genEnum* slot for a registered enum named (start,len) — its 0-type-arg instance —
+// or st.genEnumRefs.count() if not registered.
 
 pub impl LlvmCtx {
+    // B1 (generic-unification): a non-generic enum is the 0-type-arg instance of itself,
+    // registered in the genEnum* tables (see registerEnums). enumRegSlot now returns that
+    // genEnum* slot — every enum resolves through the one `%ge` mechanism. The slot indexes
+    // genEnumRefs/genEnumDefs/genEnumTys (sentinel genEnumRefs.count()); the 0-arg filter
+    // disambiguates a non-generic enum from any generic instance that shares the head name.
     inout fn enumRegSlot(c: inout Comp, start: U64, len: U64) -> U64 {
         val eid: U64 = c.enumIdxByName(start: start, len: len)
         if eid < c.arena.enums.count() {
-            mut val i: U64 = 0
-            while i < self.enumIdxs.count() {
-                if self.enumIdxs[i] == eid {
-                    return i
-                }
-                i += 1
-            }
+            return self.enumRegSlotByEid(c: inout c, eid: eid)
         }
-        return self.enumIdxs.count()
+        return self.genEnumRefs.count()
     }
 
     // How many i64 words a primitive field occupies in the enum payload area (String
@@ -224,8 +224,16 @@ pub impl LlvmCtx {
                     elems.append(self.i64ty)
                     elems.append(LLVMArrayType2(self.i64ty, maxWords))
                     LLVMStructSetBody(ty, arrayCPtr(elems), 2U64, 0I32)
-                    self.enumIdxs.append(ei)
-                    self.enumTys.append(ty)
+                    // B1 (generic-unification): a non-generic enum is the 0-type-arg instance of
+                    // itself — registered in the SAME genEnum* tables as generic instances. Every
+                    // enum then resolves through the one genEnumSlot path (the `%ge` mechanism);
+                    // the separate name-registered `enumIdxs`/`enumTys` tables are gone. The
+                    // instance ref is the enum's bare name with no args.
+                    mut val zargs: Array[U64] = []
+                    val instRef: U64 = c.pushType(t: <TypeRef nameStart=e.nameStart nameLen=e.nameLen args=zargs />)
+                    self.genEnumRefs.append(instRef)
+                    self.genEnumTys.append(ty)
+                    self.genEnumDefs.append(ei)
                 }
             }
             ei += 1
@@ -279,9 +287,9 @@ pub impl LlvmCtx {
         }
         val t: TypeRef = c.arena.types[ref]
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
-        if reg < self.enumIdxs.count() {
-            if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
-                val slot: U64 = self.enumReleaseWitness(c: inout c, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+        if reg < self.genEnumRefs.count() {
+            if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg]) {
+                val slot: U64 = self.enumReleaseWitness(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
                 LLVMBuildCall2(self.b, self.enumRelWitTy[slot], self.enumRelWitVal[slot], arrayCPtr(av), 1U64, anon())
@@ -315,9 +323,9 @@ pub impl LlvmCtx {
         }
         val t: TypeRef = c.arena.types[ref]
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
-        if reg < self.enumIdxs.count() {
-            if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
-                val slot: U64 = self.enumCopyWitness(c: inout c, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+        if reg < self.genEnumRefs.count() {
+            if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg]) {
+                val slot: U64 = self.enumCopyWitness(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
                 return LLVMBuildCall2(self.b, self.enumCopyWitTy[slot], self.enumCopyWitVal[slot], arrayCPtr(av), 1U64, anon())
@@ -541,7 +549,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumRelWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitEnumRelease(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRelWitEid[s], ety: self.enumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRelWitEid[s])])
+            self.emitEnumRelease(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRelWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRelWitEid[s])])
             LLVMBuildRetVoid(self.b)
             self.enumRelWitDone += 1
         }
@@ -581,7 +589,7 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumRetWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitEnumRetain(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRetWitEid[s], ety: self.enumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRetWitEid[s])])
+            self.emitEnumRetain(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRetWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRetWitEid[s])])
             LLVMBuildRetVoid(self.b)
             self.enumRetWitDone += 1
         }
@@ -621,22 +629,25 @@ pub impl LlvmCtx {
             val fv: LLVMValueRef = self.enumCopyWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            LLVMBuildRet(self.b, self.deepCopyEnumValue(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumCopyWitEid[s], ety: self.enumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumCopyWitEid[s])]))
+            LLVMBuildRet(self.b, self.deepCopyEnumValue(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumCopyWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumCopyWitEid[s])]))
             self.enumCopyWitDone += 1
         }
     }
 
-    // The enumIdxs/enumTys slot for a registered enum by its enum id (the inverse of
-    // enumIdxs[reg]=eid), or enumIdxs.count() if not registered.
+    // The genEnum* slot for a non-generic enum by its enum id — its 0-type-arg instance
+    // (genEnumDefs[slot]==eid AND the ref carries no args, distinguishing it from a generic
+    // instance of a same-named def). genEnumRefs.count() if not registered.
     inout fn enumRegSlotByEid(c: inout Comp, eid: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.enumIdxs.count() {
-            if self.enumIdxs[i] == eid {
-                return i
+        while i < self.genEnumRefs.count() {
+            if self.genEnumDefs[i] == eid {
+                if c.arena.types[self.genEnumRefs[i]].args.count() == 0U64 {
+                    return i
+                }
             }
             i += 1
         }
-        return self.enumIdxs.count()
+        return self.genEnumRefs.count()
     }
 
     // Retain the heap of enum value `v` of type `ref` if it owns any (genericinstance or
@@ -663,9 +674,9 @@ pub impl LlvmCtx {
         }
         val t: TypeRef = c.arena.types[ref]
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
-        if reg < self.enumIdxs.count() {
-            if self.enumNeedsDeinit(c: inout c, eid: self.enumIdxs[reg]) {
-                val slot: U64 = self.enumRetainWitness(c: inout c, eid: self.enumIdxs[reg], ety: self.enumTys[reg])
+        if reg < self.genEnumRefs.count() {
+            if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg]) {
+                val slot: U64 = self.enumRetainWitness(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
                 LLVMBuildCall2(self.b, self.enumRetWitTy[slot], self.enumRetWitVal[slot], arrayCPtr(av), 1U64, anon())
@@ -786,11 +797,11 @@ pub impl LlvmCtx {
             }
         }
         val reg: U64 = self.enumRegSlot(c: inout c, start: typeStart, len: typeLen)
-        if reg >= self.enumIdxs.count() {
+        if reg >= self.genEnumRefs.count() {
             compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this enum not yet supported (generic / array-field enums are TODO)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        return self.buildEnumValue(c: inout c, eid: self.enumIdxs[reg], ety: self.enumTys[reg], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
+        return self.buildEnumValue(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
     }
 
     // Build an enum value of LLVM type `ety` for def `eid`: store the tag + the

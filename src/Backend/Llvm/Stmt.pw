@@ -223,7 +223,7 @@ pub impl LlvmCtx {
                 // the enum (typeOf can't see locals — c.cur.locals is unpopulated here).
                 if tref == 0U64 {
                     if tyLen > 0U64 {
-                        if self.enumRegSlot(c: inout c, start: tyStart, len: tyLen) < self.enumIdxs.count() {
+                        if self.enumRegSlot(c: inout c, start: tyStart, len: tyLen) < self.genEnumRefs.count() {
                             tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                         }
                     }

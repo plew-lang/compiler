@@ -379,7 +379,7 @@ pub impl LlvmCtx {
                 }
             }
             if pRef == 0U64 {
-                if self.enumRegSlot(c: inout c, start: p.tyStart, len: p.tyLen) < self.enumIdxs.count() {
+                if self.enumRegSlot(c: inout c, start: p.tyStart, len: p.tyLen) < self.genEnumRefs.count() {
                     pRef = c.simpleTypeRef(nameStart: p.tyStart, nameLen: p.tyLen)
                 }
             }

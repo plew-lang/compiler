@@ -307,7 +307,7 @@ pub impl LlvmCtx {
                                 if c.isGenericInst(ref: cap.ty) {
                                     cRef = cap.ty
                                 } else {
-                                    if self.enumRegSlot(c: inout c, start: cap.tyStart, len: cap.tyLen) < self.enumIdxs.count() {
+                                    if self.enumRegSlot(c: inout c, start: cap.tyStart, len: cap.tyLen) < self.genEnumRefs.count() {
                                         cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
                                     }
                                 }
