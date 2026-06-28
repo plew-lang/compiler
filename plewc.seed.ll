@@ -9565,18 +9565,18 @@ while.cond3:                                      ; preds = %while.body4, %then1
 while.body4:                                      ; preds = %while.cond3
   %79 = load %gs94, ptr %10, align 8
   %80 = load i64, ptr %14, align 4
-  %81 = call %st76 @gm23_42887(%gs94 %79, i64 %80)
+  %81 = call %st76 @gm23_42976(%gs94 %79, i64 %80)
   %82 = extractvalue %st76 %81, 2
   %83 = insertvalue %st78 undef, i64 %82, 0
   %84 = insertvalue %st78 %83, i1 false, 1
   %85 = load %gs94, ptr %10, align 8
   %86 = load i64, ptr %14, align 4
-  %87 = call %st76 @gm23_42887(%gs94 %85, i64 %86)
+  %87 = call %st76 @gm23_42976(%gs94 %85, i64 %86)
   %88 = extractvalue %st76 %87, 0
   %89 = insertvalue %st78 %84, i64 %88, 2
   %90 = load %gs94, ptr %10, align 8
   %91 = load i64, ptr %14, align 4
-  %92 = call %st76 @gm23_42887(%gs94 %90, i64 %91)
+  %92 = call %st76 @gm23_42976(%gs94 %90, i64 %91)
   %93 = extractvalue %st76 %92, 1
   %94 = insertvalue %st78 %89, i64 %93, 3
   %95 = insertvalue %st78 %94, i1 true, 4
@@ -9616,10 +9616,10 @@ while.end5:                                       ; preds = %while.cond3
 
 then6:                                            ; preds = %else
   %117 = load %gs94, ptr %10, align 8
-  %118 = call %st76 @gm23_42887(%gs94 %117, i64 0)
+  %118 = call %st76 @gm23_42976(%gs94 %117, i64 0)
   %119 = extractvalue %st76 %118, 0
   %120 = load %gs94, ptr %10, align 8
-  %121 = call %st76 @gm23_42887(%gs94 %120, i64 0)
+  %121 = call %st76 @gm23_42976(%gs94 %120, i64 0)
   %122 = extractvalue %st76 %121, 1
   %123 = load %st77, ptr %1, align 4
   %124 = extractvalue %st77 %123, 0
@@ -9662,7 +9662,7 @@ then10:                                           ; preds = %then8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs26 zeroinitializer, ptr %18, align 8
   %145 = load %gs94, ptr %10, align 8
-  %146 = call %st76 @gm23_42887(%gs94 %145, i64 0)
+  %146 = call %st76 @gm23_42976(%gs94 %145, i64 0)
   %147 = extractvalue %st76 %146, 2
   %148 = insertvalue %st78 undef, i64 %147, 0
   %149 = insertvalue %st78 %148, i1 false, 1
@@ -28984,16 +28984,16 @@ endif36:                                          ; preds = %endif34
   store i64 %243, ptr %11, align 4
   %244 = load i64, ptr %11, align 4
   %245 = load %st37, ptr %0, align 8
-  %246 = extractvalue %st37 %245, 27
+  %246 = extractvalue %st37 %245, 29
   %247 = call i64 @gm11_4725(%gs14 %246)
   %248 = icmp ult i64 %244, %247
   br i1 %248, label %then37, label %endif38
 
 then37:                                           ; preds = %endif36
   %249 = load %st37, ptr %0, align 8
-  %250 = extractvalue %st37 %249, 28
+  %250 = extractvalue %st37 %249, 30
   %251 = load i64, ptr %11, align 4
-  %252 = call ptr @gm23_1561(%gs118 %250, i64 %251)
+  %252 = call ptr @gm23_1565(%gs118 %250, i64 %251)
   %253 = load i64, ptr %11, align 4
   ret ptr %252
 
@@ -29013,7 +29013,7 @@ then39:                                           ; preds = %endif38
   %262 = load %st37, ptr %0, align 8
   %263 = extractvalue %st37 %262, 33
   %264 = load i64, ptr %12, align 4
-  %265 = call ptr @gm23_1561(%gs118 %263, i64 %264)
+  %265 = call ptr @gm23_1565(%gs118 %263, i64 %264)
   %266 = load i64, ptr %12, align 4
   %267 = load i64, ptr %11, align 4
   ret ptr %265
@@ -29066,66 +29066,35 @@ entry:
   %4 = alloca i64, align 8
   %5 = alloca i64, align 8
   %6 = alloca i64, align 8
-  %7 = alloca i64, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
   store i64 %2, ptr %4, align 4
   store i64 %3, ptr %5, align 4
-  %8 = load i64, ptr %4, align 4
-  %9 = load i64, ptr %5, align 4
-  %10 = call i64 @pf875(ptr %1, i64 %8, i64 %9)
-  store i64 %10, ptr %6, align 4
-  %11 = load i64, ptr %6, align 4
-  %12 = load %st32, ptr %1, align 8
-  %13 = extractvalue %st32 %12, 0
-  %14 = extractvalue %st98 %13, 5
-  %15 = call i64 @gm11_4811(%gs190 %14)
-  %16 = icmp ult i64 %11, %15
-  br i1 %16, label %then, label %endif
+  %7 = load i64, ptr %4, align 4
+  %8 = load i64, ptr %5, align 4
+  %9 = call i64 @pf875(ptr %1, i64 %7, i64 %8)
+  store i64 %9, ptr %6, align 4
+  %10 = load i64, ptr %6, align 4
+  %11 = load %st32, ptr %1, align 8
+  %12 = extractvalue %st32 %11, 0
+  %13 = extractvalue %st98 %12, 5
+  %14 = call i64 @gm11_4811(%gs190 %13)
+  %15 = icmp ult i64 %10, %14
+  br i1 %15, label %then, label %endif
 
 then:                                             ; preds = %body0
-  store i64 0, ptr %7, align 4
-  br label %while.cond
+  %16 = load i64, ptr %6, align 4
+  %17 = call i64 @pf1605(ptr %0, ptr %1, i64 %16)
+  %18 = load i64, ptr %6, align 4
+  ret i64 %17
 
-endif:                                            ; preds = %while.end, %body0
-  %17 = load %st37, ptr %0, align 8
-  %18 = extractvalue %st37 %17, 27
-  %19 = call i64 @gm11_4725(%gs14 %18)
-  %20 = load i64, ptr %6, align 4
-  ret i64 %19
-
-while.cond:                                       ; preds = %endif2, %then
-  %21 = load i64, ptr %7, align 4
-  %22 = load %st37, ptr %0, align 8
-  %23 = extractvalue %st37 %22, 27
-  %24 = call i64 @gm11_4725(%gs14 %23)
-  %25 = icmp ult i64 %21, %24
-  br i1 %25, label %while.body, label %while.end
-
-while.body:                                       ; preds = %while.cond
-  %26 = load %st37, ptr %0, align 8
-  %27 = extractvalue %st37 %26, 27
-  %28 = load i64, ptr %7, align 4
-  %29 = call i64 @gm23_6468(%gs14 %27, i64 %28)
-  %30 = load i64, ptr %6, align 4
-  %31 = icmp eq i64 %29, %30
-  br i1 %31, label %then1, label %endif2
-
-while.end:                                        ; preds = %while.cond
-  %32 = load i64, ptr %7, align 4
-  br label %endif
-
-then1:                                            ; preds = %while.body
-  %33 = load i64, ptr %7, align 4
-  %34 = load i64, ptr %6, align 4
-  ret i64 %33
-
-endif2:                                           ; preds = %while.body
-  %35 = load i64, ptr %7, align 4
-  %36 = call i64 @plew_u64Add(i64 %35, i64 1)
-  store i64 %36, ptr %7, align 4
-  br label %while.cond
+endif:                                            ; preds = %body0
+  %19 = load %st37, ptr %0, align 8
+  %20 = extractvalue %st37 %19, 29
+  %21 = call i64 @gm11_4725(%gs14 %20)
+  %22 = load i64, ptr %6, align 4
+  ret i64 %21
 }
 
 define ptr @pf1308(ptr %0, ptr %1) {
@@ -29145,16 +29114,16 @@ body0:                                            ; preds = %entry
   store i64 %9, ptr %3, align 4
   %10 = load i64, ptr %3, align 4
   %11 = load %st37, ptr %0, align 8
-  %12 = extractvalue %st37 %11, 27
+  %12 = extractvalue %st37 %11, 29
   %13 = call i64 @gm11_4725(%gs14 %12)
   %14 = icmp ult i64 %10, %13
   br i1 %14, label %then, label %endif
 
 then:                                             ; preds = %body0
   %15 = load %st37, ptr %0, align 8
-  %16 = extractvalue %st37 %15, 28
+  %16 = extractvalue %st37 %15, 30
   %17 = load i64, ptr %3, align 4
-  %18 = call ptr @gm23_1561(%gs118 %16, i64 %17)
+  %18 = call ptr @gm23_1565(%gs118 %16, i64 %17)
   %19 = load i64, ptr %3, align 4
   ret ptr %18
 
@@ -29362,7 +29331,7 @@ endif10:                                          ; preds = %endif8
   store i64 %98, ptr %9, align 4
   %99 = load i64, ptr %9, align 4
   %100 = load %st37, ptr %0, align 8
-  %101 = extractvalue %st37 %100, 27
+  %101 = extractvalue %st37 %100, 29
   %102 = call i64 @gm11_4725(%gs14 %101)
   %103 = icmp ult i64 %99, %102
   br i1 %103, label %then11, label %endif12
@@ -29372,7 +29341,7 @@ then11:                                           ; preds = %endif10
   %105 = extractvalue %st32 %104, 0
   %106 = extractvalue %st98 %105, 5
   %107 = load %st37, ptr %0, align 8
-  %108 = extractvalue %st37 %107, 27
+  %108 = extractvalue %st37 %107, 31
   %109 = load i64, ptr %9, align 4
   %110 = call i64 @gm23_6468(%gs14 %108, i64 %109)
   %111 = call %st84 @gm23_4811(%gs190 %106, i64 %110)
@@ -30286,7 +30255,7 @@ endif:                                            ; preds = %body0
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %7, align 8
   %19 = load ptr, ptr %5, align 8
-  call void @gm13_9794(ptr %7, ptr %19)
+  call void @gm13_9797(ptr %7, ptr %19)
   %20 = load %st37, ptr %0, align 8
   %21 = extractvalue %st37 %20, 9
   %22 = load %gs118, ptr %7, align 8
@@ -30315,7 +30284,7 @@ endif:                                            ; preds = %body0
   call void @gm13_1696(ptr %35, ptr %36)
   %37 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 100
   %38 = load ptr, ptr %8, align 8
-  call void @gm13_9794(ptr %37, ptr %38)
+  call void @gm13_9797(ptr %37, ptr %38)
   %39 = load %st37, ptr %0, align 8
   %40 = extractvalue %st37 %39, 98
   %41 = call i64 @gm11_4725(%gs14 %40)
@@ -30364,7 +30333,7 @@ endif:                                            ; preds = %body0
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %7, align 8
   %19 = load ptr, ptr %5, align 8
-  call void @gm13_9794(ptr %7, ptr %19)
+  call void @gm13_9797(ptr %7, ptr %19)
   %20 = load %st37, ptr %0, align 8
   %21 = extractvalue %st37 %20, 9
   %22 = load %gs118, ptr %7, align 8
@@ -30393,7 +30362,7 @@ endif:                                            ; preds = %body0
   call void @gm13_1696(ptr %35, ptr %36)
   %37 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 103
   %38 = load ptr, ptr %8, align 8
-  call void @gm13_9794(ptr %37, ptr %38)
+  call void @gm13_9797(ptr %37, ptr %38)
   %39 = load %st37, ptr %0, align 8
   %40 = extractvalue %st37 %39, 101
   %41 = call i64 @gm11_4725(%gs14 %40)
@@ -30442,7 +30411,7 @@ endif:                                            ; preds = %body0
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %7, align 8
   %19 = load ptr, ptr %5, align 8
-  call void @gm13_9794(ptr %7, ptr %19)
+  call void @gm13_9797(ptr %7, ptr %19)
   %20 = load ptr, ptr %5, align 8
   %21 = load %gs118, ptr %7, align 8
   %22 = extractvalue %gs118 %21, 0
@@ -30470,7 +30439,7 @@ endif:                                            ; preds = %body0
   call void @gm13_1696(ptr %34, ptr %35)
   %36 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 106
   %37 = load ptr, ptr %8, align 8
-  call void @gm13_9794(ptr %36, ptr %37)
+  call void @gm13_9797(ptr %36, ptr %37)
   %38 = load %st37, ptr %0, align 8
   %39 = extractvalue %st37 %38, 104
   %40 = call i64 @gm11_4725(%gs14 %39)
@@ -31002,11 +30971,11 @@ while.cond1:                                      ; preds = %endif5, %while.body
 while.body2:                                      ; preds = %while.cond1
   %118 = load %gs94, ptr %15, align 8
   %119 = load i64, ptr %24, align 4
-  %120 = call %st76 @gm23_42887(%gs94 %118, i64 %119)
+  %120 = call %st76 @gm23_42976(%gs94 %118, i64 %119)
   %121 = extractvalue %st76 %120, 0
   %122 = load %gs94, ptr %15, align 8
   %123 = load i64, ptr %24, align 4
-  %124 = call %st76 @gm23_42887(%gs94 %122, i64 %123)
+  %124 = call %st76 @gm23_42976(%gs94 %122, i64 %123)
   %125 = extractvalue %st76 %124, 1
   %126 = load %gs98, ptr %18, align 8
   %127 = load i64, ptr %21, align 4
@@ -31029,7 +30998,7 @@ while.end3:                                       ; preds = %while.cond1
 then4:                                            ; preds = %while.body2
   %139 = load %gs94, ptr %15, align 8
   %140 = load i64, ptr %24, align 4
-  %141 = call %st76 @gm23_42887(%gs94 %139, i64 %140)
+  %141 = call %st76 @gm23_42976(%gs94 %139, i64 %140)
   %142 = extractvalue %st76 %141, 2
   store i64 %142, ptr %22, align 4
   store i1 true, ptr %23, align 1
@@ -31573,7 +31542,7 @@ body0:                                            ; preds = %entry
   %33 = call ptr @LLVMBuildStructGEP2(ptr %29, ptr %30, ptr %31, i64 0, ptr %32)
   %34 = call ptr @LLVMBuildStore(ptr %23, ptr %27, ptr %33)
   %35 = load %gs38, ptr %9, align 8
-  %36 = call i64 @gm11_9949(%gs38 %35)
+  %36 = call i64 @gm11_9952(%gs38 %35)
   %37 = icmp ugt i64 %36, 0
   br i1 %37, label %then, label %endif
 
@@ -31601,7 +31570,7 @@ endif:                                            ; preds = %while.end, %body0
 while.cond:                                       ; preds = %while.body, %then
   %50 = load i64, ptr %13, align 4
   %51 = load %gs38, ptr %9, align 8
-  %52 = call i64 @gm11_9949(%gs38 %51)
+  %52 = call i64 @gm11_9952(%gs38 %51)
   %53 = icmp ult i64 %50, %52
   br i1 %53, label %while.body, label %while.end
 
@@ -31611,7 +31580,7 @@ while.body:                                       ; preds = %while.cond
   %56 = load ptr, ptr %12, align 8
   %57 = load %gs38, ptr %9, align 8
   %58 = load i64, ptr %13, align 4
-  %59 = call ptr @gm23_9949(%gs38 %57, i64 %58)
+  %59 = call ptr @gm23_9952(%gs38 %57, i64 %58)
   %60 = load i64, ptr %13, align 4
   %61 = call ptr @pf478()
   %62 = call ptr @LLVMBuildInsertValue(ptr %55, ptr %56, ptr %59, i64 %60, ptr %61)
@@ -33506,7 +33475,7 @@ endif2:                                           ; preds = %while.end, %endif
   %37 = load i64, ptr %5, align 4
   %38 = call i64 @pf1307(ptr %0, ptr %1, i64 %36, i64 %37)
   %39 = load %st37, ptr %0, align 8
-  %40 = extractvalue %st37 %39, 27
+  %40 = extractvalue %st37 %39, 29
   %41 = call i64 @gm11_4725(%gs14 %40)
   %42 = icmp ult i64 %38, %41
   br i1 %42, label %then5, label %endif6
@@ -33884,10 +33853,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %6, align 8
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 8
-  call void @gm13_9794(ptr %6, ptr %11)
+  call void @gm13_9797(ptr %6, ptr %11)
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 8
-  call void @gm13_9794(ptr %6, ptr %13)
+  call void @gm13_9797(ptr %6, ptr %13)
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 9
   %16 = load %gs118, ptr %6, align 8
@@ -34498,15 +34467,15 @@ endif4:                                           ; preds = %then3, %endif2
   %53 = load %st37, ptr %0, align 8
   %54 = extractvalue %st37 %53, 43
   %55 = load i64, ptr %10, align 4
-  %56 = call ptr @gm23_1561(%gs118 %54, i64 %55)
+  %56 = call ptr @gm23_1565(%gs118 %54, i64 %55)
   %57 = load %st37, ptr %0, align 8
   %58 = extractvalue %st37 %57, 42
   %59 = load i64, ptr %10, align 4
-  %60 = call ptr @gm23_9949(%gs38 %58, i64 %59)
+  %60 = call ptr @gm23_9952(%gs38 %58, i64 %59)
   %61 = load %gs38, ptr %12, align 8
   %62 = extractvalue %gs38 %61, 0
   %63 = load %gs38, ptr %12, align 8
-  %64 = call i64 @gm11_9949(%gs38 %63)
+  %64 = call i64 @gm11_9952(%gs38 %63)
   %65 = call ptr @pf478()
   %66 = call ptr @LLVMBuildCall2(ptr %52, ptr %56, ptr %60, ptr %62, i64 %64, ptr %65)
   %67 = load %gs38, ptr %12, align 8
@@ -34616,10 +34585,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %11, align 8
   %21 = load %st37, ptr %0, align 8
   %22 = extractvalue %st37 %21, 10
-  call void @gm13_9794(ptr %11, ptr %22)
+  call void @gm13_9797(ptr %11, ptr %22)
   %23 = load %st37, ptr %0, align 8
   %24 = extractvalue %st37 %23, 7
-  call void @gm13_9794(ptr %11, ptr %24)
+  call void @gm13_9797(ptr %11, ptr %24)
   %25 = load %st37, ptr %0, align 8
   %26 = extractvalue %st37 %25, 9
   %27 = load %gs118, ptr %11, align 8
@@ -34684,10 +34653,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %11, align 8
   %17 = load %st37, ptr %0, align 8
   %18 = extractvalue %st37 %17, 10
-  call void @gm13_9794(ptr %11, ptr %18)
+  call void @gm13_9797(ptr %11, ptr %18)
   %19 = load %st37, ptr %0, align 8
   %20 = extractvalue %st37 %19, 7
-  call void @gm13_9794(ptr %11, ptr %20)
+  call void @gm13_9797(ptr %11, ptr %20)
   %21 = load ptr, ptr %8, align 8
   %22 = load %gs118, ptr %11, align 8
   %23 = extractvalue %gs118 %22, 0
@@ -34745,7 +34714,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %8, align 8
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 7
-  call void @gm13_9794(ptr %8, ptr %13)
+  call void @gm13_9797(ptr %8, ptr %13)
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 9
   %16 = load %gs118, ptr %8, align 8
@@ -34884,11 +34853,11 @@ endif4:                                           ; preds = %endif2
   %69 = load %st37, ptr %0, align 8
   %70 = extractvalue %st37 %69, 43
   %71 = load i64, ptr %9, align 4
-  %72 = call ptr @gm23_1561(%gs118 %70, i64 %71)
+  %72 = call ptr @gm23_1565(%gs118 %70, i64 %71)
   %73 = load %st37, ptr %0, align 8
   %74 = extractvalue %st37 %73, 42
   %75 = load i64, ptr %9, align 4
-  %76 = call ptr @gm23_9949(%gs38 %74, i64 %75)
+  %76 = call ptr @gm23_9952(%gs38 %74, i64 %75)
   %77 = load %gs38, ptr %12, align 8
   %78 = extractvalue %gs38 %77, 0
   %79 = call ptr @pf478()
@@ -34904,10 +34873,10 @@ endif4:                                           ; preds = %endif2
   store %gs118 zeroinitializer, ptr %16, align 8
   %85 = load %st37, ptr %0, align 8
   %86 = extractvalue %st37 %85, 10
-  call void @gm13_9794(ptr %16, ptr %86)
+  call void @gm13_9797(ptr %16, ptr %86)
   %87 = load %st37, ptr %0, align 8
   %88 = extractvalue %st37 %87, 7
-  call void @gm13_9794(ptr %16, ptr %88)
+  call void @gm13_9797(ptr %16, ptr %88)
   %89 = load %st37, ptr %0, align 8
   %90 = extractvalue %st37 %89, 9
   %91 = load %gs118, ptr %16, align 8
@@ -35054,7 +35023,7 @@ then5:                                            ; preds = %endif4
   store %gs118 zeroinitializer, ptr %9, align 8
   %69 = load %st37, ptr %0, align 8
   %70 = extractvalue %st37 %69, 8
-  call void @gm13_9794(ptr %9, ptr %70)
+  call void @gm13_9797(ptr %9, ptr %70)
   %71 = load %st37, ptr %0, align 8
   %72 = extractvalue %st37 %71, 9
   %73 = load %gs118, ptr %9, align 8
@@ -35151,16 +35120,16 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %10, align 8
   %23 = load %st37, ptr %0, align 8
   %24 = extractvalue %st37 %23, 10
-  call void @gm13_9794(ptr %10, ptr %24)
+  call void @gm13_9797(ptr %10, ptr %24)
   %25 = load %st37, ptr %0, align 8
   %26 = extractvalue %st37 %25, 7
-  call void @gm13_9794(ptr %10, ptr %26)
+  call void @gm13_9797(ptr %10, ptr %26)
   %27 = load %st37, ptr %0, align 8
   %28 = extractvalue %st37 %27, 10
-  call void @gm13_9794(ptr %10, ptr %28)
+  call void @gm13_9797(ptr %10, ptr %28)
   %29 = load %st37, ptr %0, align 8
   %30 = extractvalue %st37 %29, 7
-  call void @gm13_9794(ptr %10, ptr %30)
+  call void @gm13_9797(ptr %10, ptr %30)
   %31 = load %st37, ptr %0, align 8
   %32 = extractvalue %st37 %31, 7
   %33 = load %gs118, ptr %10, align 8
@@ -35243,7 +35212,7 @@ body0:                                            ; preds = %entry
   store i64 %22, ptr %10, align 4
   %23 = load i64, ptr %10, align 4
   %24 = load %st37, ptr %0, align 8
-  %25 = extractvalue %st37 %24, 27
+  %25 = extractvalue %st37 %24, 29
   %26 = call i64 @gm11_4725(%gs14 %25)
   %27 = icmp ult i64 %23, %26
   br i1 %27, label %then, label %endif
@@ -35252,7 +35221,7 @@ then:                                             ; preds = %body0
   %28 = load ptr, ptr %6, align 8
   %29 = load ptr, ptr %7, align 8
   %30 = load %st37, ptr %0, align 8
-  %31 = extractvalue %st37 %30, 27
+  %31 = extractvalue %st37 %30, 31
   %32 = load i64, ptr %10, align 4
   %33 = call i64 @gm23_6468(%gs14 %31, i64 %32)
   %34 = call ptr @pf1403(ptr %0, ptr %1, ptr %28, ptr %29, i64 %33)
@@ -35907,11 +35876,11 @@ while.body:                                       ; preds = %while.cond
   call void @plew_rawbuf_retain(ptr %26)
   %27 = load %gs94, ptr %5, align 8
   %28 = load i64, ptr %9, align 4
-  %29 = call %st76 @gm23_42887(%gs94 %27, i64 %28)
+  %29 = call %st76 @gm23_42976(%gs94 %27, i64 %28)
   %30 = extractvalue %st76 %29, 0
   %31 = load %gs94, ptr %5, align 8
   %32 = load i64, ptr %9, align 4
-  %33 = call %st76 @gm23_42887(%gs94 %31, i64 %32)
+  %33 = call %st76 @gm23_42976(%gs94 %31, i64 %32)
   %34 = extractvalue %st76 %33, 1
   %35 = call i1 @pf638(%gs0 %25, i64 %30, i64 %34, %st27 { ptr getelementptr ([30 x i8], ptr @str.198, i64 0, i64 24) })
   %36 = icmp ne i1 %35, false
@@ -35930,7 +35899,7 @@ while.end:                                        ; preds = %while.cond
 then:                                             ; preds = %while.body
   %43 = load %gs94, ptr %5, align 8
   %44 = load i64, ptr %9, align 4
-  %45 = call %st76 @gm23_42887(%gs94 %43, i64 %44)
+  %45 = call %st76 @gm23_42976(%gs94 %43, i64 %44)
   %46 = extractvalue %st76 %45, 2
   store i64 %46, ptr %8, align 4
   %47 = load %gs94, ptr %5, align 8
@@ -36061,7 +36030,7 @@ then:                                             ; preds = %body0
   %68 = load ptr, ptr %16, align 8
   call void @gm13_1696(ptr %12, ptr %68)
   %69 = load ptr, ptr %17, align 8
-  call void @gm13_10874(ptr %13, ptr %69)
+  call void @gm13_10877(ptr %13, ptr %69)
   %70 = load %st37, ptr %0, align 8
   %71 = extractvalue %st37 %70, 2
   %72 = load ptr, ptr %11, align 8
@@ -36100,7 +36069,7 @@ endif:                                            ; preds = %then, %body0
 
 then1:                                            ; preds = %endif
   %93 = load %gs38, ptr %12, align 8
-  %94 = call i64 @gm11_9949(%gs38 %93)
+  %94 = call i64 @gm11_9952(%gs38 %93)
   %95 = icmp ugt i64 %94, 0
   br i1 %95, label %then3, label %endif4
 
@@ -36112,14 +36081,14 @@ endif2:                                           ; preds = %endif4, %endif
   %99 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 20
   store i1 false, ptr %99, align 1
   %100 = load %gs38, ptr %12, align 8
-  %101 = call i64 @gm11_9949(%gs38 %100)
+  %101 = call i64 @gm11_9952(%gs38 %100)
   %102 = icmp eq i64 %101, 0
   br i1 %102, label %then5, label %endif6
 
 then3:                                            ; preds = %then1
   %103 = load ptr, ptr %20, align 8
   %104 = load %gs38, ptr %12, align 8
-  %105 = call ptr @gm23_9949(%gs38 %104, i64 0)
+  %105 = call ptr @gm23_9952(%gs38 %104, i64 0)
   %106 = call ptr @LLVMTypeOf(ptr %105)
   %107 = call ptr @pf1367(ptr %0, ptr %103, ptr %106, i1 false)
   store ptr %107, ptr %20, align 8
@@ -36129,7 +36098,7 @@ endif4:                                           ; preds = %then3, %then1
   %108 = load ptr, ptr %20, align 8
   call void @gm13_1696(ptr %12, ptr %108)
   %109 = load ptr, ptr %21, align 8
-  call void @gm13_10874(ptr %13, ptr %109)
+  call void @gm13_10877(ptr %13, ptr %109)
   %110 = load %st37, ptr %0, align 8
   %111 = extractvalue %st37 %110, 2
   %112 = load ptr, ptr %11, align 8
@@ -36169,7 +36138,7 @@ endif6:                                           ; preds = %endif2
   %137 = load %st37, ptr %0, align 8
   %138 = extractvalue %st37 %137, 2
   %139 = load %gs38, ptr %12, align 8
-  %140 = call ptr @gm23_9949(%gs38 %139, i64 0)
+  %140 = call ptr @gm23_9952(%gs38 %139, i64 0)
   %141 = call ptr @LLVMTypeOf(ptr %140)
   %142 = call ptr @pf478()
   %143 = call ptr @LLVMBuildPhi(ptr %138, ptr %141, ptr %142)
@@ -36180,7 +36149,7 @@ endif6:                                           ; preds = %endif2
   %147 = load %gs130, ptr %13, align 8
   %148 = extractvalue %gs130 %147, 0
   %149 = load %gs38, ptr %12, align 8
-  %150 = call i64 @gm11_9949(%gs38 %149)
+  %150 = call i64 @gm11_9952(%gs38 %149)
   call void @LLVMAddIncoming(ptr %144, ptr %146, ptr %148, i64 %150)
   %151 = load ptr, ptr %22, align 8
   %152 = load ptr, ptr %21, align 8
@@ -36290,7 +36259,7 @@ endif:                                            ; preds = %body0
   %70 = load %st37, ptr %0, align 8
   %71 = extractvalue %st37 %70, 33
   %72 = load i64, ptr %9, align 4
-  %73 = call ptr @gm23_1561(%gs118 %71, i64 %72)
+  %73 = call ptr @gm23_1565(%gs118 %71, i64 %72)
   store ptr %73, ptr %11, align 8
   %74 = load %st32, ptr %1, align 8
   %75 = extractvalue %st32 %74, 0
@@ -36529,7 +36498,7 @@ endif8:                                           ; preds = %endif6
   %246 = load %st37, ptr %0, align 8
   %247 = extractvalue %st37 %246, 33
   %248 = load i64, ptr %26, align 4
-  %249 = call ptr @gm23_1561(%gs118 %247, i64 %248)
+  %249 = call ptr @gm23_1565(%gs118 %247, i64 %248)
   store ptr %249, ptr %28, align 8
   %250 = load i64, ptr %5, align 4
   %251 = call ptr @pf1426(ptr %0, ptr %1, i64 %250)
@@ -36910,7 +36879,7 @@ endif4:                                           ; preds = %endif2
   %84 = load %st37, ptr %0, align 8
   %85 = extractvalue %st37 %84, 33
   %86 = load i64, ptr %5, align 4
-  %87 = call ptr @gm23_1561(%gs118 %85, i64 %86)
+  %87 = call ptr @gm23_1565(%gs118 %85, i64 %86)
   store ptr %87, ptr %8, align 8
   %88 = load %st37, ptr %0, align 8
   %89 = extractvalue %st37 %88, 34
@@ -36920,7 +36889,7 @@ endif4:                                           ; preds = %endif2
   %92 = load %st37, ptr %0, align 8
   %93 = extractvalue %st37 %92, 33
   %94 = load i64, ptr %6, align 4
-  %95 = call ptr @gm23_1561(%gs118 %93, i64 %94)
+  %95 = call ptr @gm23_1565(%gs118 %93, i64 %94)
   store ptr %95, ptr %10, align 8
   %96 = load %st32, ptr %1, align 8
   %97 = extractvalue %st32 %96, 0
@@ -37181,15 +37150,15 @@ then17:                                           ; preds = %endif16
   %273 = load %st37, ptr %0, align 8
   %274 = extractvalue %st37 %273, 43
   %275 = load i64, ptr %32, align 4
-  %276 = call ptr @gm23_1561(%gs118 %274, i64 %275)
+  %276 = call ptr @gm23_1565(%gs118 %274, i64 %275)
   %277 = load %st37, ptr %0, align 8
   %278 = extractvalue %st37 %277, 42
   %279 = load i64, ptr %32, align 4
-  %280 = call ptr @gm23_9949(%gs38 %278, i64 %279)
+  %280 = call ptr @gm23_9952(%gs38 %278, i64 %279)
   %281 = load %gs38, ptr %33, align 8
   %282 = extractvalue %gs38 %281, 0
   %283 = load %gs38, ptr %33, align 8
-  %284 = call i64 @gm11_9949(%gs38 %283)
+  %284 = call i64 @gm11_9952(%gs38 %283)
   %285 = call ptr @pf478()
   %286 = call ptr @LLVMBuildCall2(ptr %272, ptr %276, ptr %280, ptr %282, i64 %284, ptr %285)
   store ptr %286, ptr %28, align 8
@@ -37454,10 +37423,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %6, align 8
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 7
-  call void @gm13_9794(ptr %6, ptr %11)
+  call void @gm13_9797(ptr %6, ptr %11)
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 7
-  call void @gm13_9794(ptr %6, ptr %13)
+  call void @gm13_9797(ptr %6, ptr %13)
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 10
   %16 = load %gs118, ptr %6, align 8
@@ -37507,7 +37476,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 7
   %12 = load %gs118, ptr %4, align 8
@@ -37555,7 +37524,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 7
   %12 = load %gs118, ptr %4, align 8
@@ -37605,10 +37574,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %6, align 8
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 10
-  call void @gm13_9794(ptr %6, ptr %11)
+  call void @gm13_9797(ptr %6, ptr %11)
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 7
-  call void @gm13_9794(ptr %6, ptr %13)
+  call void @gm13_9797(ptr %6, ptr %13)
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 9
   %16 = load %gs118, ptr %6, align 8
@@ -37666,19 +37635,19 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %12, align 8
   %16 = load %st37, ptr %0, align 8
   %17 = extractvalue %st37 %16, 10
-  call void @gm13_9794(ptr %12, ptr %17)
+  call void @gm13_9797(ptr %12, ptr %17)
   %18 = load %st37, ptr %0, align 8
   %19 = extractvalue %st37 %18, 7
-  call void @gm13_9794(ptr %12, ptr %19)
+  call void @gm13_9797(ptr %12, ptr %19)
   %20 = load %st37, ptr %0, align 8
   %21 = extractvalue %st37 %20, 7
-  call void @gm13_9794(ptr %12, ptr %21)
+  call void @gm13_9797(ptr %12, ptr %21)
   %22 = load %st37, ptr %0, align 8
   %23 = extractvalue %st37 %22, 7
-  call void @gm13_9794(ptr %12, ptr %23)
+  call void @gm13_9797(ptr %12, ptr %23)
   %24 = load %st37, ptr %0, align 8
   %25 = extractvalue %st37 %24, 7
-  call void @gm13_9794(ptr %12, ptr %25)
+  call void @gm13_9797(ptr %12, ptr %25)
   %26 = load %st37, ptr %0, align 8
   %27 = extractvalue %st37 %26, 9
   %28 = load %gs118, ptr %12, align 8
@@ -37738,13 +37707,13 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %8, align 8
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 10
-  call void @gm13_9794(ptr %8, ptr %13)
+  call void @gm13_9797(ptr %8, ptr %13)
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 7
-  call void @gm13_9794(ptr %8, ptr %15)
+  call void @gm13_9797(ptr %8, ptr %15)
   %16 = load %st37, ptr %0, align 8
   %17 = extractvalue %st37 %16, 7
-  call void @gm13_9794(ptr %8, ptr %17)
+  call void @gm13_9797(ptr %8, ptr %17)
   %18 = load %st37, ptr %0, align 8
   %19 = extractvalue %st37 %18, 10
   %20 = load %gs118, ptr %8, align 8
@@ -37801,13 +37770,13 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %8, align 8
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 10
-  call void @gm13_9794(ptr %8, ptr %13)
+  call void @gm13_9797(ptr %8, ptr %13)
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 7
-  call void @gm13_9794(ptr %8, ptr %15)
+  call void @gm13_9797(ptr %8, ptr %15)
   %16 = load %st37, ptr %0, align 8
   %17 = extractvalue %st37 %16, 7
-  call void @gm13_9794(ptr %8, ptr %17)
+  call void @gm13_9797(ptr %8, ptr %17)
   %18 = load %st37, ptr %0, align 8
   %19 = extractvalue %st37 %18, 10
   %20 = load %gs118, ptr %8, align 8
@@ -37935,13 +37904,13 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %10, align 8
   %20 = load %st37, ptr %0, align 8
   %21 = extractvalue %st37 %20, 10
-  call void @gm13_9794(ptr %10, ptr %21)
+  call void @gm13_9797(ptr %10, ptr %21)
   %22 = load %st37, ptr %0, align 8
   %23 = extractvalue %st37 %22, 7
-  call void @gm13_9794(ptr %10, ptr %23)
+  call void @gm13_9797(ptr %10, ptr %23)
   %24 = load %st37, ptr %0, align 8
   %25 = extractvalue %st37 %24, 7
-  call void @gm13_9794(ptr %10, ptr %25)
+  call void @gm13_9797(ptr %10, ptr %25)
   %26 = load %st37, ptr %0, align 8
   %27 = extractvalue %st37 %26, 10
   %28 = load %gs118, ptr %10, align 8
@@ -38030,9 +37999,9 @@ body0:                                            ; preds = %entry
   store ptr %2, ptr %4, align 8
   store i64 %3, ptr %5, align 4
   %8 = load i64, ptr %5, align 4
-  %9 = call i64 @pf1605(ptr %0, i64 %8)
+  %9 = call i64 @pf1605(ptr %0, ptr %1, i64 %8)
   %10 = load %st37, ptr %0, align 8
-  %11 = extractvalue %st37 %10, 27
+  %11 = extractvalue %st37 %10, 29
   %12 = call i64 @gm11_4725(%gs14 %11)
   %13 = icmp ult i64 %9, %12
   br i1 %13, label %then, label %endif
@@ -38050,11 +38019,11 @@ then:                                             ; preds = %body0
   %19 = load %st37, ptr %0, align 8
   %20 = extractvalue %st37 %19, 97
   %21 = load i64, ptr %6, align 4
-  %22 = call ptr @gm23_1561(%gs118 %20, i64 %21)
+  %22 = call ptr @gm23_1565(%gs118 %20, i64 %21)
   %23 = load %st37, ptr %0, align 8
   %24 = extractvalue %st37 %23, 96
   %25 = load i64, ptr %6, align 4
-  %26 = call ptr @gm23_9949(%gs38 %24, i64 %25)
+  %26 = call ptr @gm23_9952(%gs38 %24, i64 %25)
   %27 = load %gs38, ptr %7, align 8
   %28 = extractvalue %gs38 %27, 0
   %29 = call ptr @pf478()
@@ -38102,17 +38071,17 @@ then:                                             ; preds = %body0
 
 endif:                                            ; preds = %body0
   %19 = load i64, ptr %3, align 4
-  %20 = call i64 @pf1605(ptr %0, i64 %19)
+  %20 = call i64 @pf1605(ptr %0, ptr %1, i64 %19)
   store i64 %20, ptr %5, align 4
   %21 = load %st37, ptr %0, align 8
-  %22 = extractvalue %st37 %21, 28
+  %22 = extractvalue %st37 %21, 30
   %23 = load i64, ptr %5, align 4
-  %24 = call ptr @gm23_1561(%gs118 %22, i64 %23)
+  %24 = call ptr @gm23_1565(%gs118 %22, i64 %23)
   store ptr %24, ptr %6, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %7, align 8
   %25 = load ptr, ptr %6, align 8
-  call void @gm13_9794(ptr %7, ptr %25)
+  call void @gm13_9797(ptr %7, ptr %25)
   %26 = load ptr, ptr %6, align 8
   %27 = load %gs118, ptr %7, align 8
   %28 = extractvalue %gs118 %27, 0
@@ -38140,7 +38109,7 @@ endif:                                            ; preds = %body0
   call void @gm13_1696(ptr %40, ptr %41)
   %42 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 97
   %43 = load ptr, ptr %8, align 8
-  call void @gm13_9794(ptr %42, ptr %43)
+  call void @gm13_9797(ptr %42, ptr %43)
   %44 = load %st37, ptr %0, align 8
   %45 = extractvalue %st37 %44, 95
   %46 = call i64 @gm11_4725(%gs14 %45)
@@ -38189,7 +38158,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 9
   %12 = load %gs118, ptr %4, align 8
@@ -38237,7 +38206,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 7
   %12 = load %gs118, ptr %4, align 8
@@ -38285,7 +38254,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 9
   %12 = load %gs118, ptr %4, align 8
@@ -38333,7 +38302,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 9
   %12 = load %gs118, ptr %4, align 8
@@ -38381,7 +38350,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 10
   %12 = load %gs118, ptr %4, align 8
@@ -38429,7 +38398,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 10
   %12 = load %gs118, ptr %4, align 8
@@ -38477,7 +38446,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 7
   %12 = load %gs118, ptr %4, align 8
@@ -38525,7 +38494,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 9
   %12 = load %gs118, ptr %4, align 8
@@ -38739,13 +38708,13 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %10, align 8
   %22 = load %st37, ptr %0, align 8
   %23 = extractvalue %st37 %22, 10
-  call void @gm13_9794(ptr %10, ptr %23)
+  call void @gm13_9797(ptr %10, ptr %23)
   %24 = load %st37, ptr %0, align 8
   %25 = extractvalue %st37 %24, 7
-  call void @gm13_9794(ptr %10, ptr %25)
+  call void @gm13_9797(ptr %10, ptr %25)
   %26 = load %st37, ptr %0, align 8
   %27 = extractvalue %st37 %26, 7
-  call void @gm13_9794(ptr %10, ptr %27)
+  call void @gm13_9797(ptr %10, ptr %27)
   %28 = load %st37, ptr %0, align 8
   %29 = extractvalue %st37 %28, 10
   %30 = load %gs118, ptr %10, align 8
@@ -38862,7 +38831,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 10
-  call void @gm13_9794(ptr %4, ptr %9)
+  call void @gm13_9797(ptr %4, ptr %9)
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 9
   %12 = load %gs118, ptr %4, align 8
@@ -38907,9 +38876,9 @@ body0:                                            ; preds = %entry
   store ptr %2, ptr %4, align 8
   store i64 %3, ptr %5, align 4
   %8 = load i64, ptr %5, align 4
-  %9 = call i64 @pf1605(ptr %0, i64 %8)
+  %9 = call i64 @pf1605(ptr %0, ptr %1, i64 %8)
   %10 = load %st37, ptr %0, align 8
-  %11 = extractvalue %st37 %10, 27
+  %11 = extractvalue %st37 %10, 29
   %12 = call i64 @gm11_4725(%gs14 %11)
   %13 = icmp ult i64 %9, %12
   br i1 %13, label %then, label %endif
@@ -38927,11 +38896,11 @@ then:                                             ; preds = %body0
   %19 = load %st37, ptr %0, align 8
   %20 = extractvalue %st37 %19, 94
   %21 = load i64, ptr %6, align 4
-  %22 = call ptr @gm23_1561(%gs118 %20, i64 %21)
+  %22 = call ptr @gm23_1565(%gs118 %20, i64 %21)
   %23 = load %st37, ptr %0, align 8
   %24 = extractvalue %st37 %23, 93
   %25 = load i64, ptr %6, align 4
-  %26 = call ptr @gm23_9949(%gs38 %24, i64 %25)
+  %26 = call ptr @gm23_9952(%gs38 %24, i64 %25)
   %27 = load %gs38, ptr %7, align 8
   %28 = extractvalue %gs38 %27, 0
   %29 = call ptr @pf478()
@@ -39181,15 +39150,15 @@ then:                                             ; preds = %body0
 
 endif:                                            ; preds = %body0
   %18 = load i64, ptr %3, align 4
-  %19 = call i64 @pf1605(ptr %0, i64 %18)
+  %19 = call i64 @pf1605(ptr %0, ptr %1, i64 %18)
   store i64 %19, ptr %5, align 4
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %6, align 8
   %20 = load %st37, ptr %0, align 8
-  %21 = extractvalue %st37 %20, 28
+  %21 = extractvalue %st37 %20, 30
   %22 = load i64, ptr %5, align 4
-  %23 = call ptr @gm23_1561(%gs118 %21, i64 %22)
-  call void @gm13_9794(ptr %6, ptr %23)
+  %23 = call ptr @gm23_1565(%gs118 %21, i64 %22)
+  call void @gm13_9797(ptr %6, ptr %23)
   %24 = load %st37, ptr %0, align 8
   %25 = extractvalue %st37 %24, 9
   %26 = load %gs118, ptr %6, align 8
@@ -39218,7 +39187,7 @@ endif:                                            ; preds = %body0
   call void @gm13_1696(ptr %39, ptr %40)
   %41 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 94
   %42 = load ptr, ptr %7, align 8
-  call void @gm13_9794(ptr %41, ptr %42)
+  call void @gm13_9797(ptr %41, ptr %42)
   %43 = load %st37, ptr %0, align 8
   %44 = extractvalue %st37 %43, 92
   %45 = call i64 @gm11_4725(%gs14 %44)
@@ -39710,10 +39679,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %6, align 8
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 7
-  call void @gm13_9794(ptr %6, ptr %11)
+  call void @gm13_9797(ptr %6, ptr %11)
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 7
-  call void @gm13_9794(ptr %6, ptr %13)
+  call void @gm13_9797(ptr %6, ptr %13)
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 9
   %16 = load %gs118, ptr %6, align 8
@@ -40141,13 +40110,13 @@ endif:                                            ; preds = %body0
   store %gs118 zeroinitializer, ptr %10, align 8
   %36 = load %st37, ptr %0, align 8
   %37 = extractvalue %st37 %36, 10
-  call void @gm13_9794(ptr %10, ptr %37)
+  call void @gm13_9797(ptr %10, ptr %37)
   %38 = load %st37, ptr %0, align 8
   %39 = extractvalue %st37 %38, 7
-  call void @gm13_9794(ptr %10, ptr %39)
+  call void @gm13_9797(ptr %10, ptr %39)
   %40 = load %st37, ptr %0, align 8
   %41 = extractvalue %st37 %40, 7
-  call void @gm13_9794(ptr %10, ptr %41)
+  call void @gm13_9797(ptr %10, ptr %41)
   %42 = load %st37, ptr %0, align 8
   %43 = extractvalue %st37 %42, 10
   %44 = load %gs118, ptr %10, align 8
@@ -40999,16 +40968,16 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %12, align 8
   %39 = load %st37, ptr %0, align 8
   %40 = extractvalue %st37 %39, 10
-  call void @gm13_9794(ptr %12, ptr %40)
+  call void @gm13_9797(ptr %12, ptr %40)
   %41 = load %st37, ptr %0, align 8
   %42 = extractvalue %st37 %41, 7
-  call void @gm13_9794(ptr %12, ptr %42)
+  call void @gm13_9797(ptr %12, ptr %42)
   %43 = load %st37, ptr %0, align 8
   %44 = extractvalue %st37 %43, 10
-  call void @gm13_9794(ptr %12, ptr %44)
+  call void @gm13_9797(ptr %12, ptr %44)
   %45 = load %st37, ptr %0, align 8
   %46 = extractvalue %st37 %45, 7
-  call void @gm13_9794(ptr %12, ptr %46)
+  call void @gm13_9797(ptr %12, ptr %46)
   %47 = load %st37, ptr %0, align 8
   %48 = extractvalue %st37 %47, 7
   %49 = load %gs118, ptr %12, align 8
@@ -41393,9 +41362,9 @@ endif2:                                           ; preds = %then1, %endif
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs130 zeroinitializer, ptr %17, align 8
   %81 = load ptr, ptr %9, align 8
-  call void @gm13_10874(ptr %17, ptr %81)
+  call void @gm13_10877(ptr %17, ptr %81)
   %82 = load ptr, ptr %13, align 8
-  call void @gm13_10874(ptr %17, ptr %82)
+  call void @gm13_10877(ptr %17, ptr %82)
   %83 = load ptr, ptr %14, align 8
   %84 = load %gs38, ptr %16, align 8
   %85 = extractvalue %gs38 %84, 0
@@ -41724,7 +41693,7 @@ while.end:                                        ; preds = %while.cond
   %80 = load %st37, ptr %0, align 8
   %81 = extractvalue %st37 %80, 30
   %82 = load i64, ptr %8, align 4
-  %83 = call ptr @gm23_1561(%gs118 %81, i64 %82)
+  %83 = call ptr @gm23_1565(%gs118 %81, i64 %82)
   %84 = load %gs94, ptr %10, align 8
   %85 = extractvalue %gs94 %84, 0
   call void @plew_rawbuf_retain(ptr %85)
@@ -41941,15 +41910,15 @@ while.end:                                        ; preds = %while.cond
   %94 = load %st37, ptr %0, align 8
   %95 = extractvalue %st37 %94, 43
   %96 = load i64, ptr %10, align 4
-  %97 = call ptr @gm23_1561(%gs118 %95, i64 %96)
+  %97 = call ptr @gm23_1565(%gs118 %95, i64 %96)
   %98 = load %st37, ptr %0, align 8
   %99 = extractvalue %st37 %98, 42
   %100 = load i64, ptr %10, align 4
-  %101 = call ptr @gm23_9949(%gs38 %99, i64 %100)
+  %101 = call ptr @gm23_9952(%gs38 %99, i64 %100)
   %102 = load %gs38, ptr %12, align 8
   %103 = extractvalue %gs38 %102, 0
   %104 = load %gs38, ptr %12, align 8
-  %105 = call i64 @gm11_9949(%gs38 %104)
+  %105 = call i64 @gm11_9952(%gs38 %104)
   %106 = call ptr @pf478()
   %107 = call ptr @LLVMBuildCall2(ptr %93, ptr %97, ptr %101, ptr %103, i64 %105, ptr %106)
   %108 = load i64, ptr %13, align 4
@@ -42563,7 +42532,7 @@ then45:                                           ; preds = %endif40
   store %gs118 zeroinitializer, ptr %10, align 8
   %425 = load %st37, ptr %0, align 8
   %426 = extractvalue %st37 %425, 7
-  call void @gm13_9794(ptr %10, ptr %426)
+  call void @gm13_9797(ptr %10, ptr %426)
   %427 = load %st37, ptr %0, align 8
   %428 = extractvalue %st37 %427, 10
   %429 = load %gs118, ptr %10, align 8
@@ -42657,7 +42626,7 @@ then51:                                           ; preds = %endif50
   store %gs118 zeroinitializer, ptr %14, align 8
   %488 = load %st37, ptr %0, align 8
   %489 = extractvalue %st37 %488, 4
-  call void @gm13_9794(ptr %14, ptr %489)
+  call void @gm13_9797(ptr %14, ptr %489)
   %490 = load %st37, ptr %0, align 8
   %491 = extractvalue %st37 %490, 9
   %492 = load %gs118, ptr %14, align 8
@@ -42758,7 +42727,7 @@ then55:                                           ; preds = %endif54
   store %gs118 zeroinitializer, ptr %22, align 8
   %557 = load %st37, ptr %0, align 8
   %558 = extractvalue %st37 %557, 7
-  call void @gm13_9794(ptr %22, ptr %558)
+  call void @gm13_9797(ptr %22, ptr %558)
   %559 = call ptr @pf1308(ptr %0, ptr %1)
   %560 = load %gs118, ptr %22, align 8
   %561 = extractvalue %gs118 %560, 0
@@ -43302,10 +43271,10 @@ then93:                                           ; preds = %endif92
   store %gs118 zeroinitializer, ptr %39, align 8
   %933 = load %st37, ptr %0, align 8
   %934 = extractvalue %st37 %933, 10
-  call void @gm13_9794(ptr %39, ptr %934)
+  call void @gm13_9797(ptr %39, ptr %934)
   %935 = load %st37, ptr %0, align 8
   %936 = extractvalue %st37 %935, 7
-  call void @gm13_9794(ptr %39, ptr %936)
+  call void @gm13_9797(ptr %39, ptr %936)
   %937 = load %st37, ptr %0, align 8
   %938 = extractvalue %st37 %937, 10
   %939 = load %gs118, ptr %39, align 8
@@ -43365,7 +43334,7 @@ then95:                                           ; preds = %endif94
   store %gs118 zeroinitializer, ptr %44, align 8
   %976 = load %st37, ptr %0, align 8
   %977 = extractvalue %st37 %976, 10
-  call void @gm13_9794(ptr %44, ptr %977)
+  call void @gm13_9797(ptr %44, ptr %977)
   %978 = call ptr @pf1308(ptr %0, ptr %1)
   %979 = load %gs118, ptr %44, align 8
   %980 = extractvalue %gs118 %979, 0
@@ -43503,7 +43472,7 @@ then102:                                          ; preds = %endif100
   store %gs118 zeroinitializer, ptr %53, align 8
   %1065 = load %st37, ptr %0, align 8
   %1066 = extractvalue %st37 %1065, 8
-  call void @gm13_9794(ptr %53, ptr %1066)
+  call void @gm13_9797(ptr %53, ptr %1066)
   %1067 = call ptr @pf1308(ptr %0, ptr %1)
   %1068 = load %gs118, ptr %53, align 8
   %1069 = extractvalue %gs118 %1068, 0
@@ -43626,10 +43595,10 @@ then106:                                          ; preds = %endif105
   store %gs118 zeroinitializer, ptr %64, align 8
   %1152 = load %st37, ptr %0, align 8
   %1153 = extractvalue %st37 %1152, 10
-  call void @gm13_9794(ptr %64, ptr %1153)
+  call void @gm13_9797(ptr %64, ptr %1153)
   %1154 = load %st37, ptr %0, align 8
   %1155 = extractvalue %st37 %1154, 7
-  call void @gm13_9794(ptr %64, ptr %1155)
+  call void @gm13_9797(ptr %64, ptr %1155)
   %1156 = load %st37, ptr %0, align 8
   %1157 = extractvalue %st37 %1156, 9
   %1158 = load %gs118, ptr %64, align 8
@@ -43724,7 +43693,7 @@ then110:                                          ; preds = %endif107
   store %gs118 zeroinitializer, ptr %69, align 8
   %1218 = load %st37, ptr %0, align 8
   %1219 = extractvalue %st37 %1218, 7
-  call void @gm13_9794(ptr %69, ptr %1219)
+  call void @gm13_9797(ptr %69, ptr %1219)
   %1220 = load %st37, ptr %0, align 8
   %1221 = extractvalue %st37 %1220, 9
   %1222 = load %gs118, ptr %69, align 8
@@ -43907,15 +43876,15 @@ while.end122:                                     ; preds = %while.cond120
   %1331 = load %st37, ptr %0, align 8
   %1332 = extractvalue %st37 %1331, 43
   %1333 = load i64, ptr %74, align 4
-  %1334 = call ptr @gm23_1561(%gs118 %1332, i64 %1333)
+  %1334 = call ptr @gm23_1565(%gs118 %1332, i64 %1333)
   %1335 = load %st37, ptr %0, align 8
   %1336 = extractvalue %st37 %1335, 42
   %1337 = load i64, ptr %74, align 4
-  %1338 = call ptr @gm23_9949(%gs38 %1336, i64 %1337)
+  %1338 = call ptr @gm23_9952(%gs38 %1336, i64 %1337)
   %1339 = load %gs38, ptr %76, align 8
   %1340 = extractvalue %gs38 %1339, 0
   %1341 = load %gs38, ptr %76, align 8
-  %1342 = call i64 @gm11_9949(%gs38 %1341)
+  %1342 = call i64 @gm11_9952(%gs38 %1341)
   %1343 = call ptr @pf478()
   %1344 = call ptr @LLVMBuildCall2(ptr %1330, ptr %1334, ptr %1338, ptr %1340, i64 %1342, ptr %1343)
   %1345 = load i64, ptr %78, align 4
@@ -44078,15 +44047,15 @@ while.end132:                                     ; preds = %while.cond130
   %1440 = load %st37, ptr %0, align 8
   %1441 = extractvalue %st37 %1440, 46
   %1442 = load i64, ptr %80, align 4
-  %1443 = call ptr @gm23_1561(%gs118 %1441, i64 %1442)
+  %1443 = call ptr @gm23_1565(%gs118 %1441, i64 %1442)
   %1444 = load %st37, ptr %0, align 8
   %1445 = extractvalue %st37 %1444, 45
   %1446 = load i64, ptr %80, align 4
-  %1447 = call ptr @gm23_9949(%gs38 %1445, i64 %1446)
+  %1447 = call ptr @gm23_9952(%gs38 %1445, i64 %1446)
   %1448 = load %gs38, ptr %84, align 8
   %1449 = extractvalue %gs38 %1448, 0
   %1450 = load %gs38, ptr %84, align 8
-  %1451 = call i64 @gm11_9949(%gs38 %1450)
+  %1451 = call i64 @gm11_9952(%gs38 %1450)
   %1452 = call ptr @pf478()
   %1453 = call ptr @LLVMBuildCall2(ptr %1439, ptr %1443, ptr %1447, ptr %1449, i64 %1451, ptr %1452)
   %1454 = load i64, ptr %86, align 4
@@ -44168,7 +44137,7 @@ while.body138:                                    ; preds = %while.cond137
   %1501 = call %st82 @gm23_6496(%gs22 %1499, i64 %1500)
   %1502 = extractvalue %st82 %1501, 4
   %1503 = call ptr @pf1521(ptr %0, ptr %1, i64 %1497, i64 %1502)
-  call void @gm13_9794(ptr %88, ptr %1503)
+  call void @gm13_9797(ptr %88, ptr %1503)
   %1504 = load i64, ptr %89, align 4
   %1505 = call i64 @plew_u64Add(i64 %1504, i64 1)
   store i64 %1505, ptr %89, align 4
@@ -44197,7 +44166,7 @@ endif141:                                         ; preds = %then140, %while.end
   %1517 = load %gs118, ptr %88, align 8
   %1518 = extractvalue %gs118 %1517, 0
   %1519 = load %gs118, ptr %88, align 8
-  %1520 = call i64 @gm11_11923(%gs118 %1519)
+  %1520 = call i64 @gm11_11926(%gs118 %1519)
   %1521 = call ptr @LLVMFunctionType(ptr %1516, ptr %1518, i64 %1520, i32 0)
   store ptr %1521, ptr %91, align 8
   %1522 = load %st95, ptr %87, align 8
@@ -44239,7 +44208,7 @@ then145:                                          ; preds = %while.body143
   %1542 = load %st37, ptr %0, align 8
   %1543 = extractvalue %st37 %1542, 80
   %1544 = load i64, ptr %95, align 4
-  %1545 = call ptr @gm23_9949(%gs38 %1543, i64 %1544)
+  %1545 = call ptr @gm23_9952(%gs38 %1543, i64 %1544)
   store ptr %1545, ptr %93, align 8
   store i1 true, ptr %94, align 1
   %1546 = load %st37, ptr %0, align 8
@@ -44306,7 +44275,7 @@ while.end152:                                     ; preds = %while.cond150
   call void @gm13_1696(ptr %1571, ptr %1572)
   %1573 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 81
   %1574 = load ptr, ptr %91, align 8
-  call void @gm13_9794(ptr %1573, ptr %1574)
+  call void @gm13_9797(ptr %1573, ptr %1574)
   %1575 = load i64, ptr %97, align 4
   %1576 = load %gs0, ptr %96, align 8
   %1577 = extractvalue %gs0 %1576, 0
@@ -44340,7 +44309,7 @@ while.end155:                                     ; preds = %while.cond153
   %1593 = load %gs38, ptr %98, align 8
   %1594 = extractvalue %gs38 %1593, 0
   %1595 = load %gs38, ptr %98, align 8
-  %1596 = call i64 @gm11_9949(%gs38 %1595)
+  %1596 = call i64 @gm11_9952(%gs38 %1595)
   %1597 = call ptr @pf478()
   %1598 = call ptr @LLVMBuildCall2(ptr %1590, ptr %1591, ptr %1592, ptr %1594, i64 %1596, ptr %1597)
   store ptr %1598, ptr %100, align 8
@@ -45058,15 +45027,15 @@ while.end19:                                      ; preds = %while.cond17
   %253 = load %st37, ptr %0, align 8
   %254 = extractvalue %st37 %253, 46
   %255 = load i64, ptr %15, align 4
-  %256 = call ptr @gm23_1561(%gs118 %254, i64 %255)
+  %256 = call ptr @gm23_1565(%gs118 %254, i64 %255)
   %257 = load %st37, ptr %0, align 8
   %258 = extractvalue %st37 %257, 45
   %259 = load i64, ptr %15, align 4
-  %260 = call ptr @gm23_9949(%gs38 %258, i64 %259)
+  %260 = call ptr @gm23_9952(%gs38 %258, i64 %259)
   %261 = load %gs38, ptr %19, align 8
   %262 = extractvalue %gs38 %261, 0
   %263 = load %gs38, ptr %19, align 8
-  %264 = call i64 @gm11_9949(%gs38 %263)
+  %264 = call i64 @gm11_9952(%gs38 %263)
   %265 = call ptr @pf478()
   %266 = call ptr @LLVMBuildCall2(ptr %252, ptr %256, ptr %260, ptr %262, i64 %264, ptr %265)
   %267 = load i64, ptr %21, align 4
@@ -45191,15 +45160,15 @@ while.end29:                                      ; preds = %while.cond27
   %337 = load %st37, ptr %0, align 8
   %338 = extractvalue %st37 %337, 43
   %339 = load i64, ptr %22, align 4
-  %340 = call ptr @gm23_1561(%gs118 %338, i64 %339)
+  %340 = call ptr @gm23_1565(%gs118 %338, i64 %339)
   %341 = load %st37, ptr %0, align 8
   %342 = extractvalue %st37 %341, 42
   %343 = load i64, ptr %22, align 4
-  %344 = call ptr @gm23_9949(%gs38 %342, i64 %343)
+  %344 = call ptr @gm23_9952(%gs38 %342, i64 %343)
   %345 = load %gs38, ptr %24, align 8
   %346 = extractvalue %gs38 %345, 0
   %347 = load %gs38, ptr %24, align 8
-  %348 = call i64 @gm11_9949(%gs38 %347)
+  %348 = call i64 @gm11_9952(%gs38 %347)
   %349 = call ptr @pf478()
   %350 = call ptr @LLVMBuildCall2(ptr %336, ptr %340, ptr %344, ptr %346, i64 %348, ptr %349)
   %351 = load i64, ptr %26, align 4
@@ -45381,15 +45350,15 @@ while.end46:                                      ; preds = %while.cond44
   %453 = load %st37, ptr %0, align 8
   %454 = extractvalue %st37 %453, 43
   %455 = load i64, ptr %31, align 4
-  %456 = call ptr @gm23_1561(%gs118 %454, i64 %455)
+  %456 = call ptr @gm23_1565(%gs118 %454, i64 %455)
   %457 = load %st37, ptr %0, align 8
   %458 = extractvalue %st37 %457, 42
   %459 = load i64, ptr %31, align 4
-  %460 = call ptr @gm23_9949(%gs38 %458, i64 %459)
+  %460 = call ptr @gm23_9952(%gs38 %458, i64 %459)
   %461 = load %gs38, ptr %33, align 8
   %462 = extractvalue %gs38 %461, 0
   %463 = load %gs38, ptr %33, align 8
-  %464 = call i64 @gm11_9949(%gs38 %463)
+  %464 = call i64 @gm11_9952(%gs38 %463)
   %465 = call ptr @pf478()
   %466 = call ptr @LLVMBuildCall2(ptr %452, ptr %456, ptr %460, ptr %462, i64 %464, ptr %465)
   %467 = load i64, ptr %34, align 4
@@ -45868,15 +45837,15 @@ while.end87:                                      ; preds = %while.cond85
   %753 = load %st37, ptr %0, align 8
   %754 = extractvalue %st37 %753, 43
   %755 = load i64, ptr %48, align 4
-  %756 = call ptr @gm23_1561(%gs118 %754, i64 %755)
+  %756 = call ptr @gm23_1565(%gs118 %754, i64 %755)
   %757 = load %st37, ptr %0, align 8
   %758 = extractvalue %st37 %757, 42
   %759 = load i64, ptr %48, align 4
-  %760 = call ptr @gm23_9949(%gs38 %758, i64 %759)
+  %760 = call ptr @gm23_9952(%gs38 %758, i64 %759)
   %761 = load %gs38, ptr %50, align 8
   %762 = extractvalue %gs38 %761, 0
   %763 = load %gs38, ptr %50, align 8
-  %764 = call i64 @gm11_9949(%gs38 %763)
+  %764 = call i64 @gm11_9952(%gs38 %763)
   %765 = call ptr @pf478()
   %766 = call ptr @LLVMBuildCall2(ptr %752, ptr %756, ptr %760, ptr %762, i64 %764, ptr %765)
   %767 = load i64, ptr %52, align 4
@@ -46379,15 +46348,15 @@ while.end129:                                     ; preds = %while.cond127
   %1076 = load %st37, ptr %0, align 8
   %1077 = extractvalue %st37 %1076, 43
   %1078 = load i64, ptr %63, align 4
-  %1079 = call ptr @gm23_1561(%gs118 %1077, i64 %1078)
+  %1079 = call ptr @gm23_1565(%gs118 %1077, i64 %1078)
   %1080 = load %st37, ptr %0, align 8
   %1081 = extractvalue %st37 %1080, 42
   %1082 = load i64, ptr %63, align 4
-  %1083 = call ptr @gm23_9949(%gs38 %1081, i64 %1082)
+  %1083 = call ptr @gm23_9952(%gs38 %1081, i64 %1082)
   %1084 = load %gs38, ptr %68, align 8
   %1085 = extractvalue %gs38 %1084, 0
   %1086 = load %gs38, ptr %68, align 8
-  %1087 = call i64 @gm11_9949(%gs38 %1086)
+  %1087 = call i64 @gm11_9952(%gs38 %1086)
   %1088 = call ptr @pf478()
   %1089 = call ptr @LLVMBuildCall2(ptr %1075, ptr %1079, ptr %1083, ptr %1085, i64 %1087, ptr %1088)
   %1090 = load i64, ptr %70, align 4
@@ -46455,7 +46424,7 @@ endif:                                            ; preds = %endif2, %body0
   store i64 %28, ptr %8, align 4
   %29 = load i64, ptr %8, align 4
   %30 = load %st37, ptr %0, align 8
-  %31 = extractvalue %st37 %30, 27
+  %31 = extractvalue %st37 %30, 29
   %32 = call i64 @gm11_4725(%gs14 %31)
   %33 = icmp ult i64 %29, %32
   br i1 %33, label %then5, label %endif6
@@ -46478,7 +46447,7 @@ then3:                                            ; preds = %then1
   %41 = load %st37, ptr %0, align 8
   %42 = extractvalue %st37 %41, 30
   %43 = load i64, ptr %7, align 4
-  %44 = call ptr @gm23_1561(%gs118 %42, i64 %43)
+  %44 = call ptr @gm23_1565(%gs118 %42, i64 %43)
   %45 = load i64, ptr %7, align 4
   %46 = load i64, ptr %6, align 4
   ret ptr %44
@@ -46489,9 +46458,9 @@ endif4:                                           ; preds = %then1
 
 then5:                                            ; preds = %endif
   %48 = load %st37, ptr %0, align 8
-  %49 = extractvalue %st37 %48, 28
+  %49 = extractvalue %st37 %48, 30
   %50 = load i64, ptr %8, align 4
-  %51 = call ptr @gm23_1561(%gs118 %49, i64 %50)
+  %51 = call ptr @gm23_1565(%gs118 %49, i64 %50)
   %52 = load i64, ptr %8, align 4
   %53 = load i64, ptr %6, align 4
   ret ptr %51
@@ -46636,7 +46605,7 @@ endif4:                                           ; preds = %endif2
   %47 = extractvalue %st95 %46, 14
   %48 = call i64 @pf1307(ptr %0, ptr %1, i64 %45, i64 %47)
   %49 = load %st37, ptr %0, align 8
-  %50 = extractvalue %st37 %49, 27
+  %50 = extractvalue %st37 %49, 29
   %51 = call i64 @gm11_4725(%gs14 %50)
   %52 = icmp uge i64 %48, %51
   br i1 %52, label %then5, label %endif6
@@ -46674,7 +46643,7 @@ endif6:                                           ; preds = %endif8, %endif4
   store %gs118 zeroinitializer, ptr %8, align 8
   %74 = load %st95, ptr %5, align 8
   %75 = call ptr @pf1547(ptr %0, ptr %1, %st95 %74)
-  call void @gm13_9794(ptr %8, ptr %75)
+  call void @gm13_9797(ptr %8, ptr %75)
   store i64 0, ptr %9, align 4
   br label %while.cond
 
@@ -46718,7 +46687,7 @@ while.body:                                       ; preds = %while.cond
   %96 = call %st82 @gm23_6496(%gs22 %94, i64 %95)
   call void @pwretain82(%st82 %96)
   %97 = call ptr @pf1546(ptr %0, ptr %1, %st82 %96)
-  call void @gm13_9794(ptr %8, ptr %97)
+  call void @gm13_9797(ptr %8, ptr %97)
   %98 = load i64, ptr %9, align 4
   %99 = call i64 @plew_u64Add(i64 %98, i64 1)
   store i64 %99, ptr %9, align 4
@@ -46730,7 +46699,7 @@ while.end:                                        ; preds = %while.cond
   %102 = load %gs118, ptr %8, align 8
   %103 = extractvalue %gs118 %102, 0
   %104 = load %gs118, ptr %8, align 8
-  %105 = call i64 @gm11_11923(%gs118 %104)
+  %105 = call i64 @gm11_11926(%gs118 %104)
   %106 = call ptr @LLVMFunctionType(ptr %101, ptr %103, i64 %105, i32 0)
   store ptr %106, ptr %10, align 8
   %107 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
@@ -46763,7 +46732,7 @@ while.end:                                        ; preds = %while.cond
   call void @gm13_1696(ptr %123, ptr %124)
   %125 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 43
   %126 = load ptr, ptr %10, align 8
-  call void @gm13_9794(ptr %125, ptr %126)
+  call void @gm13_9797(ptr %125, ptr %126)
   %127 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 113
   %128 = load i64, ptr %3, align 4
   call void @gm13_5355(ptr %127, i64 %128)
@@ -46915,7 +46884,7 @@ while.body:                                       ; preds = %while.cond
   %69 = call %st82 @gm23_6496(%gs22 %67, i64 %68)
   call void @pwretain82(%st82 %69)
   %70 = call ptr @pf1546(ptr %0, ptr %1, %st82 %69)
-  call void @gm13_9794(ptr %6, ptr %70)
+  call void @gm13_9797(ptr %6, ptr %70)
   %71 = load i64, ptr %7, align 4
   %72 = call i64 @plew_u64Add(i64 %71, i64 1)
   store i64 %72, ptr %7, align 4
@@ -46927,7 +46896,7 @@ while.end:                                        ; preds = %while.cond
   %75 = load %gs118, ptr %6, align 8
   %76 = extractvalue %gs118 %75, 0
   %77 = load %gs118, ptr %6, align 8
-  %78 = call i64 @gm11_11923(%gs118 %77)
+  %78 = call i64 @gm11_11926(%gs118 %77)
   %79 = call ptr @LLVMFunctionType(ptr %74, ptr %76, i64 %78, i32 0)
   store ptr %79, ptr %8, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -46952,7 +46921,7 @@ while.end:                                        ; preds = %while.cond
   call void @gm13_1696(ptr %90, ptr %91)
   %92 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 43
   %93 = load ptr, ptr %8, align 8
-  call void @gm13_9794(ptr %92, ptr %93)
+  call void @gm13_9797(ptr %92, ptr %93)
   %94 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 113
   %95 = load i64, ptr %3, align 4
   call void @gm13_5355(ptr %94, i64 %95)
@@ -47275,17 +47244,17 @@ body0:                                            ; preds = %entry
 while.cond:                                       ; preds = %while.body, %body0
   %6 = load i64, ptr %5, align 4
   %7 = load %gs30, ptr %3, align 8
-  %8 = call i64 @gm11_12407(%gs30 %7)
+  %8 = call i64 @gm11_12410(%gs30 %7)
   %9 = icmp ult i64 %6, %8
   br i1 %9, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
   %10 = load %gs30, ptr %3, align 8
   %11 = load i64, ptr %5, align 4
-  %12 = call %st72 @gm23_12407(%gs30 %10, i64 %11)
+  %12 = call %st72 @gm23_12410(%gs30 %10, i64 %11)
   call void @pwretain72(%st72 %12)
   %13 = call ptr @pf1565(ptr %0, ptr %1, %st72 %12)
-  call void @gm13_9794(ptr %4, ptr %13)
+  call void @gm13_9797(ptr %4, ptr %13)
   %14 = load i64, ptr %5, align 4
   %15 = call i64 @plew_u64Add(i64 %14, i64 1)
   store i64 %15, ptr %5, align 4
@@ -47297,7 +47266,7 @@ while.end:                                        ; preds = %while.cond
   %18 = load %gs118, ptr %4, align 8
   %19 = extractvalue %gs118 %18, 0
   %20 = load %gs118, ptr %4, align 8
-  %21 = call i64 @gm11_11923(%gs118 %20)
+  %21 = call i64 @gm11_11926(%gs118 %20)
   %22 = call ptr @LLVMStructTypeInContext(ptr %17, ptr %19, i64 %21, i32 0)
   %23 = load i64, ptr %5, align 4
   %24 = load %gs118, ptr %4, align 8
@@ -47384,7 +47353,7 @@ arm:                                              ; preds = %endif2
   store %gs118 zeroinitializer, ptr %12, align 8
   %45 = load %st37, ptr %0, align 8
   %46 = extractvalue %st37 %45, 10
-  call void @gm13_9794(ptr %12, ptr %46)
+  call void @gm13_9797(ptr %12, ptr %46)
   store i64 0, ptr %13, align 4
   br label %while.cond
 
@@ -47404,7 +47373,7 @@ while.body:                                       ; preds = %while.cond
   %53 = call %st82 @gm23_6496(%gs22 %51, i64 %52)
   call void @pwretain82(%st82 %53)
   %54 = call ptr @pf1546(ptr %0, ptr %1, %st82 %53)
-  call void @gm13_9794(ptr %12, ptr %54)
+  call void @gm13_9797(ptr %12, ptr %54)
   %55 = load i64, ptr %13, align 4
   %56 = call i64 @plew_u64Add(i64 %55, i64 1)
   store i64 %56, ptr %13, align 4
@@ -47429,7 +47398,7 @@ endif4:                                           ; preds = %endif6, %while.end
   %65 = load %gs118, ptr %12, align 8
   %66 = extractvalue %gs118 %65, 0
   %67 = load %gs118, ptr %12, align 8
-  %68 = call i64 @gm11_11923(%gs118 %67)
+  %68 = call i64 @gm11_11926(%gs118 %67)
   %69 = call ptr @LLVMFunctionType(ptr %64, ptr %66, i64 %68, i32 0)
   store ptr %69, ptr %15, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -47454,7 +47423,7 @@ endif4:                                           ; preds = %endif6, %while.end
   call void @gm13_1696(ptr %80, ptr %81)
   %82 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 85
   %83 = load ptr, ptr %15, align 8
-  call void @gm13_9794(ptr %82, ptr %83)
+  call void @gm13_9797(ptr %82, ptr %83)
   %84 = load ptr, ptr %17, align 8
   %85 = load %gs0, ptr %16, align 8
   %86 = extractvalue %gs0 %85, 0
@@ -47545,7 +47514,7 @@ endif4:                                           ; preds = %endif2
   store %gs118 zeroinitializer, ptr %5, align 8
   %29 = load %st37, ptr %0, align 8
   %30 = extractvalue %st37 %29, 10
-  call void @gm13_9794(ptr %5, ptr %30)
+  call void @gm13_9797(ptr %5, ptr %30)
   store i64 0, ptr %6, align 4
   br label %while.cond
 
@@ -47564,7 +47533,7 @@ while.body:                                       ; preds = %while.cond
   %39 = call %st82 @gm23_6496(%gs22 %37, i64 %38)
   call void @pwretain82(%st82 %39)
   %40 = call ptr @pf1546(ptr %0, ptr %1, %st82 %39)
-  call void @gm13_9794(ptr %5, ptr %40)
+  call void @gm13_9797(ptr %5, ptr %40)
   %41 = load i64, ptr %6, align 4
   %42 = call i64 @plew_u64Add(i64 %41, i64 1)
   store i64 %42, ptr %6, align 4
@@ -47576,7 +47545,7 @@ while.end:                                        ; preds = %while.cond
   %45 = load %gs118, ptr %5, align 8
   %46 = extractvalue %gs118 %45, 0
   %47 = load %gs118, ptr %5, align 8
-  %48 = call i64 @gm11_11923(%gs118 %47)
+  %48 = call i64 @gm11_11926(%gs118 %47)
   %49 = call ptr @LLVMFunctionType(ptr %44, ptr %46, i64 %48, i32 0)
   store ptr %49, ptr %7, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -47601,7 +47570,7 @@ while.end:                                        ; preds = %while.cond
   call void @gm13_1696(ptr %60, ptr %61)
   %62 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 88
   %63 = load ptr, ptr %7, align 8
-  call void @gm13_9794(ptr %62, ptr %63)
+  call void @gm13_9797(ptr %62, ptr %63)
   %64 = load ptr, ptr %9, align 8
   %65 = load %gs0, ptr %8, align 8
   %66 = extractvalue %gs0 %65, 0
@@ -47764,7 +47733,7 @@ then:                                             ; preds = %sc.cont2
   %88 = load %st37, ptr %0, align 8
   %89 = extractvalue %st37 %88, 18
   %90 = load i64, ptr %11, align 4
-  %91 = call ptr @gm23_9949(%gs38 %89, i64 %90)
+  %91 = call ptr @gm23_9952(%gs38 %89, i64 %90)
   %92 = load i64, ptr %11, align 4
   %93 = load i64, ptr %10, align 4
   %94 = load %gs14, ptr %9, align 8
@@ -47813,7 +47782,7 @@ while.end5:                                       ; preds = %while.cond3
   %119 = load %gs38, ptr %17, align 8
   %120 = extractvalue %gs38 %119, 0
   %121 = load %gs38, ptr %17, align 8
-  %122 = call i64 @gm11_9949(%gs38 %121)
+  %122 = call i64 @gm11_9952(%gs38 %121)
   %123 = call ptr @LLVMConstArray2(ptr %118, ptr %120, i64 %122)
   call void @LLVMSetInitializer(ptr %116, ptr %123)
   %124 = load ptr, ptr %16, align 8
@@ -47854,7 +47823,7 @@ body0:                                            ; preds = %entry
   %8 = load %st37, ptr %0, align 8
   %9 = extractvalue %st37 %8, 42
   %10 = load i64, ptr %4, align 4
-  %11 = call ptr @gm23_9949(%gs38 %9, i64 %10)
+  %11 = call ptr @gm23_9952(%gs38 %9, i64 %10)
   call void @pf1587(ptr %0, ptr %1, i64 %7, ptr %11)
   %12 = load i64, ptr %4, align 4
   ret void
@@ -49325,11 +49294,11 @@ endif10:                                          ; preds = %then7
   %139 = load %st37, ptr %0, align 8
   %140 = extractvalue %st37 %139, 43
   %141 = load i64, ptr %26, align 4
-  %142 = call ptr @gm23_1561(%gs118 %140, i64 %141)
+  %142 = call ptr @gm23_1565(%gs118 %140, i64 %141)
   %143 = load %st37, ptr %0, align 8
   %144 = extractvalue %st37 %143, 42
   %145 = load i64, ptr %26, align 4
-  %146 = call ptr @gm23_9949(%gs38 %144, i64 %145)
+  %146 = call ptr @gm23_9952(%gs38 %144, i64 %145)
   %147 = load %gs38, ptr %27, align 8
   %148 = extractvalue %gs38 %147, 0
   %149 = call ptr @pf478()
@@ -49415,11 +49384,11 @@ endif14:                                          ; preds = %endif12
   %204 = load %st37, ptr %0, align 8
   %205 = extractvalue %st37 %204, 43
   %206 = load i64, ptr %30, align 4
-  %207 = call ptr @gm23_1561(%gs118 %205, i64 %206)
+  %207 = call ptr @gm23_1565(%gs118 %205, i64 %206)
   %208 = load %st37, ptr %0, align 8
   %209 = extractvalue %st37 %208, 42
   %210 = load i64, ptr %30, align 4
-  %211 = call ptr @gm23_9949(%gs38 %209, i64 %210)
+  %211 = call ptr @gm23_9952(%gs38 %209, i64 %210)
   %212 = load i64, ptr %9, align 4
   %213 = load i64, ptr %10, align 4
   %214 = load i64, ptr %11, align 4
@@ -49597,7 +49566,7 @@ endif4:                                           ; preds = %endif2
   %109 = load %st37, ptr %0, align 8
   %110 = extractvalue %st37 %109, 33
   %111 = load i64, ptr %25, align 4
-  %112 = call ptr @gm23_1561(%gs118 %110, i64 %111)
+  %112 = call ptr @gm23_1565(%gs118 %110, i64 %111)
   store ptr %112, ptr %27, align 8
   %113 = load %st32, ptr %1, align 8
   %114 = extractvalue %st32 %113, 0
@@ -50092,15 +50061,15 @@ then:                                             ; preds = %body0
 
 endif:                                            ; preds = %body0
   %18 = load i64, ptr %3, align 4
-  %19 = call i64 @pf1605(ptr %0, i64 %18)
+  %19 = call i64 @pf1605(ptr %0, ptr %1, i64 %18)
   store i64 %19, ptr %5, align 4
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %6, align 8
   %20 = load %st37, ptr %0, align 8
-  %21 = extractvalue %st37 %20, 28
+  %21 = extractvalue %st37 %20, 30
   %22 = load i64, ptr %5, align 4
-  %23 = call ptr @gm23_1561(%gs118 %21, i64 %22)
-  call void @gm13_9794(ptr %6, ptr %23)
+  %23 = call ptr @gm23_1565(%gs118 %21, i64 %22)
+  call void @gm13_9797(ptr %6, ptr %23)
   %24 = load %st37, ptr %0, align 8
   %25 = extractvalue %st37 %24, 9
   %26 = load %gs118, ptr %6, align 8
@@ -50129,7 +50098,7 @@ endif:                                            ; preds = %body0
   call void @gm13_1696(ptr %39, ptr %40)
   %41 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 91
   %42 = load ptr, ptr %7, align 8
-  call void @gm13_9794(ptr %41, ptr %42)
+  call void @gm13_9797(ptr %41, ptr %42)
   %43 = load %st37, ptr %0, align 8
   %44 = extractvalue %st37 %43, 89
   %45 = call i64 @gm11_4725(%gs14 %44)
@@ -50159,9 +50128,9 @@ body0:                                            ; preds = %entry
   store ptr %2, ptr %4, align 8
   store i64 %3, ptr %5, align 4
   %8 = load i64, ptr %5, align 4
-  %9 = call i64 @pf1605(ptr %0, i64 %8)
+  %9 = call i64 @pf1605(ptr %0, ptr %1, i64 %8)
   %10 = load %st37, ptr %0, align 8
-  %11 = extractvalue %st37 %10, 27
+  %11 = extractvalue %st37 %10, 29
   %12 = call i64 @gm11_4725(%gs14 %11)
   %13 = icmp ult i64 %9, %12
   br i1 %13, label %then, label %endif
@@ -50179,11 +50148,11 @@ then:                                             ; preds = %body0
   %19 = load %st37, ptr %0, align 8
   %20 = extractvalue %st37 %19, 91
   %21 = load i64, ptr %6, align 4
-  %22 = call ptr @gm23_1561(%gs118 %20, i64 %21)
+  %22 = call ptr @gm23_1565(%gs118 %20, i64 %21)
   %23 = load %st37, ptr %0, align 8
   %24 = extractvalue %st37 %23, 90
   %25 = load i64, ptr %6, align 4
-  %26 = call ptr @gm23_9949(%gs38 %24, i64 %25)
+  %26 = call ptr @gm23_9952(%gs38 %24, i64 %25)
   %27 = load %gs38, ptr %7, align 8
   %28 = extractvalue %gs38 %27, 0
   %29 = call ptr @pf478()
@@ -50275,11 +50244,11 @@ then3:                                            ; preds = %then1
   %44 = load %st37, ptr %0, align 8
   %45 = extractvalue %st37 %44, 43
   %46 = load i64, ptr %8, align 4
-  %47 = call ptr @gm23_1561(%gs118 %45, i64 %46)
+  %47 = call ptr @gm23_1565(%gs118 %45, i64 %46)
   %48 = load %st37, ptr %0, align 8
   %49 = extractvalue %st37 %48, 42
   %50 = load i64, ptr %8, align 4
-  %51 = call ptr @gm23_9949(%gs38 %49, i64 %50)
+  %51 = call ptr @gm23_9952(%gs38 %49, i64 %50)
   %52 = load %gs38, ptr %9, align 8
   %53 = extractvalue %gs38 %52, 0
   %54 = call ptr @pf478()
@@ -50619,7 +50588,7 @@ while.body:                                       ; preds = %while.cond
   %58 = load %st37, ptr %0, align 8
   %59 = extractvalue %st37 %58, 56
   %60 = load i64, ptr %6, align 4
-  %61 = call ptr @gm23_1561(%gs118 %59, i64 %60)
+  %61 = call ptr @gm23_1565(%gs118 %59, i64 %60)
   store ptr %61, ptr %7, align 8
   %62 = load %st37, ptr %0, align 8
   %63 = extractvalue %st37 %62, 1
@@ -50639,7 +50608,7 @@ while.body:                                       ; preds = %while.cond
   %75 = load %st37, ptr %0, align 8
   %76 = extractvalue %st37 %75, 55
   %77 = load i64, ptr %6, align 4
-  %78 = call ptr @gm23_9949(%gs38 %76, i64 %77)
+  %78 = call ptr @gm23_9952(%gs38 %76, i64 %77)
   %79 = call ptr @pf478()
   %80 = call ptr @LLVMBuildLoad2(ptr %73, ptr %74, ptr %78, ptr %79)
   store ptr %80, ptr %9, align 8
@@ -50653,7 +50622,7 @@ while.body:                                       ; preds = %while.cond
   call void @gm13_1696(ptr %86, ptr %87)
   %88 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 68
   %89 = load ptr, ptr %7, align 8
-  call void @gm13_9794(ptr %88, ptr %89)
+  call void @gm13_9797(ptr %88, ptr %89)
   %90 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 69
   %91 = load %st37, ptr %0, align 8
   %92 = extractvalue %st37 %91, 57
@@ -50676,8 +50645,8 @@ while.body:                                       ; preds = %while.cond
   %106 = load %st37, ptr %0, align 8
   %107 = extractvalue %st37 %106, 60
   %108 = load i64, ptr %6, align 4
-  %109 = call ptr @gm23_1561(%gs118 %107, i64 %108)
-  call void @gm13_9794(ptr %105, ptr %109)
+  %109 = call ptr @gm23_1565(%gs118 %107, i64 %108)
+  call void @gm13_9797(ptr %105, ptr %109)
   %110 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 73
   %111 = load %st37, ptr %0, align 8
   %112 = extractvalue %st37 %111, 61
@@ -50742,10 +50711,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %4, align 8
   %11 = load %st37, ptr %0, align 8
   %12 = extractvalue %st37 %11, 6
-  call void @gm13_9794(ptr %4, ptr %12)
+  call void @gm13_9797(ptr %4, ptr %12)
   %13 = load %st37, ptr %0, align 8
   %14 = extractvalue %st37 %13, 10
-  call void @gm13_9794(ptr %4, ptr %14)
+  call void @gm13_9797(ptr %4, ptr %14)
   %15 = load %st37, ptr %0, align 8
   %16 = extractvalue %st37 %15, 6
   %17 = load %gs118, ptr %4, align 8
@@ -50771,10 +50740,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %7, align 8
   %30 = load %st37, ptr %0, align 8
   %31 = extractvalue %st37 %30, 6
-  call void @gm13_9794(ptr %7, ptr %31)
+  call void @gm13_9797(ptr %7, ptr %31)
   %32 = load %st37, ptr %0, align 8
   %33 = extractvalue %st37 %32, 10
-  call void @gm13_9794(ptr %7, ptr %33)
+  call void @gm13_9797(ptr %7, ptr %33)
   %34 = load %st37, ptr %0, align 8
   %35 = extractvalue %st37 %34, 9
   %36 = load %gs118, ptr %7, align 8
@@ -51121,7 +51090,7 @@ then6:                                            ; preds = %while.end3
 
 endif7:                                           ; preds = %endif9, %while.end3
   %100 = load ptr, ptr %13, align 8
-  call void @gm13_9794(ptr %3, ptr %100)
+  call void @gm13_9797(ptr %3, ptr %100)
   %101 = load i64, ptr %9, align 4
   %102 = call i64 @plew_u64Add(i64 %101, i64 1)
   store i64 %102, ptr %9, align 4
@@ -51279,7 +51248,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %5, align 8
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 10
-  call void @gm13_9794(ptr %5, ptr %11)
+  call void @gm13_9797(ptr %5, ptr %11)
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 9
   %14 = load %gs118, ptr %5, align 8
@@ -51371,7 +51340,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %5, align 8
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 7
-  call void @gm13_9794(ptr %5, ptr %11)
+  call void @gm13_9797(ptr %5, ptr %11)
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 10
   %14 = load %gs118, ptr %5, align 8
@@ -51635,12 +51604,12 @@ endif:                                            ; preds = %body0
   %39 = load %st37, ptr %0, align 8
   %40 = extractvalue %st37 %39, 124
   %41 = load i64, ptr %4, align 4
-  %42 = call ptr @gm23_1561(%gs118 %40, i64 %41)
+  %42 = call ptr @gm23_1565(%gs118 %40, i64 %41)
   store ptr %42, ptr %6, align 8
   %43 = load %st37, ptr %0, align 8
   %44 = extractvalue %st37 %43, 125
   %45 = load i64, ptr %4, align 4
-  %46 = call ptr @gm23_9949(%gs38 %44, i64 %45)
+  %46 = call ptr @gm23_9952(%gs38 %44, i64 %45)
   store ptr %46, ptr %7, align 8
   %47 = load %st95, ptr %5, align 8
   %48 = call i1 @pf859(ptr %1, %st95 %47)
@@ -51697,7 +51666,7 @@ else:                                             ; preds = %endif
   %79 = extractvalue %st37 %78, 42
   %80 = load i64, ptr %3, align 4
   %81 = call i64 @pf1538(ptr %0, i64 %80)
-  %82 = call ptr @gm23_9949(%gs38 %79, i64 %81)
+  %82 = call ptr @gm23_9952(%gs38 %79, i64 %81)
   store ptr %82, ptr %9, align 8
   br label %endif2
 
@@ -51773,7 +51742,7 @@ while.end:                                        ; preds = %while.cond
   store %gs118 zeroinitializer, ptr %17, align 8
   %130 = load %st37, ptr %0, align 8
   %131 = extractvalue %st37 %130, 10
-  call void @gm13_9794(ptr %17, ptr %131)
+  call void @gm13_9797(ptr %17, ptr %131)
   %132 = load %st37, ptr %0, align 8
   %133 = extractvalue %st37 %132, 9
   %134 = load %gs118, ptr %17, align 8
@@ -51887,7 +51856,7 @@ while.end10:                                      ; preds = %while.cond8
   %204 = extractvalue %st37 %203, 6
   %205 = load %st37, ptr %0, align 8
   %206 = extractvalue %st37 %205, 126
-  %207 = call ptr @gm23_9949(%gs38 %206, i64 0)
+  %207 = call ptr @gm23_9952(%gs38 %206, i64 0)
   %208 = call ptr @pf478()
   %209 = call ptr @LLVMBuildLoad2(ptr %202, ptr %204, ptr %207, ptr %208)
   store ptr %209, ptr %24, align 8
@@ -54130,7 +54099,7 @@ body0:                                            ; preds = %entry
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %5, align 8
   %30 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %5, ptr %30)
+  call void @gm13_9797(ptr %5, ptr %30)
   %31 = load ptr, ptr %1, align 8
   %32 = load %gs118, ptr %5, align 8
   %33 = extractvalue %gs118 %32, 0
@@ -54141,9 +54110,9 @@ body0:                                            ; preds = %entry
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %8, align 8
   %36 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %8, ptr %36)
+  call void @gm13_9797(ptr %8, ptr %36)
   %37 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %8, ptr %37)
+  call void @gm13_9797(ptr %8, ptr %37)
   %38 = load ptr, ptr %1, align 8
   %39 = load %gs118, ptr %8, align 8
   %40 = extractvalue %gs118 %39, 0
@@ -54152,9 +54121,9 @@ body0:                                            ; preds = %entry
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %10, align 8
   %42 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %10, ptr %42)
+  call void @gm13_9797(ptr %10, ptr %42)
   %43 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %10, ptr %43)
+  call void @gm13_9797(ptr %10, ptr %43)
   %44 = load ptr, ptr %1, align 8
   %45 = load %gs118, ptr %10, align 8
   %46 = extractvalue %gs118 %45, 0
@@ -54164,13 +54133,13 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %12, align 8
   %48 = load ptr, ptr %1, align 8
   %49 = call ptr @LLVMInt32TypeInContext(ptr %48)
-  call void @gm13_9794(ptr %12, ptr %49)
+  call void @gm13_9797(ptr %12, ptr %49)
   %50 = load ptr, ptr %4, align 8
-  call void @gm13_9794(ptr %12, ptr %50)
+  call void @gm13_9797(ptr %12, ptr %50)
   %51 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %12, ptr %51)
+  call void @gm13_9797(ptr %12, ptr %51)
   %52 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %12, ptr %52)
+  call void @gm13_9797(ptr %12, ptr %52)
   %53 = load ptr, ptr %1, align 8
   %54 = load %gs118, ptr %12, align 8
   %55 = extractvalue %gs118 %54, 0
@@ -54622,7 +54591,7 @@ while.body18:                                     ; preds = %while.cond17
   %300 = load i64, ptr %18, align 4
   %301 = call i64 @gm23_6468(%gs14 %299, i64 %300)
   %302 = call i64 @pf1538(ptr %14, i64 %301)
-  %303 = call ptr @gm23_9949(%gs38 %297, i64 %302)
+  %303 = call ptr @gm23_9952(%gs38 %297, i64 %302)
   call void @pf1587(ptr %14, ptr %0, i64 %295, ptr %303)
   %304 = load i64, ptr %18, align 4
   %305 = call i64 @plew_u64Add(i64 %304, i64 1)
@@ -54762,7 +54731,7 @@ body0:                                            ; preds = %entry
   store %gs0 %0, ptr %1, align 8
   %3 = load %gs0, ptr %1, align 8
   %4 = extractvalue %gs0 %3, 0
-  %5 = call i64 @gm196_44725(ptr %4)
+  %5 = call i64 @gm196_44813(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -54772,7 +54741,7 @@ body02:                                           ; preds = %entry1
   store %gs0 %0, ptr %2, align 8
   %6 = load %gs0, ptr %2, align 8
   %7 = extractvalue %gs0 %6, 0
-  %8 = call i64 @gm196_44725(ptr %7)
+  %8 = call i64 @gm196_44813(ptr %7)
   ret i64 %8
 }
 
@@ -54786,7 +54755,7 @@ body0:                                            ; preds = %entry
   store i8 %1, ptr %2, align 1
   %4 = getelementptr inbounds nuw %gs0, ptr %0, i32 0, i32 0
   %5 = load i8, ptr %2, align 1
-  call void @gm200_44735(ptr %4, i8 %5)
+  call void @gm200_44823(ptr %4, i8 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -54796,7 +54765,7 @@ body02:                                           ; preds = %entry1
   store i8 %1, ptr %3, align 1
   %6 = getelementptr inbounds nuw %gs0, ptr %0, i32 0, i32 0
   %7 = load i8, ptr %3, align 1
-  call void @gm200_44735(ptr %6, i8 %7)
+  call void @gm200_44823(ptr %6, i8 %7)
   ret void
 }
 
@@ -54846,7 +54815,7 @@ body0:                                            ; preds = %entry
   store %gs178 %0, ptr %1, align 8
   %3 = load %gs178, ptr %1, align 8
   %4 = extractvalue %gs178 %3, 0
-  %5 = call i64 @gm196_44741(ptr %4)
+  %5 = call i64 @gm196_44829(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -54856,7 +54825,7 @@ body02:                                           ; preds = %entry1
   store %gs178 %0, ptr %2, align 8
   %6 = load %gs178, ptr %2, align 8
   %7 = extractvalue %gs178 %6, 0
-  %8 = call i64 @gm196_44741(ptr %7)
+  %8 = call i64 @gm196_44829(ptr %7)
   ret i64 %8
 }
 
@@ -54953,7 +54922,7 @@ enumret.v11:                                      ; preds = %enumret.c10
   br label %enumret.c12
 
 enumret.c12:                                      ; preds = %enumret.v11, %enumret.c10
-  call void @gm200_44751(ptr %6, %en9 %7)
+  call void @gm200_44839(ptr %6, %en9 %7)
   ret void
 
 entry13:                                          ; No predecessors!
@@ -55044,7 +55013,7 @@ enumret.v27:                                      ; preds = %enumret.c26
   br label %enumret.c28
 
 enumret.c28:                                      ; preds = %enumret.v27, %enumret.c26
-  call void @gm200_44751(ptr %39, %en9 %40)
+  call void @gm200_44839(ptr %39, %en9 %40)
   ret void
 }
 
@@ -55058,7 +55027,7 @@ body0:                                            ; preds = %entry
   store %gs182 %0, ptr %1, align 8
   %3 = load %gs182, ptr %1, align 8
   %4 = extractvalue %gs182 %3, 0
-  %5 = call i64 @gm196_44756(ptr %4)
+  %5 = call i64 @gm196_44844(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55068,7 +55037,7 @@ body02:                                           ; preds = %entry1
   store %gs182 %0, ptr %2, align 8
   %6 = load %gs182, ptr %2, align 8
   %7 = extractvalue %gs182 %6, 0
-  %8 = call i64 @gm196_44756(ptr %7)
+  %8 = call i64 @gm196_44844(ptr %7)
   ret i64 %8
 }
 
@@ -55110,7 +55079,7 @@ enumret.v1:                                       ; preds = %enumret.c
   br label %enumret.c2
 
 enumret.c2:                                       ; preds = %enumret.v1, %enumret.c
-  call void @gm200_44766(ptr %6, %en10 %7)
+  call void @gm200_44854(ptr %6, %en10 %7)
   ret void
 
 entry3:                                           ; No predecessors!
@@ -55146,7 +55115,7 @@ enumret.v7:                                       ; preds = %enumret.c6
   br label %enumret.c8
 
 enumret.c8:                                       ; preds = %enumret.v7, %enumret.c6
-  call void @gm200_44766(ptr %19, %en10 %20)
+  call void @gm200_44854(ptr %19, %en10 %20)
   ret void
 }
 
@@ -55160,7 +55129,7 @@ body0:                                            ; preds = %entry
   store %gs198 %0, ptr %1, align 8
   %3 = load %gs198, ptr %1, align 8
   %4 = extractvalue %gs198 %3, 0
-  %5 = call i64 @gm196_44771(ptr %4)
+  %5 = call i64 @gm196_44859(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55170,7 +55139,7 @@ body02:                                           ; preds = %entry1
   store %gs198 %0, ptr %2, align 8
   %6 = load %gs198, ptr %2, align 8
   %7 = extractvalue %gs198 %6, 0
-  %8 = call i64 @gm196_44771(ptr %7)
+  %8 = call i64 @gm196_44859(ptr %7)
   ret i64 %8
 }
 
@@ -55333,7 +55302,7 @@ body0:                                            ; preds = %entry
   store %st71 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs198, ptr %0, i32 0, i32 0
   %5 = load %st71, ptr %2, align 8
-  call void @gm200_44780(ptr %4, %st71 %5)
+  call void @gm200_44868(ptr %4, %st71 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55343,7 +55312,7 @@ body02:                                           ; preds = %entry1
   store %st71 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs198, ptr %0, i32 0, i32 0
   %7 = load %st71, ptr %3, align 8
-  call void @gm200_44780(ptr %6, %st71 %7)
+  call void @gm200_44868(ptr %6, %st71 %7)
   ret void
 }
 
@@ -55357,7 +55326,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs14, ptr %0, i32 0, i32 0
   %5 = load i64, ptr %2, align 4
-  call void @gm200_44784(ptr %4, i64 %5)
+  call void @gm200_44872(ptr %4, i64 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55367,7 +55336,7 @@ body02:                                           ; preds = %entry1
   store i64 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs14, ptr %0, i32 0, i32 0
   %7 = load i64, ptr %3, align 4
-  call void @gm200_44784(ptr %6, i64 %7)
+  call void @gm200_44872(ptr %6, i64 %7)
   ret void
 }
 
@@ -55381,7 +55350,7 @@ body0:                                            ; preds = %entry
   store %gs186 %0, ptr %1, align 8
   %3 = load %gs186, ptr %1, align 8
   %4 = extractvalue %gs186 %3, 0
-  %5 = call i64 @gm196_44789(ptr %4)
+  %5 = call i64 @gm196_44877(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55391,7 +55360,7 @@ body02:                                           ; preds = %entry1
   store %gs186 %0, ptr %2, align 8
   %6 = load %gs186, ptr %2, align 8
   %7 = extractvalue %gs186 %6, 0
-  %8 = call i64 @gm196_44789(ptr %7)
+  %8 = call i64 @gm196_44877(ptr %7)
   ret i64 %8
 }
 
@@ -55405,7 +55374,7 @@ body0:                                            ; preds = %entry
   store %st81 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs186, ptr %0, i32 0, i32 0
   %5 = load %st81, ptr %2, align 8
-  call void @gm200_44798(ptr %4, %st81 %5)
+  call void @gm200_44886(ptr %4, %st81 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55415,7 +55384,7 @@ body02:                                           ; preds = %entry1
   store %st81 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs186, ptr %0, i32 0, i32 0
   %7 = load %st81, ptr %3, align 8
-  call void @gm200_44798(ptr %6, %st81 %7)
+  call void @gm200_44886(ptr %6, %st81 %7)
   ret void
 }
 
@@ -55451,7 +55420,7 @@ body0:                                            ; preds = %entry
   store %gs190 %0, ptr %1, align 8
   %3 = load %gs190, ptr %1, align 8
   %4 = extractvalue %gs190 %3, 0
-  %5 = call i64 @gm196_44803(ptr %4)
+  %5 = call i64 @gm196_44891(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55461,7 +55430,7 @@ body02:                                           ; preds = %entry1
   store %gs190 %0, ptr %2, align 8
   %6 = load %gs190, ptr %2, align 8
   %7 = extractvalue %gs190 %6, 0
-  %8 = call i64 @gm196_44803(ptr %7)
+  %8 = call i64 @gm196_44891(ptr %7)
   ret i64 %8
 }
 
@@ -55503,7 +55472,7 @@ body0:                                            ; preds = %entry
   store %st82 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs22, ptr %0, i32 0, i32 0
   %5 = load %st82, ptr %2, align 4
-  call void @gm200_44813(ptr %4, %st82 %5)
+  call void @gm200_44901(ptr %4, %st82 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55513,7 +55482,7 @@ body02:                                           ; preds = %entry1
   store %st82 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs22, ptr %0, i32 0, i32 0
   %7 = load %st82, ptr %3, align 4
-  call void @gm200_44813(ptr %6, %st82 %7)
+  call void @gm200_44901(ptr %6, %st82 %7)
   ret void
 }
 
@@ -55527,7 +55496,7 @@ body0:                                            ; preds = %entry
   store %gs98 %0, ptr %1, align 8
   %3 = load %gs98, ptr %1, align 8
   %4 = extractvalue %gs98 %3, 0
-  %5 = call i64 @gm196_44818(ptr %4)
+  %5 = call i64 @gm196_44906(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55537,7 +55506,7 @@ body02:                                           ; preds = %entry1
   store %gs98 %0, ptr %2, align 8
   %6 = load %gs98, ptr %2, align 8
   %7 = extractvalue %gs98 %6, 0
-  %8 = call i64 @gm196_44818(ptr %7)
+  %8 = call i64 @gm196_44906(ptr %7)
   ret i64 %8
 }
 
@@ -55599,7 +55568,7 @@ body0:                                            ; preds = %entry
   store %st95 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs102, ptr %0, i32 0, i32 0
   %5 = load %st95, ptr %2, align 8
-  call void @gm200_44828(ptr %4, %st95 %5)
+  call void @gm200_44916(ptr %4, %st95 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55609,7 +55578,7 @@ body02:                                           ; preds = %entry1
   store %st95 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs102, ptr %0, i32 0, i32 0
   %7 = load %st95, ptr %3, align 8
-  call void @gm200_44828(ptr %6, %st95 %7)
+  call void @gm200_44916(ptr %6, %st95 %7)
   ret void
 }
 
@@ -55623,7 +55592,7 @@ body0:                                            ; preds = %entry
   store %st90 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs214, ptr %0, i32 0, i32 0
   %5 = load %st90, ptr %2, align 8
-  call void @gm200_44831(ptr %4, %st90 %5)
+  call void @gm200_44919(ptr %4, %st90 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55633,7 +55602,7 @@ body02:                                           ; preds = %entry1
   store %st90 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs214, ptr %0, i32 0, i32 0
   %7 = load %st90, ptr %3, align 8
-  call void @gm200_44831(ptr %6, %st90 %7)
+  call void @gm200_44919(ptr %6, %st90 %7)
   ret void
 }
 
@@ -55698,7 +55667,7 @@ body0:                                            ; preds = %entry
   store %gs194 %0, ptr %1, align 8
   %3 = load %gs194, ptr %1, align 8
   %4 = extractvalue %gs194 %3, 0
-  %5 = call i64 @gm196_44836(ptr %4)
+  %5 = call i64 @gm196_44924(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55708,7 +55677,7 @@ body02:                                           ; preds = %entry1
   store %gs194 %0, ptr %2, align 8
   %6 = load %gs194, ptr %2, align 8
   %7 = extractvalue %gs194 %6, 0
-  %8 = call i64 @gm196_44836(ptr %7)
+  %8 = call i64 @gm196_44924(ptr %7)
   ret i64 %8
 }
 
@@ -55750,7 +55719,7 @@ body0:                                            ; preds = %entry
   store %gs174 %0, ptr %1, align 8
   %3 = load %gs174, ptr %1, align 8
   %4 = extractvalue %gs174 %3, 0
-  %5 = call i64 @gm196_44848(ptr %4)
+  %5 = call i64 @gm196_44936(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55760,7 +55729,7 @@ body02:                                           ; preds = %entry1
   store %gs174 %0, ptr %2, align 8
   %6 = load %gs174, ptr %2, align 8
   %7 = extractvalue %gs174 %6, 0
-  %8 = call i64 @gm196_44848(ptr %7)
+  %8 = call i64 @gm196_44936(ptr %7)
   ret i64 %8
 }
 
@@ -55816,7 +55785,7 @@ body0:                                            ; preds = %entry
   store %st77 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs34, ptr %0, i32 0, i32 0
   %5 = load %st77, ptr %2, align 4
-  call void @gm200_44858(ptr %4, %st77 %5)
+  call void @gm200_44946(ptr %4, %st77 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55826,7 +55795,7 @@ body02:                                           ; preds = %entry1
   store %st77 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs34, ptr %0, i32 0, i32 0
   %7 = load %st77, ptr %3, align 4
-  call void @gm200_44858(ptr %6, %st77 %7)
+  call void @gm200_44946(ptr %6, %st77 %7)
   ret void
 }
 
@@ -55840,7 +55809,7 @@ body0:                                            ; preds = %entry
   store %st79 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs90, ptr %0, i32 0, i32 0
   %5 = load %st79, ptr %2, align 8
-  call void @gm200_44861(ptr %4, %st79 %5)
+  call void @gm200_44949(ptr %4, %st79 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -55850,7 +55819,7 @@ body02:                                           ; preds = %entry1
   store %st79 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs90, ptr %0, i32 0, i32 0
   %7 = load %st79, ptr %3, align 8
-  call void @gm200_44861(ptr %6, %st79 %7)
+  call void @gm200_44949(ptr %6, %st79 %7)
   ret void
 }
 
@@ -55890,7 +55859,7 @@ body0:                                            ; preds = %entry
   store %gs34 %0, ptr %1, align 8
   %3 = load %gs34, ptr %1, align 8
   %4 = extractvalue %gs34 %3, 0
-  %5 = call i64 @gm196_44866(ptr %4)
+  %5 = call i64 @gm196_44954(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55900,7 +55869,7 @@ body02:                                           ; preds = %entry1
   store %gs34 %0, ptr %2, align 8
   %6 = load %gs34, ptr %2, align 8
   %7 = extractvalue %gs34 %6, 0
-  %8 = call i64 @gm196_44866(ptr %7)
+  %8 = call i64 @gm196_44954(ptr %7)
   ret i64 %8
 }
 
@@ -55942,7 +55911,7 @@ body0:                                            ; preds = %entry
   store %gs226 %0, ptr %1, align 8
   %3 = load %gs226, ptr %1, align 8
   %4 = extractvalue %gs226 %3, 0
-  %5 = call i64 @gm196_44878(ptr %4)
+  %5 = call i64 @gm196_44966(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -55952,7 +55921,7 @@ body02:                                           ; preds = %entry1
   store %gs226 %0, ptr %2, align 8
   %6 = load %gs226, ptr %2, align 8
   %7 = extractvalue %gs226 %6, 0
-  %8 = call i64 @gm196_44878(ptr %7)
+  %8 = call i64 @gm196_44966(ptr %7)
   ret i64 %8
 }
 
@@ -56578,7 +56547,7 @@ body0:                                            ; preds = %entry
   store %gs206 %0, ptr %1, align 8
   %3 = load %gs206, ptr %1, align 8
   %4 = extractvalue %gs206 %3, 0
-  %5 = call i64 @gm196_44890(ptr %4)
+  %5 = call i64 @gm196_44978(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -56588,7 +56557,7 @@ body02:                                           ; preds = %entry1
   store %gs206 %0, ptr %2, align 8
   %6 = load %gs206, ptr %2, align 8
   %7 = extractvalue %gs206 %6, 0
-  %8 = call i64 @gm196_44890(ptr %7)
+  %8 = call i64 @gm196_44978(ptr %7)
   ret i64 %8
 }
 
@@ -57056,7 +57025,7 @@ body0:                                            ; preds = %entry
   store %st78 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs26, ptr %0, i32 0, i32 0
   %5 = load %st78, ptr %2, align 4
-  call void @gm200_44900(ptr %4, %st78 %5)
+  call void @gm200_44988(ptr %4, %st78 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -57066,7 +57035,7 @@ body02:                                           ; preds = %entry1
   store %st78 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs26, ptr %0, i32 0, i32 0
   %7 = load %st78, ptr %3, align 4
-  call void @gm200_44900(ptr %6, %st78 %7)
+  call void @gm200_44988(ptr %6, %st78 %7)
   ret void
 }
 
@@ -57352,7 +57321,7 @@ body0:                                            ; preds = %entry
   store %gs102 %0, ptr %1, align 8
   %3 = load %gs102, ptr %1, align 8
   %4 = extractvalue %gs102 %3, 0
-  %5 = call i64 @gm196_44905(ptr %4)
+  %5 = call i64 @gm196_44993(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -57362,7 +57331,7 @@ body02:                                           ; preds = %entry1
   store %gs102 %0, ptr %2, align 8
   %6 = load %gs102, ptr %2, align 8
   %7 = extractvalue %gs102 %6, 0
-  %8 = call i64 @gm196_44905(ptr %7)
+  %8 = call i64 @gm196_44993(ptr %7)
   ret i64 %8
 }
 
@@ -57702,7 +57671,7 @@ body0:                                            ; preds = %entry
   store %gs214 %0, ptr %1, align 8
   %3 = load %gs214, ptr %1, align 8
   %4 = extractvalue %gs214 %3, 0
-  %5 = call i64 @gm196_44916(ptr %4)
+  %5 = call i64 @gm196_45004(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -57712,7 +57681,7 @@ body02:                                           ; preds = %entry1
   store %gs214 %0, ptr %2, align 8
   %6 = load %gs214, ptr %2, align 8
   %7 = extractvalue %gs214 %6, 0
-  %8 = call i64 @gm196_44916(ptr %7)
+  %8 = call i64 @gm196_45004(ptr %7)
   ret i64 %8
 }
 
@@ -58339,7 +58308,7 @@ body0:                                            ; preds = %entry
   store %gs14 %0, ptr %1, align 8
   %3 = load %gs14, ptr %1, align 8
   %4 = extractvalue %gs14 %3, 0
-  %5 = call i64 @gm196_44929(ptr %4)
+  %5 = call i64 @gm196_45017(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -58349,7 +58318,7 @@ body02:                                           ; preds = %entry1
   store %gs14 %0, ptr %2, align 8
   %6 = load %gs14, ptr %2, align 8
   %7 = extractvalue %gs14 %6, 0
-  %8 = call i64 @gm196_44929(ptr %7)
+  %8 = call i64 @gm196_45017(ptr %7)
   ret i64 %8
 }
 
@@ -58554,7 +58523,7 @@ while.body:                                       ; preds = %while.cond
   %11 = load %st87, ptr %2, align 8
   %12 = extractvalue %st87 %11, 7
   %13 = load i64, ptr %3, align 4
-  %14 = call %st76 @gm23_42887(%gs94 %12, i64 %13)
+  %14 = call %st76 @gm23_42976(%gs94 %12, i64 %13)
   call void @pwretain76(%st76 %14)
   store %st76 %14, ptr %4, align 4
   %15 = load %st87, ptr %2, align 8
@@ -58600,7 +58569,7 @@ body0:                                            ; preds = %entry
   store %gs94 %0, ptr %1, align 8
   %3 = load %gs94, ptr %1, align 8
   %4 = extractvalue %gs94 %3, 0
-  %5 = call i64 @gm196_44940(ptr %4)
+  %5 = call i64 @gm196_45028(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -58610,7 +58579,7 @@ body02:                                           ; preds = %entry1
   store %gs94 %0, ptr %2, align 8
   %6 = load %gs94, ptr %2, align 8
   %7 = extractvalue %gs94 %6, 0
-  %8 = call i64 @gm196_44940(ptr %7)
+  %8 = call i64 @gm196_45028(ptr %7)
   ret i64 %8
 }
 
@@ -61014,7 +60983,7 @@ body0:                                            ; preds = %entry
   store %gs54 %0, ptr %1, align 8
   %3 = load %gs54, ptr %1, align 8
   %4 = extractvalue %gs54 %3, 0
-  %5 = call i64 @gm196_44951(ptr %4)
+  %5 = call i64 @gm196_45039(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -61024,7 +60993,7 @@ body02:                                           ; preds = %entry1
   store %gs54 %0, ptr %2, align 8
   %6 = load %gs54, ptr %2, align 8
   %7 = extractvalue %gs54 %6, 0
-  %8 = call i64 @gm196_44951(ptr %7)
+  %8 = call i64 @gm196_45039(ptr %7)
   ret i64 %8
 }
 
@@ -61625,7 +61594,7 @@ body0:                                            ; preds = %entry
   store %st45 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs134, ptr %0, i32 0, i32 0
   %5 = load %st45, ptr %2, align 4
-  call void @gm200_44961(ptr %4, %st45 %5)
+  call void @gm200_45049(ptr %4, %st45 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -61635,7 +61604,7 @@ body02:                                           ; preds = %entry1
   store %st45 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs134, ptr %0, i32 0, i32 0
   %7 = load %st45, ptr %3, align 4
-  call void @gm200_44961(ptr %6, %st45 %7)
+  call void @gm200_45049(ptr %6, %st45 %7)
   ret void
 }
 
@@ -61649,7 +61618,7 @@ body0:                                            ; preds = %entry
   store %gs134 %0, ptr %1, align 8
   %3 = load %gs134, ptr %1, align 8
   %4 = extractvalue %gs134 %3, 0
-  %5 = call i64 @gm196_44966(ptr %4)
+  %5 = call i64 @gm196_45054(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -61659,7 +61628,7 @@ body02:                                           ; preds = %entry1
   store %gs134 %0, ptr %2, align 8
   %6 = load %gs134, ptr %2, align 8
   %7 = extractvalue %gs134 %6, 0
-  %8 = call i64 @gm196_44966(ptr %7)
+  %8 = call i64 @gm196_45054(ptr %7)
   ret i64 %8
 }
 
@@ -62124,7 +62093,7 @@ body0:                                            ; preds = %entry
   store %gs218 %0, ptr %1, align 8
   %3 = load %gs218, ptr %1, align 8
   %4 = extractvalue %gs218 %3, 0
-  %5 = call i64 @gm196_44978(ptr %4)
+  %5 = call i64 @gm196_45066(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -62134,7 +62103,7 @@ body02:                                           ; preds = %entry1
   store %gs218 %0, ptr %2, align 8
   %6 = load %gs218, ptr %2, align 8
   %7 = extractvalue %gs218 %6, 0
-  %8 = call i64 @gm196_44978(ptr %7)
+  %8 = call i64 @gm196_45066(ptr %7)
   ret i64 %8
 }
 
@@ -62193,7 +62162,7 @@ body0:                                            ; preds = %entry
   store %gs210 %0, ptr %1, align 8
   %3 = load %gs210, ptr %1, align 8
   %4 = extractvalue %gs210 %3, 0
-  %5 = call i64 @gm196_44990(ptr %4)
+  %5 = call i64 @gm196_45078(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -62203,7 +62172,7 @@ body02:                                           ; preds = %entry1
   store %gs210 %0, ptr %2, align 8
   %6 = load %gs210, ptr %2, align 8
   %7 = extractvalue %gs210 %6, 0
-  %8 = call i64 @gm196_44990(ptr %7)
+  %8 = call i64 @gm196_45078(ptr %7)
   ret i64 %8
 }
 
@@ -62322,7 +62291,7 @@ body0:                                            ; preds = %entry
   store %gs202 %0, ptr %1, align 8
   %3 = load %gs202, ptr %1, align 8
   %4 = extractvalue %gs202 %3, 0
-  %5 = call i64 @gm196_45002(ptr %4)
+  %5 = call i64 @gm196_45090(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -62332,7 +62301,7 @@ body02:                                           ; preds = %entry1
   store %gs202 %0, ptr %2, align 8
   %6 = load %gs202, ptr %2, align 8
   %7 = extractvalue %gs202 %6, 0
-  %8 = call i64 @gm196_45002(ptr %7)
+  %8 = call i64 @gm196_45090(ptr %7)
   ret i64 %8
 }
 
@@ -62427,7 +62396,7 @@ body0:                                            ; preds = %entry
   store %st96 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs202, ptr %0, i32 0, i32 0
   %5 = load %st96, ptr %2, align 4
-  call void @gm200_45011(ptr %4, %st96 %5)
+  call void @gm200_45099(ptr %4, %st96 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -62437,7 +62406,7 @@ body02:                                           ; preds = %entry1
   store %st96 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs202, ptr %0, i32 0, i32 0
   %7 = load %st96, ptr %3, align 4
-  call void @gm200_45011(ptr %6, %st96 %7)
+  call void @gm200_45099(ptr %6, %st96 %7)
   ret void
 }
 
@@ -62537,7 +62506,7 @@ body02:                                           ; preds = %entry1
   ret %en9 %11
 }
 
-define %st76 @gm23_42887(%gs94 %0, i64 %1) {
+define %st76 @gm23_42976(%gs94 %0, i64 %1) {
 entry:
   %2 = alloca %gs94, align 8
   %3 = alloca i64, align 8
@@ -62550,7 +62519,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   %6 = load %gs94, ptr %2, align 8
   %7 = load i64, ptr %3, align 4
-  %8 = call %st76 @gm15_42887(%gs94 %6, i64 %7)
+  %8 = call %st76 @gm15_42976(%gs94 %6, i64 %7)
   ret %st76 %8
 
 entry1:                                           ; No predecessors!
@@ -62561,7 +62530,7 @@ body02:                                           ; preds = %entry1
   store i64 %1, ptr %5, align 4
   %9 = load %gs94, ptr %4, align 8
   %10 = load i64, ptr %5, align 4
-  %11 = call %st76 @gm15_42887(%gs94 %9, i64 %10)
+  %11 = call %st76 @gm15_42976(%gs94 %9, i64 %10)
   ret %st76 %11
 }
 
@@ -62662,7 +62631,7 @@ enumret.v11:                                      ; preds = %enumret.c10
   br label %enumret.c12
 
 enumret.c12:                                      ; preds = %enumret.v11, %enumret.c10
-  call void @gm203_45020(ptr %9, i64 %10, %en9 %11)
+  call void @gm203_45108(ptr %9, i64 %10, %en9 %11)
   ret void
 
 entry13:                                          ; No predecessors!
@@ -62755,7 +62724,7 @@ enumret.v27:                                      ; preds = %enumret.c26
   br label %enumret.c28
 
 enumret.c28:                                      ; preds = %enumret.v27, %enumret.c26
-  call void @gm203_45020(ptr %43, i64 %44, %en9 %45)
+  call void @gm203_45108(ptr %43, i64 %44, %en9 %45)
   ret void
 }
 
@@ -62769,7 +62738,7 @@ body0:                                            ; preds = %entry
   store %gs26 %0, ptr %1, align 8
   %3 = load %gs26, ptr %1, align 8
   %4 = extractvalue %gs26 %3, 0
-  %5 = call i64 @gm196_45025(ptr %4)
+  %5 = call i64 @gm196_45113(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -62779,7 +62748,7 @@ body02:                                           ; preds = %entry1
   store %gs26 %0, ptr %2, align 8
   %6 = load %gs26, ptr %2, align 8
   %7 = extractvalue %gs26 %6, 0
-  %8 = call i64 @gm196_45025(ptr %7)
+  %8 = call i64 @gm196_45113(ptr %7)
   ret i64 %8
 }
 
@@ -62793,7 +62762,7 @@ body0:                                            ; preds = %entry
   store %gs22 %0, ptr %1, align 8
   %3 = load %gs22, ptr %1, align 8
   %4 = extractvalue %gs22 %3, 0
-  %5 = call i64 @gm196_45036(ptr %4)
+  %5 = call i64 @gm196_45124(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -62803,7 +62772,7 @@ body02:                                           ; preds = %entry1
   store %gs22 %0, ptr %2, align 8
   %6 = load %gs22, ptr %2, align 8
   %7 = extractvalue %gs22 %6, 0
-  %8 = call i64 @gm196_45036(ptr %7)
+  %8 = call i64 @gm196_45124(ptr %7)
   ret i64 %8
 }
 
@@ -64675,7 +64644,7 @@ while.cond:                                       ; preds = %endif200, %then197
   %1018 = load %st32, ptr %0, align 8
   %1019 = extractvalue %st32 %1018, 10
   %1020 = extractvalue %st101 %1019, 4
-  %1021 = call i64 @gm11_12407(%gs30 %1020)
+  %1021 = call i64 @gm11_12410(%gs30 %1020)
   %1022 = icmp ult i64 %1017, %1021
   br i1 %1022, label %while.body, label %while.end
 
@@ -64684,7 +64653,7 @@ while.body:                                       ; preds = %while.cond
   %1024 = extractvalue %st32 %1023, 10
   %1025 = extractvalue %st101 %1024, 4
   %1026 = load i64, ptr %43, align 4
-  %1027 = call %st72 @gm23_12407(%gs30 %1025, i64 %1026)
+  %1027 = call %st72 @gm23_12410(%gs30 %1025, i64 %1026)
   call void @pwretain72(%st72 %1027)
   store %st72 %1027, ptr %44, align 4
   %1028 = load %st72, ptr %44, align 4
@@ -77461,7 +77430,7 @@ body0:                                            ; preds = %entry
   store %st73 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs246, ptr %0, i32 0, i32 0
   %5 = load %st73, ptr %2, align 4
-  call void @gm200_45047(ptr %4, %st73 %5)
+  call void @gm200_45135(ptr %4, %st73 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -77471,7 +77440,7 @@ body02:                                           ; preds = %entry1
   store %st73 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs246, ptr %0, i32 0, i32 0
   %7 = load %st73, ptr %3, align 4
-  call void @gm200_45047(ptr %6, %st73 %7)
+  call void @gm200_45135(ptr %6, %st73 %7)
   ret void
 }
 
@@ -77485,7 +77454,7 @@ body0:                                            ; preds = %entry
   store %gs246 %0, ptr %1, align 8
   %3 = load %gs246, ptr %1, align 8
   %4 = extractvalue %gs246 %3, 0
-  %5 = call i64 @gm196_45052(ptr %4)
+  %5 = call i64 @gm196_45140(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -77495,7 +77464,7 @@ body02:                                           ; preds = %entry1
   store %gs246 %0, ptr %2, align 8
   %6 = load %gs246, ptr %2, align 8
   %7 = extractvalue %gs246 %6, 0
-  %8 = call i64 @gm196_45052(ptr %7)
+  %8 = call i64 @gm196_45140(ptr %7)
   ret i64 %8
 }
 
@@ -77599,7 +77568,7 @@ while.cond:                                       ; preds = %endif, %body0
   %10 = load %st32, ptr %0, align 8
   %11 = extractvalue %st32 %10, 10
   %12 = extractvalue %st101 %11, 4
-  %13 = call i64 @gm11_12407(%gs30 %12)
+  %13 = call i64 @gm11_12410(%gs30 %12)
   %14 = icmp ult i64 %9, %13
   br i1 %14, label %while.body, label %while.end
 
@@ -77608,7 +77577,7 @@ while.body:                                       ; preds = %while.cond
   %16 = extractvalue %st32 %15, 10
   %17 = extractvalue %st101 %16, 4
   %18 = load i64, ptr %7, align 4
-  %19 = call %st72 @gm23_12407(%gs30 %17, i64 %18)
+  %19 = call %st72 @gm23_12410(%gs30 %17, i64 %18)
   call void @pwretain72(%st72 %19)
   store %st72 %19, ptr %8, align 4
   %20 = load %st72, ptr %8, align 4
@@ -77667,7 +77636,7 @@ while.cond:                                       ; preds = %endif, %body0
   %10 = load %st32, ptr %0, align 8
   %11 = extractvalue %st32 %10, 10
   %12 = extractvalue %st101 %11, 4
-  %13 = call i64 @gm11_12407(%gs30 %12)
+  %13 = call i64 @gm11_12410(%gs30 %12)
   %14 = icmp ult i64 %9, %13
   br i1 %14, label %while.body, label %while.end
 
@@ -77676,7 +77645,7 @@ while.body:                                       ; preds = %while.cond
   %16 = extractvalue %st32 %15, 10
   %17 = extractvalue %st101 %16, 4
   %18 = load i64, ptr %7, align 4
-  %19 = call %st72 @gm23_12407(%gs30 %17, i64 %18)
+  %19 = call %st72 @gm23_12410(%gs30 %17, i64 %18)
   call void @pwretain72(%st72 %19)
   store %st72 %19, ptr %8, align 4
   %20 = load %st72, ptr %8, align 4
@@ -84438,7 +84407,7 @@ while.cond37:                                     ; preds = %endif41, %arm35
 while.body38:                                     ; preds = %while.cond37
   %234 = load %gs94, ptr %44, align 8
   %235 = load i64, ptr %45, align 4
-  %236 = call %st76 @gm23_42887(%gs94 %234, i64 %235)
+  %236 = call %st76 @gm23_42976(%gs94 %234, i64 %235)
   %237 = extractvalue %st76 %236, 2
   %238 = load %gs14, ptr %4, align 8
   %239 = extractvalue %gs14 %238, 0
@@ -89657,7 +89626,7 @@ body0:                                            ; preds = %entry
   store %st93 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs238, ptr %0, i32 0, i32 0
   %5 = load %st93, ptr %2, align 8
-  call void @gm200_45064(ptr %4, %st93 %5)
+  call void @gm200_45152(ptr %4, %st93 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -89667,7 +89636,7 @@ body02:                                           ; preds = %entry1
   store %st93 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs238, ptr %0, i32 0, i32 0
   %7 = load %st93, ptr %3, align 8
-  call void @gm200_45064(ptr %6, %st93 %7)
+  call void @gm200_45152(ptr %6, %st93 %7)
   ret void
 }
 
@@ -92320,7 +92289,7 @@ body0:                                            ; preds = %entry
   store %gs90 %0, ptr %1, align 8
   %3 = load %gs90, ptr %1, align 8
   %4 = extractvalue %gs90 %3, 0
-  %5 = call i64 @gm196_45069(ptr %4)
+  %5 = call i64 @gm196_45157(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -92330,7 +92299,7 @@ body02:                                           ; preds = %entry1
   store %gs90 %0, ptr %2, align 8
   %6 = load %gs90, ptr %2, align 8
   %7 = extractvalue %gs90 %6, 0
-  %8 = call i64 @gm196_45069(ptr %7)
+  %8 = call i64 @gm196_45157(ptr %7)
   ret i64 %8
 }
 
@@ -95031,7 +95000,7 @@ body0:                                            ; preds = %entry
   store %gs42 %0, ptr %1, align 8
   %3 = load %gs42, ptr %1, align 8
   %4 = extractvalue %gs42 %3, 0
-  %5 = call i64 @gm196_45081(ptr %4)
+  %5 = call i64 @gm196_45169(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -95041,7 +95010,7 @@ body02:                                           ; preds = %entry1
   store %gs42 %0, ptr %2, align 8
   %6 = load %gs42, ptr %2, align 8
   %7 = extractvalue %gs42 %6, 0
-  %8 = call i64 @gm196_45081(ptr %7)
+  %8 = call i64 @gm196_45169(ptr %7)
   ret i64 %8
 }
 
@@ -95163,7 +95132,7 @@ body0:                                            ; preds = %entry
   %7 = getelementptr inbounds nuw %gs14, ptr %0, i32 0, i32 0
   %8 = load i64, ptr %3, align 4
   %9 = load i64, ptr %4, align 4
-  call void @gm203_45093(ptr %7, i64 %8, i64 %9)
+  call void @gm203_45181(ptr %7, i64 %8, i64 %9)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -95175,7 +95144,7 @@ body02:                                           ; preds = %entry1
   %10 = getelementptr inbounds nuw %gs14, ptr %0, i32 0, i32 0
   %11 = load i64, ptr %5, align 4
   %12 = load i64, ptr %6, align 4
-  call void @gm203_45093(ptr %10, i64 %11, i64 %12)
+  call void @gm203_45181(ptr %10, i64 %11, i64 %12)
   ret void
 }
 
@@ -95229,7 +95198,7 @@ body0:                                            ; preds = %entry
   store %st83 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs98, ptr %0, i32 0, i32 0
   %5 = load %st83, ptr %2, align 4
-  call void @gm200_45097(ptr %4, %st83 %5)
+  call void @gm200_45185(ptr %4, %st83 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -95239,7 +95208,7 @@ body02:                                           ; preds = %entry1
   store %st83 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs98, ptr %0, i32 0, i32 0
   %7 = load %st83, ptr %3, align 4
-  call void @gm200_45097(ptr %6, %st83 %7)
+  call void @gm200_45185(ptr %6, %st83 %7)
   ret void
 }
 
@@ -95253,7 +95222,7 @@ body0:                                            ; preds = %entry
   store %st84 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs190, ptr %0, i32 0, i32 0
   %5 = load %st84, ptr %2, align 8
-  call void @gm200_45100(ptr %4, %st84 %5)
+  call void @gm200_45188(ptr %4, %st84 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -95263,7 +95232,7 @@ body02:                                           ; preds = %entry1
   store %st84 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs190, ptr %0, i32 0, i32 0
   %7 = load %st84, ptr %3, align 8
-  call void @gm200_45100(ptr %6, %st84 %7)
+  call void @gm200_45188(ptr %6, %st84 %7)
   ret void
 }
 
@@ -95277,7 +95246,7 @@ body0:                                            ; preds = %entry
   store %gs58 %0, ptr %1, align 8
   %3 = load %gs58, ptr %1, align 8
   %4 = extractvalue %gs58 %3, 0
-  %5 = call i64 @gm196_45105(ptr %4)
+  %5 = call i64 @gm196_45193(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -95287,7 +95256,7 @@ body02:                                           ; preds = %entry1
   store %gs58 %0, ptr %2, align 8
   %6 = load %gs58, ptr %2, align 8
   %7 = extractvalue %gs58 %6, 0
-  %8 = call i64 @gm196_45105(ptr %7)
+  %8 = call i64 @gm196_45193(ptr %7)
   ret i64 %8
 }
 
@@ -99705,14 +99674,14 @@ match.next452:                                    ; preds = %match.next446
 while.cond453:                                    ; preds = %enumret.c495, %arm451
   %1641 = load i64, ptr %137, align 4
   %1642 = load %gs110, ptr %134, align 8
-  %1643 = call i64 @gm11_46840(%gs110 %1642)
+  %1643 = call i64 @gm11_46928(%gs110 %1642)
   %1644 = icmp ult i64 %1641, %1643
   br i1 %1644, label %while.body454, label %while.end455
 
 while.body454:                                    ; preds = %while.cond453
   %1645 = load %gs110, ptr %134, align 8
   %1646 = load i64, ptr %137, align 4
-  %1647 = call %en7 @gm23_46840(%gs110 %1645, i64 %1646)
+  %1647 = call %en7 @gm23_46928(%gs110 %1645, i64 %1646)
   store %en7 %1647, ptr %138, align 4
   %1648 = getelementptr inbounds nuw %en7, ptr %138, i32 0, i32 0
   %1649 = load i64, ptr %1648, align 4
@@ -103517,7 +103486,7 @@ body0:                                            ; preds = %entry
   store %gs50 %0, ptr %1, align 8
   %3 = load %gs50, ptr %1, align 8
   %4 = extractvalue %gs50 %3, 0
-  %5 = call i64 @gm196_45117(ptr %4)
+  %5 = call i64 @gm196_45205(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -103527,7 +103496,7 @@ body02:                                           ; preds = %entry1
   store %gs50 %0, ptr %2, align 8
   %6 = load %gs50, ptr %2, align 8
   %7 = extractvalue %gs50 %6, 0
-  %8 = call i64 @gm196_45117(ptr %7)
+  %8 = call i64 @gm196_45205(ptr %7)
   ret i64 %8
 }
 
@@ -103823,7 +103792,7 @@ body0:                                            ; preds = %entry
   store %st76 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs94, ptr %0, i32 0, i32 0
   %5 = load %st76, ptr %2, align 4
-  call void @gm200_45127(ptr %4, %st76 %5)
+  call void @gm200_45215(ptr %4, %st76 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -103833,7 +103802,7 @@ body02:                                           ; preds = %entry1
   store %st76 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs94, ptr %0, i32 0, i32 0
   %7 = load %st76, ptr %3, align 4
-  call void @gm200_45127(ptr %6, %st76 %7)
+  call void @gm200_45215(ptr %6, %st76 %7)
   ret void
 }
 
@@ -104434,7 +104403,7 @@ body0:                                            ; preds = %entry
   store %gs46 %0, ptr %1, align 8
   %3 = load %gs46, ptr %1, align 8
   %4 = extractvalue %gs46 %3, 0
-  %5 = call i64 @gm196_45132(ptr %4)
+  %5 = call i64 @gm196_45220(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -104444,7 +104413,7 @@ body02:                                           ; preds = %entry1
   store %gs46 %0, ptr %2, align 8
   %6 = load %gs46, ptr %2, align 8
   %7 = extractvalue %gs46 %6, 0
-  %8 = call i64 @gm196_45132(ptr %7)
+  %8 = call i64 @gm196_45220(ptr %7)
   ret i64 %8
 }
 
@@ -105718,7 +105687,7 @@ body0:                                            ; preds = %entry
   store %gs114 %0, ptr %1, align 8
   %3 = load %gs114, ptr %1, align 8
   %4 = extractvalue %gs114 %3, 0
-  %5 = call i64 @gm196_45144(ptr %4)
+  %5 = call i64 @gm196_45232(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -105728,7 +105697,7 @@ body02:                                           ; preds = %entry1
   store %gs114 %0, ptr %2, align 8
   %6 = load %gs114, ptr %2, align 8
   %7 = extractvalue %gs114 %6, 0
-  %8 = call i64 @gm196_45144(ptr %7)
+  %8 = call i64 @gm196_45232(ptr %7)
   ret i64 %8
 }
 
@@ -105794,7 +105763,7 @@ body0:                                            ; preds = %entry
   store %gs18 %0, ptr %1, align 8
   %3 = load %gs18, ptr %1, align 8
   %4 = extractvalue %gs18 %3, 0
-  %5 = call i64 @gm196_45156(ptr %4)
+  %5 = call i64 @gm196_45244(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -105804,7 +105773,7 @@ body02:                                           ; preds = %entry1
   store %gs18 %0, ptr %2, align 8
   %6 = load %gs18, ptr %2, align 8
   %7 = extractvalue %gs18 %6, 0
-  %8 = call i64 @gm196_45156(ptr %7)
+  %8 = call i64 @gm196_45244(ptr %7)
   ret i64 %8
 }
 
@@ -106219,7 +106188,7 @@ body0:                                            ; preds = %entry
   store %gs70 %0, ptr %1, align 8
   %3 = load %gs70, ptr %1, align 8
   %4 = extractvalue %gs70 %3, 0
-  %5 = call i64 @gm196_45168(ptr %4)
+  %5 = call i64 @gm196_45256(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -106229,7 +106198,7 @@ body02:                                           ; preds = %entry1
   store %gs70 %0, ptr %2, align 8
   %6 = load %gs70, ptr %2, align 8
   %7 = extractvalue %gs70 %6, 0
-  %8 = call i64 @gm196_45168(ptr %7)
+  %8 = call i64 @gm196_45256(ptr %7)
   ret i64 %8
 }
 
@@ -110736,7 +110705,7 @@ body0:                                            ; preds = %entry
   store %gs142 %0, ptr %1, align 8
   %3 = load %gs142, ptr %1, align 8
   %4 = extractvalue %gs142 %3, 0
-  %5 = call i64 @gm196_45180(ptr %4)
+  %5 = call i64 @gm196_45268(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -110746,7 +110715,7 @@ body02:                                           ; preds = %entry1
   store %gs142 %0, ptr %2, align 8
   %6 = load %gs142, ptr %2, align 8
   %7 = extractvalue %gs142 %6, 0
-  %8 = call i64 @gm196_45180(ptr %7)
+  %8 = call i64 @gm196_45268(ptr %7)
   ret i64 %8
 }
 
@@ -111047,7 +111016,7 @@ body0:                                            ; preds = %entry
   store %st89 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs222, ptr %0, i32 0, i32 0
   %5 = load %st89, ptr %2, align 4
-  call void @gm200_45190(ptr %4, %st89 %5)
+  call void @gm200_45278(ptr %4, %st89 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -111057,7 +111026,7 @@ body02:                                           ; preds = %entry1
   store %st89 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs222, ptr %0, i32 0, i32 0
   %7 = load %st89, ptr %3, align 4
-  call void @gm200_45190(ptr %6, %st89 %7)
+  call void @gm200_45278(ptr %6, %st89 %7)
   ret void
 }
 
@@ -111148,7 +111117,7 @@ body0:                                            ; preds = %entry
   store %gs146 %0, ptr %1, align 8
   %3 = load %gs146, ptr %1, align 8
   %4 = extractvalue %gs146 %3, 0
-  %5 = call i64 @gm196_45195(ptr %4)
+  %5 = call i64 @gm196_45283(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -111158,7 +111127,7 @@ body02:                                           ; preds = %entry1
   store %gs146 %0, ptr %2, align 8
   %6 = load %gs146, ptr %2, align 8
   %7 = extractvalue %gs146 %6, 0
-  %8 = call i64 @gm196_45195(ptr %7)
+  %8 = call i64 @gm196_45283(ptr %7)
   ret i64 %8
 }
 
@@ -111213,7 +111182,7 @@ body0:                                            ; preds = %entry
   store %st85 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs174, ptr %0, i32 0, i32 0
   %5 = load %st85, ptr %2, align 8
-  call void @gm200_45205(ptr %4, %st85 %5)
+  call void @gm200_45293(ptr %4, %st85 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -111223,7 +111192,7 @@ body02:                                           ; preds = %entry1
   store %st85 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs174, ptr %0, i32 0, i32 0
   %7 = load %st85, ptr %3, align 8
-  call void @gm200_45205(ptr %6, %st85 %7)
+  call void @gm200_45293(ptr %6, %st85 %7)
   ret void
 }
 
@@ -111278,7 +111247,7 @@ body0:                                            ; preds = %entry
   store %st94 %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs194, ptr %0, i32 0, i32 0
   %5 = load %st94, ptr %2, align 8
-  call void @gm200_45208(ptr %4, %st94 %5)
+  call void @gm200_45296(ptr %4, %st94 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -111288,7 +111257,7 @@ body02:                                           ; preds = %entry1
   store %st94 %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs194, ptr %0, i32 0, i32 0
   %7 = load %st94, ptr %3, align 8
-  call void @gm200_45208(ptr %6, %st94 %7)
+  call void @gm200_45296(ptr %6, %st94 %7)
   ret void
 }
 
@@ -111302,7 +111271,7 @@ body0:                                            ; preds = %entry
   store %st91 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs218, ptr %0, i32 0, i32 0
   %5 = load %st91, ptr %2, align 4
-  call void @gm200_45211(ptr %4, %st91 %5)
+  call void @gm200_45299(ptr %4, %st91 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -111312,7 +111281,7 @@ body02:                                           ; preds = %entry1
   store %st91 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs218, ptr %0, i32 0, i32 0
   %7 = load %st91, ptr %3, align 4
-  call void @gm200_45211(ptr %6, %st91 %7)
+  call void @gm200_45299(ptr %6, %st91 %7)
   ret void
 }
 
@@ -111326,7 +111295,7 @@ body0:                                            ; preds = %entry
   store %gs138 %0, ptr %1, align 8
   %3 = load %gs138, ptr %1, align 8
   %4 = extractvalue %gs138 %3, 0
-  %5 = call i64 @gm196_45216(ptr %4)
+  %5 = call i64 @gm196_45304(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -111336,7 +111305,7 @@ body02:                                           ; preds = %entry1
   store %gs138 %0, ptr %2, align 8
   %6 = load %gs138, ptr %2, align 8
   %7 = extractvalue %gs138 %6, 0
-  %8 = call i64 @gm196_45216(ptr %7)
+  %8 = call i64 @gm196_45304(ptr %7)
   ret i64 %8
 }
 
@@ -111499,7 +111468,7 @@ body0:                                            ; preds = %entry
   store %gs166 %0, ptr %1, align 8
   %3 = load %gs166, ptr %1, align 8
   %4 = extractvalue %gs166 %3, 0
-  %5 = call i64 @gm196_45227(ptr %4)
+  %5 = call i64 @gm196_45315(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -111509,7 +111478,7 @@ body02:                                           ; preds = %entry1
   store %gs166 %0, ptr %2, align 8
   %6 = load %gs166, ptr %2, align 8
   %7 = extractvalue %gs166 %6, 0
-  %8 = call i64 @gm196_45227(ptr %7)
+  %8 = call i64 @gm196_45315(ptr %7)
   ret i64 %8
 }
 
@@ -111591,7 +111560,7 @@ body0:                                            ; preds = %entry
   store %st88 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs234, ptr %0, i32 0, i32 0
   %5 = load %st88, ptr %2, align 4
-  call void @gm200_45237(ptr %4, %st88 %5)
+  call void @gm200_45325(ptr %4, %st88 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -111601,7 +111570,7 @@ body02:                                           ; preds = %entry1
   store %st88 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs234, ptr %0, i32 0, i32 0
   %7 = load %st88, ptr %3, align 4
-  call void @gm200_45237(ptr %6, %st88 %7)
+  call void @gm200_45325(ptr %6, %st88 %7)
   ret void
 }
 
@@ -111791,7 +111760,7 @@ body0:                                            ; preds = %entry
   store %st97 %1, ptr %2, align 4
   %4 = getelementptr inbounds nuw %gs206, ptr %0, i32 0, i32 0
   %5 = load %st97, ptr %2, align 4
-  call void @gm200_45241(ptr %4, %st97 %5)
+  call void @gm200_45329(ptr %4, %st97 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -111801,7 +111770,7 @@ body02:                                           ; preds = %entry1
   store %st97 %1, ptr %3, align 4
   %6 = getelementptr inbounds nuw %gs206, ptr %0, i32 0, i32 0
   %7 = load %st97, ptr %3, align 4
-  call void @gm200_45241(ptr %6, %st97 %7)
+  call void @gm200_45329(ptr %6, %st97 %7)
   ret void
 }
 
@@ -111936,7 +111905,7 @@ then7:                                            ; preds = %endif4
   %62 = load %st37, ptr %0, align 8
   %63 = extractvalue %st37 %62, 30
   %64 = load i64, ptr %6, align 4
-  %65 = call ptr @gm23_1561(%gs118 %63, i64 %64)
+  %65 = call ptr @gm23_1565(%gs118 %63, i64 %64)
   %66 = load i64, ptr %6, align 4
   %67 = load i64, ptr %5, align 4
   %68 = load %st71, ptr %4, align 8
@@ -111958,7 +111927,7 @@ then9:                                            ; preds = %endif8
   %76 = load %st37, ptr %0, align 8
   %77 = extractvalue %st37 %76, 33
   %78 = load i64, ptr %7, align 4
-  %79 = call ptr @gm23_1561(%gs118 %77, i64 %78)
+  %79 = call ptr @gm23_1565(%gs118 %77, i64 %78)
   %80 = load i64, ptr %7, align 4
   %81 = load i64, ptr %6, align 4
   %82 = load i64, ptr %5, align 4
@@ -111975,7 +111944,7 @@ endif10:                                          ; preds = %endif8
   br label %endif2
 }
 
-define ptr @gm23_1561(%gs118 %0, i64 %1) {
+define ptr @gm23_1565(%gs118 %0, i64 %1) {
 entry:
   %2 = alloca %gs118, align 8
   %3 = alloca i64, align 8
@@ -111988,7 +111957,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   %6 = load %gs118, ptr %2, align 8
   %7 = load i64, ptr %3, align 4
-  %8 = call ptr @gm15_1561(%gs118 %6, i64 %7)
+  %8 = call ptr @gm15_1565(%gs118 %6, i64 %7)
   ret ptr %8
 
 entry1:                                           ; No predecessors!
@@ -111999,8 +111968,71 @@ body02:                                           ; preds = %entry1
   store i64 %1, ptr %5, align 4
   %9 = load %gs118, ptr %4, align 8
   %10 = load i64, ptr %5, align 4
-  %11 = call ptr @gm15_1561(%gs118 %9, i64 %10)
+  %11 = call ptr @gm15_1565(%gs118 %9, i64 %10)
   ret ptr %11
+}
+
+define i64 @pf1605(ptr %0, ptr %1, i64 %2) {
+entry:
+  %3 = alloca i64, align 8
+  %4 = alloca i64, align 8
+  br label %body0
+
+body0:                                            ; preds = %entry
+  store i64 %2, ptr %3, align 4
+  store i64 0, ptr %4, align 4
+  br label %while.cond
+
+while.cond:                                       ; preds = %endif, %body0
+  %5 = load i64, ptr %4, align 4
+  %6 = load %st37, ptr %0, align 8
+  %7 = extractvalue %st37 %6, 29
+  %8 = call i64 @gm11_4725(%gs14 %7)
+  %9 = icmp ult i64 %5, %8
+  br i1 %9, label %while.body, label %while.end
+
+while.body:                                       ; preds = %while.cond
+  %10 = load %st37, ptr %0, align 8
+  %11 = extractvalue %st37 %10, 31
+  %12 = load i64, ptr %4, align 4
+  %13 = call i64 @gm23_6468(%gs14 %11, i64 %12)
+  %14 = load i64, ptr %3, align 4
+  %15 = icmp eq i64 %13, %14
+  br i1 %15, label %then, label %endif
+
+while.end:                                        ; preds = %while.cond
+  %16 = load %st37, ptr %0, align 8
+  %17 = extractvalue %st37 %16, 29
+  %18 = call i64 @gm11_4725(%gs14 %17)
+  %19 = load i64, ptr %4, align 4
+  ret i64 %18
+
+then:                                             ; preds = %while.body
+  %20 = load %st32, ptr %1, align 8
+  %21 = extractvalue %st32 %20, 0
+  %22 = extractvalue %st98 %21, 7
+  %23 = load %st37, ptr %0, align 8
+  %24 = extractvalue %st37 %23, 29
+  %25 = load i64, ptr %4, align 4
+  %26 = call i64 @gm23_6468(%gs14 %24, i64 %25)
+  %27 = call %st71 @gm23_4815(%gs198 %22, i64 %26)
+  %28 = extractvalue %st71 %27, 3
+  %29 = call i64 @gm11_4725(%gs14 %28)
+  %30 = icmp eq i64 %29, 0
+  br i1 %30, label %then1, label %endif2
+
+endif:                                            ; preds = %endif2, %while.body
+  %31 = load i64, ptr %4, align 4
+  %32 = call i64 @plew_u64Add(i64 %31, i64 1)
+  store i64 %32, ptr %4, align 4
+  br label %while.cond
+
+then1:                                            ; preds = %then
+  %33 = load i64, ptr %4, align 4
+  ret i64 %33
+
+endif2:                                           ; preds = %then
+  br label %endif
 }
 
 define i64 @pf1335(ptr %0, ptr %1, i64 %2) {
@@ -113026,7 +113058,7 @@ while.end:                                        ; preds = %while.cond
   %30 = load %gs118, ptr %7, align 8
   %31 = extractvalue %gs118 %30, 0
   %32 = load %gs118, ptr %7, align 8
-  %33 = call i64 @gm11_11923(%gs118 %32)
+  %33 = call i64 @gm11_11926(%gs118 %32)
   %34 = call ptr @LLVMStructTypeInContext(ptr %29, ptr %31, i64 %33, i32 0)
   %35 = load i64, ptr %8, align 4
   %36 = load %gs118, ptr %7, align 8
@@ -113040,7 +113072,7 @@ while.end:                                        ; preds = %while.cond
 then:                                             ; preds = %while.body
   %40 = load %st37, ptr %0, align 8
   %41 = extractvalue %st37 %40, 10
-  call void @gm13_9794(ptr %7, ptr %41)
+  call void @gm13_9797(ptr %7, ptr %41)
   br label %endif
 
 endif:                                            ; preds = %else, %then
@@ -113055,7 +113087,7 @@ else:                                             ; preds = %while.body
   %46 = call %st83 @gm23_5377(%gs98 %44, i64 %45)
   call void @pwretain83(%st83 %46)
   %47 = call ptr @pf1363(ptr %0, ptr %1, %st83 %46)
-  call void @gm13_9794(ptr %7, ptr %47)
+  call void @gm13_9797(ptr %7, ptr %47)
   br label %endif
 }
 
@@ -113551,7 +113583,7 @@ endif:                                            ; preds = %while.body
   br label %while.cond
 }
 
-define void @gm13_9794(ptr %0, ptr %1) {
+define void @gm13_9797(ptr %0, ptr %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca ptr, align 8
@@ -113561,7 +113593,7 @@ body0:                                            ; preds = %entry
   store ptr %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs118, ptr %0, i32 0, i32 0
   %5 = load ptr, ptr %2, align 8
-  call void @gm200_45246(ptr %4, ptr %5)
+  call void @gm200_45334(ptr %4, ptr %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -113571,7 +113603,7 @@ body02:                                           ; preds = %entry1
   store ptr %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs118, ptr %0, i32 0, i32 0
   %7 = load ptr, ptr %3, align 8
-  call void @gm200_45246(ptr %6, ptr %7)
+  call void @gm200_45334(ptr %6, ptr %7)
   ret void
 }
 
@@ -113615,7 +113647,7 @@ body0:                                            ; preds = %entry
   store ptr %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs38, ptr %0, i32 0, i32 0
   %5 = load ptr, ptr %2, align 8
-  call void @gm200_45249(ptr %4, ptr %5)
+  call void @gm200_45337(ptr %4, ptr %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -113625,7 +113657,7 @@ body02:                                           ; preds = %entry1
   store ptr %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs38, ptr %0, i32 0, i32 0
   %7 = load ptr, ptr %3, align 8
-  call void @gm200_45249(ptr %6, ptr %7)
+  call void @gm200_45337(ptr %6, ptr %7)
   ret void
 }
 
@@ -114728,11 +114760,11 @@ then94:                                           ; preds = %arm92
   %595 = load %st37, ptr %0, align 8
   %596 = extractvalue %st37 %595, 56
   %597 = load i64, ptr %32, align 4
-  %598 = call ptr @gm23_1561(%gs118 %596, i64 %597)
+  %598 = call ptr @gm23_1565(%gs118 %596, i64 %597)
   %599 = load %st37, ptr %0, align 8
   %600 = extractvalue %st37 %599, 55
   %601 = load i64, ptr %32, align 4
-  %602 = call ptr @gm23_9949(%gs38 %600, i64 %601)
+  %602 = call ptr @gm23_9952(%gs38 %600, i64 %601)
   %603 = call ptr @pf478()
   %604 = call ptr @LLVMBuildLoad2(ptr %594, ptr %598, ptr %602, ptr %603)
   %605 = load i64, ptr %32, align 4
@@ -114911,7 +114943,7 @@ then117:                                          ; preds = %then115
   %693 = load %st37, ptr %0, align 8
   %694 = extractvalue %st37 %693, 87
   %695 = load i64, ptr %36, align 4
-  %696 = call ptr @gm23_9949(%gs38 %694, i64 %695)
+  %696 = call ptr @gm23_9952(%gs38 %694, i64 %695)
   %697 = call ptr @pf478()
   %698 = call ptr @LLVMBuildInsertValue(ptr %691, ptr %692, ptr %696, i64 0, ptr %697)
   store ptr %698, ptr %37, align 8
@@ -118591,7 +118623,7 @@ then651:                                          ; preds = %arm649
   %2433 = call %gs30 @pf439(ptr %1, i64 %2432)
   store %gs30 %2433, ptr %139, align 8
   %2434 = load %gs30, ptr %139, align 8
-  %2435 = call i64 @gm11_12407(%gs30 %2434)
+  %2435 = call i64 @gm11_12410(%gs30 %2434)
   %2436 = icmp ugt i64 %2435, 0
   br i1 %2436, label %then653, label %endif654
 
@@ -118639,7 +118671,7 @@ endif654:                                         ; preds = %while.end, %then651
   %2464 = load %st37, ptr %0, align 8
   %2465 = extractvalue %st37 %2464, 84
   %2466 = load i64, ptr %137, align 4
-  %2467 = call ptr @gm23_9949(%gs38 %2465, i64 %2466)
+  %2467 = call ptr @gm23_9952(%gs38 %2465, i64 %2466)
   %2468 = call ptr @pf478()
   %2469 = call ptr @LLVMBuildInsertValue(ptr %2462, ptr %2463, ptr %2467, i64 0, ptr %2468)
   store ptr %2469, ptr %146, align 8
@@ -118667,14 +118699,14 @@ endif654:                                         ; preds = %while.end, %then651
 while.cond:                                       ; preds = %endif656, %then653
   %2486 = load i64, ptr %141, align 4
   %2487 = load %gs30, ptr %139, align 8
-  %2488 = call i64 @gm11_12407(%gs30 %2487)
+  %2488 = call i64 @gm11_12410(%gs30 %2487)
   %2489 = icmp ult i64 %2486, %2488
   br i1 %2489, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
   %2490 = load %gs30, ptr %139, align 8
   %2491 = load i64, ptr %141, align 4
-  %2492 = call %st72 @gm23_12407(%gs30 %2490, i64 %2491)
+  %2492 = call %st72 @gm23_12410(%gs30 %2490, i64 %2491)
   call void @pwretain72(%st72 %2492)
   store %st72 %2492, ptr %142, align 4
   %2493 = load %st72, ptr %142, align 4
@@ -118713,7 +118745,7 @@ then657:                                          ; preds = %then655
   %2512 = load %st37, ptr %0, align 8
   %2513 = extractvalue %st37 %2512, 55
   %2514 = load i64, ptr %143, align 4
-  %2515 = call ptr @gm23_9949(%gs38 %2513, i64 %2514)
+  %2515 = call ptr @gm23_9952(%gs38 %2513, i64 %2514)
   %2516 = load %st37, ptr %0, align 8
   %2517 = extractvalue %st37 %2516, 2
   %2518 = load ptr, ptr %140, align 8
@@ -118733,11 +118765,11 @@ else659:                                          ; preds = %then655
   %2526 = load %st37, ptr %0, align 8
   %2527 = extractvalue %st37 %2526, 56
   %2528 = load i64, ptr %143, align 4
-  %2529 = call ptr @gm23_1561(%gs118 %2527, i64 %2528)
+  %2529 = call ptr @gm23_1565(%gs118 %2527, i64 %2528)
   %2530 = load %st37, ptr %0, align 8
   %2531 = extractvalue %st37 %2530, 55
   %2532 = load i64, ptr %143, align 4
-  %2533 = call ptr @gm23_9949(%gs38 %2531, i64 %2532)
+  %2533 = call ptr @gm23_9952(%gs38 %2531, i64 %2532)
   %2534 = call ptr @pf478()
   %2535 = call ptr @LLVMBuildLoad2(ptr %2525, ptr %2529, ptr %2533, ptr %2534)
   store ptr %2535, ptr %144, align 8
@@ -118751,7 +118783,7 @@ then660:                                          ; preds = %else659
   %2540 = load %st37, ptr %0, align 8
   %2541 = extractvalue %st37 %2540, 60
   %2542 = load i64, ptr %143, align 4
-  %2543 = call ptr @gm23_1561(%gs118 %2541, i64 %2542)
+  %2543 = call ptr @gm23_1565(%gs118 %2541, i64 %2542)
   %2544 = load %st37, ptr %0, align 8
   %2545 = extractvalue %st37 %2544, 64
   %2546 = load i64, ptr %143, align 4
@@ -123126,7 +123158,7 @@ then3:                                            ; preds = %then1
   %59 = load %st37, ptr %0, align 8
   %60 = extractvalue %st37 %59, 33
   %61 = load i64, ptr %6, align 4
-  %62 = call ptr @gm23_1561(%gs118 %60, i64 %61)
+  %62 = call ptr @gm23_1565(%gs118 %60, i64 %61)
   call void @pf1324(ptr %0, ptr %1, ptr %54, i64 %58, ptr %62)
   br label %endif4
 
@@ -123185,7 +123217,7 @@ then9:                                            ; preds = %then7
   %92 = load %st37, ptr %0, align 8
   %93 = extractvalue %st37 %92, 33
   %94 = load i64, ptr %11, align 4
-  %95 = call ptr @gm23_1561(%gs118 %93, i64 %94)
+  %95 = call ptr @gm23_1565(%gs118 %93, i64 %94)
   %96 = call i64 @pf1330(ptr %0, ptr %1, i64 %91, ptr %95)
   store i64 %96, ptr %12, align 4
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -123197,11 +123229,11 @@ then9:                                            ; preds = %then7
   %100 = load %st37, ptr %0, align 8
   %101 = extractvalue %st37 %100, 103
   %102 = load i64, ptr %12, align 4
-  %103 = call ptr @gm23_1561(%gs118 %101, i64 %102)
+  %103 = call ptr @gm23_1565(%gs118 %101, i64 %102)
   %104 = load %st37, ptr %0, align 8
   %105 = extractvalue %st37 %104, 102
   %106 = load i64, ptr %12, align 4
-  %107 = call ptr @gm23_9949(%gs38 %105, i64 %106)
+  %107 = call ptr @gm23_9952(%gs38 %105, i64 %106)
   %108 = load %gs38, ptr %13, align 8
   %109 = extractvalue %gs38 %108, 0
   %110 = call ptr @pf478()
@@ -123253,7 +123285,7 @@ endif:                                            ; preds = %body0
   ret ptr %20
 }
 
-define i64 @gm11_9949(%gs38 %0) {
+define i64 @gm11_9952(%gs38 %0) {
 entry:
   %1 = alloca %gs38, align 8
   %2 = alloca %gs38, align 8
@@ -123263,7 +123295,7 @@ body0:                                            ; preds = %entry
   store %gs38 %0, ptr %1, align 8
   %3 = load %gs38, ptr %1, align 8
   %4 = extractvalue %gs38 %3, 0
-  %5 = call i64 @gm196_45254(ptr %4)
+  %5 = call i64 @gm196_45342(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -123273,13 +123305,13 @@ body02:                                           ; preds = %entry1
   store %gs38 %0, ptr %2, align 8
   %6 = load %gs38, ptr %2, align 8
   %7 = extractvalue %gs38 %6, 0
-  %8 = call i64 @gm196_45254(ptr %7)
+  %8 = call i64 @gm196_45342(ptr %7)
   ret i64 %8
 }
 
 declare ptr @LLVMGetUndef(ptr)
 
-define ptr @gm23_9949(%gs38 %0, i64 %1) {
+define ptr @gm23_9952(%gs38 %0, i64 %1) {
 entry:
   %2 = alloca %gs38, align 8
   %3 = alloca i64, align 8
@@ -123292,7 +123324,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   %6 = load %gs38, ptr %2, align 8
   %7 = load i64, ptr %3, align 4
-  %8 = call ptr @gm15_9949(%gs38 %6, i64 %7)
+  %8 = call ptr @gm15_9952(%gs38 %6, i64 %7)
   ret ptr %8
 
 entry1:                                           ; No predecessors!
@@ -123303,7 +123335,7 @@ body02:                                           ; preds = %entry1
   store i64 %1, ptr %5, align 4
   %9 = load %gs38, ptr %4, align 8
   %10 = load i64, ptr %5, align 4
-  %11 = call ptr @gm15_9949(%gs38 %9, i64 %10)
+  %11 = call ptr @gm15_9952(%gs38 %9, i64 %10)
   ret ptr %11
 }
 
@@ -126436,7 +126468,7 @@ while.end:                                        ; preds = %while.cond
   call void @gm13_1696(ptr %29, ptr %30)
   %31 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 81
   %32 = load ptr, ptr %7, align 8
-  call void @gm13_9794(ptr %31, ptr %32)
+  call void @gm13_9797(ptr %31, ptr %32)
   %33 = load ptr, ptr %9, align 8
   %34 = load i64, ptr %8, align 4
   ret ptr %33
@@ -126445,7 +126477,7 @@ then:                                             ; preds = %while.body
   %35 = load %st37, ptr %0, align 8
   %36 = extractvalue %st37 %35, 80
   %37 = load i64, ptr %8, align 4
-  %38 = call ptr @gm23_9949(%gs38 %36, i64 %37)
+  %38 = call ptr @gm23_9952(%gs38 %36, i64 %37)
   %39 = load i64, ptr %8, align 4
   ret ptr %38
 
@@ -126559,7 +126591,7 @@ body0:                                            ; preds = %entry
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %6, align 8
   %17 = load ptr, ptr %5, align 8
-  call void @gm13_9794(ptr %6, ptr %17)
+  call void @gm13_9797(ptr %6, ptr %17)
   %18 = load ptr, ptr %5, align 8
   %19 = load %gs118, ptr %6, align 8
   %20 = extractvalue %gs118 %19, 0
@@ -126857,9 +126889,9 @@ then:                                             ; preds = %sc.cont6
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %12, align 8
   %45 = load ptr, ptr %11, align 8
-  call void @gm13_9794(ptr %12, ptr %45)
+  call void @gm13_9797(ptr %12, ptr %45)
   %46 = load ptr, ptr %11, align 8
-  call void @gm13_9794(ptr %12, ptr %46)
+  call void @gm13_9797(ptr %12, ptr %46)
   %47 = load ptr, ptr %11, align 8
   %48 = load %gs118, ptr %12, align 8
   %49 = extractvalue %gs118 %48, 0
@@ -127664,7 +127696,7 @@ else:                                             ; preds = %body0
   call void @gm13_1696(ptr %87, ptr %88)
   %89 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 56
   %90 = load ptr, ptr %14, align 8
-  call void @gm13_9794(ptr %89, ptr %90)
+  call void @gm13_9797(ptr %89, ptr %90)
   %91 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 57
   %92 = load i64, ptr %15, align 4
   call void @gm13_5355(ptr %91, i64 %92)
@@ -127676,7 +127708,7 @@ else:                                             ; preds = %body0
   call void @gm13_1641(ptr %95, i1 %96)
   %97 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 60
   %98 = load ptr, ptr %18, align 8
-  call void @gm13_9794(ptr %97, ptr %98)
+  call void @gm13_9797(ptr %97, ptr %98)
   %99 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 61
   %100 = load i64, ptr %19, align 4
   call void @gm13_5355(ptr %99, i64 %100)
@@ -127708,7 +127740,7 @@ body0:                                            ; preds = %entry
   %7 = getelementptr inbounds nuw %gs126, ptr %0, i32 0, i32 0
   %8 = load i64, ptr %3, align 4
   %9 = load i1, ptr %4, align 1
-  call void @gm203_45266(ptr %7, i64 %8, i1 %9)
+  call void @gm203_45354(ptr %7, i64 %8, i1 %9)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -127720,7 +127752,7 @@ body02:                                           ; preds = %entry1
   %10 = getelementptr inbounds nuw %gs126, ptr %0, i32 0, i32 0
   %11 = load i64, ptr %5, align 4
   %12 = load i1, ptr %6, align 1
-  call void @gm203_45266(ptr %10, i64 %11, i1 %12)
+  call void @gm203_45354(ptr %10, i64 %11, i1 %12)
   ret void
 }
 
@@ -129792,7 +129824,7 @@ endif2:                                           ; preds = %then1, %while.end
 
 declare ptr @LLVMGetInsertBlock(ptr)
 
-define void @gm13_10874(ptr %0, ptr %1) {
+define void @gm13_10877(ptr %0, ptr %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca ptr, align 8
@@ -129802,7 +129834,7 @@ body0:                                            ; preds = %entry
   store ptr %1, ptr %2, align 8
   %4 = getelementptr inbounds nuw %gs130, ptr %0, i32 0, i32 0
   %5 = load ptr, ptr %2, align 8
-  call void @gm200_45269(ptr %4, ptr %5)
+  call void @gm200_45357(ptr %4, ptr %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -129812,7 +129844,7 @@ body02:                                           ; preds = %entry1
   store ptr %1, ptr %3, align 8
   %6 = getelementptr inbounds nuw %gs130, ptr %0, i32 0, i32 0
   %7 = load ptr, ptr %3, align 8
-  call void @gm200_45269(ptr %6, ptr %7)
+  call void @gm200_45357(ptr %6, ptr %7)
   ret void
 }
 
@@ -130387,7 +130419,7 @@ then1:                                            ; preds = %then
   %38 = load %st37, ptr %0, align 8
   %39 = extractvalue %st37 %38, 55
   %40 = load i64, ptr %7, align 4
-  %41 = call ptr @gm23_9949(%gs38 %39, i64 %40)
+  %41 = call ptr @gm23_9952(%gs38 %39, i64 %40)
   %42 = load i64, ptr %7, align 4
   ret ptr %41
 
@@ -130640,52 +130672,6 @@ endif18:                                          ; preds = %endif14
   %133 = load %st71, ptr %4, align 8
   call void @pwdrop71(%st71 %133)
   ret i1 false
-}
-
-define i64 @pf1605(ptr %0, i64 %1) {
-entry:
-  %2 = alloca i64, align 8
-  %3 = alloca i64, align 8
-  br label %body0
-
-body0:                                            ; preds = %entry
-  store i64 %1, ptr %2, align 4
-  store i64 0, ptr %3, align 4
-  br label %while.cond
-
-while.cond:                                       ; preds = %endif, %body0
-  %4 = load i64, ptr %3, align 4
-  %5 = load %st37, ptr %0, align 8
-  %6 = extractvalue %st37 %5, 27
-  %7 = call i64 @gm11_4725(%gs14 %6)
-  %8 = icmp ult i64 %4, %7
-  br i1 %8, label %while.body, label %while.end
-
-while.body:                                       ; preds = %while.cond
-  %9 = load %st37, ptr %0, align 8
-  %10 = extractvalue %st37 %9, 27
-  %11 = load i64, ptr %3, align 4
-  %12 = call i64 @gm23_6468(%gs14 %10, i64 %11)
-  %13 = load i64, ptr %2, align 4
-  %14 = icmp eq i64 %12, %13
-  br i1 %14, label %then, label %endif
-
-while.end:                                        ; preds = %while.cond
-  %15 = load %st37, ptr %0, align 8
-  %16 = extractvalue %st37 %15, 27
-  %17 = call i64 @gm11_4725(%gs14 %16)
-  %18 = load i64, ptr %3, align 4
-  ret i64 %17
-
-then:                                             ; preds = %while.body
-  %19 = load i64, ptr %3, align 4
-  ret i64 %19
-
-endif:                                            ; preds = %while.body
-  %20 = load i64, ptr %3, align 4
-  %21 = call i64 @plew_u64Add(i64 %20, i64 1)
-  store i64 %21, ptr %3, align 4
-  br label %while.cond
 }
 
 define ptr @pf1456(ptr %0, ptr %1, ptr %2, i64 %3) {
@@ -131531,7 +131517,7 @@ then1:                                            ; preds = %then
   %36 = load %st37, ptr %0, align 8
   %37 = extractvalue %st37 %36, 30
   %38 = load i64, ptr %7, align 4
-  %39 = call ptr @gm23_1561(%gs118 %37, i64 %38)
+  %39 = call ptr @gm23_1565(%gs118 %37, i64 %38)
   %40 = load i64, ptr %7, align 4
   %41 = load i64, ptr %6, align 4
   %42 = load %gs14, ptr %5, align 8
@@ -132257,7 +132243,7 @@ then:                                             ; preds = %arm
   %29 = load %st37, ptr %0, align 8
   %30 = extractvalue %st37 %29, 55
   %31 = load i64, ptr %7, align 4
-  %32 = call ptr @gm23_9949(%gs38 %30, i64 %31)
+  %32 = call ptr @gm23_9952(%gs38 %30, i64 %31)
   %33 = load i64, ptr %7, align 4
   ret ptr %32
 
@@ -132513,11 +132499,11 @@ while.cond1:                                      ; preds = %endif, %while.body
 while.body2:                                      ; preds = %while.cond1
   %33 = load %gs94, ptr %8, align 8
   %34 = load i64, ptr %15, align 4
-  %35 = call %st76 @gm23_42887(%gs94 %33, i64 %34)
+  %35 = call %st76 @gm23_42976(%gs94 %33, i64 %34)
   %36 = extractvalue %st76 %35, 0
   %37 = load %gs94, ptr %8, align 8
   %38 = load i64, ptr %15, align 4
-  %39 = call %st76 @gm23_42887(%gs94 %37, i64 %38)
+  %39 = call %st76 @gm23_42976(%gs94 %37, i64 %38)
   %40 = extractvalue %st76 %39, 1
   %41 = load %st83, ptr %12, align 4
   %42 = extractvalue %st83 %41, 0
@@ -132537,7 +132523,7 @@ then:                                             ; preds = %while.body2
   store i1 true, ptr %13, align 1
   %50 = load %gs94, ptr %8, align 8
   %51 = load i64, ptr %15, align 4
-  %52 = call %st76 @gm23_42887(%gs94 %50, i64 %51)
+  %52 = call %st76 @gm23_42976(%gs94 %50, i64 %51)
   %53 = extractvalue %st76 %52, 2
   store i64 %53, ptr %14, align 4
   %54 = load %gs94, ptr %8, align 8
@@ -132617,7 +132603,7 @@ body0:                                            ; preds = %entry
   %11 = load %st37, ptr %0, align 8
   %12 = extractvalue %st37 %11, 55
   %13 = load i64, ptr %4, align 4
-  %14 = call ptr @gm23_9949(%gs38 %12, i64 %13)
+  %14 = call ptr @gm23_9952(%gs38 %12, i64 %13)
   %15 = call ptr @pf478()
   %16 = call ptr @LLVMBuildLoad2(ptr %8, ptr %10, ptr %14, ptr %15)
   store ptr %16, ptr %6, align 8
@@ -132776,7 +132762,7 @@ endif4:                                           ; preds = %endif2
   ret ptr %33
 }
 
-define i64 @gm11_11923(%gs118 %0) {
+define i64 @gm11_11926(%gs118 %0) {
 entry:
   %1 = alloca %gs118, align 8
   %2 = alloca %gs118, align 8
@@ -132786,7 +132772,7 @@ body0:                                            ; preds = %entry
   store %gs118 %0, ptr %1, align 8
   %3 = load %gs118, ptr %1, align 8
   %4 = extractvalue %gs118 %3, 0
-  %5 = call i64 @gm196_45274(ptr %4)
+  %5 = call i64 @gm196_45362(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -132796,7 +132782,7 @@ body02:                                           ; preds = %entry1
   store %gs118 %0, ptr %2, align 8
   %6 = load %gs118, ptr %2, align 8
   %7 = extractvalue %gs118 %6, 0
-  %8 = call i64 @gm196_45274(ptr %7)
+  %8 = call i64 @gm196_45362(ptr %7)
   ret i64 %8
 }
 
@@ -133185,7 +133171,7 @@ endif6:                                           ; preds = %then5, %endif4
   store %gs118 zeroinitializer, ptr %28, align 8
   %149 = load %st37, ptr %0, align 8
   %150 = extractvalue %st37 %149, 10
-  call void @gm13_9794(ptr %28, ptr %150)
+  call void @gm13_9797(ptr %28, ptr %150)
   store i64 0, ptr %29, align 4
   br label %while.cond
 
@@ -133204,7 +133190,7 @@ while.body:                                       ; preds = %while.cond
   %159 = call %st82 @gm23_6496(%gs22 %157, i64 %158)
   call void @pwretain82(%st82 %159)
   %160 = call ptr @pf1546(ptr %0, ptr %1, %st82 %159)
-  call void @gm13_9794(ptr %28, ptr %160)
+  call void @gm13_9797(ptr %28, ptr %160)
   %161 = load i64, ptr %29, align 4
   %162 = call i64 @plew_u64Add(i64 %161, i64 1)
   store i64 %162, ptr %29, align 4
@@ -133249,7 +133235,7 @@ endif10:                                          ; preds = %then9, %endif8
   %180 = load %gs118, ptr %28, align 8
   %181 = extractvalue %gs118 %180, 0
   %182 = load %gs118, ptr %28, align 8
-  %183 = call i64 @gm11_11923(%gs118 %182)
+  %183 = call i64 @gm11_11926(%gs118 %182)
   %184 = call ptr @LLVMFunctionType(ptr %179, ptr %181, i64 %183, i32 0)
   store ptr %184, ptr %31, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -133291,7 +133277,7 @@ while.end13:                                      ; preds = %while.cond11
   %205 = load %gs38, ptr %32, align 8
   %206 = extractvalue %gs38 %205, 0
   %207 = load %gs38, ptr %32, align 8
-  %208 = call i64 @gm11_9949(%gs38 %207)
+  %208 = call i64 @gm11_9952(%gs38 %207)
   %209 = call ptr @pf478()
   %210 = call ptr @LLVMBuildCall2(ptr %202, ptr %203, ptr %204, ptr %206, i64 %208, ptr %209)
   %211 = load i64, ptr %33, align 4
@@ -134416,15 +134402,15 @@ while.end5:                                       ; preds = %while.cond3
   %138 = load %st37, ptr %0, align 8
   %139 = extractvalue %st37 %138, 50
   %140 = load i64, ptr %9, align 4
-  %141 = call ptr @gm23_1561(%gs118 %139, i64 %140)
+  %141 = call ptr @gm23_1565(%gs118 %139, i64 %140)
   %142 = load %st37, ptr %0, align 8
   %143 = extractvalue %st37 %142, 49
   %144 = load i64, ptr %9, align 4
-  %145 = call ptr @gm23_9949(%gs38 %143, i64 %144)
+  %145 = call ptr @gm23_9952(%gs38 %143, i64 %144)
   %146 = load %gs38, ptr %13, align 8
   %147 = extractvalue %gs38 %146, 0
   %148 = load %gs38, ptr %13, align 8
-  %149 = call i64 @gm11_9949(%gs38 %148)
+  %149 = call i64 @gm11_9952(%gs38 %148)
   %150 = call ptr @pf478()
   %151 = call ptr @LLVMBuildCall2(ptr %137, ptr %141, ptr %145, ptr %147, i64 %149, ptr %150)
   %152 = load i64, ptr %19, align 4
@@ -135065,7 +135051,7 @@ while.end:                                        ; preds = %while.cond
   %53 = load %gs38, ptr %12, align 8
   %54 = extractvalue %gs38 %53, 0
   %55 = load %gs38, ptr %12, align 8
-  %56 = call i64 @gm11_9949(%gs38 %55)
+  %56 = call i64 @gm11_9952(%gs38 %55)
   %57 = call ptr @pf478()
   %58 = call ptr @LLVMBuildCall2(ptr %50, ptr %51, ptr %52, ptr %54, i64 %56, ptr %57)
   %59 = load i64, ptr %13, align 4
@@ -135408,7 +135394,7 @@ then:                                             ; preds = %arm
   %53 = load %st37, ptr %0, align 8
   %54 = extractvalue %st37 %53, 55
   %55 = load i64, ptr %7, align 4
-  %56 = call ptr @gm23_9949(%gs38 %54, i64 %55)
+  %56 = call ptr @gm23_9952(%gs38 %54, i64 %55)
   %57 = load i64, ptr %7, align 4
   ret ptr %56
 
@@ -135514,11 +135500,11 @@ then8:                                            ; preds = %then6
   %116 = load %st37, ptr %0, align 8
   %117 = extractvalue %st37 %116, 56
   %118 = load i64, ptr %14, align 4
-  %119 = call ptr @gm23_1561(%gs118 %117, i64 %118)
+  %119 = call ptr @gm23_1565(%gs118 %117, i64 %118)
   %120 = load %st37, ptr %0, align 8
   %121 = extractvalue %st37 %120, 55
   %122 = load i64, ptr %14, align 4
-  %123 = call ptr @gm23_9949(%gs38 %121, i64 %122)
+  %123 = call ptr @gm23_9952(%gs38 %121, i64 %122)
   %124 = load i64, ptr %16, align 4
   %125 = call ptr @pf478()
   %126 = call ptr @LLVMBuildStructGEP2(ptr %115, ptr %119, ptr %123, i64 %124, ptr %125)
@@ -135566,7 +135552,7 @@ then13:                                           ; preds = %then11
   store i64 %149, ptr %20, align 4
   %150 = load i64, ptr %20, align 4
   %151 = load %st37, ptr %0, align 8
-  %152 = extractvalue %st37 %151, 27
+  %152 = extractvalue %st37 %151, 29
   %153 = call i64 @gm11_4725(%gs14 %152)
   %154 = icmp ult i64 %150, %153
   br i1 %154, label %then15, label %endif16
@@ -135602,9 +135588,9 @@ then17:                                           ; preds = %then15
   %171 = load %st37, ptr %0, align 8
   %172 = extractvalue %st37 %171, 2
   %173 = load %st37, ptr %0, align 8
-  %174 = extractvalue %st37 %173, 28
+  %174 = extractvalue %st37 %173, 30
   %175 = load i64, ptr %20, align 4
-  %176 = call ptr @gm23_1561(%gs118 %174, i64 %175)
+  %176 = call ptr @gm23_1565(%gs118 %174, i64 %175)
   %177 = load ptr, ptr %17, align 8
   %178 = load i64, ptr %21, align 4
   %179 = call ptr @pf478()
@@ -136497,7 +136483,7 @@ endif:                                            ; preds = %then, %body0
 then1:                                            ; preds = %endif
   %78 = load %st37, ptr %0, align 8
   %79 = extractvalue %st37 %78, 10
-  call void @gm13_9794(ptr %14, ptr %79)
+  call void @gm13_9797(ptr %14, ptr %79)
   br label %endif2
 
 endif2:                                           ; preds = %else, %then1
@@ -136507,7 +136493,7 @@ endif2:                                           ; preds = %else, %then1
 else:                                             ; preds = %endif
   %80 = load i64, ptr %6, align 4
   %81 = call ptr @pf1365(ptr %0, ptr %1, i64 %80)
-  call void @gm13_9794(ptr %14, ptr %81)
+  call void @gm13_9797(ptr %14, ptr %81)
   br label %endif2
 
 while.cond:                                       ; preds = %while.body, %endif2
@@ -136525,7 +136511,7 @@ while.body:                                       ; preds = %while.cond
   %90 = call %st82 @gm23_6496(%gs22 %88, i64 %89)
   call void @pwretain82(%st82 %90)
   %91 = call ptr @pf1546(ptr %0, ptr %1, %st82 %90)
-  call void @gm13_9794(ptr %14, ptr %91)
+  call void @gm13_9797(ptr %14, ptr %91)
   %92 = load i64, ptr %15, align 4
   %93 = call i64 @plew_u64Add(i64 %92, i64 1)
   store i64 %93, ptr %15, align 4
@@ -136537,7 +136523,7 @@ while.end:                                        ; preds = %while.cond
   %96 = load %gs118, ptr %14, align 8
   %97 = extractvalue %gs118 %96, 0
   %98 = load %gs118, ptr %14, align 8
-  %99 = call i64 @gm11_11923(%gs118 %98)
+  %99 = call i64 @gm11_11926(%gs118 %98)
   %100 = call ptr @LLVMFunctionType(ptr %95, ptr %97, i64 %99, i32 0)
   store ptr %100, ptr %16, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -136569,7 +136555,7 @@ while.end:                                        ; preds = %while.cond
   call void @gm13_1696(ptr %115, ptr %116)
   %117 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 50
   %118 = load ptr, ptr %16, align 8
-  call void @gm13_9794(ptr %117, ptr %118)
+  call void @gm13_9797(ptr %117, ptr %118)
   %119 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 51
   %120 = load %gs14, ptr %7, align 8
   %121 = extractvalue %gs14 %120, 0
@@ -136621,7 +136607,7 @@ while.end:                                        ; preds = %while.cond
   ret void
 }
 
-define i64 @gm11_12407(%gs30 %0) {
+define i64 @gm11_12410(%gs30 %0) {
 entry:
   %1 = alloca %gs30, align 8
   %2 = alloca %gs30, align 8
@@ -136631,7 +136617,7 @@ body0:                                            ; preds = %entry
   store %gs30 %0, ptr %1, align 8
   %3 = load %gs30, ptr %1, align 8
   %4 = extractvalue %gs30 %3, 0
-  %5 = call i64 @gm196_45285(ptr %4)
+  %5 = call i64 @gm196_45373(ptr %4)
   ret i64 %5
 
 entry1:                                           ; No predecessors!
@@ -136641,7 +136627,7 @@ body02:                                           ; preds = %entry1
   store %gs30 %0, ptr %2, align 8
   %6 = load %gs30, ptr %2, align 8
   %7 = extractvalue %gs30 %6, 0
-  %8 = call i64 @gm196_45285(ptr %7)
+  %8 = call i64 @gm196_45373(ptr %7)
   ret i64 %8
 }
 
@@ -136668,7 +136654,7 @@ endif:                                            ; preds = %body0
   ret ptr %10
 }
 
-define %st72 @gm23_12407(%gs30 %0, i64 %1) {
+define %st72 @gm23_12410(%gs30 %0, i64 %1) {
 entry:
   %2 = alloca %gs30, align 8
   %3 = alloca i64, align 8
@@ -136681,7 +136667,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   %6 = load %gs30, ptr %2, align 8
   %7 = load i64, ptr %3, align 4
-  %8 = call %st72 @gm15_12407(%gs30 %6, i64 %7)
+  %8 = call %st72 @gm15_12410(%gs30 %6, i64 %7)
   ret %st72 %8
 
 entry1:                                           ; No predecessors!
@@ -136692,7 +136678,7 @@ body02:                                           ; preds = %entry1
   store i64 %1, ptr %5, align 4
   %9 = load %gs30, ptr %4, align 8
   %10 = load i64, ptr %5, align 4
-  %11 = call %st72 @gm15_12407(%gs30 %9, i64 %10)
+  %11 = call %st72 @gm15_12410(%gs30 %9, i64 %10)
   ret %st72 %11
 }
 
@@ -136776,7 +136762,7 @@ while.cond:                                       ; preds = %endif, %body0
   %5 = load %st32, ptr %0, align 8
   %6 = extractvalue %st32 %5, 10
   %7 = extractvalue %st101 %6, 4
-  %8 = call i64 @gm11_12407(%gs30 %7)
+  %8 = call i64 @gm11_12410(%gs30 %7)
   %9 = icmp ult i64 %4, %8
   br i1 %9, label %while.body, label %while.end
 
@@ -136785,7 +136771,7 @@ while.body:                                       ; preds = %while.cond
   %11 = extractvalue %st32 %10, 10
   %12 = extractvalue %st101 %11, 4
   %13 = load i64, ptr %3, align 4
-  %14 = call %st72 @gm23_12407(%gs30 %12, i64 %13)
+  %14 = call %st72 @gm23_12410(%gs30 %12, i64 %13)
   %15 = extractvalue %st72 %14, 0
   %16 = load i64, ptr %2, align 4
   %17 = icmp eq i64 %15, %16
@@ -136800,7 +136786,7 @@ then:                                             ; preds = %while.body
   %20 = extractvalue %st32 %19, 10
   %21 = extractvalue %st101 %20, 4
   %22 = load i64, ptr %3, align 4
-  %23 = call %st72 @gm23_12407(%gs30 %21, i64 %22)
+  %23 = call %st72 @gm23_12410(%gs30 %21, i64 %22)
   %24 = extractvalue %st72 %23, 7
   %25 = icmp ne i1 %24, false
   br i1 %25, label %then1, label %endif2
@@ -136816,7 +136802,7 @@ then1:                                            ; preds = %then
   %29 = extractvalue %st32 %28, 10
   %30 = extractvalue %st101 %29, 4
   %31 = load i64, ptr %3, align 4
-  %32 = call %st72 @gm23_12407(%gs30 %30, i64 %31)
+  %32 = call %st72 @gm23_12410(%gs30 %30, i64 %31)
   %33 = extractvalue %st72 %32, 5
   %34 = icmp ne i1 %33, false
   br i1 %34, label %then3, label %endif4
@@ -136833,7 +136819,7 @@ endif4:                                           ; preds = %then1
   %37 = extractvalue %st32 %36, 10
   %38 = extractvalue %st101 %37, 4
   %39 = load i64, ptr %3, align 4
-  %40 = call %st72 @gm23_12407(%gs30 %38, i64 %39)
+  %40 = call %st72 @gm23_12410(%gs30 %38, i64 %39)
   %41 = extractvalue %st72 %40, 6
   %42 = call i1 @pf1114(ptr %0, i64 %41)
   %43 = icmp ne i1 %42, false
@@ -137035,7 +137021,7 @@ endif14:                                          ; preds = %endif12
   %52 = extractvalue %st95 %51, 14
   %53 = call i64 @pf1307(ptr %0, ptr %1, i64 %50, i64 %52)
   %54 = load %st37, ptr %0, align 8
-  %55 = extractvalue %st37 %54, 27
+  %55 = extractvalue %st37 %54, 29
   %56 = call i64 @gm11_4725(%gs14 %55)
   %57 = icmp ult i64 %53, %56
   br i1 %57, label %then15, label %endif16
@@ -137101,7 +137087,7 @@ endif22:                                          ; preds = %then19
   %89 = extractvalue %st95 %88, 14
   %90 = call i64 @pf1307(ptr %0, ptr %1, i64 %87, i64 %89)
   %91 = load %st37, ptr %0, align 8
-  %92 = extractvalue %st37 %91, 27
+  %92 = extractvalue %st37 %91, 29
   %93 = call i64 @gm11_4725(%gs14 %92)
   %94 = icmp uge i64 %90, %93
   br i1 %94, label %then23, label %endif24
@@ -137599,7 +137585,7 @@ body0:                                            ; preds = %entry
   store i64 %25, ptr %5, align 4
   %26 = load i64, ptr %5, align 4
   %27 = load %st37, ptr %0, align 8
-  %28 = extractvalue %st37 %27, 27
+  %28 = extractvalue %st37 %27, 29
   %29 = call i64 @gm11_4725(%gs14 %28)
   %30 = icmp uge i64 %26, %29
   br i1 %30, label %then, label %endif
@@ -137615,15 +137601,15 @@ then:                                             ; preds = %body0
 
 endif:                                            ; preds = %body0
   %36 = load %st37, ptr %0, align 8
-  %37 = extractvalue %st37 %36, 28
+  %37 = extractvalue %st37 %36, 30
   %38 = load i64, ptr %5, align 4
-  %39 = call ptr @gm23_1561(%gs118 %37, i64 %38)
+  %39 = call ptr @gm23_1565(%gs118 %37, i64 %38)
   store ptr %39, ptr %6, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %7, align 8
   %40 = load %st37, ptr %0, align 8
   %41 = extractvalue %st37 %40, 10
-  call void @gm13_9794(ptr %7, ptr %41)
+  call void @gm13_9797(ptr %7, ptr %41)
   %42 = load %st37, ptr %0, align 8
   %43 = extractvalue %st37 %42, 10
   %44 = load %gs118, ptr %7, align 8
@@ -137831,7 +137817,7 @@ endif6:                                           ; preds = %endif4
   store i64 %85, ptr %16, align 4
   %86 = load i64, ptr %16, align 4
   %87 = load %st37, ptr %0, align 8
-  %88 = extractvalue %st37 %87, 27
+  %88 = extractvalue %st37 %87, 29
   %89 = call i64 @gm11_4725(%gs14 %88)
   %90 = icmp uge i64 %86, %89
   br i1 %90, label %then7, label %endif8
@@ -137850,9 +137836,9 @@ then7:                                            ; preds = %endif6
 
 endif8:                                           ; preds = %endif6
   %99 = load %st37, ptr %0, align 8
-  %100 = extractvalue %st37 %99, 28
+  %100 = extractvalue %st37 %99, 30
   %101 = load i64, ptr %16, align 4
-  %102 = call ptr @gm23_1561(%gs118 %100, i64 %101)
+  %102 = call ptr @gm23_1565(%gs118 %100, i64 %101)
   store ptr %102, ptr %17, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs34 zeroinitializer, ptr %18, align 8
@@ -137898,7 +137884,7 @@ endif10:                                          ; preds = %then9, %endif8
   store %gs118 zeroinitializer, ptr %23, align 8
   %124 = load %st37, ptr %0, align 8
   %125 = extractvalue %st37 %124, 10
-  call void @gm13_9794(ptr %23, ptr %125)
+  call void @gm13_9797(ptr %23, ptr %125)
   store i64 0, ptr %24, align 4
   br label %while.cond
 
@@ -137917,7 +137903,7 @@ while.body:                                       ; preds = %while.cond
   %134 = call %st82 @gm23_6496(%gs22 %132, i64 %133)
   call void @pwretain82(%st82 %134)
   %135 = call ptr @pf1546(ptr %0, ptr %1, %st82 %134)
-  call void @gm13_9794(ptr %23, ptr %135)
+  call void @gm13_9797(ptr %23, ptr %135)
   %136 = load i64, ptr %24, align 4
   %137 = call i64 @plew_u64Add(i64 %136, i64 1)
   store i64 %137, ptr %24, align 4
@@ -137962,7 +137948,7 @@ endif14:                                          ; preds = %then13, %endif12
   %155 = load %gs118, ptr %23, align 8
   %156 = extractvalue %gs118 %155, 0
   %157 = load %gs118, ptr %23, align 8
-  %158 = call i64 @gm11_11923(%gs118 %157)
+  %158 = call i64 @gm11_11926(%gs118 %157)
   %159 = call ptr @LLVMFunctionType(ptr %154, ptr %156, i64 %158, i32 0)
   store ptr %159, ptr %26, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -138057,15 +138043,15 @@ while.end19:                                      ; preds = %while.cond17
   %212 = load %st37, ptr %0, align 8
   %213 = extractvalue %st37 %212, 43
   %214 = load i64, ptr %14, align 4
-  %215 = call ptr @gm23_1561(%gs118 %213, i64 %214)
+  %215 = call ptr @gm23_1565(%gs118 %213, i64 %214)
   %216 = load %st37, ptr %0, align 8
   %217 = extractvalue %st37 %216, 42
   %218 = load i64, ptr %14, align 4
-  %219 = call ptr @gm23_9949(%gs38 %217, i64 %218)
+  %219 = call ptr @gm23_9952(%gs38 %217, i64 %218)
   %220 = load %gs38, ptr %32, align 8
   %221 = extractvalue %gs38 %220, 0
   %222 = load %gs38, ptr %32, align 8
-  %223 = call i64 @gm11_9949(%gs38 %222)
+  %223 = call i64 @gm11_9952(%gs38 %222)
   %224 = call ptr @pf478()
   %225 = call ptr @LLVMBuildCall2(ptr %211, ptr %215, ptr %219, ptr %221, i64 %223, ptr %224)
   store ptr %225, ptr %34, align 8
@@ -139136,11 +139122,11 @@ then5:                                            ; preds = %then3
   %38 = load %st37, ptr %0, align 8
   %39 = extractvalue %st37 %38, 56
   %40 = load i64, ptr %3, align 4
-  %41 = call ptr @gm23_1561(%gs118 %39, i64 %40)
+  %41 = call ptr @gm23_1565(%gs118 %39, i64 %40)
   %42 = load %st37, ptr %0, align 8
   %43 = extractvalue %st37 %42, 55
   %44 = load i64, ptr %3, align 4
-  %45 = call ptr @gm23_9949(%gs38 %43, i64 %44)
+  %45 = call ptr @gm23_9952(%gs38 %43, i64 %44)
   %46 = call ptr @pf478()
   %47 = call ptr @LLVMBuildLoad2(ptr %37, ptr %41, ptr %45, ptr %46)
   store ptr %47, ptr %4, align 8
@@ -139165,7 +139151,7 @@ then7:                                            ; preds = %then5
   %59 = load %st37, ptr %0, align 8
   %60 = extractvalue %st37 %59, 60
   %61 = load i64, ptr %3, align 4
-  %62 = call ptr @gm23_1561(%gs118 %60, i64 %61)
+  %62 = call ptr @gm23_1565(%gs118 %60, i64 %61)
   %63 = load %st37, ptr %0, align 8
   %64 = extractvalue %st37 %63, 64
   %65 = load i64, ptr %3, align 4
@@ -139238,7 +139224,7 @@ then13:                                           ; preds = %then11
   %108 = load %st37, ptr %0, align 8
   %109 = extractvalue %st37 %108, 55
   %110 = load i64, ptr %3, align 4
-  %111 = call ptr @gm23_9949(%gs38 %109, i64 %110)
+  %111 = call ptr @gm23_9952(%gs38 %109, i64 %110)
   %112 = call ptr @pf478()
   %113 = call ptr @LLVMBuildLoad2(ptr %105, ptr %107, ptr %111, ptr %112)
   store ptr %113, ptr %6, align 8
@@ -139323,7 +139309,7 @@ then22:                                           ; preds = %then20
   %161 = load %st37, ptr %0, align 8
   %162 = extractvalue %st37 %161, 55
   %163 = load i64, ptr %3, align 4
-  %164 = call ptr @gm23_9949(%gs38 %162, i64 %163)
+  %164 = call ptr @gm23_9952(%gs38 %162, i64 %163)
   %165 = call ptr @pf478()
   %166 = call ptr @LLVMBuildLoad2(ptr %158, ptr %160, ptr %164, ptr %165)
   %167 = load %st37, ptr %0, align 8
@@ -139365,7 +139351,7 @@ then26:                                           ; preds = %then24
   %189 = load %st37, ptr %0, align 8
   %190 = extractvalue %st37 %189, 55
   %191 = load i64, ptr %3, align 4
-  %192 = call ptr @gm23_9949(%gs38 %190, i64 %191)
+  %192 = call ptr @gm23_9952(%gs38 %190, i64 %191)
   %193 = call ptr @pf478()
   %194 = call ptr @LLVMBuildLoad2(ptr %186, ptr %188, ptr %192, ptr %193)
   call void @pf1469(ptr %0, ptr %1, ptr %194)
@@ -139394,11 +139380,11 @@ then30:                                           ; preds = %then28
   %205 = load %st37, ptr %0, align 8
   %206 = extractvalue %st37 %205, 56
   %207 = load i64, ptr %3, align 4
-  %208 = call ptr @gm23_1561(%gs118 %206, i64 %207)
+  %208 = call ptr @gm23_1565(%gs118 %206, i64 %207)
   %209 = load %st37, ptr %0, align 8
   %210 = extractvalue %st37 %209, 55
   %211 = load i64, ptr %3, align 4
-  %212 = call ptr @gm23_9949(%gs38 %210, i64 %211)
+  %212 = call ptr @gm23_9952(%gs38 %210, i64 %211)
   %213 = call ptr @pf478()
   %214 = call ptr @LLVMBuildLoad2(ptr %204, ptr %208, ptr %212, ptr %213)
   store ptr %214, ptr %9, align 8
@@ -139425,11 +139411,11 @@ endif33:                                          ; preds = %endif29
   %226 = load %st37, ptr %0, align 8
   %227 = extractvalue %st37 %226, 56
   %228 = load i64, ptr %3, align 4
-  %229 = call ptr @gm23_1561(%gs118 %227, i64 %228)
+  %229 = call ptr @gm23_1565(%gs118 %227, i64 %228)
   %230 = load %st37, ptr %0, align 8
   %231 = extractvalue %st37 %230, 55
   %232 = load i64, ptr %3, align 4
-  %233 = call ptr @gm23_9949(%gs38 %231, i64 %232)
+  %233 = call ptr @gm23_9952(%gs38 %231, i64 %232)
   %234 = call ptr @pf478()
   %235 = call ptr @LLVMBuildLoad2(ptr %225, ptr %229, ptr %233, ptr %234)
   store ptr %235, ptr %10, align 8
@@ -139545,7 +139531,7 @@ body0:                                            ; preds = %entry
   %4 = load %st37, ptr %0, align 8
   %5 = extractvalue %st37 %4, 126
   %6 = load i64, ptr %3, align 4
-  %7 = call ptr @gm23_9949(%gs38 %5, i64 %6)
+  %7 = call ptr @gm23_9952(%gs38 %5, i64 %6)
   ret ptr %7
 }
 
@@ -139943,11 +139929,11 @@ endif6:                                           ; preds = %endif4
   %220 = load %st37, ptr %0, align 8
   %221 = extractvalue %st37 %220, 50
   %222 = load i64, ptr %31, align 4
-  %223 = call ptr @gm23_1561(%gs118 %221, i64 %222)
+  %223 = call ptr @gm23_1565(%gs118 %221, i64 %222)
   %224 = load %st37, ptr %0, align 8
   %225 = extractvalue %st37 %224, 49
   %226 = load i64, ptr %31, align 4
-  %227 = call ptr @gm23_9949(%gs38 %225, i64 %226)
+  %227 = call ptr @gm23_9952(%gs38 %225, i64 %226)
   %228 = load i64, ptr %10, align 4
   %229 = load i64, ptr %11, align 4
   %230 = load i64, ptr %12, align 4
@@ -140092,7 +140078,7 @@ endif:                                            ; preds = %body0
   %89 = load %st37, ptr %0, align 8
   %90 = extractvalue %st37 %89, 33
   %91 = load i64, ptr %31, align 4
-  %92 = call ptr @gm23_1561(%gs118 %90, i64 %91)
+  %92 = call ptr @gm23_1565(%gs118 %90, i64 %91)
   store ptr %92, ptr %33, align 8
   %93 = load %st32, ptr %1, align 8
   %94 = extractvalue %st32 %93, 0
@@ -140728,10 +140714,10 @@ endif:                                            ; preds = %else, %then
 else:                                             ; preds = %body0
   %29 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 127
   %30 = load ptr, ptr %4, align 8
-  call void @gm13_10874(ptr %29, ptr %30)
+  call void @gm13_10877(ptr %29, ptr %30)
   %31 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 128
   %32 = load ptr, ptr %5, align 8
-  call void @gm13_10874(ptr %31, ptr %32)
+  call void @gm13_10877(ptr %31, ptr %32)
   %33 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 129
   %34 = load i64, ptr %6, align 4
   call void @gm13_5355(ptr %33, i64 %34)
@@ -141063,7 +141049,7 @@ then3:                                            ; preds = %then1
   %59 = load %st37, ptr %0, align 8
   %60 = extractvalue %st37 %59, 33
   %61 = load i64, ptr %6, align 4
-  %62 = call ptr @gm23_1561(%gs118 %60, i64 %61)
+  %62 = call ptr @gm23_1565(%gs118 %60, i64 %61)
   call void @pf1323(ptr %0, ptr %1, ptr %54, i64 %58, ptr %62)
   br label %endif4
 
@@ -141122,7 +141108,7 @@ then9:                                            ; preds = %then7
   %92 = load %st37, ptr %0, align 8
   %93 = extractvalue %st37 %92, 33
   %94 = load i64, ptr %11, align 4
-  %95 = call ptr @gm23_1561(%gs118 %93, i64 %94)
+  %95 = call ptr @gm23_1565(%gs118 %93, i64 %94)
   %96 = call i64 @pf1327(ptr %0, ptr %1, i64 %91, ptr %95)
   store i64 %96, ptr %12, align 4
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -141134,11 +141120,11 @@ then9:                                            ; preds = %then7
   %100 = load %st37, ptr %0, align 8
   %101 = extractvalue %st37 %100, 100
   %102 = load i64, ptr %12, align 4
-  %103 = call ptr @gm23_1561(%gs118 %101, i64 %102)
+  %103 = call ptr @gm23_1565(%gs118 %101, i64 %102)
   %104 = load %st37, ptr %0, align 8
   %105 = extractvalue %st37 %104, 99
   %106 = load i64, ptr %12, align 4
-  %107 = call ptr @gm23_9949(%gs38 %105, i64 %106)
+  %107 = call ptr @gm23_9952(%gs38 %105, i64 %106)
   %108 = load %gs38, ptr %13, align 8
   %109 = extractvalue %gs38 %108, 0
   %110 = call ptr @pf478()
@@ -142785,7 +142771,7 @@ endif183:                                         ; preds = %then182, %then180
   %854 = load %st37, ptr %0, align 8
   %855 = extractvalue %st37 %854, 55
   %856 = load i64, ptr %54, align 4
-  %857 = call ptr @gm23_9949(%gs38 %855, i64 %856)
+  %857 = call ptr @gm23_9952(%gs38 %855, i64 %856)
   %858 = call ptr @LLVMBuildStore(ptr %852, ptr %853, ptr %857)
   %859 = load ptr, ptr %56, align 8
   %860 = load i1, ptr %55, align 1
@@ -142874,7 +142860,7 @@ then195:                                          ; preds = %endif194
   %898 = load %st37, ptr %0, align 8
   %899 = extractvalue %st37 %898, 56
   %900 = load i64, ptr %54, align 4
-  %901 = call ptr @gm23_1561(%gs118 %899, i64 %900)
+  %901 = call ptr @gm23_1565(%gs118 %899, i64 %900)
   %902 = load %st37, ptr %0, align 8
   %903 = extractvalue %st37 %902, 57
   %904 = load i64, ptr %54, align 4
@@ -142921,11 +142907,11 @@ else201:                                          ; preds = %endif198
   %925 = load %st37, ptr %0, align 8
   %926 = extractvalue %st37 %925, 56
   %927 = load i64, ptr %54, align 4
-  %928 = call ptr @gm23_1561(%gs118 %926, i64 %927)
+  %928 = call ptr @gm23_1565(%gs118 %926, i64 %927)
   %929 = load %st37, ptr %0, align 8
   %930 = extractvalue %st37 %929, 55
   %931 = load i64, ptr %54, align 4
-  %932 = call ptr @gm23_9949(%gs38 %930, i64 %931)
+  %932 = call ptr @gm23_9952(%gs38 %930, i64 %931)
   %933 = call ptr @pf478()
   %934 = call ptr @LLVMBuildLoad2(ptr %924, ptr %928, ptr %932, ptr %933)
   store ptr %934, ptr %61, align 8
@@ -142957,7 +142943,7 @@ endif203:                                         ; preds = %endif205, %then199
   %952 = load %st37, ptr %0, align 8
   %953 = extractvalue %st37 %952, 55
   %954 = load i64, ptr %54, align 4
-  %955 = call ptr @gm23_9949(%gs38 %953, i64 %954)
+  %955 = call ptr @gm23_9952(%gs38 %953, i64 %954)
   %956 = call ptr @LLVMBuildStore(ptr %950, ptr %951, ptr %955)
   br label %endif200
 
@@ -143003,11 +142989,11 @@ then209:                                          ; preds = %then206
   %979 = load %st37, ptr %0, align 8
   %980 = extractvalue %st37 %979, 56
   %981 = load i64, ptr %54, align 4
-  %982 = call ptr @gm23_1561(%gs118 %980, i64 %981)
+  %982 = call ptr @gm23_1565(%gs118 %980, i64 %981)
   %983 = load %st37, ptr %0, align 8
   %984 = extractvalue %st37 %983, 55
   %985 = load i64, ptr %54, align 4
-  %986 = call ptr @gm23_9949(%gs38 %984, i64 %985)
+  %986 = call ptr @gm23_9952(%gs38 %984, i64 %985)
   %987 = call ptr @pf478()
   %988 = call ptr @LLVMBuildLoad2(ptr %978, ptr %982, ptr %986, ptr %987)
   %989 = load i64, ptr %60, align 4
@@ -143025,7 +143011,7 @@ then211:                                          ; preds = %else208
   %994 = load %st37, ptr %0, align 8
   %995 = extractvalue %st37 %994, 55
   %996 = load i64, ptr %54, align 4
-  %997 = call ptr @gm23_9949(%gs38 %995, i64 %996)
+  %997 = call ptr @gm23_9952(%gs38 %995, i64 %996)
   %998 = call ptr @pf478()
   %999 = call ptr @LLVMBuildLoad2(ptr %991, ptr %993, ptr %997, ptr %998)
   %1000 = load %st37, ptr %0, align 8
@@ -143055,7 +143041,7 @@ then214:                                          ; preds = %else213
   %1014 = load %st37, ptr %0, align 8
   %1015 = extractvalue %st37 %1014, 55
   %1016 = load i64, ptr %54, align 4
-  %1017 = call ptr @gm23_9949(%gs38 %1015, i64 %1016)
+  %1017 = call ptr @gm23_9952(%gs38 %1015, i64 %1016)
   %1018 = call ptr @pf478()
   %1019 = call ptr @LLVMBuildLoad2(ptr %1011, ptr %1013, ptr %1017, ptr %1018)
   call void @pf1469(ptr %0, ptr %1, ptr %1019)
@@ -143080,7 +143066,7 @@ endif217:                                         ; preds = %else218, %then216
   %1028 = load %st37, ptr %0, align 8
   %1029 = extractvalue %st37 %1028, 55
   %1030 = load i64, ptr %54, align 4
-  %1031 = call ptr @gm23_9949(%gs38 %1029, i64 %1030)
+  %1031 = call ptr @gm23_9952(%gs38 %1029, i64 %1030)
   %1032 = call ptr @LLVMBuildStore(ptr %1026, ptr %1027, ptr %1031)
   %1033 = load ptr, ptr %62, align 8
   %1034 = load ptr, ptr %61, align 8
@@ -143547,11 +143533,11 @@ then267:                                          ; preds = %then265
   %1289 = load %st37, ptr %0, align 8
   %1290 = extractvalue %st37 %1289, 56
   %1291 = load i64, ptr %88, align 4
-  %1292 = call ptr @gm23_1561(%gs118 %1290, i64 %1291)
+  %1292 = call ptr @gm23_1565(%gs118 %1290, i64 %1291)
   %1293 = load %st37, ptr %0, align 8
   %1294 = extractvalue %st37 %1293, 55
   %1295 = load i64, ptr %88, align 4
-  %1296 = call ptr @gm23_9949(%gs38 %1294, i64 %1295)
+  %1296 = call ptr @gm23_9952(%gs38 %1294, i64 %1295)
   %1297 = load i64, ptr %90, align 4
   %1298 = call ptr @pf478()
   %1299 = call ptr @LLVMBuildStructGEP2(ptr %1288, ptr %1292, ptr %1296, i64 %1297, ptr %1298)
@@ -145667,7 +145653,7 @@ body0:                                            ; preds = %entry
   store i1 %1, ptr %2, align 1
   %4 = getelementptr inbounds nuw %gs126, ptr %0, i32 0, i32 0
   %5 = load i1, ptr %2, align 1
-  call void @gm200_45296(ptr %4, i1 %5)
+  call void @gm200_45384(ptr %4, i1 %5)
   ret void
 
 entry1:                                           ; No predecessors!
@@ -145677,7 +145663,7 @@ body02:                                           ; preds = %entry1
   store i1 %1, ptr %3, align 1
   %6 = getelementptr inbounds nuw %gs126, ptr %0, i32 0, i32 0
   %7 = load i1, ptr %3, align 1
-  call void @gm200_45296(ptr %6, i1 %7)
+  call void @gm200_45384(ptr %6, i1 %7)
   ret void
 }
 
@@ -145726,7 +145712,7 @@ while.cond:                                       ; preds = %while.body, %body0
   %3 = load i64, ptr %2, align 4
   %4 = load %st37, ptr %0, align 8
   %5 = extractvalue %st37 %4, 67
-  %6 = call i64 @gm11_9949(%gs38 %5)
+  %6 = call i64 @gm11_9952(%gs38 %5)
   %7 = icmp ult i64 %3, %6
   br i1 %7, label %while.body, label %while.end
 
@@ -145746,11 +145732,11 @@ while.body:                                       ; preds = %while.cond
   %20 = load %st37, ptr %0, align 8
   %21 = extractvalue %st37 %20, 67
   %22 = load i64, ptr %2, align 4
-  %23 = call ptr @gm23_9949(%gs38 %21, i64 %22)
+  %23 = call ptr @gm23_9952(%gs38 %21, i64 %22)
   %24 = load %st37, ptr %0, align 8
   %25 = extractvalue %st37 %24, 68
   %26 = load i64, ptr %2, align 4
-  %27 = call ptr @gm23_1561(%gs118 %25, i64 %26)
+  %27 = call ptr @gm23_1565(%gs118 %25, i64 %26)
   %28 = load %st37, ptr %0, align 8
   %29 = extractvalue %st37 %28, 69
   %30 = load i64, ptr %2, align 4
@@ -145766,7 +145752,7 @@ while.body:                                       ; preds = %while.cond
   %40 = load %st37, ptr %0, align 8
   %41 = extractvalue %st37 %40, 72
   %42 = load i64, ptr %2, align 4
-  %43 = call ptr @gm23_1561(%gs118 %41, i64 %42)
+  %43 = call ptr @gm23_1565(%gs118 %41, i64 %42)
   %44 = load %st37, ptr %0, align 8
   %45 = extractvalue %st37 %44, 73
   %46 = load i64, ptr %2, align 4
@@ -146283,10 +146269,10 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %6, align 8
   %19 = load %st37, ptr %0, align 8
   %20 = extractvalue %st37 %19, 10
-  call void @gm13_9794(ptr %6, ptr %20)
+  call void @gm13_9797(ptr %6, ptr %20)
   %21 = load %st37, ptr %0, align 8
   %22 = extractvalue %st37 %21, 7
-  call void @gm13_9794(ptr %6, ptr %22)
+  call void @gm13_9797(ptr %6, ptr %22)
   %23 = load %st37, ptr %0, align 8
   %24 = extractvalue %st37 %23, 9
   %25 = load %gs118, ptr %6, align 8
@@ -146326,7 +146312,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define i64 @gm196_44725(ptr %0) {
+define i64 @gm196_44813(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -146348,7 +146334,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define void @gm200_44735(ptr %0, i8 %1) {
+define void @gm200_44823(ptr %0, i8 %1) {
 entry:
   %2 = alloca i8, align 1
   %3 = alloca i8, align 1
@@ -146406,7 +146392,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs0, ptr %2, align 8
   %7 = extractvalue %gs0 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call i8 @gm202_45304(ptr %7, i64 %8)
+  %9 = call i8 @gm202_45392(ptr %7, i64 %8)
   ret i8 %9
 
 entry1:                                           ; No predecessors!
@@ -146418,11 +146404,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs0, ptr %4, align 8
   %11 = extractvalue %gs0 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call i8 @gm202_45304(ptr %11, i64 %12)
+  %13 = call i8 @gm202_45392(ptr %11, i64 %12)
   ret i8 %13
 }
 
-define i64 @gm196_44741(ptr %0) {
+define i64 @gm196_44829(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -146444,7 +146430,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define void @gm200_44751(ptr %0, %en9 %1) {
+define void @gm200_44839(ptr %0, %en9 %1) {
 entry:
   %2 = alloca %en9, align 8
   %3 = alloca i64, align 8
@@ -146864,7 +146850,7 @@ enumret.c61:                                      ; preds = %enumret.v60, %enumr
   ret void
 }
 
-define i64 @gm196_44756(ptr %0) {
+define i64 @gm196_44844(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -146886,7 +146872,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define void @gm200_44766(ptr %0, %en10 %1) {
+define void @gm200_44854(ptr %0, %en10 %1) {
 entry:
   %2 = alloca %en10, align 8
   %3 = alloca i64, align 8
@@ -147086,7 +147072,7 @@ enumret.c21:                                      ; preds = %enumret.v20, %enumr
   ret void
 }
 
-define i64 @gm196_44771(ptr %0) {
+define i64 @gm196_44859(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -147108,7 +147094,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define void @gm200_44780(ptr %0, %st71 %1) {
+define void @gm200_44868(ptr %0, %st71 %1) {
 entry:
   %2 = alloca %st71, align 8
   %3 = alloca i64, align 8
@@ -147204,7 +147190,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define void @gm200_44784(ptr %0, i64 %1) {
+define void @gm200_44872(ptr %0, i64 %1) {
 entry:
   %2 = alloca i64, align 8
   %3 = alloca i64, align 8
@@ -147248,7 +147234,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_44789(ptr %0) {
+define i64 @gm196_44877(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -147270,7 +147256,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define void @gm200_44798(ptr %0, %st81 %1) {
+define void @gm200_44886(ptr %0, %st81 %1) {
 entry:
   %2 = alloca %st81, align 8
   %3 = alloca i64, align 8
@@ -147366,7 +147352,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define i64 @gm196_44803(ptr %0) {
+define i64 @gm196_44891(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -147402,7 +147388,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs190, ptr %2, align 8
   %7 = extractvalue %gs190 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st84 @gm202_45319(ptr %7, i64 %8)
+  %9 = call %st84 @gm202_45407(ptr %7, i64 %8)
   ret %st84 %9
 
 entry1:                                           ; No predecessors!
@@ -147414,11 +147400,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs190, ptr %4, align 8
   %11 = extractvalue %gs190 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st84 @gm202_45319(ptr %11, i64 %12)
+  %13 = call %st84 @gm202_45407(ptr %11, i64 %12)
   ret %st84 %13
 }
 
-define void @gm200_44813(ptr %0, %st82 %1) {
+define void @gm200_44901(ptr %0, %st82 %1) {
 entry:
   %2 = alloca %st82, align 8
   %3 = alloca %st82, align 8
@@ -147464,7 +147450,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_44818(ptr %0) {
+define i64 @gm196_44906(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -147500,7 +147486,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs98, ptr %2, align 8
   %7 = extractvalue %gs98 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st83 @gm202_45331(ptr %7, i64 %8)
+  %9 = call %st83 @gm202_45419(ptr %7, i64 %8)
   ret %st83 %9
 
 entry1:                                           ; No predecessors!
@@ -147512,11 +147498,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs98, ptr %4, align 8
   %11 = extractvalue %gs98 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st83 @gm202_45331(ptr %11, i64 %12)
+  %13 = call %st83 @gm202_45419(ptr %11, i64 %12)
   ret %st83 %13
 }
 
-define void @gm200_44828(ptr %0, %st95 %1) {
+define void @gm200_44916(ptr %0, %st95 %1) {
 entry:
   %2 = alloca %st95, align 8
   %3 = alloca i64, align 8
@@ -147612,7 +147598,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define void @gm200_44831(ptr %0, %st90 %1) {
+define void @gm200_44919(ptr %0, %st90 %1) {
 entry:
   %2 = alloca %st90, align 8
   %3 = alloca i64, align 8
@@ -147708,7 +147694,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define i64 @gm196_44836(ptr %0) {
+define i64 @gm196_44924(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -147744,7 +147730,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs194, ptr %2, align 8
   %7 = extractvalue %gs194 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st94 @gm202_45343(ptr %7, i64 %8)
+  %9 = call %st94 @gm202_45431(ptr %7, i64 %8)
   ret %st94 %9
 
 entry1:                                           ; No predecessors!
@@ -147756,11 +147742,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs194, ptr %4, align 8
   %11 = extractvalue %gs194 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st94 @gm202_45343(ptr %11, i64 %12)
+  %13 = call %st94 @gm202_45431(ptr %11, i64 %12)
   ret %st94 %13
 }
 
-define i64 @gm196_44848(ptr %0) {
+define i64 @gm196_44936(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -147796,7 +147782,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs174, ptr %2, align 8
   %7 = extractvalue %gs174 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st85 @gm202_45355(ptr %7, i64 %8)
+  %9 = call %st85 @gm202_45443(ptr %7, i64 %8)
   ret %st85 %9
 
 entry1:                                           ; No predecessors!
@@ -147808,11 +147794,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs174, ptr %4, align 8
   %11 = extractvalue %gs174 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st85 @gm202_45355(ptr %11, i64 %12)
+  %13 = call %st85 @gm202_45443(ptr %11, i64 %12)
   ret %st85 %13
 }
 
-define void @gm200_44858(ptr %0, %st77 %1) {
+define void @gm200_44946(ptr %0, %st77 %1) {
 entry:
   %2 = alloca %st77, align 8
   %3 = alloca %st77, align 8
@@ -147858,7 +147844,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define void @gm200_44861(ptr %0, %st79 %1) {
+define void @gm200_44949(ptr %0, %st79 %1) {
 entry:
   %2 = alloca %st79, align 8
   %3 = alloca i64, align 8
@@ -147954,7 +147940,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define i64 @gm196_44866(ptr %0) {
+define i64 @gm196_44954(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -147990,7 +147976,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs34, ptr %2, align 8
   %7 = extractvalue %gs34 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st77 @gm202_45367(ptr %7, i64 %8)
+  %9 = call %st77 @gm202_45455(ptr %7, i64 %8)
   ret %st77 %9
 
 entry1:                                           ; No predecessors!
@@ -148002,11 +147988,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs34, ptr %4, align 8
   %11 = extractvalue %gs34 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st77 @gm202_45367(ptr %11, i64 %12)
+  %13 = call %st77 @gm202_45455(ptr %11, i64 %12)
   ret %st77 %13
 }
 
-define i64 @gm196_44878(ptr %0) {
+define i64 @gm196_44966(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148042,7 +148028,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs226, ptr %2, align 8
   %7 = extractvalue %gs226 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st87 @gm202_45379(ptr %7, i64 %8)
+  %9 = call %st87 @gm202_45467(ptr %7, i64 %8)
   ret %st87 %9
 
 entry1:                                           ; No predecessors!
@@ -148054,11 +148040,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs226, ptr %4, align 8
   %11 = extractvalue %gs226 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st87 @gm202_45379(ptr %11, i64 %12)
+  %13 = call %st87 @gm202_45467(ptr %11, i64 %12)
   ret %st87 %13
 }
 
-define i64 @gm196_44890(ptr %0) {
+define i64 @gm196_44978(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148094,7 +148080,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs206, ptr %2, align 8
   %7 = extractvalue %gs206 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st97 @gm202_45391(ptr %7, i64 %8)
+  %9 = call %st97 @gm202_45479(ptr %7, i64 %8)
   ret %st97 %9
 
 entry1:                                           ; No predecessors!
@@ -148106,11 +148092,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs206, ptr %4, align 8
   %11 = extractvalue %gs206 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st97 @gm202_45391(ptr %11, i64 %12)
+  %13 = call %st97 @gm202_45479(ptr %11, i64 %12)
   ret %st97 %13
 }
 
-define void @gm200_44900(ptr %0, %st78 %1) {
+define void @gm200_44988(ptr %0, %st78 %1) {
 entry:
   %2 = alloca %st78, align 8
   %3 = alloca %st78, align 8
@@ -148156,7 +148142,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_44905(ptr %0) {
+define i64 @gm196_44993(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148178,7 +148164,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define i64 @gm196_44916(ptr %0) {
+define i64 @gm196_45004(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148214,7 +148200,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs214, ptr %2, align 8
   %7 = extractvalue %gs214 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st90 @gm202_45403(ptr %7, i64 %8)
+  %9 = call %st90 @gm202_45491(ptr %7, i64 %8)
   ret %st90 %9
 
 entry1:                                           ; No predecessors!
@@ -148226,7 +148212,7 @@ body02:                                           ; preds = %entry1
   %10 = load %gs214, ptr %4, align 8
   %11 = extractvalue %gs214 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st90 @gm202_45403(ptr %11, i64 %12)
+  %13 = call %st90 @gm202_45491(ptr %11, i64 %12)
   ret %st90 %13
 }
 
@@ -148244,7 +148230,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs102, ptr %2, align 8
   %7 = extractvalue %gs102 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st95 @gm202_45415(ptr %7, i64 %8)
+  %9 = call %st95 @gm202_45503(ptr %7, i64 %8)
   ret %st95 %9
 
 entry1:                                           ; No predecessors!
@@ -148256,11 +148242,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs102, ptr %4, align 8
   %11 = extractvalue %gs102 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st95 @gm202_45415(ptr %11, i64 %12)
+  %13 = call %st95 @gm202_45503(ptr %11, i64 %12)
   ret %st95 %13
 }
 
-define i64 @gm196_44929(ptr %0) {
+define i64 @gm196_45017(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148282,7 +148268,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define i64 @gm196_44940(ptr %0) {
+define i64 @gm196_45028(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148304,7 +148290,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define i64 @gm196_44951(ptr %0) {
+define i64 @gm196_45039(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148340,7 +148326,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs54, ptr %2, align 8
   %7 = extractvalue %gs54 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %en6 @gm202_45427(ptr %7, i64 %8)
+  %9 = call %en6 @gm202_45515(ptr %7, i64 %8)
   ret %en6 %9
 
 entry1:                                           ; No predecessors!
@@ -148352,11 +148338,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs54, ptr %4, align 8
   %11 = extractvalue %gs54 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %en6 @gm202_45427(ptr %11, i64 %12)
+  %13 = call %en6 @gm202_45515(ptr %11, i64 %12)
   ret %en6 %13
 }
 
-define void @gm200_44961(ptr %0, %st45 %1) {
+define void @gm200_45049(ptr %0, %st45 %1) {
 entry:
   %2 = alloca %st45, align 8
   %3 = alloca %st45, align 8
@@ -148402,7 +148388,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_44966(ptr %0) {
+define i64 @gm196_45054(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148438,7 +148424,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs134, ptr %2, align 8
   %7 = extractvalue %gs134 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st45 @gm202_45439(ptr %7, i64 %8)
+  %9 = call %st45 @gm202_45527(ptr %7, i64 %8)
   ret %st45 %9
 
 entry1:                                           ; No predecessors!
@@ -148450,11 +148436,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs134, ptr %4, align 8
   %11 = extractvalue %gs134 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st45 @gm202_45439(ptr %11, i64 %12)
+  %13 = call %st45 @gm202_45527(ptr %11, i64 %12)
   ret %st45 %13
 }
 
-define i64 @gm196_44978(ptr %0) {
+define i64 @gm196_45066(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148490,7 +148476,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs218, ptr %2, align 8
   %7 = extractvalue %gs218 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st91 @gm202_45451(ptr %7, i64 %8)
+  %9 = call %st91 @gm202_45539(ptr %7, i64 %8)
   ret %st91 %9
 
 entry1:                                           ; No predecessors!
@@ -148502,11 +148488,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs218, ptr %4, align 8
   %11 = extractvalue %gs218 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st91 @gm202_45451(ptr %11, i64 %12)
+  %13 = call %st91 @gm202_45539(ptr %11, i64 %12)
   ret %st91 %13
 }
 
-define i64 @gm196_44990(ptr %0) {
+define i64 @gm196_45078(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148542,7 +148528,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs210, ptr %2, align 8
   %7 = extractvalue %gs210 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st86 @gm202_45463(ptr %7, i64 %8)
+  %9 = call %st86 @gm202_45551(ptr %7, i64 %8)
   ret %st86 %9
 
 entry1:                                           ; No predecessors!
@@ -148554,11 +148540,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs210, ptr %4, align 8
   %11 = extractvalue %gs210 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st86 @gm202_45463(ptr %11, i64 %12)
+  %13 = call %st86 @gm202_45551(ptr %11, i64 %12)
   ret %st86 %13
 }
 
-define i64 @gm196_45002(ptr %0) {
+define i64 @gm196_45090(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -148580,7 +148566,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define void @gm200_45011(ptr %0, %st96 %1) {
+define void @gm200_45099(ptr %0, %st96 %1) {
 entry:
   %2 = alloca %st96, align 8
   %3 = alloca %st96, align 8
@@ -148640,7 +148626,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs202, ptr %2, align 8
   %7 = extractvalue %gs202 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st96 @gm202_45475(ptr %7, i64 %8)
+  %9 = call %st96 @gm202_45563(ptr %7, i64 %8)
   ret %st96 %9
 
 entry1:                                           ; No predecessors!
@@ -148652,7 +148638,7 @@ body02:                                           ; preds = %entry1
   %10 = load %gs202, ptr %4, align 8
   %11 = extractvalue %gs202 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st96 @gm202_45475(ptr %11, i64 %12)
+  %13 = call %st96 @gm202_45563(ptr %11, i64 %12)
   ret %st96 %13
 }
 
@@ -148670,7 +148656,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs14, ptr %2, align 8
   %7 = extractvalue %gs14 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call i64 @gm202_45487(ptr %7, i64 %8)
+  %9 = call i64 @gm202_45575(ptr %7, i64 %8)
   ret i64 %9
 
 entry1:                                           ; No predecessors!
@@ -148682,7 +148668,7 @@ body02:                                           ; preds = %entry1
   %10 = load %gs14, ptr %4, align 8
   %11 = extractvalue %gs14 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call i64 @gm202_45487(ptr %11, i64 %12)
+  %13 = call i64 @gm202_45575(ptr %11, i64 %12)
   ret i64 %13
 }
 
@@ -148700,7 +148686,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs178, ptr %2, align 8
   %7 = extractvalue %gs178 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %en9 @gm202_45499(ptr %7, i64 %8)
+  %9 = call %en9 @gm202_45587(ptr %7, i64 %8)
   ret %en9 %9
 
 entry1:                                           ; No predecessors!
@@ -148712,11 +148698,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs178, ptr %4, align 8
   %11 = extractvalue %gs178 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %en9 @gm202_45499(ptr %11, i64 %12)
+  %13 = call %en9 @gm202_45587(ptr %11, i64 %12)
   ret %en9 %13
 }
 
-define %st76 @gm15_42887(%gs94 %0, i64 %1) {
+define %st76 @gm15_42976(%gs94 %0, i64 %1) {
 entry:
   %2 = alloca %gs94, align 8
   %3 = alloca i64, align 8
@@ -148730,7 +148716,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs94, ptr %2, align 8
   %7 = extractvalue %gs94 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st76 @gm202_45511(ptr %7, i64 %8)
+  %9 = call %st76 @gm202_45599(ptr %7, i64 %8)
   ret %st76 %9
 
 entry1:                                           ; No predecessors!
@@ -148742,11 +148728,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs94, ptr %4, align 8
   %11 = extractvalue %gs94 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st76 @gm202_45511(ptr %11, i64 %12)
+  %13 = call %st76 @gm202_45599(ptr %11, i64 %12)
   ret %st76 %13
 }
 
-define void @gm203_45020(ptr %0, i64 %1, %en9 %2) {
+define void @gm203_45108(ptr %0, i64 %1, %en9 %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca %en9, align 8
@@ -149412,7 +149398,7 @@ enumrel.c95:                                      ; preds = %enumrel.v94, %enumr
   ret void
 }
 
-define i64 @gm196_45025(ptr %0) {
+define i64 @gm196_45113(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -149434,7 +149420,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define i64 @gm196_45036(ptr %0) {
+define i64 @gm196_45124(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -149470,7 +149456,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs22, ptr %2, align 8
   %7 = extractvalue %gs22 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st82 @gm202_45525(ptr %7, i64 %8)
+  %9 = call %st82 @gm202_45613(ptr %7, i64 %8)
   ret %st82 %9
 
 entry1:                                           ; No predecessors!
@@ -149482,7 +149468,7 @@ body02:                                           ; preds = %entry1
   %10 = load %gs22, ptr %4, align 8
   %11 = extractvalue %gs22 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st82 @gm202_45525(ptr %11, i64 %12)
+  %13 = call %st82 @gm202_45613(ptr %11, i64 %12)
   ret %st82 %13
 }
 
@@ -149500,7 +149486,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs26, ptr %2, align 8
   %7 = extractvalue %gs26 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st78 @gm202_45537(ptr %7, i64 %8)
+  %9 = call %st78 @gm202_45625(ptr %7, i64 %8)
   ret %st78 %9
 
 entry1:                                           ; No predecessors!
@@ -149512,11 +149498,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs26, ptr %4, align 8
   %11 = extractvalue %gs26 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st78 @gm202_45537(ptr %11, i64 %12)
+  %13 = call %st78 @gm202_45625(ptr %11, i64 %12)
   ret %st78 %13
 }
 
-define void @gm200_45047(ptr %0, %st73 %1) {
+define void @gm200_45135(ptr %0, %st73 %1) {
 entry:
   %2 = alloca %st73, align 8
   %3 = alloca %st73, align 8
@@ -149562,7 +149548,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_45052(ptr %0) {
+define i64 @gm196_45140(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -149598,7 +149584,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs246, ptr %2, align 8
   %7 = extractvalue %gs246 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st73 @gm202_45549(ptr %7, i64 %8)
+  %9 = call %st73 @gm202_45637(ptr %7, i64 %8)
   ret %st73 %9
 
 entry1:                                           ; No predecessors!
@@ -149610,7 +149596,7 @@ body02:                                           ; preds = %entry1
   %10 = load %gs246, ptr %4, align 8
   %11 = extractvalue %gs246 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st73 @gm202_45549(ptr %11, i64 %12)
+  %13 = call %st73 @gm202_45637(ptr %11, i64 %12)
   ret %st73 %13
 }
 
@@ -149628,7 +149614,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs198, ptr %2, align 8
   %7 = extractvalue %gs198 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st71 @gm202_45561(ptr %7, i64 %8)
+  %9 = call %st71 @gm202_45649(ptr %7, i64 %8)
   ret %st71 %9
 
 entry1:                                           ; No predecessors!
@@ -149640,7 +149626,7 @@ body02:                                           ; preds = %entry1
   %10 = load %gs198, ptr %4, align 8
   %11 = extractvalue %gs198 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st71 @gm202_45561(ptr %11, i64 %12)
+  %13 = call %st71 @gm202_45649(ptr %11, i64 %12)
   ret %st71 %13
 }
 
@@ -149658,7 +149644,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs186, ptr %2, align 8
   %7 = extractvalue %gs186 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st81 @gm202_45573(ptr %7, i64 %8)
+  %9 = call %st81 @gm202_45661(ptr %7, i64 %8)
   ret %st81 %9
 
 entry1:                                           ; No predecessors!
@@ -149670,11 +149656,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs186, ptr %4, align 8
   %11 = extractvalue %gs186 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st81 @gm202_45573(ptr %11, i64 %12)
+  %13 = call %st81 @gm202_45661(ptr %11, i64 %12)
   ret %st81 %13
 }
 
-define void @gm200_45064(ptr %0, %st93 %1) {
+define void @gm200_45152(ptr %0, %st93 %1) {
 entry:
   %2 = alloca %st93, align 8
   %3 = alloca i64, align 8
@@ -149770,7 +149756,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define i64 @gm196_45069(ptr %0) {
+define i64 @gm196_45157(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -149806,7 +149792,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs90, ptr %2, align 8
   %7 = extractvalue %gs90 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st79 @gm202_45585(ptr %7, i64 %8)
+  %9 = call %st79 @gm202_45673(ptr %7, i64 %8)
   ret %st79 %9
 
 entry1:                                           ; No predecessors!
@@ -149818,11 +149804,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs90, ptr %4, align 8
   %11 = extractvalue %gs90 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st79 @gm202_45585(ptr %11, i64 %12)
+  %13 = call %st79 @gm202_45673(ptr %11, i64 %12)
   ret %st79 %13
 }
 
-define i64 @gm196_45081(ptr %0) {
+define i64 @gm196_45169(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -149858,7 +149844,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs42, ptr %2, align 8
   %7 = extractvalue %gs42 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st27 @gm202_45597(ptr %7, i64 %8)
+  %9 = call %st27 @gm202_45685(ptr %7, i64 %8)
   ret %st27 %9
 
 entry1:                                           ; No predecessors!
@@ -149870,11 +149856,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs42, ptr %4, align 8
   %11 = extractvalue %gs42 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st27 @gm202_45597(ptr %11, i64 %12)
+  %13 = call %st27 @gm202_45685(ptr %11, i64 %12)
   ret %st27 %13
 }
 
-define void @gm203_45093(ptr %0, i64 %1, i64 %2) {
+define void @gm203_45181(ptr %0, i64 %1, i64 %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca i64, align 8
@@ -149932,7 +149918,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs106, ptr %2, align 8
   %7 = extractvalue %gs106 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st70 @gm202_45611(ptr %7, i64 %8)
+  %9 = call %st70 @gm202_45699(ptr %7, i64 %8)
   ret %st70 %9
 
 entry1:                                           ; No predecessors!
@@ -149944,11 +149930,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs106, ptr %4, align 8
   %11 = extractvalue %gs106 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st70 @gm202_45611(ptr %11, i64 %12)
+  %13 = call %st70 @gm202_45699(ptr %11, i64 %12)
   ret %st70 %13
 }
 
-define void @gm200_45097(ptr %0, %st83 %1) {
+define void @gm200_45185(ptr %0, %st83 %1) {
 entry:
   %2 = alloca %st83, align 8
   %3 = alloca %st83, align 8
@@ -149994,7 +149980,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define void @gm200_45100(ptr %0, %st84 %1) {
+define void @gm200_45188(ptr %0, %st84 %1) {
 entry:
   %2 = alloca %st84, align 8
   %3 = alloca i64, align 8
@@ -150090,7 +150076,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define i64 @gm196_45105(ptr %0) {
+define i64 @gm196_45193(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150126,7 +150112,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs58, ptr %2, align 8
   %7 = extractvalue %gs58 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st61 @gm202_45623(ptr %7, i64 %8)
+  %9 = call %st61 @gm202_45711(ptr %7, i64 %8)
   ret %st61 %9
 
 entry1:                                           ; No predecessors!
@@ -150138,11 +150124,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs58, ptr %4, align 8
   %11 = extractvalue %gs58 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st61 @gm202_45623(ptr %11, i64 %12)
+  %13 = call %st61 @gm202_45711(ptr %11, i64 %12)
   ret %st61 %13
 }
 
-define i64 @gm196_45117(ptr %0) {
+define i64 @gm196_45205(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150178,7 +150164,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs50, ptr %2, align 8
   %7 = extractvalue %gs50 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st62 @gm202_45635(ptr %7, i64 %8)
+  %9 = call %st62 @gm202_45723(ptr %7, i64 %8)
   ret %st62 %9
 
 entry1:                                           ; No predecessors!
@@ -150190,11 +150176,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs50, ptr %4, align 8
   %11 = extractvalue %gs50 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st62 @gm202_45635(ptr %11, i64 %12)
+  %13 = call %st62 @gm202_45723(ptr %11, i64 %12)
   ret %st62 %13
 }
 
-define void @gm200_45127(ptr %0, %st76 %1) {
+define void @gm200_45215(ptr %0, %st76 %1) {
 entry:
   %2 = alloca %st76, align 8
   %3 = alloca %st76, align 8
@@ -150240,7 +150226,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_45132(ptr %0) {
+define i64 @gm196_45220(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150276,7 +150262,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs46, ptr %2, align 8
   %7 = extractvalue %gs46 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st51 @gm202_45647(ptr %7, i64 %8)
+  %9 = call %st51 @gm202_45735(ptr %7, i64 %8)
   ret %st51 %9
 
 entry1:                                           ; No predecessors!
@@ -150288,11 +150274,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs46, ptr %4, align 8
   %11 = extractvalue %gs46 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st51 @gm202_45647(ptr %11, i64 %12)
+  %13 = call %st51 @gm202_45735(ptr %11, i64 %12)
   ret %st51 %13
 }
 
-define i64 @gm196_45144(ptr %0) {
+define i64 @gm196_45232(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150328,7 +150314,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs114, ptr %2, align 8
   %7 = extractvalue %gs114 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st63 @gm202_45659(ptr %7, i64 %8)
+  %9 = call %st63 @gm202_45747(ptr %7, i64 %8)
   ret %st63 %9
 
 entry1:                                           ; No predecessors!
@@ -150340,11 +150326,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs114, ptr %4, align 8
   %11 = extractvalue %gs114 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st63 @gm202_45659(ptr %11, i64 %12)
+  %13 = call %st63 @gm202_45747(ptr %11, i64 %12)
   ret %st63 %13
 }
 
-define i64 @gm196_45156(ptr %0) {
+define i64 @gm196_45244(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150380,7 +150366,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs18, ptr %2, align 8
   %7 = extractvalue %gs18 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st65 @gm202_45671(ptr %7, i64 %8)
+  %9 = call %st65 @gm202_45759(ptr %7, i64 %8)
   ret %st65 %9
 
 entry1:                                           ; No predecessors!
@@ -150392,11 +150378,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs18, ptr %4, align 8
   %11 = extractvalue %gs18 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st65 @gm202_45671(ptr %11, i64 %12)
+  %13 = call %st65 @gm202_45759(ptr %11, i64 %12)
   ret %st65 %13
 }
 
-define i64 @gm196_45168(ptr %0) {
+define i64 @gm196_45256(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150432,7 +150418,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs70, ptr %2, align 8
   %7 = extractvalue %gs70 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %en8 @gm202_45683(ptr %7, i64 %8)
+  %9 = call %en8 @gm202_45771(ptr %7, i64 %8)
   ret %en8 %9
 
 entry1:                                           ; No predecessors!
@@ -150444,11 +150430,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs70, ptr %4, align 8
   %11 = extractvalue %gs70 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %en8 @gm202_45683(ptr %11, i64 %12)
+  %13 = call %en8 @gm202_45771(ptr %11, i64 %12)
   ret %en8 %13
 }
 
-define i64 @gm196_45180(ptr %0) {
+define i64 @gm196_45268(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150484,7 +150470,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs142, ptr %2, align 8
   %7 = extractvalue %gs142 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st49 @gm202_45695(ptr %7, i64 %8)
+  %9 = call %st49 @gm202_45783(ptr %7, i64 %8)
   ret %st49 %9
 
 entry1:                                           ; No predecessors!
@@ -150496,11 +150482,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs142, ptr %4, align 8
   %11 = extractvalue %gs142 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st49 @gm202_45695(ptr %11, i64 %12)
+  %13 = call %st49 @gm202_45783(ptr %11, i64 %12)
   ret %st49 %13
 }
 
-define void @gm200_45190(ptr %0, %st89 %1) {
+define void @gm200_45278(ptr %0, %st89 %1) {
 entry:
   %2 = alloca %st89, align 8
   %3 = alloca %st89, align 8
@@ -150546,7 +150532,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_45195(ptr %0) {
+define i64 @gm196_45283(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150582,7 +150568,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs146, ptr %2, align 8
   %7 = extractvalue %gs146 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st50 @gm202_45707(ptr %7, i64 %8)
+  %9 = call %st50 @gm202_45795(ptr %7, i64 %8)
   ret %st50 %9
 
 entry1:                                           ; No predecessors!
@@ -150594,11 +150580,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs146, ptr %4, align 8
   %11 = extractvalue %gs146 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st50 @gm202_45707(ptr %11, i64 %12)
+  %13 = call %st50 @gm202_45795(ptr %11, i64 %12)
   ret %st50 %13
 }
 
-define void @gm200_45205(ptr %0, %st85 %1) {
+define void @gm200_45293(ptr %0, %st85 %1) {
 entry:
   %2 = alloca %st85, align 8
   %3 = alloca i64, align 8
@@ -150694,7 +150680,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define void @gm200_45208(ptr %0, %st94 %1) {
+define void @gm200_45296(ptr %0, %st94 %1) {
 entry:
   %2 = alloca %st94, align 8
   %3 = alloca i64, align 8
@@ -150790,7 +150776,7 @@ arrelem.end7:                                     ; preds = %arrelem.cond5
   br label %cow.cont4
 }
 
-define void @gm200_45211(ptr %0, %st91 %1) {
+define void @gm200_45299(ptr %0, %st91 %1) {
 entry:
   %2 = alloca %st91, align 8
   %3 = alloca %st91, align 8
@@ -150836,7 +150822,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_45216(ptr %0) {
+define i64 @gm196_45304(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150858,7 +150844,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define i64 @gm196_45227(ptr %0) {
+define i64 @gm196_45315(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -150894,7 +150880,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs166, ptr %2, align 8
   %7 = extractvalue %gs166 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st53 @gm202_45719(ptr %7, i64 %8)
+  %9 = call %st53 @gm202_45807(ptr %7, i64 %8)
   ret %st53 %9
 
 entry1:                                           ; No predecessors!
@@ -150906,11 +150892,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs166, ptr %4, align 8
   %11 = extractvalue %gs166 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st53 @gm202_45719(ptr %11, i64 %12)
+  %13 = call %st53 @gm202_45807(ptr %11, i64 %12)
   ret %st53 %13
 }
 
-define void @gm200_45237(ptr %0, %st88 %1) {
+define void @gm200_45325(ptr %0, %st88 %1) {
 entry:
   %2 = alloca %st88, align 8
   %3 = alloca %st88, align 8
@@ -150970,7 +150956,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs138, ptr %2, align 8
   %7 = extractvalue %gs138 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st48 @gm202_45731(ptr %7, i64 %8)
+  %9 = call %st48 @gm202_45819(ptr %7, i64 %8)
   ret %st48 %9
 
 entry1:                                           ; No predecessors!
@@ -150982,11 +150968,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs138, ptr %4, align 8
   %11 = extractvalue %gs138 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st48 @gm202_45731(ptr %11, i64 %12)
+  %13 = call %st48 @gm202_45819(ptr %11, i64 %12)
   ret %st48 %13
 }
 
-define void @gm200_45241(ptr %0, %st97 %1) {
+define void @gm200_45329(ptr %0, %st97 %1) {
 entry:
   %2 = alloca %st97, align 8
   %3 = alloca %st97, align 8
@@ -151046,7 +151032,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs182, ptr %2, align 8
   %7 = extractvalue %gs182 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %en10 @gm202_45743(ptr %7, i64 %8)
+  %9 = call %en10 @gm202_45831(ptr %7, i64 %8)
   ret %en10 %9
 
 entry1:                                           ; No predecessors!
@@ -151058,11 +151044,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs182, ptr %4, align 8
   %11 = extractvalue %gs182 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %en10 @gm202_45743(ptr %11, i64 %12)
+  %13 = call %en10 @gm202_45831(ptr %11, i64 %12)
   ret %en10 %13
 }
 
-define ptr @gm15_1561(%gs118 %0, i64 %1) {
+define ptr @gm15_1565(%gs118 %0, i64 %1) {
 entry:
   %2 = alloca %gs118, align 8
   %3 = alloca i64, align 8
@@ -151076,7 +151062,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs118, ptr %2, align 8
   %7 = extractvalue %gs118 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call ptr @gm202_45755(ptr %7, i64 %8)
+  %9 = call ptr @gm202_45843(ptr %7, i64 %8)
   ret ptr %9
 
 entry1:                                           ; No predecessors!
@@ -151088,11 +151074,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs118, ptr %4, align 8
   %11 = extractvalue %gs118 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call ptr @gm202_45755(ptr %11, i64 %12)
+  %13 = call ptr @gm202_45843(ptr %11, i64 %12)
   ret ptr %13
 }
 
-define void @gm200_45246(ptr %0, ptr %1) {
+define void @gm200_45334(ptr %0, ptr %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca ptr, align 8
@@ -151136,7 +151122,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define void @gm200_45249(ptr %0, ptr %1) {
+define void @gm200_45337(ptr %0, ptr %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca ptr, align 8
@@ -151180,7 +151166,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_45254(ptr %0) {
+define i64 @gm196_45342(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -151202,7 +151188,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define ptr @gm15_9949(%gs38 %0, i64 %1) {
+define ptr @gm15_9952(%gs38 %0, i64 %1) {
 entry:
   %2 = alloca %gs38, align 8
   %3 = alloca i64, align 8
@@ -151216,7 +151202,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs38, ptr %2, align 8
   %7 = extractvalue %gs38 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call ptr @gm202_45767(ptr %7, i64 %8)
+  %9 = call ptr @gm202_45855(ptr %7, i64 %8)
   ret ptr %9
 
 entry1:                                           ; No predecessors!
@@ -151228,11 +151214,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs38, ptr %4, align 8
   %11 = extractvalue %gs38 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call ptr @gm202_45767(ptr %11, i64 %12)
+  %13 = call ptr @gm202_45855(ptr %11, i64 %12)
   ret ptr %13
 }
 
-define void @gm203_45266(ptr %0, i64 %1, i1 %2) {
+define void @gm203_45354(ptr %0, i64 %1, i1 %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca i1, align 1
@@ -151276,7 +151262,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define void @gm200_45269(ptr %0, ptr %1) {
+define void @gm200_45357(ptr %0, ptr %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca ptr, align 8
@@ -151320,7 +151306,7 @@ body02:                                           ; preds = %entry1
   ret void
 }
 
-define i64 @gm196_45274(ptr %0) {
+define i64 @gm196_45362(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -151342,7 +151328,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define i64 @gm196_45285(ptr %0) {
+define i64 @gm196_45373(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   %2 = alloca ptr, align 8
@@ -151364,7 +151350,7 @@ body02:                                           ; preds = %entry1
   ret i64 %6
 }
 
-define %st72 @gm15_12407(%gs30 %0, i64 %1) {
+define %st72 @gm15_12410(%gs30 %0, i64 %1) {
 entry:
   %2 = alloca %gs30, align 8
   %3 = alloca i64, align 8
@@ -151378,7 +151364,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs30, ptr %2, align 8
   %7 = extractvalue %gs30 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call %st72 @gm202_45781(ptr %7, i64 %8)
+  %9 = call %st72 @gm202_45869(ptr %7, i64 %8)
   ret %st72 %9
 
 entry1:                                           ; No predecessors!
@@ -151390,11 +151376,11 @@ body02:                                           ; preds = %entry1
   %10 = load %gs30, ptr %4, align 8
   %11 = extractvalue %gs30 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call %st72 @gm202_45781(ptr %11, i64 %12)
+  %13 = call %st72 @gm202_45869(ptr %11, i64 %12)
   ret %st72 %13
 }
 
-define void @gm200_45296(ptr %0, i1 %1) {
+define void @gm200_45384(ptr %0, i1 %1) {
 entry:
   %2 = alloca i1, align 1
   %3 = alloca i1, align 1
@@ -151452,7 +151438,7 @@ body0:                                            ; preds = %entry
   %6 = load %gs126, ptr %2, align 8
   %7 = extractvalue %gs126 %6, 0
   %8 = load i64, ptr %3, align 4
-  %9 = call i1 @gm202_45794(ptr %7, i64 %8)
+  %9 = call i1 @gm202_45882(ptr %7, i64 %8)
   ret i1 %9
 
 entry1:                                           ; No predecessors!
@@ -151464,7 +151450,7 @@ body02:                                           ; preds = %entry1
   %10 = load %gs126, ptr %4, align 8
   %11 = extractvalue %gs126 %10, 0
   %12 = load i64, ptr %5, align 4
-  %13 = call i1 @gm202_45794(ptr %11, i64 %12)
+  %13 = call i1 @gm202_45882(ptr %11, i64 %12)
   ret i1 %13
 }
 
@@ -151472,7 +151458,7 @@ declare ptr @plew_arr_cow(ptr, i64, i64)
 
 declare ptr @plew_arr_grow(ptr, i64, i64)
 
-define i8 @gm202_45304(ptr %0, i64 %1) {
+define i8 @gm202_45392(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151506,7 +151492,7 @@ body02:                                           ; preds = %entry1
   ret i8 %15
 }
 
-define %st84 @gm202_45319(ptr %0, i64 %1) {
+define %st84 @gm202_45407(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151542,7 +151528,7 @@ body02:                                           ; preds = %entry1
   ret %st84 %15
 }
 
-define %st83 @gm202_45331(ptr %0, i64 %1) {
+define %st83 @gm202_45419(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151576,7 +151562,7 @@ body02:                                           ; preds = %entry1
   ret %st83 %15
 }
 
-define %st94 @gm202_45343(ptr %0, i64 %1) {
+define %st94 @gm202_45431(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151612,7 +151598,7 @@ body02:                                           ; preds = %entry1
   ret %st94 %15
 }
 
-define %st85 @gm202_45355(ptr %0, i64 %1) {
+define %st85 @gm202_45443(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151648,7 +151634,7 @@ body02:                                           ; preds = %entry1
   ret %st85 %15
 }
 
-define %st77 @gm202_45367(ptr %0, i64 %1) {
+define %st77 @gm202_45455(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151682,7 +151668,7 @@ body02:                                           ; preds = %entry1
   ret %st77 %15
 }
 
-define %st87 @gm202_45379(ptr %0, i64 %1) {
+define %st87 @gm202_45467(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151718,7 +151704,7 @@ body02:                                           ; preds = %entry1
   ret %st87 %15
 }
 
-define %st97 @gm202_45391(ptr %0, i64 %1) {
+define %st97 @gm202_45479(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151752,7 +151738,7 @@ body02:                                           ; preds = %entry1
   ret %st97 %15
 }
 
-define %st90 @gm202_45403(ptr %0, i64 %1) {
+define %st90 @gm202_45491(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151788,7 +151774,7 @@ body02:                                           ; preds = %entry1
   ret %st90 %15
 }
 
-define %st95 @gm202_45415(ptr %0, i64 %1) {
+define %st95 @gm202_45503(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -151824,7 +151810,7 @@ body02:                                           ; preds = %entry1
   ret %st95 %15
 }
 
-define %en6 @gm202_45427(ptr %0, i64 %1) {
+define %en6 @gm202_45515(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152032,7 +152018,7 @@ enumret.c32:                                      ; preds = %enumret.v31, %enumr
   ret %en6 %45
 }
 
-define %st45 @gm202_45439(ptr %0, i64 %1) {
+define %st45 @gm202_45527(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152066,7 +152052,7 @@ body02:                                           ; preds = %entry1
   ret %st45 %15
 }
 
-define %st91 @gm202_45451(ptr %0, i64 %1) {
+define %st91 @gm202_45539(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152100,7 +152086,7 @@ body02:                                           ; preds = %entry1
   ret %st91 %15
 }
 
-define %st86 @gm202_45463(ptr %0, i64 %1) {
+define %st86 @gm202_45551(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152136,7 +152122,7 @@ body02:                                           ; preds = %entry1
   ret %st86 %15
 }
 
-define %st96 @gm202_45475(ptr %0, i64 %1) {
+define %st96 @gm202_45563(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152170,7 +152156,7 @@ body02:                                           ; preds = %entry1
   ret %st96 %15
 }
 
-define i64 @gm202_45487(ptr %0, i64 %1) {
+define i64 @gm202_45575(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152204,7 +152190,7 @@ body02:                                           ; preds = %entry1
   ret i64 %15
 }
 
-define %en9 @gm202_45499(ptr %0, i64 %1) {
+define %en9 @gm202_45587(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152402,7 +152388,7 @@ enumret.c28:                                      ; preds = %enumret.v27, %enumr
   ret %en9 %48
 }
 
-define %st76 @gm202_45511(ptr %0, i64 %1) {
+define %st76 @gm202_45599(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152438,7 +152424,7 @@ body02:                                           ; preds = %entry1
 
 declare void @plew_bounds(i64, i64)
 
-define %st82 @gm202_45525(ptr %0, i64 %1) {
+define %st82 @gm202_45613(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152472,7 +152458,7 @@ body02:                                           ; preds = %entry1
   ret %st82 %15
 }
 
-define %st78 @gm202_45537(ptr %0, i64 %1) {
+define %st78 @gm202_45625(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152506,7 +152492,7 @@ body02:                                           ; preds = %entry1
   ret %st78 %15
 }
 
-define %st73 @gm202_45549(ptr %0, i64 %1) {
+define %st73 @gm202_45637(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152540,7 +152526,7 @@ body02:                                           ; preds = %entry1
   ret %st73 %15
 }
 
-define %st71 @gm202_45561(ptr %0, i64 %1) {
+define %st71 @gm202_45649(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152576,7 +152562,7 @@ body02:                                           ; preds = %entry1
   ret %st71 %15
 }
 
-define %st81 @gm202_45573(ptr %0, i64 %1) {
+define %st81 @gm202_45661(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152625,7 +152611,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define %st79 @gm202_45585(ptr %0, i64 %1) {
+define %st79 @gm202_45673(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152661,7 +152647,7 @@ body02:                                           ; preds = %entry1
   ret %st79 %15
 }
 
-define %st27 @gm202_45597(ptr %0, i64 %1) {
+define %st27 @gm202_45685(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152699,7 +152685,7 @@ body02:                                           ; preds = %entry1
   ret %st27 %16
 }
 
-define %st70 @gm202_45611(ptr %0, i64 %1) {
+define %st70 @gm202_45699(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152733,7 +152719,7 @@ body02:                                           ; preds = %entry1
   ret %st70 %15
 }
 
-define %st61 @gm202_45623(ptr %0, i64 %1) {
+define %st61 @gm202_45711(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152769,7 +152755,7 @@ body02:                                           ; preds = %entry1
   ret %st61 %15
 }
 
-define %st62 @gm202_45635(ptr %0, i64 %1) {
+define %st62 @gm202_45723(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152817,7 +152803,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define %st51 @gm202_45647(ptr %0, i64 %1) {
+define %st51 @gm202_45735(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152853,7 +152839,7 @@ body02:                                           ; preds = %entry1
   ret %st51 %15
 }
 
-define %st63 @gm202_45659(ptr %0, i64 %1) {
+define %st63 @gm202_45747(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152889,7 +152875,7 @@ body02:                                           ; preds = %entry1
   ret %st63 %15
 }
 
-define %st65 @gm202_45671(ptr %0, i64 %1) {
+define %st65 @gm202_45759(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -152925,7 +152911,7 @@ body02:                                           ; preds = %entry1
   ret %st65 %15
 }
 
-define %en8 @gm202_45683(ptr %0, i64 %1) {
+define %en8 @gm202_45771(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153119,7 +153105,7 @@ enumret.c24:                                      ; preds = %enumret.v23, %enumr
   ret %en8 %47
 }
 
-define %st49 @gm202_45695(ptr %0, i64 %1) {
+define %st49 @gm202_45783(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153165,7 +153151,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define %st50 @gm202_45707(ptr %0, i64 %1) {
+define %st50 @gm202_45795(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153201,7 +153187,7 @@ body02:                                           ; preds = %entry1
   ret %st50 %15
 }
 
-define %st53 @gm202_45719(ptr %0, i64 %1) {
+define %st53 @gm202_45807(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153256,7 +153242,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define %st48 @gm202_45731(ptr %0, i64 %1) {
+define %st48 @gm202_45819(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153292,7 +153278,7 @@ body02:                                           ; preds = %entry1
   ret %st48 %15
 }
 
-define %en10 @gm202_45743(ptr %0, i64 %1) {
+define %en10 @gm202_45831(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153380,7 +153366,7 @@ enumret.c8:                                       ; preds = %enumret.v7, %enumre
   ret %en10 %28
 }
 
-define ptr @gm202_45755(ptr %0, i64 %1) {
+define ptr @gm202_45843(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153414,7 +153400,7 @@ body02:                                           ; preds = %entry1
   ret ptr %15
 }
 
-define ptr @gm202_45767(ptr %0, i64 %1) {
+define ptr @gm202_45855(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153448,7 +153434,7 @@ body02:                                           ; preds = %entry1
   ret ptr %15
 }
 
-define %st72 @gm202_45781(ptr %0, i64 %1) {
+define %st72 @gm202_45869(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -153482,7 +153468,7 @@ body02:                                           ; preds = %entry1
   ret %st72 %15
 }
 
-define i1 @gm202_45794(ptr %0, i64 %1) {
+define i1 @gm202_45882(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -155187,7 +155173,7 @@ body0:                                            ; preds = %entry
   store %gs162 %0, ptr %1, align 8
   %2 = load %gs162, ptr %1, align 8
   %3 = extractvalue %gs162 %2, 0
-  %4 = call i64 @gm196_51176(ptr %3)
+  %4 = call i64 @gm196_51267(ptr %3)
   ret i64 %4
 }
 
@@ -155200,7 +155186,7 @@ body0:                                            ; preds = %entry
   store %gs170 %0, ptr %1, align 8
   %2 = load %gs170, ptr %1, align 8
   %3 = extractvalue %gs170 %2, 0
-  %4 = call i64 @gm196_51187(ptr %3)
+  %4 = call i64 @gm196_51278(ptr %3)
   ret i64 %4
 }
 
@@ -160970,6 +160956,9 @@ define void @pf1309(ptr %0, ptr %1) {
 entry:
   %2 = alloca i64, align 8
   %3 = alloca %gs0, align 8
+  %4 = alloca ptr, align 8
+  %5 = alloca %gs14, align 8
+  %6 = alloca i64, align 8
   br label %body0
 
 body0:                                            ; preds = %entry
@@ -160977,51 +160966,95 @@ body0:                                            ; preds = %entry
   br label %while.cond
 
 while.cond:                                       ; preds = %endif, %body0
-  %4 = load i64, ptr %2, align 4
-  %5 = load %st32, ptr %1, align 8
-  %6 = extractvalue %st32 %5, 0
-  %7 = extractvalue %st98 %6, 5
-  %8 = call i64 @gm11_4811(%gs190 %7)
-  %9 = icmp ult i64 %4, %8
-  br i1 %9, label %while.body, label %while.end
+  %7 = load i64, ptr %2, align 4
+  %8 = load %st32, ptr %1, align 8
+  %9 = extractvalue %st32 %8, 0
+  %10 = extractvalue %st98 %9, 5
+  %11 = call i64 @gm11_4811(%gs190 %10)
+  %12 = icmp ult i64 %7, %11
+  br i1 %12, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
-  %10 = load i64, ptr %2, align 4
-  %11 = call i1 @pf485(ptr %1, i64 %10)
-  %12 = icmp ne i1 %11, false
-  br i1 %12, label %then, label %endif
+  %13 = load i64, ptr %2, align 4
+  %14 = call i1 @pf485(ptr %1, i64 %13)
+  %15 = icmp ne i1 %14, false
+  br i1 %15, label %then, label %endif
 
 while.end:                                        ; preds = %while.cond
-  %13 = load i64, ptr %2, align 4
+  %16 = load i64, ptr %2, align 4
   ret void
 
 then:                                             ; preds = %while.body
-  %14 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 27
-  %15 = load i64, ptr %2, align 4
-  call void @gm13_5355(ptr %14, i64 %15)
+  %17 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 27
+  %18 = load i64, ptr %2, align 4
+  call void @gm13_5355(ptr %17, i64 %18)
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs0 zeroinitializer, ptr %3, align 8
-  %16 = call %gs0 @pf225(%st27 { ptr getelementptr ([27 x i8], ptr @str.855, i64 0, i64 24) })
-  call void @pf729(ptr %3, %gs0 %16)
-  %17 = load i64, ptr %2, align 4
-  call void @pf469(ptr %3, i64 %17)
+  %19 = call %gs0 @pf225(%st27 { ptr getelementptr ([27 x i8], ptr @str.855, i64 0, i64 24) })
+  call void @pf729(ptr %3, %gs0 %19)
+  %20 = load i64, ptr %2, align 4
+  call void @pf469(ptr %3, i64 %20)
   call void @gm13_872(ptr %3, i8 0)
-  %18 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 28
-  %19 = load %st37, ptr %0, align 8
-  %20 = extractvalue %st37 %19, 0
-  %21 = load %gs0, ptr %3, align 8
-  %22 = extractvalue %gs0 %21, 0
-  %23 = call ptr @LLVMStructCreateNamed(ptr %20, ptr %22)
-  call void @gm13_9794(ptr %18, ptr %23)
-  %24 = load %gs0, ptr %3, align 8
-  %25 = extractvalue %gs0 %24, 0
-  call void @plew_rawbuf_drop(ptr %25)
+  %21 = load %st37, ptr %0, align 8
+  %22 = extractvalue %st37 %21, 0
+  %23 = load %gs0, ptr %3, align 8
+  %24 = extractvalue %gs0 %23, 0
+  %25 = call ptr @LLVMStructCreateNamed(ptr %22, ptr %24)
+  store ptr %25, ptr %4, align 8
+  %26 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 28
+  %27 = load ptr, ptr %4, align 8
+  call void @gm13_9797(ptr %26, ptr %27)
+  call void @plew_rawbuf_set_count(ptr null, i64 0)
+  store %gs14 zeroinitializer, ptr %5, align 8
+  %28 = load %st32, ptr %1, align 8
+  %29 = extractvalue %st32 %28, 0
+  %30 = extractvalue %st98 %29, 5
+  %31 = load i64, ptr %2, align 4
+  %32 = call %st84 @gm23_4811(%gs190 %30, i64 %31)
+  %33 = extractvalue %st84 %32, 0
+  %34 = insertvalue %st71 undef, i64 %33, 0
+  %35 = load %st32, ptr %1, align 8
+  %36 = extractvalue %st32 %35, 0
+  %37 = extractvalue %st98 %36, 5
+  %38 = load i64, ptr %2, align 4
+  %39 = call %st84 @gm23_4811(%gs190 %37, i64 %38)
+  %40 = extractvalue %st84 %39, 1
+  %41 = insertvalue %st71 %34, i64 %40, 1
+  %42 = insertvalue %st71 %41, i64 0, 2
+  %43 = load %gs14, ptr %5, align 8
+  %44 = extractvalue %gs14 %43, 0
+  call void @plew_rawbuf_retain(ptr %44)
+  %45 = insertvalue %st71 %42, %gs14 %43, 3
+  %46 = insertvalue %st71 %45, i64 0, 4
+  %47 = insertvalue %st71 %46, i1 false, 5
+  call void @plew_rawbuf_set_count(ptr null, i64 0)
+  %48 = insertvalue %st71 %47, %gs14 zeroinitializer, 6
+  %49 = insertvalue %st71 %48, i64 0, 7
+  %50 = call i64 @pf290(ptr %1, %st71 %49)
+  store i64 %50, ptr %6, align 4
+  %51 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 29
+  %52 = load i64, ptr %6, align 4
+  call void @gm13_5355(ptr %51, i64 %52)
+  %53 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 30
+  %54 = load ptr, ptr %4, align 8
+  call void @gm13_9797(ptr %53, ptr %54)
+  %55 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 31
+  %56 = load i64, ptr %2, align 4
+  call void @gm13_5355(ptr %55, i64 %56)
+  %57 = load i64, ptr %6, align 4
+  %58 = load %gs14, ptr %5, align 8
+  %59 = extractvalue %gs14 %58, 0
+  call void @plew_rawbuf_drop(ptr %59)
+  %60 = load ptr, ptr %4, align 8
+  %61 = load %gs0, ptr %3, align 8
+  %62 = extractvalue %gs0 %61, 0
+  call void @plew_rawbuf_drop(ptr %62)
   br label %endif
 
 endif:                                            ; preds = %then, %while.body
-  %26 = load i64, ptr %2, align 4
-  %27 = call i64 @plew_u64Add(i64 %26, i64 1)
-  store i64 %27, ptr %2, align 4
+  %63 = load i64, ptr %2, align 4
+  %64 = call i64 @plew_u64Add(i64 %63, i64 1)
+  store i64 %64, ptr %2, align 4
   br label %while.cond
 }
 
@@ -161103,12 +161136,12 @@ then1:                                            ; preds = %then
   store %gs118 zeroinitializer, ptr %7, align 8
   %41 = load %st37, ptr %0, align 8
   %42 = extractvalue %st37 %41, 7
-  call void @gm13_9794(ptr %7, ptr %42)
+  call void @gm13_9797(ptr %7, ptr %42)
   %43 = load %st37, ptr %0, align 8
   %44 = extractvalue %st37 %43, 7
   %45 = load i64, ptr %4, align 4
   %46 = call ptr @LLVMArrayType2(ptr %44, i64 %45)
-  call void @gm13_9794(ptr %7, ptr %46)
+  call void @gm13_9797(ptr %7, ptr %46)
   %47 = load ptr, ptr %6, align 8
   %48 = load %gs118, ptr %7, align 8
   %49 = extractvalue %gs118 %48, 0
@@ -161138,7 +161171,7 @@ then1:                                            ; preds = %then
   call void @gm13_5355(ptr %65, i64 %66)
   %67 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 33
   %68 = load ptr, ptr %6, align 8
-  call void @gm13_9794(ptr %67, ptr %68)
+  call void @gm13_9797(ptr %67, ptr %68)
   %69 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 34
   %70 = load i64, ptr %2, align 4
   call void @gm13_5355(ptr %69, i64 %70)
@@ -161260,7 +161293,7 @@ then1:                                            ; preds = %sc.cont
   %58 = load %gs0, ptr %6, align 8
   %59 = extractvalue %gs0 %58, 0
   %60 = call ptr @LLVMStructCreateNamed(ptr %57, ptr %59)
-  call void @gm13_9794(ptr %55, ptr %60)
+  call void @gm13_9797(ptr %55, ptr %60)
   %61 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 31
   %62 = load i64, ptr %5, align 4
   call void @gm13_5355(ptr %61, i64 %62)
@@ -161436,12 +161469,12 @@ while.end5:                                       ; preds = %while.cond3
   store %gs118 zeroinitializer, ptr %16, align 8
   %94 = load %st37, ptr %0, align 8
   %95 = extractvalue %st37 %94, 7
-  call void @gm13_9794(ptr %16, ptr %95)
+  call void @gm13_9797(ptr %16, ptr %95)
   %96 = load %st37, ptr %0, align 8
   %97 = extractvalue %st37 %96, 7
   %98 = load i64, ptr %9, align 4
   %99 = call ptr @LLVMArrayType2(ptr %97, i64 %98)
-  call void @gm13_9794(ptr %16, ptr %99)
+  call void @gm13_9797(ptr %16, ptr %99)
   %100 = load ptr, ptr %15, align 8
   %101 = load %gs118, ptr %16, align 8
   %102 = extractvalue %gs118 %101, 0
@@ -161463,7 +161496,7 @@ while.end5:                                       ; preds = %while.cond3
   call void @gm13_5355(ptr %111, i64 %112)
   %113 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 33
   %114 = load ptr, ptr %15, align 8
-  call void @gm13_9794(ptr %113, ptr %114)
+  call void @gm13_9797(ptr %113, ptr %114)
   %115 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 34
   %116 = load i64, ptr %5, align 4
   call void @gm13_5355(ptr %115, i64 %116)
@@ -161592,7 +161625,7 @@ while.end3:                                       ; preds = %while.cond1
   %31 = load %st37, ptr %0, align 8
   %32 = extractvalue %st37 %31, 28
   %33 = load i64, ptr %2, align 4
-  %34 = call ptr @gm23_1561(%gs118 %32, i64 %33)
+  %34 = call ptr @gm23_1565(%gs118 %32, i64 %33)
   %35 = load %gs118, ptr %4, align 8
   %36 = extractvalue %gs118 %35, 0
   %37 = load %st84, ptr %3, align 8
@@ -161613,7 +161646,7 @@ while.end3:                                       ; preds = %while.cond1
 then:                                             ; preds = %while.body2
   %46 = load %st37, ptr %0, align 8
   %47 = extractvalue %st37 %46, 10
-  call void @gm13_9794(ptr %4, ptr %47)
+  call void @gm13_9797(ptr %4, ptr %47)
   br label %endif
 
 endif:                                            ; preds = %else, %then
@@ -161629,7 +161662,7 @@ else:                                             ; preds = %while.body2
   %53 = call %st83 @gm23_5377(%gs98 %51, i64 %52)
   call void @pwretain83(%st83 %53)
   %54 = call ptr @pf1363(ptr %0, ptr %1, %st83 %53)
-  call void @gm13_9794(ptr %4, ptr %54)
+  call void @gm13_9797(ptr %4, ptr %54)
   br label %endif
 }
 
@@ -161648,7 +161681,7 @@ body0:                                            ; preds = %entry
   store i64 0, ptr %2, align 4
   br label %while.cond
 
-while.cond:                                       ; preds = %while.end3, %body0
+while.cond:                                       ; preds = %while.end3, %then, %body0
   %9 = load i64, ptr %2, align 4
   %10 = load %st37, ptr %0, align 8
   %11 = extractvalue %st37 %10, 29
@@ -161664,133 +161697,151 @@ while.body:                                       ; preds = %while.cond
   store i64 %17, ptr %3, align 4
   %18 = load %st32, ptr %1, align 8
   %19 = extractvalue %st32 %18, 0
-  %20 = extractvalue %st98 %19, 5
-  %21 = load %st37, ptr %0, align 8
-  %22 = extractvalue %st37 %21, 31
-  %23 = load i64, ptr %2, align 4
-  %24 = call i64 @gm23_6468(%gs14 %22, i64 %23)
-  %25 = call %st84 @gm23_4811(%gs190 %20, i64 %24)
-  call void @pwretain84(%st84 %25)
-  store %st84 %25, ptr %4, align 8
-  %26 = load %st32, ptr %1, align 8
-  %27 = extractvalue %st32 %26, 3
-  %28 = extractvalue %st105 %27, 18
-  %29 = extractvalue %gs34 %28, 0
-  call void @plew_rawbuf_retain(ptr %29)
-  store %gs34 %28, ptr %5, align 8
+  %20 = extractvalue %st98 %19, 7
+  %21 = load i64, ptr %3, align 4
+  %22 = call %st71 @gm23_4815(%gs198 %20, i64 %21)
+  %23 = extractvalue %st71 %22, 3
+  %24 = call i64 @gm11_4725(%gs14 %23)
+  %25 = icmp eq i64 %24, 0
+  br i1 %25, label %then, label %endif
+
+while.end:                                        ; preds = %while.cond
+  %26 = load i64, ptr %2, align 4
+  ret void
+
+then:                                             ; preds = %while.body
+  %27 = load i64, ptr %2, align 4
+  %28 = call i64 @plew_u64Add(i64 %27, i64 1)
+  store i64 %28, ptr %2, align 4
+  %29 = load i64, ptr %3, align 4
+  br label %while.cond
+
+endif:                                            ; preds = %while.body
   %30 = load %st32, ptr %1, align 8
-  %31 = extractvalue %st32 %30, 3
-  %32 = extractvalue %st105 %31, 19
-  %33 = extractvalue %gs14 %32, 0
-  call void @plew_rawbuf_retain(ptr %33)
-  store %gs14 %32, ptr %6, align 8
-  %34 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
-  %35 = getelementptr inbounds nuw %st105, ptr %34, i32 0, i32 18
-  %36 = load %st84, ptr %4, align 8
-  %37 = extractvalue %st84 %36, 3
-  %38 = extractvalue %gs34 %37, 0
-  call void @plew_rawbuf_retain(ptr %38)
-  store %gs34 %37, ptr %35, align 8
-  %39 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
-  %40 = getelementptr inbounds nuw %st105, ptr %39, i32 0, i32 19
-  %41 = load %st32, ptr %1, align 8
-  %42 = extractvalue %st32 %41, 0
-  %43 = extractvalue %st98 %42, 7
-  %44 = load i64, ptr %3, align 4
-  %45 = call %st71 @gm23_4815(%gs198 %43, i64 %44)
-  %46 = extractvalue %st71 %45, 3
-  %47 = extractvalue %gs14 %46, 0
-  call void @plew_rawbuf_retain(ptr %47)
-  store %gs14 %46, ptr %40, align 8
+  %31 = extractvalue %st32 %30, 0
+  %32 = extractvalue %st98 %31, 5
+  %33 = load %st37, ptr %0, align 8
+  %34 = extractvalue %st37 %33, 31
+  %35 = load i64, ptr %2, align 4
+  %36 = call i64 @gm23_6468(%gs14 %34, i64 %35)
+  %37 = call %st84 @gm23_4811(%gs190 %32, i64 %36)
+  call void @pwretain84(%st84 %37)
+  store %st84 %37, ptr %4, align 8
+  %38 = load %st32, ptr %1, align 8
+  %39 = extractvalue %st32 %38, 3
+  %40 = extractvalue %st105 %39, 18
+  %41 = extractvalue %gs34 %40, 0
+  call void @plew_rawbuf_retain(ptr %41)
+  store %gs34 %40, ptr %5, align 8
+  %42 = load %st32, ptr %1, align 8
+  %43 = extractvalue %st32 %42, 3
+  %44 = extractvalue %st105 %43, 19
+  %45 = extractvalue %gs14 %44, 0
+  call void @plew_rawbuf_retain(ptr %45)
+  store %gs14 %44, ptr %6, align 8
+  %46 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
+  %47 = getelementptr inbounds nuw %st105, ptr %46, i32 0, i32 18
+  %48 = load %st84, ptr %4, align 8
+  %49 = extractvalue %st84 %48, 3
+  %50 = extractvalue %gs34 %49, 0
+  call void @plew_rawbuf_retain(ptr %50)
+  store %gs34 %49, ptr %47, align 8
+  %51 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
+  %52 = getelementptr inbounds nuw %st105, ptr %51, i32 0, i32 19
+  %53 = load %st32, ptr %1, align 8
+  %54 = extractvalue %st32 %53, 0
+  %55 = extractvalue %st98 %54, 7
+  %56 = load i64, ptr %3, align 4
+  %57 = call %st71 @gm23_4815(%gs198 %55, i64 %56)
+  %58 = extractvalue %st71 %57, 3
+  %59 = extractvalue %gs14 %58, 0
+  call void @plew_rawbuf_retain(ptr %59)
+  store %gs14 %58, ptr %52, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
   store %gs118 zeroinitializer, ptr %7, align 8
   store i64 0, ptr %8, align 4
   br label %while.cond1
 
-while.end:                                        ; preds = %while.cond
-  %48 = load i64, ptr %2, align 4
-  ret void
-
-while.cond1:                                      ; preds = %endif, %while.body
-  %49 = load i64, ptr %8, align 4
-  %50 = load %st84, ptr %4, align 8
-  %51 = extractvalue %st84 %50, 4
-  %52 = call i64 @gm11_5377(%gs98 %51)
-  %53 = icmp ult i64 %49, %52
-  br i1 %53, label %while.body2, label %while.end3
+while.cond1:                                      ; preds = %endif5, %endif
+  %60 = load i64, ptr %8, align 4
+  %61 = load %st84, ptr %4, align 8
+  %62 = extractvalue %st84 %61, 4
+  %63 = call i64 @gm11_5377(%gs98 %62)
+  %64 = icmp ult i64 %60, %63
+  br i1 %64, label %while.body2, label %while.end3
 
 while.body2:                                      ; preds = %while.cond1
-  %54 = load %st84, ptr %4, align 8
-  %55 = extractvalue %st84 %54, 4
-  %56 = load i64, ptr %8, align 4
-  %57 = call %st83 @gm23_5377(%gs98 %55, i64 %56)
-  call void @pwretain83(%st83 %57)
-  %58 = call i1 @pf1125(ptr %1, %st83 %57)
-  %59 = icmp ne i1 %58, false
-  br i1 %59, label %then, label %else
+  %65 = load %st84, ptr %4, align 8
+  %66 = extractvalue %st84 %65, 4
+  %67 = load i64, ptr %8, align 4
+  %68 = call %st83 @gm23_5377(%gs98 %66, i64 %67)
+  call void @pwretain83(%st83 %68)
+  %69 = call i1 @pf1125(ptr %1, %st83 %68)
+  %70 = icmp ne i1 %69, false
+  br i1 %70, label %then4, label %else
 
 while.end3:                                       ; preds = %while.cond1
-  %60 = load %st37, ptr %0, align 8
-  %61 = extractvalue %st37 %60, 30
-  %62 = load i64, ptr %2, align 4
-  %63 = call ptr @gm23_1561(%gs118 %61, i64 %62)
-  %64 = load %gs118, ptr %7, align 8
-  %65 = extractvalue %gs118 %64, 0
-  %66 = load %st84, ptr %4, align 8
-  %67 = extractvalue %st84 %66, 4
-  %68 = call i64 @gm11_5377(%gs98 %67)
-  call void @LLVMStructSetBody(ptr %63, ptr %65, i64 %68, i32 0)
-  %69 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
-  %70 = getelementptr inbounds nuw %st105, ptr %69, i32 0, i32 18
-  %71 = load %gs34, ptr %5, align 8
-  %72 = extractvalue %gs34 %71, 0
-  call void @plew_rawbuf_retain(ptr %72)
-  store %gs34 %71, ptr %70, align 8
-  %73 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
-  %74 = getelementptr inbounds nuw %st105, ptr %73, i32 0, i32 19
-  %75 = load %gs14, ptr %6, align 8
-  %76 = extractvalue %gs14 %75, 0
-  call void @plew_rawbuf_retain(ptr %76)
-  store %gs14 %75, ptr %74, align 8
-  %77 = load i64, ptr %2, align 4
-  %78 = call i64 @plew_u64Add(i64 %77, i64 1)
-  store i64 %78, ptr %2, align 4
-  %79 = load i64, ptr %8, align 4
-  %80 = load %gs118, ptr %7, align 8
-  %81 = extractvalue %gs118 %80, 0
-  call void @plew_rawbuf_drop(ptr %81)
-  %82 = load %gs14, ptr %6, align 8
-  %83 = extractvalue %gs14 %82, 0
-  call void @plew_rawbuf_drop(ptr %83)
-  %84 = load %gs34, ptr %5, align 8
-  %85 = extractvalue %gs34 %84, 0
-  call void @plew_rawbuf_drop(ptr %85)
-  %86 = load %st84, ptr %4, align 8
-  call void @pwdrop84(%st84 %86)
-  %87 = load i64, ptr %3, align 4
+  %71 = load %st37, ptr %0, align 8
+  %72 = extractvalue %st37 %71, 30
+  %73 = load i64, ptr %2, align 4
+  %74 = call ptr @gm23_1565(%gs118 %72, i64 %73)
+  %75 = load %gs118, ptr %7, align 8
+  %76 = extractvalue %gs118 %75, 0
+  %77 = load %st84, ptr %4, align 8
+  %78 = extractvalue %st84 %77, 4
+  %79 = call i64 @gm11_5377(%gs98 %78)
+  call void @LLVMStructSetBody(ptr %74, ptr %76, i64 %79, i32 0)
+  %80 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
+  %81 = getelementptr inbounds nuw %st105, ptr %80, i32 0, i32 18
+  %82 = load %gs34, ptr %5, align 8
+  %83 = extractvalue %gs34 %82, 0
+  call void @plew_rawbuf_retain(ptr %83)
+  store %gs34 %82, ptr %81, align 8
+  %84 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
+  %85 = getelementptr inbounds nuw %st105, ptr %84, i32 0, i32 19
+  %86 = load %gs14, ptr %6, align 8
+  %87 = extractvalue %gs14 %86, 0
+  call void @plew_rawbuf_retain(ptr %87)
+  store %gs14 %86, ptr %85, align 8
+  %88 = load i64, ptr %2, align 4
+  %89 = call i64 @plew_u64Add(i64 %88, i64 1)
+  store i64 %89, ptr %2, align 4
+  %90 = load i64, ptr %8, align 4
+  %91 = load %gs118, ptr %7, align 8
+  %92 = extractvalue %gs118 %91, 0
+  call void @plew_rawbuf_drop(ptr %92)
+  %93 = load %gs14, ptr %6, align 8
+  %94 = extractvalue %gs14 %93, 0
+  call void @plew_rawbuf_drop(ptr %94)
+  %95 = load %gs34, ptr %5, align 8
+  %96 = extractvalue %gs34 %95, 0
+  call void @plew_rawbuf_drop(ptr %96)
+  %97 = load %st84, ptr %4, align 8
+  call void @pwdrop84(%st84 %97)
+  %98 = load i64, ptr %3, align 4
   br label %while.cond
 
-then:                                             ; preds = %while.body2
-  %88 = load %st37, ptr %0, align 8
-  %89 = extractvalue %st37 %88, 10
-  call void @gm13_9794(ptr %7, ptr %89)
-  br label %endif
+then4:                                            ; preds = %while.body2
+  %99 = load %st37, ptr %0, align 8
+  %100 = extractvalue %st37 %99, 10
+  call void @gm13_9797(ptr %7, ptr %100)
+  br label %endif5
 
-endif:                                            ; preds = %else, %then
-  %90 = load i64, ptr %8, align 4
-  %91 = call i64 @plew_u64Add(i64 %90, i64 1)
-  store i64 %91, ptr %8, align 4
+endif5:                                           ; preds = %else, %then4
+  %101 = load i64, ptr %8, align 4
+  %102 = call i64 @plew_u64Add(i64 %101, i64 1)
+  store i64 %102, ptr %8, align 4
   br label %while.cond1
 
 else:                                             ; preds = %while.body2
-  %92 = load %st84, ptr %4, align 8
-  %93 = extractvalue %st84 %92, 4
-  %94 = load i64, ptr %8, align 4
-  %95 = call %st83 @gm23_5377(%gs98 %93, i64 %94)
-  call void @pwretain83(%st83 %95)
-  %96 = call ptr @pf1363(ptr %0, ptr %1, %st83 %95)
-  call void @gm13_9794(ptr %7, ptr %96)
-  br label %endif
+  %103 = load %st84, ptr %4, align 8
+  %104 = extractvalue %st84 %103, 4
+  %105 = load i64, ptr %8, align 4
+  %106 = call %st83 @gm23_5377(%gs98 %104, i64 %105)
+  call void @pwretain83(%st83 %106)
+  %107 = call ptr @pf1363(ptr %0, ptr %1, %st83 %106)
+  call void @gm13_9797(ptr %7, ptr %107)
+  br label %endif5
 }
 
 define void @pf1544(ptr %0, ptr %1) {
@@ -162001,7 +162052,7 @@ endif2:                                           ; preds = %then1, %then
 then3:                                            ; preds = %endif2
   %40 = load %st95, ptr %3, align 8
   %41 = call ptr @pf1547(ptr %0, ptr %1, %st95 %40)
-  call void @gm13_9794(ptr %5, ptr %41)
+  call void @gm13_9797(ptr %5, ptr %41)
   br label %endif4
 
 endif4:                                           ; preds = %then3, %endif2
@@ -162023,7 +162074,7 @@ while.body6:                                      ; preds = %while.cond5
   %50 = call %st82 @gm23_6496(%gs22 %48, i64 %49)
   call void @pwretain82(%st82 %50)
   %51 = call ptr @pf1546(ptr %0, ptr %1, %st82 %50)
-  call void @gm13_9794(ptr %5, ptr %51)
+  call void @gm13_9797(ptr %5, ptr %51)
   %52 = load i64, ptr %6, align 4
   %53 = call i64 @plew_u64Add(i64 %52, i64 1)
   store i64 %53, ptr %6, align 4
@@ -162046,7 +162097,7 @@ endif9:                                           ; preds = %then8, %while.end7
   %59 = load %gs118, ptr %5, align 8
   %60 = extractvalue %gs118 %59, 0
   %61 = load %gs118, ptr %5, align 8
-  %62 = call i64 @gm11_11923(%gs118 %61)
+  %62 = call i64 @gm11_11926(%gs118 %61)
   %63 = call ptr @LLVMFunctionType(ptr %58, ptr %60, i64 %62, i32 0)
   store ptr %63, ptr %8, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -162071,7 +162122,7 @@ endif9:                                           ; preds = %then8, %while.end7
   call void @gm13_1696(ptr %74, ptr %75)
   %76 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 43
   %77 = load ptr, ptr %8, align 8
-  call void @gm13_9794(ptr %76, ptr %77)
+  call void @gm13_9797(ptr %76, ptr %77)
   %78 = load ptr, ptr %10, align 8
   %79 = load %gs0, ptr %9, align 8
   %80 = extractvalue %gs0 %79, 0
@@ -162220,7 +162271,7 @@ while.body4:                                      ; preds = %while.cond3
   %77 = call %st82 @gm23_6496(%gs22 %75, i64 %76)
   call void @pwretain82(%st82 %77)
   %78 = call ptr @pf1546(ptr %0, ptr %1, %st82 %77)
-  call void @gm13_9794(ptr %7, ptr %78)
+  call void @gm13_9797(ptr %7, ptr %78)
   %79 = load i64, ptr %8, align 4
   %80 = call i64 @plew_u64Add(i64 %79, i64 1)
   store i64 %80, ptr %8, align 4
@@ -162270,7 +162321,7 @@ while.end5:                                       ; preds = %while.cond3
   call void @gm13_1696(ptr %107, ptr %108)
   %109 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 46
   %110 = load ptr, ptr %9, align 8
-  call void @gm13_9794(ptr %109, ptr %110)
+  call void @gm13_9797(ptr %109, ptr %110)
   %111 = load ptr, ptr %11, align 8
   %112 = load %gs0, ptr %10, align 8
   %113 = extractvalue %gs0 %112, 0
@@ -162529,7 +162580,7 @@ endif4:                                           ; preds = %then3, %endif2
   store %gs118 zeroinitializer, ptr %4, align 8
   %56 = load %st37, ptr %0, align 8
   %57 = extractvalue %st37 %56, 10
-  call void @gm13_9794(ptr %4, ptr %57)
+  call void @gm13_9797(ptr %4, ptr %57)
   %58 = load %st37, ptr %0, align 8
   %59 = extractvalue %st37 %58, 9
   %60 = load %gs118, ptr %4, align 8
@@ -162557,7 +162608,7 @@ endif4:                                           ; preds = %then3, %endif2
   call void @gm13_5355(ptr %72, i64 %73)
   %74 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 124
   %75 = load ptr, ptr %3, align 8
-  call void @gm13_9794(ptr %74, ptr %75)
+  call void @gm13_9797(ptr %74, ptr %75)
   %76 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 125
   %77 = load ptr, ptr %7, align 8
   call void @gm13_1696(ptr %76, ptr %77)
@@ -162613,7 +162664,7 @@ while.body8:                                      ; preds = %while.cond7
   %109 = call %st82 @gm23_6496(%gs22 %107, i64 %108)
   call void @pwretain82(%st82 %109)
   %110 = call ptr @pf1621(ptr %0, ptr %1, %st82 %109)
-  call void @gm13_9794(ptr %8, ptr %110)
+  call void @gm13_9797(ptr %8, ptr %110)
   %111 = load i64, ptr %9, align 4
   %112 = call i64 @plew_u64Add(i64 %111, i64 1)
   store i64 %112, ptr %9, align 4
@@ -162625,7 +162676,7 @@ while.end9:                                       ; preds = %while.cond7
   %115 = load %gs118, ptr %8, align 8
   %116 = extractvalue %gs118 %115, 0
   %117 = load %gs118, ptr %8, align 8
-  %118 = call i64 @gm11_11923(%gs118 %117)
+  %118 = call i64 @gm11_11926(%gs118 %117)
   %119 = call ptr @LLVMFunctionType(ptr %114, ptr %116, i64 %118, i32 0)
   store ptr %119, ptr %10, align 8
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -162650,7 +162701,7 @@ while.end9:                                       ; preds = %while.cond7
   call void @gm13_1696(ptr %130, ptr %131)
   %132 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 43
   %133 = load ptr, ptr %10, align 8
-  call void @gm13_9794(ptr %132, ptr %133)
+  call void @gm13_9797(ptr %132, ptr %133)
   %134 = load ptr, ptr %12, align 8
   %135 = load %gs0, ptr %11, align 8
   %136 = extractvalue %gs0 %135, 0
@@ -163047,7 +163098,7 @@ while.body:                                       ; preds = %while.cond
   %46 = load %st37, ptr %0, align 8
   %47 = extractvalue %st37 %46, 45
   %48 = load i64, ptr %2, align 4
-  %49 = call ptr @gm23_9949(%gs38 %47, i64 %48)
+  %49 = call ptr @gm23_9952(%gs38 %47, i64 %48)
   call void @pf1587(ptr %0, ptr %1, i64 %45, ptr %49)
   %50 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
   %51 = getelementptr inbounds nuw %st105, ptr %50, i32 0, i32 18
@@ -163159,7 +163210,7 @@ while.body:                                       ; preds = %while.cond
   %34 = load %st37, ptr %0, align 8
   %35 = extractvalue %st37 %34, 84
   %36 = load i64, ptr %2, align 4
-  %37 = call ptr @gm23_9949(%gs38 %35, i64 %36)
+  %37 = call ptr @gm23_9952(%gs38 %35, i64 %36)
   store ptr %37, ptr %4, align 8
   %38 = load %st32, ptr %1, align 8
   %39 = extractvalue %st32 %38, 0
@@ -163311,7 +163362,7 @@ endif:                                            ; preds = %else, %endif2
   %103 = call %gs30 @pf439(ptr %1, i64 %102)
   store %gs30 %103, ptr %13, align 8
   %104 = load %gs30, ptr %13, align 8
-  %105 = call i64 @gm11_12407(%gs30 %104)
+  %105 = call i64 @gm11_12410(%gs30 %104)
   %106 = icmp ugt i64 %105, 0
   br i1 %106, label %then4, label %endif5
 
@@ -163360,14 +163411,14 @@ endif5:                                           ; preds = %while.end8, %endif
 while.cond6:                                      ; preds = %endif10, %then4
   %123 = load i64, ptr %16, align 4
   %124 = load %gs30, ptr %13, align 8
-  %125 = call i64 @gm11_12407(%gs30 %124)
+  %125 = call i64 @gm11_12410(%gs30 %124)
   %126 = icmp ult i64 %123, %125
   br i1 %126, label %while.body7, label %while.end8
 
 while.body7:                                      ; preds = %while.cond6
   %127 = load %gs30, ptr %13, align 8
   %128 = load i64, ptr %16, align 4
-  %129 = call %st72 @gm23_12407(%gs30 %127, i64 %128)
+  %129 = call %st72 @gm23_12410(%gs30 %127, i64 %128)
   call void @pwretain72(%st72 %129)
   store %st72 %129, ptr %17, align 4
   %130 = load %st72, ptr %17, align 4
@@ -163644,7 +163695,7 @@ while.body:                                       ; preds = %while.cond
   %20 = load %st37, ptr %0, align 8
   %21 = extractvalue %st37 %20, 87
   %22 = load i64, ptr %2, align 4
-  %23 = call ptr @gm23_9949(%gs38 %21, i64 %22)
+  %23 = call ptr @gm23_9952(%gs38 %21, i64 %22)
   store ptr %23, ptr %4, align 8
   %24 = load %st32, ptr %1, align 8
   %25 = extractvalue %st32 %24, 0
@@ -163700,15 +163751,15 @@ while.end3:                                       ; preds = %while.cond1
   %53 = load %st37, ptr %0, align 8
   %54 = extractvalue %st37 %53, 43
   %55 = load i64, ptr %7, align 4
-  %56 = call ptr @gm23_1561(%gs118 %54, i64 %55)
+  %56 = call ptr @gm23_1565(%gs118 %54, i64 %55)
   %57 = load %st37, ptr %0, align 8
   %58 = extractvalue %st37 %57, 42
   %59 = load i64, ptr %7, align 4
-  %60 = call ptr @gm23_9949(%gs38 %58, i64 %59)
+  %60 = call ptr @gm23_9952(%gs38 %58, i64 %59)
   %61 = load %gs38, ptr %8, align 8
   %62 = extractvalue %gs38 %61, 0
   %63 = load %gs38, ptr %8, align 8
-  %64 = call i64 @gm11_9949(%gs38 %63)
+  %64 = call i64 @gm11_9952(%gs38 %63)
   %65 = call ptr @pf478()
   %66 = call ptr @LLVMBuildCall2(ptr %52, ptr %56, ptr %60, ptr %62, i64 %64, ptr %65)
   store ptr %66, ptr %10, align 8
@@ -163858,7 +163909,7 @@ endif:                                            ; preds = %then, %body0
   %80 = load %st37, ptr %0, align 8
   %81 = extractvalue %st37 %80, 49
   %82 = load i64, ptr %3, align 4
-  %83 = call ptr @gm23_9949(%gs38 %81, i64 %82)
+  %83 = call ptr @gm23_9952(%gs38 %81, i64 %82)
   call void @pf1587(ptr %0, ptr %1, i64 %79, ptr %83)
   %84 = getelementptr inbounds nuw %st32, ptr %1, i32 0, i32 3
   %85 = getelementptr inbounds nuw %st105, ptr %84, i32 0, i32 16
@@ -164580,7 +164631,7 @@ body0:                                            ; preds = %entry
   %5 = getelementptr inbounds nuw %gs14, ptr %0, i32 0, i32 0
   %6 = load i64, ptr %3, align 4
   %7 = load i64, ptr %4, align 4
-  call void @gm203_45093(ptr %5, i64 %6, i64 %7)
+  call void @gm203_45181(ptr %5, i64 %6, i64 %7)
   ret void
 }
 
@@ -164709,7 +164760,7 @@ body0:                                            ; preds = %entry
   store %gs242 %0, ptr %1, align 8
   %2 = load %gs242, ptr %1, align 8
   %3 = extractvalue %gs242 %2, 0
-  %4 = call i64 @gm196_51204(ptr %3)
+  %4 = call i64 @gm196_51295(ptr %3)
   ret i64 %4
 }
 
@@ -164748,7 +164799,7 @@ body0:                                            ; preds = %entry
   %5 = getelementptr inbounds nuw %gs242, ptr %0, i32 0, i32 0
   %6 = load i64, ptr %3, align 4
   %7 = load i64, ptr %4, align 4
-  call void @gm203_51216(ptr %5, i64 %6, i64 %7)
+  call void @gm203_51307(ptr %5, i64 %6, i64 %7)
   ret void
 }
 
@@ -166726,7 +166777,7 @@ enumret.v13:                                      ; preds = %enumret.c12
   br label %enumret.c14
 
 enumret.c14:                                      ; preds = %enumret.v13, %enumret.c12
-  call void @gm200_51220(ptr %4, %en6 %5)
+  call void @gm200_51311(ptr %4, %en6 %5)
   ret void
 }
 
@@ -172606,7 +172657,7 @@ body0:                                            ; preds = %entry
   store %gs222 %0, ptr %1, align 8
   %2 = load %gs222, ptr %1, align 8
   %3 = extractvalue %gs222 %2, 0
-  %4 = call i64 @gm196_51225(ptr %3)
+  %4 = call i64 @gm196_51316(ptr %3)
   ret i64 %4
 }
 
@@ -172958,7 +173009,7 @@ while.cond25:                                     ; preds = %while.body26, %arm2
 while.body26:                                     ; preds = %while.cond25
   %181 = load %gs94, ptr %33, align 8
   %182 = load i64, ptr %34, align 4
-  %183 = call %st76 @gm23_42887(%gs94 %181, i64 %182)
+  %183 = call %st76 @gm23_42976(%gs94 %181, i64 %182)
   %184 = extractvalue %st76 %183, 2
   call void @pf953(ptr %0, i64 %184, ptr %2)
   %185 = load i64, ptr %34, align 4
@@ -173741,7 +173792,7 @@ body0:                                            ; preds = %entry
   store %gs234 %0, ptr %1, align 8
   %2 = load %gs234, ptr %1, align 8
   %3 = extractvalue %gs234 %2, 0
-  %4 = call i64 @gm196_51237(ptr %3)
+  %4 = call i64 @gm196_51328(ptr %3)
   ret i64 %4
 }
 
@@ -175779,7 +175830,7 @@ while.cond:                                       ; preds = %endif8, %body0
 while.body:                                       ; preds = %while.cond
   %23 = load %gs94, ptr %14, align 8
   %24 = load i64, ptr %15, align 4
-  %25 = call %st76 @gm23_42887(%gs94 %23, i64 %24)
+  %25 = call %st76 @gm23_42976(%gs94 %23, i64 %24)
   call void @pwretain76(%st76 %25)
   store %st76 %25, ptr %16, align 4
   %26 = load i64, ptr %8, align 4
@@ -176880,11 +176931,11 @@ while.body8:                                      ; preds = %while.cond7
   %110 = extractvalue %st83 %109, 1
   %111 = load %gs94, ptr %13, align 8
   %112 = load i64, ptr %16, align 4
-  %113 = call %st76 @gm23_42887(%gs94 %111, i64 %112)
+  %113 = call %st76 @gm23_42976(%gs94 %111, i64 %112)
   %114 = extractvalue %st76 %113, 0
   %115 = load %gs94, ptr %13, align 8
   %116 = load i64, ptr %16, align 4
-  %117 = call %st76 @gm23_42887(%gs94 %115, i64 %116)
+  %117 = call %st76 @gm23_42976(%gs94 %115, i64 %116)
   %118 = extractvalue %st76 %117, 1
   %119 = call i1 @pf291(ptr %0, i64 %105, i64 %110, i64 %114, i64 %118)
   %120 = icmp ne i1 %119, false
@@ -176923,7 +176974,7 @@ then12:                                           ; preds = %then10
   %136 = extractvalue %st83 %135, 7
   %137 = load %gs94, ptr %13, align 8
   %138 = load i64, ptr %16, align 4
-  %139 = call %st76 @gm23_42887(%gs94 %137, i64 %138)
+  %139 = call %st76 @gm23_42976(%gs94 %137, i64 %138)
   %140 = extractvalue %st76 %139, 2
   call void @pf1238(ptr %0, i64 %136, i64 %140, %st27 { ptr getelementptr ([37 x i8], ptr @str.956, i64 0, i64 24) })
   br label %endif13
@@ -177062,11 +177113,11 @@ while.body27:                                     ; preds = %while.cond26
   call void @plew_rawbuf_retain(ptr %206)
   %207 = load %gs94, ptr %25, align 8
   %208 = load i64, ptr %26, align 4
-  %209 = call %st76 @gm23_42887(%gs94 %207, i64 %208)
+  %209 = call %st76 @gm23_42976(%gs94 %207, i64 %208)
   %210 = extractvalue %st76 %209, 0
   %211 = load %gs94, ptr %25, align 8
   %212 = load i64, ptr %26, align 4
-  %213 = call %st76 @gm23_42887(%gs94 %211, i64 %212)
+  %213 = call %st76 @gm23_42976(%gs94 %211, i64 %212)
   %214 = extractvalue %st76 %213, 1
   %215 = call i1 @pf638(%gs0 %205, i64 %210, i64 %214, %st27 { ptr getelementptr ([30 x i8], ptr @str.959, i64 0, i64 24) })
   %216 = icmp ne i1 %215, false
@@ -177082,7 +177133,7 @@ then29:                                           ; preds = %while.body27
   %220 = call i64 @gm23_6468(%gs14 %219, i64 0)
   %221 = load %gs94, ptr %25, align 8
   %222 = load i64, ptr %26, align 4
-  %223 = call %st76 @gm23_42887(%gs94 %221, i64 %222)
+  %223 = call %st76 @gm23_42976(%gs94 %221, i64 %222)
   %224 = extractvalue %st76 %223, 2
   call void @pf1238(ptr %0, i64 %220, i64 %224, %st27 { ptr getelementptr ([34 x i8], ptr @str.960, i64 0, i64 24) })
   br label %endif30
@@ -178879,7 +178930,7 @@ while.cond92:                                     ; preds = %endif96, %arm90
 while.body93:                                     ; preds = %while.cond92
   %514 = load %gs94, ptr %55, align 8
   %515 = load i64, ptr %56, align 4
-  %516 = call %st76 @gm23_42887(%gs94 %514, i64 %515)
+  %516 = call %st76 @gm23_42976(%gs94 %514, i64 %515)
   %517 = extractvalue %st76 %516, 2
   call void @pf1075(ptr %0, i64 %517)
   %518 = load i64, ptr %49, align 4
@@ -178889,11 +178940,11 @@ while.body93:                                     ; preds = %while.cond92
   %522 = load i1, ptr %53, align 1
   %523 = load %gs94, ptr %55, align 8
   %524 = load i64, ptr %56, align 4
-  %525 = call %st76 @gm23_42887(%gs94 %523, i64 %524)
+  %525 = call %st76 @gm23_42976(%gs94 %523, i64 %524)
   %526 = extractvalue %st76 %525, 0
   %527 = load %gs94, ptr %55, align 8
   %528 = load i64, ptr %56, align 4
-  %529 = call %st76 @gm23_42887(%gs94 %527, i64 %528)
+  %529 = call %st76 @gm23_42976(%gs94 %527, i64 %528)
   %530 = extractvalue %st76 %529, 1
   %531 = call %st74 @pf1044(ptr %0, i64 %518, i64 %519, i64 %520, i64 %521, i1 %522, i64 %526, i64 %530)
   store %st74 %531, ptr %57, align 4
@@ -178933,7 +178984,7 @@ endif98:                                          ; preds = %then97, %then95
   %547 = load i64, ptr %58, align 4
   %548 = load %gs94, ptr %55, align 8
   %549 = load i64, ptr %56, align 4
-  %550 = call %st76 @gm23_42887(%gs94 %548, i64 %549)
+  %550 = call %st76 @gm23_42976(%gs94 %548, i64 %549)
   %551 = extractvalue %st76 %550, 2
   call void @pf1076(ptr %0, i64 %547, i64 %551)
   %552 = load i64, ptr %58, align 4
@@ -180626,7 +180677,7 @@ body0:                                            ; preds = %entry
   store %gs238 %0, ptr %1, align 8
   %2 = load %gs238, ptr %1, align 8
   %3 = extractvalue %gs238 %2, 0
-  %4 = call i64 @gm196_51249(ptr %3)
+  %4 = call i64 @gm196_51340(ptr %3)
   ret i64 %4
 }
 
@@ -181819,7 +181870,7 @@ while.cond40:                                     ; preds = %while.body41, %arm3
 while.body41:                                     ; preds = %while.cond40
   %336 = load %gs94, ptr %58, align 8
   %337 = load i64, ptr %59, align 4
-  %338 = call %st76 @gm23_42887(%gs94 %336, i64 %337)
+  %338 = call %st76 @gm23_42976(%gs94 %336, i64 %337)
   %339 = extractvalue %st76 %338, 2
   call void @pf1180(ptr %0, i64 %339)
   %340 = load i64, ptr %59, align 4
@@ -182975,11 +183026,11 @@ while.cond43:                                     ; preds = %endif47, %then41
 while.body44:                                     ; preds = %while.cond43
   %463 = load %gs94, ptr %47, align 8
   %464 = load i64, ptr %55, align 4
-  %465 = call %st76 @gm23_42887(%gs94 %463, i64 %464)
+  %465 = call %st76 @gm23_42976(%gs94 %463, i64 %464)
   %466 = extractvalue %st76 %465, 0
   %467 = load %gs94, ptr %47, align 8
   %468 = load i64, ptr %55, align 4
-  %469 = call %st76 @gm23_42887(%gs94 %467, i64 %468)
+  %469 = call %st76 @gm23_42976(%gs94 %467, i64 %468)
   %470 = extractvalue %st76 %469, 1
   %471 = load %gs98, ptr %52, align 8
   %472 = load i64, ptr %54, align 4
@@ -183004,7 +183055,7 @@ then46:                                           ; preds = %while.body44
   %485 = extractvalue %st83 %484, 7
   %486 = load %gs94, ptr %47, align 8
   %487 = load i64, ptr %55, align 4
-  %488 = call %st76 @gm23_42887(%gs94 %486, i64 %487)
+  %488 = call %st76 @gm23_42976(%gs94 %486, i64 %487)
   %489 = extractvalue %st76 %488, 2
   %490 = load %gs98, ptr %52, align 8
   %491 = load i64, ptr %54, align 4
@@ -183257,7 +183308,7 @@ while.cond72:                                     ; preds = %while.end85, %endif
 while.body73:                                     ; preds = %while.cond72
   %634 = load %gs94, ptr %47, align 8
   %635 = load i64, ptr %62, align 4
-  %636 = call %st76 @gm23_42887(%gs94 %634, i64 %635)
+  %636 = call %st76 @gm23_42976(%gs94 %634, i64 %635)
   %637 = extractvalue %st76 %636, 2
   call void @pf1216(ptr %0, i64 %637)
   %638 = load i64, ptr %60, align 4
@@ -183308,11 +183359,11 @@ while.body78:                                     ; preds = %while.cond77
   %664 = extractvalue %st83 %663, 1
   %665 = load %gs94, ptr %47, align 8
   %666 = load i64, ptr %62, align 4
-  %667 = call %st76 @gm23_42887(%gs94 %665, i64 %666)
+  %667 = call %st76 @gm23_42976(%gs94 %665, i64 %666)
   %668 = extractvalue %st76 %667, 0
   %669 = load %gs94, ptr %47, align 8
   %670 = load i64, ptr %62, align 4
-  %671 = call %st76 @gm23_42887(%gs94 %669, i64 %670)
+  %671 = call %st76 @gm23_42976(%gs94 %669, i64 %670)
   %672 = extractvalue %st76 %671, 1
   %673 = call i1 @pf291(ptr %0, i64 %660, i64 %664, i64 %668, i64 %672)
   %674 = icmp ne i1 %673, false
@@ -183332,7 +183383,7 @@ then80:                                           ; preds = %while.body78
   %681 = extractvalue %st83 %680, 7
   %682 = load %gs94, ptr %47, align 8
   %683 = load i64, ptr %62, align 4
-  %684 = call %st76 @gm23_42887(%gs94 %682, i64 %683)
+  %684 = call %st76 @gm23_42976(%gs94 %682, i64 %683)
   %685 = extractvalue %st76 %684, 2
   call void @pf1238(ptr %0, i64 %681, i64 %685, %st27 { ptr getelementptr ([30 x i8], ptr @str.1003, i64 0, i64 24) })
   %686 = load %gs98, ptr %63, align 8
@@ -183358,19 +183409,19 @@ while.cond83:                                     ; preds = %endif87, %endif76
 while.body84:                                     ; preds = %while.cond83
   %693 = load %gs94, ptr %47, align 8
   %694 = load i64, ptr %65, align 4
-  %695 = call %st76 @gm23_42887(%gs94 %693, i64 %694)
+  %695 = call %st76 @gm23_42976(%gs94 %693, i64 %694)
   %696 = extractvalue %st76 %695, 0
   %697 = load %gs94, ptr %47, align 8
   %698 = load i64, ptr %65, align 4
-  %699 = call %st76 @gm23_42887(%gs94 %697, i64 %698)
+  %699 = call %st76 @gm23_42976(%gs94 %697, i64 %698)
   %700 = extractvalue %st76 %699, 1
   %701 = load %gs94, ptr %47, align 8
   %702 = load i64, ptr %62, align 4
-  %703 = call %st76 @gm23_42887(%gs94 %701, i64 %702)
+  %703 = call %st76 @gm23_42976(%gs94 %701, i64 %702)
   %704 = extractvalue %st76 %703, 0
   %705 = load %gs94, ptr %47, align 8
   %706 = load i64, ptr %62, align 4
-  %707 = call %st76 @gm23_42887(%gs94 %705, i64 %706)
+  %707 = call %st76 @gm23_42976(%gs94 %705, i64 %706)
   %708 = extractvalue %st76 %707, 1
   %709 = call i1 @pf291(ptr %0, i64 %696, i64 %700, i64 %704, i64 %708)
   %710 = icmp ne i1 %709, false
@@ -183386,7 +183437,7 @@ while.end85:                                      ; preds = %while.cond83
 then86:                                           ; preds = %while.body84
   %714 = load %gs94, ptr %47, align 8
   %715 = load i64, ptr %62, align 4
-  %716 = call %st76 @gm23_42887(%gs94 %714, i64 %715)
+  %716 = call %st76 @gm23_42976(%gs94 %714, i64 %715)
   %717 = extractvalue %st76 %716, 3
   %718 = call i64 @pf835(ptr %0, i64 %717)
   call void @pf767(i64 %718, %st27 { ptr getelementptr ([92 x i8], ptr @str.1004, i64 0, i64 24) })
@@ -186015,14 +186066,14 @@ endif8:                                           ; preds = %endif
 while.cond:                                       ; preds = %enumret.c86, %endif8
   %122 = load i64, ptr %20, align 4
   %123 = load %gs110, ptr %5, align 8
-  %124 = call i64 @gm11_46840(%gs110 %123)
+  %124 = call i64 @gm11_46928(%gs110 %123)
   %125 = icmp ult i64 %122, %124
   br i1 %125, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
   %126 = load %gs110, ptr %5, align 8
   %127 = load i64, ptr %20, align 4
-  %128 = call %en7 @gm23_46840(%gs110 %126, i64 %127)
+  %128 = call %en7 @gm23_46928(%gs110 %126, i64 %127)
   store %en7 %128, ptr %21, align 4
   %129 = getelementptr inbounds nuw %en7, ptr %21, i32 0, i32 0
   %130 = load i64, ptr %129, align 4
@@ -186391,7 +186442,7 @@ enumret.c46:                                      ; preds = %enumret.v45, %enumr
   store i64 %301, ptr %22, align 4
   %302 = load %gs110, ptr %6, align 8
   %303 = load i64, ptr %20, align 4
-  %304 = call %en7 @gm23_46840(%gs110 %302, i64 %303)
+  %304 = call %en7 @gm23_46928(%gs110 %302, i64 %303)
   store %en7 %304, ptr %23, align 4
   %305 = getelementptr inbounds nuw %en7, ptr %23, i32 0, i32 0
   %306 = load i64, ptr %305, align 4
@@ -186732,7 +186783,7 @@ body0:                                            ; preds = %entry
   ret i64 %6
 }
 
-define i64 @gm11_46840(%gs110 %0) {
+define i64 @gm11_46928(%gs110 %0) {
 entry:
   %1 = alloca %gs110, align 8
   br label %body0
@@ -186741,11 +186792,11 @@ body0:                                            ; preds = %entry
   store %gs110 %0, ptr %1, align 8
   %2 = load %gs110, ptr %1, align 8
   %3 = extractvalue %gs110 %2, 0
-  %4 = call i64 @gm196_51261(ptr %3)
+  %4 = call i64 @gm196_51352(ptr %3)
   ret i64 %4
 }
 
-define %en7 @gm23_46840(%gs110 %0, i64 %1) {
+define %en7 @gm23_46928(%gs110 %0, i64 %1) {
 entry:
   %2 = alloca %gs110, align 8
   %3 = alloca i64, align 8
@@ -186756,7 +186807,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   %4 = load %gs110, ptr %2, align 8
   %5 = load i64, ptr %3, align 4
-  %6 = call %en7 @gm15_46840(%gs110 %4, i64 %5)
+  %6 = call %en7 @gm15_46928(%gs110 %4, i64 %5)
   ret %en7 %6
 }
 
@@ -188878,7 +188929,7 @@ body0:                                            ; preds = %entry
   store %st70 %1, ptr %2, align 4
   %3 = getelementptr inbounds nuw %gs106, ptr %0, i32 0, i32 0
   %4 = load %st70, ptr %2, align 4
-  call void @gm200_51271(ptr %3, %st70 %4)
+  call void @gm200_51362(ptr %3, %st70 %4)
   ret void
 }
 
@@ -190057,7 +190108,7 @@ body0:                                            ; preds = %entry
   store %st87 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs226, ptr %0, i32 0, i32 0
   %4 = load %st87, ptr %2, align 8
-  call void @gm200_51274(ptr %3, %st87 %4)
+  call void @gm200_51365(ptr %3, %st87 %4)
   ret void
 }
 
@@ -190070,7 +190121,7 @@ body0:                                            ; preds = %entry
   store %st92 %1, ptr %2, align 4
   %3 = getelementptr inbounds nuw %gs230, ptr %0, i32 0, i32 0
   %4 = load %st92, ptr %2, align 4
-  call void @gm200_51277(ptr %3, %st92 %4)
+  call void @gm200_51368(ptr %3, %st92 %4)
   ret void
 }
 
@@ -190997,7 +191048,7 @@ endif7:                                           ; preds = %endif5
   %86 = extractvalue %st83 %85, 4
   %87 = call i64 @pf1307(ptr %0, ptr %1, i64 %82, i64 %86)
   %88 = load %st37, ptr %0, align 8
-  %89 = extractvalue %st37 %88, 27
+  %89 = extractvalue %st37 %88, 29
   %90 = call i64 @gm11_4725(%gs14 %89)
   %91 = icmp ult i64 %87, %90
   br i1 %91, label %then8, label %endif9
@@ -191236,14 +191287,14 @@ endif4:                                           ; preds = %endif2
   store i64 %69, ptr %6, align 4
   %70 = load i64, ptr %6, align 4
   %71 = load %st37, ptr %0, align 8
-  %72 = extractvalue %st37 %71, 27
+  %72 = extractvalue %st37 %71, 29
   %73 = call i64 @gm11_4725(%gs14 %72)
   %74 = icmp ult i64 %70, %73
   br i1 %74, label %then5, label %endif6
 
 then5:                                            ; preds = %endif4
   %75 = load %st37, ptr %0, align 8
-  %76 = extractvalue %st37 %75, 27
+  %76 = extractvalue %st37 %75, 31
   %77 = load i64, ptr %6, align 4
   %78 = call i64 @gm23_6468(%gs14 %76, i64 %77)
   %79 = call i1 @pf1404(ptr %0, ptr %1, i64 %78)
@@ -191416,14 +191467,14 @@ endif7:                                           ; preds = %endif5
   store i64 %88, ptr %8, align 4
   %89 = load i64, ptr %8, align 4
   %90 = load %st37, ptr %0, align 8
-  %91 = extractvalue %st37 %90, 27
+  %91 = extractvalue %st37 %90, 29
   %92 = call i64 @gm11_4725(%gs14 %91)
   %93 = icmp ult i64 %89, %92
   br i1 %93, label %then8, label %endif9
 
 then8:                                            ; preds = %endif7
   %94 = load %st37, ptr %0, align 8
-  %95 = extractvalue %st37 %94, 27
+  %95 = extractvalue %st37 %94, 31
   %96 = load i64, ptr %8, align 4
   %97 = call i64 @gm23_6468(%gs14 %95, i64 %96)
   %98 = call i1 @pf1404(ptr %0, ptr %1, i64 %97)
@@ -191770,7 +191821,7 @@ then17:                                           ; preds = %then15
   store i64 %106, ptr %19, align 4
   %107 = load i64, ptr %19, align 4
   %108 = load %st37, ptr %0, align 8
-  %109 = extractvalue %st37 %108, 27
+  %109 = extractvalue %st37 %108, 29
   %110 = call i64 @gm11_4725(%gs14 %109)
   %111 = icmp ult i64 %107, %110
   br i1 %111, label %then19, label %endif20
@@ -191785,15 +191836,15 @@ then19:                                           ; preds = %then17
   %114 = extractvalue %st32 %113, 0
   %115 = extractvalue %st98 %114, 5
   %116 = load %st37, ptr %0, align 8
-  %117 = extractvalue %st37 %116, 27
+  %117 = extractvalue %st37 %116, 31
   %118 = load i64, ptr %19, align 4
   %119 = call i64 @gm23_6468(%gs14 %117, i64 %118)
   %120 = call %st84 @gm23_4811(%gs190 %115, i64 %119)
   call void @pwretain84(%st84 %120)
   %121 = load %st37, ptr %0, align 8
-  %122 = extractvalue %st37 %121, 28
+  %122 = extractvalue %st37 %121, 30
   %123 = load i64, ptr %19, align 4
-  %124 = call ptr @gm23_1561(%gs118 %122, i64 %123)
+  %124 = call ptr @gm23_1565(%gs118 %122, i64 %123)
   %125 = load %gs94, ptr %15, align 8
   %126 = extractvalue %gs94 %125, 0
   call void @plew_rawbuf_retain(ptr %126)
@@ -191983,7 +192034,7 @@ then35:                                           ; preds = %then33
   %238 = load %st37, ptr %0, align 8
   %239 = extractvalue %st37 %238, 30
   %240 = load i64, ptr %21, align 4
-  %241 = call ptr @gm23_1561(%gs118 %239, i64 %240)
+  %241 = call ptr @gm23_1565(%gs118 %239, i64 %240)
   %242 = load %gs94, ptr %15, align 8
   %243 = extractvalue %gs94 %242, 0
   call void @plew_rawbuf_retain(ptr %243)
@@ -192088,7 +192139,7 @@ endif44:                                          ; preds = %then43, %sc.cont42
   store i64 %298, ptr %30, align 4
   %299 = load i64, ptr %30, align 4
   %300 = load %st37, ptr %0, align 8
-  %301 = extractvalue %st37 %300, 27
+  %301 = extractvalue %st37 %300, 29
   %302 = call i64 @gm11_4725(%gs14 %301)
   %303 = icmp uge i64 %299, %302
   br i1 %303, label %then45, label %endif46
@@ -192111,15 +192162,15 @@ endif46:                                          ; preds = %endif44
   %314 = extractvalue %st32 %313, 0
   %315 = extractvalue %st98 %314, 5
   %316 = load %st37, ptr %0, align 8
-  %317 = extractvalue %st37 %316, 27
+  %317 = extractvalue %st37 %316, 31
   %318 = load i64, ptr %30, align 4
   %319 = call i64 @gm23_6468(%gs14 %317, i64 %318)
   %320 = call %st84 @gm23_4811(%gs190 %315, i64 %319)
   call void @pwretain84(%st84 %320)
   %321 = load %st37, ptr %0, align 8
-  %322 = extractvalue %st37 %321, 28
+  %322 = extractvalue %st37 %321, 30
   %323 = load i64, ptr %30, align 4
-  %324 = call ptr @gm23_1561(%gs118 %322, i64 %323)
+  %324 = call ptr @gm23_1565(%gs118 %322, i64 %323)
   %325 = load %gs94, ptr %15, align 8
   %326 = extractvalue %gs94 %325, 0
   call void @plew_rawbuf_retain(ptr %326)
@@ -192297,7 +192348,7 @@ then7:                                            ; preds = %arm5
   %110 = load %st37, ptr %0, align 8
   %111 = extractvalue %st37 %110, 56
   %112 = load i64, ptr %16, align 4
-  %113 = call ptr @gm23_1561(%gs118 %111, i64 %112)
+  %113 = call ptr @gm23_1565(%gs118 %111, i64 %112)
   %114 = load i64, ptr %16, align 4
   ret ptr %113
 
@@ -192806,7 +192857,7 @@ while.cond:                                       ; preds = %endif, %body0
   %6 = load %st32, ptr %0, align 8
   %7 = extractvalue %st32 %6, 10
   %8 = extractvalue %st101 %7, 4
-  %9 = call i64 @gm11_12407(%gs30 %8)
+  %9 = call i64 @gm11_12410(%gs30 %8)
   %10 = icmp ult i64 %5, %9
   br i1 %10, label %while.body, label %while.end
 
@@ -192815,7 +192866,7 @@ while.body:                                       ; preds = %while.cond
   %12 = extractvalue %st32 %11, 10
   %13 = extractvalue %st101 %12, 4
   %14 = load i64, ptr %4, align 4
-  %15 = call %st72 @gm23_12407(%gs30 %13, i64 %14)
+  %15 = call %st72 @gm23_12410(%gs30 %13, i64 %14)
   %16 = extractvalue %st72 %15, 0
   %17 = load i64, ptr %2, align 4
   %18 = icmp eq i64 %16, %17
@@ -192831,7 +192882,7 @@ then:                                             ; preds = %while.body
   %22 = extractvalue %st32 %21, 10
   %23 = extractvalue %st101 %22, 4
   %24 = load i64, ptr %4, align 4
-  %25 = call %st72 @gm23_12407(%gs30 %23, i64 %24)
+  %25 = call %st72 @gm23_12410(%gs30 %23, i64 %24)
   call void @pwretain72(%st72 %25)
   call void @gm13_2255(ptr %3, %st72 %25)
   br label %endif
@@ -193291,15 +193342,15 @@ while.end33:                                      ; preds = %while.cond31
   %269 = load %st37, ptr %0, align 8
   %270 = extractvalue %st37 %269, 43
   %271 = load i64, ptr %25, align 4
-  %272 = call ptr @gm23_1561(%gs118 %270, i64 %271)
+  %272 = call ptr @gm23_1565(%gs118 %270, i64 %271)
   %273 = load %st37, ptr %0, align 8
   %274 = extractvalue %st37 %273, 42
   %275 = load i64, ptr %25, align 4
-  %276 = call ptr @gm23_9949(%gs38 %274, i64 %275)
+  %276 = call ptr @gm23_9952(%gs38 %274, i64 %275)
   %277 = load %gs38, ptr %27, align 8
   %278 = extractvalue %gs38 %277, 0
   %279 = load %gs38, ptr %27, align 8
-  %280 = call i64 @gm11_9949(%gs38 %279)
+  %280 = call i64 @gm11_9952(%gs38 %279)
   %281 = call ptr @pf478()
   %282 = call ptr @LLVMBuildCall2(ptr %268, ptr %272, ptr %276, ptr %278, i64 %280, ptr %281)
   %283 = load i64, ptr %29, align 4
@@ -193818,14 +193869,14 @@ else26:                                           ; preds = %endif21
   %319 = extractvalue %st37 %318, 26
   store ptr %319, ptr %39, align 8
   %320 = load %gs38, ptr %29, align 8
-  %321 = call i64 @gm11_9949(%gs38 %320)
+  %321 = call i64 @gm11_9952(%gs38 %320)
   %322 = icmp ugt i64 %321, 0
   br i1 %322, label %then27, label %endif28
 
 then27:                                           ; preds = %else26
   %323 = load ptr, ptr %39, align 8
   %324 = load %gs38, ptr %29, align 8
-  %325 = call ptr @gm23_9949(%gs38 %324, i64 0)
+  %325 = call ptr @gm23_9952(%gs38 %324, i64 0)
   %326 = call ptr @LLVMTypeOf(ptr %325)
   %327 = call ptr @pf1367(ptr %0, ptr %323, ptr %326, i1 false)
   store ptr %327, ptr %39, align 8
@@ -193839,7 +193890,7 @@ endif28:                                          ; preds = %then27, %else26
   %330 = load %st37, ptr %0, align 8
   %331 = extractvalue %st37 %330, 2
   %332 = call ptr @LLVMGetInsertBlock(ptr %331)
-  call void @gm13_10874(ptr %30, ptr %332)
+  call void @gm13_10877(ptr %30, ptr %332)
   %333 = load %st37, ptr %0, align 8
   %334 = extractvalue %st37 %333, 2
   %335 = load ptr, ptr %26, align 8
@@ -193865,7 +193916,7 @@ endif30:                                          ; preds = %then29, %while.end1
   %347 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 20
   store i1 false, ptr %347, align 1
   %348 = load %gs38, ptr %29, align 8
-  %349 = call i64 @gm11_9949(%gs38 %348)
+  %349 = call i64 @gm11_9952(%gs38 %348)
   %350 = icmp eq i64 %349, 0
   br i1 %350, label %then31, label %endif32
 
@@ -193909,7 +193960,7 @@ endif32:                                          ; preds = %endif30
   %379 = load %st37, ptr %0, align 8
   %380 = extractvalue %st37 %379, 2
   %381 = load %gs38, ptr %29, align 8
-  %382 = call ptr @gm23_9949(%gs38 %381, i64 0)
+  %382 = call ptr @gm23_9952(%gs38 %381, i64 0)
   %383 = call ptr @LLVMTypeOf(ptr %382)
   %384 = call ptr @pf478()
   %385 = call ptr @LLVMBuildPhi(ptr %380, ptr %383, ptr %384)
@@ -193920,7 +193971,7 @@ endif32:                                          ; preds = %endif30
   %389 = load %gs130, ptr %30, align 8
   %390 = extractvalue %gs130 %389, 0
   %391 = load %gs38, ptr %29, align 8
-  %392 = call i64 @gm11_9949(%gs38 %391)
+  %392 = call i64 @gm11_9952(%gs38 %391)
   call void @LLVMAddIncoming(ptr %386, ptr %388, ptr %390, i64 %392)
   %393 = load ptr, ptr %40, align 8
   %394 = load i64, ptr %31, align 4
@@ -194534,7 +194585,7 @@ then1:                                            ; preds = %then
   %62 = load %st37, ptr %0, align 8
   %63 = extractvalue %st37 %62, 60
   %64 = load i64, ptr %7, align 4
-  %65 = call ptr @gm23_1561(%gs118 %63, i64 %64)
+  %65 = call ptr @gm23_1565(%gs118 %63, i64 %64)
   %66 = load i64, ptr %7, align 4
   ret ptr %65
 
@@ -195986,7 +196037,7 @@ body0:                                            ; preds = %entry
   %5 = getelementptr inbounds nuw %gs38, ptr %0, i32 0, i32 0
   %6 = load i64, ptr %3, align 4
   %7 = load ptr, ptr %4, align 8
-  call void @gm203_51281(ptr %5, i64 %6, ptr %7)
+  call void @gm203_51372(ptr %5, i64 %6, ptr %7)
   ret void
 }
 
@@ -196002,7 +196053,7 @@ body0:                                            ; preds = %entry
   %5 = getelementptr inbounds nuw %gs118, ptr %0, i32 0, i32 0
   %6 = load i64, ptr %3, align 4
   %7 = load ptr, ptr %4, align 8
-  call void @gm203_51285(ptr %5, i64 %6, ptr %7)
+  call void @gm203_51376(ptr %5, i64 %6, ptr %7)
   ret void
 }
 
@@ -196223,7 +196274,7 @@ then3:                                            ; preds = %then1
   %62 = load %st37, ptr %0, align 8
   %63 = extractvalue %st37 %62, 33
   %64 = load i64, ptr %6, align 4
-  %65 = call ptr @gm23_1561(%gs118 %63, i64 %64)
+  %65 = call ptr @gm23_1565(%gs118 %63, i64 %64)
   %66 = call ptr @pf1337(ptr %0, ptr %1, ptr %57, i64 %61, ptr %65)
   store ptr %66, ptr %10, align 8
   br label %endif4
@@ -196285,7 +196336,7 @@ then9:                                            ; preds = %then7
   %98 = load %st37, ptr %0, align 8
   %99 = extractvalue %st37 %98, 33
   %100 = load i64, ptr %12, align 4
-  %101 = call ptr @gm23_1561(%gs118 %99, i64 %100)
+  %101 = call ptr @gm23_1565(%gs118 %99, i64 %100)
   %102 = call i64 @pf1333(ptr %0, ptr %1, i64 %97, ptr %101)
   store i64 %102, ptr %13, align 4
   call void @plew_rawbuf_set_count(ptr null, i64 0)
@@ -196297,11 +196348,11 @@ then9:                                            ; preds = %then7
   %106 = load %st37, ptr %0, align 8
   %107 = extractvalue %st37 %106, 106
   %108 = load i64, ptr %13, align 4
-  %109 = call ptr @gm23_1561(%gs118 %107, i64 %108)
+  %109 = call ptr @gm23_1565(%gs118 %107, i64 %108)
   %110 = load %st37, ptr %0, align 8
   %111 = extractvalue %st37 %110, 105
   %112 = load i64, ptr %13, align 4
-  %113 = call ptr @gm23_9949(%gs38 %111, i64 %112)
+  %113 = call ptr @gm23_9952(%gs38 %111, i64 %112)
   %114 = load %gs38, ptr %14, align 8
   %115 = extractvalue %gs38 %114, 0
   %116 = call ptr @pf478()
@@ -196419,9 +196470,9 @@ body0:                                            ; preds = %entry
   %25 = call i64 @pf1307(ptr %0, ptr %1, i64 %22, i64 %24)
   store i64 %25, ptr %11, align 4
   %26 = load %st37, ptr %0, align 8
-  %27 = extractvalue %st37 %26, 28
+  %27 = extractvalue %st37 %26, 30
   %28 = load i64, ptr %11, align 4
-  %29 = call ptr @gm23_1561(%gs118 %27, i64 %28)
+  %29 = call ptr @gm23_1565(%gs118 %27, i64 %28)
   store ptr %29, ptr %12, align 8
   %30 = load ptr, ptr %12, align 8
   %31 = call ptr @LLVMSizeOf(ptr %30)
@@ -197294,7 +197345,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %5, align 8
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 10
-  call void @gm13_9794(ptr %5, ptr %15)
+  call void @gm13_9797(ptr %5, ptr %15)
   store i64 1, ptr %6, align 4
   br label %while.cond
 
@@ -197312,7 +197363,7 @@ while.body:                                       ; preds = %while.cond
   %23 = load i64, ptr %6, align 4
   %24 = call i64 @gm23_6468(%gs14 %22, i64 %23)
   %25 = call ptr @pf1365(ptr %0, ptr %1, i64 %24)
-  call void @gm13_9794(ptr %5, ptr %25)
+  call void @gm13_9797(ptr %5, ptr %25)
   %26 = load i64, ptr %6, align 4
   %27 = call i64 @plew_u64Add(i64 %26, i64 1)
   store i64 %27, ptr %6, align 4
@@ -197348,7 +197399,7 @@ endif:                                            ; preds = %endif2, %while.end
   %45 = load %gs118, ptr %5, align 8
   %46 = extractvalue %gs118 %45, 0
   %47 = load %gs118, ptr %5, align 8
-  %48 = call i64 @gm11_11923(%gs118 %47)
+  %48 = call i64 @gm11_11926(%gs118 %47)
   %49 = call ptr @LLVMFunctionType(ptr %44, ptr %46, i64 %48, i32 0)
   %50 = load ptr, ptr %7, align 8
   %51 = load i64, ptr %6, align 4
@@ -197382,7 +197433,7 @@ body0:                                            ; preds = %entry
   store %gs14 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs122, ptr %0, i32 0, i32 0
   %4 = load %gs14, ptr %2, align 8
-  call void @gm200_51289(ptr %3, %gs14 %4)
+  call void @gm200_51380(ptr %3, %gs14 %4)
   ret void
 }
 
@@ -198492,7 +198543,7 @@ body0:                                            ; preds = %entry
   store %gs130 %0, ptr %1, align 8
   %2 = load %gs130, ptr %1, align 8
   %3 = extractvalue %gs130 %2, 0
-  %4 = call i64 @gm196_51294(ptr %3)
+  %4 = call i64 @gm196_51385(ptr %3)
   ret i64 %4
 }
 
@@ -198508,7 +198559,7 @@ body0:                                            ; preds = %entry
   %5 = getelementptr inbounds nuw %gs130, ptr %0, i32 0, i32 0
   %6 = load i64, ptr %3, align 4
   %7 = load ptr, ptr %4, align 8
-  call void @gm203_51304(ptr %5, i64 %6, ptr %7)
+  call void @gm203_51395(ptr %5, i64 %6, ptr %7)
   ret void
 }
 
@@ -198639,7 +198690,7 @@ while.cond:                                       ; preds = %endif, %body0
   %7 = load %st32, ptr %0, align 8
   %8 = extractvalue %st32 %7, 10
   %9 = extractvalue %st101 %8, 4
-  %10 = call i64 @gm11_12407(%gs30 %9)
+  %10 = call i64 @gm11_12410(%gs30 %9)
   %11 = icmp ult i64 %6, %10
   br i1 %11, label %while.body, label %while.end
 
@@ -198648,7 +198699,7 @@ while.body:                                       ; preds = %while.cond
   %13 = extractvalue %st32 %12, 10
   %14 = extractvalue %st101 %13, 4
   %15 = load i64, ptr %5, align 4
-  %16 = call %st72 @gm23_12407(%gs30 %14, i64 %15)
+  %16 = call %st72 @gm23_12410(%gs30 %14, i64 %15)
   %17 = extractvalue %st72 %16, 7
   %18 = icmp ne i1 %17, false
   br i1 %18, label %then, label %endif
@@ -198662,13 +198713,13 @@ then:                                             ; preds = %while.body
   %21 = extractvalue %st32 %20, 10
   %22 = extractvalue %st101 %21, 4
   %23 = load i64, ptr %5, align 4
-  %24 = call %st72 @gm23_12407(%gs30 %22, i64 %23)
+  %24 = call %st72 @gm23_12410(%gs30 %22, i64 %23)
   %25 = extractvalue %st72 %24, 1
   %26 = load %st32, ptr %0, align 8
   %27 = extractvalue %st32 %26, 10
   %28 = extractvalue %st101 %27, 4
   %29 = load i64, ptr %5, align 4
-  %30 = call %st72 @gm23_12407(%gs30 %28, i64 %29)
+  %30 = call %st72 @gm23_12410(%gs30 %28, i64 %29)
   %31 = extractvalue %st72 %30, 2
   %32 = load i64, ptr %3, align 4
   %33 = load i64, ptr %4, align 4
@@ -200262,7 +200313,7 @@ body0:                                            ; preds = %entry
   store %gs74 %0, ptr %1, align 8
   %2 = load %gs74, ptr %1, align 8
   %3 = extractvalue %gs74 %2, 0
-  %4 = call i64 @gm196_51310(ptr %3)
+  %4 = call i64 @gm196_51401(ptr %3)
   ret i64 %4
 }
 
@@ -202522,7 +202573,7 @@ body0:                                            ; preds = %entry
   store %gs230 %0, ptr %1, align 8
   %2 = load %gs230, ptr %1, align 8
   %3 = extractvalue %gs230 %2, 0
-  %4 = call i64 @gm196_51322(ptr %3)
+  %4 = call i64 @gm196_51413(ptr %3)
   ret i64 %4
 }
 
@@ -202933,7 +202984,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %2, align 4
   %3 = getelementptr inbounds nuw %gs242, ptr %0, i32 0, i32 0
   %4 = load i64, ptr %2, align 4
-  call void @gm200_51333(ptr %3, i64 %4)
+  call void @gm200_51424(ptr %3, i64 %4)
   ret void
 }
 
@@ -204034,13 +204085,13 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %5, align 8
   %14 = load %st37, ptr %0, align 8
   %15 = extractvalue %st37 %14, 6
-  call void @gm13_9794(ptr %5, ptr %15)
+  call void @gm13_9797(ptr %5, ptr %15)
   %16 = load %st37, ptr %0, align 8
   %17 = extractvalue %st37 %16, 10
-  call void @gm13_9794(ptr %5, ptr %17)
+  call void @gm13_9797(ptr %5, ptr %17)
   %18 = load %st37, ptr %0, align 8
   %19 = extractvalue %st37 %18, 10
-  call void @gm13_9794(ptr %5, ptr %19)
+  call void @gm13_9797(ptr %5, ptr %19)
   store i64 0, ptr %6, align 4
   br label %while.cond
 
@@ -204059,7 +204110,7 @@ while.body:                                       ; preds = %while.cond
   %28 = call %st82 @gm23_6496(%gs22 %26, i64 %27)
   call void @pwretain82(%st82 %28)
   %29 = call ptr @pf1621(ptr %0, ptr %1, %st82 %28)
-  call void @gm13_9794(ptr %5, ptr %29)
+  call void @gm13_9797(ptr %5, ptr %29)
   %30 = load i64, ptr %6, align 4
   %31 = call i64 @plew_u64Add(i64 %30, i64 1)
   store i64 %31, ptr %6, align 4
@@ -204086,7 +204137,7 @@ while.end:                                        ; preds = %while.cond
   %42 = load %gs118, ptr %5, align 8
   %43 = extractvalue %gs118 %42, 0
   %44 = load %gs118, ptr %5, align 8
-  %45 = call i64 @gm11_11923(%gs118 %44)
+  %45 = call i64 @gm11_11926(%gs118 %44)
   call void @LLVMStructSetBody(ptr %41, ptr %43, i64 %45, i32 0)
   %46 = load ptr, ptr %8, align 8
   %47 = load %gs0, ptr %7, align 8
@@ -204185,7 +204236,7 @@ while.body:                                       ; preds = %while.cond
   %17 = load %st37, ptr %0, align 8
   %18 = extractvalue %st37 %17, 90
   %19 = load i64, ptr %2, align 4
-  %20 = call ptr @gm23_9949(%gs38 %18, i64 %19)
+  %20 = call ptr @gm23_9952(%gs38 %18, i64 %19)
   store ptr %20, ptr %4, align 8
   %21 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 19
   %22 = load ptr, ptr %4, align 8
@@ -204243,7 +204294,7 @@ while.body:                                       ; preds = %while.cond
   %17 = load %st37, ptr %0, align 8
   %18 = extractvalue %st37 %17, 93
   %19 = load i64, ptr %2, align 4
-  %20 = call ptr @gm23_9949(%gs38 %18, i64 %19)
+  %20 = call ptr @gm23_9952(%gs38 %18, i64 %19)
   store ptr %20, ptr %4, align 8
   %21 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 19
   %22 = load ptr, ptr %4, align 8
@@ -204301,7 +204352,7 @@ while.body:                                       ; preds = %while.cond
   %17 = load %st37, ptr %0, align 8
   %18 = extractvalue %st37 %17, 96
   %19 = load i64, ptr %2, align 4
-  %20 = call ptr @gm23_9949(%gs38 %18, i64 %19)
+  %20 = call ptr @gm23_9952(%gs38 %18, i64 %19)
   store ptr %20, ptr %4, align 8
   %21 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 19
   %22 = load ptr, ptr %4, align 8
@@ -204353,7 +204404,7 @@ while.body:                                       ; preds = %while.cond
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 99
   %14 = load i64, ptr %2, align 4
-  %15 = call ptr @gm23_9949(%gs38 %13, i64 %14)
+  %15 = call ptr @gm23_9952(%gs38 %13, i64 %14)
   store ptr %15, ptr %3, align 8
   %16 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 19
   %17 = load ptr, ptr %3, align 8
@@ -204373,7 +204424,7 @@ while.body:                                       ; preds = %while.cond
   %29 = load i64, ptr %2, align 4
   %30 = call i64 @gm23_6468(%gs14 %28, i64 %29)
   %31 = call i64 @pf1335(ptr %0, ptr %1, i64 %30)
-  %32 = call ptr @gm23_1561(%gs118 %26, i64 %31)
+  %32 = call ptr @gm23_1565(%gs118 %26, i64 %31)
   call void @pf1323(ptr %0, ptr %1, ptr %20, i64 %24, ptr %32)
   %33 = load %st37, ptr %0, align 8
   %34 = extractvalue %st37 %33, 2
@@ -204415,7 +204466,7 @@ while.body:                                       ; preds = %while.cond
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 102
   %14 = load i64, ptr %2, align 4
-  %15 = call ptr @gm23_9949(%gs38 %13, i64 %14)
+  %15 = call ptr @gm23_9952(%gs38 %13, i64 %14)
   store ptr %15, ptr %3, align 8
   %16 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 19
   %17 = load ptr, ptr %3, align 8
@@ -204435,7 +204486,7 @@ while.body:                                       ; preds = %while.cond
   %29 = load i64, ptr %2, align 4
   %30 = call i64 @gm23_6468(%gs14 %28, i64 %29)
   %31 = call i64 @pf1335(ptr %0, ptr %1, i64 %30)
-  %32 = call ptr @gm23_1561(%gs118 %26, i64 %31)
+  %32 = call ptr @gm23_1565(%gs118 %26, i64 %31)
   call void @pf1324(ptr %0, ptr %1, ptr %20, i64 %24, ptr %32)
   %33 = load %st37, ptr %0, align 8
   %34 = extractvalue %st37 %33, 2
@@ -204477,7 +204528,7 @@ while.body:                                       ; preds = %while.cond
   %12 = load %st37, ptr %0, align 8
   %13 = extractvalue %st37 %12, 105
   %14 = load i64, ptr %2, align 4
-  %15 = call ptr @gm23_9949(%gs38 %13, i64 %14)
+  %15 = call ptr @gm23_9952(%gs38 %13, i64 %14)
   store ptr %15, ptr %3, align 8
   %16 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 19
   %17 = load ptr, ptr %3, align 8
@@ -204499,7 +204550,7 @@ while.body:                                       ; preds = %while.cond
   %31 = load i64, ptr %2, align 4
   %32 = call i64 @gm23_6468(%gs14 %30, i64 %31)
   %33 = call i64 @pf1335(ptr %0, ptr %1, i64 %32)
-  %34 = call ptr @gm23_1561(%gs118 %28, i64 %33)
+  %34 = call ptr @gm23_1565(%gs118 %28, i64 %33)
   %35 = call ptr @pf1337(ptr %0, ptr %1, ptr %22, i64 %26, ptr %34)
   %36 = call ptr @LLVMBuildRet(ptr %20, ptr %35)
   %37 = getelementptr inbounds nuw %st37, ptr %0, i32 0, i32 112
@@ -205910,7 +205961,7 @@ body0:                                            ; preds = %entry
   store %st54 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs150, ptr %0, i32 0, i32 0
   %4 = load %st54, ptr %2, align 8
-  call void @gm200_51336(ptr %3, %st54 %4)
+  call void @gm200_51427(ptr %3, %st54 %4)
   ret void
 }
 
@@ -206077,7 +206128,7 @@ body0:                                            ; preds = %entry
   store %st27 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs42, ptr %0, i32 0, i32 0
   %4 = load %st27, ptr %2, align 8
-  call void @gm200_51339(ptr %3, %st27 %4)
+  call void @gm200_51430(ptr %3, %st27 %4)
   ret void
 }
 
@@ -206090,7 +206141,7 @@ body0:                                            ; preds = %entry
   store %st47 %1, ptr %2, align 4
   %3 = getelementptr inbounds nuw %gs158, ptr %0, i32 0, i32 0
   %4 = load %st47, ptr %2, align 4
-  call void @gm200_51342(ptr %3, %st47 %4)
+  call void @gm200_51433(ptr %3, %st47 %4)
   ret void
 }
 
@@ -206103,7 +206154,7 @@ body0:                                            ; preds = %entry
   store %st60 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs162, ptr %0, i32 0, i32 0
   %4 = load %st60, ptr %2, align 8
-  call void @gm200_51345(ptr %3, %st60 %4)
+  call void @gm200_51436(ptr %3, %st60 %4)
   ret void
 }
 
@@ -206116,7 +206167,7 @@ body0:                                            ; preds = %entry
   store %gs42 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs154, ptr %0, i32 0, i32 0
   %4 = load %gs42, ptr %2, align 8
-  call void @gm200_51348(ptr %3, %gs42 %4)
+  call void @gm200_51439(ptr %3, %gs42 %4)
   ret void
 }
 
@@ -208089,7 +208140,7 @@ body0:                                            ; preds = %entry
   store %st48 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs138, ptr %0, i32 0, i32 0
   %4 = load %st48, ptr %2, align 8
-  call void @gm200_51351(ptr %3, %st48 %4)
+  call void @gm200_51442(ptr %3, %st48 %4)
   ret void
 }
 
@@ -208366,7 +208417,7 @@ body0:                                            ; preds = %entry
   store %st53 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs166, ptr %0, i32 0, i32 0
   %4 = load %st53, ptr %2, align 8
-  call void @gm200_51354(ptr %3, %st53 %4)
+  call void @gm200_51445(ptr %3, %st53 %4)
   ret void
 }
 
@@ -211174,7 +211225,7 @@ body0:                                            ; preds = %entry
   store %st59 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs170, ptr %0, i32 0, i32 0
   %4 = load %st59, ptr %2, align 8
-  call void @gm200_51357(ptr %3, %st59 %4)
+  call void @gm200_51448(ptr %3, %st59 %4)
   ret void
 }
 
@@ -211482,7 +211533,7 @@ body0:                                            ; preds = %entry
   store %gs150 %0, ptr %1, align 8
   %2 = load %gs150, ptr %1, align 8
   %3 = extractvalue %gs150 %2, 0
-  %4 = call i64 @gm196_51362(ptr %3)
+  %4 = call i64 @gm196_51453(ptr %3)
   ret i64 %4
 }
 
@@ -211724,7 +211775,7 @@ body0:                                            ; preds = %entry
   store %st86 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs210, ptr %0, i32 0, i32 0
   %4 = load %st86, ptr %2, align 8
-  call void @gm200_51372(ptr %3, %st86 %4)
+  call void @gm200_51463(ptr %3, %st86 %4)
   ret void
 }
 
@@ -211737,7 +211788,7 @@ body0:                                            ; preds = %entry
   store %gs154 %0, ptr %1, align 8
   %2 = load %gs154, ptr %1, align 8
   %3 = extractvalue %gs154 %2, 0
-  %4 = call i64 @gm196_51377(ptr %3)
+  %4 = call i64 @gm196_51468(ptr %3)
   ret i64 %4
 }
 
@@ -211765,7 +211816,7 @@ body0:                                            ; preds = %entry
   store %gs158 %0, ptr %1, align 8
   %2 = load %gs158, ptr %1, align 8
   %3 = extractvalue %gs158 %2, 0
-  %4 = call i64 @gm196_51389(ptr %3)
+  %4 = call i64 @gm196_51480(ptr %3)
   ret i64 %4
 }
 
@@ -212852,11 +212903,11 @@ while.body2:                                      ; preds = %while.cond1
   %30 = extractvalue %st83 %29, 1
   %31 = load %gs94, ptr %8, align 8
   %32 = load i64, ptr %9, align 4
-  %33 = call %st76 @gm23_42887(%gs94 %31, i64 %32)
+  %33 = call %st76 @gm23_42976(%gs94 %31, i64 %32)
   %34 = extractvalue %st76 %33, 0
   %35 = load %gs94, ptr %8, align 8
   %36 = load i64, ptr %9, align 4
-  %37 = call %st76 @gm23_42887(%gs94 %35, i64 %36)
+  %37 = call %st76 @gm23_42976(%gs94 %35, i64 %36)
   %38 = extractvalue %st76 %37, 1
   %39 = call i1 @pf291(ptr %0, i64 %26, i64 %30, i64 %34, i64 %38)
   %40 = icmp ne i1 %39, false
@@ -212932,7 +212983,7 @@ then4:                                            ; preds = %then
   %80 = load i64, ptr %13, align 4
   %81 = load %gs94, ptr %8, align 8
   %82 = load i64, ptr %9, align 4
-  %83 = call %st76 @gm23_42887(%gs94 %81, i64 %82)
+  %83 = call %st76 @gm23_42976(%gs94 %81, i64 %82)
   %84 = extractvalue %st76 %83, 2
   call void @pf1238(ptr %0, i64 %80, i64 %84, %st27 { ptr getelementptr ([36 x i8], ptr @str.1207, i64 0, i64 24) })
   %85 = load i64, ptr %13, align 4
@@ -214042,7 +214093,7 @@ while.cond:                                       ; preds = %endif, %body0
   %15 = load %st32, ptr %0, align 8
   %16 = extractvalue %st32 %15, 10
   %17 = extractvalue %st101 %16, 4
-  %18 = call i64 @gm11_12407(%gs30 %17)
+  %18 = call i64 @gm11_12410(%gs30 %17)
   %19 = icmp ult i64 %14, %18
   br i1 %19, label %while.body, label %while.end
 
@@ -214051,7 +214102,7 @@ while.body:                                       ; preds = %while.cond
   %21 = extractvalue %st32 %20, 10
   %22 = extractvalue %st101 %21, 4
   %23 = load i64, ptr %6, align 4
-  %24 = call %st72 @gm23_12407(%gs30 %22, i64 %23)
+  %24 = call %st72 @gm23_12410(%gs30 %22, i64 %23)
   call void @pwretain72(%st72 %24)
   store %st72 %24, ptr %7, align 4
   %25 = load %st72, ptr %7, align 4
@@ -214934,11 +214985,11 @@ while.cond:                                       ; preds = %endif, %body0
 while.body:                                       ; preds = %while.cond
   %12 = load %gs94, ptr %4, align 8
   %13 = load i64, ptr %7, align 4
-  %14 = call %st76 @gm23_42887(%gs94 %12, i64 %13)
+  %14 = call %st76 @gm23_42976(%gs94 %12, i64 %13)
   %15 = extractvalue %st76 %14, 0
   %16 = load %gs94, ptr %4, align 8
   %17 = load i64, ptr %7, align 4
-  %18 = call %st76 @gm23_42887(%gs94 %16, i64 %17)
+  %18 = call %st76 @gm23_42976(%gs94 %16, i64 %17)
   %19 = extractvalue %st76 %18, 1
   %20 = load i64, ptr %5, align 4
   %21 = load i64, ptr %6, align 4
@@ -215198,11 +215249,11 @@ while.body:                                       ; preds = %while.cond
   %63 = load i64, ptr %6, align 4
   %64 = load %gs94, ptr %8, align 8
   %65 = load i64, ptr %12, align 4
-  %66 = call %st76 @gm23_42887(%gs94 %64, i64 %65)
+  %66 = call %st76 @gm23_42976(%gs94 %64, i64 %65)
   %67 = extractvalue %st76 %66, 0
   %68 = load %gs94, ptr %8, align 8
   %69 = load i64, ptr %12, align 4
-  %70 = call %st76 @gm23_42887(%gs94 %68, i64 %69)
+  %70 = call %st76 @gm23_42976(%gs94 %68, i64 %69)
   %71 = extractvalue %st76 %70, 1
   %72 = call i64 @pf986(ptr %0, i64 %62, i64 %63, i64 %67, i64 %71)
   store i64 %72, ptr %13, align 4
@@ -215227,7 +215278,7 @@ sc.cont:                                          ; preds = %sc.rhs, %while.body
 then11:                                           ; preds = %sc.cont
   %79 = load %gs94, ptr %8, align 8
   %80 = load i64, ptr %12, align 4
-  %81 = call %st76 @gm23_42887(%gs94 %79, i64 %80)
+  %81 = call %st76 @gm23_42976(%gs94 %79, i64 %80)
   %82 = extractvalue %st76 %81, 3
   %83 = call i1 @pf931(ptr %0, i64 %82)
   %84 = icmp ne i1 %83, false
@@ -215243,7 +215294,7 @@ endif12:                                          ; preds = %endif14, %sc.cont
 then13:                                           ; preds = %then11
   %88 = load %gs94, ptr %8, align 8
   %89 = load i64, ptr %12, align 4
-  %90 = call %st76 @gm23_42887(%gs94 %88, i64 %89)
+  %90 = call %st76 @gm23_42976(%gs94 %88, i64 %89)
   %91 = extractvalue %st76 %90, 3
   %92 = call i64 @pf927(ptr %0, i64 %91)
   %93 = load i64, ptr %11, align 4
@@ -215264,7 +215315,7 @@ endif16:                                          ; preds = %endif18, %then13
 then17:                                           ; preds = %then15
   %97 = load %gs94, ptr %8, align 8
   %98 = load i64, ptr %12, align 4
-  %99 = call %st76 @gm23_42887(%gs94 %97, i64 %98)
+  %99 = call %st76 @gm23_42976(%gs94 %97, i64 %98)
   %100 = extractvalue %st76 %99, 3
   %101 = call i64 @pf835(ptr %0, i64 %100)
   call void @pf767(i64 %101, %st27 { ptr getelementptr ([114 x i8], ptr @str.1239, i64 0, i64 24) })
@@ -215276,7 +215327,7 @@ endif18:                                          ; preds = %else, %then17
 else:                                             ; preds = %then15
   %102 = load %gs94, ptr %8, align 8
   %103 = load i64, ptr %12, align 4
-  %104 = call %st76 @gm23_42887(%gs94 %102, i64 %103)
+  %104 = call %st76 @gm23_42976(%gs94 %102, i64 %103)
   %105 = extractvalue %st76 %104, 3
   %106 = call i64 @pf835(ptr %0, i64 %105)
   call void @pf767(i64 %106, %st27 { ptr getelementptr ([129 x i8], ptr @str.1240, i64 0, i64 24) })
@@ -215292,7 +215343,7 @@ while.cond19:                                     ; preds = %endif23, %while.end
 while.body20:                                     ; preds = %while.cond19
   %111 = load %gs94, ptr %8, align 8
   %112 = load i64, ptr %14, align 4
-  %113 = call %st76 @gm23_42887(%gs94 %111, i64 %112)
+  %113 = call %st76 @gm23_42976(%gs94 %111, i64 %112)
   %114 = extractvalue %st76 %113, 3
   %115 = call i1 @pf931(ptr %0, i64 %114)
   %116 = icmp ne i1 %115, false
@@ -215310,7 +215361,7 @@ while.end21:                                      ; preds = %while.cond19
 then22:                                           ; preds = %while.body20
   %122 = load %gs94, ptr %8, align 8
   %123 = load i64, ptr %14, align 4
-  %124 = call %st76 @gm23_42887(%gs94 %122, i64 %123)
+  %124 = call %st76 @gm23_42976(%gs94 %122, i64 %123)
   %125 = extractvalue %st76 %124, 3
   %126 = call i64 @pf927(ptr %0, i64 %125)
   %127 = load i64, ptr %11, align 4
@@ -215343,7 +215394,7 @@ endif26:                                          ; preds = %endif28, %then22
 then27:                                           ; preds = %then25
   %138 = load %gs94, ptr %8, align 8
   %139 = load i64, ptr %14, align 4
-  %140 = call %st76 @gm23_42887(%gs94 %138, i64 %139)
+  %140 = call %st76 @gm23_42976(%gs94 %138, i64 %139)
   %141 = extractvalue %st76 %140, 3
   %142 = call i64 @pf835(ptr %0, i64 %141)
   call void @pf767(i64 %142, %st27 { ptr getelementptr ([197 x i8], ptr @str.1241, i64 0, i64 24) })
@@ -216713,7 +216764,7 @@ endif2:                                           ; preds = %endif
   store i64 %35, ptr %10, align 4
   %36 = load i64, ptr %10, align 4
   %37 = load %st37, ptr %0, align 8
-  %38 = extractvalue %st37 %37, 27
+  %38 = extractvalue %st37 %37, 29
   %39 = call i64 @gm11_4725(%gs14 %38)
   %40 = icmp ult i64 %36, %39
   br i1 %40, label %then3, label %endif4
@@ -216722,7 +216773,7 @@ then3:                                            ; preds = %endif2
   %41 = load ptr, ptr %6, align 8
   %42 = load ptr, ptr %7, align 8
   %43 = load %st37, ptr %0, align 8
-  %44 = extractvalue %st37 %43, 27
+  %44 = extractvalue %st37 %43, 31
   %45 = load i64, ptr %10, align 4
   %46 = call i64 @gm23_6468(%gs14 %44, i64 %45)
   %47 = call ptr @pf1401(ptr %0, ptr %1, ptr %41, ptr %42, i64 %46)
@@ -217289,7 +217340,7 @@ then13:                                           ; preds = %then11
   %118 = load %st37, ptr %0, align 8
   %119 = extractvalue %st37 %118, 33
   %120 = load i64, ptr %16, align 4
-  %121 = call ptr @gm23_1561(%gs118 %119, i64 %120)
+  %121 = call ptr @gm23_1565(%gs118 %119, i64 %120)
   %122 = load i64, ptr %8, align 4
   %123 = load i64, ptr %9, align 4
   %124 = load i64, ptr %10, align 4
@@ -217345,7 +217396,7 @@ endif16:                                          ; preds = %endif12
   %156 = load %st37, ptr %0, align 8
   %157 = extractvalue %st37 %156, 33
   %158 = load i64, ptr %20, align 4
-  %159 = call ptr @gm23_1561(%gs118 %157, i64 %158)
+  %159 = call ptr @gm23_1565(%gs118 %157, i64 %158)
   %160 = load i64, ptr %8, align 4
   %161 = load i64, ptr %9, align 4
   %162 = load i64, ptr %10, align 4
@@ -217368,7 +217419,7 @@ body0:                                            ; preds = %entry
   store %st72 %1, ptr %2, align 4
   %3 = getelementptr inbounds nuw %gs30, ptr %0, i32 0, i32 0
   %4 = load %st72, ptr %2, align 4
-  call void @gm200_51400(ptr %3, %st72 %4)
+  call void @gm200_51491(ptr %3, %st72 %4)
   ret void
 }
 
@@ -217825,7 +217876,7 @@ body0:                                            ; preds = %entry
   store %gs118 zeroinitializer, ptr %7, align 8
   %29 = load %st37, ptr %0, align 8
   %30 = extractvalue %st37 %29, 10
-  call void @gm13_9794(ptr %7, ptr %30)
+  call void @gm13_9797(ptr %7, ptr %30)
   %31 = load %st37, ptr %0, align 8
   %32 = extractvalue %st37 %31, 10
   %33 = load %gs118, ptr %7, align 8
@@ -218892,7 +218943,7 @@ body0:                                            ; preds = %entry
   store %gs254 %0, ptr %1, align 8
   %2 = load %gs254, ptr %1, align 8
   %3 = extractvalue %gs254 %2, 0
-  %4 = call i64 @gm196_51405(ptr %3)
+  %4 = call i64 @gm196_51496(ptr %3)
   ret i64 %4
 }
 
@@ -218956,7 +219007,7 @@ body0:                                            ; preds = %entry
   store %st109 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs82, ptr %0, i32 0, i32 0
   %4 = load %st109, ptr %2, align 8
-  call void @gm200_51415(ptr %3, %st109 %4)
+  call void @gm200_51506(ptr %3, %st109 %4)
   ret void
 }
 
@@ -219130,14 +219181,14 @@ match.next:                                       ; preds = %then
 while.cond1:                                      ; preds = %while.body2, %arm
   %39 = load i64, ptr %9, align 4
   %40 = load %gs86, ptr %8, align 8
-  %41 = call i64 @gm11_49676(%gs86 %40)
+  %41 = call i64 @gm11_49767(%gs86 %40)
   %42 = icmp ult i64 %39, %41
   br i1 %42, label %while.body2, label %while.end3
 
 while.body2:                                      ; preds = %while.cond1
   %43 = load %gs86, ptr %8, align 8
   %44 = load i64, ptr %9, align 4
-  %45 = call %st111 @gm23_49676(%gs86 %43, i64 %44)
+  %45 = call %st111 @gm23_49767(%gs86 %43, i64 %44)
   %46 = extractvalue %st111 %45, 1
   %47 = extractvalue %gs0 %46, 0
   call void @plew_rawbuf_retain(ptr %47)
@@ -219165,7 +219216,7 @@ body0:                                            ; preds = %entry
   store %st108 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs78, ptr %0, i32 0, i32 0
   %4 = load %st108, ptr %2, align 8
-  call void @gm200_51418(ptr %3, %st108 %4)
+  call void @gm200_51509(ptr %3, %st108 %4)
   ret void
 }
 
@@ -219455,7 +219506,7 @@ body0:                                            ; preds = %entry
   store %gs250 %0, ptr %1, align 8
   %2 = load %gs250, ptr %1, align 8
   %3 = extractvalue %gs250 %2, 0
-  %4 = call i64 @gm196_51423(ptr %3)
+  %4 = call i64 @gm196_51514(ptr %3)
   ret i64 %4
 }
 
@@ -219541,14 +219592,14 @@ body0:                                            ; preds = %entry
 while.cond:                                       ; preds = %endif, %body0
   %6 = load i64, ptr %4, align 4
   %7 = load %gs86, ptr %2, align 8
-  %8 = call i64 @gm11_49676(%gs86 %7)
+  %8 = call i64 @gm11_49767(%gs86 %7)
   %9 = icmp ult i64 %6, %8
   br i1 %9, label %while.body, label %while.end
 
 while.body:                                       ; preds = %while.cond
   %10 = load %gs86, ptr %2, align 8
   %11 = load i64, ptr %4, align 4
-  %12 = call %st111 @gm23_49676(%gs86 %10, i64 %11)
+  %12 = call %st111 @gm23_49767(%gs86 %10, i64 %11)
   call void @pwretain111(%st111 %12)
   store %st111 %12, ptr %5, align 8
   %13 = load %st111, ptr %5, align 8
@@ -219595,7 +219646,7 @@ body0:                                            ; preds = %entry
   store %st106 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs74, ptr %0, i32 0, i32 0
   %4 = load %st106, ptr %2, align 8
-  call void @gm200_51433(ptr %3, %st106 %4)
+  call void @gm200_51524(ptr %3, %st106 %4)
   ret void
 }
 
@@ -219718,7 +219769,7 @@ body0:                                            ; preds = %entry
   store %gs82 %0, ptr %1, align 8
   %2 = load %gs82, ptr %1, align 8
   %3 = extractvalue %gs82 %2, 0
-  %4 = call i64 @gm196_51438(ptr %3)
+  %4 = call i64 @gm196_51529(ptr %3)
   ret i64 %4
 }
 
@@ -222045,7 +222096,7 @@ arm:                                              ; preds = %while.body
   %67 = load i64, ptr %15, align 4
   %68 = load i1, ptr %14, align 1
   %69 = call ptr @pf1620(ptr %0, ptr %1, i64 %65, i64 %66, i64 %67, i1 %68)
-  call void @gm13_9794(ptr %3, ptr %69)
+  call void @gm13_9797(ptr %3, ptr %69)
   br label %match.end
 
 match.next:                                       ; preds = %while.body
@@ -222475,7 +222526,7 @@ body0:                                            ; preds = %entry
   store %st49 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs142, ptr %0, i32 0, i32 0
   %4 = load %st49, ptr %2, align 8
-  call void @gm200_51448(ptr %3, %st49 %4)
+  call void @gm200_51539(ptr %3, %st49 %4)
   ret void
 }
 
@@ -224213,7 +224264,7 @@ body0:                                            ; preds = %entry
   store %st50 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs146, ptr %0, i32 0, i32 0
   %4 = load %st50, ptr %2, align 8
-  call void @gm200_51451(ptr %3, %st50 %4)
+  call void @gm200_51542(ptr %3, %st50 %4)
   ret void
 }
 
@@ -225735,7 +225786,7 @@ enumret.v9:                                       ; preds = %enumret.c8
   br label %enumret.c10
 
 enumret.c10:                                      ; preds = %enumret.v9, %enumret.c8
-  call void @gm200_51455(ptr %4, %en8 %5)
+  call void @gm200_51546(ptr %4, %en8 %5)
   ret void
 }
 
@@ -227376,7 +227427,7 @@ body0:                                            ; preds = %entry
   store %st51 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs46, ptr %0, i32 0, i32 0
   %4 = load %st51, ptr %2, align 8
-  call void @gm200_51458(ptr %3, %st51 %4)
+  call void @gm200_51549(ptr %3, %st51 %4)
   ret void
 }
 
@@ -228412,7 +228463,7 @@ body0:                                            ; preds = %entry
   store %st62 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs50, ptr %0, i32 0, i32 0
   %4 = load %st62, ptr %2, align 8
-  call void @gm200_51461(ptr %3, %st62 %4)
+  call void @gm200_51552(ptr %3, %st62 %4)
   ret void
 }
 
@@ -229582,7 +229633,7 @@ body0:                                            ; preds = %entry
   store %st113 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs254, ptr %0, i32 0, i32 0
   %4 = load %st113, ptr %2, align 8
-  call void @gm200_51464(ptr %3, %st113 %4)
+  call void @gm200_51555(ptr %3, %st113 %4)
   ret void
 }
 
@@ -230146,7 +230197,7 @@ body0:                                            ; preds = %entry
   store %st112 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs250, ptr %0, i32 0, i32 0
   %4 = load %st112, ptr %2, align 8
-  call void @gm200_51467(ptr %3, %st112 %4)
+  call void @gm200_51558(ptr %3, %st112 %4)
   ret void
 }
 
@@ -230168,7 +230219,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define i64 @gm11_49676(%gs86 %0) {
+define i64 @gm11_49767(%gs86 %0) {
 entry:
   %1 = alloca %gs86, align 8
   br label %body0
@@ -230177,11 +230228,11 @@ body0:                                            ; preds = %entry
   store %gs86 %0, ptr %1, align 8
   %2 = load %gs86, ptr %1, align 8
   %3 = extractvalue %gs86 %2, 0
-  %4 = call i64 @gm196_51472(ptr %3)
+  %4 = call i64 @gm196_51563(ptr %3)
   ret i64 %4
 }
 
-define %st111 @gm23_49676(%gs86 %0, i64 %1) {
+define %st111 @gm23_49767(%gs86 %0, i64 %1) {
 entry:
   %2 = alloca %gs86, align 8
   %3 = alloca i64, align 8
@@ -230192,7 +230243,7 @@ body0:                                            ; preds = %entry
   store i64 %1, ptr %3, align 4
   %4 = load %gs86, ptr %2, align 8
   %5 = load i64, ptr %3, align 4
-  %6 = call %st111 @gm15_49676(%gs86 %4, i64 %5)
+  %6 = call %st111 @gm15_49767(%gs86 %4, i64 %5)
   ret %st111 %6
 }
 
@@ -230630,7 +230681,7 @@ while.cond9:                                      ; preds = %while.body10, %arm7
 while.body10:                                     ; preds = %while.cond9
   %135 = load %gs94, ptr %23, align 8
   %136 = load i64, ptr %24, align 4
-  %137 = call %st76 @gm23_42887(%gs94 %135, i64 %136)
+  %137 = call %st76 @gm23_42976(%gs94 %135, i64 %136)
   %138 = extractvalue %st76 %137, 2
   call void @pf1541(ptr %0, ptr %1, i64 %138)
   %139 = load i64, ptr %24, align 4
@@ -231379,7 +231430,7 @@ while.cond23:                                     ; preds = %while.body24, %arm2
 while.body24:                                     ; preds = %while.cond23
   %192 = load %gs94, ptr %46, align 8
   %193 = load i64, ptr %47, align 4
-  %194 = call %st76 @gm23_42887(%gs94 %192, i64 %193)
+  %194 = call %st76 @gm23_42976(%gs94 %192, i64 %193)
   %195 = extractvalue %st76 %194, 2
   call void @pf1569(ptr %0, ptr %1, i64 %195)
   %196 = load i64, ptr %47, align 4
@@ -254156,7 +254207,7 @@ body0:                                            ; preds = %entry
   store %st111 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs86, ptr %0, i32 0, i32 0
   %4 = load %st111, ptr %2, align 8
-  call void @gm200_51482(ptr %3, %st111 %4)
+  call void @gm200_51573(ptr %3, %st111 %4)
   ret void
 }
 
@@ -258441,7 +258492,7 @@ body0:                                            ; preds = %entry
   store %st68 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs66, ptr %0, i32 0, i32 0
   %4 = load %st68, ptr %2, align 8
-  call void @gm200_51485(ptr %3, %st68 %4)
+  call void @gm200_51576(ptr %3, %st68 %4)
   ret void
 }
 
@@ -258890,7 +258941,7 @@ body0:                                            ; preds = %entry
   store %gs66 %0, ptr %1, align 8
   %2 = load %gs66, ptr %1, align 8
   %3 = extractvalue %gs66 %2, 0
-  %4 = call i64 @gm196_51491(ptr %3)
+  %4 = call i64 @gm196_51582(ptr %3)
   ret i64 %4
 }
 
@@ -258903,7 +258954,7 @@ body0:                                            ; preds = %entry
   store %st65 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs18, ptr %0, i32 0, i32 0
   %4 = load %st65, ptr %2, align 8
-  call void @gm200_51500(ptr %3, %st65 %4)
+  call void @gm200_51591(ptr %3, %st65 %4)
   ret void
 }
 
@@ -260305,7 +260356,7 @@ body0:                                            ; preds = %entry
   store %st63 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs114, ptr %0, i32 0, i32 0
   %4 = load %st63, ptr %2, align 8
-  call void @gm200_51503(ptr %3, %st63 %4)
+  call void @gm200_51594(ptr %3, %st63 %4)
   ret void
 }
 
@@ -262077,7 +262128,7 @@ body0:                                            ; preds = %entry
   store %gs62 %0, ptr %1, align 8
   %2 = load %gs62, ptr %1, align 8
   %3 = extractvalue %gs62 %2, 0
-  %4 = call i64 @gm196_51508(ptr %3)
+  %4 = call i64 @gm196_51599(ptr %3)
   ret i64 %4
 }
 
@@ -271481,7 +271532,7 @@ body0:                                            ; preds = %entry
   store %st64 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs62, ptr %0, i32 0, i32 0
   %4 = load %st64, ptr %2, align 8
-  call void @gm200_51518(ptr %3, %st64 %4)
+  call void @gm200_51609(ptr %3, %st64 %4)
   ret void
 }
 
@@ -277431,7 +277482,7 @@ enumret.v37:                                      ; preds = %enumret.c36
   br label %enumret.c38
 
 enumret.c38:                                      ; preds = %enumret.v37, %enumret.c36
-  call void @gm200_51522(ptr %4, %en7 %5)
+  call void @gm200_51613(ptr %4, %en7 %5)
   ret void
 }
 
@@ -277444,7 +277495,7 @@ body0:                                            ; preds = %entry
   store %st61 %1, ptr %2, align 8
   %3 = getelementptr inbounds nuw %gs58, ptr %0, i32 0, i32 0
   %4 = load %st61, ptr %2, align 8
-  call void @gm200_51525(ptr %3, %st61 %4)
+  call void @gm200_51616(ptr %3, %st61 %4)
   ret void
 }
 
@@ -281333,7 +281384,7 @@ arrelem.end170:                                   ; preds = %arrelem.cond168
   br label %arrrel.cont167
 }
 
-define i64 @gm196_51176(ptr %0) {
+define i64 @gm196_51267(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281345,7 +281396,7 @@ body0:                                            ; preds = %entry
   ret i64 %3
 }
 
-define i64 @gm196_51187(ptr %0) {
+define i64 @gm196_51278(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281369,11 +281420,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs162, ptr %2, align 8
   %5 = extractvalue %gs162 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st60 @gm202_51531(ptr %5, i64 %6)
+  %7 = call %st60 @gm202_51622(ptr %5, i64 %6)
   ret %st60 %7
 }
 
-define i64 @gm196_51204(ptr %0) {
+define i64 @gm196_51295(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281397,11 +281448,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs242, ptr %2, align 8
   %5 = extractvalue %gs242 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call i64 @gm202_51543(ptr %5, i64 %6)
+  %7 = call i64 @gm202_51634(ptr %5, i64 %6)
   ret i64 %7
 }
 
-define void @gm203_51216(ptr %0, i64 %1, i64 %2) {
+define void @gm203_51307(ptr %0, i64 %1, i64 %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca i64, align 8
@@ -281424,7 +281475,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define void @gm200_51220(ptr %0, %en6 %1) {
+define void @gm200_51311(ptr %0, %en6 %1) {
 entry:
   %2 = alloca %en6, align 8
   %3 = alloca i64, align 8
@@ -281645,7 +281696,7 @@ enumret.c30:                                      ; preds = %enumret.v29, %enumr
   ret void
 }
 
-define i64 @gm196_51225(ptr %0) {
+define i64 @gm196_51316(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281669,11 +281720,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs222, ptr %2, align 8
   %5 = extractvalue %gs222 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st89 @gm202_51558(ptr %5, i64 %6)
+  %7 = call %st89 @gm202_51649(ptr %5, i64 %6)
   ret %st89 %7
 }
 
-define i64 @gm196_51237(ptr %0) {
+define i64 @gm196_51328(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281697,11 +281748,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs234, ptr %2, align 8
   %5 = extractvalue %gs234 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st88 @gm202_51570(ptr %5, i64 %6)
+  %7 = call %st88 @gm202_51661(ptr %5, i64 %6)
   ret %st88 %7
 }
 
-define i64 @gm196_51249(ptr %0) {
+define i64 @gm196_51340(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281725,11 +281776,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs238, ptr %2, align 8
   %5 = extractvalue %gs238 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st93 @gm202_51582(ptr %5, i64 %6)
+  %7 = call %st93 @gm202_51673(ptr %5, i64 %6)
   ret %st93 %7
 }
 
-define i64 @gm196_51261(ptr %0) {
+define i64 @gm196_51352(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281741,7 +281792,7 @@ body0:                                            ; preds = %entry
   ret i64 %3
 }
 
-define %en7 @gm15_46840(%gs110 %0, i64 %1) {
+define %en7 @gm15_46928(%gs110 %0, i64 %1) {
 entry:
   %2 = alloca %gs110, align 8
   %3 = alloca i64, align 8
@@ -281753,11 +281804,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs110, ptr %2, align 8
   %5 = extractvalue %gs110 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %en7 @gm202_51594(ptr %5, i64 %6)
+  %7 = call %en7 @gm202_51685(ptr %5, i64 %6)
   ret %en7 %7
 }
 
-define void @gm200_51271(ptr %0, %st70 %1) {
+define void @gm200_51362(ptr %0, %st70 %1) {
 entry:
   %2 = alloca %st70, align 8
   br label %body0
@@ -281781,7 +281832,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define void @gm200_51274(ptr %0, %st87 %1) {
+define void @gm200_51365(ptr %0, %st87 %1) {
 entry:
   %2 = alloca %st87, align 8
   %3 = alloca i64, align 8
@@ -281830,7 +281881,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51277(ptr %0, %st92 %1) {
+define void @gm200_51368(ptr %0, %st92 %1) {
 entry:
   %2 = alloca %st92, align 8
   br label %body0
@@ -281854,7 +281905,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define void @gm203_51281(ptr %0, i64 %1, ptr %2) {
+define void @gm203_51372(ptr %0, i64 %1, ptr %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca ptr, align 8
@@ -281877,7 +281928,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define void @gm203_51285(ptr %0, i64 %1, ptr %2) {
+define void @gm203_51376(ptr %0, i64 %1, ptr %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca ptr, align 8
@@ -281912,11 +281963,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs122, ptr %2, align 8
   %5 = extractvalue %gs122 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %gs14 @gm202_51608(ptr %5, i64 %6)
+  %7 = call %gs14 @gm202_51699(ptr %5, i64 %6)
   ret %gs14 %7
 }
 
-define void @gm200_51289(ptr %0, %gs14 %1) {
+define void @gm200_51380(ptr %0, %gs14 %1) {
 entry:
   %2 = alloca %gs14, align 8
   %3 = alloca i64, align 8
@@ -281965,7 +282016,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define i64 @gm196_51294(ptr %0) {
+define i64 @gm196_51385(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -281977,7 +282028,7 @@ body0:                                            ; preds = %entry
   ret i64 %3
 }
 
-define void @gm203_51304(ptr %0, i64 %1, ptr %2) {
+define void @gm203_51395(ptr %0, i64 %1, ptr %2) {
 entry:
   %3 = alloca i64, align 8
   %4 = alloca ptr, align 8
@@ -282012,11 +282063,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs130, ptr %2, align 8
   %5 = extractvalue %gs130 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call ptr @gm202_51625(ptr %5, i64 %6)
+  %7 = call ptr @gm202_51716(ptr %5, i64 %6)
   ret ptr %7
 }
 
-define i64 @gm196_51310(ptr %0) {
+define i64 @gm196_51401(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282040,11 +282091,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs74, ptr %2, align 8
   %5 = extractvalue %gs74 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st106 @gm202_51637(ptr %5, i64 %6)
+  %7 = call %st106 @gm202_51728(ptr %5, i64 %6)
   ret %st106 %7
 }
 
-define i64 @gm196_51322(ptr %0) {
+define i64 @gm196_51413(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282068,11 +282119,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs230, ptr %2, align 8
   %5 = extractvalue %gs230 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st92 @gm202_51649(ptr %5, i64 %6)
+  %7 = call %st92 @gm202_51740(ptr %5, i64 %6)
   ret %st92 %7
 }
 
-define void @gm200_51333(ptr %0, i64 %1) {
+define void @gm200_51424(ptr %0, i64 %1) {
 entry:
   %2 = alloca i64, align 8
   br label %body0
@@ -282095,7 +282146,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define void @gm200_51336(ptr %0, %st54 %1) {
+define void @gm200_51427(ptr %0, %st54 %1) {
 entry:
   %2 = alloca %st54, align 8
   %3 = alloca i64, align 8
@@ -282144,7 +282195,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51339(ptr %0, %st27 %1) {
+define void @gm200_51430(ptr %0, %st27 %1) {
 entry:
   %2 = alloca %st27, align 8
   %3 = alloca i64, align 8
@@ -282195,7 +282246,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51342(ptr %0, %st47 %1) {
+define void @gm200_51433(ptr %0, %st47 %1) {
 entry:
   %2 = alloca %st47, align 8
   br label %body0
@@ -282219,7 +282270,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define void @gm200_51345(ptr %0, %st60 %1) {
+define void @gm200_51436(ptr %0, %st60 %1) {
 entry:
   %2 = alloca %st60, align 8
   %3 = alloca i64, align 8
@@ -282268,7 +282319,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51348(ptr %0, %gs42 %1) {
+define void @gm200_51439(ptr %0, %gs42 %1) {
 entry:
   %2 = alloca %gs42, align 8
   %3 = alloca i64, align 8
@@ -282317,7 +282368,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51351(ptr %0, %st48 %1) {
+define void @gm200_51442(ptr %0, %st48 %1) {
 entry:
   %2 = alloca %st48, align 8
   %3 = alloca i64, align 8
@@ -282366,7 +282417,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51354(ptr %0, %st53 %1) {
+define void @gm200_51445(ptr %0, %st53 %1) {
 entry:
   %2 = alloca %st53, align 8
   %3 = alloca i64, align 8
@@ -282415,7 +282466,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51357(ptr %0, %st59 %1) {
+define void @gm200_51448(ptr %0, %st59 %1) {
 entry:
   %2 = alloca %st59, align 8
   %3 = alloca i64, align 8
@@ -282464,7 +282515,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define i64 @gm196_51362(ptr %0) {
+define i64 @gm196_51453(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282488,11 +282539,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs150, ptr %2, align 8
   %5 = extractvalue %gs150 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st54 @gm202_51664(ptr %5, i64 %6)
+  %7 = call %st54 @gm202_51755(ptr %5, i64 %6)
   ret %st54 %7
 }
 
-define void @gm200_51372(ptr %0, %st86 %1) {
+define void @gm200_51463(ptr %0, %st86 %1) {
 entry:
   %2 = alloca %st86, align 8
   %3 = alloca i64, align 8
@@ -282541,7 +282592,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define i64 @gm196_51377(ptr %0) {
+define i64 @gm196_51468(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282565,11 +282616,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs154, ptr %2, align 8
   %5 = extractvalue %gs154 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %gs42 @gm202_51676(ptr %5, i64 %6)
+  %7 = call %gs42 @gm202_51767(ptr %5, i64 %6)
   ret %gs42 %7
 }
 
-define i64 @gm196_51389(ptr %0) {
+define i64 @gm196_51480(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282593,7 +282644,7 @@ body0:                                            ; preds = %entry
   %4 = load %gs158, ptr %2, align 8
   %5 = extractvalue %gs158 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st47 @gm202_51690(ptr %5, i64 %6)
+  %7 = call %st47 @gm202_51781(ptr %5, i64 %6)
   ret %st47 %7
 }
 
@@ -282609,11 +282660,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs170, ptr %2, align 8
   %5 = extractvalue %gs170 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st59 @gm202_51702(ptr %5, i64 %6)
+  %7 = call %st59 @gm202_51793(ptr %5, i64 %6)
   ret %st59 %7
 }
 
-define void @gm200_51400(ptr %0, %st72 %1) {
+define void @gm200_51491(ptr %0, %st72 %1) {
 entry:
   %2 = alloca %st72, align 8
   br label %body0
@@ -282637,7 +282688,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define i64 @gm196_51405(ptr %0) {
+define i64 @gm196_51496(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282661,11 +282712,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs254, ptr %2, align 8
   %5 = extractvalue %gs254 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st113 @gm202_51714(ptr %5, i64 %6)
+  %7 = call %st113 @gm202_51805(ptr %5, i64 %6)
   ret %st113 %7
 }
 
-define void @gm200_51415(ptr %0, %st109 %1) {
+define void @gm200_51506(ptr %0, %st109 %1) {
 entry:
   %2 = alloca %st109, align 8
   %3 = alloca i64, align 8
@@ -282714,7 +282765,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51418(ptr %0, %st108 %1) {
+define void @gm200_51509(ptr %0, %st108 %1) {
 entry:
   %2 = alloca %st108, align 8
   %3 = alloca i64, align 8
@@ -282763,7 +282814,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define i64 @gm196_51423(ptr %0) {
+define i64 @gm196_51514(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282787,11 +282838,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs250, ptr %2, align 8
   %5 = extractvalue %gs250 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st112 @gm202_51726(ptr %5, i64 %6)
+  %7 = call %st112 @gm202_51817(ptr %5, i64 %6)
   ret %st112 %7
 }
 
-define void @gm200_51433(ptr %0, %st106 %1) {
+define void @gm200_51524(ptr %0, %st106 %1) {
 entry:
   %2 = alloca %st106, align 8
   %3 = alloca i64, align 8
@@ -282840,7 +282891,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define i64 @gm196_51438(ptr %0) {
+define i64 @gm196_51529(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -282864,11 +282915,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs82, ptr %2, align 8
   %5 = extractvalue %gs82 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st109 @gm202_51738(ptr %5, i64 %6)
+  %7 = call %st109 @gm202_51829(ptr %5, i64 %6)
   ret %st109 %7
 }
 
-define void @gm200_51448(ptr %0, %st49 %1) {
+define void @gm200_51539(ptr %0, %st49 %1) {
 entry:
   %2 = alloca %st49, align 8
   %3 = alloca i64, align 8
@@ -282917,7 +282968,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51451(ptr %0, %st50 %1) {
+define void @gm200_51542(ptr %0, %st50 %1) {
 entry:
   %2 = alloca %st50, align 8
   %3 = alloca i64, align 8
@@ -282966,7 +283017,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51455(ptr %0, %en8 %1) {
+define void @gm200_51546(ptr %0, %en8 %1) {
 entry:
   %2 = alloca %en8, align 8
   %3 = alloca i64, align 8
@@ -283173,7 +283224,7 @@ enumret.c22:                                      ; preds = %enumret.v21, %enumr
   ret void
 }
 
-define void @gm200_51458(ptr %0, %st51 %1) {
+define void @gm200_51549(ptr %0, %st51 %1) {
 entry:
   %2 = alloca %st51, align 8
   %3 = alloca i64, align 8
@@ -283222,7 +283273,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51461(ptr %0, %st62 %1) {
+define void @gm200_51552(ptr %0, %st62 %1) {
 entry:
   %2 = alloca %st62, align 8
   %3 = alloca i64, align 8
@@ -283271,7 +283322,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51464(ptr %0, %st113 %1) {
+define void @gm200_51555(ptr %0, %st113 %1) {
 entry:
   %2 = alloca %st113, align 8
   %3 = alloca i64, align 8
@@ -283320,7 +283371,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51467(ptr %0, %st112 %1) {
+define void @gm200_51558(ptr %0, %st112 %1) {
 entry:
   %2 = alloca %st112, align 8
   %3 = alloca i64, align 8
@@ -283369,7 +283420,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define i64 @gm196_51472(ptr %0) {
+define i64 @gm196_51563(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -283381,7 +283432,7 @@ body0:                                            ; preds = %entry
   ret i64 %3
 }
 
-define %st111 @gm15_49676(%gs86 %0, i64 %1) {
+define %st111 @gm15_49767(%gs86 %0, i64 %1) {
 entry:
   %2 = alloca %gs86, align 8
   %3 = alloca i64, align 8
@@ -283393,11 +283444,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs86, ptr %2, align 8
   %5 = extractvalue %gs86 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st111 @gm202_51751(ptr %5, i64 %6)
+  %7 = call %st111 @gm202_51842(ptr %5, i64 %6)
   ret %st111 %7
 }
 
-define void @gm200_51482(ptr %0, %st111 %1) {
+define void @gm200_51573(ptr %0, %st111 %1) {
 entry:
   %2 = alloca %st111, align 8
   %3 = alloca i64, align 8
@@ -283446,7 +283497,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51485(ptr %0, %st68 %1) {
+define void @gm200_51576(ptr %0, %st68 %1) {
 entry:
   %2 = alloca %st68, align 8
   %3 = alloca i64, align 8
@@ -283507,11 +283558,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs66, ptr %2, align 8
   %5 = extractvalue %gs66 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st68 @gm202_51763(ptr %5, i64 %6)
+  %7 = call %st68 @gm202_51854(ptr %5, i64 %6)
   ret %st68 %7
 }
 
-define i64 @gm196_51491(ptr %0) {
+define i64 @gm196_51582(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -283523,7 +283574,7 @@ body0:                                            ; preds = %entry
   ret i64 %3
 }
 
-define void @gm200_51500(ptr %0, %st65 %1) {
+define void @gm200_51591(ptr %0, %st65 %1) {
 entry:
   %2 = alloca %st65, align 8
   %3 = alloca i64, align 8
@@ -283572,7 +283623,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51503(ptr %0, %st63 %1) {
+define void @gm200_51594(ptr %0, %st63 %1) {
 entry:
   %2 = alloca %st63, align 8
   %3 = alloca i64, align 8
@@ -283621,7 +283672,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define i64 @gm196_51508(ptr %0) {
+define i64 @gm196_51599(ptr %0) {
 entry:
   %1 = alloca ptr, align 8
   br label %body0
@@ -283645,11 +283696,11 @@ body0:                                            ; preds = %entry
   %4 = load %gs62, ptr %2, align 8
   %5 = extractvalue %gs62 %4, 0
   %6 = load i64, ptr %3, align 4
-  %7 = call %st64 @gm202_51775(ptr %5, i64 %6)
+  %7 = call %st64 @gm202_51866(ptr %5, i64 %6)
   ret %st64 %7
 }
 
-define void @gm200_51518(ptr %0, %st64 %1) {
+define void @gm200_51609(ptr %0, %st64 %1) {
 entry:
   %2 = alloca %st64, align 8
   %3 = alloca i64, align 8
@@ -283698,7 +283749,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define void @gm200_51522(ptr %0, %en7 %1) {
+define void @gm200_51613(ptr %0, %en7 %1) {
 entry:
   %2 = alloca %en7, align 8
   %3 = alloca i64, align 8
@@ -284231,7 +284282,7 @@ enumret.c78:                                      ; preds = %enumret.v77, %enumr
   ret void
 }
 
-define void @gm200_51525(ptr %0, %st61 %1) {
+define void @gm200_51616(ptr %0, %st61 %1) {
 entry:
   %2 = alloca %st61, align 8
   %3 = alloca i64, align 8
@@ -284280,7 +284331,7 @@ arrelem.end:                                      ; preds = %arrelem.cond
   br label %cow.cont
 }
 
-define %st60 @gm202_51531(ptr %0, i64 %1) {
+define %st60 @gm202_51622(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284299,7 +284350,7 @@ body0:                                            ; preds = %entry
   ret %st60 %8
 }
 
-define i64 @gm202_51543(ptr %0, i64 %1) {
+define i64 @gm202_51634(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284317,7 +284368,7 @@ body0:                                            ; preds = %entry
   ret i64 %8
 }
 
-define %st89 @gm202_51558(ptr %0, i64 %1) {
+define %st89 @gm202_51649(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284335,7 +284386,7 @@ body0:                                            ; preds = %entry
   ret %st89 %8
 }
 
-define %st88 @gm202_51570(ptr %0, i64 %1) {
+define %st88 @gm202_51661(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284353,7 +284404,7 @@ body0:                                            ; preds = %entry
   ret %st88 %8
 }
 
-define %st93 @gm202_51582(ptr %0, i64 %1) {
+define %st93 @gm202_51673(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284372,7 +284423,7 @@ body0:                                            ; preds = %entry
   ret %st93 %8
 }
 
-define %en7 @gm202_51594(ptr %0, i64 %1) {
+define %en7 @gm202_51685(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284633,7 +284684,7 @@ enumret.c38:                                      ; preds = %enumret.v37, %enumr
   ret %en7 %9
 }
 
-define %gs14 @gm202_51608(ptr %0, i64 %1) {
+define %gs14 @gm202_51699(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284653,7 +284704,7 @@ body0:                                            ; preds = %entry
   ret %gs14 %8
 }
 
-define ptr @gm202_51625(ptr %0, i64 %1) {
+define ptr @gm202_51716(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284671,7 +284722,7 @@ body0:                                            ; preds = %entry
   ret ptr %8
 }
 
-define %st106 @gm202_51637(ptr %0, i64 %1) {
+define %st106 @gm202_51728(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284690,7 +284741,7 @@ body0:                                            ; preds = %entry
   ret %st106 %8
 }
 
-define %st92 @gm202_51649(ptr %0, i64 %1) {
+define %st92 @gm202_51740(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284708,7 +284759,7 @@ body0:                                            ; preds = %entry
   ret %st92 %8
 }
 
-define %st54 @gm202_51664(ptr %0, i64 %1) {
+define %st54 @gm202_51755(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284727,7 +284778,7 @@ body0:                                            ; preds = %entry
   ret %st54 %8
 }
 
-define %gs42 @gm202_51676(ptr %0, i64 %1) {
+define %gs42 @gm202_51767(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284747,7 +284798,7 @@ body0:                                            ; preds = %entry
   ret %gs42 %8
 }
 
-define %st47 @gm202_51690(ptr %0, i64 %1) {
+define %st47 @gm202_51781(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284765,7 +284816,7 @@ body0:                                            ; preds = %entry
   ret %st47 %8
 }
 
-define %st59 @gm202_51702(ptr %0, i64 %1) {
+define %st59 @gm202_51793(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284784,7 +284835,7 @@ body0:                                            ; preds = %entry
   ret %st59 %8
 }
 
-define %st113 @gm202_51714(ptr %0, i64 %1) {
+define %st113 @gm202_51805(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284814,7 +284865,7 @@ body0:                                            ; preds = %entry
   ret void
 }
 
-define %st112 @gm202_51726(ptr %0, i64 %1) {
+define %st112 @gm202_51817(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284833,7 +284884,7 @@ body0:                                            ; preds = %entry
   ret %st112 %8
 }
 
-define %st109 @gm202_51738(ptr %0, i64 %1) {
+define %st109 @gm202_51829(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284852,7 +284903,7 @@ body0:                                            ; preds = %entry
   ret %st109 %8
 }
 
-define %st111 @gm202_51751(ptr %0, i64 %1) {
+define %st111 @gm202_51842(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284871,7 +284922,7 @@ body0:                                            ; preds = %entry
   ret %st111 %8
 }
 
-define %st68 @gm202_51763(ptr %0, i64 %1) {
+define %st68 @gm202_51854(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8
@@ -284890,7 +284941,7 @@ body0:                                            ; preds = %entry
   ret %st68 %8
 }
 
-define %st64 @gm202_51775(ptr %0, i64 %1) {
+define %st64 @gm202_51866(ptr %0, i64 %1) {
 entry:
   %2 = alloca ptr, align 8
   %3 = alloca i64, align 8

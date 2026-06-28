@@ -27,7 +27,7 @@ pub impl LlvmCtx {
                 ti += 1
             }
         }
-        if self.structRegSlot(c: inout c, start: start, len: len) < self.structIdxs.count() {
+        if self.structRegSlot(c: inout c, start: start, len: len) < self.genStructRefs.count() {
             return c.structIndexByName(start: start, len: len)
         }
         return c.arena.structs.count()

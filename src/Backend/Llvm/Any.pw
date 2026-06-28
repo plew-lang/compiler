@@ -43,10 +43,10 @@ pub impl LlvmCtx {
         }
         val sd: StructDef = c.arena.structs[sidx]
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-        if regSlot >= self.structIdxs.count() {
+        if regSlot >= self.genStructRefs.count() {
             return LLVMConstNull(self.ptrty)
         }
-        val concreteTy: LLVMTypeRef = self.structTys[regSlot]
+        val concreteTy: LLVMTypeRef = self.genStructTys[regSlot]
         // the erased thunk signature uses the requirement's types with the trait's type
         // parameters / associated types substituted by the existential's bindings
         // (`Rhs`/`Output`/`Item` -> the bound concrete), set as the active env so
@@ -127,10 +127,10 @@ pub impl LlvmCtx {
     inout fn buildAnyCopyThunk(c: inout Comp, sidx: U64) -> LLVMValueRef {
         val sd: StructDef = c.arena.structs[sidx]
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-        if regSlot >= self.structIdxs.count() {
+        if regSlot >= self.genStructRefs.count() {
             return LLVMConstNull(self.ptrty)
         }
-        val concreteTy: LLVMTypeRef = self.structTys[regSlot]
+        val concreteTy: LLVMTypeRef = self.genStructTys[regSlot]
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), 1U64, 0I32)
@@ -241,7 +241,7 @@ pub impl LlvmCtx {
     inout fn boxIntoAny(c: inout Comp, v: LLVMValueRef, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
         val sd: StructDef = c.arena.structs[sidx]
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-        val concreteTy: LLVMTypeRef = self.structTys[regSlot]
+        val concreteTy: LLVMTypeRef = self.genStructTys[regSlot]
         val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(concreteTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
         LLVMBuildStore(self.b, v, cell)
         val vt: LLVMValueRef = self.ensureAnyVtable(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx)

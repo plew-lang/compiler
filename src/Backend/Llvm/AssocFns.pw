@@ -204,7 +204,7 @@ pub impl LlvmCtx {
                 return false
             }
             if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.structIdxs.count() {
+            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.genStructRefs.count() {
                 return c.methodInEntryModule(f: f)
             }
             if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.genEnumRefs.count() {
@@ -219,7 +219,7 @@ pub impl LlvmCtx {
             // original source offsets, to recover the defining module — this keeps std
             // struct methods, full of not-yet-supported constructs, from being emitted.)
             if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.structIdxs.count() {
+            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.genStructRefs.count() {
                 if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.genEnumRefs.count() {
                     return false
                 }

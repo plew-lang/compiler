@@ -51,8 +51,8 @@ pub impl LlvmCtx {
             return 2U64
         }
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if sreg < self.structIdxs.count() {
-            val sd: StructDef = c.arena.structs[self.structIdxs[sreg]]
+        if sreg < self.genStructRefs.count() {
+            val sd: StructDef = c.arena.structs[self.genStructDefs[sreg]]
             mut val w: U64 = 0
             mut val i: U64 = 0
             while i < sd.fields.count() {

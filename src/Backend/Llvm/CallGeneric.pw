@@ -95,8 +95,8 @@ pub impl LlvmCtx {
             }
         }
         val reg: U64 = self.structRegSlot(c: inout c, start: c.arena.structs[sidx].nameStart, len: c.arena.structs[sidx].nameLen)
-        if reg < self.structIdxs.count() {
-            return self.structTys[reg]
+        if reg < self.genStructRefs.count() {
+            return self.genStructTys[reg]
         }
         return LLVMConstNull(self.ptrty)
     }
@@ -140,10 +140,10 @@ pub impl LlvmCtx {
                     if bsi < c.arena.structs.count() {
                         val sd: StructDef = c.arena.structs[bsi]
                         val reg: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-                        if reg < self.structIdxs.count() {
+                        if reg < self.genStructRefs.count() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
                             if fidx < c.arena.structs[bsi].fields.count() {
-                                return LLVMBuildStructGEP2(self.b, self.structTys[reg], basePtr, fidx, anon())
+                                return LLVMBuildStructGEP2(self.b, self.genStructTys[reg], basePtr, fidx, anon())
                             }
                         }
                     }

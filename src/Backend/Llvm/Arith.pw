@@ -111,9 +111,9 @@ pub impl LlvmCtx {
                     if et.nameLen > 0U64 {
                         if c.arena.bytes[et.nameStart] == 40U8 {
                             val rreg: U64 = self.structRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
-                            if rreg < self.structIdxs.count() {
+                            if rreg < self.genStructRefs.count() {
                                 self.expectedTy = 0U64
-                                return self.buildStructValue(c: inout c, sd: c.arena.structs[self.structIdxs[rreg]], sty: self.structTys[rreg], fields: fields, errOffset: et.nameStart)
+                                return self.buildStructValue(c: inout c, sd: c.arena.structs[self.genStructDefs[rreg]], sty: self.genStructTys[rreg], fields: fields, errOffset: et.nameStart)
                             }
                         }
                     }
@@ -186,11 +186,11 @@ pub impl LlvmCtx {
             rtLen = ntn.nameLen
         }
         val reg: U64 = self.structRegSlot(c: inout c, start: rtStart, len: rtLen)
-        if reg >= self.structIdxs.count() {
+        if reg >= self.genStructRefs.count() {
             compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        return self.buildStructValue(c: inout c, sd: c.arena.structs[self.structIdxs[reg]], sty: self.structTys[reg], fields: fields, errOffset: typeStart)
+        return self.buildStructValue(c: inout c, sd: c.arena.structs[self.genStructDefs[reg]], sty: self.genStructTys[reg], fields: fields, errOffset: typeStart)
     }
 
     // The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).

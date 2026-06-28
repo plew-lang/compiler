@@ -89,17 +89,20 @@ pub impl LlvmCtx {
         return self.dropWitSidx.count()
     }
 
-    // The registered struct-type slot (index into structIdxs/structTys) for struct `sidx`,
-    // or structIdxs.count() if `sidx` is not a registered struct.
-    inout fn structSlotForSidx(sidx: U64) -> U64 {
+    // The genStruct* slot for struct `sidx` — its 0-type-arg instance — or
+    // genStructRefs.count() if `sidx` is not a registered (non-generic) struct. The 0-arg
+    // filter keeps a generic def's sidx (which generic instances also point at) from matching.
+    inout fn structSlotForSidx(c: inout Comp, sidx: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.structIdxs.count() {
-            if self.structIdxs[i] == sidx {
-                return i
+        while i < self.genStructRefs.count() {
+            if self.genStructDefs[i] == sidx {
+                if c.arena.types[self.genStructRefs[i]].args.count() == 0U64 {
+                    return i
+                }
             }
             i += 1
         }
-        return self.structIdxs.count()
+        return self.genStructRefs.count()
     }
 
     // Ensure the per-type drop witness `void @pwdrop<sidx>(structVal)` is declared, and
@@ -110,9 +113,9 @@ pub impl LlvmCtx {
         if found < self.dropWitSidx.count() {
             return found
         }
-        val reg: U64 = self.structSlotForSidx(sidx: sidx)
+        val reg: U64 = self.structSlotForSidx(c: inout c, sidx: sidx)
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(self.structTys[reg])
+        ptys.append(self.genStructTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwdrop".bytes())
@@ -131,7 +134,7 @@ pub impl LlvmCtx {
     // ONCE per type instead of inlined at every drop site (collapsing the IR).
     inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64) {
         // registered struct: call its drop witness instead of inlining the walker.
-        if self.structSlotForSidx(sidx: sidx) < self.structIdxs.count() {
+        if self.structSlotForSidx(c: inout c, sidx: sidx) < self.genStructRefs.count() {
             val slot: U64 = self.structDropWitness(c: inout c, sidx: sidx)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)

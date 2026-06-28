@@ -224,8 +224,8 @@ pub impl LlvmCtx {
             return self.emitStrEqValues(c: inout c, a: a, b: b)
         }
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if sreg < self.structIdxs.count() {
-            return self.emitStructEq(c: inout c, a: a, b: b, sidx: self.structIdxs[sreg])
+        if sreg < self.genStructRefs.count() {
+            return self.emitStructEq(c: inout c, a: a, b: b, sidx: self.genStructDefs[sreg])
         }
         return LLVMBuildICmp(self.b, llvmIntEq(), a, b, anon())
     }
@@ -249,8 +249,8 @@ pub impl LlvmCtx {
     // are deferred (structOrdSupported gates them out).
     inout fn cmpFieldOrd(c: inout Comp, a: LLVMValueRef, b: LLVMValueRef, tyStart: U64, tyLen: U64) -> LLVMValueRef {
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
-        if sreg < self.structIdxs.count() {
-            return self.emitStructCmp(c: inout c, a: a, b: b, sidx: self.structIdxs[sreg])
+        if sreg < self.genStructRefs.count() {
+            return self.emitStructCmp(c: inout c, a: a, b: b, sidx: self.genStructDefs[sreg])
         }
         val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
         mut val gtPred: U32 = llvmIntSgt()
@@ -303,8 +303,8 @@ pub impl LlvmCtx {
                 return false
             }
             val sreg: U64 = self.structRegSlot(c: inout c, start: sd.fields[i].tyStart, len: sd.fields[i].tyLen)
-            if sreg < self.structIdxs.count() {
-                if !(self.structOrdSupported(c: inout c, sidx: self.structIdxs[sreg])) {
+            if sreg < self.genStructRefs.count() {
+                if !(self.structOrdSupported(c: inout c, sidx: self.genStructDefs[sreg])) {
                     return false
                 }
             }
@@ -390,7 +390,7 @@ pub impl LlvmCtx {
                 if fs[fj].tyIsArray { return false }
                 if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
                 if c.isEnumName(start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
-                if self.structRegSlot(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) < self.structIdxs.count() { return false }
+                if self.structRegSlot(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen) < self.genStructRefs.count() { return false }
                 fj += 1
             }
             vi += 1
@@ -431,8 +431,8 @@ pub impl LlvmCtx {
                 if rangeEquals(bytes: c.arena.bytes, start: fs[fj].tyStart, len: fs[fj].tyLen, kw: "String") { return false }
                 if c.isEnumName(start: fs[fj].tyStart, len: fs[fj].tyLen) { return false }
                 val sreg: U64 = self.structRegSlot(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
-                if sreg < self.structIdxs.count() {
-                    if !(self.structOrdSupported(c: inout c, sidx: self.structIdxs[sreg])) {
+                if sreg < self.genStructRefs.count() {
+                    if !(self.structOrdSupported(c: inout c, sidx: self.genStructDefs[sreg])) {
                         return false
                     }
                 }
