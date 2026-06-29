@@ -1,9 +1,12 @@
-// Part of the LLVM backend (root: _.pw): provided / free / generic function declaration and emission.
+// Part of the LLVM backend (root: _.pw): generic-fn instance emission + the `pf` lazy
+// declaration of methods that have no `gm` instance (primitive / lang-item receivers).
 
-// Lazily declare a (non-generic) provided trait method `fi` reached at a call site:
-// add its `pf<fi>` symbol with the self-first method signature and queue its body
-// for emission (provEmit). Returns the fnIdx slot, or st.fnIdx.count() if it can't be
-// emitted (generic / non-struct receiver). Idempotent (returns the existing slot).
+// Lazily declare a non-generic method `fi` reached at a call site whose receiver has no
+// `gm` 0-type-arg instance — i.e. a primitive lang-item (String / a fixed-width integer)
+// or other non-user-type receiver, the cases the gm dispatch path falls through to (B3-2).
+// Adds its `pf<fi>` symbol with the self-first method signature and queues its body for
+// emission (provEmit). Returns the fnIdx slot, or st.fnIdx.count() if it can't be emitted.
+// Idempotent (returns the existing slot).
 
 pub impl LlvmCtx {
     inout fn ensureProvidedDeclared(c: inout Comp, fi: U64) -> U64 {
