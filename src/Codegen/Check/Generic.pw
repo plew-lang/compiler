@@ -35,38 +35,60 @@ pub impl Comp {
         return false
     }
 
-    // Whether `start..len` in READ (value) position resolves to a value binding —
-    // `self`, a local/parameter/global (localIndexByName folds these), or a free-function
-    // name (a bare fn used as a closure value). A bare TYPE name is deliberately NOT a
-    // value: it is valid only as an assoc-fn receiver (`Type.fn()`), which verifyRecv /
-    // checkBoundsRecv accept directly — so a type name reaching a value position
-    // (`val x = SomeType`) is an undefined-identifier misuse, caught by the callers below.
-    inout fn identResolvesAsValue(start: U64, len: U64) -> Bool {
+    // The single name-resolution authority: classify the identifier `start..len` into its
+    // binding category (identValueCode / identFnCode / identTypeQualCode / identUndefCode).
+    // `self`, a local/parameter/global (localIndexByName folds these) = a VALUE; a bare
+    // free-function name = a closure VALUE but tracked as Fn (the backend lowers it to a
+    // {thunk, env} closure); a type / primitive / type-parameter of `tpFn` = a type
+    // QUALIFIER, valid only as an assoc-fn receiver (`Buffer.new()` / `T.make()`), never a
+    // value read; anything else = UNDEF. `tpFn >= funcs.count()` means no type parameters
+    // are in scope (a non-generic body — isTypeParamOf short-circuits to false). Kept as the
+    // one place that decides ident binding so the generic/non-generic split the unification
+    // erased is not silently reintroduced at the resolution layer (spec/04).
+    inout fn classifyIdent(start: U64, len: U64, tpFn: U64) -> I64 {
         if self.isSelfRef(start: start, len: len) {
-            return true
+            return identValueCode()
         }
         if self.localIndexByName(start: start, len: len) < self.cur.locals.count() {
-            return true
+            return identValueCode()
         }
-        return self.firstFuncByName(nameStart: start, nameLen: len) < self.arena.funcs.count()
-    }
-
-    // Whether `start..len` names a type / primitive / type-parameter of `tpFn` — i.e. a
-    // valid assoc-fn qualifier (`Buffer.new()` / `I64.fromBytes(…)` / `T.make()`), as
-    // opposed to a value. `tpFn >= funcs.count()` means no type parameters are in scope
-    // (a non-generic body — isTypeParamOf returns false for the sentinel). The single
-    // acceptance set shared by the reachability-independent undefined-identifier check
-    // that verifyExpr runs over non-generic bodies and checkBoundsExpr over entry-module
-    // generic bodies (spec/04) — kept in one place so the generic/non-generic split that
-    // the unification erased is not silently reintroduced at the resolution layer.
-    inout fn identIsTypeQualifier(start: U64, len: U64, tpFn: U64) -> Bool {
+        if self.firstFuncByName(nameStart: start, nameLen: len) < self.arena.funcs.count() {
+            return identFnCode()
+        }
         if self.isTypeName(start: start, len: len) {
-            return true
+            return identTypeQualCode()
         }
         if self.isPrimType(start: start, len: len) {
-            return true
+            return identTypeQualCode()
         }
-        return self.isTypeParamOf(fnIdx: tpFn, start: start, len: len)
+        if self.isTypeParamOf(fnIdx: tpFn, start: start, len: len) {
+            return identTypeQualCode()
+        }
+        return identUndefCode()
+    }
+
+    // Classify `id` (an Ident expr) and RECORD the binding in typeCache.identBind so the
+    // backend reads the decision instead of re-deriving it by name. Returns the code.
+    // Called from the verify/check Ident walk, where c.cur.locals is valid (the backend
+    // never fills locals, so it only reads this record). A node past the table (synthesized
+    // after buildExprTyTable) is classified but not cached.
+    inout fn recordIdent(id: U64, start: U64, len: U64, tpFn: U64) -> I64 {
+        val code: I64 = self.classifyIdent(start: start, len: len, tpFn: tpFn)
+        if id < self.typeCache.identBind.count() {
+            self.typeCache.identBind.set(i: id, value: code)
+        }
+        return code
+    }
+
+    // A VALUE-position read accepts a value or a free-fn closure value, not a type
+    // qualifier (`val x = SomeType` is a misuse) nor an unresolved name.
+    inout fn identResolvesAsValue(start: U64, len: U64) -> Bool {
+        val code: I64 = self.classifyIdent(start: start, len: len, tpFn: self.arena.funcs.count())
+        return code == identValueCode() || code == identFnCode()
+    }
+
+    inout fn identIsTypeQualifier(start: U64, len: U64, tpFn: U64) -> Bool {
+        return self.classifyIdent(start: start, len: len, tpFn: tpFn) == identTypeQualCode()
     }
 
     inout fn traitProvidesMember(traitNameId: U64, qName: U64, args: Array[Arg], depth: U64) -> Bool {
@@ -411,7 +433,8 @@ pub impl Comp {
                 // so it is an undefined-identifier misuse (`val x = SomeType`).
                 if self.cur.checkFn < self.arena.funcs.count() {
                     if self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn]) {
-                        if !(self.identResolvesAsValue(start: start, len: len)) {
+                        val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
+                        if bindCode != identValueCode() && bindCode != identFnCode() {
                             compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
                         }
                     }

@@ -14,6 +14,7 @@ pub impl Comp {
             self.typeCache.ref.append(0)
             self.typeCache.intCtx.append(0)
             self.typeCache.callee.append(calleeUnfilled())
+            self.typeCache.identBind.append(identUnfilledCode())
             i += 1
         }
     }

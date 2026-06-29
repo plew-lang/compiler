@@ -871,6 +871,16 @@ export struct TypeCache {
     // hold `funcs.count()` ("resolves to no declared function" — a call through a fn
     // value/local), which is itself stable, so it is cached too.
     pub mut val callee: Array[U64] = []
+    // resolved binding category per Ident-expr id, recorded by the name-resolution pass
+    // (the verify/check Ident walk, where c.cur.locals is valid). PERSISTENT (like callee:
+    // which entity a name binds to is lexical, not instantiation-dependent). Codes —
+    // identUnfilledCode 0 / identValueCode 1 (self·local·param·global) / identFnCode 2
+    // (a bare free-function used as a closure value) / identTypeQualCode 3 (a type /
+    // primitive / type-parameter, valid only as an assoc-fn receiver) / identUndefCode 4
+    // (unresolved). The single record every pass reads instead of re-deriving the binding
+    // by name; the backend reads it to drive the local-vs-fn branch (its own findLocal is
+    // only the SSA-pointer mechanism). Unfilled for std / synthesized nodes.
+    pub mut val identBind: Array[I64] = []
 }
 pub impl TypeCache { factory }
 
@@ -981,6 +991,16 @@ pub impl NewtypeDef { factory }
 // Append every byte of `from` onto `into`. A generic byte-buffer primitive used
 // across the whole compiler (path building, LLVM string emission, …), so it lives
 // in the shared IR leaf rather than any one pass.
+// Resolved-binding category codes for `typeCache.identBind` (see TypeCache). 0 marks an
+// unrecorded slot; 1..4 are the categories the name-resolution pass assigns to an Ident.
+// Defined here (the shared IR vocabulary) so both Frontend (the resolver that fills them)
+// and Backend (which reads them) can name the codes.
+export fn identUnfilledCode() -> I64 { return 0I64 }
+export fn identValueCode() -> I64 { return 1I64 }
+export fn identFnCode() -> I64 { return 2I64 }
+export fn identTypeQualCode() -> I64 { return 3I64 }
+export fn identUndefCode() -> I64 { return 4I64 }
+
 export fn appendBytes(into: inout Array[U8], from: Array[U8]) {
     mut val i: U64 = 0
     while i < from.count() {

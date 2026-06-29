@@ -44,9 +44,19 @@ pub impl LlvmCtx {
                 return LLVMConstRealOfStringAndSize(self.f64ty, floatTextCPtr(c: inout c, start: start, len: len), len)
             }
             Expr.Ident(val start, val len) => {
-                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if li < self.nLocals {
-                    return LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                // the binding category recorded by the name-resolution pass (entry-module
+                // bodies); unfilled for std / synthesized nodes. A recorded Fn is definitely
+                // not a local, so skip the local scan and go straight to the closure value;
+                // value/unfilled take the local scan first (its own SSA-pointer mechanism).
+                mut val bindCode: I64 = identUnfilledCode()
+                if id < c.typeCache.identBind.count() {
+                    bindCode = c.typeCache.identBind[id]
+                }
+                if bindCode != identFnCode() {
+                    val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+                    if li < self.nLocals {
+                        return LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                    }
                 }
                 // a bare reference to a free function (`val g = twice`): the closure
                 // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
