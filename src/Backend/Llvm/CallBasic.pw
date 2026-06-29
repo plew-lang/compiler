@@ -469,10 +469,10 @@ pub impl LlvmCtx {
                     return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
                 }
                 // ensureFnInst declined: an `async fn` whose promise-returning entry is
-                // declared by declareAsyncFns into the `pf` tables (async entries are the last
-                // pf user — B4). Resolve its `pf` symbol.
-                val pslot: U64 = self.userFnSlot(idx: cfi)
-                if pslot < self.fnIdx.count() {
+                // declared by declareAsyncFns into the dedicated async-entry table (split off
+                // pf — pf now holds only provided/lang-item method declarations). Resolve it.
+                val pslot: U64 = self.asyncEntrySlot(fi: cfi)
+                if pslot < self.asyncEntryIdx.count() {
                     val cf: Func = c.arena.funcs[cfi]
                     mut val pav: Array[LLVMValueRef] = []
                     mut val pai: U64 = 0
@@ -485,7 +485,7 @@ pub impl LlvmCtx {
                         pav.append(self.genArgValue(c: inout c, argExpr: cf.params[pdi].defaultExpr, p: cf.params[pdi]))
                         pdi += 1
                     }
-                    return LLVMBuildCall2(self.b, self.fnTy[pslot], self.fnVal[pslot], arrayCPtr(pav), pav.count(), anon())
+                    return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
                 }
             }
         }

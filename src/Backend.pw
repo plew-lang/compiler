@@ -109,11 +109,11 @@ struct LlvmCtx {
     // The `pf<idx>` symbol table (parallel arrays keyed by c.arena.funcs index): the
     // lazily-declared functions that are NOT ordinary user fns/methods/assoc — those are
     // their own gf/gm 0-type-arg instances now (B3/B4). After the unification, `pf` holds
-    // only two genuinely-distinct symbol kinds: (1) async-fn entry symbols (declareAsyncFns
-    // — state machines, not a generic instance of anything), and (2) provided / lang-item /
-    // non-entry-std METHODS whose receiver has no user-type instance to key a `gm` on
-    // (ensureProvidedDeclared — primitives, trait receivers). It is no longer the
-    // "non-generic vs generic" seam, just an on-demand declaration cache for these.
+    // only provided / lang-item / non-entry-std METHODS whose receiver has no user-type
+    // instance to key a `gm` on (ensureProvidedDeclared — primitives, trait receivers).
+    // It is no longer the "non-generic vs generic" seam, just an on-demand declaration
+    // cache for non-instantiated method bodies. (Async-fn ENTRY symbols, the other former
+    // pf user, now live in their own asyncEntry* table.)
     pub mut val fnIdx: Array[U64]
     pub mut val fnVal: Array[LLVMValueRef]
     pub mut val fnTy: Array[LLVMTypeRef]
@@ -298,6 +298,14 @@ struct LlvmCtx {
     pub mut val asyncFnIdx: Array[U64]
     pub mut val asyncFrameTy: Array[LLVMTypeRef]
     pub mut val asyncResumeFn: Array[LLVMValueRef]
+    // the promise-returning ENTRY symbol of each non-main async fn (`async fn doubler`
+    // -> `pf<fi>`), its own small symbol table keyed by funcs index — kept SEPARATE from
+    // the `pf` fnIdx/fnVal/fnTy tables (which now hold only provided/lang-item method
+    // lazy declarations) so an async state-machine entry is no longer conflated with a
+    // method symbol. `main` keeps the C `i32 main()` shape and has no entry here.
+    pub mut val asyncEntryIdx: Array[U64]
+    pub mut val asyncEntryVal: Array[LLVMValueRef]
+    pub mut val asyncEntryTy: Array[LLVMTypeRef]
     // the current resume fn's per-field frame-slot GEPs, ALL built in the resume
     // entry block (which dominates every resume block reached via the dispatch
     // switch) — caching them there avoids "instruction does not dominate all uses"
@@ -842,7 +850,7 @@ export fn emitLlvm(c: inout Comp) {
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
         curAsyncSwitch=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)
-        curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
+        curAsyncState=0 asyncFieldNext=0 asyncFnIdx=[] asyncFrameTy=[] asyncResumeFn=[] asyncEntryIdx=[] asyncEntryVal=[] asyncEntryTy=[] asyncSlotPtrs=[] loopBreakBB=[] loopContBB=[] loopUnwindMark=[] loopDepth=0 />
 
     // a "self" byte span (appended past the source) to bind method receivers.
     st.selfStart = c.arena.bytes.count()

@@ -197,9 +197,9 @@ pub impl LlvmCtx {
                     appendU64Dec(into: inout enm, n: fi)
                     enm.append(0)
                     val entryFn: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(enm), fty)
-                    self.fnIdx.append(fi)
-                    self.fnVal.append(entryFn)
-                    self.fnTy.append(fty)
+                    self.asyncEntryIdx.append(fi)
+                    self.asyncEntryVal.append(entryFn)
+                    self.asyncEntryTy.append(fty)
                 }
             }
             fi += 1
@@ -216,6 +216,19 @@ pub impl LlvmCtx {
             i += 1
         }
         return self.asyncFnIdx.count()
+    }
+
+    // The async-entry-symbol slot for `fi` (its promise-returning entry fn), or
+    // asyncEntryIdx.count() if absent (`main` and non-async fns have none).
+    inout fn asyncEntrySlot(fi: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.asyncEntryIdx.count() {
+            if self.asyncEntryIdx[i] == fi {
+                return i
+            }
+            i += 1
+        }
+        return self.asyncEntryIdx.count()
     }
 
     // A pointer to async frame field `idx`: the cached GEP built in the resume entry
@@ -404,7 +417,7 @@ pub impl LlvmCtx {
             val mainTy: LLVMTypeRef = LLVMFunctionType(self.i32ty, arrayCPtr(noParams), 0U64, 0I32)
             entryFn = LLVMAddFunction(self.mod, cstr(s: "main"), mainTy)
         } else {
-            entryFn = self.fnVal[self.userFnSlot(idx: fi)]
+            entryFn = self.asyncEntryVal[self.asyncEntrySlot(fi: fi)]
         }
         self.curFn = entryFn
         val entryBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, entryFn, cstr(s: "entry"))
