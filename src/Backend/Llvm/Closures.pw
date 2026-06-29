@@ -222,7 +222,7 @@ pub impl LlvmCtx {
                     }
                 }
             }
-            if c.nameIsMain(f: f) || self.isPlainUserFn(c: inout c, fi: fi) || isFreeFn {
+            if c.nameIsMain(f: f) || isFreeFn {
                 self.scanBlockClosures(c: inout c, id: c.arena.funcs[fi].body)
             }
             fi += 1

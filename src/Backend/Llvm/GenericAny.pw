@@ -309,8 +309,8 @@ pub impl LlvmCtx {
     }
 
     // Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
-    // unary: just lhs). The witness must be emitted (collectReachableAssoc seeds all
-    // operator witnesses); a missing slot is a loud not-yet-emittable error.
+    // unary: just lhs). The witness is its own 0-type-arg `gf` instance, declared lazily
+    // here on first reach (ensureFnInst); a missing slot is a loud not-yet-emittable error.
     inout fn emitWitnessCall(c: inout Comp, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
         val af: Func = c.arena.funcs[fi]
         mut val av: Array[LLVMValueRef] = []

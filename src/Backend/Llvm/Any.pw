@@ -358,11 +358,6 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count(), anon())
     }
 
-    inout fn genLlvmFunc(c: inout Comp, fi: U64) {
-        val slot: U64 = self.userFnSlot(idx: fi)
-        self.genLlvmFuncBody(c: inout c, fi: fi, fv: self.fnVal[slot])
-    }
-
     // Emit function `fi`'s body into the LLVM function value `fv` (under the active
     // substitution env, if any — used for both plain functions and generic instances).
     inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef) {
