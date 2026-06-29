@@ -74,12 +74,24 @@ pub impl Comp {
     // after buildExprTyTable) is classified but not cached.
     inout fn recordIdent(id: U64, start: U64, len: U64, tpFn: U64) -> I64 {
         val code: I64 = self.classifyIdent(start: start, len: len, tpFn: tpFn)
-        // for a free-function value, record the resolved callee so the backend reads the
-        // decision instead of re-running firstFuncByName; a local's SSA slot stays the
-        // backend's own findLocal mechanism (no target recorded).
+        // identTarget records the resolver's DECISION so the backend locates it instead of
+        // independently re-resolving the name: for a free-function value, the resolved callee
+        // (skip firstFuncByName); for a local/param value, the DECLARATION's source offset
+        // (locals[li].nameStart) — a unique per-declaration key the backend matches against
+        // its locStart, so it finds exactly the declaration the resolver chose (not "the
+        // innermost same-named local"), with a name scan as a safe fallback. `self` and a
+        // global (no matching c.cur.locals decl offset for the latter in the backend's local
+        // table) record no target and keep the backend's name scan.
         mut val target: U64 = identNoTarget()
         if code == identFnCode() {
             target = self.firstFuncByName(nameStart: start, nameLen: len)
+        } else if code == identValueCode() {
+            if !(self.isSelfRef(start: start, len: len)) {
+                val li: U64 = self.localIndexByName(start: start, len: len)
+                if li < self.cur.locals.count() {
+                    target = self.cur.locals[li].nameStart
+                }
+            }
         }
         if id < self.typeCache.identBind.count() {
             self.typeCache.identBind.set(i: id, value: code)

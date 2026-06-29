@@ -411,4 +411,21 @@ pub impl LlvmCtx {
         }
         return self.nLocals
     }
+
+    // Locate the local whose DECLARATION source offset is `declStart` — the resolver-decided
+    // binding (recordIdent records this unique per-declaration key in typeCache.identTarget).
+    // The local's locStart IS its declaration's nameStart (pushLocal stores it), so this
+    // resolves to exactly the declaration the name-resolution pass chose, independent of
+    // shadowing by same-named locals. Reverse scan (innermost first), matching findLocal.
+    // Returns nLocals if absent (e.g. a global not in this frame) — the caller falls back.
+    inout fn findLocalByDeclStart(declStart: U64) -> U64 {
+        mut val i: U64 = self.nLocals
+        while i > 0 {
+            i -= 1
+            if self.locStart[i] == declStart {
+                return i
+            }
+        }
+        return self.nLocals
+    }
 }

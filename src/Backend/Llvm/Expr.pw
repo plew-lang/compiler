@@ -55,7 +55,16 @@ pub impl LlvmCtx {
                     fnTarget = c.typeCache.identTarget[id]
                 }
                 if bindCode != identFnCode() {
-                    val li: U64 = self.findLocal(c: inout c, start: start, len: len)
+                    // a recorded local/param: locate the resolver-decided DECLARATION by its
+                    // unique offset (not "innermost same-named local"); fall back to the name
+                    // scan for self / globals / unrecorded (std / synthesized) nodes.
+                    mut val li: U64 = self.nLocals
+                    if bindCode == identValueCode() && fnTarget != identNoTarget() {
+                        li = self.findLocalByDeclStart(declStart: fnTarget)
+                    }
+                    if li >= self.nLocals {
+                        li = self.findLocal(c: inout c, start: start, len: len)
+                    }
                     if li < self.nLocals {
                         return LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
                     }
