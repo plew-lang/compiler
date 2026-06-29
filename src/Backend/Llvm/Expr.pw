@@ -49,8 +49,10 @@ pub impl LlvmCtx {
                 // not a local, so skip the local scan and go straight to the closure value;
                 // value/unfilled take the local scan first (its own SSA-pointer mechanism).
                 mut val bindCode: I64 = identUnfilledCode()
+                mut val fnTarget: U64 = identNoTarget()
                 if id < c.typeCache.identBind.count() {
                     bindCode = c.typeCache.identBind[id]
+                    fnTarget = c.typeCache.identTarget[id]
                 }
                 if bindCode != identFnCode() {
                     val li: U64 = self.findLocal(c: inout c, start: start, len: len)
@@ -60,7 +62,12 @@ pub impl LlvmCtx {
                 }
                 // a bare reference to a free function (`val g = twice`): the closure
                 // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
-                val fvi: U64 = c.firstFuncByName(nameStart: start, nameLen: len)
+                // Prefer the resolver-recorded callee; fall back to firstFuncByName for an
+                // unrecorded (std / synthesized) node.
+                mut val fvi: U64 = fnTarget
+                if fvi == identNoTarget() {
+                    fvi = c.firstFuncByName(nameStart: start, nameLen: len)
+                }
                 if fvi < c.arena.funcs.count() {
                     val ts: U64 = self.thunkSlot(fi: fvi)
                     if ts < self.thunkIdx.count() {

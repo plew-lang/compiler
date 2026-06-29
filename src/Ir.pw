@@ -881,6 +881,11 @@ export struct TypeCache {
     // by name; the backend reads it to drive the local-vs-fn branch (its own findLocal is
     // only the SSA-pointer mechanism). Unfilled for std / synthesized nodes.
     pub mut val identBind: Array[I64] = []
+    // resolved TARGET per Ident-expr id, paired with identBind: for identFnCode, the
+    // resolved free-function index (firstFuncByName result) so the backend reads the decided
+    // callee instead of re-deriving it; identNoTarget otherwise (a local's SSA slot stays the
+    // backend's own findLocal mechanism). PERSISTENT, like callee/identBind.
+    pub mut val identTarget: Array[U64] = []
 }
 pub impl TypeCache { factory }
 
@@ -996,6 +1001,8 @@ pub impl NewtypeDef { factory }
 // Defined here (the shared IR vocabulary) so both Frontend (the resolver that fills them)
 // and Backend (which reads them) can name the codes.
 export fn identUnfilledCode() -> I64 { return 0I64 }
+// Sentinel `typeCache.identTarget` value marking "no resolved target recorded".
+export fn identNoTarget() -> U64 { return 18446744073709551615U64 }
 export fn identValueCode() -> I64 { return 1I64 }
 export fn identFnCode() -> I64 { return 2I64 }
 export fn identTypeQualCode() -> I64 { return 3I64 }
