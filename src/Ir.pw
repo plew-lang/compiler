@@ -970,6 +970,7 @@ pub impl TypeRef { factory }
 pub impl CaptureEntry { factory }
 pub impl Local { factory }
 pub impl TypeInfo { factory }
+pub impl ResolvedExpr { factory }
 pub impl MakeField { factory }
 pub impl Bind { factory }
 pub impl Arg { factory }

@@ -9,15 +9,16 @@ pub impl Comp {
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
-            // acceptance soundness is about the USER's code: verify only entry-module
-            // (module 0) bodies. The auto-loaded prelude / std (`@Std/*`) is trusted and
-            // validated separately (test suite + self-compile); walking it here falsely
-            // rejected a no-import program because a prelude body's operator witness
-            // (`Add[U64]` in SipHasher) lives in Core, loaded only on import.
-            if !(f.isExtern || self.methodInEntryModule(f: f)) {
-                fi += 1
-                continue
-            }
+            // Verify EVERY module's bodies, not just the entry module: a Plew program's
+            // acceptance rules apply uniformly to imported code too (std, the compiler's
+            // own import submodules, future package deps) — "develops as spoken" reaches
+            // across the import boundary, and verifying the compiler's own source (the
+            // largest Plew program) is the deepest dogfood of the language. Cost is ~5% on
+            // a self-compile and noise on an ordinary program (measured). The former
+            // entry-module-only gate is gone; its false-reject rationale (a prelude
+            // operator witness `Add[U64]` in SipHasher said to be loaded only on import) is
+            // moot — Core is force-loaded WITH its witnesses (see Frontend force-load), so a
+            // no-import program resolves them fine. extern fns have no body to verify.
             if !(f.isExtern) {
                 if f.typeParams.count() > 0U64 {
                     // a generic template: its concrete instances are checked during the
