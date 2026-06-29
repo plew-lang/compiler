@@ -194,32 +194,13 @@ pub impl LlvmCtx {
         // reachability is the gate, not module membership.
         if f.isProvided { return false }
         if f.typeParams.count() > 0 { return false }
-        if f.isAssoc {
-            // an associated function (`Type.name(args)`, no self) is emitted like a
-            // free function, gated to a registered owner type in the entry module AND
-            // actually reached (called) — so derive-generated but uncalled witnesses
-            // (Eq/Ord lowered natively here) aren't emitted into failing bodies.
-            // Trait assoc fns and generic ones are deferred.
-            if !(self.inReachAssoc(fi: fi)) {
-                return false
-            }
-            if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.genStructRefs.count() {
-                return c.methodInEntryModule(f: f)
-            }
-            if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.genEnumRefs.count() {
-                return c.methodInEntryModule(f: f)
-            }
-            return false
-        }
-        // a method (hasRecv) is no longer eagerly emitted as `pf`: it is its receiver
-        // type's 0-type-arg `gm` instance, declared lazily on first dispatch via
-        // ensureGenMethodDeclared (B3-2). Reachability-driven, so an uncalled method emits
-        // no dead body, and there is no pf/gm double-emit of the same body.
-        if f.hasRecv { return false }
-        // a free function is no longer declared/emitted as `pf`: it is its own 0-type-arg
-        // `gf` instance, declared lazily on first reach via ensureFnInst (B3-1). Reachability-
-        // driven, so an uncalled free fn emits no dead body.
+        // Nothing is eagerly emitted as `pf` any more (B3/B4 unification): every user
+        // function is its own 0-type-arg generic instance, declared lazily on first reach.
+        //   - free fns  -> `gf` via ensureFnInst (B3-1)
+        //   - methods   -> `gm` via ensureGenMethodDeclared (B3-2)
+        //   - assoc fns -> `gf` via ensureFnInst (B4-1; an assoc fn has no self, so it rides
+        //                  the free-fn instance path — its owner type is just a namespace).
+        // Reachability-driven, so an uncalled function emits no dead body.
         return false
     }
 
