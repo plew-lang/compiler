@@ -106,9 +106,14 @@ struct LlvmCtx {
     // incl. self), so scope-exit deinit drops skip params (borrows/inout self that
     // the caller still owns and will deinit).
     pub mut val curBodyMark: U64
-    // declared user functions, cached by c.arena.funcs index (parallel arrays), so a call
-    // resolves to the same LLVMValueRef without name mangling (the symbol name is a
-    // synthetic unique `pf<idx>`; only `main`/runtime symbols have meaningful names).
+    // The `pf<idx>` symbol table (parallel arrays keyed by c.arena.funcs index): the
+    // lazily-declared functions that are NOT ordinary user fns/methods/assoc — those are
+    // their own gf/gm 0-type-arg instances now (B3/B4). After the unification, `pf` holds
+    // only two genuinely-distinct symbol kinds: (1) async-fn entry symbols (declareAsyncFns
+    // — state machines, not a generic instance of anything), and (2) provided / lang-item /
+    // non-entry-std METHODS whose receiver has no user-type instance to key a `gm` on
+    // (ensureProvidedDeclared — primitives, trait receivers). It is no longer the
+    // "non-generic vs generic" seam, just an on-demand declaration cache for these.
     pub mut val fnIdx: Array[U64]
     pub mut val fnVal: Array[LLVMValueRef]
     pub mut val fnTy: Array[LLVMTypeRef]

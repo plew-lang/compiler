@@ -348,19 +348,11 @@ pub impl LlvmCtx {
                     if ffi < c.arena.funcs.count() {
                         mut val cav: Array[LLVMValueRef] = []
                         cav.append(errVal)
-                        // the error-conversion factory is a pure free fn (its 0-type-arg `gf`
-                        // instance) or an assoc fn (`pf`): resolve through whichever applies.
+                        // the error-conversion factory (free fn or assoc fn — no self) is its
+                        // own 0-type-arg `gf` instance (B4-1).
                         val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [])
                         if fgslot < self.genFnK.count() {
                             convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
-                        } else {
-                            mut val fslot: U64 = self.userFnSlot(idx: ffi)
-                            if fslot >= self.fnIdx.count() {
-                                fslot = self.ensureFreeFnDeclared(c: inout c, fi: ffi)
-                            }
-                            if fslot < self.fnIdx.count() {
-                                convErrVal = LLVMBuildCall2(self.b, self.fnTy[fslot], self.fnVal[fslot], arrayCPtr(cav), cav.count(), anon())
-                            }
                         }
                     }
                 }

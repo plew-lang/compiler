@@ -83,20 +83,12 @@ pub impl LlvmCtx {
             av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
             ai += 1
         }
-        // the `pow` conformance fn is a pure free fn (its 0-type-arg `gf` instance) or an assoc
-        // fn (still on `pf`): resolve through whichever applies.
+        // the `pow` conformance fn (free or assoc) is its own 0-type-arg `gf` instance.
         val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [])
         if gslot < self.genFnK.count() {
             return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av), av.count(), anon())
         }
-        mut val aslot: U64 = self.userFnSlot(idx: afi)
-        if aslot >= self.fnIdx.count() {
-            aslot = self.ensureFreeFnDeclared(c: inout c, fi: afi)
-        }
-        if aslot >= self.fnIdx.count() {
-            return LLVMConstNull(self.ptrty)
-        }
-        return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count(), anon())
+        return LLVMConstNull(self.ptrty)
     }
 
     inout fn genLlvmCall(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
@@ -476,14 +468,10 @@ pub impl LlvmCtx {
                     c.cur.typeArgs = savedA
                     return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
                 }
-                // ensureFnInst declined (an assoc fn `pow(base:,exp:)` reached here, or an
-                // `async fn` whose promise-returning entry is declared by declareAsyncFns):
-                // resolve its `pf` symbol, declaring an assoc fn lazily if needed. (Assoc fns
-                // and async entries still ride `pf` until methods are unified in B3-2.)
-                mut val pslot: U64 = self.userFnSlot(idx: cfi)
-                if pslot >= self.fnIdx.count() {
-                    pslot = self.ensureFreeFnDeclared(c: inout c, fi: cfi)
-                }
+                // ensureFnInst declined: an `async fn` whose promise-returning entry is
+                // declared by declareAsyncFns into the `pf` tables (async entries are the last
+                // pf user — B4). Resolve its `pf` symbol.
+                val pslot: U64 = self.userFnSlot(idx: cfi)
                 if pslot < self.fnIdx.count() {
                     val cf: Func = c.arena.funcs[cfi]
                     mut val pav: Array[LLVMValueRef] = []
