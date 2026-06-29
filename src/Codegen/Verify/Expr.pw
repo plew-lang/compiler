@@ -248,7 +248,9 @@ pub impl Comp {
                 self.verifyExpr(id: base)
                 // `r->field` is `Ref`-only too: a `WeakRef` field read/write must go through
                 // `upgrade()` (spec/03). Same pointed diagnostic as the `->method()` case.
-                val abt: TypeInfo = self.exprType(id: base)
+                // (typeOf, not exprType: cached; only `.ref` is read here and an int context's
+                // ref is 0 like a scalar's, so the isRefInst branches are unaffected.)
+                val abt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefInst(ref: abt.ref) {
                     compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
                 } else if self.isRefInst(ref: abt.ref) {
@@ -268,7 +270,8 @@ pub impl Comp {
                 // direct deref — its referent may be dead — so it must be `upgrade()`d to an
                 // `Optional[Ref[T]]` first. Reject `w->…` with a pointed message rather than the
                 // opaque backend "not a registered struct" error.
-                val bt: TypeInfo = self.exprType(id: base)
+                // (typeOf: cached; only `.ref` read — int context ref is 0, branches unaffected.)
+                val bt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefInst(ref: bt.ref) {
                     compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
                 } else if !(self.isRefInst(ref: bt.ref)) {

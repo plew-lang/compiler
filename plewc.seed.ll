@@ -126416,7 +126416,7 @@ arm76:                                            ; preds = %match.next50
   %454 = load i64, ptr %42, align 4
   call void @gm1085_42265(ptr %0, i64 %454)
   %455 = load i64, ptr %42, align 4
-  %456 = call %st74 @gm1008_42265(ptr %0, i64 %455)
+  %456 = call %st74 @gm1005_42265(ptr %0, i64 %455)
   store %st74 %456, ptr %45, align 4
   %457 = load %st74, ptr %45, align 4
   %458 = extractvalue %st74 %457, 0
@@ -126463,7 +126463,7 @@ arm82:                                            ; preds = %match.next77
   %477 = load i64, ptr %47, align 4
   call void @gm1085_42265(ptr %0, i64 %477)
   %478 = load i64, ptr %46, align 4
-  %479 = call %st74 @gm1008_42265(ptr %0, i64 %478)
+  %479 = call %st74 @gm1005_42265(ptr %0, i64 %478)
   store %st74 %479, ptr %48, align 4
   %480 = load %st74, ptr %48, align 4
   %481 = extractvalue %st74 %480, 0
@@ -175365,7 +175365,7 @@ arm101:                                           ; preds = %match.next97
   %785 = load i64, ptr %79, align 4
   call void @gm1226_42265(ptr %0, i64 %785)
   %786 = load i64, ptr %79, align 4
-  %787 = call %st74 @gm1008_42265(ptr %0, i64 %786)
+  %787 = call %st74 @gm1005_42265(ptr %0, i64 %786)
   store %st74 %787, ptr %82, align 4
   %788 = load %st74, ptr %82, align 4
   %789 = extractvalue %st74 %788, 3
@@ -175440,7 +175440,7 @@ arm110:                                           ; preds = %match.next102
   %824 = load i64, ptr %85, align 4
   call void @gm1226_42265(ptr %0, i64 %824)
   %825 = load i64, ptr %85, align 4
-  %826 = call %st74 @gm1008_42265(ptr %0, i64 %825)
+  %826 = call %st74 @gm1005_42265(ptr %0, i64 %825)
   store %st74 %826, ptr %86, align 4
   %827 = load %st74, ptr %86, align 4
   %828 = extractvalue %st74 %827, 3
@@ -176388,7 +176388,7 @@ arm11:                                            ; preds = %match.next8
   %97 = extractvalue { i64, i64, i64 } %94, 2
   store i64 %97, ptr %18, align 4
   %98 = load i64, ptr %16, align 4
-  %99 = call %st74 @gm1008_42265(ptr %0, i64 %98)
+  %99 = call %st74 @gm1005_42265(ptr %0, i64 %98)
   store %st74 %99, ptr %19, align 4
   %100 = load %st74, ptr %19, align 4
   %101 = extractvalue %st74 %100, 3
@@ -198909,7 +198909,7 @@ arm25:                                            ; preds = %match.next
   %141 = extractvalue { i64, i64, i64 } %138, 2
   store i64 %141, ptr %12, align 4
   %142 = load i64, ptr %10, align 4
-  %143 = call %st74 @gm1008_42265(ptr %0, i64 %142)
+  %143 = call %st74 @gm1005_42265(ptr %0, i64 %142)
   store %st74 %143, ptr %13, align 4
   %144 = load %st74, ptr %13, align 4
   %145 = extractvalue %st74 %144, 0
@@ -199453,7 +199453,7 @@ arm107:                                           ; preds = %match.next87
   %383 = extractvalue { i64, i64, i64 } %380, 2
   store i64 %383, ptr %26, align 4
   %384 = load i64, ptr %24, align 4
-  %385 = call %st74 @gm1008_42265(ptr %0, i64 %384)
+  %385 = call %st74 @gm1005_42265(ptr %0, i64 %384)
   store %st74 %385, ptr %27, align 4
   %386 = load %st74, ptr %27, align 4
   %387 = extractvalue %st74 %386, 3

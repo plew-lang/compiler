@@ -372,7 +372,7 @@ pub impl Comp {
                 // a field access on a type-parameter value is invalid: `T` is opaque and
                 // traits declare methods, not fields, so a bound cannot grant a field
                 // (spec/06). `.count()`/`.bytes()` etself. on a `T` value have no meaning.
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = self.typeOf(id: base)
                 if bt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: bt.nameStart, len: bt.nameLen) {
                         compileErrorAt(line: self.lineOf(offset: nameStart), msg: "field access on a type parameter: `T` is opaque (traits declare methods, not fields) — no bound can provide a field (spec/06)")
@@ -384,7 +384,7 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: index)
                 // `x[i]` on a type-parameter value needs `where T: Index` (spec/12: the
                 // subscript desugars to the Index trait).
-                val ibt: TypeInfo = self.exprType(id: base)
+                val ibt: TypeInfo = self.typeOf(id: base)
                 if ibt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ibt.nameStart, len: ibt.nameLen) {
                         if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: ibt.nameStart, tpLen: ibt.nameLen, traitName: "Index")) {

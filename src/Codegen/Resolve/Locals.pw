@@ -368,7 +368,7 @@ pub impl Comp {
                 return self.localIsMutable(start: start, len: len)
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = self.typeOf(id: base)
                 if bt.kind == 2 {
                     if self.fieldDeclaredMut(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) {
                         return self.placeIsMutable(id: base)
@@ -386,7 +386,7 @@ pub impl Comp {
                 // NOT the pointee field's own mutability. A `val` field stays immutable even
                 // through a Ref, or value-semantics' val-immutability would leak away for any
                 // Ref-shared type.
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = self.typeOf(id: base)
                 if self.isRefInst(ref: bt.ref) {
                     val inst: TypeRef = self.arena.types[bt.ref]
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])

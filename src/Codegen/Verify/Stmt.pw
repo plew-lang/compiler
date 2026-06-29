@@ -324,7 +324,7 @@ pub impl Comp {
                 // deref (its referent may be gone — spec/03), and `->` must obey the pointee
                 // type's field WRITE visibility just like `.` (spec/05) rather than slipping
                 // past it into the opaque backend "not a registered struct" error.
-                val abt: TypeInfo = self.exprType(id: base)
+                val abt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefInst(ref: abt.ref) {
                     compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
                 } else if self.isRefInst(ref: abt.ref) {
