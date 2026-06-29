@@ -1,0 +1,5 @@
+import @Std/Io with { print }
+// An UNCALLED free function with an undefined identifier must still be rejected:
+// name resolution is reachability-independent (it does not wait for a call site).
+fn dead() -> I32 { return n }
+fn main() { print(0I64) }

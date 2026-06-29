@@ -365,6 +365,28 @@ pub impl Comp {
                 self.verifyBlock(blockId: elseBlk)
             }
             Expr.Ident(val start, val len) => {
+                // an identifier in read position must resolve to something in scope: `self`,
+                // a local / parameter / global, or a free-function name (a bare fn used as a
+                // closure value — the backend's genLlvmExpr Ident arm accepts exactly these).
+                // Otherwise it is undefined — caught here at declaration time over EVERY
+                // entry-module body (reachability-independent), not as a backend codegen
+                // side-effect that only fired for emitted/reachable bodies (spec/04).
+                if !(self.isSelfRef(start: start, len: len)) {
+                    if self.localIndexByName(start: start, len: len) >= self.cur.locals.count() {
+                        if self.firstFuncByName(nameStart: start, nameLen: len) >= self.arena.funcs.count() {
+                            // a bare receiver naming a type / primitive is an assoc-fn receiver
+                            // (`Buffer.new()`, `Optional.empty()`, `I64.fromBytes(...)`): the
+                            // parent Method/Call routes it via assocRecvName, so it is a valid
+                            // qualifier, not a value read. (isTypeName folds in import aliases,
+                            // newtypes, enums, traits.)
+                            if !(self.isTypeName(start: start, len: len)) {
+                                if !(self.isPrimType(start: start, len: len)) {
+                                    compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a field of `self` needs `self.`) (spec/04)")
+                                }
+                            }
+                        }
+                    }
+                }
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
                 if self.cur.verifyMovedIdx.count() > 0U64 {
                     if self.verifyIsMoved(idx: self.localIndexByName(start: start, len: len)) {

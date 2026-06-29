@@ -225,6 +225,19 @@ pub impl Comp {
                             // single binding to the element type (`for val b in bs` -> U8).
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                         }
+                    } else {
+                        // a custom Iterator / Iterable (kind 2 — `for v in counter`, an adapter
+                        // chain `xs.map(..).filter(..)`, or an `any Iterator`): recover the loop
+                        // variable's Item type from next()'s Optional[Item] (iterableItemInfo)
+                        // and bind it, so the body's references to it resolve. (When the Item is
+                        // unresolvable — e.g. an existential's associated type — it degrades to a
+                        // scalar binding, still in scope.)
+                        val item: TypeInfo = self.iterableItemInfo(et: et)
+                        if isStruct {
+                            self.addForStructBinds(et: item, binds: binds)
+                        } else {
+                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: item.nameStart, tyLen: item.nameLen, isArray: item.kind == 3, ty: item.ref, isInout: false, isMut: false, owned: false)
+                        }
                     }
                 }
                 self.cur.verifyLoopDepth = self.cur.verifyLoopDepth + 1U64
