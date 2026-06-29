@@ -199,19 +199,11 @@ pub impl LlvmCtx {
                     aav.append(self.genArgValue(c: inout c, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
                     adi += 1
                 }
-                // a pure free fn (`tryFrom` / a free conformance fn) is its 0-type-arg `gf`
-                // instance; a real assoc fn with a receiver type (`Greeter.banner()`) is
-                // declared lazily on `pf` (no self param), like a free function.
+                // an assoc fn (`Greeter.banner()`, `tryFrom`, a free conformance fn) has no
+                // self, so it is its own 0-type-arg `gf` instance (B4-1).
                 val agslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [])
                 if agslot < self.genFnK.count() {
                     return LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(aav), aav.count(), anon())
-                }
-                mut val aslot: U64 = self.userFnSlot(idx: afi)
-                if aslot >= self.fnIdx.count() {
-                    aslot = self.ensureFreeFnDeclared(c: inout c, fi: afi)
-                }
-                if aslot < self.fnIdx.count() {
-                    return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(aav), aav.count(), anon())
                 }
                 compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this assoc fn is not emittable yet (generic / std / trait)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)

@@ -325,10 +325,7 @@ pub impl LlvmCtx {
         if gslot < self.genFnK.count() {
             return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av), av.count(), anon())
         }
-        mut val aslot: U64 = self.userFnSlot(idx: fi)
-        if aslot >= self.fnIdx.count() {
-            aslot = self.ensureFreeFnDeclared(c: inout c, fi: fi)
-        }
+        val aslot: U64 = self.userFnSlot(idx: fi)
         if aslot >= self.fnIdx.count() {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
