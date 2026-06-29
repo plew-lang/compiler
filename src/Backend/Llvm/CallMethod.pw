@@ -73,6 +73,28 @@ pub impl LlvmCtx {
             compileErrorAt(line: c.lineOf(offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
+        // an extension method on a registered struct / enum is the receiver's 0-type-arg `gm`
+        // instance (B3-2). Its view (`#Ext`) is layered onto self in genLlvmFuncBody via the
+        // func's extId, so the unified generic-method path resolves `self.b()` correctly.
+        if rsidx < c.arena.structs.count() {
+            val rslot: U64 = self.structRegSlot(c: inout c, start: recvNameStart, len: recvNameLen)
+            if rslot < self.genStructRefs.count() {
+                val instRef0: U64 = self.genStructRefs[rslot]
+                val gmslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: instRef0, ownArgs: [])
+                if gmslot < self.genMethK.count() {
+                    return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gmslot, instRef: instRef0, args: args)
+                }
+            }
+        } else {
+            val ereg: U64 = self.enumRegSlot(c: inout c, start: recvNameStart, len: recvNameLen)
+            if ereg < self.genEnumRefs.count() {
+                val einst: U64 = self.genEnumRefs[ereg]
+                val egmslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: einst, ownArgs: [])
+                if egmslot < self.genMethK.count() {
+                    return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: egmslot, instRef: einst, args: args)
+                }
+            }
+        }
         mut val slot: U64 = self.userFnSlot(idx: mfi)
         if slot >= self.fnIdx.count() {
             slot = self.ensureProvidedDeclared(c: inout c, fi: mfi)

@@ -37,13 +37,16 @@ pub impl LlvmCtx {
         if wfi >= c.arena.funcs.count() {
             return LLVMConstNull(self.ptrty)
         }
-        val wslot: U64 = self.userFnSlot(idx: wfi)
-        if wslot >= self.fnIdx.count() {
-            return LLVMConstNull(self.ptrty)
-        }
         val sd: StructDef = c.arena.structs[sidx]
         val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
         if regSlot >= self.genStructRefs.count() {
+            return LLVMConstNull(self.ptrty)
+        }
+        // the witness is a method on the concrete struct — its receiver's 0-type-arg `gm`
+        // instance (B3-2; any view it carries is layered in via the func's selfViewId/extId).
+        val wInstRef: U64 = self.genStructRefs[regSlot]
+        val wslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: wfi, instRef: wInstRef, ownArgs: [])
+        if wslot >= self.genMethK.count() {
             return LLVMConstNull(self.ptrty)
         }
         val concreteTy: LLVMTypeRef = self.genStructTys[regSlot]
@@ -103,7 +106,7 @@ pub impl LlvmCtx {
             av.append(LLVMGetParam(fv, ai + 1U64))
             ai += 1
         }
-        val r: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[wslot], self.fnVal[wslot], arrayCPtr(av), av.count(), anon())
+        val r: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[wslot], self.genMethVal[wslot], arrayCPtr(av), av.count(), anon())
         if req.hasRet {
             if retsSelf {
                 // re-erase: box the witness's concrete result (the same concrete type as
