@@ -157,11 +157,17 @@ pub impl LlvmCtx {
         val sd: StructDef = c.arena.structs[sidx]
         val fi: U64 = structDeinitFi(c: inout c, sidx: sidx)
         if fi < c.arena.funcs.count() {
-            val slot: U64 = self.userFnSlot(idx: fi)
-            if slot < self.fnIdx.count() {
-                mut val av: Array[LLVMValueRef] = []
-                av.append(v)
-                LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), 1U64, anon())
+            // the deinit method is its struct's 0-type-arg `gm` instance (B3-2): declare it on
+            // demand and call the symbol directly with the value (no recv expr here).
+            val dslot: U64 = self.structSlotForSidx(c: inout c, sidx: sidx)
+            if dslot < self.genStructRefs.count() {
+                val dinst: U64 = self.genStructRefs[dslot]
+                val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: fi, instRef: dinst, ownArgs: [])
+                if gslot < self.genMethK.count() {
+                    mut val av: Array[LLVMValueRef] = []
+                    av.append(v)
+                    LLVMBuildCall2(self.b, self.genMethTy[gslot], self.genMethVal[gslot], arrayCPtr(av), 1U64, anon())
+                }
             }
         }
         mut val i: U64 = 0
