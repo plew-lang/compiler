@@ -294,9 +294,19 @@ pub impl LlvmCtx {
             val erecvRef: U64 = self.exprTypeRef(c: inout c, id: recv)
             if erecvRef != 0U64 {
                 val et: TypeRef = c.arena.types[erecvRef]
-                if self.enumRegSlot(c: inout c, start: et.nameStart, len: et.nameLen) < self.genEnumRefs.count() {
+                val ereg0: U64 = self.enumRegSlot(c: inout c, start: et.nameStart, len: et.nameLen)
+                if ereg0 < self.genEnumRefs.count() {
                     val emfi: U64 = c.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     if emfi < c.arena.funcs.count() {
+                        // a non-generic method declared on this enum is its 0-type-arg `gm`
+                        // instance (B3-2), like a struct method.
+                        if c.arena.funcs[emfi].recvId == intern(c: inout c, start: et.nameStart, len: et.nameLen) {
+                            val einst: U64 = self.genEnumRefs[ereg0]
+                            val egmslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: emfi, instRef: einst, ownArgs: [])
+                            if egmslot < self.genMethK.count() {
+                                return self.genGenMethodCall(c: inout c, recv: recv, mfi: emfi, slot: egmslot, instRef: einst, args: args)
+                            }
+                        }
                         mut val eslot: U64 = self.userFnSlot(idx: emfi)
                         if eslot >= self.fnIdx.count() {
                             eslot = self.ensureProvidedDeclared(c: inout c, fi: emfi)
@@ -403,12 +413,11 @@ pub impl LlvmCtx {
                 _ => {}
             }
         }
-        // an INHERENT non-generic method declared on this struct (recvId names the struct) is
-        // its receiver's 0-type-arg `gm` instance (B3-2): route through the unified generic-
-        // method path (its empty env is a no-op). A provided / inter-trait-conformance method
-        // (recv = a trait, reached through a view chain) keeps its special `pf` handling — its
-        // self is the trait subject, not this struct's 0-arg instance.
-        if mf.recvId == intern(c: inout c, start: sd.nameStart, len: sd.nameLen) && !(mf.isProvided) {
+        // a non-generic method declared on this struct (recvId names the struct — inherent OR
+        // a frontend-specialized conformance witness like `s#C.a()`, whose self view is layered
+        // on in genLlvmFuncBody via f.selfViewId) is its receiver's 0-type-arg `gm` instance
+        // (B3-2): route through the unified generic-method path (its empty env is a no-op).
+        if mf.recvId == intern(c: inout c, start: sd.nameStart, len: sd.nameLen) {
             val rslot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
             if rslot < self.genStructRefs.count() {
                 val instRef0: U64 = self.genStructRefs[rslot]

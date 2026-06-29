@@ -464,9 +464,13 @@ pub impl LlvmCtx {
             // `self.m()` in the body resolves through the same extension (so it is
             // recursion, not a call to a shadowed bare method); reach the shadowed
             // method with `self#!Ext.m()`.
+            // layer the self view onto recvRef when it carries none yet — recvRef==0 (the old
+            // pf path) OR a no-view instance ref (B3-2: the gm path sets recvRef from
+            // curRecvInstRef, so the view must be applied on top of it, preserving its args).
             if f.extId != 0U64 {
-                if recvRef == 0U64 {
+                if recvRef == 0U64 || c.arena.types[recvRef].viewExtId == 0U64 {
                     mut val selfViewArgs: Array[U64] = []
+                    if recvRef != 0U64 { selfViewArgs = c.arena.types[recvRef].args }
                     recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
                 }
             }
@@ -474,8 +478,9 @@ pub impl LlvmCtx {
             // viewed as `Recv#root`, so an internal `self.m()` to a multi-path intermediate
             // resolves through the SAME root C (findExtMethodById via the view chain).
             if f.selfViewId != 0U64 {
-                if recvRef == 0U64 {
+                if recvRef == 0U64 || c.arena.types[recvRef].viewExtId == 0U64 {
                     mut val selfRootArgs: Array[U64] = []
+                    if recvRef != 0U64 { selfRootArgs = c.arena.types[recvRef].args }
                     recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfRootArgs viewExtId=f.selfViewId />)
                 }
             }
