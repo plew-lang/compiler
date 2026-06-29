@@ -240,7 +240,7 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: operand)
                 // a unary operator on a type-parameter value needs the matching bound
                 // (`-x` -> `where T: Neg`, `!x` -> `: Not`, `~x` -> `: BitNot`). spec/12.
-                val ut: TypeInfo = self.exprType(id: operand)
+                val ut: TypeInfo = self.typeOf(id: operand)
                 if ut.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: ut.nameStart, len: ut.nameLen) {
                         val need: String = self.unOpTraitName(op: op)
@@ -263,7 +263,7 @@ pub impl Comp {
                         self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                     }
                 }
-                val lt: TypeInfo = self.exprType(id: lhs)
+                val lt: TypeInfo = self.typeOf(id: lhs)
                 if lt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lt.nameStart, len: lt.nameLen) {
                         mut val need: String = ""
@@ -327,7 +327,7 @@ pub impl Comp {
                     self.checkBoundsExpr(exprId: args[i].expr)
                     i += 1
                 }
-                val rt: TypeInfo = self.exprType(id: recv)
+                val rt: TypeInfo = self.typeOf(id: recv)
                 if rt.kind == 2 {
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                         if !(self.boundProvidesMethod(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)) {
@@ -434,7 +434,7 @@ pub impl Comp {
                 while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.exprType(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -596,7 +596,7 @@ pub impl Comp {
                     self.checkBoundsExpr(exprId: rangeHi)
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: 0, tyLen: 0, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
-                    val et: TypeInfo = self.exprType(id: iter)
+                    val et: TypeInfo = self.typeOf(id: iter)
                     if isStruct {
                         self.addForStructBinds(et: et, binds: binds)
                     } else {
@@ -618,7 +618,7 @@ pub impl Comp {
                 while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.exprType(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1

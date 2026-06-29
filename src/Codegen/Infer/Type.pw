@@ -234,7 +234,9 @@ pub impl Comp {
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                val rt: TypeInfo = self.exprType(id: recv)
+                // (typeOf, cached: read only via kind==2 — a method receiver is never the
+                // width-less int form, so this matches exprType.)
+                val rt: TypeInfo = self.typeOf(id: recv)
                 if rt.kind == 2 {
                     val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     if mi != self.arena.funcs.count() {
