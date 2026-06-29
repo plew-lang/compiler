@@ -73,7 +73,9 @@ pub impl LlvmCtx {
         // terminal (`fold[B]`) sees the right item independent of the B/B collision.
         val sDs: U64 = c.cur.selfRef
         val sDi: U64 = c.cur.itemRef
-        if mf.isProvided {
+        // a non-generic method (B3-2: typeParams empty) needs `Self` bound to its receiver so
+        // its signature (`-> Self`, a `Self` param) grounds — matching the body env above.
+        if mf.isProvided || mf.typeParams.count() == 0U64 {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
         mut val ptys: Array[LLVMTypeRef] = []
@@ -127,7 +129,10 @@ pub impl LlvmCtx {
         // name collision (only when own args are present, leaving ordinary methods untouched).
         val s4: U64 = c.cur.selfRef
         val si4: U64 = c.cur.itemRef
-        if mf.isProvided {
+        // a non-generic method (B3-2: typeParams empty ⟺ a 0-type-arg receiver) needs `Self`
+        // bound to its receiver too — a `-> Self` / `Self`-param inherent method resolves `Self`
+        // to the receiver type, which the old pf path set via genLlvmFuncBody's didSelf.
+        if mf.isProvided || mf.typeParams.count() == 0U64 {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
         self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot])

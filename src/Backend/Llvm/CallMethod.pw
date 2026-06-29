@@ -392,16 +392,6 @@ pub impl LlvmCtx {
                 return mtv
             }
         }
-        mut val slot: U64 = self.userFnSlot(idx: mfi)
-        // a provided trait method OR a non-entry-module std method (SipHasher.writeU64,
-        // reached via a generic Hasher) is declared+emitted lazily on first call.
-        if slot >= self.fnIdx.count() {
-            slot = self.ensureProvidedDeclared(c: inout c, fi: mfi)
-        }
-        if slot >= self.fnIdx.count() {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this method is not emittable yet (generic / provided / trait receiver)")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
         val mf: Func = c.arena.funcs[mfi]
         // a `move fn` consumes self (its deinit runs in the callee): mark the receiver
         // local moved so the caller does not also deinit it.
@@ -412,6 +402,31 @@ pub impl LlvmCtx {
                 }
                 _ => {}
             }
+        }
+        // an INHERENT non-generic method declared on this struct (recvId names the struct) is
+        // its receiver's 0-type-arg `gm` instance (B3-2): route through the unified generic-
+        // method path (its empty env is a no-op). A provided / inter-trait-conformance method
+        // (recv = a trait, reached through a view chain) keeps its special `pf` handling — its
+        // self is the trait subject, not this struct's 0-arg instance.
+        if mf.recvId == intern(c: inout c, start: sd.nameStart, len: sd.nameLen) && !(mf.isProvided) {
+            val rslot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
+            if rslot < self.genStructRefs.count() {
+                val instRef0: U64 = self.genStructRefs[rslot]
+                val gmslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: instRef0, ownArgs: [])
+                if gmslot < self.genMethK.count() {
+                    return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gmslot, instRef: instRef0, args: args)
+                }
+            }
+        }
+        mut val slot: U64 = self.userFnSlot(idx: mfi)
+        // a provided trait method OR a non-entry-module std method (SipHasher.writeU64,
+        // reached via a generic Hasher) is declared+emitted lazily on first call.
+        if slot >= self.fnIdx.count() {
+            slot = self.ensureProvidedDeclared(c: inout c, fi: mfi)
+        }
+        if slot >= self.fnIdx.count() {
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this method is not emittable yet (generic / provided / trait receiver)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         mut val av: Array[LLVMValueRef] = []
         // self: an `inout fn` needs the receiver's address (a place); else its value.
