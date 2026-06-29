@@ -1,0 +1,11 @@
+// Main is valid and only ever calls Lib.used; Lib.unused (whose body has an
+// undefined identifier) is never imported here nor called, so it is never
+// emitted. The reject therefore can only come from the acceptance pass walking
+// the imported module's bodies regardless of reachability — the property that
+// removing the entry-module-only verify gate gave us (root③(iv)).
+import @Std/Io with { print }
+import ./Lib with { used }
+
+fn main() {
+    print(used())
+}

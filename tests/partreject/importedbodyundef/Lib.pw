@@ -1,0 +1,15 @@
+// `unused` is exported but never called, so it is never emitted. Its body
+// references an undefined identifier. Before the entry-module-only verify gate
+// was removed, an imported module's bodies were skipped by the acceptance pass
+// and an undefined name in DEAD (unreachable, never-emitted) imported code went
+// undetected entirely. Now verify walks every body in every module, so it is a
+// clean front-end reject — root③(iv): undefined-identifier detection no longer
+// depends on emission / reachability.
+
+export fn used() -> I64 {
+    return 1
+}
+
+export fn unused() -> I64 {
+    return mysteryValue
+}
