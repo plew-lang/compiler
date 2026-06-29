@@ -971,6 +971,11 @@ export fn emitLlvm(c: inout Comp) {
             st.emitOneGenFn(c: inout c, slot: st.genFnEmit[genfDone])
             genfDone += 1
         }
+        // per-type drop/retain/copy-witness bodies (declared on demand at drop sites). A
+        // witness body's deinit call is now a `gm` instance (B3-2), which queues onto
+        // genMethEmit — so emitWitnessBodies must run INSIDE this fixpoint loop, not after it,
+        // or those deinit method bodies would be declared but never emitted (link error).
+        st.emitWitnessBodies(c: inout c)
         if provDone >= st.provEmit.count() {
             if genmDone >= st.genMethEmit.count() {
                 if genfDone >= st.genFnEmit.count() {
@@ -979,11 +984,6 @@ export fn emitLlvm(c: inout Comp) {
             }
         }
     }
-    // emit the per-type drop-witness bodies (declared on demand at drop sites during the
-    // passes above). A witness body may declare further sub-struct witnesses, which the
-    // drain's growing cursor picks up. All callees (user deinit fns, runtime intrinsics)
-    // are already declared, so this runs after the provided/generic fixpoint.
-    st.emitWitnessBodies(c: inout c)
     if !(foundMain) {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
     }

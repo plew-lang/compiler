@@ -85,14 +85,21 @@ pub impl LlvmCtx {
         val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
         val itfi: U64 = c.findMethod(recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
         if itfi < c.arena.funcs.count() {
-            val itSlotF: U64 = self.userFnSlot(idx: itfi)
-            if itSlotF >= self.fnIdx.count() {
+            // the iterator() method is the (non-generic) iterable's 0-type-arg `gm` instance.
+            val itreg: U64 = self.structRegSlot(c: inout c, start: isd.nameStart, len: isd.nameLen)
+            if itreg >= self.genStructRefs.count() {
+                compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
+                return
+            }
+            val itinst: U64 = self.genStructRefs[itreg]
+            val itgSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: itfi, instRef: itinst, ownArgs: [])
+            if itgSlot >= self.genMethK.count() {
                 compileErrorAt(line: 0, msg: "LLVM backend: this Iterable's iterator method is not emittable yet")
                 return
             }
             mut val itArgs: Array[LLVMValueRef] = []
             itArgs.append(iterableVal)
-            iterVal = LLVMBuildCall2(self.b, self.fnTy[itSlotF], self.fnVal[itSlotF], arrayCPtr(itArgs), 1U64, anon())
+            iterVal = LLVMBuildCall2(self.b, self.genMethTy[itgSlot], self.genMethVal[itgSlot], arrayCPtr(itArgs), 1U64, anon())
             iterStructStart = c.arena.funcs[itfi].retStart
             iterStructLen = c.arena.funcs[itfi].retLen
         }
@@ -103,8 +110,15 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
             return
         }
-        val nSlotF: U64 = self.userFnSlot(idx: nfi)
-        if nSlotF >= self.fnIdx.count() {
+        // next() is the (non-generic) iterator struct's 0-type-arg `gm` instance.
+        val nreg: U64 = self.structRegSlot(c: inout c, start: iterStructStart, len: iterStructLen)
+        if nreg >= self.genStructRefs.count() {
+            compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
+            return
+        }
+        val ninst: U64 = self.genStructRefs[nreg]
+        val nSlotF: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: nfi, instRef: ninst, ownArgs: [])
+        if nSlotF >= self.genMethK.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
             return
         }
@@ -113,7 +127,7 @@ pub impl LlvmCtx {
         // instance ref needed to drop a heap-owning iterator at loop end (rare — all stdlib
         // collections are generic and take genLlvmForGenIterable). Loop var + body locals are
         // still released via emitIterNextLoop's per-iteration unwind.
-        self.emitIterNextLoop(c: inout c, iterVal: iterVal, iterInstRef: 0U64, ownsIter: false, optRef: nf.retTy, nextTy: self.fnTy[nSlotF], nextVal: self.fnVal[nSlotF], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
+        self.emitIterNextLoop(c: inout c, iterVal: iterVal, iterInstRef: 0U64, ownsIter: false, optRef: nf.retTy, nextTy: self.genMethTy[nSlotF], nextVal: self.genMethVal[nSlotF], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
     }
 
     // `for x in genericIterable` where the receiver is a generic instance (`Box[I64]`).

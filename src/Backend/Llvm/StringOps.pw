@@ -119,6 +119,31 @@ pub impl LlvmCtx {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a type that does not conform to Format")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
+        // a Format witness on a registered struct / enum is the receiver's 0-type-arg `gm`
+        // instance (B3-2); a primitive lang-item witness has no type instance and stays on
+        // the lazily-declared provided-fn path (pf fallback below).
+        mut val gmSlot: U64 = self.genMethK.count()
+        mut val gmInst: U64 = 0
+        val sReg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
+        if sReg < self.genStructRefs.count() {
+            gmInst = self.genStructRefs[sReg]
+            gmSlot = self.ensureGenMethodDeclared(c: inout c, mfi: ffi, instRef: gmInst, ownArgs: [])
+        } else {
+            val eReg: U64 = self.enumRegSlot(c: inout c, start: tyStart, len: tyLen)
+            if eReg < self.genEnumRefs.count() {
+                gmInst = self.genEnumRefs[eReg]
+                gmSlot = self.ensureGenMethodDeclared(c: inout c, mfi: ffi, instRef: gmInst, ownArgs: [])
+            }
+        }
+        val recvVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
+        val emptyFmt: LLVMValueRef = self.arrValWrap(c: inout c, data: LLVMConstNull(self.ptrty), aggTy: self.stringLlvmTy(c: inout c))
+        mut val cav: Array[LLVMValueRef] = []
+        cav.append(recvVal)
+        cav.append(emptyFmt)
+        if gmSlot < self.genMethK.count() {
+            val gval: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[gmSlot], self.genMethVal[gmSlot], arrayCPtr(cav), 2U64, anon())
+            return self.emitFormatPrintTail(c: inout c, sval: gval)
+        }
         mut val slot: U64 = self.userFnSlot(idx: ffi)
         if slot >= self.fnIdx.count() {
             slot = self.ensureProvidedDeclared(c: inout c, fi: ffi)
@@ -127,12 +152,13 @@ pub impl LlvmCtx {
             compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: Format witness not emittable yet")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val recvVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
-        val emptyFmt: LLVMValueRef = self.arrValWrap(c: inout c, data: LLVMConstNull(self.ptrty), aggTy: self.stringLlvmTy(c: inout c))
-        mut val cav: Array[LLVMValueRef] = []
-        cav.append(recvVal)
-        cav.append(emptyFmt)
         val sval: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(cav), 2U64, anon())
+        return self.emitFormatPrintTail(c: inout c, sval: sval)
+    }
+
+    // The shared tail of emitFormatPrint: take the String the Format witness returned and
+    // write its bytes through the runtime string sink.
+    inout fn emitFormatPrintTail(c: inout Comp, sval: LLVMValueRef) -> LLVMValueRef {
         val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sval)
         val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sval)
         mut val ptys: Array[LLVMTypeRef] = []

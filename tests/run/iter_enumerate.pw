@@ -3,7 +3,7 @@
 // (the adapter's `next()` returns `Optional[(index:U64,value:E)]`). The binding form
 // `for p in it.enumerate()` exposes `p.index` / `p.value`.
 import @Std/Io with { print }
-import @Std/Core with { Iterator }
+import @Std/Core with { Iterator, RangeError }
 
 struct Counter { pub mut val n: I64 }
 pub impl Counter as Iterator {
@@ -20,10 +20,12 @@ fn main() {
         print(p.index)
         print(p.value)
     }
-    // enumerate composes with other adapters (filter the indices via the value).
+    // the index is a U64; `as I64` is rejected (sign change is not lossless, spec/12), so
+    // convert it through the fallible `<I64.checked .../>` TryFrom before the signed add.
     mut val sum: I64 = 0
     for p in <Counter n=0 />.enumerate() {
-        sum = sum + (p.index as I64) + p.value
+        val idx: Result[I64, RangeError] = <I64.checked source=p.index />
+        sum = sum + idx.unwrapOr(fallback: 0I64) + p.value
     }
     print(sum)   // (0+10)+(1+20)+(2+30) = 63
     // the record-destructure form, by FIELD LABEL (records are labelled, not positional).

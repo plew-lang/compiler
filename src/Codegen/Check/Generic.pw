@@ -349,6 +349,31 @@ pub impl Comp {
                 }
             }
             Expr.Move(val operand, val isBorrow) => { self.checkBoundsExpr(exprId: operand) }
+            Expr.Ident(val start, val len) => {
+                // the same reachability-independent undefined-identifier check the
+                // non-generic path runs (verifyExpr), but for entry-module GENERIC bodies —
+                // walked here regardless of instantiation, so a dead generic's `return n`
+                // (forgotten `self.`) is still caught at declaration. std generic templates
+                // are trusted and excluded (mirrors checkGenericTypeMatch's gate). A bare
+                // type-parameter name is a valid assoc-fn receiver (`T.make()`), like a type.
+                if self.cur.checkFn < self.arena.funcs.count() {
+                    if self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn]) {
+                        if !(self.isSelfRef(start: start, len: len)) {
+                            if self.localIndexByName(start: start, len: len) >= self.cur.locals.count() {
+                                if self.firstFuncByName(nameStart: start, nameLen: len) >= self.arena.funcs.count() {
+                                    if !(self.isTypeName(start: start, len: len)) {
+                                        if !(self.isPrimType(start: start, len: len)) {
+                                            if !(self.isTypeParamOf(fnIdx: self.cur.checkFn, start: start, len: len)) {
+                                                compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a field of `self` needs `self.`) (spec/04)")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             _ => {}
         }
     }

@@ -212,20 +212,11 @@ pub impl LlvmCtx {
             }
             return false
         }
-        if f.hasRecv {
-            // a method: emit it iff its receiver is a registered struct OR enum AND it is
-            // defined in the entry module. (A method name is re-interned so moduleOf on
-            // it is unreliable; use the body's first statement, whose exprs keep their
-            // original source offsets, to recover the defining module — this keeps std
-            // struct methods, full of not-yet-supported constructs, from being emitted.)
-            if c.isTraitName(start: f.recvStart, len: f.recvLen) { return false }
-            if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.genStructRefs.count() {
-                if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.genEnumRefs.count() {
-                    return false
-                }
-            }
-            return c.methodInEntryModule(f: f)
-        }
+        // a method (hasRecv) is no longer eagerly emitted as `pf`: it is its receiver
+        // type's 0-type-arg `gm` instance, declared lazily on first dispatch via
+        // ensureGenMethodDeclared (B3-2). Reachability-driven, so an uncalled method emits
+        // no dead body, and there is no pf/gm double-emit of the same body.
+        if f.hasRecv { return false }
         // a free function is no longer declared/emitted as `pf`: it is its own 0-type-arg
         // `gf` instance, declared lazily on first reach via ensureFnInst (B3-1). Reachability-
         // driven, so an uncalled free fn emits no dead body.
