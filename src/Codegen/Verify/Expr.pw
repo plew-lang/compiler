@@ -74,7 +74,7 @@ pub impl Comp {
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.verifyMethodVis(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-                self.verifyExpr(id: recv)
+                self.verifyRecv(recv: recv)
                 self.verifyArgs(args: args)
                 self.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             }
@@ -371,21 +371,11 @@ pub impl Comp {
                 // Otherwise it is undefined — caught here at declaration time over EVERY
                 // entry-module body (reachability-independent), not as a backend codegen
                 // side-effect that only fired for emitted/reachable bodies (spec/04).
-                if !(self.isSelfRef(start: start, len: len)) {
-                    if self.localIndexByName(start: start, len: len) >= self.cur.locals.count() {
-                        if self.firstFuncByName(nameStart: start, nameLen: len) >= self.arena.funcs.count() {
-                            // a bare receiver naming a type / primitive is an assoc-fn receiver
-                            // (`Buffer.new()`, `Optional.empty()`, `I64.fromBytes(...)`): the
-                            // parent Method/Call routes it via assocRecvName, so it is a valid
-                            // qualifier, not a value read. (isTypeName folds in import aliases,
-                            // newtypes, enums, traits.)
-                            if !(self.isTypeName(start: start, len: len)) {
-                                if !(self.isPrimType(start: start, len: len)) {
-                                    compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a field of `self` needs `self.`) (spec/04)")
-                                }
-                            }
-                        }
-                    }
+                // value position: a bare type / primitive name reaching here is NOT a value
+                // (an assoc-fn receiver `Buffer.new()` / `I64.fromBytes(...)` is rerouted via
+                // verifyRecv) — so it is an undefined-identifier misuse (`val x = SomeType`).
+                if !(self.identResolvesAsValue(start: start, len: len)) {
+                    compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
                 }
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
                 if self.cur.verifyMovedIdx.count() > 0U64 {
@@ -428,6 +418,22 @@ pub impl Comp {
                 }
             }
             _ => {}
+        }
+    }
+
+    // Verify a method/assoc receiver. A bare type / primitive name here is a valid assoc-
+    // fn qualifier (`Buffer.new()`, `I64.fromBytes(...)`), not a value read — so it needs
+    // no value check. Any other receiver is an ordinary value and is verified normally (its
+    // Ident arm runs the value check). A non-generic body has no type parameters in scope,
+    // so pass the funcs.count() sentinel to identIsTypeQualifier.
+    inout fn verifyRecv(recv: U64) {
+        match self.arena.exprs[recv] {
+            Expr.Ident(val start, val len) => {
+                if !(self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.funcs.count())) {
+                    self.verifyExpr(id: recv)
+                }
+            }
+            _ => { self.verifyExpr(id: recv) }
         }
     }
 }

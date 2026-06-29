@@ -35,6 +35,40 @@ pub impl Comp {
         return false
     }
 
+    // Whether `start..len` in READ (value) position resolves to a value binding —
+    // `self`, a local/parameter/global (localIndexByName folds these), or a free-function
+    // name (a bare fn used as a closure value). A bare TYPE name is deliberately NOT a
+    // value: it is valid only as an assoc-fn receiver (`Type.fn()`), which verifyRecv /
+    // checkBoundsRecv accept directly — so a type name reaching a value position
+    // (`val x = SomeType`) is an undefined-identifier misuse, caught by the callers below.
+    inout fn identResolvesAsValue(start: U64, len: U64) -> Bool {
+        if self.isSelfRef(start: start, len: len) {
+            return true
+        }
+        if self.localIndexByName(start: start, len: len) < self.cur.locals.count() {
+            return true
+        }
+        return self.firstFuncByName(nameStart: start, nameLen: len) < self.arena.funcs.count()
+    }
+
+    // Whether `start..len` names a type / primitive / type-parameter of `tpFn` — i.e. a
+    // valid assoc-fn qualifier (`Buffer.new()` / `I64.fromBytes(…)` / `T.make()`), as
+    // opposed to a value. `tpFn >= funcs.count()` means no type parameters are in scope
+    // (a non-generic body — isTypeParamOf returns false for the sentinel). The single
+    // acceptance set shared by the reachability-independent undefined-identifier check
+    // that verifyExpr runs over non-generic bodies and checkBoundsExpr over entry-module
+    // generic bodies (spec/04) — kept in one place so the generic/non-generic split that
+    // the unification erased is not silently reintroduced at the resolution layer.
+    inout fn identIsTypeQualifier(start: U64, len: U64, tpFn: U64) -> Bool {
+        if self.isTypeName(start: start, len: len) {
+            return true
+        }
+        if self.isPrimType(start: start, len: len) {
+            return true
+        }
+        return self.isTypeParamOf(fnIdx: tpFn, start: start, len: len)
+    }
+
     inout fn traitProvidesMember(traitNameId: U64, qName: U64, args: Array[Arg], depth: U64) -> Bool {
         if depth > 64U64 {
             return false
@@ -119,6 +153,22 @@ pub impl Comp {
             bi += 1
         }
         return false
+    }
+
+    // Walk a method/assoc receiver in a generic body. A bare type / primitive / type-
+    // parameter name here is a valid assoc-fn qualifier (`T.make()`, `Buffer.new()`),
+    // not a value read — so it needs no value check (the parent Method arm bound-checks a
+    // type-parameter receiver separately). Any other receiver is an ordinary value and is
+    // walked normally (its Ident arm runs the value check).
+    inout fn checkBoundsRecv(recv: U64, tpFn: U64) {
+        match self.arena.exprs[recv] {
+            Expr.Ident(val start, val len) => {
+                if !(self.identIsTypeQualifier(start: start, len: len, tpFn: tpFn)) {
+                    self.checkBoundsExpr(exprId: recv)
+                }
+            }
+            _ => { self.checkBoundsExpr(exprId: recv) }
+        }
     }
 
     inout fn binOpTraitName(op: I64) -> String {
@@ -229,7 +279,7 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: recv)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                self.checkBoundsExpr(exprId: recv)
+                self.checkBoundsRecv(recv: recv, tpFn: self.cur.checkFn)
                 mut val i: U64 = 0
                 while i < args.count() {
                     self.checkBoundsExpr(exprId: args[i].expr)
@@ -356,20 +406,13 @@ pub impl Comp {
                 // (forgotten `self.`) is still caught at declaration. std generic templates
                 // are trusted and excluded (mirrors checkGenericTypeMatch's gate). A bare
                 // type-parameter name is a valid assoc-fn receiver (`T.make()`), like a type.
+                // value position: a bare type / type-parameter name reaching here is NOT a
+                // value (an assoc-fn receiver `T.make()` is rerouted via checkBoundsRecv) —
+                // so it is an undefined-identifier misuse (`val x = SomeType`).
                 if self.cur.checkFn < self.arena.funcs.count() {
                     if self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn]) {
-                        if !(self.isSelfRef(start: start, len: len)) {
-                            if self.localIndexByName(start: start, len: len) >= self.cur.locals.count() {
-                                if self.firstFuncByName(nameStart: start, nameLen: len) >= self.arena.funcs.count() {
-                                    if !(self.isTypeName(start: start, len: len)) {
-                                        if !(self.isPrimType(start: start, len: len)) {
-                                            if !(self.isTypeParamOf(fnIdx: self.cur.checkFn, start: start, len: len)) {
-                                                compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a field of `self` needs `self.`) (spec/04)")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        if !(self.identResolvesAsValue(start: start, len: len)) {
+                            compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
                         }
                     }
                 }

@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+// A bare type name is valid ONLY as an assoc-fn receiver (`Type.fn()`), never as a
+// value. Binding a type name to a value (`val x = SomeType`) is an undefined-identifier
+// misuse: the value-position resolver does not accept type names (spec/04).
+struct Widget { val n: I64 = 0 }
+fn main() {
+    val x = Widget
+    print(0I64)
+}
