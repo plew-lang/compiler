@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+// Regression (root③(iv) full closure): a concrete type whose name collides with a
+// trait's associated type name (`Item` for Iterator). std's provided-method copies on
+// conforming iterators (ArrayIter.reduce, EnumerateIter.next, …) are type-checked ONCE
+// on the trait's abstract template (spec/08 — a provided body is checked against the
+// trait interface, not re-checked per conformer). Re-checking each conformer's copy
+// mis-resolved the abstract `Item` to this struct (and a record `Item = (index,value)`
+// for EnumerateIter) and false-rejected std once the entry-module verify gate was
+// removed. The copy is now skipped via Func.srcTraitId; only the template carries the
+// check. Defining `struct Item` alone loads those copies into the arena, so this also
+// pins that a name collision with any std associated type stays compilable.
+struct Item { pub val v: I64 }
+
+fn main() {
+    val xs: Array[I64] = [1I64, 2I64, 3I64]
+    mut val total: I64 = 0
+    for x in xs {
+        total += x
+    }
+    print(total)
+}

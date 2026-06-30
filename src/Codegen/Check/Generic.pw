@@ -256,12 +256,11 @@ pub impl Comp {
                 self.checkBoundsExpr(exprId: lhs)
                 self.checkBoundsExpr(exprId: rhs)
                 // concrete operand checks in a generic body (`1I64 + true`, `aT == 5I64`):
-                // the same binop type-check verifyProgram runs on non-generic bodies, but
-                // only for the USER's (entry-module) generic templates (std is trusted).
+                // the same binop type-check verifyProgram runs on non-generic bodies, now
+                // applied to EVERY module's generic templates (std included — no
+                // trusted-import boundary).
                 if self.cur.checkFn < self.arena.funcs.count() {
-                    if self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn]) {
-                        self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
-                    }
+                    self.tcCheckBinop(op: op, lhs: lhs, rhs: rhs)
                 }
                 val lt: TypeInfo = self.typeOf(id: lhs)
                 if lt.kind == 2 {
@@ -443,20 +442,18 @@ pub impl Comp {
             Expr.Move(val operand, val isBorrow) => { self.checkBoundsExpr(exprId: operand) }
             Expr.Ident(val start, val len) => {
                 // the same reachability-independent undefined-identifier check the
-                // non-generic path runs (verifyExpr), but for entry-module GENERIC bodies —
+                // non-generic path runs (verifyExpr), now for EVERY module's GENERIC bodies —
                 // walked here regardless of instantiation, so a dead generic's `return n`
-                // (forgotten `self.`) is still caught at declaration. std generic templates
-                // are trusted and excluded (mirrors checkGenericTypeMatch's gate). A bare
-                // type-parameter name is a valid assoc-fn receiver (`T.make()`), like a type.
+                // (forgotten `self.`) is still caught at declaration (std included — no
+                // trusted-import boundary). A bare type-parameter name is a valid assoc-fn
+                // receiver (`T.make()`), like a type.
                 // value position: a bare type / type-parameter name reaching here is NOT a
                 // value (an assoc-fn receiver `T.make()` is rerouted via checkBoundsRecv) —
                 // so it is an undefined-identifier misuse (`val x = SomeType`).
                 if self.cur.checkFn < self.arena.funcs.count() {
-                    if self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn]) {
-                        val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
-                        if bindCode != identValueCode() && bindCode != identFnCode() {
-                            compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
-                        }
+                    val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
+                    if bindCode != identValueCode() && bindCode != identFnCode() {
+                        compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
                     }
                 }
             }
@@ -469,13 +466,6 @@ pub impl Comp {
             return
         }
         if self.cur.checkFn >= self.arena.funcs.count() {
-            return
-        }
-        // only the USER's (entry-module) generic bodies are judged; std/prelude is
-        // trusted and validated separately (its array-element inferType quirks — e.g.
-        // `Array.get` reporting the result as `Array` not the element `T` — would
-        // false-positive here). Mirrors verifyProgram's entry-module gate.
-        if !(self.methodInEntryModule(f: self.arena.funcs[self.cur.checkFn])) {
             return
         }
         // an untyped numeric literal cannot flow into a type parameter / Self: `val y: T = 5`
@@ -650,19 +640,26 @@ pub impl Comp {
             // block). Generic externs like `arrayPush[T]` would otherwise have block 0
             // (some unrelated function's body) walked under their own bound-less type
             // params, mis-flagging method calls inside it.
-            // walk generic templates (any module — bound checks), and ENTRY-MODULE trait
+            // walk generic templates (any module — bound checks), and trait
             // provided-method templates (`pub impl Trait { fn m() {...} }` — Self abstract):
             // a dead provided method (no conforming type, so no concrete copy is verified)
-            // would otherwise escape all checks. std's provided methods (iterator
-            // combinators) are trusted and not walked here.
+            // would otherwise escape all checks. Every module is walked (std included — no
+            // trusted-import boundary).
             mut val shouldCheck: Bool = false
             if f.typeParams.count() > 0 {
                 shouldCheck = true
             }
             if self.methodRecvIsTrait(f: f) {
-                if self.methodInEntryModule(f: f) {
-                    shouldCheck = true
-                }
+                shouldCheck = true
+            }
+            // a provided-method COPY on a conforming type (srcTraitId != 0, generated by
+            // instantiateProvidedMethods) is NOT re-checked: spec/08 type-checks a provided
+            // method body ONCE against the trait's abstract interface (the `impl Trait { }`
+            // template, walked above), so re-checking each conformer's copy would re-derive
+            // its associated types per conformance (`Item = (index: U64, value: E)` for
+            // EnumerateIter) and false-positive. The template carries the real check.
+            if f.srcTraitId != 0U64 {
+                shouldCheck = false
             }
             if shouldCheck && !f.isExtern {
                 val noParams: Array[Bind] = []
