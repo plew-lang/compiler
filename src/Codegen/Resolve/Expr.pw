@@ -70,14 +70,6 @@ pub impl Comp {
         return scalarInfo()
     }
 
-    // The type of expression `id` — the typed-AST read path codegen uses instead of
-    // re-deriving with `exprType`. Caching is restricted to a pure free-function
-    // context: no type params, no receiver-instantiation, no receiver/Self/Item env.
-    // There a node's type is env-independent AND its body is emitted exactly once, so
-    // it can be computed once via `exprType` and cached. Method bodies are excluded
-    // because a provided trait method shares one body AST across conforming types
-    // (its node types vary with Self); generic bodies vary per instantiation. Those
-    // re-derive every time.
     // The recorded result TypeRef of a desugared non-Optional `?.` at `exprId` (a Chain
     // rewrite, set by registerChainResultInsts), or 0 if this node isn't one. Lets typeOf
     // / exprTypeRef recover a Chain stage's type without re-deriving it from the rewritten
@@ -93,16 +85,33 @@ pub impl Comp {
         return 0
     }
 
+    // The type of expression `id` — the typed-AST read path that codegen and the
+    // checker use instead of re-deriving with `exprType`. The result is cached
+    // PERSISTENTLY (one slot per expr id, allocated by buildExprTyTable, never
+    // cleared) and the cache is UNCONDITIONAL: the first caller to ask a slot fills
+    // it via `exprType`, everyone after reads it back.
+    //
+    // Soundness rests on an invariant the fill path asserts below: a slot is only
+    // ever filled while `cur.recvInstRef == 0`. `exprType`'s env-dependent arms
+    // (`self` → recvInstRef, a generic node → ground under the typeParams env) would
+    // otherwise bake one instantiation's type into a slot that is shared across every
+    // instantiation and poison reads from the other envs. Today every fill happens on
+    // the checker / non-instance read path (recvInstRef 0, locals empty); the `panic`
+    // makes a future instance-aware read path fail loudly instead of silently
+    // miscompiling. (intCtx width-less recovery below stays env-independent — it reads
+    // the checker-recorded literal context, not the live env.)
     inout fn typeOf(id: U64) -> TypeInfo {
         mut val t: TypeInfo = scalarInfo()
         if id < self.typeCache.kind.count() {
             if self.typeCache.kind[id] == typeUnfilled() {
+                if self.cur.recvInstRef != 0U64 {
+                    panic "typeOf: filling the persistent type cache under a non-zero recvInstRef would bake an instance-specific type into a slot shared across instantiations (see agents/generic-unification.md)"
+                }
                 t = self.exprType(id: id)
                 self.typeCache.kind[id] = t.kind
                 self.typeCache.start[id] = t.nameStart
                 self.typeCache.len[id] = t.nameLen
                 self.typeCache.ref[id] = t.ref
-                self.typeCache.filled.append(id)
             } else {
                 t = <TypeInfo kind=self.typeCache.kind[id] nameStart=self.typeCache.start[id] nameLen=self.typeCache.len[id] ref=self.typeCache.ref[id] />
             }

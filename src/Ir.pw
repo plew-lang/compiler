@@ -847,19 +847,17 @@ pub impl MonoWork { factory }
 
 // Typed-AST cache (Phase B): each expression node's recovered `TypeInfo`, stored
 // as parallel scalar arrays keyed by expr id (struct-array IndexSet isn't in the
-// self-host subset). `typeOf` fills these lazily during codegen in a NON-generic
-// context (a node's type is env-independent and computed once) and reads them
-// back, so codegen stops re-deriving via `exprType`. `kind == typeUnfilled` marks
-// an uncomputed slot. `filled` lists ids filled since the last clear so the cache
-// resets in O(fills) at each body-emission entry. `intCtx` is the checker-recorded
-// integer CONTEXT type (code 1..8, 0 = none), which persists (not cleared per
-// body — a literal's context type is env-independent).
+// self-host subset). `typeOf` fills these lazily and PERSISTENTLY (one slot per
+// expr id, allocated by buildExprTyTable, never cleared) and reads them back, so
+// codegen and the checker stop re-deriving via `exprType`. `kind == typeUnfilled`
+// marks an uncomputed slot; the fill path holds the recvInstRef==0 invariant (see
+// typeOf). `intCtx` is the checker-recorded integer CONTEXT type (code 1..8, 0 =
+// none), env-independent like the rest.
 export struct TypeCache {
     pub mut val kind: Array[I64] = []
     pub mut val start: Array[U64] = []
     pub mut val len: Array[U64] = []
     pub mut val ref: Array[U64] = []
-    pub mut val filled: Array[U64] = []
     pub mut val intCtx: Array[U64] = []
     // resolved free-function callee per call-expr id (the `findFunc` result), the
     // first step of pre-resolving the IR so the backend reads decisions instead of
