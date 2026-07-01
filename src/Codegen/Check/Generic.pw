@@ -100,10 +100,11 @@ pub impl Comp {
         return code
     }
 
-    // A VALUE-position read accepts a value or a free-fn closure value, not a type
-    // qualifier (`val x = SomeType` is a misuse) nor an unresolved name.
-    inout fn identResolvesAsValue(start: U64, len: U64) -> Bool {
-        val code: I64 = self.classifyIdent(start: start, len: len, tpFn: self.arena.funcs.count())
+    // Whether a resolved binding code (a classifyIdent / recordIdent result) is a
+    // VALUE-position read: a value or a free-fn closure value — not a type qualifier
+    // (`val x = SomeType` is a misuse) nor an unresolved name. Folds the duplicated
+    // `!= identValueCode && != identFnCode` guard the verify/generic Ident walks share.
+    inout fn bindIsValue(code: I64) -> Bool {
         return code == identValueCode() || code == identFnCode()
     }
 
@@ -452,7 +453,7 @@ pub impl Comp {
                 // so it is an undefined-identifier misuse (`val x = SomeType`).
                 if self.cur.checkFn < self.arena.funcs.count() {
                     val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
-                    if bindCode != identValueCode() && bindCode != identFnCode() {
+                    if !(self.bindIsValue(code: bindCode)) {
                         compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
                     }
                 }

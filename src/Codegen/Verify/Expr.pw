@@ -380,7 +380,7 @@ pub impl Comp {
                 // recordIdent stores the binding (value/fn/type-qual/undef) the backend reads;
                 // a non-generic body has no type params, so pass the funcs.count() sentinel.
                 val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.arena.funcs.count())
-                if bindCode != identValueCode() && bindCode != identFnCode() {
+                if !(self.bindIsValue(code: bindCode)) {
                     compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
                 }
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
