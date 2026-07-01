@@ -88,30 +88,42 @@ pub impl Comp {
     // The type of expression `id` — the typed-AST read path that codegen and the
     // checker use instead of re-deriving with `exprType`. The result is cached
     // PERSISTENTLY (one slot per expr id, allocated by buildExprTyTable, never
-    // cleared) and the cache is UNCONDITIONAL: the first caller to ask a slot fills
-    // it via `exprType`, everyone after reads it back.
+    // cleared). The cache is INSTANCE-INDEPENDENT by construction: a slot is written
+    // only when no monomorphization env is active (recvInstRef 0 AND typeParams empty
+    // — see the fill path below), so it only ever holds a type that is the same for
+    // every instantiation. Reads always return the right type: a cached slot is
+    // instance-independent; an unfilled slot recomputes fresh under the current env.
     //
-    // Soundness rests on an invariant the fill path asserts below: a slot is only
-    // ever filled while `cur.recvInstRef == 0`. `exprType`'s env-dependent arms
-    // (`self` → recvInstRef, a generic node → ground under the typeParams env) would
-    // otherwise bake one instantiation's type into a slot that is shared across every
-    // instantiation and poison reads from the other envs. Today every fill happens on
-    // the checker / non-instance read path (recvInstRef 0, locals empty); the `panic`
-    // makes a future instance-aware read path fail loudly instead of silently
-    // miscompiling. (intCtx width-less recovery below stays env-independent — it reads
-    // the checker-recorded literal context, not the live env.)
+    // Why the write is gated rather than unconditional: `exprType`'s env-dependent arms
+    // (`self` under recvInstRef, a type-parameter local grounded under typeParams) yield
+    // an instance-SPECIFIC type. The backend re-walks the SAME expr ids for every generic
+    // instance (emitOneGenMethod swaps cur.typeParams/typeArgs), so writing one instance's
+    // grounding into the shared slot would poison a sibling instance's read. Gating the
+    // write leaves generic-body slots unfilled — they recompute per instance (perf is
+    // secondary), which is exactly what the backend's env-aware exprTypeRef path already
+    // does for most generic reads. (intCtx width-less recovery below stays env-independent
+    // — it reads the checker-recorded literal context, not the live env.)
     inout fn typeOf(id: U64) -> TypeInfo {
         mut val t: TypeInfo = scalarInfo()
         if id < self.typeCache.kind.count() {
             if self.typeCache.kind[id] == typeUnfilled() {
-                if self.cur.recvInstRef != 0U64 {
-                    panic "typeOf: filling the persistent type cache under a non-zero recvInstRef would bake an instance-specific type into a slot shared across instantiations (see agents/generic-unification.md)"
-                }
                 t = self.exprType(id: id)
-                self.typeCache.kind[id] = t.kind
-                self.typeCache.start[id] = t.nameStart
-                self.typeCache.len[id] = t.nameLen
-                self.typeCache.ref[id] = t.ref
+                // Cache the result ONLY in an instance-independent context (no active
+                // monomorphization env). Under a live env — `recvInstRef` set (front-end
+                // mono), or `cur.typeParams` non-empty during backend generic-instance
+                // emission (emitOneGenMethod re-walks the SAME expr ids per instance,
+                // swapping typeParams/typeArgs) — exprType grounds type-parameter nodes to
+                // THIS instance's concrete types. Writing that into the persistent expr-id
+                // slot (shared across every instantiation) would poison reads from a sibling
+                // instance. So we return the fresh instance-specific type WITHOUT caching:
+                // a generic body's slots stay unfilled and are recomputed per instance (perf
+                // is secondary). Non-generic bodies always fill — their env is clear.
+                if self.cur.recvInstRef == 0U64 && self.cur.typeParams.count() == 0U64 {
+                    self.typeCache.kind[id] = t.kind
+                    self.typeCache.start[id] = t.nameStart
+                    self.typeCache.len[id] = t.nameLen
+                    self.typeCache.ref[id] = t.ref
+                }
             } else {
                 t = <TypeInfo kind=self.typeCache.kind[id] nameStart=self.typeCache.start[id] nameLen=self.typeCache.len[id] ref=self.typeCache.ref[id] />
             }
