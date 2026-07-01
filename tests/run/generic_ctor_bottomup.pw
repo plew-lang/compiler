@@ -1,0 +1,21 @@
+// Bottom-up type-argument inference: a generic construction with NO top-down
+// context (no annotation / return / field context) grounds its type arguments
+// from the field VALUES' concrete types — `<Box v=42I32 />` infers T=I32. A
+// parameter pinned by several fields must agree; the field value's own type is
+// what binds (spec/06). Complements generic_ctor_infer (top-down context).
+import @Std/Io with { print }
+
+struct Box[T] { pub val v: T }
+struct Pair[T] { pub val a: T pub val b: T }
+
+fn main() {
+    // no annotation: T inferred from the field value 42I32
+    val b = <Box v=42I32 />
+    print(b.v)
+    // multi-field, consistent: T = I64 from both a and b
+    val p = <Pair a=1I64 b=2I64 />
+    print(p.a + p.b)
+    // nested: outer Box[Box[I32]] inferred from the inner construction's type
+    val n = <Box v=<Box v=5I32 /> />
+    print(n.v.v)
+}

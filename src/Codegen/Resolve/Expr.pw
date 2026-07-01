@@ -145,3 +145,112 @@ pub impl Comp {
         return t
     }
 }
+
+pub impl Comp {
+
+    // Bottom-up type-argument inference for a generic construction whose head was NOT
+    // grounded top-down during lowering (`val b = <Box v=1I32 />` — no annotation /
+    // return / field context). Runs once before collectGenInsts so a successfully
+    // inferred instance is discovered and monomorphized (collectGenInsts scans Make.ty).
+    // For each un-grounded generic-struct Make, bind every type parameter from a field
+    // whose declared type IS that bare parameter, using the field value's concrete type;
+    // if every parameter is pinned consistently, rewrite Make.ty to the grounded instance.
+    // Otherwise leave it un-grounded — a top-down context (backend expectedTy) may still
+    // ground it, and a genuinely un-inferable construction is reported at construction.
+    inout fn inferConstructTypeArgs() {
+        mut val i: U64 = 0
+        while i < self.arena.exprs.count() {
+            match self.arena.exprs[i] {
+                Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                    if !isEnum {
+                        if !(self.isGenericInst(ref: ty)) {
+                            val inferred: U64 = self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields)
+                            if inferred != 0U64 {
+                                self.arena.exprs.set(i: i, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            i += 1
+        }
+    }
+
+    // The grounded TypeRef inferred for a generic-struct construction, or 0 when it can't
+    // be inferred: not a generic struct, a parameter no bare field pins, or a field value
+    // that is untyped / an array element / conflicts with another field's binding.
+    inout fn inferMakeInstance(typeStart: U64, typeLen: U64, fields: Array[MakeField]) -> U64 {
+        // generic structs are excluded from structIndexByName, so resolve the template
+        // through genericStructIndex (a 0-arg / non-generic head is not our case).
+        val sidx: U64 = self.genericStructIndex(nameStart: typeStart, nameLen: typeLen)
+        if sidx >= self.arena.structs.count() {
+            return 0U64
+        }
+        val sd: StructDef = self.arena.structs[sidx]
+        if sd.typeParams.count() == 0U64 {
+            return 0U64
+        }
+        mut val args: Array[U64] = []
+        mut val pi: U64 = 0
+        while pi < sd.typeParams.count() {
+            val pName: U64 = sd.typeParams[pi].nameId
+            mut val argRef: U64 = 0
+            mut val fj: U64 = 0
+            while fj < sd.fields.count() {
+                val fd: FieldDef = sd.fields[fj]
+                // only a field whose declared type IS this bare parameter (`v: T`, not
+                // `xs: Array[T]` — nested unification is a follow-on) pins it.
+                if !(fd.tyIsArray) {
+                    if fd.tyNameId == pName {
+                        val cand: U64 = self.makeFieldArgRef(fieldNameId: fd.nameId, fields: fields)
+                        if cand == 0U64 {
+                            return 0U64
+                        }
+                        if argRef == 0U64 {
+                            argRef = cand
+                        } else if !(self.typeRefEq(a: argRef, b: cand)) {
+                            return 0U64
+                        }
+                    }
+                }
+                fj += 1
+            }
+            if argRef == 0U64 {
+                return 0U64
+            }
+            args.append(argRef)
+            pi += 1
+        }
+        return self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen args=args />)
+    }
+
+    // The TypeRef for the value supplied to the make-field named `fieldNameId`, or 0 when
+    // the field is absent, or its value's type is untyped / unknown / an array (which a
+    // bare parameter can't take in this increment).
+    inout fn makeFieldArgRef(fieldNameId: U64, fields: Array[MakeField]) -> U64 {
+        mut val k: U64 = 0
+        while k < fields.count() {
+            val mf: MakeField = fields[k]
+            if intern(c: inout self, start: mf.nameStart, len: mf.nameLen) == fieldNameId {
+                val ti: TypeInfo = self.exprType(id: mf.value)
+                if ti.kind == 3 {
+                    return 0U64
+                }
+                if ti.nameLen == 0U64 {
+                    return 0U64
+                }
+                // a generic-instance value (`v=<Box v2=1I32/>`): reuse its grounded ref.
+                if ti.ref != 0U64 {
+                    if self.isGenericInst(ref: ti.ref) {
+                        return ti.ref
+                    }
+                }
+                mut val noArgs: Array[U64] = []
+                return self.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs />)
+            }
+            k += 1
+        }
+        return 0U64
+    }
+}

@@ -767,6 +767,11 @@ export fn runFrontend() -> Comp {
     // discover concrete generic instantiations to monomorphize. The collection passes are
     // the one phase allowed to REGISTER a grounded-record StructDef (grounding is pure
     // elsewhere); they reach every record instance via scanType. See inCollection.
+    // bottom-up type-argument inference (spec/06): ground an un-annotated generic
+    // construction `<Box v=1I32 />` from its field value types before instance discovery,
+    // so collectGenInsts (which scans Make.ty) reaches the inferred instance. Runs after
+    // top-down grounding (done during lowering) and before collection.
+    c.inferConstructTypeArgs()
     c.inCollection = true
     c.collectGenInsts()
     // discover concrete instantiations of generic free functions from call sites

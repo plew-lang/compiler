@@ -187,7 +187,15 @@ pub impl LlvmCtx {
         }
         val reg: U64 = self.structRegSlot(c: inout c, start: rtStart, len: rtLen)
         if reg >= self.genStructRefs.count() {
-            compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type not yet supported (Ref / nested-struct structs are TODO)")
+            // an un-grounded generic construction that neither top-down context, bottom-up
+            // field inference, nor the expectedTy fallback could ground: the head names a
+            // generic template with no concrete type arguments. Report it honestly at the
+            // construction (front-end inference already handled every inferable case).
+            if c.genericStructIndex(nameStart: rtStart, nameLen: rtLen) < c.arena.structs.count() {
+                compileErrorAt(line: c.lineOf(offset: typeStart), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)")
+            } else {
+                compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type is not supported")
+            }
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         return self.buildStructValue(c: inout c, sd: c.arena.structs[self.genStructDefs[reg]], sty: self.genStructTys[reg], fields: fields, errOffset: typeStart)

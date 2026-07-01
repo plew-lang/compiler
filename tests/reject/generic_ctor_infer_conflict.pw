@@ -1,0 +1,9 @@
+// Bottom-up type-argument inference is a completion, not a guess: when field
+// values pin the SAME parameter to conflicting types (`a: T = 1I32`, `b: T =
+// 2I64`) the construction is not grounded and the compiler reports it rather
+// than silently picking one (spec/06 — 曖昧はエラー). An annotation is required.
+struct Pair[T] { pub val a: T pub val b: T }
+
+fn main() {
+    val p = <Pair a=1I32 b=2I64 />
+}
