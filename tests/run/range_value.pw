@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+// First-class ranges: `a..<b` / `a..=b` desugar to HalfOpenRange / ClosedRange
+// values (2-field {start,end} structs). Bound as a value, its fields are read
+// back; the type argument T is inferred bottom-up from an endpoint whose type is
+// known — a typed literal, a local, or an expression — so the untyped endpoint
+// takes T from the field's declared type at construction.
+fn main() {
+    // typed-literal endpoints
+    val a = 3I64 ..< 9I64
+    print(a.start)
+    print(a.end)
+
+    // inference from a local endpoint: `0` is untyped, `n` pins T = U64
+    val n: U64 = 10U64
+    val b = 0U64 ..< n
+    print(b.start)
+    print(b.end)
+
+    // inference from an expression endpoint (`arr.count()` -> I64)
+    val arr: Array[I64] = [1I64, 2I64, 3I64, 4I64]
+    val c = 0 ..< arr.count()
+    print(c.end)
+
+    // closed range
+    val d = 1I64 ..= 5I64
+    print(d.start)
+    print(d.end)
+}

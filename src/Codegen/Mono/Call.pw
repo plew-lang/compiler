@@ -300,12 +300,30 @@ pub impl Comp {
                     self.scanExprInsts(exprId: fields[i].value)
                     i += 1
                 }
+                // bottom-up type-argument inference for a generic construction the front
+                // end did NOT ground top-down (`val r = 0 ..< n` — no annotation / return /
+                // field context). We run it HERE, inside the per-function body walk, so the
+                // field values' types resolve under the live env (`n`'s local type). A
+                // standalone global pass has empty `cur.locals` and can't type a local
+                // endpoint. On success we rewrite Make.ty to the grounded instance so both
+                // this scan and the backend read the concrete type; the untyped endpoint
+                // literal (`0`) then takes T from the field's declared type at construction.
+                mut val gty: U64 = ty
+                if !isEnum {
+                    if !(self.isGenericInst(ref: gty)) {
+                        val inferred: U64 = self.inferMakeInstance(typeStart: typeStart, typeLen: typeLen, fields: fields)
+                        if inferred != 0U64 {
+                            self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=inferred fields=fields />)
+                            gty = inferred
+                        }
+                    }
+                }
                 // register the constructed type's grounded instance (`<Entry[K,V] …/>`
                 // under K=U64,V=U64 -> Entry_U64_U64). Without this, a construction that
                 // appears only as a call argument (`xs.append(<Entry[K,V] …/>)`) — whose
                 // result type no field/return scan reaches — never gets its genInst typedef.
-                if ty != 0U64 {
-                    self.scanType(ref: ty)
+                if gty != 0U64 {
+                    self.scanType(ref: gty)
                 }
             }
             Expr.Array(val elems) => {

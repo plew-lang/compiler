@@ -1,0 +1,9 @@
+import @Std/Io with { print }
+
+// A range whose element type is inferable from neither endpoint (both are bare
+// integer literals) has no type to bind T to — rejected like any width-less
+// literal binding. Suffix one endpoint (`0I64..<10`) or annotate to fix.
+fn main() {
+    val x = 0 ..< 10
+    print(x.end)
+}

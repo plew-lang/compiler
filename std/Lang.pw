@@ -24,14 +24,34 @@ import @Std/Core with { Buffer, Index, IndexSet, Iterator, Iterable }
 export @Std/Core with { I8, I16, I32, I64, U8, U16, U32, U64, F32, F64, Bool, String }
 
 // The synthesized ambient intrinsics (spec/15): types the compiler produces from
-// dedicated syntax — `a..<b`/`a...b` (the range types), `async fn … -> Promise[T]`, and
-// `spawn` (→ JoinHandle). They have no library home (the compiler supplies both syntax
-// and representation), so they are DECLARED opaque here, in the ambient module. Listed
-// in spec/15's ambient set, so they belong in @Std/Lang's surface.
+// dedicated syntax — `async fn … -> Promise[T]` and `spawn` (→ JoinHandle). They have
+// no library home (the compiler supplies both syntax and representation), so they are
+// DECLARED opaque here, in the ambient module. Listed in spec/15's ambient set, so they
+// belong in @Std/Lang's surface.
 extern "plew-intrinsic" {
-    struct HalfOpenRange  struct ClosedRange
     struct Promise[T]     struct JoinHandle[T]
 }
+
+// Range values (spec/02): `a..<b` (half-open `[a,b)`) and `a..=b` (closed `[a,b]`) are
+// FIXED SUGAR — the parser desugars them to `<HalfOpenRange start=a end=b />` /
+// `<ClosedRange start=a end=b />`. Ordinary two-field prelude structs (not a JSX
+// exception): first-class values you can bind, pass, and return. The element type is
+// `Ord` (comparison / `contains`); iteration requires `T: Step` (a conditional `Iterable`
+// conformance — additive). `..<`/`..=` are non-trait and non-overridable.
+struct HalfOpenRange[T] {
+    pub val start: T
+    pub val end: T
+}
+
+struct ClosedRange[T] {
+    pub val start: T
+    pub val end: T
+}
+
+// Public factories so the `a..<b` / `a..=b` desugar (which constructs these from the
+// user's module) is allowed across the module boundary (spec/05 field/factory gate).
+pub impl[T] HalfOpenRange[T] { factory }
+pub impl[T] ClosedRange[T] { factory }
 
 // An optional value: `Some` holds a `T`, `None` holds nothing.
 enum Optional[T] {

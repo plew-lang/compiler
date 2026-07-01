@@ -203,14 +203,17 @@ pub impl Comp {
                 // `xs: Array[T]` — nested unification is a follow-on) pins it.
                 if !(fd.tyIsArray) {
                     if fd.tyNameId == pName {
+                        // an untyped field value (a bare literal) does not pin the parameter —
+                        // skip it; another (typed) field must, and this one is grounded to the
+                        // inferred type by context downstream (`0..<n` binds T from `n`, then
+                        // `0` takes T). A conflict between two TYPED fields fails inference.
                         val cand: U64 = self.makeFieldArgRef(fieldNameId: fd.nameId, fields: fields)
-                        if cand == 0U64 {
-                            return 0U64
-                        }
-                        if argRef == 0U64 {
-                            argRef = cand
-                        } else if !(self.typeRefEq(a: argRef, b: cand)) {
-                            return 0U64
+                        if cand != 0U64 {
+                            if argRef == 0U64 {
+                                argRef = cand
+                            } else if !(self.typeRefEq(a: argRef, b: cand)) {
+                                return 0U64
+                            }
                         }
                     }
                 }
