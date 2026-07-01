@@ -1,0 +1,16 @@
+// Regression (generic-unification review E): a context-width integer literal inside a
+// GENERIC body must be range-checked against its annotated width, exactly as in a
+// non-generic body. The generic-body checker (checkBoundsStmt) is a SEPARATE walk from
+// the verify literal pass (Verify/Stmt), so before the fix `val x: U8 = 200 + 100`
+// silently wrapped (300 -> 44) instead of being rejected. spec/12: integer overflow is
+// never a silent wraparound. This program MUST be rejected at compile time.
+import @Std/Io with { print }
+
+fn widthInGenericBody[T](tag: T) -> U8 {
+    val x: U8 = 200 + 100
+    return x
+}
+
+fn main() {
+    print(widthInGenericBody(tag: 0I64) as U64)
+}

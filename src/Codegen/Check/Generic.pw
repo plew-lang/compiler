@@ -549,6 +549,11 @@ pub impl Comp {
                 if tyLen > 0U64 {
                     // checkGenericTypeMatch recurses into an array literal against Array[E].
                     self.checkGenericTypeMatch(expectedRef: ty, valueExpr: init)
+                    // the annotated width bounds a context-typed integer literal here too: a
+                    // generic body is NOT walked by the verify literal pass (Verify/Stmt), so
+                    // without this `val x: U8 = 200 + 100` would skip the constant-range check
+                    // and wrap at runtime instead of being rejected (spec/12: no wraparound).
+                    self.checkLitSpanCtx(id: init, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ctxRef: ty)
                 }
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
             }
