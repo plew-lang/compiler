@@ -214,10 +214,18 @@ pub impl LlvmCtx {
                 ownStart = c.arena.enums[eid].nameStart
                 ownLen = c.arena.enums[eid].nameLen
             } else {
-                // not a registered aggregate (a primitive) — the caller keeps the built-in
-                // op. (A String operand `"a" + "b"` is already a registered-struct lhs via
-                // exprStructIdx above, so it resolves `String.add` on the normal path.)
-                return c.arena.funcs.count()
+                // a primitive lhs (`3I8 + 4I8`): resolve its OWN operator-trait witness
+                // (`impl I8 as Add` in std/Core/Num.pw) — the same path as an aggregate. The
+                // witness body bottoms out in the numeric intrinsic floor (genNumIntrinsic),
+                // so the std `impl` is the single source of truth for what `+` does (spec/12);
+                // no primitive open-code shortcut. (A String operand resolves as a registered
+                // struct via exprStructIdx above.)
+                val pti: TypeInfo = c.typeOf(id: lhs)
+                if pti.nameLen == 0U64 {
+                    return c.arena.funcs.count()
+                }
+                ownStart = pti.nameStart
+                ownLen = pti.nameLen
             }
         }
         val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
@@ -288,9 +296,57 @@ pub impl LlvmCtx {
         if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "eq")
         }
-        // (a String operand resolves as a registered-struct lhs via exprStructIdx above, so
-        // its `String.eq` witness is found on the normal path — no value-kind special-case.)
+        // a primitive lhs (`a == b`, a: I8): resolve its own `Eq` witness (`impl I8 as Eq`
+        // in std/Core/Num.pw), so `==` reaches the `i8Eq` intrinsic through the witness
+        // body — the single source of truth, same as arithmetic (spec/12). (A String
+        // operand resolves as a registered struct via exprStructIdx above.)
+        val pti: TypeInfo = c.typeOf(id: lhs)
+        if pti.nameLen != 0U64 {
+            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) {
+                return c.findAssocByName(typeStart: pti.nameStart, typeLen: pti.nameLen, name: "eq")
+            }
+        }
         return c.arena.funcs.count()
+    }
+
+    // The c.arena.funcs index of the `Ord` witness `T.compare(lhs:rhs:)` for the ordering
+    // operand `lhs` (a registered struct/enum with a compare witness, or a primitive whose
+    // `impl I8 as Ord` lives in std/Core/Num.pw), or c.arena.funcs.count() when none — the
+    // caller then keeps the structural/built-in ordering. `< <= > >=` are `Ord` sugar
+    // (spec/12); routing through this witness honors a user/derived `compare`.
+    inout fn ordWitnessFn(c: inout Comp, lhs: U64) -> U64 {
+        val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
+        if sidx < c.arena.structs.count() {
+            return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: "compare")
+        }
+        val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
+        if eid < c.arena.enums.count() {
+            return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "compare")
+        }
+        val pti: TypeInfo = c.typeOf(id: lhs)
+        if pti.nameLen != 0U64 {
+            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) {
+                return c.findAssocByName(typeStart: pti.nameStart, typeLen: pti.nameLen, name: "compare")
+            }
+        }
+        return c.arena.funcs.count()
+    }
+
+    // Emit `a <op> b` (op ∈ `< <= > >=`) via the resolved `Ord` compare witness `fi`
+    // (spec/12: `< <= > >=` desugar to a match on `compare`). Call `compare(a,b)` ->
+    // an `Ordering` value, extract its tag (Less=0, Equal=1, Greater=2, declaration
+    // order in std/Core), and reduce to the boolean the match would yield.
+    inout fn emitOrdViaCompare(c: inout Comp, op: I64, fi: U64, lhs: U64, rhs: U64) -> LLVMValueRef {
+        val ordVal: LLVMValueRef = self.emitWitnessCall(c: inout c, fi: fi, lhs: lhs, rhs: rhs, binary: true)
+        val tag: LLVMValueRef = LLVMBuildExtractValue(self.b, ordVal, 0U64, anon())
+        val tagTy: LLVMTypeRef = LLVMTypeOf(tag)
+        val less: LLVMValueRef = LLVMConstInt(tagTy, 0U64, 0I32)
+        val greater: LLVMValueRef = LLVMConstInt(tagTy, 2U64, 0I32)
+        // a<b: ==Less ; a<=b: !=Greater ; a>b: ==Greater ; a>=b: !=Less
+        if op == opLt() { return LLVMBuildICmp(self.b, llvmIntEq(), tag, less, anon()) }
+        if op == opLe() { return LLVMBuildICmp(self.b, llvmIntNe(), tag, greater, anon()) }
+        if op == opGt() { return LLVMBuildICmp(self.b, llvmIntEq(), tag, greater, anon()) }
+        return LLVMBuildICmp(self.b, llvmIntNe(), tag, less, anon())
     }
 
     // The c.arena.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
@@ -305,6 +361,18 @@ pub impl LlvmCtx {
         if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
         }
+        // a primitive int operand (`-x` -> `impl I8 as Neg`, `~x` -> `impl I8 as BitNot`
+        // in std/Core/Num.pw): route through the witness so `~`/`-` reach the intrinsic
+        // floor through the witness body. (Neg is signed-only, so `impl U8 as Neg` does
+        // not exist and this returns none for it; Bool `!` names a non-prim type and also
+        // returns none — both keep the built-in op. Float neg has no witness until floats
+        // gain conformances — genPrim…/FNeg keeps it.)
+        val pti: TypeInfo = c.typeOf(id: operand)
+        if pti.nameLen != 0U64 {
+            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) {
+                return c.findAssocByName(typeStart: pti.nameStart, typeLen: pti.nameLen, name: unaryMethodName(op: op))
+            }
+        }
         return c.arena.funcs.count()
     }
 
@@ -314,9 +382,12 @@ pub impl LlvmCtx {
     inout fn emitWitnessCall(c: inout Comp, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
         val af: Func = c.arena.funcs[fi]
         mut val av: Array[LLVMValueRef] = []
-        av.append(self.genArgValue(c: inout c, argExpr: lhs, p: af.params[0]))
+        // operator operands are view-blind (operators dispatch on the underlying type;
+        // the `#Ext` view only adds methods) — `self * 2` in an `impl I64` extension must
+        // not trip the arg view-invariance check against the plain-typed witness param.
+        av.append(self.genArgValueV(c: inout c, argExpr: lhs, p: af.params[0], checkView: false))
         if binary {
-            av.append(self.genArgValue(c: inout c, argExpr: rhs, p: af.params[1]))
+            av.append(self.genArgValueV(c: inout c, argExpr: rhs, p: af.params[1], checkView: false))
         }
         // a witness may be a pure free function (its 0-type-arg `gf` instance) or an assoc fn
         // on a lang-item (`String.add` for `"a" + "b"` — still on `pf`, declared lazily like a

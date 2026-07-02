@@ -100,6 +100,14 @@ pub impl LlvmCtx {
                 return self.genLlvmClosureCall(c: inout c, li: cli, args: args)
             }
         }
+        // numeric intrinsic floor (`i8Add`, `u32Lt`, `i64Neg`, …): the primitive op the
+        // std operator-trait witness bodies bottom out in. Lowered by intrinsic-function
+        // IDENTITY (like the Buffer floor below) — this is the ONE place a primitive op is
+        // known; `+`/`<`/`~`/… reach it only through those witness bodies (spec/12, O6).
+        val numIv: LLVMValueRef = self.genNumIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+        if LLVMIsNull(numIv) == 0I32 {
+            return numIv
+        }
         // Buffer floor intrinsics in free-function form, lowered by intrinsic-function
         // IDENTITY (not by receiver-type recognition): the `Buffer[T]` methods are now
         // ordinary monomorphized generic methods whose bodies call these intrinsics, so

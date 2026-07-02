@@ -229,6 +229,15 @@ pub impl LlvmCtx {
 pub impl LlvmCtx {
 
     inout fn genArgValue(c: inout Comp, argExpr: U64, p: Param) -> LLVMValueRef {
+        return self.genArgValueV(c: inout c, argExpr: argExpr, p: p, checkView: true)
+    }
+
+    // As genArgValue, but `checkView` selects whether the extension-view invariance is
+    // enforced. Operator-trait witness operands pass `false`: an operator dispatches on
+    // the UNDERLYING type (the `#Ext` view only adds methods, spec/09), so `self * 2`
+    // inside an `impl I64` extension flows `self` (a viewed value) into the plain-typed
+    // `I64.mul` witness param without a view mismatch. Every other call passes `true`.
+    inout fn genArgValueV(c: inout Comp, argExpr: U64, p: Param, checkView: Bool) -> LLVMValueRef {
         // extension-view invariance (spec/09): `A` and `A#Ext` are distinct types with
         // no implicit cast either way, so an argument's view must match the parameter's
         // declared view exactly — the view is applied/dropped explicitly at the call
@@ -241,9 +250,11 @@ pub impl LlvmCtx {
             pView = c.arena.types[p.ty].viewExtId
             pConcrete = tyNameConcrete(c: inout c, start: c.arena.types[p.ty].nameStart, len: c.arena.types[p.ty].nameLen)
         }
-        if pConcrete {
-            if pView != self.exprViewExtId(c: inout c, id: argExpr) {
-                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
+        if checkView {
+            if pConcrete {
+                if pView != self.exprViewExtId(c: inout c, id: argExpr) {
+                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
+                }
             }
         }
         if p.isInout {

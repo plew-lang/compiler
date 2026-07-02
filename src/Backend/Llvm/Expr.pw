@@ -127,6 +127,17 @@ pub impl LlvmCtx {
                         return self.emitWitnessCall(c: inout c, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
+                // `< <= > >=` : dispatch to the operand type's `Ord` compare witness (spec/12
+                // — ordering is trait sugar, `a < b` == `match compare(a,b) { Less => true, _
+                // => false }`). Honors a user/derived `compare` (`impl I8 as Ord` in Num.pw,
+                // or a struct/enum with a compare witness); a type carrying no compare witness
+                // falls through to the structural / built-in `icmp` ordering below.
+                if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+                    val ordFi: U64 = self.ordWitnessFn(c: inout c, lhs: lhs)
+                    if ordFi < c.arena.funcs.count() {
+                        return self.emitOrdViaCompare(c: inout c, op: op, fi: ordFi, lhs: lhs, rhs: rhs)
+                    }
+                }
                 mut val l: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
                 mut val r: LLVMValueRef = self.genLlvmExpr(c: inout c, id: rhs)
                 // struct ==/!= : structural (field-by-field) equality (the Eq witness).

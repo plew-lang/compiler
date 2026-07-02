@@ -81,6 +81,80 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
+    // 8 (a no-match sentinel, > any real code) if `start..len` is not one of the numeric
+    // type prefixes i8..u64; else its packed code `wi + (unsigned ? 4 : 0)` (wi = width
+    // bucket 0..3). All-U64 so callers derive `wi = code % 4`, `unsigned = code >= 4`
+    // without a signed cast.
+    inout fn numPrefixCode(c: inout Comp, start: U64, len: U64) -> U64 {
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i8") { return 0U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i16") { return 1U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i32") { return 2U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i64") { return 3U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u8") { return 4U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u16") { return 5U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u32") { return 6U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u64") { return 7U64 }
+        return 8U64
+    }
+
+    // If the tail of the call name `nameStart..nameLen` equals `opKw` AND the leading
+    // bytes form a numeric type prefix (i8..u64), return that prefix's packed code
+    // (< 8); else 8 (no match). Used to recognize a numeric-intrinsic name `<prefix><Op>`.
+    inout fn numIntrinsicPrefixFor(c: inout Comp, nameStart: U64, nameLen: U64, opKw: String) -> U64 {
+        val sl: U64 = opKw.bytes().count()
+        if nameLen <= sl { return 8U64 }
+        if !(rangeEquals(bytes: c.arena.bytes, start: nameStart + nameLen - sl, len: sl, kw: opKw)) {
+            return 8U64
+        }
+        return self.numPrefixCode(c: inout c, start: nameStart, len: nameLen - sl)
+    }
+
+    // The numeric intrinsic floor (spec/12, O6). A call to an `extern "plew-intrinsic"`
+    // numeric op (`i8Add`, `u32Lt`, `i64Neg`, …) lowers HERE to the primitive LLVM
+    // operation — this is the ONE place the compiler knows what a primitive numeric op
+    // does. Every source operator (`+`, `<`, `~`, …) reaches it only THROUGH its trait
+    // witness body (`impl I8 as Add { assoc fn add(l,r) { return i8Add(a:l, b:r) } }` in
+    // std/Core/Num.pw), so the witness body is the single source of truth and editing it
+    // changes the operator. Returns null if the name is not a numeric intrinsic.
+    inout fn genNumIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        // unary ops first (single `value` arg).
+        val negP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Neg")
+        if negP < 8U64 {
+            val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: negP % 4U64)
+            return self.buildNegChecked(c: inout c, v: self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: negP >= 4U64))
+        }
+        val notP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitNot")
+        if notP < 8U64 {
+            val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: notP % 4U64)
+            return LLVMBuildNot(self.b, self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: notP >= 4U64), anon())
+        }
+        // binary ops: name tail -> Op, then the single checked entry (which routes
+        // arithmetic to the panic helpers and bitwise/shift/comparison to the raw op).
+        mut val op: I64 = -1I64
+        mut val pc: U64 = 8U64
+        pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Add")
+        if pc < 8U64 { op = opAdd() }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Sub")  if pc < 8U64 { op = opSub() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Mul")  if pc < 8U64 { op = opMul() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Div")  if pc < 8U64 { op = opDiv() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Rem")  if pc < 8U64 { op = opRem() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitAnd")  if pc < 8U64 { op = opBitAnd() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitOr")  if pc < 8U64 { op = opBitOr() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitXor")  if pc < 8U64 { op = opBitXor() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Shl")  if pc < 8U64 { op = opShl() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Shr")  if pc < 8U64 { op = opShr() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Eq")  if pc < 8U64 { op = opEq() } }
+        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Lt")  if pc < 8U64 { op = opLt() } }
+        if op == -1I64 {
+            return LLVMConstNull(self.ptrty)
+        }
+        val unsigned: Bool = pc >= 4U64
+        val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: pc % 4U64)
+        val l: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: unsigned)
+        val r: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[1].expr), target: ty, unsigned: unsigned)
+        return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: unsigned)
+    }
+
     // Construct a registered struct value from a JSX `<Type field=expr ... />`: build
     // each declared field (matched by name, or its default) in order via insertvalue.
     inout fn genLlvmMake(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
