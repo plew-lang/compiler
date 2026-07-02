@@ -242,22 +242,6 @@ pub impl Comp {
         return self.isIntType(start: self.arena.types[ref].nameStart, len: self.arena.types[ref].nameLen)
     }
 
-    inout fn tcCheckCompoundAssign(op: I64, target: U64, value: U64) {
-        if !(op == opAddAssign() || op == opSubAssign() || op == opMulAssign() || op == opDivAssign() || op == opRemAssign()) {
-            return
-        }
-        val l: U64 = self.inferType(id: target)
-        if l == 0U64 || l >= self.arena.types.count() {
-            return
-        }
-        // a primitive numeric target forces the value to match (same as the binop it
-        // desugars to: `x: I64; x += true` / `x += "a"` has no `Add[Bool]`/`Add[String]`
-        // on I64). A user-type target uses `Add[Rhs]` and is checked by its own witness.
-        if self.isIntType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) || self.isFloatType(start: self.arena.types[l].nameStart, len: self.arena.types[l].nameLen) {
-            self.tcCheckValue(expectedRef: l, valueExpr: value, pos: "compound")
-        }
-    }
-
     inout fn tcCheckArrayIndex(base: U64, index: U64) {
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.kind == 3 {

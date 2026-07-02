@@ -351,24 +351,16 @@ pub impl LlvmCtx {
                     }
                 }
             }
-            Stmt.Assign(val op, val target, val value) => {
+            Stmt.Assign(val target, val value) => {
                 // extension-view invariance (spec/09): an assignment must not implicitly
                 // change a value's view — the target's and value's views must match.
                 if self.exprViewExtId(c: inout c, id: target) != self.exprViewExtId(c: inout c, id: value) {
                     compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: value)), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
                 }
-                // compound assign `x OP= v` is pure sugar for `x = x OP v` (spec/12): synthesize
-                // the binary RHS so the operator rides its trait witness — the single-source
-                // intrinsic-floor path — exactly like a plain `x = x + v`, with no separate
-                // primitive open-code for the compound form. The target place expr is reused as
-                // the binary's lhs (its read rides the same place / Index / Field witness the
-                // store uses), so from here every target kind sees `aop == opAssign()`.
-                mut val aop: I64 = op
-                mut val aval: U64 = value
-                if op != opAssign() {
-                    aval = c.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=target rhs=value />)
-                    aop = opAssign()
-                }
+                // compound assign is desugared upstream in the Lower pass to `place = place OP
+                // value` (spec/12, place-once), so every `Stmt.Assign` reaching the backend is a
+                // plain `=` and the OP rides its operator witness like any binary — no primitive
+                // open-code and no compound handling here.
                 match c.arena.exprs[target] {
                     Expr.Ident(val start, val len) => {
                         val li: U64 = self.findLocal(c: inout c, start: start, len: len)
@@ -377,10 +369,10 @@ pub impl LlvmCtx {
                             // into the fat pointer before the store (spec/08).
                             if refIsAny(c: inout c, ref: self.locTypeRef[li]) {
                                 mut val ab: Bool = false
-                                mut val arv: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: self.locTypeRef[li], valueExpr: aval, outBoxed: inout ab)
+                                mut val arv: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: self.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
                                 if !(ab) {
                                     // any -> any: value-semantics copy of a place.
-                                    arv = self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: aval), valueExpr: aval)
+                                    arv = self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: value), valueExpr: value)
                                 }
                                 LLVMBuildStore(self.b, arv, self.locPtr[li])
                                 return
@@ -392,7 +384,7 @@ pub impl LlvmCtx {
                             if c.isGenericInst(ref: self.locTypeRef[li]) {
                                 self.expectedTy = self.locTypeRef[li]
                             }
-                            mut val rv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: aval)
+                            mut val rv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
                             self.expectedTy = 0U64
                             // coerce the value to the local's width (a context-less
                             // literal may default wider/narrower).
@@ -403,7 +395,7 @@ pub impl LlvmCtx {
                             // (`b = a`) copies so the two bindings stay independent. (The
                             // desugared compound RHS is a Binary — never a place — so this is a
                             // no-op for `x += v`.)
-                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: aval)
+                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                             // reassigning a unique local deinits its PREVIOUS value
                             // first (spec/03) — load and destroy the old, unless the
                             // local was moved out (no live value) or not owned.
@@ -436,27 +428,25 @@ pub impl LlvmCtx {
                         }
                     }
                     Expr.Index(base: val ibase, index: val iindex) => {
-                        // whole-element write `g[i] = v` / `g[i] OP= v` (collections.md E3):
-                        // route through the `IndexSet` witness uniformly — a Dictionary
-                        // `d[k]=v` lowers to `d.insert(key:, value:)`; any type with an
-                        // `indexSet` method (incl. Array, whose `indexSet` forwards to the
-                        // Buffer floor) lowers to `g.indexSet(key: i, value: v)`. The compound
-                        // form was already desugared to `aval = g[i] OP v` at the top (the read
-                        // rides the `Index` witness; its narrow-int overflow check survives
-                        // because the RHS literal carries the element-width context the frontend
-                        // recorded — verifyAssign / checkAssignRhsLit). The receiver is `inout`,
-                        // so its place gateway runs the CoW privatization. (Place-based element
-                        // mutation `arr[i].field = v` / `inout arr[i]` is handled elsewhere and
-                        // keeps the place model, which addresses the backing directly.)
+                        // whole-element write `g[i] = v` (collections.md E3): route through the
+                        // `IndexSet` witness uniformly — a Dictionary `d[k]=v` lowers to
+                        // `d.insert(key:, value:)`; any type with an `indexSet` method (incl.
+                        // Array, whose `indexSet` forwards to the Buffer floor) lowers to
+                        // `g.indexSet(key: i, value: v)`. A compound `g[i] OP= v` arrives already
+                        // desugared by Lower to `g[i] = g[i] OP v` with `i` bound to a temp (so it
+                        // is evaluated once) — `value` here is that binary. The receiver is
+                        // `inout`, so its place gateway runs the CoW privatization. (Place-based
+                        // element mutation `arr[i].field = v` / `inout arr[i]` is handled elsewhere
+                        // and keeps the place model, which addresses the backing directly.)
                         val ibsi: U64 = self.exprStructIdx(c: inout c, id: ibase)
                         if ibsi < c.arena.structs.count() {
                             if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
-                                val m: U64 = c.synthDictMethod(recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: aval)
+                                val m: U64 = c.synthDictMethod(recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: value)
                                 self.genLlvmExpr(c: inout c, id: m)
                                 return
                             }
                             if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "indexSet") {
-                                val m: U64 = c.synthDictMethod(recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: aval)
+                                val m: U64 = c.synthDictMethod(recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: value)
                                 self.genLlvmExpr(c: inout c, id: m)
                                 return
                             }
@@ -487,11 +477,11 @@ pub impl LlvmCtx {
                                         // FRESH cell, and repoint the field — value semantics
                                         // (a copy that still points at the old cell is unchanged).
                                         // (boxed / generic-instance fields are non-numeric, so a
-                                        // compound `+=` never reaches here — aval is a Binary only
-                                        // for the scalar tail below.)
+                                        // desugared compound `s.f = s.f OP v` only lands on the
+                                        // scalar-field tail below, never here.)
                                         if c.fieldIsBoxed(f: fld) {
                                             self.expectedTy = fld.ty
-                                            val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: aval)
+                                            val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
                                             self.expectedTy = 0U64
                                             val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(LLVMTypeOf(bv)), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                                             LLVMBuildStore(self.b, bv, cell)
@@ -501,7 +491,7 @@ pub impl LlvmCtx {
                                         val gfr: U64 = fieldGenInstRef(c: inout c, fld: fld)
                                         if gfr != 0U64 {
                                             self.expectedTy = gfr
-                                            mut val gv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: aval)
+                                            mut val gv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
                                             self.expectedTy = 0U64
                                             // value semantics: assigning a generic-instance PLACE
                                             // (an opaque `Buffer[T]` field, a `Box`/`Optional` place)
@@ -517,18 +507,18 @@ pub impl LlvmCtx {
                                             // value's retain (copyValueIfPlace) below. Mirrors the
                                             // `->` pointee-field-assign path.
                                             self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: gfr), gep, anon()), typeRef: gfr, retain: false)
-                                            gv = self.copyValueIfPlace(c: inout c, rv: gv, valueExpr: aval)
+                                            gv = self.copyValueIfPlace(c: inout c, rv: gv, valueExpr: value)
                                             LLVMBuildStore(self.b, gv, gep)
                                             return
                                         }
                                         // scalar field: `s.f = v` / (desugared) `s.f = s.f OP v`.
-                                        mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: aval), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                        mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                         // value semantics (spec/03): assigning an array/struct
                                         // PLACE into a field copies, so the field and the RHS
                                         // binding stay independent (`s.xs = a` then `a[0]=…`
                                         // must leave `s.xs` unchanged). A desugared compound RHS
                                         // is a Binary (non-place), so this is a no-op for `s.f += v`.
-                                        rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: aval)
+                                        rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                                         LLVMBuildStore(self.b, rv, gep)
                                         return
                                     }
@@ -551,18 +541,18 @@ pub impl LlvmCtx {
                                             val gfr2: U64 = fieldGenInstRef(c: inout c, fld: fld)
                                             if gfr2 != 0U64 {
                                                 self.expectedTy = gfr2
-                                                val gv2: LLVMValueRef = self.genLlvmExpr(c: inout c, id: aval)
+                                                val gv2: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
                                                 self.expectedTy = 0U64
                                                 LLVMBuildStore(self.b, gv2, gep)
                                                 return
                                             }
                                             // scalar nested field: `arr[i].f = v` / (desugared)
                                             // `arr[i].f = arr[i].f OP v`.
-                                            mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: aval), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                            mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                             // value semantics: copy an array/struct PLACE RHS
                                             // (`arr[i].xs = a`) so the field stays independent.
                                             // A desugared compound RHS is a Binary (non-place) = no-op.
-                                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: aval)
+                                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                                             LLVMBuildStore(self.b, rv, gep)
                                             handled = true
                                         }
@@ -589,7 +579,7 @@ pub impl LlvmCtx {
                                 val gfr3: U64 = fieldGenInstRef(c: inout c, fld: fld)
                                 if gfr3 != 0U64 {
                                     self.expectedTy = gfr3
-                                    val gv3: LLVMValueRef = self.genLlvmExpr(c: inout c, id: aval)
+                                    val gv3: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
                                     self.expectedTy = 0U64
                                     // the shared pointee field is overwritten in place: release the
                                     // OLD occupant (one owner drops) and, when the RHS is a PLACE,
@@ -599,19 +589,19 @@ pub impl LlvmCtx {
                                     // freed (the field and the source both release the one cell).
                                     val gfTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: gfr3)
                                     self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, gfTy, gep, anon()), typeRef: gfr3, retain: false)
-                                    if structExprIsPlace(c: inout c, id: aval) {
+                                    if structExprIsPlace(c: inout c, id: value) {
                                         self.valueArc(c: inout c, v: gv3, typeRef: gfr3, retain: true)
                                     }
                                     LLVMBuildStore(self.b, gv3, gep)
                                     return
                                 }
                                 // scalar pointee field: `r->f = v` / (desugared) `r->f = r->f OP v`.
-                                mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: aval), tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
                                 // value semantics: copy an array/struct PLACE RHS so the pointee
                                 // field is independent of the source binding (the Ref aliasing is
                                 // about the cell, not the assigned value). A desugared compound RHS
                                 // is a Binary (non-place) = no-op.
-                                rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: aval)
+                                rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                                 LLVMBuildStore(self.b, rv, gep)
                                 return
                             }

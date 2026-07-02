@@ -556,7 +556,7 @@ pub impl Comp {
                 }
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
             }
-            Stmt.Assign(val op, val target, val value) => {
+            Stmt.Assign(val target, val value) => {
                 self.checkBoundsExpr(exprId: target)
                 self.checkBoundsExpr(exprId: value)
                 // the assigned value must match the place's type (`x = a` / `x += a` where

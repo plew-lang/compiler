@@ -22,7 +22,7 @@ import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepI
 import ./Lock with { Lock }
 import ./Cache with { cacheRoot }
 import ./Diag with { compileErrorAt, eprintInt, digitByte }
-import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, opAddAssign, opSubAssign, opMulAssign, opDivAssign, opRemAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
+import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 export struct Comp {
     // the shared IR arena: source bytes + every node table (see `Arena`). The

@@ -310,6 +310,66 @@ pub impl Comp {
         return self.pushExpr(e: <Expr.IfExpr cond=trueCond thenBlk=thenWrap elseBlk=elseWrap />)
     }
 
+    // Compound assign `place OP= v` desugars to `place = place OP v` (spec/12), evaluating
+    // the PLACE ONCE: side-effecting index keys in the place are bound to temp locals first,
+    // then the place (read + write) references those temps — so `arr[f()] += v` calls `f()`
+    // once, not twice. The OP then rides its operator-trait witness like any binary (the
+    // single-source intrinsic-floor path); there is no primitive open-code and no separate
+    // compound handling downstream (verify / codegen see only `=`). Ident / Field / Arrow
+    // navigations are re-evaluable places (a local read, a GEP), so only Index keys need a
+    // temp.
+    inout fn lowerCompoundAssignInto(op: I64, target: ExprAst, value: ExprAst, stmts: inout Array[U64]) {
+        val pid: U64 = self.rebuildPlaceTemping(e: target, stmts: inout stmts)
+        val vid: U64 = self.lowerExpr(e: value)
+        val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=pid rhs=vid />)
+        stmts.append(self.pushStmt(s: <Stmt.Assign target=pid value=binE />))
+    }
+
+    // Lower a place ExprAst to an IR expr id, binding each side-effecting index key to a
+    // fresh temp local (pushed into `stmts`) so the place is evaluated once (spec/12). The
+    // returned id is reused for both the read and the write of the desugared compound assign.
+    inout fn rebuildPlaceTemping(e: ExprAst, stmts: inout Array[U64]) -> U64 {
+        match e {
+            ExprAst.Field(val base, val name, span: _) => {
+                val b: U64 = self.rebuildPlaceTemping(e: base, stmts: inout stmts)
+                val nm: Bind = self.internBytes(s: name)
+                return self.pushExpr(e: <Expr.Field base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+            }
+            ExprAst.Arrow(val base, val name, span: _) => {
+                val b: U64 = self.rebuildPlaceTemping(e: base, stmts: inout stmts)
+                val nm: Bind = self.internBytes(s: name)
+                return self.pushExpr(e: <Expr.Arrow base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+            }
+            ExprAst.Index(val base, val index, span: _) => {
+                val b: U64 = self.rebuildPlaceTemping(e: base, stmts: inout stmts)
+                val idx: U64 = self.tempIndexKey(e: index, stmts: inout stmts)
+                return self.pushExpr(e: <Expr.Index base=b index=idx />)
+            }
+            _ => {
+                // an Ident (or any leaf) — a re-readable place root; lower as-is.
+                return self.lowerExpr(e: e)
+            }
+        }
+    }
+
+    // An index key that might have a side effect (anything but a bare Ident or int literal)
+    // is bound to a fresh temp local and returned as an Ident to it, so the key is evaluated
+    // exactly once. A literal is kept inline (it needs its index-position type context); an
+    // Ident is a pure re-readable local.
+    inout fn tempIndexKey(e: ExprAst, stmts: inout Array[U64]) -> U64 {
+        match e {
+            ExprAst.Ident(name: _, span: _) => { return self.lowerExpr(e: e) }
+            ExprAst.IntLit(value: _, isBool: _, tySuffix: _, span: _) => { return self.lowerExpr(e: e) }
+            _ => {
+                val iv: U64 = self.lowerExpr(e: e)
+                self.cur.lowerTmpSeq += 1U64
+                val tmp: Bind = self.internTmpName(prefix: "__ce", n: self.cur.lowerTmpSeq)
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+                return self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+            }
+        }
+    }
+
     inout fn lowerStmt(s: StmtAst) -> U64 {
         mut val result: U64 = 0
         match s {
@@ -330,9 +390,19 @@ pub impl Comp {
                 result = self.pushStmt(s: <Stmt.Let mutable=mutable nameStart=nm.nameStart nameLen=nm.nameLen tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=iv />)
             }
             StmtAst.Assign(val op, val target, val value, val span) => {
+                // The block path (lowerBlock) desugars a compound `place OP= v` with
+                // place-once temps; this direct path (only reached for a plain top-level
+                // assign today) also desugars any compound inline as `place = place OP v`
+                // — no place-once temps here, but a temp-free target has none to bind — so
+                // NO compound Stmt.Assign ever reaches verify / codegen (single desugar model).
                 val t: U64 = self.lowerExpr(e: target)
-                val v: U64 = self.lowerExpr(e: value)
-                result = self.pushStmt(s: <Stmt.Assign op=op target=t value=v />)
+                if op == opAssign() {
+                    val v: U64 = self.lowerExpr(e: value)
+                    result = self.pushStmt(s: <Stmt.Assign target=t value=v />)
+                } else {
+                    val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=t rhs=self.lowerExpr(e: value) />)
+                    result = self.pushStmt(s: <Stmt.Assign target=t value=binE />)
+                }
             }
             StmtAst.ExprStmt(val expr, val span) => {
                 val e: U64 = self.lowerExpr(e: expr)
@@ -471,6 +541,16 @@ pub impl Comp {
             match b.stmts[i] {
                 StmtAst.Destructure(val binds, val init, val span) => {
                     self.lowerDestructureInto(binds: binds, init: init, stmts: inout stmts)
+                }
+                // a compound assign `place OP= v` expands to the temp bindings for its
+                // place's side-effecting index keys plus the desugared `place = place OP v`
+                // (place evaluated once, spec/12). A plain `=` falls to lowerStmt below.
+                StmtAst.Assign(val op, val target, val value, val span) => {
+                    if op == opAssign() {
+                        stmts.append(self.lowerStmt(s: b.stmts[i]))
+                    } else {
+                        self.lowerCompoundAssignInto(op: op, target: target, value: value, stmts: inout stmts)
+                    }
                 }
                 StmtAst.Match(val scrut, val arms, val span) => {
                     if matchHasEnumOrStruct(arms: arms) {

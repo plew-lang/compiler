@@ -1,0 +1,37 @@
+// Compound assign `a OP= b` is pure desugar to `a = a OP b` with the lvalue
+// PLACE evaluated exactly ONCE (spec/12, "場所は 1 回だけ評価する"): a
+// side-effecting index like `xs[idx()] += v` must call `idx()` a single time.
+// The desugar lives in the Lower pass, which temps any side-effecting index key
+// so both the read and the write-back reuse the SAME computed place.
+import @Std/Io with { print }
+
+mut val calls: I64 = 0
+
+fn idx() -> U64 {
+    calls += 1
+    return 0U64
+}
+
+fn main() {
+    mut val xs: Array[I64] = [10I64, 20I64]
+    // side-effecting index key — must be evaluated once for both read and write.
+    xs[idx()] += 5I64
+    print(xs[0])   // 15
+    print(calls)   // 1  (place evaluated once — would be 2 if desugar re-evaluated)
+
+    // plain local compound assign still works.
+    mut val n: I64 = 7I64
+    n += 3I64
+    n *= 2I64
+    print(n)       // 20
+
+    // field compound assign.
+    mut val p: Point = <Point x=1I64 y=2I64 />
+    p.x += 10I64
+    print(p.x)     // 11
+}
+
+struct Point {
+    pub mut val x: I64
+    val y: I64
+}

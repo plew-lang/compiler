@@ -325,7 +325,10 @@ export struct IdentBinding {
 
 export enum Stmt {
     Let(mutable: Bool, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64)
-    Assign(op: I64, target: U64, value: U64)
+    // A plain `place = value`. Compound `place OP= v` is desugared to `place = place OP v`
+    // in the Lower pass (spec/12, place-once), so the IR has no compound form — the OP rides
+    // its operator-trait witness like any binary. There is no `op` field.
+    Assign(target: U64, value: U64)
     ExprStmt(expr: U64)
     // `offset` = the `return` keyword's source offset (for the bare-return-in-a
     // value-returning-function diagnostic). 0 for synthesized returns.
@@ -968,6 +971,9 @@ export struct Cursor {
     pub mut val asyncVarSeq: U64 = 0
     pub mut val lowerRetTy: U64 = 0
     pub mut val checkFn: U64 = 0
+    // monotonic gensym counter for lowering-synthesized temp locals (compound-assign
+    // place bindings etc.), so names are globally unique across statements.
+    pub mut val lowerTmpSeq: U64 = 0
 }
 pub impl Cursor { factory }
 

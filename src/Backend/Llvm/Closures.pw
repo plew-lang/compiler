@@ -163,7 +163,7 @@ pub impl LlvmCtx {
     inout fn scanStmtClosures(c: inout Comp, id: U64) {
         match c.arena.stmts[id] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { self.scanExprClosures(c: inout c, id: init) }
-            Stmt.Assign(op: _, val target, val value) => { self.scanExprClosures(c: inout c, id: target) self.scanExprClosures(c: inout c, id: value) }
+            Stmt.Assign(val target, val value) => { self.scanExprClosures(c: inout c, id: target) self.scanExprClosures(c: inout c, id: value) }
             Stmt.ExprStmt(val expr) => { self.scanExprClosures(c: inout c, id: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => { if hasValue { self.scanExprClosures(c: inout c, id: value) } }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {

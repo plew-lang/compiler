@@ -13,7 +13,7 @@ import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, pars
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, ResolvedExpr, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, runFrontend }
 import ./Diag with { compileErrorAt, digitStrU }
-import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitMethodName, unaryMethodName }
+import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
 
 // ---- backend state (threaded inout through the emitters) ----
 //

@@ -86,8 +86,8 @@ pub impl Comp {
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
-            Stmt.Assign(val op, val target, val value) => {
-                self.verifyAssign(op: op, target: target, value: value)
+            Stmt.Assign(val target, val value) => {
+                self.verifyAssign(target: target, value: value)
             }
             Stmt.ExprStmt(val expr) => {
                 self.checkLitCtx(id: expr, eKind: 0, eBits: 0, eSgn: false)
@@ -292,7 +292,7 @@ pub impl Comp {
         }
     }
 
-    inout fn verifyAssign(op: I64, target: U64, value: U64) {
+    inout fn verifyAssign(target: U64, value: U64) {
         match self.arena.exprs[target] {
             Expr.Index(val base, val index) => {
                 if !(self.placeIsMutable(id: base)) {
@@ -349,24 +349,20 @@ pub impl Comp {
         // range-checked; an undetermined one is a compile error, not a silent i64 default.
         self.checkAssignRhsLit(target: target, value: value)
         self.verifyExpr(id: value)
-        // a plain reassignment `u = e` reinitializes `u`, so it is live again — clear any
+        // a reassignment `u = e` reinitializes `u`, so it is live again — clear any
         // use-after-move mark (the value was verified above, so a moved read in `e` is
         // already reported). spec/03.
-        if op == opAssign() {
-            match self.arena.exprs[target] {
-                Expr.Ident(val start, val len) => {
-                    self.verifyUnmarkMoved(idx: self.localIndexByName(start: start, len: len))
-                }
-                _ => {}
+        match self.arena.exprs[target] {
+            Expr.Ident(val start, val len) => {
+                self.verifyUnmarkMoved(idx: self.localIndexByName(start: start, len: len))
             }
+            _ => {}
         }
         // the assigned value's type must match the place's type (the TypeRef checker
         // subsumes the old numeric/String/named-id category checks here, with generic-arg
-        // precision and Bool/width/sign distinctions).
-        if op == opAssign() {
-            self.tcCheckValue(expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
-        } else {
-            self.tcCheckCompoundAssign(op: op, target: target, value: value)
-        }
+        // precision and Bool/width/sign distinctions). Compound assign was desugared to
+        // `place = place OP value` in Lower, so the OP's operand check rides the binary's
+        // own witness resolution — there is no separate compound check.
+        self.tcCheckValue(expectedRef: self.inferType(id: target), valueExpr: value, pos: "assign")
     }
 }

@@ -429,7 +429,7 @@ pub impl Comp {
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
-            Stmt.Assign(val op, val target, val value) => {
+            Stmt.Assign(val target, val value) => {
                 self.scanExprInsts(exprId: target)
                 self.scanExprInsts(exprId: value)
             }

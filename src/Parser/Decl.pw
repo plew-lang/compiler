@@ -49,6 +49,36 @@ pub impl Comp {
         return <Bind nameStart=start nameLen=sb.count() nameId=nid fieldStart=start fieldLen=sb.count() />
     }
 
+    // Intern `<prefix><n>` (decimal) as a fresh name — for lowering-synthesized temps that
+    // need a globally-unique name (e.g. compound-assign place bindings `__ce0`, `__ce1`).
+    inout fn internTmpName(prefix: String, n: U64) -> Bind {
+        val start: U64 = self.arena.bytes.count()
+        val pb: Array[U8] = prefix.bytes()
+        mut val i: U64 = 0
+        while i < pb.count() {
+            self.arena.bytes.append(pb[i])
+            i += 1
+        }
+        // decimal digits of `n`, most-significant first (build LS-first, then reverse).
+        mut val digits: Array[U8] = []
+        mut val m: U64 = n
+        if m == 0U64 {
+            digits.append(digitByte(d: 0U64))
+        }
+        while m > 0U64 {
+            digits.append(digitByte(d: m % 10U64))
+            m = m / 10U64
+        }
+        mut val j: U64 = digits.count()
+        while j > 0U64 {
+            self.arena.bytes.append(digits[j - 1U64])
+            j -= 1U64
+        }
+        val len: U64 = self.arena.bytes.count() - start
+        val nid: U64 = intern(c: inout self, start: start, len: len)
+        return <Bind nameStart=start nameLen=len nameId=nid fieldStart=start fieldLen=len />
+    }
+
     // A type-typed parameter `name: Type` (copyable, no mode/default) for a
     // synthesized assoc fn.
     inout fn synthParam(nameSpan: Bind, tyStart: U64, tyLen: U64) -> Param {
