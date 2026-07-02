@@ -150,6 +150,20 @@ extern "plew-intrinsic" {
     fn u64BitNot(a: U64) -> U64
     fn u64Eq(a: U64, b: U64) -> Bool
     fn u64Lt(a: U64, b: U64) -> Bool
+    fn f32Add(a: F32, b: F32) -> F32
+    fn f32Sub(a: F32, b: F32) -> F32
+    fn f32Mul(a: F32, b: F32) -> F32
+    fn f32Div(a: F32, b: F32) -> F32
+    fn f32Neg(a: F32) -> F32
+    fn f32Eq(a: F32, b: F32) -> Bool
+    fn f32Lt(a: F32, b: F32) -> Bool
+    fn f64Add(a: F64, b: F64) -> F64
+    fn f64Sub(a: F64, b: F64) -> F64
+    fn f64Mul(a: F64, b: F64) -> F64
+    fn f64Div(a: F64, b: F64) -> F64
+    fn f64Neg(a: F64) -> F64
+    fn f64Eq(a: F64, b: F64) -> Bool
+    fn f64Lt(a: F64, b: F64) -> Bool
     fn boolNot(a: Bool) -> Bool
     fn boolEq(a: Bool, b: Bool) -> Bool
 }

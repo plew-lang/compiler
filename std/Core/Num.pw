@@ -3,7 +3,6 @@
 // intrinsic floor (iXAdd -> plew_iXAdd in the C preamble; spec/12, O6). A part
 // of @Std/Core so Core — the owner of the primitive types — stays coherent.
 
-
 impl I8 as Add[I8] {
     type Output = I8
     assoc fn add(lhs: I8, rhs: I8) -> I8 { return i8Add(a: lhs, b: rhs) }
@@ -449,6 +448,66 @@ impl U64 as Ord {
     assoc fn compare(lhs: U64, rhs: U64) -> Ordering {
         if u64Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
         if u64Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
+impl F32 as Add[F32] {
+    type Output = F32
+    assoc fn add(lhs: F32, rhs: F32) -> F32 { return f32Add(a: lhs, b: rhs) }
+}
+impl F32 as Sub[F32] {
+    type Output = F32
+    assoc fn sub(lhs: F32, rhs: F32) -> F32 { return f32Sub(a: lhs, b: rhs) }
+}
+impl F32 as Mul[F32] {
+    type Output = F32
+    assoc fn mul(lhs: F32, rhs: F32) -> F32 { return f32Mul(a: lhs, b: rhs) }
+}
+impl F32 as Div[F32] {
+    type Output = F32
+    assoc fn div(lhs: F32, rhs: F32) -> F32 { return f32Div(a: lhs, b: rhs) }
+}
+impl F32 as Neg {
+    type Output = F32
+    assoc fn neg(value: F32) -> F32 { return f32Neg(a: value) }
+}
+impl F32 as Eq {
+    assoc fn eq(lhs: F32, rhs: F32) -> Bool { return f32Eq(a: lhs, b: rhs) }
+}
+impl F32 as Ord {
+    assoc fn compare(lhs: F32, rhs: F32) -> Ordering {
+        if f32Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if f32Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
+        return <Ordering.Greater />
+    }
+}
+impl F64 as Add[F64] {
+    type Output = F64
+    assoc fn add(lhs: F64, rhs: F64) -> F64 { return f64Add(a: lhs, b: rhs) }
+}
+impl F64 as Sub[F64] {
+    type Output = F64
+    assoc fn sub(lhs: F64, rhs: F64) -> F64 { return f64Sub(a: lhs, b: rhs) }
+}
+impl F64 as Mul[F64] {
+    type Output = F64
+    assoc fn mul(lhs: F64, rhs: F64) -> F64 { return f64Mul(a: lhs, b: rhs) }
+}
+impl F64 as Div[F64] {
+    type Output = F64
+    assoc fn div(lhs: F64, rhs: F64) -> F64 { return f64Div(a: lhs, b: rhs) }
+}
+impl F64 as Neg {
+    type Output = F64
+    assoc fn neg(value: F64) -> F64 { return f64Neg(a: value) }
+}
+impl F64 as Eq {
+    assoc fn eq(lhs: F64, rhs: F64) -> Bool { return f64Eq(a: lhs, b: rhs) }
+}
+impl F64 as Ord {
+    assoc fn compare(lhs: F64, rhs: F64) -> Ordering {
+        if f64Lt(a: lhs, b: rhs) { return <Ordering.Less /> }
+        if f64Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }
         return <Ordering.Greater />
     }
 }

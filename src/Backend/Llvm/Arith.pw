@@ -117,6 +117,14 @@ pub impl LlvmCtx {
     // std/Core/Num.pw), so the witness body is the single source of truth and editing it
     // changes the operator. Returns null if the name is not a numeric intrinsic.
     inout fn genNumIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        // float floor (`f64Add`, `f32Neg`, `f64Lt`, …) and bool floor (`boolNot`,
+        // `boolEq`) are recognized first — their names don't share the iN/uN prefix
+        // shape, so the int matcher below would reject them anyway; handling them up
+        // front keeps each floor's lowering in one place.
+        val fv: LLVMValueRef = self.genFloatIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+        if LLVMIsNull(fv) == 0I32 { return fv }
+        val bv: LLVMValueRef = self.genBoolIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+        if LLVMIsNull(bv) == 0I32 { return bv }
         // unary ops first (single `value` arg).
         val negP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Neg")
         if negP < 8U64 {
@@ -153,6 +161,66 @@ pub impl LlvmCtx {
         val l: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: unsigned)
         val r: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[1].expr), target: ty, unsigned: unsigned)
         return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: unsigned)
+    }
+
+    // The float half of the intrinsic floor (spec/02,12): a call to `f32<Op>` / `f64<Op>`
+    // lowers HERE to the IEEE op. Arithmetic (Add/Sub/Mul/Div) -> f-op; Neg -> fneg;
+    // Eq/Lt -> a NaN-compare panic guard then an ordered fcmp -> i1 (Ord.compare rides
+    // Lt; float `%` and bitwise ops don't exist, so no Rem/Bit* here). Both F32/F64 lower
+    // to `double` for now. Returns null if the name isn't a float intrinsic.
+    inout fn genFloatIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        if nameLen <= 3U64 { return LLVMConstNull(self.ptrty) }
+        if !(rangeEquals(bytes: c.arena.bytes, start: nameStart, len: 3U64, kw: "f32")) {
+            if !(rangeEquals(bytes: c.arena.bytes, start: nameStart, len: 3U64, kw: "f64")) {
+                return LLVMConstNull(self.ptrty)
+            }
+        }
+        val ss: U64 = nameStart + 3U64
+        val sl: U64 = nameLen - 3U64
+        // unary Neg (one `value` arg). Match the suffix BEFORE touching args — an
+        // unrelated `f64<X>` name (e.g. the `f64ToU64` conversion intrinsic) shares the
+        // prefix but isn't an operator floor op, and takes a different arg shape.
+        if rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Neg") {
+            return LLVMBuildFNeg(self.b, self.coerceToF64(c: inout c, id: args[0].expr), anon())
+        }
+        // recognized binary float ops only: identify the op from the suffix first, then
+        // (once matched) lower the two operands.
+        mut val isAdd: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Add")
+        mut val isSub: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Sub")
+        mut val isMul: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Mul")
+        mut val isDiv: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Div")
+        mut val isEq: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Eq")
+        mut val isLt: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Lt")
+        if !isAdd { if !isSub { if !isMul { if !isDiv { if !isEq { if !isLt {
+            return LLVMConstNull(self.ptrty)
+        } } } } } }
+        val l: LLVMValueRef = self.coerceToF64(c: inout c, id: args[0].expr)
+        val r: LLVMValueRef = self.coerceToF64(c: inout c, id: args[1].expr)
+        if isAdd { return LLVMBuildFAdd(self.b, l, r, anon()) }
+        if isSub { return LLVMBuildFSub(self.b, l, r, anon()) }
+        if isMul { return LLVMBuildFMul(self.b, l, r, anon()) }
+        if isDiv { return LLVMBuildFDiv(self.b, l, r, anon()) }
+        // Eq/Lt: NaN compares must panic (spec/02) before the ordered fcmp
+        // (LLVMRealOEQ=1, OLT=4).
+        self.emitF64NanCheck(c: inout c, l: l, r: r)
+        if isEq { return LLVMBuildFCmp(self.b, 1U32, l, r, anon()) }
+        return LLVMBuildFCmp(self.b, 4U32, l, r, anon())
+    }
+
+    // The bool half of the intrinsic floor: `boolNot` -> `xor x, true`, `boolEq` ->
+    // `icmp eq`. Concrete `!b` / `b == b` open-code the same ops directly (Expr.pw); these
+    // exist so a generic `T.not` / `T.eq` grounded to Bool routes through the real witness.
+    // Returns null if the name isn't a bool intrinsic.
+    inout fn genBoolIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "boolNot") {
+            return LLVMBuildNot(self.b, self.genLlvmExpr(c: inout c, id: args[0].expr), anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "boolEq") {
+            val l: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
+            val r: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[1].expr)
+            return LLVMBuildICmp(self.b, llvmIntEq(), l, r, anon())
+        }
+        return LLVMConstNull(self.ptrty)
     }
 
     // Construct a registered struct value from a JSX `<Type field=expr ... />`: build

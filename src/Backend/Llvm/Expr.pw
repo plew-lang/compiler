@@ -95,11 +95,6 @@ pub impl LlvmCtx {
                 if op == opAnd() || op == opOr() {
                     return self.genLlvmShortCircuit(c: inout c, isAnd: op == opAnd(), lhs: lhs, rhs: rhs)
                 }
-                // float arithmetic / comparison: emit the IEEE op directly (the operands
-                // are doubles). Arithmetic -> f-op; comparison -> fcmp (ordered) -> i1.
-                if self.valueKind(c: inout c, id: lhs) == 4U64 || self.valueKind(c: inout c, id: rhs) == 4U64 {
-                    return self.genLlvmFloatBinop(c: inout c, op: op, lhs: lhs, rhs: rhs)
-                }
                 // ==/!= : dispatch to the operand type's `Eq` witness (spec/12 — comparison
                 // is trait sugar). `String.eq` rides its `buffer: Buffer[U8]` field through
                 // `bufferEq`; a user `@[Eq]` struct/enum rides its synthesized `eq`. No

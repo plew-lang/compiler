@@ -327,6 +327,25 @@ pub impl LlvmCtx {
                 val cfi: U64 = c.resolvedCallee(id: id)
                 if cfi < c.arena.funcs.count() {
                     if c.arena.funcs[cfi].hasRet {
+                        // a generic free fn (`sum[T](…) -> T`): ground the return through the
+                        // call's inferred type args so a `T -> F64` result is kinded float (4),
+                        // not the ungrounded-`T` int default — so `print(sum(a: 1.5, …))` picks
+                        // the float sink instead of sext-ing a double into plew_print_i64.
+                        if c.isGenericFreeFn(fi: cfi) {
+                            if c.arena.funcs[cfi].retTy != 0U64 {
+                                val ginf: Array[U64] = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
+                                val savedGP: Array[Bind] = c.cur.typeParams
+                                val savedGA: Array[U64] = c.cur.typeArgs
+                                c.cur.typeParams = c.arena.funcs[cfi].typeParams
+                                c.cur.typeArgs = ginf
+                                val rg: U64 = c.groundTypeRef(ref: c.arena.funcs[cfi].retTy)
+                                c.cur.typeParams = savedGP
+                                c.cur.typeArgs = savedGA
+                                if rg < c.arena.types.count() {
+                                    return kindFromTySpan(c: inout c, tyStart: c.arena.types[rg].nameStart, tyLen: c.arena.types[rg].nameLen)
+                                }
+                            }
+                        }
                         return kindFromTySpan(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
                     }
                 }

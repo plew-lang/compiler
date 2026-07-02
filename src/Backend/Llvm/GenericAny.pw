@@ -101,40 +101,15 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // Lower a primitive numeric operator-witness assoc call (`I32.add(lhs:, rhs:)`,
-    // `I64.neg(value:)`, `U8.bitnot(value:)`) directly to the LLVM op. Binary ops take
-    // `lhs`/`rhs`, unary `value`; the result is the receiver primitive's type and
-    // signedness. Returns a null sentinel for an unrecognized method (the caller then
-    // falls back to the normal assoc path).
-    // IEEE float binary op from two double VALUES (for compound assign `x += 2.5`).
+    // IEEE float binary op from two double VALUES, for compound assign `x += 2.5` (which
+    // reads the place, applies the op, stores back — it has values, not operand exprs, so
+    // it can't route through the operator witnesses the way `a + b` does). Arithmetic only:
+    // a float `%` is a compile error (spec/12) and comparisons don't compound-assign.
     inout fn buildF64BinOp(op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
         if op == opAdd() { return LLVMBuildFAdd(self.b, l, r, anon()) }
         if op == opSub() { return LLVMBuildFSub(self.b, l, r, anon()) }
         if op == opMul() { return LLVMBuildFMul(self.b, l, r, anon()) }
         if op == opDiv() { return LLVMBuildFDiv(self.b, l, r, anon()) }
-        return l
-    }
-
-    // IEEE float binary op (spec/02,12): arithmetic -> fadd/fsub/fmul/fdiv; comparison ->
-    // ordered fcmp -> i1. Both operands are coerced to double. (NaN-compare panic and
-    // integer `%` rejection are handled at the verify layer / are follow-ups.)
-    inout fn genLlvmFloatBinop(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> LLVMValueRef {
-        val l: LLVMValueRef = self.coerceToF64(c: inout c, id: lhs)
-        val r: LLVMValueRef = self.coerceToF64(c: inout c, id: rhs)
-        if op == opAdd() { return LLVMBuildFAdd(self.b, l, r, anon()) }
-        if op == opSub() { return LLVMBuildFSub(self.b, l, r, anon()) }
-        if op == opMul() { return LLVMBuildFMul(self.b, l, r, anon()) }
-        if op == opDiv() { return LLVMBuildFDiv(self.b, l, r, anon()) }
-        // comparison: NaN compares must panic (spec/02) — a runtime check panics if either
-        // operand is NaN, then the ordered fcmp produces the boolean.
-        self.emitF64NanCheck(c: inout c, l: l, r: r)
-        // ordered comparison predicates (LLVMRealOEQ=1 OGT=2 OGE=3 OLT=4 OLE=5 ONE=6).
-        if op == opEq() { return LLVMBuildFCmp(self.b, 1U32, l, r, anon()) }
-        if op == opNe() { return LLVMBuildFCmp(self.b, 6U32, l, r, anon()) }
-        if op == opLt() { return LLVMBuildFCmp(self.b, 4U32, l, r, anon()) }
-        if op == opLe() { return LLVMBuildFCmp(self.b, 5U32, l, r, anon()) }
-        if op == opGt() { return LLVMBuildFCmp(self.b, 2U32, l, r, anon()) }
-        if op == opGe() { return LLVMBuildFCmp(self.b, 3U32, l, r, anon()) }
         return l
     }
 
@@ -164,34 +139,33 @@ pub impl LlvmCtx {
         return v
     }
 
-    inout fn genPrimOpWitness(c: inout Comp, tyStart: U64, tyLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
-        val ty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
-        val uns: Bool = isUnsignedName(c: inout c, start: tyStart, len: tyLen)
-        // unary: neg / bitnot (one `value` arg).
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "neg") {
-            return self.buildNegChecked(c: inout c, v: self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: uns))
+    // The grounded primitive (int / float) type-name span of an operator operand `id`, or
+    // nameLen 0 if it isn't a primitive. Recovers the operand's TypeRef and grounds it
+    // through the active instance env: a generic-body operand `a: T` carries the ungrounded
+    // `T`, so `a + b` in a `where T: Add` body emitted at F64 must ground `T -> F64` to reach
+    // `impl F64 as Add` — exactly the witness a concrete `1.5 + 2.5` (a literal, recovered by
+    // typeOf) uses. This routes generic AND concrete primitive operators through the one std
+    // witness (spec/12, O6); the built-in open-code path in Expr.pw is only a last resort.
+    inout fn primOperandName(c: inout Comp, id: U64) -> Bind {
+        val r: U64 = self.exprTypeRef(c: inout c, id: id)
+        if r != 0U64 {
+            val g: U64 = c.groundTypeRef(ref: r)
+            if g < c.arena.types.count() {
+                val gt: TypeRef = c.arena.types[g]
+                if gt.nameLen != 0U64 {
+                    if isPrimIntName(c: inout c, start: gt.nameStart, len: gt.nameLen) || c.isFloatType(start: gt.nameStart, len: gt.nameLen) {
+                        return <Bind nameStart=gt.nameStart nameLen=gt.nameLen fieldStart=0U64 fieldLen=0U64 />
+                    }
+                }
+            }
         }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitnot") {
-            return LLVMBuildNot(self.b, self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: uns), anon())
+        val pti: TypeInfo = c.typeOf(id: id)
+        if pti.nameLen != 0U64 {
+            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) || c.isFloatType(start: pti.nameStart, len: pti.nameLen) {
+                return <Bind nameStart=pti.nameStart nameLen=pti.nameLen fieldStart=0U64 fieldLen=0U64 />
+            }
         }
-        // binary: map the method name to an Op, then reuse buildBinOpS.
-        mut val op: I64 = -1I64
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "add") { op = opAdd() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sub") { op = opSub() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mul") { op = opMul() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "div") { op = opDiv() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "rem") { op = opRem() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitand") { op = opBitAnd() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitor") { op = opBitOr() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitxor") { op = opBitXor() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shl") { op = opShl() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "shr") { op = opShr() }
-        if op == -1I64 {
-            return LLVMConstNull(self.ptrty)
-        }
-        val l: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: uns)
-        val r: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[1].expr), target: ty, unsigned: uns)
-        return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: uns)
+        return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
     }
 
     // The c.arena.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
@@ -214,18 +188,19 @@ pub impl LlvmCtx {
                 ownStart = c.arena.enums[eid].nameStart
                 ownLen = c.arena.enums[eid].nameLen
             } else {
-                // a primitive lhs (`3I8 + 4I8`): resolve its OWN operator-trait witness
-                // (`impl I8 as Add` in std/Core/Num.pw) — the same path as an aggregate. The
-                // witness body bottoms out in the numeric intrinsic floor (genNumIntrinsic),
-                // so the std `impl` is the single source of truth for what `+` does (spec/12);
-                // no primitive open-code shortcut. (A String operand resolves as a registered
-                // struct via exprStructIdx above.)
-                val pti: TypeInfo = c.typeOf(id: lhs)
-                if pti.nameLen == 0U64 {
+                // a primitive lhs (`3I8 + 4I8`, or a generic-body `a + b` at I8/F64): resolve
+                // its OWN operator-trait witness (`impl I8 as Add` / `impl F64 as Add` in
+                // std/Core/Num.pw) — the same path as an aggregate. The witness body bottoms
+                // out in the numeric intrinsic floor (genNumIntrinsic), so the std `impl` is the
+                // single source of truth for what `+` does (spec/12); no primitive open-code
+                // shortcut. (A String operand resolves as a registered struct via exprStructIdx
+                // above.)
+                val pnm: Bind = self.primOperandName(c: inout c, id: lhs)
+                if pnm.nameLen == 0U64 {
                     return c.arena.funcs.count()
                 }
-                ownStart = pti.nameStart
-                ownLen = pti.nameLen
+                ownStart = pnm.nameStart
+                ownLen = pnm.nameLen
             }
         }
         val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
@@ -296,15 +271,14 @@ pub impl LlvmCtx {
         if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "eq")
         }
-        // a primitive lhs (`a == b`, a: I8): resolve its own `Eq` witness (`impl I8 as Eq`
-        // in std/Core/Num.pw), so `==` reaches the `i8Eq` intrinsic through the witness
-        // body — the single source of truth, same as arithmetic (spec/12). (A String
-        // operand resolves as a registered struct via exprStructIdx above.)
-        val pti: TypeInfo = c.typeOf(id: lhs)
-        if pti.nameLen != 0U64 {
-            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) {
-                return c.findAssocByName(typeStart: pti.nameStart, typeLen: pti.nameLen, name: "eq")
-            }
+        // a primitive lhs (`a == b`, a: I8 / F64, or a generic-body operand at I8/F64): resolve
+        // its own `Eq` witness (`impl I8 as Eq` / `impl F64 as Eq` in std/Core/Num.pw), so `==`
+        // reaches the `i8Eq` / `f64Eq` intrinsic through the witness body — the single source of
+        // truth, same as arithmetic (spec/12). (A String operand resolves as a registered struct
+        // via exprStructIdx above.)
+        val pnm: Bind = self.primOperandName(c: inout c, id: lhs)
+        if pnm.nameLen != 0U64 {
+            return c.findAssocByName(typeStart: pnm.nameStart, typeLen: pnm.nameLen, name: "eq")
         }
         return c.arena.funcs.count()
     }
@@ -323,11 +297,9 @@ pub impl LlvmCtx {
         if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "compare")
         }
-        val pti: TypeInfo = c.typeOf(id: lhs)
-        if pti.nameLen != 0U64 {
-            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) {
-                return c.findAssocByName(typeStart: pti.nameStart, typeLen: pti.nameLen, name: "compare")
-            }
+        val pnm: Bind = self.primOperandName(c: inout c, id: lhs)
+        if pnm.nameLen != 0U64 {
+            return c.findAssocByName(typeStart: pnm.nameStart, typeLen: pnm.nameLen, name: "compare")
         }
         return c.arena.funcs.count()
     }
@@ -361,17 +333,16 @@ pub impl LlvmCtx {
         if eid < c.arena.enums.count() {
             return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
         }
-        // a primitive int operand (`-x` -> `impl I8 as Neg`, `~x` -> `impl I8 as BitNot`
-        // in std/Core/Num.pw): route through the witness so `~`/`-` reach the intrinsic
-        // floor through the witness body. (Neg is signed-only, so `impl U8 as Neg` does
-        // not exist and this returns none for it; Bool `!` names a non-prim type and also
-        // returns none — both keep the built-in op. Float neg has no witness until floats
-        // gain conformances — genPrim…/FNeg keeps it.)
-        val pti: TypeInfo = c.typeOf(id: operand)
-        if pti.nameLen != 0U64 {
-            if isPrimIntName(c: inout c, start: pti.nameStart, len: pti.nameLen) {
-                return c.findAssocByName(typeStart: pti.nameStart, typeLen: pti.nameLen, name: unaryMethodName(op: op))
-            }
+        // a primitive int / float operand (`-x` -> `impl I8 as Neg` / `impl F64 as Neg`,
+        // `~x` -> `impl I8 as BitNot` in std/Core/Num.pw): route through the witness so
+        // `~`/`-` reach the intrinsic floor through the witness body. (Int Neg is signed-only,
+        // so `impl U8 as Neg` does not exist and this returns none for it — the built-in path
+        // rejects `-u`; floats are signed so `impl F64 as Neg` exists; `~` on a float names no
+        // BitNot witness and returns none. Bool `!` names a non-prim type and also returns
+        // none — it keeps the built-in op.)
+        val pnm: Bind = self.primOperandName(c: inout c, id: operand)
+        if pnm.nameLen != 0U64 {
+            return c.findAssocByName(typeStart: pnm.nameStart, typeLen: pnm.nameLen, name: unaryMethodName(op: op))
         }
         return c.arena.funcs.count()
     }

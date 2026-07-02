@@ -302,11 +302,22 @@ pub impl LlvmCtx {
                         gl2 = c.arena.types[pg2].nameLen
                     }
                 }
+                // a grounded scalar type param (`v: T` with T -> I32 / F64 / Bool): pin BOTH
+                // its tracked type name (so an operator/method on it dispatches through the
+                // instance's witness) AND its alloca LLVM type to the GROUNDED scalar — the
+                // ungrounded-`T` default (i64) would put a float's bits in an i64 slot. This
+                // matches paramLlvmTy's grounded signature type.
                 if isPrimIntName(c: inout c, start: gs2, len: gl2) {
                     pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
+                    pty = self.llvmScalarTy(c: inout c, tyStart: gs2, tyLen: gl2)
+                }
+                if c.isFloatType(start: gs2, len: gl2) {
+                    pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
+                    pty = self.llvmScalarTy(c: inout c, tyStart: gs2, tyLen: gl2)
                 }
                 if rangeEquals(bytes: c.arena.bytes, start: gs2, len: gl2, kw: "Bool") {
                     pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
+                    pty = self.llvmScalarTy(c: inout c, tyStart: gs2, tyLen: gl2)
                 }
                 if pRef == 0U64 {
                     if self.enumRegSlot(c: inout c, start: gs2, len: gl2) < self.genEnumRefs.count() {

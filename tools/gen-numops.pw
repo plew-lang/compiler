@@ -130,9 +130,9 @@ fn main() {
     // intrinsic floor declarations
     write(s: "extern \"plew-intrinsic\" {\n")
     mut val ti: U64 = 0
-    while ti < tys.count {
+    while ti < tys.count() {
         mut val oi: U64 = 0
-        while oi < traits.count {
+        while oi < traits.count() {
             externBin(pfx: pfx[ti], suf: traits[oi], ty: tys[ti])
             oi += 1
         }
@@ -157,15 +157,45 @@ fn main() {
         write(s: ") -> Bool\n")
         ti += 1
     }
+    // float floor: Add/Sub/Mul/Div (no Rem — float `%` is a compile error, spec/12),
+    // Neg (floats are signed), Eq/Lt (NaN-panicking ordered compares, spec/02). F32/F64
+    // both lower to `double` for now.
+    val ftys: Array[String] = ["F32", "F64"]
+    val fpfx: Array[String] = ["f32", "f64"]
+    val ftraits: Array[String] = ["Add", "Sub", "Mul", "Div"]
+    mut val fi: U64 = 0
+    while fi < ftys.count() {
+        mut val foi: U64 = 0
+        while foi < ftraits.count() {
+            externBin(pfx: fpfx[fi], suf: ftraits[foi], ty: ftys[fi])
+            foi += 1
+        }
+        externUn(pfx: fpfx[fi], suf: "Neg", ty: ftys[fi])
+        write(s: "    fn ")
+        write(s: fpfx[fi])
+        write(s: "Eq(a: ")
+        write(s: ftys[fi])
+        write(s: ", b: ")
+        write(s: ftys[fi])
+        write(s: ") -> Bool\n")
+        write(s: "    fn ")
+        write(s: fpfx[fi])
+        write(s: "Lt(a: ")
+        write(s: ftys[fi])
+        write(s: ", b: ")
+        write(s: ftys[fi])
+        write(s: ") -> Bool\n")
+        fi += 1
+    }
     write(s: "    fn boolNot(a: Bool) -> Bool\n")
     write(s: "    fn boolEq(a: Bool, b: Bool) -> Bool\n")
     write(s: "}\n\n")
 
     // conformances
     ti = 0
-    while ti < tys.count {
+    while ti < tys.count() {
         mut val oi: U64 = 0
-        while oi < traits.count {
+        while oi < traits.count() {
             implBin(ty: tys[ti], trn: traits[oi], meth: meths[oi], pfx: pfx[ti], suf: traits[oi])
             oi += 1
         }
@@ -176,6 +206,19 @@ fn main() {
         implEq(ty: tys[ti], pfx: pfx[ti])
         implOrd(ty: tys[ti], pfx: pfx[ti])
         ti += 1
+    }
+    // float conformances (Add/Sub/Mul/Div/Neg/Eq/Ord).
+    fi = 0
+    while fi < ftys.count() {
+        mut val foi: U64 = 0
+        while foi < ftraits.count() {
+            implBin(ty: ftys[fi], trn: ftraits[foi], meth: meths[foi], pfx: fpfx[fi], suf: ftraits[foi])
+            foi += 1
+        }
+        implUn(ty: ftys[fi], trn: "Neg", meth: "neg", pfx: fpfx[fi], suf: "Neg")
+        implEq(ty: ftys[fi], pfx: fpfx[fi])
+        implOrd(ty: ftys[fi], pfx: fpfx[fi])
+        fi += 1
     }
     implUn(ty: "Bool", trn: "Not", meth: "not", pfx: "bool", suf: "Not")
     implEq(ty: "Bool", pfx: "bool")
