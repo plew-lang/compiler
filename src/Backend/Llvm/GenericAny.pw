@@ -101,18 +101,6 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // IEEE float binary op from two double VALUES, for compound assign `x += 2.5` (which
-    // reads the place, applies the op, stores back — it has values, not operand exprs, so
-    // it can't route through the operator witnesses the way `a + b` does). Arithmetic only:
-    // a float `%` is a compile error (spec/12) and comparisons don't compound-assign.
-    inout fn buildF64BinOp(op: I64, l: LLVMValueRef, r: LLVMValueRef) -> LLVMValueRef {
-        if op == opAdd() { return LLVMBuildFAdd(self.b, l, r, anon()) }
-        if op == opSub() { return LLVMBuildFSub(self.b, l, r, anon()) }
-        if op == opMul() { return LLVMBuildFMul(self.b, l, r, anon()) }
-        if op == opDiv() { return LLVMBuildFDiv(self.b, l, r, anon()) }
-        return l
-    }
-
     // Emit a runtime NaN-compare guard (spec/02): panics if either double operand is NaN
     // before an ordered comparison runs (so NaN compares are loud, not silently false).
     inout fn emitF64NanCheck(c: inout Comp, l: LLVMValueRef, r: LLVMValueRef) {
