@@ -1,0 +1,11 @@
+// Overlapping `inout` (spec/03): a whole array and one of its elements (`xs` and
+// `xs[i]`) — containment holds whatever `i` is, so it is statically certain. (Also
+// a memory hazard: mutating the whole array may reallocate under the element pointer.)
+import @Std/Io with { print }
+fn f(a: inout Array[I64], b: inout I64) { a.append(9)  b = 2 }
+fn main() {
+    mut val xs: Array[I64] = [1, 2, 3]
+    val i: U64 = 1
+    f(a: inout xs, b: inout xs[i])
+    print(xs[0])
+}

@@ -1635,6 +1635,10 @@ export fn emitLlvmRuntime() {
     // element retain/release is needed (buffer-floor.md §5 relocation = memmove).
     write(s: "void plew_rawbuf_move(void* data, long long elemSize, long long dst, long long src, long long n){ if(n>0) memmove((char*)data+(size_t)(elemSize*dst),(char*)data+(size_t)(elemSize*src),(size_t)(elemSize*n)); }\n")
     write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
+    // overlapping `inout` (spec/03): two `inout` positions of one call resolved to the
+    // SAME place at runtime (`arr[i]`/`arr[j]` with i==j, two Refs to one cell) — the
+    // exclusivity the callee relies on does not hold, so panic loudly at the call.
+    write(s: "void plew_inout_overlap(void* a, void* b){ if(a&&a==b){ fputs(\"panic: overlapping inout: two inout arguments of one call are the same place\\n\",stderr); exit(1); } }\n")
     // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
     // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
     // LLVM backend matches the C backend's loud overflow/div-zero behaviour.

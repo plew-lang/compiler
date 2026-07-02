@@ -1,0 +1,15 @@
+// Overlapping `inout` runtime tier (spec/03): `xs[i]` and `xs[j]` are distinct only
+// when i != j — the pre-call place-identity check panics when they coincide.
+import @Std/Io with { print }
+fn swapAdd(a: inout I64, b: inout I64) { val t = a  a = b  b = t }
+fn main() {
+    mut val xs: Array[I64] = [1, 2, 3]
+    val i: U64 = 0
+    mut val j: U64 = 1
+    swapAdd(a: inout xs[i], b: inout xs[j])   // distinct -> proceeds
+    print(xs[0])                              // 2
+    print(xs[1])                              // 1
+    j = 0
+    swapAdd(a: inout xs[i], b: inout xs[j])   // i == j -> panic
+    print(999I64)                             // must not print
+}

@@ -76,6 +76,7 @@ pub impl LlvmCtx {
         c.cur.itemRef = sGi
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
+        self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64)
         return LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count(), anon())
     }
 
@@ -172,6 +173,22 @@ pub impl LlvmCtx {
                     return self.genLlvmExpr(c: inout c, id: base)
                 }
             }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                // `r->field` as a place: GEP into the Ref's cell (the same recipe as the
+                // `r->field = v` assignment path in Stmt.pw). The cell is intentionally
+                // SHARED (no CoW), so an `inout r->field` argument mutates through every
+                // alias of the Ref — without this arm the place fell back to a temp copy
+                // and the callee's write was silently lost.
+                val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
+                if psidx < c.arena.structs.count() {
+                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
+                    if fidx < c.arena.structs[psidx].fields.count() {
+                        val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: self.exprRefTypeRef(c: inout c, id: base))
+                        val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                        return LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
+                    }
+                }
+            }
             _ => {}
         }
         return LLVMConstNull(self.ptrty)
@@ -223,6 +240,87 @@ pub impl LlvmCtx {
     inout fn placePtrOfWrite(c: inout Comp, id: U64) -> LLVMValueRef {
         self.privatizeForWrite(c: inout c, id: id)
         return self.placePtrOf(c: inout c, id: id)
+    }
+
+    // Overlapping-`inout` runtime tier (spec/03): with two or more `inout` positions in
+    // ONE call, every pair the frontend could not resolve statically is compared by
+    // ADDRESS just before the call — the arg vector holds the just-materialized place
+    // pointers (CoW-privatized), so pointer identity IS place identity: value semantics
+    // cannot alias two distinct places, and two Refs to one cell compare equal with no
+    // Ref-specific handling. `av` holds the receiver (when `hasRecv`) followed by the
+    // provided args starting at `avArgStart`; omitted-default positions carry callee-side
+    // temps and never overlap a caller place, so only provided args are paired.
+    inout fn emitInoutOverlapChecks(c: inout Comp, f: Func, av: Array[LLVMValueRef], args: Array[Arg], hasRecv: Bool, recvExpr: U64, avArgStart: U64) {
+        mut val ioExpr: Array[U64] = []
+        mut val ioPtr: Array[LLVMValueRef] = []
+        if hasRecv {
+            if f.selfInout {
+                ioExpr.append(recvExpr)
+                ioPtr.append(av[avArgStart - 1U64])
+            }
+        }
+        mut val ai: U64 = 0
+        while ai < args.count() {
+            if ai < f.params.count() {
+                if f.params[ai].isInout {
+                    ioExpr.append(args[ai].expr)
+                    ioPtr.append(av[avArgStart + ai])
+                }
+            }
+            ai += 1
+        }
+        if ioExpr.count() < 2U64 {
+            return
+        }
+        mut val i: U64 = 0
+        while i < ioExpr.count() {
+            mut val j: U64 = i + 1U64
+            while j < ioExpr.count() {
+                // 0 = provably distinct (skip). 1 (certain overlap) normally already died
+                // in Verify; emitting its always-true check keeps a loud failure for any
+                // body that pass does not walk. 2 = the runtime-check tier proper.
+                if c.classifyInoutPair(a: ioExpr[i], b: ioExpr[j]) != 0U64 {
+                    self.emitInoutOverlapPair(c: inout c, aExpr: ioExpr[i], aPtr: ioPtr[i], bExpr: ioExpr[j], bPtr: ioPtr[j])
+                }
+                j += 1U64
+            }
+            i += 1U64
+        }
+    }
+
+    // One runtime-checked pair: for places of different path depths, the deeper one's
+    // ancestor at the shallower depth is the semantically-comparable place (`arr[i]` vs
+    // `arr[j].f` compares `arr[i]` with `arr[j]`; `r1->xs` vs `r2->xs[k]` compares the
+    // two cell fields) — its indices are frontend-checked simple values, so re-deriving
+    // it re-fires no side effects. Equal-depth pairs reuse the arg pointers as-is.
+    inout fn emitInoutOverlapPair(c: inout Comp, aExpr: U64, aPtr: LLVMValueRef, bExpr: U64, bPtr: LLVMValueRef) {
+        val da: U64 = c.placeDepth(id: aExpr)
+        val db: U64 = c.placeDepth(id: bExpr)
+        mut val pa: LLVMValueRef = aPtr
+        mut val pb: LLVMValueRef = bPtr
+        if da != 0U64 && db != 0U64 {
+            if da > db {
+                pa = self.placePtrStrict(c: inout c, id: c.placeAncestor(id: aExpr, up: da - db))
+            }
+            if db > da {
+                pb = self.placePtrStrict(c: inout c, id: c.placeAncestor(id: bExpr, up: db - da))
+            }
+        }
+        if LLVMIsNull(pa) != 0I32 {
+            return
+        }
+        if LLVMIsNull(pb) != 0I32 {
+            return
+        }
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        ptys.append(self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 2U64, 0I32)
+        val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_inout_overlap", nameId: 28U64, fnTy: fty)
+        mut val cav: Array[LLVMValueRef] = []
+        cav.append(pa)
+        cav.append(pb)
+        LLVMBuildCall2(self.b, fty, callee, arrayCPtr(cav), 2U64, anon())
     }
 }
 

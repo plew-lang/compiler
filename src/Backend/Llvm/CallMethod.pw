@@ -120,6 +120,7 @@ pub impl LlvmCtx {
             av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
             di += 1
         }
+        self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64)
         return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count(), anon())
     }
 
@@ -181,6 +182,7 @@ pub impl LlvmCtx {
                         }
                         c.cur.typeParams = gsavedP
                         c.cur.typeArgs = gsavedA
+                        self.emitInoutOverlapChecks(c: inout c, f: gaf, av: gav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64)
                         return LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(gav), gav.count(), anon())
                     }
                 }
@@ -200,6 +202,7 @@ pub impl LlvmCtx {
                 // self, so it is its own 0-type-arg `gf` instance (B4-1).
                 val agslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [])
                 if agslot < self.genFnK.count() {
+                    self.emitInoutOverlapChecks(c: inout c, f: af, av: aav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64)
                     return LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(aav), aav.count(), anon())
                 }
                 compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this assoc fn is not emittable yet (generic / std / trait)")
@@ -241,6 +244,7 @@ pub impl LlvmCtx {
                         sav.append(self.genArgValue(c: inout c, argExpr: args[sai].expr, p: smf.params[sai]))
                         sai += 1
                     }
+                    self.emitInoutOverlapChecks(c: inout c, f: smf, av: sav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64)
                     return LLVMBuildCall2(self.b, self.fnTy[sslot], self.fnVal[sslot], arrayCPtr(sav), sav.count(), anon())
                 }
             }
@@ -340,6 +344,7 @@ pub impl LlvmCtx {
                                 eav.append(self.genArgValue(c: inout c, argExpr: emf.params[edi].defaultExpr, p: emf.params[edi]))
                                 edi += 1
                             }
+                            self.emitInoutOverlapChecks(c: inout c, f: emf, av: eav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64)
                             return LLVMBuildCall2(self.b, self.fnTy[eslot], self.fnVal[eslot], arrayCPtr(eav), eav.count(), anon())
                         }
                         compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this enum method is not emittable yet (generic / provided)")
@@ -465,6 +470,7 @@ pub impl LlvmCtx {
             av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
             di += 1
         }
+        self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64)
         return LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count(), anon())
     }
 }

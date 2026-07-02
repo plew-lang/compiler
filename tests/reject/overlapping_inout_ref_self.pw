@@ -1,0 +1,15 @@
+// Overlapping `inout` (spec/03): a pointee-method receiver (`r->bump(...)` = the whole
+// pointee) contains a pointee field of the SAME Ref (`r->m`) — statically certain
+// through the one Ref variable, so it is a compile error (two different Refs to one
+// cell are the runtime-checked tier instead).
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+struct Pair { pub mut val n: I32  pub mut val m: I32 }
+pub impl Pair {
+    inout fn bump(other: inout I32) { self.n = self.n + 1I32  other = other + 10I32 }
+}
+fn main() {
+    val r: Ref[Pair] = <Ref[Pair] value=<Pair n=1 m=2 /> />
+    r->bump(other: inout r->m)
+    print(r->n)
+}

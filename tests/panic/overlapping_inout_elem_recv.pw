@@ -1,0 +1,21 @@
+// Overlapping `inout` runtime tier (spec/03): an `inout fn` receiver that is an ARRAY
+// ELEMENT (`xs[i].bump(...)`) pairs with an `inout` argument into the same container —
+// the receiver place is a real element pointer, so the same element panics at the call.
+import @Std/Io with { print }
+
+struct Pair { pub mut val n: I64  pub mut val m: I64 }
+pub impl Pair {
+    inout fn bump(other: inout I64) { self.n = self.n + 1  other = other + 10 }
+}
+
+fn main() {
+    mut val xs: Array[Pair] = [<Pair n=1 m=2 />, <Pair n=3 m=4 />]
+    val i: U64 = 0
+    mut val j: U64 = 1
+    xs[i].bump(other: inout xs[j].m)    // distinct elements -> ok
+    print(xs[0].n)   // 2
+    print(xs[1].m)   // 14
+    j = 0
+    xs[i].bump(other: inout xs[j].m)    // same element: receiver contains m -> should panic
+    print(999I64)    // must not print
+}

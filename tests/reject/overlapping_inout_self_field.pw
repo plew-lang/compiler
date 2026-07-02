@@ -1,0 +1,12 @@
+// Overlapping `inout` (spec/03): an `inout fn` receiver contains an `inout` argument
+// naming one of its own fields (`a.merge(inout a.field)`) — statically certain overlap.
+import @Std/Io with { print }
+struct Pair { pub mut val n: I64  pub mut val m: I64 }
+pub impl Pair {
+    inout fn merge(other: inout I64) { self.n = self.n + other  other = 0I64 }
+}
+fn main() {
+    mut val s: Pair = <Pair n=1 m=2 />
+    s.merge(other: inout s.n)
+    print(s.n)
+}

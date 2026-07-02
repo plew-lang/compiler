@@ -1,0 +1,13 @@
+// Overlapping `inout` (spec/03): a mixed-depth runtime pair whose overlapping-path
+// index is a CALL — the pre-call distinctness check would have to re-evaluate it
+// (re-firing its side effects), so the call is rejected; bind the index to a `val`.
+import @Std/Io with { print }
+struct Cell { pub mut val v: I64 }
+fn pick() -> U64 { return 0 }
+fn touch(a: inout Cell, b: inout I64) { a.v = 1  b = 2 }
+fn main() {
+    mut val xs: Array[Cell] = [<Cell v=0 />, <Cell v=0 />]
+    val i: U64 = 1
+    touch(a: inout xs[i], b: inout xs[pick()].v)
+    print(xs[0].v)
+}
