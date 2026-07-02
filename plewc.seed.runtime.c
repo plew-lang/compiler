@@ -41,7 +41,7 @@ void* plew_arr_cow(void* data, long long elemSize, long long count){ if(data && 
 void* plew_arr_reserve(void* data, long long elemSize, long long mincap){ long long cap=plew_rawbuf_cap(data); if(cap>=mincap) return data; void* nd=plew_rawbuf_alloc(elemSize,mincap); long long cnt=plew_rawbuf_count(data); if(cnt){ memcpy(nd,data,(size_t)(elemSize*cnt)); ((long long*)nd)[-2]=cnt; } if(data && ((long long*)data)[-1]<=1) free((long long*)data-3); return nd; }
 void plew_rawbuf_move(void* data, long long elemSize, long long dst, long long src, long long n){ if(n>0) memmove((char*)data+(size_t)(elemSize*dst),(char*)data+(size_t)(elemSize*src),(size_t)(elemSize*n)); }
 void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs("panic: index out of bounds\n",stderr); exit(1); } }
-void plew_inout_overlap(void* a, void* b){ if(a&&a==b){ fputs("panic: overlapping inout: two inout arguments of one call are the same place\n",stderr); exit(1); } }
+void plew_inout_overlap(void* a, void* b){ if(a&&a==b){ fputs("panic: overlapping inout: two inout positions of one call overlap in the same shared cell\n",stderr); exit(1); } }
 int8_t plew_i8Add(int8_t a, int8_t b){ int8_t r; if(__builtin_add_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }
 int8_t plew_i8Sub(int8_t a, int8_t b){ int8_t r; if(__builtin_sub_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }
 int8_t plew_i8Mul(int8_t a, int8_t b){ int8_t r; if(__builtin_mul_overflow(a,b,&r)) plew_panic_raw("integer overflow",16); return r; }

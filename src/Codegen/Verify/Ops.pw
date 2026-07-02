@@ -11,11 +11,11 @@ pub impl Comp {
             self.verifyExpr(id: args[i].expr)
             i += 1
         }
-        // overlapping `inout` (spec/03): two or more `inout` positions of ONE call must
-        // not name overlapping places. Statically-certain overlap (identical place, or
-        // one place containing the other) is a compile error here; pairs whose overlap
-        // depends on runtime values (`arr[i]`/`arr[j]`, `r1->v`/`r2->v`) get a place-
-        // identity check emitted just before the call by the backend.
+        // overlapping `inout` (spec/03, Swift-equivalent granularity): two or more
+        // `inout` positions of ONE call must not name overlapping places. Value-world
+        // pairs are fully static (same-variable pairs error unless they diverge at
+        // distinct fields); shared-world pairs (`r1->v`/`r2->v`) whose cell identity is
+        // a runtime value get a cell-identity check emitted by the backend.
         mut val a: U64 = 0
         while a < args.count() {
             if args[a].isInout {
@@ -32,59 +32,80 @@ pub impl Comp {
     }
 
     // One PAIR of `inout` places (spec/03 overlapping-inout, the static tier):
-    // certain overlap -> compile error; a runtime-checked pair whose deeper place
-    // would need re-evaluating a non-trivial index to compare -> compile error too
-    // (the check must not re-fire side effects — bind the index to a `val` first).
+    // certain overlap -> compile error. Runtime-tier pairs (class 2) need nothing
+    // here — the backend compares the already-evaluated cell addresses, so no index
+    // or subexpression is ever re-evaluated.
     inout fn checkInoutPair(a: U64, b: U64) {
-        val cls: U64 = self.classifyInoutPair(a: a, b: b)
-        if cls == 1U64 {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: b)), msg: "two `inout` positions in one call overlap: they name the same place, or one contains the other; overlapping `inout` is forbidden (spec/03)")
-        }
-        if cls == 2U64 {
-            val da: U64 = self.placeDepth(id: a)
-            val db: U64 = self.placeDepth(id: b)
-            if da != db {
-                mut val anc: U64 = a
-                if db > da {
-                    anc = self.placeAncestor(id: b, up: db - da)
-                } else {
-                    anc = self.placeAncestor(id: a, up: da - db)
-                }
-                if !(self.placePathPure(id: anc)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: b)), msg: "cannot verify that these `inout` places are distinct: an index on the overlapping path is not a simple value, so the runtime check would re-evaluate it; bind the index to a `val` first (spec/03)")
-                }
-            }
+        if self.classifyInoutPair(a: a, b: b) == 1U64 {
+            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: b)), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)")
         }
     }
 
-    // Classify one pair of `inout` places (spec/03): 1 = statically-certain overlap
-    // (one is a syntactic prefix of the other — includes syntactic identity),
-    // 0 = provably distinct (deref-free value paths that diverge — value semantics
-    // cannot alias two different roots), 2 = needs the runtime place-identity check.
+    // Classify one pair of `inout` places (spec/03, Swift-equivalent granularity):
+    // 1 = certain overlap (compile error), 2 = a same-cell question only answerable at
+    // runtime (the backend compares the cells just before the call), 0 = provably
+    // distinct (no check). Two worlds: a deref-free place lives in value-semantics
+    // storage, so it can only overlap a place rooted in the SAME variable — decided
+    // fully statically at VARIABLE granularity (two subscripts into one variable
+    // overlap regardless of the index values; only divergence at distinct field names
+    // proves disjointness). A deref-crossing place lives in a heap cell, so it can
+    // only overlap another deref-crossing place: distinct pointee fields are disjoint
+    // whatever the cells; the same field (or containment) reduces to cell identity —
+    // certain when the places share one syntactic variable path, runtime otherwise.
+    // MIXED worlds never overlap (variable storage vs heap cell): `f(r: inout r1,
+    // x: inout r1->n)` is legal — the backend's cell pin keeps the lent pointee alive
+    // across a rebind of the variable.
     inout fn classifyInoutPair(a: U64, b: U64) -> U64 {
         val da: U64 = self.placeDepth(id: a)
         val db: U64 = self.placeDepth(id: b)
         if da == 0U64 || db == 0U64 {
             return 2
         }
-        mut val sa: U64 = a
-        mut val sb: U64 = b
-        if da > db {
-            sa = self.placeAncestor(id: a, up: da - db)
-        } else {
-            sb = self.placeAncestor(id: b, up: db - da)
+        val hda: Bool = self.placeHasDeref(id: a)
+        if hda != self.placeHasDeref(id: b) {
+            return 0
         }
-        if self.exprSyntaxEq(a: sa, b: sb) {
+        if !hda {
+            mut val sa: U64 = a
+            mut val sb: U64 = b
+            if da > db {
+                sa = self.placeAncestor(id: a, up: da - db)
+            } else {
+                sb = self.placeAncestor(id: b, up: db - da)
+            }
+            if self.relValuePlaces(a: sa, b: sb) == 1U64 {
+                return 0
+            }
             return 1
         }
-        // syntactic reasoning about distinctness is only valid while both paths stay in
-        // value-semantics storage: a `->`/deref jumps to a shared cell whose identity is
-        // a runtime value, so any deref-bearing pair goes to the runtime check.
-        if self.placeHasDeref(id: a) || self.placeHasDeref(id: b) {
-            return 2
+        // shared world: truncate each place to its outermost cell projection — the
+        // first Field above the topmost deref (container granularity: everything below
+        // an element access collapses onto its container field), or the whole pointee
+        // when the place IS the deref.
+        val pa: U64 = self.placePostDerefDepth(id: a)
+        val pb: U64 = self.placePostDerefDepth(id: b)
+        mut val ta: U64 = a
+        mut val tb: U64 = b
+        if pa > 1U64 {
+            ta = self.placeAncestor(id: a, up: pa - 1U64)
         }
-        if self.placesDistinctEq(a: sa, b: sb) {
-            return 0
+        if pb > 1U64 {
+            tb = self.placeAncestor(id: b, up: pb - 1U64)
+        }
+        // whole pointee vs a pointee projection: containment — compare at the cell.
+        if pa == 0U64 && pb != 0U64 {
+            tb = self.placeAncestor(id: tb, up: 1U64)
+        }
+        if pb == 0U64 && pa != 0U64 {
+            ta = self.placeAncestor(id: ta, up: 1U64)
+        }
+        if pa != 0U64 && pb != 0U64 {
+            if self.derefProjNamesDiffer(a: ta, b: tb) {
+                return 0
+            }
+        }
+        if self.exprSyntaxEq(a: ta, b: tb) {
+            return 1
         }
         return 2
     }
@@ -159,67 +180,99 @@ pub impl Comp {
         }
     }
 
-    // Provable distinctness of two EQUAL-DEPTH, deref-free place paths: different
-    // value-variable roots cannot alias (value semantics), different fields of one
-    // struct are disjoint, and sub-places of provably distinct bases are distinct.
-    // Equal-syntax paths never reach here (classified as certain overlap upstream).
-    inout fn placesDistinctEq(a: U64, b: U64) -> Bool {
+    // Relation of two EQUAL-DEPTH, deref-free place paths (Swift-equivalent variable
+    // granularity): 0 = identical path, 1 = provably distinct (different variable
+    // roots — value semantics cannot alias two variables — or divergence at distinct
+    // Field names), 2 = overlapping (the same variable reached without a distinct-
+    // field divergence; two subscripts into one container overlap REGARDLESS of the
+    // index values — no distinctness proof over indices is attempted).
+    inout fn relValuePlaces(a: U64, b: U64) -> U64 {
         match self.arena.exprs[a] {
             Expr.Ident(start: val s1, len: val l1) => {
                 match self.arena.exprs[b] {
-                    Expr.Ident(start: val s2, len: val l2) => { return !(spansEqual(c: inout self, aStart: s1, aLen: l1, bStart: s2, bLen: l2)) }
-                    _ => { return true }
+                    Expr.Ident(start: val s2, len: val l2) => {
+                        if spansEqual(c: inout self, aStart: s1, aLen: l1, bStart: s2, bLen: l2) {
+                            return 0
+                        }
+                        return 1
+                    }
+                    _ => { return 2 }
                 }
             }
             Expr.Field(base: val base1, nameStart: val n1s, nameLen: val n1l) => {
                 match self.arena.exprs[b] {
                     Expr.Field(base: val base2, nameStart: val n2s, nameLen: val n2l) => {
-                        if !(spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l)) {
-                            return true
+                        val r: U64 = self.relValuePlaces(a: base1, b: base2)
+                        if r != 0U64 {
+                            return r
                         }
-                        return self.placesDistinctEq(a: base1, b: base2)
+                        if spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l) {
+                            return 0
+                        }
+                        return 1
                     }
-                    _ => { return true }
+                    Expr.Index(base: val base2, index: _) => {
+                        // kind mismatch on one base (untypable in practice): same base ->
+                        // conservatively overlapping, distinct bases stay distinct.
+                        val r: U64 = self.relValuePlaces(a: base1, b: base2)
+                        if r == 0U64 {
+                            return 2
+                        }
+                        return r
+                    }
+                    _ => { return 2 }
                 }
             }
             Expr.Index(base: val base1, index: _) => {
                 match self.arena.exprs[b] {
                     Expr.Index(base: val base2, index: _) => {
-                        // same (or not-provably-distinct) container: index equality is a
-                        // runtime question — not provably distinct.
-                        return self.placesDistinctEq(a: base1, b: base2)
+                        // same container: overlapping at variable granularity, whatever
+                        // the indices (identical AND differing index exprs both land here).
+                        val r: U64 = self.relValuePlaces(a: base1, b: base2)
+                        if r == 0U64 {
+                            return 2
+                        }
+                        return r
                     }
-                    _ => { return true }
+                    Expr.Field(base: val base2, nameStart: _, nameLen: _) => {
+                        val r: U64 = self.relValuePlaces(a: base1, b: base2)
+                        if r == 0U64 {
+                            return 2
+                        }
+                        return r
+                    }
+                    _ => { return 2 }
                 }
             }
-            _ => { return true }
+            _ => { return 2 }
         }
     }
 
-    // Whether re-evaluating this place path (for the runtime distinctness check of a
-    // mixed-depth pair) cannot re-fire user side effects: every index on the path must
-    // be a simple value (literal, variable, or a field chain on one).
-    inout fn placePathPure(id: U64) -> Bool {
+    // Levels of a place path ABOVE its topmost deref: 0 = the place IS the pointee
+    // (`Deref`, a pointee-method receiver), 1 = a direct cell projection (`r->f`),
+    // 2+ = deeper (`r->xs[i]`, `r->a.b`). Only meaningful when placeHasDeref holds.
+    inout fn placePostDerefDepth(id: U64) -> U64 {
         match self.arena.exprs[id] {
-            Expr.Ident(start: _, len: _) => { return true }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.placePathPure(id: base) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.placePathPure(id: base) }
-            Expr.Deref(val base) => { return self.placePathPure(id: base) }
-            Expr.Index(val base, val index) => {
-                if !(self.exprSimplePure(id: index)) {
-                    return false
-                }
-                return self.placePathPure(id: base)
-            }
-            _ => { return false }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.placePostDerefDepth(id: base) + 1U64 }
+            Expr.Index(val base, index: _) => { return self.placePostDerefDepth(id: base) + 1U64 }
+            // Arrow = Field∘Deref: the field is ONE level above its own deref, which is
+            // the topmost deref of the whole path (anything deeper sits inside `base`).
+            Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return 1 }
+            _ => { return 0 }
         }
     }
 
-    inout fn exprSimplePure(id: U64) -> Bool {
-        match self.arena.exprs[id] {
-            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return true }
-            Expr.Ident(start: _, len: _) => { return true }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprSimplePure(id: base) }
+    // Two direct cell projections: do they name provably DIFFERENT pointee fields?
+    // Distinct fields are disjoint regardless of cell identity (fields of one cell are
+    // disjoint; fields of two cells even more so). Non-Arrow shapes: unknown (false).
+    inout fn derefProjNamesDiffer(a: U64, b: U64) -> Bool {
+        match self.arena.exprs[a] {
+            Expr.Arrow(base: _, nameStart: val n1s, nameLen: val n1l) => {
+                match self.arena.exprs[b] {
+                    Expr.Arrow(base: _, nameStart: val n2s, nameLen: val n2l) => { return !(spansEqual(c: inout self, aStart: n1s, aLen: n1l, bStart: n2s, bLen: n2l)) }
+                    _ => { return false }
+                }
+            }
             _ => { return false }
         }
     }

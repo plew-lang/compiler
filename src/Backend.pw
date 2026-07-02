@@ -195,6 +195,20 @@ struct LlvmCtx {
     // codegen — a struct already being emitted is skipped (its deeper level leaks, never crashes).
     pub mut val arcStack: Array[U64] = []
     pub mut val arcDepth: U64 = 0
+    // Cell pin (spec/03): a deref-crossing `inout` place retains its Ref cell for the
+    // call's duration, so a mid-call rebind cannot free the lent pointee — the pointee
+    // deinit runs after the call. A stack of pinned cells (parallel: cell value, the
+    // Ref TypeRef for the release, the arg place expr id for the overlap check's cell
+    // lookup): each call site marks the count before lowering its arguments and
+    // releases back to the mark right after the call instruction (an inner call inside
+    // an argument pops its own pins during the outer lowering, so frames nest cleanly).
+    // `pinArm` arms the pin: placePtrStrict's deref arms push ONLY while an `inout`
+    // argument/receiver pointer is being computed (placePtrOfWritePinned), not for
+    // reads or assignment targets.
+    pub mut val pinCells: Array[LLVMValueRef] = []
+    pub mut val pinRefTys: Array[U64] = []
+    pub mut val pinExprs: Array[U64] = []
+    pub mut val pinArm: Bool = false
     // declared runtime/intrinsic functions, cached by name id (parallel arrays).
     pub mut val declId: Array[U64]
     pub mut val declFn: Array[LLVMValueRef]
@@ -1638,7 +1652,7 @@ export fn emitLlvmRuntime() {
     // overlapping `inout` (spec/03): two `inout` positions of one call resolved to the
     // SAME place at runtime (`arr[i]`/`arr[j]` with i==j, two Refs to one cell) — the
     // exclusivity the callee relies on does not hold, so panic loudly at the call.
-    write(s: "void plew_inout_overlap(void* a, void* b){ if(a&&a==b){ fputs(\"panic: overlapping inout: two inout arguments of one call are the same place\\n\",stderr); exit(1); } }\n")
+    write(s: "void plew_inout_overlap(void* a, void* b){ if(a&&a==b){ fputs(\"panic: overlapping inout: two inout positions of one call overlap in the same shared cell\\n\",stderr); exit(1); } }\n")
     // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
     // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
     // LLVM backend matches the C backend's loud overflow/div-zero behaviour.

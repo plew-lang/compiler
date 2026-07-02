@@ -1,0 +1,15 @@
+// Overlapping `inout`, value world (spec/03, Swift-equivalent granularity): an `inout fn`
+// receiver that is an ARRAY ELEMENT and an `inout` argument into the SAME array variable
+// — rejected statically whatever the indices (per-variable granularity, like Swift).
+import @Std/Io with { print }
+struct Pair { pub mut val n: I64  pub mut val m: I64 }
+pub impl Pair {
+    inout fn bump(other: inout I64) { self.n = self.n + 1  other = other + 10 }
+}
+fn main() {
+    mut val xs: Array[Pair] = [<Pair n=1 m=2 />, <Pair n=3 m=4 />]
+    val i: U64 = 0
+    val j: U64 = 1
+    xs[i].bump(other: inout xs[j].m)
+    print(xs[0].n)
+}

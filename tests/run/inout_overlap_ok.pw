@@ -1,9 +1,9 @@
-// Overlapping-`inout` runtime tier, NEGATIVE cases (spec/03): distinct places must
-// proceed untouched by the pre-call check. Covers (1) CoW-shared distinct variables —
-// the check compares privatized pointers, so buffer sharing (a hidden cost) never
-// panics (a hidden meaning); (2) distinct Ref cells; (3) an `inout r->field` argument
-// passing a REAL cell pointer (the write lands through the Ref — the old temp-copy
-// fallback silently dropped it).
+// Overlapping-`inout` NEGATIVE cases (spec/03): distinct places must proceed
+// untouched. Covers (1) CoW-shared DISTINCT variables — statically distinct roots, so
+// buffer sharing (a hidden cost) never rejects or panics (a hidden meaning);
+// (2) distinct Ref cells — the runtime place-identity check passes; (3) an
+// `inout r->field` argument passing a REAL cell pointer (the write lands through the
+// Ref — the old temp-copy fallback silently dropped it).
 import @Std/Io with { print }
 import @Std/Core with { Ref }
 
@@ -21,13 +21,6 @@ fn main() {
     print(a[0])      // 101
     print(b[0])      // 110
     print(a[1])      // 200
-
-    // same array, distinct indices: the runtime check passes.
-    val i: U64 = 0
-    val j: U64 = 1
-    bump2(x: inout a[i], y: inout a[j])
-    print(a[0])      // 102
-    print(a[1])      // 210
 
     // (2) distinct Ref cells: distinct pointees, no panic.
     val r1: Ref[Counter] = <Ref[Counter] value=<Counter n=5 /> />

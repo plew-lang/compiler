@@ -36,9 +36,10 @@ pub impl LlvmCtx {
 
     inout fn genGenMethodCall(c: inout Comp, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
         val mf: Func = c.arena.funcs[mfi]
+        val pinMark: U64 = self.pinCells.count()
         mut val av: Array[LLVMValueRef] = []
         if mf.selfInout {
-            av.append(self.placePtrOfWrite(c: inout c, id: recv))
+            av.append(self.placePtrOfWritePinned(c: inout c, id: recv))
         } else {
             av.append(self.genLlvmExpr(c: inout c, id: recv))
         }
@@ -76,8 +77,10 @@ pub impl LlvmCtx {
         c.cur.itemRef = sGi
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
-        self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64)
-        return LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count(), anon())
+        self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
+        val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count(), anon())
+        self.releaseInoutPins(c: inout c, mark: pinMark)
+        return rv
     }
 
     // The address of an addressable place (a struct local), for `inout` self. Falls
@@ -156,7 +159,21 @@ pub impl LlvmCtx {
                 // alias — so writing through it is observably correct).
                 if self.exprIsArray(c: inout c, id: base) {
                     val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
-                    val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                    mut val arr: LLVMValueRef = LLVMConstNull(self.ptrty)
+                    mut val loaded: Bool = false
+                    // a deref-crossing base (`r->xs[i]`): route through the base's own
+                    // place pointer and load the array value from it — the one cell
+                    // evaluation (which also arms the cell pin below).
+                    if c.placeHasDeref(id: base) {
+                        val basePtr: LLVMValueRef = self.placePtrStrict(c: inout c, id: base)
+                        if LLVMIsNull(basePtr) == 0I32 {
+                            arr = LLVMBuildLoad2(self.b, self.arrayTy, basePtr, anon())
+                            loaded = true
+                        }
+                    }
+                    if !loaded {
+                        arr = self.genLlvmExpr(c: inout c, id: base)
+                    }
                     val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
                     val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
                     val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
@@ -169,8 +186,11 @@ pub impl LlvmCtx {
                 // pointee struct lives AT the cell pointer, so the cell pointer IS the place.
                 // The cell is intentionally SHARED (no CoW privatize — that is the point of a
                 // `Ref`), so mutation is visible through every alias of the Ref.
-                if self.exprRefTypeRef(c: inout c, id: base) != 0U64 {
-                    return self.genLlvmExpr(c: inout c, id: base)
+                val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
+                if refTy != 0U64 {
+                    val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                    self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
+                    return cellPtr
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -183,8 +203,10 @@ pub impl LlvmCtx {
                 if psidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
                     if fidx < c.arena.structs[psidx].fields.count() {
-                        val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: self.exprRefTypeRef(c: inout c, id: base))
+                        val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
+                        val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                         val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                        self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                         return LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
                     }
                 }
@@ -242,15 +264,77 @@ pub impl LlvmCtx {
         return self.placePtrOf(c: inout c, id: id)
     }
 
-    // Overlapping-`inout` runtime tier (spec/03): with two or more `inout` positions in
-    // ONE call, every pair the frontend could not resolve statically is compared by
-    // ADDRESS just before the call — the arg vector holds the just-materialized place
-    // pointers (CoW-privatized), so pointer identity IS place identity: value semantics
-    // cannot alias two distinct places, and two Refs to one cell compare equal with no
-    // Ref-specific handling. `av` holds the receiver (when `hasRecv`) followed by the
-    // provided args starting at `avArgStart`; omitted-default positions carry callee-side
-    // temps and never overlap a caller place, so only provided args are paired.
-    inout fn emitInoutOverlapChecks(c: inout Comp, f: Func, av: Array[LLVMValueRef], args: Array[Arg], hasRecv: Bool, recvExpr: U64, avArgStart: U64) {
+    // Cell pin, the push side (spec/03): called by placePtrStrict's deref arms with the
+    // cell they just evaluated. Armed (pinArm) only while an `inout` argument/receiver
+    // pointer is being computed: retain the cell and push it on the pin stack — the
+    // call site releases back to its mark after the call, so a rebind inside the callee
+    // cannot free the lent pointee mid-call (its deinit runs at the release instead).
+    inout fn pinDerefCell(c: inout Comp, cell: LLVMValueRef, refTy: U64) {
+        if !self.pinArm {
+            return
+        }
+        self.rawbufRetain(c: inout c, cell: cell)
+        self.pinCells.append(cell)
+        self.pinRefTys.append(refTy)
+        self.pinExprs.append(0U64)
+    }
+
+    // `placePtrOfWrite` for an `inout` CALL argument/receiver: arms the cell pin, then
+    // stamps the entries pushed during this place's evaluation with the arg expr id (so
+    // the overlap check finds the arg's cell without re-evaluating anything). An inner
+    // call inside the place's index expression pushes AND releases its own pins during
+    // the evaluation, so the stamped frame holds exactly this place's cells.
+    inout fn placePtrOfWritePinned(c: inout Comp, id: U64) -> LLVMValueRef {
+        val mark: U64 = self.pinCells.count()
+        val savedArm: Bool = self.pinArm
+        self.pinArm = true
+        val p: LLVMValueRef = self.placePtrOfWrite(c: inout c, id: id)
+        self.pinArm = savedArm
+        mut val i: U64 = mark
+        while i < self.pinExprs.count() {
+            self.pinExprs[i] = id
+            i += 1U64
+        }
+        return p
+    }
+
+    // Release one call's cell pins (back to `mark`), in reverse push order: each drops
+    // its strong owner via emitRefRelease — if the callee dropped every other owner (a
+    // rebind of the lent Ref), the pointee deinit runs HERE, after the call (spec/03).
+    inout fn releaseInoutPins(c: inout Comp, mark: U64) {
+        mut val i: U64 = self.pinCells.count()
+        while i > mark {
+            i -= 1U64
+            self.emitRefRelease(c: inout c, cell: self.pinCells[i], refTy: self.pinRefTys[i])
+        }
+        self.pinCells.truncate(count: mark)
+        self.pinRefTys.truncate(count: mark)
+        self.pinExprs.truncate(count: mark)
+    }
+
+    // The pinned cell recorded for an `inout` arg place in the current call's pin frame
+    // (null when the place did not cross a deref / took the non-place fallback).
+    inout fn pinnedCellOf(expr: U64, mark: U64) -> LLVMValueRef {
+        mut val i: U64 = mark
+        while i < self.pinExprs.count() {
+            if self.pinExprs[i] == expr {
+                return self.pinCells[i]
+            }
+            i += 1U64
+        }
+        return LLVMConstNull(self.ptrty)
+    }
+
+    // Overlapping-`inout` runtime tier (spec/03, Swift-equivalent granularity): with two
+    // or more `inout` positions in ONE call, every pair the frontend could not resolve
+    // statically is checked just before the call at CELL granularity — such a pair is
+    // two deref-crossing places that do not provably diverge at distinct pointee fields,
+    // so overlap reduces to cell identity: compare the cells captured (and pinned) while
+    // the argument pointers themselves were computed. Nothing is re-evaluated. `av`
+    // holds the receiver (when `hasRecv`) followed by the provided args starting at
+    // `avArgStart`; omitted-default positions carry callee-side temps and never overlap
+    // a caller place, so only provided args are paired.
+    inout fn emitInoutOverlapChecks(c: inout Comp, f: Func, av: Array[LLVMValueRef], args: Array[Arg], hasRecv: Bool, recvExpr: U64, avArgStart: U64, pinMark: U64) {
         mut val ioExpr: Array[U64] = []
         mut val ioPtr: Array[LLVMValueRef] = []
         if hasRecv {
@@ -280,7 +364,7 @@ pub impl LlvmCtx {
                 // in Verify; emitting its always-true check keeps a loud failure for any
                 // body that pass does not walk. 2 = the runtime-check tier proper.
                 if c.classifyInoutPair(a: ioExpr[i], b: ioExpr[j]) != 0U64 {
-                    self.emitInoutOverlapPair(c: inout c, aExpr: ioExpr[i], aPtr: ioPtr[i], bExpr: ioExpr[j], bPtr: ioPtr[j])
+                    self.emitInoutOverlapPair(c: inout c, aExpr: ioExpr[i], aPtr: ioPtr[i], bExpr: ioExpr[j], bPtr: ioPtr[j], pinMark: pinMark)
                 }
                 j += 1U64
             }
@@ -288,23 +372,20 @@ pub impl LlvmCtx {
         }
     }
 
-    // One runtime-checked pair: for places of different path depths, the deeper one's
-    // ancestor at the shallower depth is the semantically-comparable place (`arr[i]` vs
-    // `arr[j].f` compares `arr[i]` with `arr[j]`; `r1->xs` vs `r2->xs[k]` compares the
-    // two cell fields) — its indices are frontend-checked simple values, so re-deriving
-    // it re-fires no side effects. Equal-depth pairs reuse the arg pointers as-is.
-    inout fn emitInoutOverlapPair(c: inout Comp, aExpr: U64, aPtr: LLVMValueRef, bExpr: U64, bPtr: LLVMValueRef) {
-        val da: U64 = c.placeDepth(id: aExpr)
-        val db: U64 = c.placeDepth(id: bExpr)
-        mut val pa: LLVMValueRef = aPtr
-        mut val pb: LLVMValueRef = bPtr
-        if da != 0U64 && db != 0U64 {
-            if da > db {
-                pa = self.placePtrStrict(c: inout c, id: c.placeAncestor(id: aExpr, up: da - db))
-            }
-            if db > da {
-                pb = self.placePtrStrict(c: inout c, id: c.placeAncestor(id: bExpr, up: db - da))
-            }
+    // One runtime-checked pair: compare the two places' CELLS (spec/03 container/cell
+    // granularity — the frontend only emits a check when the post-deref paths do not
+    // provably diverge, so same cell ⟺ overlap). The cells were captured by the pin
+    // while each argument pointer was computed; a place without a pinned cell (an
+    // opaque non-place fallback) falls back to its raw argument pointer, keeping the
+    // old leaf-identity behaviour for that conservative corner.
+    inout fn emitInoutOverlapPair(c: inout Comp, aExpr: U64, aPtr: LLVMValueRef, bExpr: U64, bPtr: LLVMValueRef, pinMark: U64) {
+        mut val pa: LLVMValueRef = self.pinnedCellOf(expr: aExpr, mark: pinMark)
+        mut val pb: LLVMValueRef = self.pinnedCellOf(expr: bExpr, mark: pinMark)
+        if LLVMIsNull(pa) != 0I32 {
+            pa = aPtr
+        }
+        if LLVMIsNull(pb) != 0I32 {
+            pb = bPtr
         }
         if LLVMIsNull(pa) != 0I32 {
             return
@@ -356,8 +437,9 @@ pub impl LlvmCtx {
             }
         }
         if p.isInout {
-            // pass the caller's place address (the callee mutates in place).
-            return self.placePtrOfWrite(c: inout c, id: argExpr)
+            // pass the caller's place address (the callee mutates in place); a deref-
+            // crossing place pins its cell for the call (the site releases after it).
+            return self.placePtrOfWritePinned(c: inout c, id: argExpr)
         }
         // a `move` parameter consumes the argument — the callee owns it and runs
         // deinit, so mark the source local moved (excluded from the caller's drop).

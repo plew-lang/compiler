@@ -348,6 +348,7 @@ pub impl LlvmCtx {
             rty = self.anyTy
         }
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
+        val pinMark: U64 = self.pinCells.count()
         mut val av: Array[LLVMValueRef] = []
         av.append(dataPtr)
         mut val ai: U64 = 0
@@ -357,8 +358,10 @@ pub impl LlvmCtx {
         }
         // overlapping-inout runtime tier: the `any` receiver is a boxed copy (not a caller
         // place), so only the argument pairs need the pre-call place-identity check.
-        self.emitInoutOverlapChecks(c: inout c, f: req, av: av, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 1U64)
-        return LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count(), anon())
+        self.emitInoutOverlapChecks(c: inout c, f: req, av: av, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 1U64, pinMark: pinMark)
+        val rv: LLVMValueRef = LLVMBuildCall2(self.b, fty, fnPtr, arrayCPtr(av), av.count(), anon())
+        self.releaseInoutPins(c: inout c, mark: pinMark)
+        return rv
     }
 
     // Emit function `fi`'s body into the LLVM function value `fv` (under the active

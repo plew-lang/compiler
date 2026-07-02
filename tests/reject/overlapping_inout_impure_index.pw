@@ -1,6 +1,6 @@
-// Overlapping `inout` (spec/03): a mixed-depth runtime pair whose overlapping-path
-// index is a CALL — the pre-call distinctness check would have to re-evaluate it
-// (re-firing its side effects), so the call is rejected; bind the index to a `val`.
+// Overlapping `inout` (spec/03, Swift-equivalent granularity): two `inout` places into
+// the SAME array variable are rejected at the variable granularity — the index
+// expressions are never evaluated or compared, so even a CALL index changes nothing.
 import @Std/Io with { print }
 struct Cell { pub mut val v: I64 }
 fn pick() -> U64 { return 0 }

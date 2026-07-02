@@ -396,28 +396,31 @@ pub impl LlvmCtx {
                             // desugared compound RHS is a Binary — never a place — so this is a
                             // no-op for `x += v`.)
                             rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
-                            // reassigning a unique local deinits its PREVIOUS value
-                            // first (spec/03) — load and destroy the old, unless the
-                            // local was moved out (no live value) or not owned.
-                            if self.locOwned[li] {
-                                if !(self.locMoved[li]) {
-                                    val osi: U64 = self.locStructIdx[li]
-                                    if osi < c.arena.structs.count() {
-                                        if self.structNeedsDeinit(c: inout c, sidx: osi) {
-                                            self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()), sidx: osi)
-                                        }
-                                    } else if c.isRefInst(ref: self.locTypeRef[li]) {
-                                        // a `Ref` local has no registered struct index, so the
-                                        // struct old-drop above misses it: release the PREVIOUS
-                                        // owner (strong--, pointee deinit + free at 0) before the
-                                        // store, balancing the new value's retain (copyValueIfPlace).
-                                        // Without this a reassigned `mut val r: Ref[T]` leaks the old cell.
-                                        self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
-                                    } else if c.isWeakRefInst(ref: self.locTypeRef[li]) {
-                                        // same for a `WeakRef` local: drop the old weak observer
-                                        // (weak--, free iff both counts 0) before the store.
-                                        self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
+                            // reassigning a local destroys its PREVIOUS value first
+                            // (spec/03) — load and destroy the old, unless the local was
+                            // moved out (no live value). NOT gated on locOwned: that flag
+                            // is about SCOPE-EXIT ownership, and the one assignable
+                            // non-owned local — an `inout` param (its locPtr IS the
+                            // caller's storage) — replaces the caller's value in place,
+                            // so the old value must still die here (skipping it leaked
+                            // the old Ref cell on `r = …` through an `inout Ref[T]`).
+                            if !(self.locMoved[li]) {
+                                val osi: U64 = self.locStructIdx[li]
+                                if osi < c.arena.structs.count() {
+                                    if self.structNeedsDeinit(c: inout c, sidx: osi) {
+                                        self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()), sidx: osi)
                                     }
+                                } else if c.isRefInst(ref: self.locTypeRef[li]) {
+                                    // a `Ref` local has no registered struct index, so the
+                                    // struct old-drop above misses it: release the PREVIOUS
+                                    // owner (strong--, pointee deinit + free at 0) before the
+                                    // store, balancing the new value's retain (copyValueIfPlace).
+                                    // Without this a reassigned `mut val r: Ref[T]` leaks the old cell.
+                                    self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
+                                } else if c.isWeakRefInst(ref: self.locTypeRef[li]) {
+                                    // same for a `WeakRef` local: drop the old weak observer
+                                    // (weak--, free iff both counts 0) before the store.
+                                    self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
                                 }
                             }
                             // the local re-owns the new value (clear any moved flag).

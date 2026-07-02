@@ -1,0 +1,16 @@
+// Overlapping `inout`, shared world (spec/03, Swift-equivalent granularity): two `inout`
+// subscripts into the SAME container reached through Ref derefs are checked at CONTAINER
+// granularity — DISTINCT indices still panic, because one element's write can reallocate
+// the buffer under the sibling place (a silently-lost write otherwise).
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+struct Holder { pub mut val xs: Array[I64] }
+fn bump2(x: inout I64, y: inout I64) { x = x + 1  y = y + 10 }
+fn main() {
+    val r1: Ref[Holder] = <Ref[Holder] value=<Holder xs=[1, 2, 3] /> />
+    val r2: Ref[Holder] = r1
+    val i: U64 = 0
+    val j: U64 = 1
+    bump2(x: inout r1->xs[i], y: inout r2->xs[j])   // same cell, same container -> panic
+    print(999I64)                                   // must not print
+}

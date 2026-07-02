@@ -459,6 +459,7 @@ pub impl LlvmCtx {
                     val savedA: Array[U64] = c.cur.typeArgs
                     c.cur.typeParams = cf.typeParams
                     c.cur.typeArgs = inferred
+                    val pinMark: U64 = self.pinCells.count()
                     mut val av2: Array[LLVMValueRef] = []
                     mut val ai: U64 = 0
                     while ai < args.count() {
@@ -474,8 +475,10 @@ pub impl LlvmCtx {
                     }
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
-                    self.emitInoutOverlapChecks(c: inout c, f: cf, av: av2, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64)
-                    return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
+                    self.emitInoutOverlapChecks(c: inout c, f: cf, av: av2, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: pinMark)
+                    val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
+                    self.releaseInoutPins(c: inout c, mark: pinMark)
+                    return rv
                 }
                 // ensureFnInst declined: an `async fn` whose promise-returning entry is
                 // declared by declareAsyncFns into the dedicated async-entry table (split off

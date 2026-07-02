@@ -1,0 +1,12 @@
+// Overlapping `inout`, value world (spec/03, Swift-equivalent granularity): two `inout`
+// subscripts into the SAME array variable are a compile error regardless of the index
+// values — no distinctness proof is attempted (per-variable granularity, like Swift).
+import @Std/Io with { print }
+fn swapAdd(a: inout I64, b: inout I64) { val t = a  a = b  b = t }
+fn main() {
+    mut val xs: Array[I64] = [1, 2, 3]
+    val i: U64 = 0
+    val j: U64 = 1
+    swapAdd(a: inout xs[i], b: inout xs[j])
+    print(xs[0])
+}
