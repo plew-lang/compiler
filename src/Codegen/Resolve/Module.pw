@@ -139,13 +139,47 @@ pub impl Comp {
         return false
     }
 
+    // Is the candidate decl `(candStart,candLen)` (a free fn) visible from module `useMod`
+    // (spec/15)? (name, module)-keyed: a cross-module candidate is visible only if the
+    // candidate's OWN module exports the name AND `useMod` directly imported that module
+    // (an import edge) AND brought this name into scope (a `with { }` import, not a bare
+    // namespace import). Pinning the candidate's module is what stops a private same-named
+    // decl in one module from being reached via an unrelated module's export of the same
+    // text (the import + "exported somewhere" pair alone did not distinguish the source).
+    // Does `useMod` import a barrel module that re-exports from `srcMod` (spec/15)? Composes
+    // a direct import edge (useMod -> barrel) with a re-export edge (barrel -> srcMod), so a
+    // name defined+exported in `srcMod` and forwarded by a barrel the use site imports is
+    // reachable without the use site naming the source module directly.
+    inout fn importsBarrelForwarding(useMod: U64, srcMod: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.modules.reExportEdges.count() {
+            val e: Bind = self.modules.reExportEdges[i]
+            if e.fieldLen == srcMod {
+                if self.hasImportEdge(useMod: useMod, targetMod: e.fieldStart) {
+                    return true
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
     inout fn nameVisibleFrom(useMod: U64, candStart: U64, candLen: U64) -> Bool {
-        if self.moduleOf(offset: candStart) == useMod {
+        val candMod: U64 = self.moduleOf(offset: candStart)
+        if candMod == useMod {
             return true
         }
-        if self.isImportedInto(mod: useMod, nameStart: candStart, nameLen: candLen) {
-            if self.isExportedName(nameStart: candStart, nameLen: candLen) {
-                return true
+        // cross-module: the candidate's own module must export the name, and the use site must
+        // bring the name into scope with a `with { }` import (not a bare namespace import) that
+        // reaches the candidate's module either directly or through a re-exporting barrel.
+        if self.isExportedFromModule(mod: candMod, nameStart: candStart, nameLen: candLen) {
+            if self.isImportedInto(mod: useMod, nameStart: candStart, nameLen: candLen) {
+                if self.hasImportEdge(useMod: useMod, targetMod: candMod) {
+                    return true
+                }
+                if self.importsBarrelForwarding(useMod: useMod, srcMod: candMod) {
+                    return true
+                }
             }
         }
         return false
@@ -320,6 +354,35 @@ pub impl Comp {
             i += 1
         }
         return self.arena.funcs.count()
+    }
+
+    // Does a free fn matching this call's name AND labels exist, but only in module(s) not
+    // visible from `useMod`? Drives the use-site diagnostic for the (name, module) rule: when
+    // an imported same-named export shadows the name by text, the actual label match may live
+    // in another module's PRIVATE surface — `findFunc` correctly returns nothing (it is not a
+    // candidate), and this turns that into a clean "not visible here" error instead of an
+    // opaque backend failure. Returns false when a visible label match exists (then any
+    // remaining mismatch is a normal overload/type error) or when nothing matches the labels
+    // (a local / closure / builtin, handled elsewhere).
+    inout fn labelMatchOnlyInvisible(useMod: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+        val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val foundInvisible: Bool = false
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[i]
+            if !(f.hasRecv || f.isAssoc) {
+                if f.nameId == qId {
+                    if self.paramsLabelsOk(params: f.params, args: args) {
+                        if self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen) {
+                            return false
+                        }
+                        foundInvisible = true
+                    }
+                }
+            }
+            i += 1
+        }
+        return foundInvisible
     }
 
     inout fn firstMethodRetType(typeStart: U64, typeLen: U64, name: String) -> TypeInfo {

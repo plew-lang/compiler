@@ -635,6 +635,13 @@ export fn runFrontend() -> Comp {
                                 appendBytes(into: inout pathBuf, from: rePath)
                                 loaded.append(<Bind nameStart=rs nameLen=rePath.count() fieldStart=rm fieldLen=rePath.count() />)
                             }
+                            // record the re-export edge (this module -> the source module it
+                            // forwards from), whether newly loaded or deduped, so visibility can
+                            // compose an import-of-the-barrel with the barrel's forward.
+                            val reTgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: rePath)
+                            if reTgt != 4000000000U64 {
+                                c.modules.reExportEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=reTgt />)
+                            }
                         }
                     }
                     TopItemAst.Directive(val dir) => { sawDirective = true }

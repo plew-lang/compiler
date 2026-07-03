@@ -824,6 +824,12 @@ export struct Modules {
     // different versions bind their own `leafval`). A single candidate is unaffected
     // (re-exports / normal cross-module use stay name-based).
     pub mut val importEdges: Array[Bind] = []
+    // re-export EDGES (fieldStart = the re-exporting module, fieldLen = the source module it
+    // forwards from). Recorded by the loader for each `export <path> with { … }` (spec/15).
+    // Composed with an import edge for visibility: a name defined+exported in the source
+    // module is visible to a consumer that imported the re-exporting module (the barrel) and
+    // brought the name into scope — the barrel need not be the name's defining module.
+    pub mut val reExportEdges: Array[Bind] = []
     // the module id of the ambient lang-item module @Std/Lang (std/Lang.pw), or the
     // "none" sentinel 4_000_000_000 when it was not loaded. Lang is THE ambient module
     // (spec/15): the types it declares — the language's built-in types — are in scope

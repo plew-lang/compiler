@@ -1,0 +1,11 @@
+// Main imports Pub's `shared` (tag:) and Priv's `touch`. The call `shared(code:)`
+// matches ONLY Priv's PRIVATE `shared` — which is not visible here (spec/15). The
+// front-end must reject: a private free fn in another module is not reachable via
+// an unrelated module's same-named export (the (name, module) visibility rule).
+import @Std/Io with { print }
+import ./Pub with { shared }
+import ./Priv with { touch }
+
+fn main() {
+    print(value: shared(code: 2I64))
+}

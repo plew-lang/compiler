@@ -1,0 +1,4 @@
+// A module that exports `shared` with label `tag:`.
+export fn shared(tag: I64) -> I64 {
+    return tag
+}

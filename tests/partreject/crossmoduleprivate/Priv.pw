@@ -1,0 +1,8 @@
+// A DIFFERENT module with a NON-exported `shared` (label `code:`), kept live by
+// its own exported user. Its private `shared` must not be visible elsewhere.
+fn shared(code: I64) -> I64 {
+    return code * 100
+}
+export fn touch() -> I64 {
+    return shared(code: 1I64)
+}

@@ -17,6 +17,28 @@ pub impl Comp {
         return false
     }
 
+    // Is `(nameStart,nameLen)` exported BY the specific module `mod` (spec/15)? Unlike
+    // `isExportedName` (which asks "does SOME module export this text"), this pins the
+    // exporting module: an export entry's `nameStart` is the exported decl's real source
+    // offset (free fn / global / newtype / re-export name all keep their original offset —
+    // only struct/enum names are re-interned, and those go through type visibility, not
+    // this free-fn path), so `moduleOf(e.nameStart)` recovers the module that exported it.
+    // This is the (name, module) pairing that keeps a private same-named decl in another
+    // module from riding an unrelated module's export of the same text.
+    inout fn isExportedFromModule(mod: U64, nameStart: U64, nameLen: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.modules.exports.count() {
+            val e: Bind = self.modules.exports[i]
+            if self.moduleOf(offset: e.nameStart) == mod {
+                if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
+                    return true
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
     // Module visibility (spec/15): every name brought in by `import … with { }` must be
     // part of some loaded module's public surface (`export`). A use of a non-exported
     // name — or an import from the wrong module (whose own module then isn't loaded, so
@@ -80,6 +102,15 @@ pub impl Comp {
                                     compileErrorAt(line: self.lineOf(offset: nameStart), msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)")
                                 }
                             }
+                        }
+                    } else {
+                        // a free fn of this name IS visible, but the call's labels may match only
+                        // a same-named fn PRIVATE to another module (an imported same-named export
+                        // shadows the name by text). `findFunc` correctly rejects it — report the
+                        // (name, module) visibility failure cleanly instead of an opaque backend
+                        // error (spec/15).
+                        if self.labelMatchOnlyInvisible(useMod: useMod, nameStart: nameStart, nameLen: nameLen, args: args) {
+                            compileErrorAt(line: self.lineOf(offset: nameStart), msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)")
                         }
                     }
                     i += 1
