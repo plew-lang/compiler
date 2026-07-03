@@ -346,24 +346,11 @@ pub impl LlvmCtx {
         // name any more: `Buffer[T]` and `Array[T]` are both generic-instance receivers, so
         // their methods ride the uniform generic-method path above (238) like Box/Optional.
         // Array's methods are pure Plew over `self.data` (std/Lang.pw); the inner `buffer*`
-        // intrinsics lower by function identity in genLlvmCall. collections.md §3-付録3.)
-        // wrapping arithmetic on a primitive integer receiver: two's-complement wrap
-        // is LLVM's default add/sub/mul (no overflow check), so `x.wrappingAdd(by: y)`
-        // is a plain op at the receiver's width. (Checked `+`/`-`/`*` aren't modeled
-        // here yet either, so the distinction is currently a no-op — but routing the
-        // method keeps the call accepted and correct on wraparound.)
-        mut val wop: I64 = -1I64
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { wop = opAdd() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { wop = opSub() }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { wop = opMul() }
-        if wop != -1I64 {
-            val rv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
-            if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
-                val uns: Bool = self.valueKind(c: inout c, id: recv) == 3U64
-                val bv: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: LLVMTypeOf(rv), unsigned: uns)
-                return self.buildBinOpS(c: inout c, op: wop, l: rv, r: bv, unsigned: uns)
-            }
-        }
+        // intrinsics lower by function identity in genLlvmCall. collections.md §3-付録3.
+        // The `wrapping*` ops are no longer intercepted here either: they are FixedWidthInteger
+        // witnesses `<Prim>.wrappingAdd(a, b)` in std/Core/Num.pw whose bodies bottom out in the
+        // `<pfx>Wrap*` intrinsic floor — resolved and emitted like any assoc fn, with identity,
+        // so a same-named user extension is no longer hijacked.)
         val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         if rsidx >= c.arena.structs.count() {
             // an enum-receiver method (`c.code()` on an enum value): dispatch like a

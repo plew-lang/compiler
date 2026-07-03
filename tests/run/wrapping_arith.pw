@@ -1,14 +1,22 @@
 import @Std/Io with { print }
 
-// Wrapping arithmetic (spec/02): `* + -` panic on overflow; the `wrapping*`
-// methods opt into two's-complement wraparound (the only way to wrap).
+// Wrapping arithmetic (spec/02): `* + -` panic on overflow; the `wrapping*` ops opt
+// into two's-complement wraparound (the only way to wrap — no `&+` operator). They are
+// `FixedWidthInteger` trait witnesses on each integer type with the operands' position-name
+// labels suppressed (`U64.wrappingAdd(a, b)`), resolved and emitted with identity (no name
+// intercept), so a same-named user extension is never hijacked.
 fn main() {
     val maxU: U64 = 18446744073709551615U64
-    print(maxU.wrappingAdd(by: 1U64))    // 0
-    print(maxU.wrappingAdd(by: 3U64))    // 2
-    print(0U64.wrappingSub(by: 1U64))    // 18446744073709551615
+    print(U64.wrappingAdd(maxU, 1U64))    // 0
+    print(U64.wrappingAdd(maxU, 3U64))    // 2
+    print(U64.wrappingSub(0U64, 1U64))    // 18446744073709551615
     val big: U64 = 6364136223846793005U64
-    print(big.wrappingMul(by: 3U64))     // wraps mod 2^64
+    print(U64.wrappingMul(big, 3U64))     // wraps mod 2^64
     val w: U8 = 250U8
-    print(w.wrappingAdd(by: 10U8))       // 4 (wraps at 8 bits)
+    print(U8.wrappingAdd(w, 10U8))        // 4 (wraps at 8 bits)
+    // wrappingNeg: two's-complement negate (defined for unsigned = 2^n - x).
+    print(U8.wrappingNeg(1U8))            // 255
+    print(U64.wrappingNeg(0U64))          // 0
+    val minI: I32 = -2147483648I32
+    print(I32.wrappingNeg(minI))          // -2147483648 (MIN negates to itself)
 }

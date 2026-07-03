@@ -51,17 +51,17 @@ pub impl SipHasher {
         return <SipHasher v0=(8317987319222330741U64 ^ k) v1=(7237128888997146477U64 ^ k) v2=(7816392313619706465U64 ^ k) v3=(8387220255154660723U64 ^ k) />
     }
     inout fn round() {
-        self.v0 = self.v0.wrappingAdd(by: self.v1)
+        self.v0 = U64.wrappingAdd(self.v0, self.v1)
         self.v1 = rotlU64(x: self.v1, b: 13U64)
         self.v1 = self.v1 ^ self.v0
         self.v0 = rotlU64(x: self.v0, b: 32U64)
-        self.v2 = self.v2.wrappingAdd(by: self.v3)
+        self.v2 = U64.wrappingAdd(self.v2, self.v3)
         self.v3 = rotlU64(x: self.v3, b: 16U64)
         self.v3 = self.v3 ^ self.v2
-        self.v0 = self.v0.wrappingAdd(by: self.v3)
+        self.v0 = U64.wrappingAdd(self.v0, self.v3)
         self.v3 = rotlU64(x: self.v3, b: 21U64)
         self.v3 = self.v3 ^ self.v0
-        self.v2 = self.v2.wrappingAdd(by: self.v1)
+        self.v2 = U64.wrappingAdd(self.v2, self.v1)
         self.v1 = rotlU64(x: self.v1, b: 17U64)
         self.v1 = self.v1 ^ self.v2
         self.v2 = rotlU64(x: self.v2, b: 32U64)

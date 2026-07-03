@@ -56,6 +56,10 @@ extern "plew-intrinsic" {
     fn i8Neg(a: I8) -> I8
     fn i8Eq(a: I8, b: I8) -> Bool
     fn i8Lt(a: I8, b: I8) -> Bool
+    fn i8WrapAdd(a: I8, b: I8) -> I8
+    fn i8WrapSub(a: I8, b: I8) -> I8
+    fn i8WrapMul(a: I8, b: I8) -> I8
+    fn i8WrapNeg(a: I8) -> I8
     fn i16Add(a: I16, b: I16) -> I16
     fn i16Sub(a: I16, b: I16) -> I16
     fn i16Mul(a: I16, b: I16) -> I16
@@ -70,6 +74,10 @@ extern "plew-intrinsic" {
     fn i16Neg(a: I16) -> I16
     fn i16Eq(a: I16, b: I16) -> Bool
     fn i16Lt(a: I16, b: I16) -> Bool
+    fn i16WrapAdd(a: I16, b: I16) -> I16
+    fn i16WrapSub(a: I16, b: I16) -> I16
+    fn i16WrapMul(a: I16, b: I16) -> I16
+    fn i16WrapNeg(a: I16) -> I16
     fn i32Add(a: I32, b: I32) -> I32
     fn i32Sub(a: I32, b: I32) -> I32
     fn i32Mul(a: I32, b: I32) -> I32
@@ -84,6 +92,10 @@ extern "plew-intrinsic" {
     fn i32Neg(a: I32) -> I32
     fn i32Eq(a: I32, b: I32) -> Bool
     fn i32Lt(a: I32, b: I32) -> Bool
+    fn i32WrapAdd(a: I32, b: I32) -> I32
+    fn i32WrapSub(a: I32, b: I32) -> I32
+    fn i32WrapMul(a: I32, b: I32) -> I32
+    fn i32WrapNeg(a: I32) -> I32
     fn i64Add(a: I64, b: I64) -> I64
     fn i64Sub(a: I64, b: I64) -> I64
     fn i64Mul(a: I64, b: I64) -> I64
@@ -98,6 +110,10 @@ extern "plew-intrinsic" {
     fn i64Neg(a: I64) -> I64
     fn i64Eq(a: I64, b: I64) -> Bool
     fn i64Lt(a: I64, b: I64) -> Bool
+    fn i64WrapAdd(a: I64, b: I64) -> I64
+    fn i64WrapSub(a: I64, b: I64) -> I64
+    fn i64WrapMul(a: I64, b: I64) -> I64
+    fn i64WrapNeg(a: I64) -> I64
     fn u8Add(a: U8, b: U8) -> U8
     fn u8Sub(a: U8, b: U8) -> U8
     fn u8Mul(a: U8, b: U8) -> U8
@@ -111,6 +127,10 @@ extern "plew-intrinsic" {
     fn u8BitNot(a: U8) -> U8
     fn u8Eq(a: U8, b: U8) -> Bool
     fn u8Lt(a: U8, b: U8) -> Bool
+    fn u8WrapAdd(a: U8, b: U8) -> U8
+    fn u8WrapSub(a: U8, b: U8) -> U8
+    fn u8WrapMul(a: U8, b: U8) -> U8
+    fn u8WrapNeg(a: U8) -> U8
     fn u16Add(a: U16, b: U16) -> U16
     fn u16Sub(a: U16, b: U16) -> U16
     fn u16Mul(a: U16, b: U16) -> U16
@@ -124,6 +144,10 @@ extern "plew-intrinsic" {
     fn u16BitNot(a: U16) -> U16
     fn u16Eq(a: U16, b: U16) -> Bool
     fn u16Lt(a: U16, b: U16) -> Bool
+    fn u16WrapAdd(a: U16, b: U16) -> U16
+    fn u16WrapSub(a: U16, b: U16) -> U16
+    fn u16WrapMul(a: U16, b: U16) -> U16
+    fn u16WrapNeg(a: U16) -> U16
     fn u32Add(a: U32, b: U32) -> U32
     fn u32Sub(a: U32, b: U32) -> U32
     fn u32Mul(a: U32, b: U32) -> U32
@@ -137,6 +161,10 @@ extern "plew-intrinsic" {
     fn u32BitNot(a: U32) -> U32
     fn u32Eq(a: U32, b: U32) -> Bool
     fn u32Lt(a: U32, b: U32) -> Bool
+    fn u32WrapAdd(a: U32, b: U32) -> U32
+    fn u32WrapSub(a: U32, b: U32) -> U32
+    fn u32WrapMul(a: U32, b: U32) -> U32
+    fn u32WrapNeg(a: U32) -> U32
     fn u64Add(a: U64, b: U64) -> U64
     fn u64Sub(a: U64, b: U64) -> U64
     fn u64Mul(a: U64, b: U64) -> U64
@@ -150,6 +178,10 @@ extern "plew-intrinsic" {
     fn u64BitNot(a: U64) -> U64
     fn u64Eq(a: U64, b: U64) -> Bool
     fn u64Lt(a: U64, b: U64) -> Bool
+    fn u64WrapAdd(a: U64, b: U64) -> U64
+    fn u64WrapSub(a: U64, b: U64) -> U64
+    fn u64WrapMul(a: U64, b: U64) -> U64
+    fn u64WrapNeg(a: U64) -> U64
     fn f32Add(a: F32, b: F32) -> F32
     fn f32Sub(a: F32, b: F32) -> F32
     fn f32Mul(a: F32, b: F32) -> F32
@@ -426,19 +458,36 @@ export fn assert(cond~: Bool, message: String = "assertion failed") {
 // numeric conformances are generated into ./Core/Num (over the intrinsic floor);
 // user types declare their own. `as` desugars binary `+ - * / % & | ^ << >>` and
 // prefix `- ! ~` uniformly — primitives are not special-cased (spec/12, O6).
-export trait Add[Rhs]    { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
-export trait Sub[Rhs]    { type Output  assoc fn sub(lhs: Self, rhs: Rhs) -> Output }
-export trait Mul[Rhs]    { type Output  assoc fn mul(lhs: Self, rhs: Rhs) -> Output }
-export trait Div[Rhs]    { type Output  assoc fn div(lhs: Self, rhs: Rhs) -> Output }
-export trait Rem[Rhs]    { type Output  assoc fn rem(lhs: Self, rhs: Rhs) -> Output }
-export trait BitAnd[Rhs] { type Output  assoc fn bitand(lhs: Self, rhs: Rhs) -> Output }
-export trait BitOr[Rhs]  { type Output  assoc fn bitor(lhs: Self, rhs: Rhs) -> Output }
-export trait BitXor[Rhs] { type Output  assoc fn bitxor(lhs: Self, rhs: Rhs) -> Output }
-export trait Shl[Rhs]    { type Output  assoc fn shl(lhs: Self, rhs: Rhs) -> Output }
-export trait Shr[Rhs]    { type Output  assoc fn shr(lhs: Self, rhs: Rhs) -> Output }
-export trait Neg    { type Output  assoc fn neg(value: Self) -> Output }
-export trait Not    { type Output  assoc fn not(value: Self) -> Output }
-export trait BitNot { type Output  assoc fn bitnot(value: Self) -> Output }
+export trait Add[Rhs]    { type Output  assoc fn add(lhs~: Self, rhs~: Rhs) -> Output }
+export trait Sub[Rhs]    { type Output  assoc fn sub(lhs~: Self, rhs~: Rhs) -> Output }
+export trait Mul[Rhs]    { type Output  assoc fn mul(lhs~: Self, rhs~: Rhs) -> Output }
+export trait Div[Rhs]    { type Output  assoc fn div(lhs~: Self, rhs~: Rhs) -> Output }
+export trait Rem[Rhs]    { type Output  assoc fn rem(lhs~: Self, rhs~: Rhs) -> Output }
+export trait BitAnd[Rhs] { type Output  assoc fn bitand(lhs~: Self, rhs~: Rhs) -> Output }
+export trait BitOr[Rhs]  { type Output  assoc fn bitor(lhs~: Self, rhs~: Rhs) -> Output }
+export trait BitXor[Rhs] { type Output  assoc fn bitxor(lhs~: Self, rhs~: Rhs) -> Output }
+export trait Shl[Rhs]    { type Output  assoc fn shl(lhs~: Self, rhs~: Rhs) -> Output }
+export trait Shr[Rhs]    { type Output  assoc fn shr(lhs~: Self, rhs~: Rhs) -> Output }
+export trait Neg    { type Output  assoc fn neg(value~: Self) -> Output }
+export trait Not    { type Output  assoc fn not(value~: Self) -> Output }
+export trait BitNot { type Output  assoc fn bitnot(value~: Self) -> Output }
+
+// Fixed-width integers (spec/02): the classification trait for the bounded, two's-
+// complement integer types. Its members are the operations that only make sense for a
+// finite bit width — `wrapping*`, the two's-complement wraparound forms of `+ - *` /
+// prefix `-` (there is NO `&+` operator: wrapping is opt-in by name, not sugar). Called
+// `<Int>.wrappingAdd(a, b)` — an assoc fn, not a method, so a future operator overload of
+// `+` on the same type stays a separate surface. The primitive int conformances are
+// generated into ./Core/Num over the `<pfx>Wrap*` intrinsic floor; a BigInt (unbounded)
+// is NOT a `FixedWidthInteger`, so the name honestly states the fixed-width precondition.
+// The operands are equal peers whose labels fall to the position names `lhs`/`rhs`, so
+// they are suppressed (spec/04); the unary `wrappingNeg` takes the empty-name `value`.
+export trait FixedWidthInteger {
+    assoc fn wrappingAdd(lhs~: Self, rhs~: Self) -> Self
+    assoc fn wrappingSub(lhs~: Self, rhs~: Self) -> Self
+    assoc fn wrappingMul(lhs~: Self, rhs~: Self) -> Self
+    assoc fn wrappingNeg(value~: Self) -> Self
+}
 
 // Optional chaining (spec/12): `receiver?.member` is sugar for member access on a
 // type that branches into "has a value" / "is empty". `?.` is NOT special-cased to
@@ -558,8 +607,8 @@ impl U64 as Pow[U64] {
 // Equality and ordering (spec/12): `==`/`!=` desugar to `Eq.eq`, and `< <= > >=`
 // to a tag test on `Ord.compare`'s three-way `Ordering`. Same-type relations, so
 // no type argument. The primitive conformances are generated into ./Core/Num.
-export trait Eq { assoc fn eq(lhs: Self, rhs: Self) -> Bool }
-export trait Ord: Eq { assoc fn compare(lhs: Self, rhs: Self) -> Ordering }
+export trait Eq { assoc fn eq(lhs~: Self, rhs~: Self) -> Bool }
+export trait Ord: Eq { assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering }
 
 // The three-way result of `Ord.compare` (spec/12). NOT a lang item / not ambient: the
 // `< <= > >=` operators desugar through it but RETURN `Bool` (the `Ordering` reference
@@ -752,7 +801,7 @@ pub impl[T] Buffer[T] {
 // Buffer equality (spec/02): the floor's `==` is element-wise (NOT pointer identity) — a
 // `@[Eq]` struct over a Buffer field (`Array`/`String`) compares its buffer through this.
 pub impl[T] Buffer[T] as Eq {
-    assoc fn eq(lhs: Self, rhs: Self) -> Bool {
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool {
         return bufferEq(lhs: lhs, rhs: rhs)
     }
 }
@@ -771,7 +820,7 @@ pub impl String as Eq {
 // method (receiver = the collection), not an assoc fn. Read and write are separate
 // traits (a read-only collection implements only Index).
 export trait Index[Key]    { type Output  fn index(key: Key) -> Output }
-export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value: Value) }
+export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value~: Value) }
 
 // Build a String from a byte array WITHOUT validating UTF-8 — the unchecked floor (the
 // bytes must already be valid UTF-8; decimal digits and interned source spans always
@@ -973,7 +1022,7 @@ pub impl String as Format {
 // is the convenient binary form. Built in pure Plew over the `bytes` view.
 pub impl String as Add[String] {
     type Output = String
-    assoc fn add(lhs: String, rhs: String) -> String {
+    assoc fn add(lhs~: String, rhs~: String) -> String {
         mut val out: Array[U8] = lhs.bytes()
         val rb: Array[U8] = rhs.bytes()
         mut val i: U64 = 0

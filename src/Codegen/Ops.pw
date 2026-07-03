@@ -21,16 +21,4 @@ pub impl Comp {
         }
         return scalarInfo()
     }
-
-    // Wrapping arithmetic (spec/02): integer `* + -` panic on overflow; the
-    // `wrapping*` methods opt into two's-complement wraparound instead (the only
-    // way to wrap — there is no `&+` operator). A privileged lowering on integer
-    // receivers until the integer trait tower subsumes it. Whether a method name is
-    // one of the supported wrapping ops.
-    inout fn isWrappingMethod(nameStart: U64, nameLen: U64) -> Bool {
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingMul") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingAdd") { return true }
-        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "wrappingSub") { return true }
-        return false
-    }
 }

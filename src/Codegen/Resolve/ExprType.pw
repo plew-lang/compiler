@@ -348,14 +348,6 @@ pub impl Comp {
                     return scalarInfo()
                 }
                 mut val rt: TypeInfo = self.exprType(id: recv)
-                // wrapping arithmetic on an integer receiver yields the receiver's type
-                // (`x.wrappingMul(by: y): U64` when x: U64) — a privileged lowering with
-                // no real fn, so its type is recovered here (see Expr.pw codegen).
-                if self.isWrappingMethod(nameStart: nameStart, nameLen: nameLen) {
-                    if self.isIntType(start: rt.nameStart, len: rt.nameLen) {
-                        return rt
-                    }
-                }
                 if rt.kind == 2 {
                     // a method call on `self` (Self) in a trait provided-method body being
                     // abstract-checked: resolve the result from the trait requirement's

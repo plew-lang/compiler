@@ -1,9 +1,13 @@
 // gen-numops — emit the primitive operator-trait witnesses (spec/12, O6).
 //
-// One-shot generator (run by hand, output committed): prints the intrinsic
-// `extern` floor declarations plus an `impl <Prim> as <OpTrait>` for every
-// primitive numeric type and operator, each body delegating to its intrinsic
-// (`i32Add` etc., which lower to the `plew_i32Add` runtime in the C preamble).
+// One-shot generator (run by hand, output committed): prints an `impl <Prim> as
+// <OpTrait>` for every primitive numeric type and operator, each body delegating to
+// its intrinsic (`i32Add` etc., which lower in genNumIntrinsic). The output IS
+// `std/Core/Num.pw` verbatim — a `part ./Core/Num` of @Std/Core, so it holds ONLY
+// impl blocks. The matching `extern "plew-intrinsic"` floor these bodies call
+// (`i8Add`, `u64WrapAdd`, …) is hand-maintained in std/Core.pw (the module root — a
+// part cannot declare externs); adding an op means editing BOTH this generator and
+// that floor.
 //
 // Why a standalone generator rather than the `@[...]` derive pipeline: any
 // derive macro depends on @Std/Syntax, which depends on @Std/Core — so deriving
@@ -12,36 +16,11 @@
 // not the primitive floor itself. This generator keeps the bootstrap-critical
 // core free of gen-pipeline coupling while still avoiding ~400 hand-written lines.
 //
-//   compiler/plewc tools/gen-numops.pw | clang -x c - -o /tmp/gen \
-//     && /tmp/gen > compiler/std/Core/Num.pw
+//   plewc tools/gen-numops.pw > /tmp/gen.ll && plewc --runtime > /tmp/rt.c \
+//     && clang -w /tmp/gen.ll /tmp/rt.c $(llvm-config --ldflags --libs core) \
+//        -o /tmp/gen && /tmp/gen > std/Core/Num.pw
 
 import @Std/Io with { write }
-
-// `    fn <pfx><suf>(a: <ty>, b: <ty>) -> <ty>`
-fn externBin(pfx: String, suf: String, ty: String) {
-    write(s: "    fn ")
-    write(s: pfx)
-    write(s: suf)
-    write(s: "(a: ")
-    write(s: ty)
-    write(s: ", b: ")
-    write(s: ty)
-    write(s: ") -> ")
-    write(s: ty)
-    write(s: "\n")
-}
-
-// `    fn <pfx><suf>(a: <ty>) -> <ty>`
-fn externUn(pfx: String, suf: String, ty: String) {
-    write(s: "    fn ")
-    write(s: pfx)
-    write(s: suf)
-    write(s: "(a: ")
-    write(s: ty)
-    write(s: ") -> ")
-    write(s: ty)
-    write(s: "\n")
-}
 
 // impl <ty> as <trn>[<ty>] { type Output = <ty>  assoc fn <meth>(lhs,rhs) { return <pfx><suf>(a:lhs, b:rhs) } }
 fn implBin(ty: String, trn: String, meth: String, pfx: String, suf: String) {
@@ -55,9 +34,9 @@ fn implBin(ty: String, trn: String, meth: String, pfx: String, suf: String) {
     write(s: ty)
     write(s: "\n    assoc fn ")
     write(s: meth)
-    write(s: "(lhs: ")
+    write(s: "(lhs~: ")
     write(s: ty)
-    write(s: ", rhs: ")
+    write(s: ", rhs~: ")
     write(s: ty)
     write(s: ") -> ")
     write(s: ty)
@@ -77,7 +56,7 @@ fn implUn(ty: String, trn: String, meth: String, pfx: String, suf: String) {
     write(s: ty)
     write(s: "\n    assoc fn ")
     write(s: meth)
-    write(s: "(value: ")
+    write(s: "(value~: ")
     write(s: ty)
     write(s: ") -> ")
     write(s: ty)
@@ -91,9 +70,9 @@ fn implUn(ty: String, trn: String, meth: String, pfx: String, suf: String) {
 fn implEq(ty: String, pfx: String) {
     write(s: "impl ")
     write(s: ty)
-    write(s: " as Eq {\n    assoc fn eq(lhs: ")
+    write(s: " as Eq {\n    assoc fn eq(lhs~: ")
     write(s: ty)
-    write(s: ", rhs: ")
+    write(s: ", rhs~: ")
     write(s: ty)
     write(s: ") -> Bool { return ")
     write(s: pfx)
@@ -104,15 +83,57 @@ fn implEq(ty: String, pfx: String) {
 fn implOrd(ty: String, pfx: String) {
     write(s: "impl ")
     write(s: ty)
-    write(s: " as Ord {\n    assoc fn compare(lhs: ")
+    write(s: " as Ord {\n    assoc fn compare(lhs~: ")
     write(s: ty)
-    write(s: ", rhs: ")
+    write(s: ", rhs~: ")
     write(s: ty)
     write(s: ") -> Ordering {\n        if ")
     write(s: pfx)
     write(s: "Lt(a: lhs, b: rhs) { return <Ordering.Less /> }\n        if ")
     write(s: pfx)
     write(s: "Eq(a: lhs, b: rhs) { return <Ordering.Equal /> }\n        return <Ordering.Greater />\n    }\n}\n")
+}
+
+// `    assoc fn <meth>(lhs~,rhs~) -> ty { return <pfx><suf>(a: lhs, b: rhs) }`
+fn implWrapBin(ty: String, pfx: String, meth: String, suf: String) {
+    write(s: "    assoc fn ")
+    write(s: meth)
+    write(s: "(lhs~: ")
+    write(s: ty)
+    write(s: ", rhs~: ")
+    write(s: ty)
+    write(s: ") -> ")
+    write(s: ty)
+    write(s: " { return ")
+    write(s: pfx)
+    write(s: suf)
+    write(s: "(a: lhs, b: rhs) }\n")
+}
+
+// Wrapping arithmetic (spec/02): the `wrapping*` two's-complement ops as the
+// `FixedWidthInteger` trait witnesses on each integer type (there is no operator, so
+// they are named, not desugared). Primitives are trait-only — behavior on a type Core
+// owns is expressed as a conformance, not an inherent impl (spec/09) — so wrapping is a
+// conformance to the integer classification trait, mirroring `Add`. Both operands are
+// equal peers whose labels fall to the position names `lhs`/`rhs`, so they are suppressed
+// (spec/04 label guidance); the unary `wrappingNeg` takes the empty-name `value`. Bodies
+// bottom out in the `<pfx>Wrap*` intrinsic floor (declared in Core.pw, lowered
+// raw/unchecked by genNumIntrinsic).
+fn implWrap(ty: String, pfx: String) {
+    write(s: "impl ")
+    write(s: ty)
+    write(s: " as FixedWidthInteger {\n")
+    implWrapBin(ty: ty, pfx: pfx, meth: "wrappingAdd", suf: "WrapAdd")
+    implWrapBin(ty: ty, pfx: pfx, meth: "wrappingSub", suf: "WrapSub")
+    implWrapBin(ty: ty, pfx: pfx, meth: "wrappingMul", suf: "WrapMul")
+    // wrappingNeg is defined for unsigned too (2^n - x), unlike checked Neg (signed only).
+    write(s: "    assoc fn wrappingNeg(value~: ")
+    write(s: ty)
+    write(s: ") -> ")
+    write(s: ty)
+    write(s: " { return ")
+    write(s: pfx)
+    write(s: "WrapNeg(a: value) }\n}\n")
 }
 
 fn main() {
@@ -124,75 +145,16 @@ fn main() {
 
     write(s: "// Generated by tools/gen-numops.pw — do not edit by hand.\n")
     write(s: "// Operator-trait witnesses for the primitive numeric types over the numeric\n")
-    write(s: "// intrinsic floor (iXAdd -> plew_iXAdd in the C preamble; spec/12, O6). A part\n")
-    write(s: "// of @Std/Core so Core — the owner of the primitive types — stays coherent.\n\n")
+    write(s: "// intrinsic floor (iXAdd -> genNumIntrinsic; spec/12, O6). A `part ./Core/Num`\n")
+    write(s: "// of @Std/Core so Core — the owner of the primitive types — stays coherent. The\n")
+    write(s: "// `extern` floor these bodies call is declared in std/Core.pw (the module root).\n\n")
 
-    // intrinsic floor declarations
-    write(s: "extern \"plew-intrinsic\" {\n")
-    mut val ti: U64 = 0
-    while ti < tys.count() {
-        mut val oi: U64 = 0
-        while oi < traits.count() {
-            externBin(pfx: pfx[ti], suf: traits[oi], ty: tys[ti])
-            oi += 1
-        }
-        externUn(pfx: pfx[ti], suf: "BitNot", ty: tys[ti])
-        if signed[ti] {
-            externUn(pfx: pfx[ti], suf: "Neg", ty: tys[ti])
-        }
-        // comparison floor: Eq backs `==`, Lt backs Ord.compare. Both return Bool.
-        write(s: "    fn ")
-        write(s: pfx[ti])
-        write(s: "Eq(a: ")
-        write(s: tys[ti])
-        write(s: ", b: ")
-        write(s: tys[ti])
-        write(s: ") -> Bool\n")
-        write(s: "    fn ")
-        write(s: pfx[ti])
-        write(s: "Lt(a: ")
-        write(s: tys[ti])
-        write(s: ", b: ")
-        write(s: tys[ti])
-        write(s: ") -> Bool\n")
-        ti += 1
-    }
-    // float floor: Add/Sub/Mul/Div (no Rem — float `%` is a compile error, spec/12),
-    // Neg (floats are signed), Eq/Lt (NaN-panicking ordered compares, spec/02). F32/F64
-    // both lower to `double` for now.
     val ftys: Array[String] = ["F32", "F64"]
     val fpfx: Array[String] = ["f32", "f64"]
     val ftraits: Array[String] = ["Add", "Sub", "Mul", "Div"]
-    mut val fi: U64 = 0
-    while fi < ftys.count() {
-        mut val foi: U64 = 0
-        while foi < ftraits.count() {
-            externBin(pfx: fpfx[fi], suf: ftraits[foi], ty: ftys[fi])
-            foi += 1
-        }
-        externUn(pfx: fpfx[fi], suf: "Neg", ty: ftys[fi])
-        write(s: "    fn ")
-        write(s: fpfx[fi])
-        write(s: "Eq(a: ")
-        write(s: ftys[fi])
-        write(s: ", b: ")
-        write(s: ftys[fi])
-        write(s: ") -> Bool\n")
-        write(s: "    fn ")
-        write(s: fpfx[fi])
-        write(s: "Lt(a: ")
-        write(s: ftys[fi])
-        write(s: ", b: ")
-        write(s: ftys[fi])
-        write(s: ") -> Bool\n")
-        fi += 1
-    }
-    write(s: "    fn boolNot(a: Bool) -> Bool\n")
-    write(s: "    fn boolEq(a: Bool, b: Bool) -> Bool\n")
-    write(s: "}\n\n")
 
     // conformances
-    ti = 0
+    mut val ti: U64 = 0
     while ti < tys.count() {
         mut val oi: U64 = 0
         while oi < traits.count() {
@@ -205,10 +167,11 @@ fn main() {
         }
         implEq(ty: tys[ti], pfx: pfx[ti])
         implOrd(ty: tys[ti], pfx: pfx[ti])
+        implWrap(ty: tys[ti], pfx: pfx[ti])
         ti += 1
     }
     // float conformances (Add/Sub/Mul/Div/Neg/Eq/Ord).
-    fi = 0
+    mut val fi: U64 = 0
     while fi < ftys.count() {
         mut val foi: U64 = 0
         while foi < ftraits.count() {
