@@ -1,0 +1,9 @@
+// Main imports Gl's exported `touchGl` but reads Gl's NON-exported global `secret`
+// directly. The front-end must reject: a private top-level global in another module
+// is not reachable from here (the (name, module) visibility rule, spec/15).
+import @Std/Io with { print }
+import ./Gl with { touchGl }
+
+fn main() {
+    print(value: secret)
+}

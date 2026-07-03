@@ -55,7 +55,7 @@ pub impl Comp {
         self.cur.branchBase = 0
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
-        self.seedGlobalLocals()
+        self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
         self.checkGenericArity(ref: f.retTy, offset: f.nameStart)
         mut val pi: U64 = 0
         while pi < f.params.count() {

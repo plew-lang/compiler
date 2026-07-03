@@ -11,7 +11,7 @@ pub impl Comp {
                 val noParams: Array[Bind] = []
                 val noArgs: Array[U64] = []
                 self.cur.locals = []
-                self.seedGlobalLocals()
+                self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
                 self.cur.hasRecv = f.hasRecv
                 self.cur.recvStart = f.recvStart
                 self.cur.recvLen = f.recvLen
@@ -47,7 +47,7 @@ pub impl Comp {
             val fin: FnInst = self.monoWork.fnInsts[si]
             val gf: Func = self.arena.funcs[fin.fnIdx]
             self.cur.locals = []
-            self.seedGlobalLocals()
+            self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: gf))
             // a generic *method* instance carries a receiver: set the self env (and the
             // receiver instantiation for a generic receiver) so `self`/`self.field`
             // resolve while scanning its body — without this, a derived `hash[H]` that

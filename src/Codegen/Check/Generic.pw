@@ -669,7 +669,7 @@ pub impl Comp {
                 val noParams: Array[Bind] = []
                 val noArgs: Array[U64] = []
                 self.cur.locals = []
-                self.seedGlobalLocals()
+                self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
                 self.cur.hasRecv = f.hasRecv
                 self.cur.recvStart = f.recvStart
                 self.cur.recvLen = f.recvLen

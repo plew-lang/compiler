@@ -1,0 +1,6 @@
+// A module with a NON-exported top-level global `secret`, kept live by its own
+// exported user. Its private global must not be visible from another module (spec/15).
+val secret: I64 = 42I64
+export fn touchGl() -> I64 {
+    return secret
+}

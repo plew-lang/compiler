@@ -529,7 +529,7 @@ pub impl Comp {
                     if !(mf.isProvided) {
                         if mf.body != 0 {
                             self.cur.locals = []
-                            self.seedGlobalLocals()
+                            self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: mf))
                             self.cur.hasRecv = true
                             self.cur.recvStart = mf.recvStart
                             self.cur.recvLen = mf.recvLen

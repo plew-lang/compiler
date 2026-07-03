@@ -10,13 +10,59 @@ pub impl Comp {
         self.cur.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
     }
 
-    inout fn seedGlobalLocals() {
+    // The "seed every global" sentinel for `seedGlobalLocals`: used when the referencing
+    // function has no reliable module offset (a method / assoc fn — its `nameStart` is
+    // re-interned to module 0), so gating would risk hiding a same-module global. Free
+    // functions get their real module and are gated; methods stay conservative (their own
+    // module's globals remain visible — the narrow residual is a method reading another
+    // module's private global, which needs a real per-Func decl offset to close).
+    inout fn globalSeedModeFor(f: Func) -> U64 {
+        if f.hasRecv || f.isAssoc {
+            return 4000000000U64
+        }
+        return self.moduleOf(offset: f.nameStart)
+    }
+
+    // Is a top-level global defined in module `gMod` with name `(nameStart,nameLen)` visible
+    // from module `useMod` (spec/15)? Same module, or `export`ed by its own module and brought
+    // in by a `with { }` import that reaches that module directly or through a re-exporting
+    // barrel. Without this a non-`export` global was readable from any module (an ambient leak).
+    inout fn globalVisibleFrom(useMod: U64, gMod: U64, nameStart: U64, nameLen: U64) -> Bool {
+        if gMod == useMod {
+            return true
+        }
+        if self.isExportedName(nameStart: nameStart, nameLen: nameLen) {
+            if self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen) {
+                if self.hasImportEdge(useMod: useMod, targetMod: gMod) {
+                    return true
+                }
+                if self.importsBarrelForwarding(useMod: useMod, srcMod: gMod) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    // Seed the globals visible from `useMod` as locals so identifiers in a function body
+    // resolve (spec/15). `useMod == 4_000_000_000` (the sentinel from `globalSeedModeFor`)
+    // seeds every global (conservative, for a function with no reliable module). A global's
+    // own module is `moduleOf` of its initializer offset (a real source offset — its name is
+    // re-interned, so `nameStart` cannot serve `moduleOf`).
+    inout fn seedGlobalLocals(useMod: U64) {
         mut val gi: U64 = 0
         while gi < self.arena.globals.count() {
             match self.arena.stmts[self.arena.globals[gi].letStmt] {
                 Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
-                    val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+                    mut val visible: Bool = useMod == 4000000000U64
+                    if !visible {
+                        val gMod: U64 = self.moduleOf(offset: self.exprOffset(id: init))
+                        visible = self.globalVisibleFrom(useMod: useMod, gMod: gMod, nameStart: nameStart, nameLen: nameLen)
+                    }
+                    if visible {
+                        val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                        self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: false)
+                    }
                 }
                 _ => {}
             }
