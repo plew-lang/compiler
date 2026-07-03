@@ -195,6 +195,70 @@ pub impl LlvmCtx {
         return rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array")
     }
 
+    // `g` if it names a concrete lang-item value type (a fixed-width int, a float, Bool, or
+    // String) — the "value type" a `print[T]` / assignment inference keys on — else 0. A
+    // generic-instance ref is recovered by isGenericInst, a struct/enum by exprStructIdx; this
+    // is the single source for the scalar/String tier so every exprTypeRef branch recovers a
+    // scalar result uniformly (spec/02, audit-3: print via the real `Format` body).
+    inout fn concreteLangItemRef(c: inout Comp, g: U64) -> U64 {
+        if g == 0U64 {
+            return 0U64
+        }
+        if g >= c.arena.types.count() {
+            return 0U64
+        }
+        val gn: TypeRef = c.arena.types[g]
+        if isPrimIntName(c: inout c, start: gn.nameStart, len: gn.nameLen) {
+            return g
+        }
+        if c.isFloatType(start: gn.nameStart, len: gn.nameLen) {
+            return g
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: gn.nameStart, len: gn.nameLen, kw: "Bool") {
+            return g
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: gn.nameStart, len: gn.nameLen, kw: "String") {
+            return g
+        }
+        return 0U64
+    }
+
+    // The concrete lang-item ref of field `(nameStart,nameLen)` on struct `baseSi` when the
+    // field's declared type is a scalar / String (`ping.v : I64`), else 0 — resolveField tracks
+    // only generic-instance fields, so this recovers the scalar tier for `print(x.f)` inference.
+    // `baseRef` is the base's (possibly generic) instance ref: a generic field (`pg.w` where
+    // w: T and pg: Pong[I64]) is grounded under it so the param `T` resolves to its concrete
+    // scalar (I64), not left un-grounded — otherwise `print` falls back to the front-end typeOf,
+    // which recurses on a recursive/mutually-recursive generic scrutinee.
+    inout fn scalarFieldRef(c: inout Comp, baseSi: U64, baseRef: U64, nameStart: U64, nameLen: U64) -> U64 {
+        if baseSi >= c.arena.structs.count() {
+            return 0U64
+        }
+        val fidx: U64 = structFieldIndex(c: inout c, sidx: baseSi, start: nameStart, len: nameLen)
+        if fidx >= c.arena.structs[baseSi].fields.count() {
+            return 0U64
+        }
+        val fd: FieldDef = c.arena.structs[baseSi].fields[fidx]
+        if fd.tyIsArray {
+            return 0U64
+        }
+        mut val fr: U64 = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
+        if fd.ty != 0U64 {
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            val didSet: Bool = self.setInstanceEnv(c: inout c, ref: baseRef)
+            val g: U64 = c.groundTypeRef(ref: fd.ty)
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
+            }
+            if g != 0U64 {
+                fr = g
+            }
+        }
+        return self.concreteLangItemRef(c: inout c, g: fr)
+    }
+
     inout fn exprTypeRef(c: inout Comp, id: U64) -> U64 {
         // a desugared non-Optional `?.` (a Chain rewrite) records its result `Head[U]`; use
         // it so a method call on the result (`(a?.x).chain()` in a nested `a?.x?.y`) resolves
@@ -215,9 +279,15 @@ pub impl LlvmCtx {
                 // yield the instance ref (grounded under the base env + any active env) so a
                 // match on the field read recovers the enum's substitution env. Shared with
                 // `->field` (Arrow) via resolveField — one source for field grounding.
-                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: self.exprStructIdx(c: inout c, id: base), baseRef: self.exprTypeRef(c: inout c, id: base), nameStart: nameStart, nameLen: nameLen)
+                val fbsi: U64 = self.exprStructIdx(c: inout c, id: base)
+                val fbref: U64 = self.exprTypeRef(c: inout c, id: base)
+                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: fbsi, baseRef: fbref, nameStart: nameStart, nameLen: nameLen)
                 if rf.typeRef != 0U64 {
                     return rf.typeRef
+                }
+                val sfr: U64 = self.scalarFieldRef(c: inout c, baseSi: fbsi, baseRef: fbref, nameStart: nameStart, nameLen: nameLen)
+                if sfr != 0U64 {
+                    return sfr
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -225,9 +295,15 @@ pub impl LlvmCtx {
                 // (generic-instance or existential) type ref, grounded under the pointee's env,
                 // so `s->items[i]` / `s->items.count()` dispatch the Array witness like a local
                 // field. Same resolveField helper as Field — `->` and `.` stay in lockstep.
-                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: self.refPointeeStructIdx(c: inout c, base: base), baseRef: self.refPointeeTypeRef(c: inout c, base: base), nameStart: nameStart, nameLen: nameLen)
+                val absi: U64 = self.refPointeeStructIdx(c: inout c, base: base)
+                val abref: U64 = self.refPointeeTypeRef(c: inout c, base: base)
+                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: absi, baseRef: abref, nameStart: nameStart, nameLen: nameLen)
                 if rf.typeRef != 0U64 {
                     return rf.typeRef
+                }
+                val sfr: U64 = self.scalarFieldRef(c: inout c, baseSi: absi, baseRef: abref, nameStart: nameStart, nameLen: nameLen)
+                if sfr != 0U64 {
+                    return sfr
                 }
             }
             Expr.Deref(val base) => {
@@ -336,12 +412,26 @@ pub impl LlvmCtx {
                 return self.methodResultRef(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                // `pow(base: x, exp: n)` (spec/12) yields the base argument's type (the
-                // `Pow` Output is the base type for the integer conformances), so a print /
-                // assignment recovers the right width and signedness.
+                // `pow(base: x, exp: n)` (spec/12) yields the base type's `Pow` Output — the
+                // base type itself for the integer conformances, but a distinct `type Output`
+                // for a user conformance (`Sq.pow -> I64`). Resolve the base's `pow` assoc and
+                // read its return type (mirrors genPowCall) so a `print(pow(base: s, …))` / an
+                // assignment recovers the true result type, not just the base. Fall back to the
+                // base arg's type when the assoc cannot be resolved.
                 if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
                     if args.count() == 2U64 {
-                        return self.llvmArgTypeRef(c: inout c, argExpr: args[0].expr)
+                        val br: U64 = self.llvmArgTypeRef(c: inout c, argExpr: args[0].expr)
+                        if br != 0U64 {
+                            val bt: TypeRef = c.arena.types[br]
+                            val powN: Bind = c.kwSpan(kw: "pow", kwLen: 3U64)
+                            val afi: U64 = c.findAssoc(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
+                            if afi < c.arena.funcs.count() {
+                                if c.arena.funcs[afi].retTy != 0U64 {
+                                    return c.arena.funcs[afi].retTy
+                                }
+                            }
+                        }
+                        return br
                     }
                 }
                 // a free call's grounded return TypeRef when it carries type args: an
@@ -367,6 +457,13 @@ pub impl LlvmCtx {
                         if rt != 0U64 {
                             if self.typeRefCarriesArgs(c: inout c, ref: rt) {
                                 return rt
+                            }
+                            // a concrete scalar / String return (`sumList(…) -> I64`): return its
+                            // ref too, so `print(f(…))` recovers the type for `print[T]` inference.
+                            // (A struct return stays 0 here and is recovered by exprStructIdx.)
+                            val cr: U64 = self.concreteLangItemRef(c: inout c, g: rt)
+                            if cr != 0U64 {
+                                return cr
                             }
                         }
                     }
@@ -429,9 +526,22 @@ pub impl LlvmCtx {
             // `x as T` where T is a generic instance (`x as Box[I32]`): its instance ref, so a
             // chained method on the cast result recovers the env. A scalar/plain-struct cast has
             // no tracked instance ref → 0 (resolved via exprStructIdx).
-            Expr.Cast(operand: _, tyStart: _, tyLen: _, val ty) => {
+            Expr.Cast(operand: _, val tyStart, val tyLen, val ty) => {
                 if c.isGenericInst(ref: ty) {
                     return ty
+                }
+                // a scalar / String cast (`u as String`, `n as I64`): its result type is the
+                // cast target, so `print(x as String)` recovers T. Build the ref from the target
+                // span when `ty` is unset (a bare non-generic cast carries no TypeRef).
+                mut val cref: U64 = ty
+                if cref == 0U64 {
+                    if tyLen > 0U64 {
+                        cref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
+                    }
+                }
+                val cr: U64 = self.concreteLangItemRef(c: inout c, g: cref)
+                if cr != 0U64 {
+                    return cr
                 }
             }
             // `try e` (e: Result[T,E]): the unwrapped value is a T — its instance ref when T is
@@ -448,13 +558,42 @@ pub impl LlvmCtx {
                     }
                 }
             }
-            // these resolve to a non-tracked value in every exercised case → 0: an `await`
-            // (statement-head only today), an extension-method scalar result. NOTE (latent gap,
-            // mirrors exprStructIdx): the generic-instance-producing `(await p)` / `recv#Ext.m()`
-            // sub-cases are not recovered here yet; kept explicit (not `_`) so a new Expr variant
-            // still forces a decision.
+            // `await p` resolves to a non-tracked value in every exercised case (statement-head
+            // only today) → 0. NOTE (latent gap, mirrors exprStructIdx): a generic-instance-
+            // producing `(await p)` isn't recovered yet; kept explicit (not `_`) so a new Expr
+            // variant still forces a decision.
             Expr.Await(operand: _) => {}
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {}
+            // `recv#Ext.m(args)`: resolve the extension method (via the shared resolution used by
+            // emission), ground its return under the receiver's instance env, and return the
+            // grounded generic instance or scalar/String/Bool ref — so `print(x#Ext.m())` recovers
+            // the result type for `print[T]` inference, mirroring the plain-method branch.
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                mut val rns: U64 = 0
+                mut val rnl: U64 = 0
+                val mfi: U64 = self.resolveExtMethodMfi(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvNameStart: inout rns, recvNameLen: inout rnl, report: false)
+                if mfi < c.arena.funcs.count() {
+                    val mf: Func = c.arena.funcs[mfi]
+                    if mf.hasRet {
+                        if mf.retTy != 0U64 {
+                            val savedP: Array[Bind] = c.cur.typeParams
+                            val savedA: Array[U64] = c.cur.typeArgs
+                            val didSet: Bool = self.setInstanceEnv(c: inout c, ref: self.exprTypeRef(c: inout c, id: recv))
+                            val g: U64 = c.groundTypeRef(ref: mf.retTy)
+                            if didSet {
+                                c.cur.typeParams = savedP
+                                c.cur.typeArgs = savedA
+                            }
+                            if c.isGenericInst(ref: g) {
+                                return g
+                            }
+                            val gcr: U64 = self.concreteLangItemRef(c: inout c, g: g)
+                            if gcr != 0U64 {
+                                return gcr
+                            }
+                        }
+                    }
+                }
+            }
         }
         return 0U64
     }
@@ -492,24 +631,64 @@ pub impl LlvmCtx {
         val ntu: Bind = c.newtypeUnderName(start: headStart, len: headLen)
         headStart = ntu.nameStart
         headLen = ntu.nameLen
-        val mfi: U64 = c.findMethod(recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs)
+        // resolve view-aware (an extension/conformance method reached through a view on the
+        // receiver's binding, `val sa = s#A; print(sa.a())`), mirroring genLlvmMethod so
+        // `print[T]` infers T from an extension-method result too; report:false since emission
+        // reports any ambiguity.
+        val mfi: U64 = self.resolveMethodMfi(c: inout c, recv: recv, recvStart: headStart, recvLen: headLen, nameStart: nameStart, nameLen: nameLen, args: margs, report: false)
         if mfi < c.arena.funcs.count() {
             val mf: Func = c.arena.funcs[mfi]
             if mf.hasRet {
-                if mf.retTy != 0U64 {
+                // a provided trait method (an Iterator terminal `count()` / `any()` / `all()`)
+                // carries only its return SPAN, not a built `retTy` — rebuild the ref from the
+                // span so `print(it.count())` infers `T = U64` too. A method-own type-param
+                // return (`fold[B] -> B`) rebuilds to the un-grounded param and resolves to 0
+                // below (grounded from the args elsewhere); an array return is left to the
+                // generic path (retIsArray → no scalar ref).
+                mut val mrt: U64 = mf.retTy
+                if mrt == 0U64 {
+                    if !(mf.retIsArray) {
+                        if mf.retLen > 0U64 {
+                            mrt = c.simpleTypeRef(nameStart: mf.retStart, nameLen: mf.retLen)
+                        }
+                    }
+                }
+                if mrt != 0U64 {
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
                     // the receiver may be a struct, an enum (`Loaded[Box].chain()` — an enum
                     // Chain conformer), OR an opaque Ref/WeakRef (`w.upgrade() -> Optional[Ref[T]]`):
                     // set whichever instance env grounds its type params.
                     val didSet: Bool = self.setInstanceEnv(c: inout c, ref: recvRef)
-                    val g: U64 = c.groundTypeRef(ref: mf.retTy)
-                    if didSet {
+                    mut val touched: Bool = didSet
+                    // a method-own type-param return (`fold[B] -> B`): infer the own type args
+                    // from the call and layer them on top of the receiver env, so the own
+                    // param (`B`, the accumulator) grounds to its concrete type (the `init:`
+                    // arg's) — mirroring genMethodOwnTypeParamCall's env. Without this, a
+                    // `print(it.fold(init: 0U64, …))` leaves `B` un-grounded and can't infer T.
+                    if mf.typeParams.count() > 0U64 {
+                        val ownArgs: Array[U64] = self.llvmInferFnArgs(c: inout c, f: mf, args: margs)
+                        c.cur.typeParams = concatParams(add: mf.typeParams, base: c.cur.typeParams)
+                        c.cur.typeArgs = concatArgs(add: ownArgs, base: c.cur.typeArgs)
+                        touched = true
+                    }
+                    val g: U64 = c.groundTypeRef(ref: mrt)
+                    if touched {
                         c.cur.typeParams = savedP
                         c.cur.typeArgs = savedA
                     }
                     if c.isGenericInst(ref: g) {
                         return g
+                    }
+                    // a concrete scalar / String / Bool return (`.count() -> U64`,
+                    // `.isEmpty() -> Bool`, `.p() -> I64`, `.fold() -> U64`): return its ref too,
+                    // so a `print(recv.m())` recovers the result type for `print[T]` inference.
+                    // (Existing callers act only on generic-instance / Ref refs, so a scalar ref
+                    // is a no-op for them; the type-param `Self`/`Item` cases already grounded
+                    // above via setInstanceEnv, so `g` here names a concrete type.)
+                    val gcr: U64 = self.concreteLangItemRef(c: inout c, g: g)
+                    if gcr != 0U64 {
+                        return gcr
                     }
                 }
             }

@@ -11,7 +11,7 @@ fn main() {
     mut val b: Buffer[String] = Buffer.new()
     b.reserve(additionalCapacity: 4U64)
     val c0: U64 = b.count()
-    print(line: "afterReserve count=" + c0.format(format: ""))
+    print("afterReserve count=" + c0.format(format: ""))
     b.append("a")
     b.append("c")
     b.insertAt(index: 1U64, "b")   // [a, b, c]
@@ -22,5 +22,5 @@ fn main() {
     val e0: String = b.get(index: 0U64)
     val e2: String = b.get(index: 2U64)
     val e4: String = b.get(index: 4U64)
-    print(line: "n=" + n2.format(format: "") + " [0]=" + e0 + " [2]=" + e2 + " [4]=" + e4)
+    print("n=" + n2.format(format: "") + " [0]=" + e0 + " [2]=" + e2 + " [4]=" + e4)
 }

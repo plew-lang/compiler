@@ -22,11 +22,18 @@ pub impl LlvmCtx {
             return self.fnIdx.count()
         }
         // a registered struct receiver, or a primitive lang-item (String / a fixed-width
-        // integer) — all have a well-defined self LLVM type.
+        // integer / a float / Bool) — all have a well-defined self LLVM type. Bool and the
+        // floats matter for `(3.5F64).format(…)` / `flag.format(…)`: their `Format` (and other)
+        // witnesses dispatch like any prim lang-item now that `print` routes through the real
+        // `print` body instead of a backend-special sink (audit-3 P0).
         if self.structRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) >= self.genStructRefs.count() {
             if !(rangeEquals(bytes: c.arena.bytes, start: f.recvStart, len: f.recvLen, kw: "String")) {
                 if !(isPrimIntName(c: inout c, start: f.recvStart, len: f.recvLen)) {
-                    return self.fnIdx.count()
+                    if !(c.isFloatType(start: f.recvStart, len: f.recvLen)) {
+                        if !(rangeEquals(bytes: c.arena.bytes, start: f.recvStart, len: f.recvLen, kw: "Bool")) {
+                            return self.fnIdx.count()
+                        }
+                    }
                 }
             }
         }

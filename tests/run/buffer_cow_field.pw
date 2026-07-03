@@ -21,11 +21,11 @@ fn main() {
     h.items.set(index: 0U64, "A")
     val n1: U64 = h.items.count()
     val n2: U64 = h2.items.count()
-    print(line: "h=" + n1.format(format: "") + " h2=" + n2.format(format: ""))
-    print(line: "h[0]=" + h.items.get(index: 0U64) + " h2[0]=" + h2.items.get(index: 0U64))
-    print(line: "h[2]=" + h.items.get(index: 2U64))
+    print("h=" + n1.format(format: "") + " h2=" + n2.format(format: ""))
+    print("h[0]=" + h.items.get(index: 0U64) + " h2[0]=" + h2.items.get(index: 0U64))
+    print("h[2]=" + h.items.get(index: 2U64))
     val popped: String = h.items.removeLast()   // move-out: caller owns "c"
     val n3: U64 = h.items.count()
     val n4: U64 = h2.items.count()
-    print(line: "popped=" + popped + " after pop h=" + n3.format(format: "") + " h2=" + n4.format(format: ""))
+    print("popped=" + popped + " after pop h=" + n3.format(format: "") + " h2=" + n4.format(format: ""))
 }

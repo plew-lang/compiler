@@ -20,10 +20,10 @@ fn main() {
         k += 1I64
     }
     val oc: U64 = outer.count()
-    print(line: "outer=" + oc.format(format: ""))
+    print("outer=" + oc.format(format: ""))
     val row: Buffer[I64] = outer.get(index: 2U64)
     val rc: U64 = row.count()
-    print(line: "row2count=" + rc.format(format: ""))
+    print("row2count=" + rc.format(format: ""))
     val v: I64 = row.get(index: 3U64)
-    print(line: "v=" + v.format(format: ""))
+    print("v=" + v.format(format: ""))
 }

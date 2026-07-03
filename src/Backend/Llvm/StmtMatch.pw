@@ -269,6 +269,38 @@ pub impl LlvmCtx {
                 if genFieldRef != 0U64 {
                     tref = genFieldRef
                 }
+                // a scalar / newtype-over-scalar payload bind (`Some(v: I32)`, or `Some(v: T)`
+                // with T grounded to a concrete int / float / Bool): track its grounded type
+                // name so exprTypeRef recovers it — a `print(x)` on the bind then infers T from
+                // the backend's own tracking (its intended source), instead of falling back to
+                // the front-end typeOf, which recurses on a nested-generic scrutinee. Mirrors
+                // bindOneParam's grounded-scalar param tracking. (String needs no entry: it is
+                // a registered struct, so exprStructIdx already recovers a String bind.)
+                if tref == 0U64 {
+                    if !(isArrF) {
+                        mut val gns: U64 = fd.tyStart
+                        mut val gnl: U64 = fd.tyLen
+                        if fd.ty != 0U64 {
+                            if c.cur.typeParams.count() > 0U64 {
+                                val gfr: U64 = c.groundTypeRef(ref: fd.ty)
+                                if gfr != 0U64 {
+                                    gns = c.arena.types[gfr].nameStart
+                                    gnl = c.arena.types[gfr].nameLen
+                                }
+                            }
+                        }
+                        val gnu: Bind = c.newtypeUnderName(start: gns, len: gnl)
+                        if isPrimIntName(c: inout c, start: gnu.nameStart, len: gnu.nameLen) {
+                            tref = c.simpleTypeRef(nameStart: gns, nameLen: gnl)
+                        }
+                        if c.isFloatType(start: gnu.nameStart, len: gnu.nameLen) {
+                            tref = c.simpleTypeRef(nameStart: gns, nameLen: gnl)
+                        }
+                        if rangeEquals(bytes: c.arena.bytes, start: gnu.nameStart, len: gnu.nameLen, kw: "Bool") {
+                            tref = c.simpleTypeRef(nameStart: gns, nameLen: gnl)
+                        }
+                    }
+                }
                 // a type-parameter payload field (`Optional.Some(v: T)`): ground T under
                 // the active enum-instance env (set by the caller around bindMatchPayload)
                 // so a String/Bool payload is recognized as kind 1/2, not defaulted to int

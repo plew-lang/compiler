@@ -15,16 +15,16 @@ fn main() {
         i += 1I64
     }
     val c0: U64 = b.count()
-    print(line: "count=" + c0.format(format: ""))
+    print("count=" + c0.format(format: ""))
     val first: String = b.get(index: 0U64)
-    print(line: "first=" + first)
+    print("first=" + first)
     val last: String = b.get(index: 11U64)
-    print(line: "last=" + last)
+    print("last=" + last)
     b.set(index: 0U64, "replaced")
     val r: String = b.get(index: 0U64)
-    print(line: "r=" + r)
+    print("r=" + r)
     val popped: String = b.removeLast()   // move-out: caller owns + drops "item-11"
-    print(line: "popped=" + popped)
+    print("popped=" + popped)
     val c1: U64 = b.count()
-    print(line: "afterPop=" + c1.format(format: ""))
+    print("afterPop=" + c1.format(format: ""))
 }

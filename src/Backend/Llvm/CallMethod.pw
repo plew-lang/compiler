@@ -7,11 +7,17 @@
 // method. First cut: the receiver must be a registered struct value.
 
 pub impl LlvmCtx {
-    inout fn genLlvmExtMethod(c: inout Comp, recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    // Resolve `recv#src.name(args)` to its extension-method Func index, recovering the
+    // receiver's lang-item type name into `recvNameStart`/`recvNameLen`. Resolution mirrors
+    // the front-end: the call's own `#src` plus the receiver's view chain, then bare fallback
+    // (a view is additive — it never hides the base surface). Returns funcs.count() when the
+    // receiver isn't a struct/enum/primitive or no method resolves — the caller decides what
+    // that means (emission reports it; type recovery silently yields 0). `report` gates the
+    // stacked-view ambiguity error so type recovery, which runs before the emission of the
+    // same call, doesn't double-report it.
+    inout fn resolveExtMethodMfi(c: inout Comp, recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvNameStart: inout U64, recvNameLen: inout U64, report: Bool) -> U64 {
         // the receiver's type name (the extension subject): a registered struct, a
         // registered enum, or a primitive lang-item (spec/09 — `x#Ext.m()` on any of them).
-        mut val recvNameStart: U64 = 0
-        mut val recvNameLen: U64 = 0
         val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         if rsidx < c.arena.structs.count() {
             recvNameStart = c.arena.structs[rsidx].nameStart
@@ -27,8 +33,7 @@ pub impl LlvmCtx {
                     recvNameStart = pb.nameStart
                     recvNameLen = pb.nameLen
                 } else {
-                    compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: extension method call only on a struct / enum / primitive value (so far)")
-                    return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                    return c.arena.funcs.count()
                 }
             }
         }
@@ -50,7 +55,9 @@ pub impl LlvmCtx {
             if cand < c.arena.funcs.count() {
                 if mfi < c.arena.funcs.count() {
                     if mfi != cand {
-                        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view)")
+                        if report {
+                            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view)")
+                        }
                     }
                 } else {
                     mfi = cand
@@ -69,6 +76,49 @@ pub impl LlvmCtx {
             // excludes `viewOnly` witnesses, so a multi-path conformance stays loud-ambiguous.
             mfi = c.findMethod(recvStart: recvNameStart, recvLen: recvNameLen, nameStart: nameStart, nameLen: nameLen, args: args)
         }
+        return mfi
+    }
+
+    // Resolve a plain `recv.name(args)` to its Func index, honouring the receiver's view
+    // chain: an extension/conformance method reached only through a view on the receiver's
+    // binding (`val sa = s#A; sa.a()`) resolves via findExtMethodById over collectViewChain,
+    // and a view is additive so a bare findMethod is the fallback (spec/09). Returns
+    // funcs.count() if unresolved. `report` gates the stacked-view ambiguity error so type
+    // recovery, which runs before the emission of the same call, doesn't double-report it.
+    inout fn resolveMethodMfi(c: inout Comp, recv: U64, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg], report: Bool) -> U64 {
+        val viewChain: Array[U64] = self.collectViewChain(c: inout c, id: recv)
+        mut val mfi: U64 = c.arena.funcs.count()
+        mut val vci: U64 = 0
+        while vci < viewChain.count() {
+            val cand: U64 = c.findExtMethodById(recvStart: recvStart, recvLen: recvLen, srcId: viewChain[vci], nameStart: nameStart, nameLen: nameLen, args: args)
+            if cand < c.arena.funcs.count() {
+                if mfi < c.arena.funcs.count() {
+                    if mfi != cand {
+                        if report {
+                            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view, or select with `value#Ext.method()`)")
+                        }
+                    }
+                } else {
+                    mfi = cand
+                }
+            }
+            vci += 1
+        }
+        if mfi >= c.arena.funcs.count() {
+            mfi = c.findMethod(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
+        return mfi
+    }
+
+    inout fn genLlvmExtMethod(c: inout Comp, recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        mut val recvNameStart: U64 = 0
+        mut val recvNameLen: U64 = 0
+        val mfi: U64 = self.resolveExtMethodMfi(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvNameStart: inout recvNameStart, recvNameLen: inout recvNameLen, report: true)
+        if recvNameLen == 0U64 {
+            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: extension method call only on a struct / enum / primitive value (so far)")
+            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+        }
+        val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         if mfi >= c.arena.funcs.count() {
             compileErrorAt(line: c.lineOf(offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -376,25 +426,7 @@ pub impl LlvmCtx {
         // (spec/09); the extension shadows a same-name bare method under the view. With
         // stacked views, the name must resolve in exactly one (same-name in two stacked
         // views is ambiguous).
-        val viewChain: Array[U64] = self.collectViewChain(c: inout c, id: recv)
-        mut val mfi: U64 = c.arena.funcs.count()
-        mut val vci: U64 = 0
-        while vci < viewChain.count() {
-            val cand: U64 = c.findExtMethodById(recvStart: sd.nameStart, recvLen: sd.nameLen, srcId: viewChain[vci], nameStart: nameStart, nameLen: nameLen, args: args)
-            if cand < c.arena.funcs.count() {
-                if mfi < c.arena.funcs.count() {
-                    if mfi != cand {
-                        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view, or select with `value#Ext.method()`)")
-                    }
-                } else {
-                    mfi = cand
-                }
-            }
-            vci += 1
-        }
-        if mfi >= c.arena.funcs.count() {
-            mfi = c.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-        }
+        mut val mfi: U64 = self.resolveMethodMfi(c: inout c, recv: recv, recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, report: true)
         if mfi >= c.arena.funcs.count() {
             // `self.f(n: x)` where `f` is a closure-typed field (the iterator-adapter
             // pattern — a struct holds a mapping/predicate closure): load the field value

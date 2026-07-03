@@ -91,6 +91,66 @@ pub impl LlvmCtx {
         return LLVMConstNull(self.ptrty)
     }
 
+    // Emit a resolved free-function call — a real Plew fn (user OR std, isExtern=false),
+    // including std's own `print`/Format wrappers. The fn is one `gf` instance keyed by
+    // (cfi, inferred type args); a non-generic fn is its 0-type-arg instance, a generic one
+    // infers its concrete args. An `async fn` resolves through the async-entry table. Returns
+    // a null value if neither could be declared (the caller then errors — a resolved Plew fn
+    // is never re-routed to an intrinsic intercept). Caller guarantees `funcs[cfi]` non-extern.
+    inout fn genLlvmResolvedFreeCall(c: inout Comp, cfi: U64, args: Array[Arg]) -> LLVMValueRef {
+        mut val inferred: Array[U64] = []
+        if c.isGenericFreeFn(fi: cfi) {
+            inferred = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
+        }
+        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: cfi, args: inferred)
+        if gslot < self.genFnK.count() {
+            val cf: Func = c.arena.funcs[cfi]
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            c.cur.typeParams = cf.typeParams
+            c.cur.typeArgs = inferred
+            val pinMark: U64 = self.pinCells.count()
+            mut val av2: Array[LLVMValueRef] = []
+            mut val ai: U64 = 0
+            while ai < args.count() {
+                // coerce each argument to the parameter's type (width / env-grounded).
+                av2.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
+                ai += 1
+            }
+            // fill omitted trailing params with their default expressions (spec/04).
+            mut val di: U64 = args.count()
+            while di < cf.params.count() {
+                av2.append(self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
+                di += 1
+            }
+            c.cur.typeParams = savedP
+            c.cur.typeArgs = savedA
+            self.emitInoutOverlapChecks(c: inout c, f: cf, av: av2, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: pinMark)
+            val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
+            self.releaseInoutPins(c: inout c, mark: pinMark)
+            return rv
+        }
+        // ensureFnInst declined: an `async fn` whose promise-returning entry is declared by
+        // declareAsyncFns into the dedicated async-entry table. Resolve it.
+        val pslot: U64 = self.asyncEntrySlot(fi: cfi)
+        if pslot < self.asyncEntryIdx.count() {
+            val cf: Func = c.arena.funcs[cfi]
+            mut val pav: Array[LLVMValueRef] = []
+            mut val pai: U64 = 0
+            while pai < args.count() {
+                pav.append(self.genArgValue(c: inout c, argExpr: args[pai].expr, p: cf.params[pai]))
+                pai += 1
+            }
+            mut val pdi: U64 = args.count()
+            while pdi < cf.params.count() {
+                pav.append(self.genArgValue(c: inout c, argExpr: cf.params[pdi].defaultExpr, p: cf.params[pdi]))
+                pdi += 1
+            }
+            return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
+        }
+        return LLVMConstNull(self.ptrty)
+    }
+
     inout fn genLlvmCall(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
         // a call whose "name" is a closure-typed local (`g(n: 4)` where g: fn(...)) is
         // an indirect call: load the {fn, env} value, then call fn(env, args).
@@ -98,6 +158,25 @@ pub impl LlvmCtx {
         if cli < self.nLocals {
             if c.isFnType(ref: self.locTypeRef[cli]) {
                 return self.genLlvmClosureCall(c: inout c, li: cli, args: args)
+            }
+        }
+        // Resolve the callee up front and dispatch by IDENTITY, not by raw name (audit-3 P0,
+        // spec/12): a real Plew function — user OR std, isExtern=false, including std's own
+        // `print` and Format wrappers — is emitted through its real body. The intrinsic floor
+        // intercepts below fire ONLY when the name resolves to a std `extern "plew-intrinsic"`
+        // declaration (isExtern) or to nothing (a backend-synthesized floor op). This is what
+        // stops a user `fn write`/`fn truncU8` from being silently replaced by the intrinsic.
+        val cfi: U64 = self.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+        if cfi < c.arena.funcs.count() {
+            if !(c.arena.funcs[cfi].isExtern) {
+                val uv: LLVMValueRef = self.genLlvmResolvedFreeCall(c: inout c, cfi: cfi, args: args)
+                if LLVMIsNull(uv) == 0I32 {
+                    return uv
+                }
+                // a resolved Plew fn that could not be instantiated is an error, never an
+                // intrinsic — report it here rather than fall into the name intercepts.
+                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
         // numeric intrinsic floor (`i8Add`, `u32Lt`, `i64Neg`, …): the primitive op the
@@ -170,9 +249,6 @@ pub impl LlvmCtx {
             // take a new strong owner of the (wrapper-guaranteed-alive) cell, yield it as a
             // Ref (refUpgrade re-checks strong>0 then bumps; returns the cell).
             return self.refUpgrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "print") {
-            return self.emitPrint(c: inout c, argExpr: args[0].expr)
         }
         // `pow(base: x, exp: n)` (spec/12): the named exponentiation operation dispatches on
         // the base argument's `Pow[Exp]` conformance (no `**` operator). Route the bare call
@@ -435,72 +511,9 @@ pub impl LlvmCtx {
             av.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: self.valueKind(c: inout c, id: args[0].expr) == 3U64))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
         }
-        // a user-defined free function: resolve like the C backend, then call the
-        // cached LLVMValueRef (declared in pass 1). Generic / extern / overload cases
-        // beyond a plain match arrive in later increments. Overloads differing only by
-        // a parameter's `#Ext` view (`f(a: P)` vs `f(a: P#Ext)`) are refined by the
-        // arguments' actual views (spec/09) — resolution is otherwise view-blind.
-        val cfi: U64 = self.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-        if cfi < c.arena.funcs.count() {
-            // a user-defined free function — generic or not — is one `gf` instance keyed by
-            // (cfi, args): a non-generic fn is its 0-type-arg instance (args=[], empty env),
-            // a generic one infers its concrete type args. ensureFnInst declares it lazily on
-            // first reach (it rejects extern/main/method, which fall through to the extern
-            // path / error below). One path, no pf/gf split.
-            if !(c.arena.funcs[cfi].isExtern) {
-                mut val inferred: Array[U64] = []
-                if c.isGenericFreeFn(fi: cfi) {
-                    inferred = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
-                }
-                val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: cfi, args: inferred)
-                if gslot < self.genFnK.count() {
-                    val cf: Func = c.arena.funcs[cfi]
-                    val savedP: Array[Bind] = c.cur.typeParams
-                    val savedA: Array[U64] = c.cur.typeArgs
-                    c.cur.typeParams = cf.typeParams
-                    c.cur.typeArgs = inferred
-                    val pinMark: U64 = self.pinCells.count()
-                    mut val av2: Array[LLVMValueRef] = []
-                    mut val ai: U64 = 0
-                    while ai < args.count() {
-                        // coerce each argument to the parameter's type (width / env-grounded).
-                        av2.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
-                        ai += 1
-                    }
-                    // fill omitted trailing params with their default expressions (spec/04).
-                    mut val di: U64 = args.count()
-                    while di < cf.params.count() {
-                        av2.append(self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
-                        di += 1
-                    }
-                    c.cur.typeParams = savedP
-                    c.cur.typeArgs = savedA
-                    self.emitInoutOverlapChecks(c: inout c, f: cf, av: av2, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: pinMark)
-                    val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
-                    self.releaseInoutPins(c: inout c, mark: pinMark)
-                    return rv
-                }
-                // ensureFnInst declined: an `async fn` whose promise-returning entry is
-                // declared by declareAsyncFns into the dedicated async-entry table (split off
-                // pf — pf now holds only provided/lang-item method declarations). Resolve it.
-                val pslot: U64 = self.asyncEntrySlot(fi: cfi)
-                if pslot < self.asyncEntryIdx.count() {
-                    val cf: Func = c.arena.funcs[cfi]
-                    mut val pav: Array[LLVMValueRef] = []
-                    mut val pai: U64 = 0
-                    while pai < args.count() {
-                        pav.append(self.genArgValue(c: inout c, argExpr: args[pai].expr, p: cf.params[pai]))
-                        pai += 1
-                    }
-                    mut val pdi: U64 = args.count()
-                    while pdi < cf.params.count() {
-                        pav.append(self.genArgValue(c: inout c, argExpr: cf.params[pdi].defaultExpr, p: cf.params[pdi]))
-                        pdi += 1
-                    }
-                    return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
-                }
-            }
-        }
+        // A resolved non-extern Plew fn (user or std) was already emitted by identity at the
+        // top of this function; only an extern(c) foreign function or a genuinely unresolved
+        // name reaches here. `cfi` is the up-front resolution.
         // an extern(c) foreign function (`moduleCreate(…)`): call by its RAW C name
         // with an FFI-mapped signature (opaque handles / CPtr -> ptr, scalars as-is).
         if cfi < c.arena.funcs.count() {

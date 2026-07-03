@@ -26,12 +26,27 @@ pub impl LlvmCtx {
     // `(42I64).format(...)` / `s.isEmpty()`. nameLen 0 if not such a receiver.
     inout fn primLangItemRecvName(c: inout Comp, recv: U64) -> Bind {
         match c.arena.exprs[recv] {
-            Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
+            Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
+                // a Bool literal (`true`/`false`) carries no type span (tyLen 0); its lang-item
+                // is Bool, so a method on it (`true.format(…)`) dispatches on Bool.
+                if isBool {
+                    return c.kwSpan(kw: "Bool", kwLen: 4U64)
+                }
                 if tyLen > 0U64 {
                     if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
                         return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
                     }
                 }
+            }
+            Expr.Float(start: _, len: _, val tyStart, val tyLen) => {
+                // a float literal (`3.5F64`): dispatch a method on it (`(3.5F64).format(…)`) on
+                // the suffixed float type, defaulting to F64 for an unsuffixed literal.
+                if tyLen > 0U64 {
+                    if c.isFloatType(start: tyStart, len: tyLen) {
+                        return <Bind nameStart=tyStart nameLen=tyLen fieldStart=tyStart fieldLen=tyLen />
+                    }
+                }
+                return c.kwSpan(kw: "F64", kwLen: 3U64)
             }
             Expr.Ident(val start, val len) => {
                 // a primitive-int local/param (`v: U64`): its tracked type name (locTypeRef),
@@ -69,13 +84,28 @@ pub impl LlvmCtx {
             }
             _ => {}
         }
-        // a Bool receiver (`b.hash[H](…)`, `flag.eq(…)`): the backend models Bool method
-        // dispatch like a primitive lang-item. Recover the type from the grounded env
-        // (`exprTypeRef` applies the instance args, so a generic `K` param bound to Bool
-        // resolves here). Bool's only resolvable structured form is its own name.
+        // a scalar receiver recovered from the grounded env (`b.hash[H](…)` on Bool,
+        // `value.format(…)` on a generic `T` bound to F64 / an int / Bool): the backend models
+        // every primitive lang-item's method dispatch by its type name. `exprTypeRef` applies
+        // the instance args, so a type param bound to a scalar resolves here — bindOneParam
+        // already pins a grounded int/float/Bool param's tracked ref to that concrete name.
         val rt: U64 = self.exprTypeRef(c: inout c, id: recv)
         if rt != 0U64 {
-            if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[rt].nameStart, len: c.arena.types[rt].nameLen, kw: "Bool") {
+            val rtn: TypeRef = c.arena.types[rt]
+            // a grounded int / float / Bool type-param receiver (`value.format(…)` in `print[I64]`
+            // / `print[F64]` / `print[Bool]`), including a newtype over a primitive (`Meter = I64`
+            // in `print[Meter]`): a newtype inherits the underlying's lang-item methods (spec/10),
+            // so unwrap to the underlying prim name and recover it so the witness dispatches.
+            // (newtypeUnderName is a no-op on a non-newtype, so a plain grounded primitive rides
+            // the same path.)
+            val u: Bind = c.newtypeUnderName(start: rtn.nameStart, len: rtn.nameLen)
+            if isPrimIntName(c: inout c, start: u.nameStart, len: u.nameLen) {
+                return <Bind nameStart=u.nameStart nameLen=u.nameLen fieldStart=u.nameStart fieldLen=u.nameLen />
+            }
+            if c.isFloatType(start: u.nameStart, len: u.nameLen) {
+                return <Bind nameStart=u.nameStart nameLen=u.nameLen fieldStart=u.nameStart fieldLen=u.nameLen />
+            }
+            if rangeEquals(bytes: c.arena.bytes, start: u.nameStart, len: u.nameLen, kw: "Bool") {
                 return c.kwSpan(kw: "Bool", kwLen: 4U64)
             }
         }

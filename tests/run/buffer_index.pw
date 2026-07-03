@@ -11,14 +11,14 @@ fn main() {
     b.append("y")
     b.append("z")
     val e1: String = b[1U64]
-    print(line: "b[1]=" + e1)
+    print("b[1]=" + e1)
     mut val nums: Buffer[U64] = Buffer.new()
     nums.append(10U64)
     nums.append(20U64)
     val s: U64 = nums[0U64] + nums[1U64]
-    print(line: "sum=" + s.format(format: ""))
+    print("sum=" + s.format(format: ""))
     val first: U64 = nums[0U64]
     if first == 10U64 {
-        print(line: "first==10")
+        print("first==10")
     }
 }

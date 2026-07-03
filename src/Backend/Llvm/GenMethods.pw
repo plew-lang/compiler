@@ -319,6 +319,28 @@ pub impl LlvmCtx {
                     pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                     pty = self.llvmScalarTy(c: inout c, tyStart: gs2, tyLen: gl2)
                 }
+                // a grounded newtype over a primitive (`v: T` with T -> `Meter = I64` /
+                // `Ratio = F64`): track the NEWTYPE ref (preserving its identity, so its own
+                // methods still resolve) but pin the alloca to the UNDERLYING scalar's LLVM
+                // type — an inherited lang-item method (`value.format()` in `print[Meter]`)
+                // unwraps to the underlying at the dispatch site (spec/10). The direct-prim
+                // branches above already handle a non-newtype scalar, so this only fires for a
+                // newtype (newtypeUnderName is a no-op otherwise, guarded by pRef == 0).
+                if pRef == 0U64 {
+                    val ntu2: Bind = c.newtypeUnderName(start: gs2, len: gl2)
+                    if isPrimIntName(c: inout c, start: ntu2.nameStart, len: ntu2.nameLen) {
+                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
+                        pty = self.llvmScalarTy(c: inout c, tyStart: ntu2.nameStart, tyLen: ntu2.nameLen)
+                    }
+                    if c.isFloatType(start: ntu2.nameStart, len: ntu2.nameLen) {
+                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
+                        pty = self.llvmScalarTy(c: inout c, tyStart: ntu2.nameStart, tyLen: ntu2.nameLen)
+                    }
+                    if rangeEquals(bytes: c.arena.bytes, start: ntu2.nameStart, len: ntu2.nameLen, kw: "Bool") {
+                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
+                        pty = self.llvmScalarTy(c: inout c, tyStart: ntu2.nameStart, tyLen: ntu2.nameLen)
+                    }
+                }
                 if pRef == 0U64 {
                     if self.enumRegSlot(c: inout c, start: gs2, len: gl2) < self.genEnumRefs.count() {
                         pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
