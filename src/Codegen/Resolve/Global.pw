@@ -22,11 +22,19 @@ pub impl Comp {
         }
         match self.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
+                // The identifier's module (a real source offset — identifier uses keep their
+                // original offset). Only globals visible from here are true dependencies;
+                // matching by name-text alone would forge cross-module edges between distinct
+                // same-named globals and report a false initialization cycle (spec/15).
+                val useMod: U64 = self.moduleOf(offset: start)
                 mut val gi: U64 = 0
                 while gi < self.arena.globals.count() {
                     if spansEqual(c: inout self, aStart: self.arena.globals[gi].nameStart, aLen: self.arena.globals[gi].nameLen, bStart: start, bLen: len) {
-                        if !(u64ArrayHas(a: into, v: gi)) {
-                            into.append(gi)
+                        val gMod: U64 = self.moduleOf(offset: self.exprOffset(id: self.globalInitExpr(g: self.arena.globals[gi])))
+                        if self.globalVisibleFrom(useMod: useMod, gMod: gMod, nameStart: self.arena.globals[gi].nameStart, nameLen: self.arena.globals[gi].nameLen) {
+                            if !(u64ArrayHas(a: into, v: gi)) {
+                                into.append(gi)
+                            }
                         }
                     }
                     gi += 1

@@ -1,0 +1,7 @@
+// Private globals `a`/`b`: a depends on b, all within this module. Module B has
+// same-named privates cross-referenced the other way. Init-order dependency must be
+// keyed by (name, module) — a name-only match would forge an A<->B edge and report a
+// false initialization cycle (spec/15).
+val a: I64 = b + 1I64
+val b: I64 = 5I64
+export fn sumA() -> I64 { return a + b }

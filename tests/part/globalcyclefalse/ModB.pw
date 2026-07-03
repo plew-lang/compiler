@@ -1,0 +1,5 @@
+// The mirror of ModA: here `b` depends on `a`. With name-only dependency collection
+// a_A -> b_B -> a_A would form a spurious cycle across the two modules.
+val b: I64 = a + 1I64
+val a: I64 = 7I64
+export fn sumB() -> I64 { return a + b }

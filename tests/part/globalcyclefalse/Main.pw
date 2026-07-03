@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+import ./ModA with { sumA }
+import ./ModB with { sumB }
+
+fn main() {
+    print(sumA())  // b=5, a=b+1=6 -> 11
+    print(sumB())  // a=7, b=a+1=8 -> 15
+}
