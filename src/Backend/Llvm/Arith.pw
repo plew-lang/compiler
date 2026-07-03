@@ -125,6 +125,28 @@ pub impl LlvmCtx {
         if LLVMIsNull(fv) == 0I32 { return fv }
         val bv: LLVMValueRef = self.genBoolIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         if LLVMIsNull(bv) == 0I32 { return bv }
+        // wrapping floor (`i64WrapAdd`, `u8WrapNeg`, …): raw two's-complement ops with NO
+        // overflow check — the intrinsic bodies of the `wrapping*` FixedWidthInteger
+        // witnesses (spec/02). Matched first, and off the checked `Add`/`Neg` matchers because their
+        // remaining prefix (`i64Wrap`) is not a recognized width prefix (numPrefixCode -> 8).
+        val wnegP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapNeg")
+        if wnegP < 8U64 {
+            val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wnegP % 4U64)
+            return LLVMBuildNeg(self.b, self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: ty, unsigned: wnegP >= 4U64), anon())
+        }
+        mut val wop: I64 = -1I64
+        mut val wpc: U64 = 8U64
+        wpc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapAdd")
+        if wpc < 8U64 { wop = opAdd() }
+        if wop == -1I64 { wpc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapSub")  if wpc < 8U64 { wop = opSub() } }
+        if wop == -1I64 { wpc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapMul")  if wpc < 8U64 { wop = opMul() } }
+        if wop != -1I64 {
+            val wu: Bool = wpc >= 4U64
+            val wty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wpc % 4U64)
+            val wl: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[0].expr), target: wty, unsigned: wu)
+            val wr: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: args[1].expr), target: wty, unsigned: wu)
+            return self.buildBinOpS(c: inout c, op: wop, l: wl, r: wr, unsigned: wu)
+        }
         // unary ops first (single `value` arg).
         val negP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Neg")
         if negP < 8U64 {
