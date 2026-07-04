@@ -1,0 +1,47 @@
+import @Std/Io with { print }
+
+// An array `==` desugars to `Array.eq` regardless of the OPERAND FORM. exprStructIdx
+// must recognise an array-RETURNING call/method as an Array value (not the element
+// struct): an `-> Array[Point]` return names its element `Point` in retStart/retLen,
+// so resolving that as "the value's struct" would route `mk() == mk()` to `Point.eq`
+// with a whole-array operand (a backend field-access crash). A struct element exposed
+// the bug; a scalar element hid it (its element name is not a registered struct). Both
+// element kinds and every operand form (call / local / field / method, either side) are
+// exercised so the witness resolves to `Array.eq` uniformly.
+struct Point { pub val x: I64  pub val y: I64 }
+pub impl Point as Eq {
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return lhs.x == rhs.x && lhs.y == rhs.y }
+}
+
+struct Holder { pub val items: Array[Point] }
+pub impl Holder {
+    fn items2() -> Array[Point] { return self.items }
+}
+
+fn mkA() -> Array[Point] { return [<Point x=1 y=2 />] }
+fn mkB() -> Array[Point] { return [<Point x=1 y=2 />] }
+fn mkC() -> Array[Point] { return [<Point x=9 y=9 />] }
+fn mkI() -> Array[I64] { return [1, 2, 3] }
+fn mkJ() -> Array[I64] { return [1, 2, 3] }
+
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    // struct element, call operands (the case that used to crash)
+    print(boolI(b: mkA() == mkB()))       // 1  call == call
+    print(boolI(b: mkA() == mkC()))       // 0  call == call (differ)
+    print(boolI(b: mkA() != mkC()))       // 1
+
+    // mixed operand forms — the witness must be the same Array.eq either way
+    val a: Array[Point] = [<Point x=1 y=2 />]
+    print(boolI(b: a == mkB()))           // 1  local == call
+    print(boolI(b: mkA() == a))           // 1  call  == local
+
+    // array-typed field and array-returning method as operands
+    val h: Holder = <Holder items=[<Point x=1 y=2 />] />
+    print(boolI(b: h.items == mkA()))     // 1  field  == call
+    print(boolI(b: h.items2() == mkA()))  // 1  method == call
+
+    // scalar element, call operands (bytewise path — always worked; regression guard)
+    print(boolI(b: mkI() == mkJ()))       // 1
+}

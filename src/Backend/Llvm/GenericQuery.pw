@@ -181,7 +181,9 @@ pub impl LlvmCtx {
                 if marn.nameLen != 0U64 {
                     val afi: U64 = c.findAssoc(recvStart: marn.nameStart, recvLen: marn.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                     if afi < c.arena.funcs.count() {
-                        if c.arena.funcs[afi].hasRet {
+                        // an Array-returning assoc fn: retStart/retLen names the ELEMENT, so
+                        // skip it and fall through to the array catch (as with an array call).
+                        if c.arena.funcs[afi].hasRet && !(c.arena.funcs[afi].retIsArray) {
                             val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[afi].retStart, len: c.arena.funcs[afi].retLen)
                             if r < c.arena.structs.count() {
                                 return r
@@ -193,11 +195,11 @@ pub impl LlvmCtx {
                     if mrsi < c.arena.structs.count() {
                         val mfi: U64 = c.findMethod(recvStart: c.arena.structs[mrsi].nameStart, recvLen: c.arena.structs[mrsi].nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
                         if mfi < c.arena.funcs.count() {
-                            if c.arena.funcs[mfi].hasRet {
-                                // an Array-returning method (`h.items() -> Array[I64]`)
-                                // resolves to the sentinel here (Array isn't registered) —
-                                // fall through to the array catch so `h.items()[i]` /
-                                // `h.items().count()` ride the witness.
+                            // an Array-returning method (`h.items() -> Array[I64]`) is an ARRAY
+                            // value: retStart/retLen names the ELEMENT, so resolving it would
+                            // wrongly return the element's struct. Skip and fall through to the
+                            // array catch so `h.items()[i]` / `h.items() == …` ride the witness.
+                            if c.arena.funcs[mfi].hasRet && !(c.arena.funcs[mfi].retIsArray) {
                                 val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[mfi].retStart, len: c.arena.funcs[mfi].retLen)
                                 if r < c.arena.structs.count() {
                                     return r
@@ -248,7 +250,13 @@ pub impl LlvmCtx {
                 val cfi: U64 = c.resolvedCallee(id: id)
                 if cfi < c.arena.funcs.count() {
                     val cf: Func = c.arena.funcs[cfi]
-                    if cf.hasRet {
+                    // an Array-returning call (`mk() -> Array[E]`) is an ARRAY value, not the
+                    // element struct: retStart/retLen names the ELEMENT (`Point` for
+                    // `Array[Point]`), so resolving it here would wrongly return the element's
+                    // struct (and route `mk() == mk()` to `Point.eq` instead of `Array.eq`).
+                    // Fall through to the array catch, which resolves it to the Array def so
+                    // index/method/`==` ride the Array witness — same as a bound array local.
+                    if cf.hasRet && !(cf.retIsArray) {
                         if c.isGenericFreeFn(fi: cfi) {
                             val savedP: Array[Bind] = c.cur.typeParams
                             val savedA: Array[U64] = c.cur.typeArgs
@@ -261,9 +269,6 @@ pub impl LlvmCtx {
                                 return r
                             }
                         } else {
-                            // an Array-returning free call (`mk() -> Array[E]`) resolves to the
-                            // sentinel (Array isn't registered) — fall through to the array
-                            // catch so `mk()[i]` / `mk().count()` ride the witness.
                             val r: U64 = self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
                             if r < c.arena.structs.count() {
                                 return r
