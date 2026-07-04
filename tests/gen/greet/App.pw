@@ -1,12 +1,22 @@
-// gen test (spec/16 M0): a user-defined macro `Greet` generates a top-level
-// function into App.gen.pw, which the normal build auto-parts and `main` calls.
-import @Plew/Syntax with { Derive, TopItemAst }
+// gen test (spec/16 M0): a user-defined macro `Greet` generates an `impl` on the
+// annotated type into App.gen.pw (part = impl only), which the normal build
+// auto-parts; `main` calls the generated assoc fn.
+import @Plew/Syntax with { Derive, TopItemAst, Src, newSrc }
 import @Std/Io with { write }
 
 struct Greet { }
 pub impl Greet as Derive {
     assoc fn derive(input: TopItemAst) -> String {
-        return "fn widgetTag() -> String {\n    return \"tagged!\\n\"\n}\n"
+        match input {
+            TopItemAst.Decl(val d) => {
+                mut val s: Src = newSrc()
+                s.put("impl ")
+                s.put(d.name)
+                s.put(" {\n    assoc fn widgetTag() -> String {\n        return \"tagged!\\n\"\n    }\n}\n")
+                return s.finish()
+            }
+            _ => { return "" }
+        }
     }
 }
 
@@ -14,5 +24,5 @@ pub impl Greet as Derive {
 struct Widget { }
 
 fn main() {
-    write(s: widgetTag())
+    write(s: Widget.widgetTag())
 }

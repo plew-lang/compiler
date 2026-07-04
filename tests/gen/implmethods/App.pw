@@ -11,14 +11,16 @@ pub impl MethodList as Derive {
         match input {
             TopItemAst.Impl(val im) => {
                 mut val s: Src = newSrc()
-                s.put("fn methodNames() -> String {\n    return \"")
+                s.put("impl ")
+                s.put(im.recvType.name)
+                s.put(" {\n    assoc fn methodNames() -> String {\n        return \"")
                 mut val i: U64 = 0
                 while i < im.members.count() {
                     s.put(im.members[i].name)
                     s.put(",")
                     i += 1
                 }
-                s.put("\"\n}\n")
+                s.put("\"\n    }\n}\n")
                 return s.finish()
             }
             _ => { return "" }
@@ -41,6 +43,6 @@ pub impl Widget {
 }
 
 fn main() {
-    write(s: methodNames())
+    write(s: Widget.methodNames())
     write(s: "\n")
 }

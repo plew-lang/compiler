@@ -11,14 +11,16 @@ pub impl ReqList as Derive {
         match input {
             TopItemAst.Trait(val t) => {
                 mut val s: Src = newSrc()
-                s.put("fn reqNames() -> String {\n    return \"")
+                s.put("impl ")
+                s.put(t.name)
+                s.put(" {\n    assoc fn reqNames() -> String {\n        return \"")
                 mut val i: U64 = 0
                 while i < t.reqs.count() {
                     s.put(t.reqs[i].name)
                     s.put(",")
                     i += 1
                 }
-                s.put("\"\n}\n")
+                s.put("\"\n    }\n}\n")
                 return s.finish()
             }
             _ => { return "" }
@@ -33,6 +35,6 @@ trait Greeter {
 }
 
 fn main() {
-    write(s: reqNames())
+    write(s: Greeter.reqNames())
     write(s: "\n")
 }

@@ -9,7 +9,9 @@ pub impl VariantNames as Derive {
         match input {
             TopItemAst.Decl(val d) => {
                 mut val s: Src = newSrc()
-                s.put("fn variantNames() -> String {\n    return \"")
+                s.put("impl ")
+                s.put(d.name)
+                s.put(" {\n    assoc fn variantNames() -> String {\n        return \"")
                 mut val i: U64 = 0
                 while i < d.variants.count() {
                     s.put(d.variants[i].name)
@@ -19,7 +21,7 @@ pub impl VariantNames as Derive {
                     s.putByte(44)
                     i += 1
                 }
-                s.put("\"\n}\n")
+                s.put("\"\n    }\n}\n")
                 return s.finish()
             }
             _ => { return "" }
@@ -35,6 +37,6 @@ enum Shape {
 }
 
 fn main() {
-    write(s: variantNames())
+    write(s: Shape.variantNames())
     write(s: "\n")
 }

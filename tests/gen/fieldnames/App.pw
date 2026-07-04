@@ -14,14 +14,16 @@ pub impl FieldList as Derive {
         match input {
             TopItemAst.Decl(val d) => {
                 mut val out: Array[U8] = []
-                pushStr(into: inout out, s: "fn fieldNames() -> String {\n    return \"")
+                pushStr(into: inout out, s: "impl ")
+                pushStr(into: inout out, s: d.name)
+                pushStr(into: inout out, s: " {\n    assoc fn fieldNames() -> String {\n        return \"")
                 mut val i: U64 = 0
                 while i < d.fields.count() {
                     pushStr(into: inout out, s: d.fields[i].name)
                     out.append(',')
                     i += 1
                 }
-                pushStr(into: inout out, s: "\"\n}\n")
+                pushStr(into: inout out, s: "\"\n    }\n}\n")
                 return stringFromBytesUnchecked(out)
             }
             _ => { return "" }
@@ -46,6 +48,6 @@ struct Point {
 }
 
 fn main() {
-    write(s: fieldNames())
+    write(s: Point.fieldNames())
     write(s: "\n")
 }

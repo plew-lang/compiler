@@ -15,7 +15,9 @@ pub impl Tagged as ParameterizedDerive {
         match input {
             TopItemAst.Decl(val d) => {
                 mut val out: Array[U8] = []
-                pushStr(into: inout out, s: "fn tag() -> String {\n    return \"")
+                pushStr(into: inout out, s: "impl ")
+                pushStr(into: inout out, s: d.name)
+                pushStr(into: inout out, s: " {\n    assoc fn tag() -> String {\n        return \"")
                 mut val i: I64 = 0
                 while i < self.times {
                     pushStr(into: inout out, s: self.prefix)
@@ -23,7 +25,7 @@ pub impl Tagged as ParameterizedDerive {
                     i += 1
                 }
                 pushStr(into: inout out, s: d.name)
-                pushStr(into: inout out, s: "\"\n}\n")
+                pushStr(into: inout out, s: "\"\n    }\n}\n")
                 return stringFromBytesUnchecked(out)
             }
             _ => { return "" }
@@ -44,6 +46,6 @@ fn pushStr(into: inout Array[U8], s: String) {
 struct Widget { }
 
 fn main() {
-    write(s: tag())
+    write(s: Widget.tag())
     write(s: "\n")
 }
