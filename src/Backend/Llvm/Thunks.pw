@@ -97,7 +97,7 @@ pub impl LlvmCtx {
                 callTy = self.fnTy[callSlot]
                 callVal = self.fnVal[callSlot]
             } else {
-                val callSlot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: [])
+                val callSlot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: [], recvInstRef: 0U64)
                 callTy = self.genFnTy[callSlot]
                 callVal = self.genFnVal[callSlot]
             }

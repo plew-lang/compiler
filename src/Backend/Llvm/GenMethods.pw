@@ -191,11 +191,24 @@ pub impl LlvmCtx {
         // preserve isAny/viewExtId, and Self carries neither, so this is span-only).
         mut val pgStart: U64 = p.tyStart
         mut val pgLen: U64 = p.tyLen
+        // The effective param type — `Self` resolved to the receiver. A `Self` param stands
+        // for the receiver type, so the representation branches below must bind it EXACTLY as
+        // that type: not just the name span (pgStart/pgLen) but the array flag and the full
+        // ref too. Without this a `Self` on `impl[T] Array[T] as Eq` (Self = Array[T]) fell
+        // through the scalar path and its `.data` field access failed. A `Self` grounding to
+        // a plain struct/enum already flows through pgStart/pgLen; only the array case needs
+        // the flag flip (its repr is the buffer floor, not a scalar). effRef/effIsArray equal
+        // the raw p.ty/p.tyIsArray for a non-`Self` param, so existing bindings are unchanged.
+        mut val effRef: U64 = p.ty
+        mut val effIsArray: Bool = p.tyIsArray
         if p.ty != 0U64 {
             if rangeEquals(bytes: c.arena.bytes, start: p.tyStart, len: p.tyLen, kw: "Self") {
-                val pgr: U64 = c.groundTypeRef(ref: p.ty)
-                pgStart = c.arena.types[pgr].nameStart
-                pgLen = c.arena.types[pgr].nameLen
+                effRef = c.groundTypeRef(ref: p.ty)
+                pgStart = c.arena.types[effRef].nameStart
+                pgLen = c.arena.types[effRef].nameLen
+                if rangeEquals(bytes: c.arena.bytes, start: pgStart, len: pgLen, kw: "Array") {
+                    effIsArray = true
+                }
             }
         }
         mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: pgStart, tyLen: pgLen)
@@ -236,12 +249,12 @@ pub impl LlvmCtx {
                 pRef = p.ty
             }
         }
-        if p.tyIsArray {
+        if effIsArray {
             pElem = pty
             // an `Array[any P]` param: its element is the existential fat pointer.
-            if p.ty != 0U64 {
-                if c.arena.types[p.ty].args.count() > 0U64 {
-                    if refIsAny(c: inout c, ref: c.arena.types[p.ty].args[0]) {
+            if effRef != 0U64 {
+                if c.arena.types[effRef].args.count() > 0U64 {
+                    if refIsAny(c: inout c, ref: c.arena.types[effRef].args[0]) {
                         pElem = self.anyTy
                     }
                 }
@@ -250,10 +263,10 @@ pub impl LlvmCtx {
             // E3 step (a): track the array param as a generic-struct value `Array[E]` (the
             // ref grounded under the active instantiation env) + Array's arena struct index,
             // so a use resolves through the uniform generic path (drops exprIsArray dispatch).
-            if p.ty != 0U64 {
-                mut val gpr: U64 = p.ty
+            if effRef != 0U64 {
+                mut val gpr: U64 = effRef
                 if c.cur.typeParams.count() > 0U64 {
-                    gpr = c.groundTypeRef(ref: p.ty)
+                    gpr = c.groundTypeRef(ref: effRef)
                 }
                 pRef = gpr
                 // de-pin: the param's LLVM type is the per-instance `%gs` of `Array[E]`.
@@ -261,22 +274,22 @@ pub impl LlvmCtx {
             }
             pSidx = c.structDefByNameAny(start: c.kwSpan(kw: "Array", kwLen: 5U64).nameStart, len: 5U64)
         } else {
-            if c.isGenericInst(ref: p.ty) {
-                pty = self.llvmTypeOfRef(c: inout c, ref: p.ty)
-                pRef = p.ty
-                val pgs: U64 = self.genStructSlot(c: inout c, ref: p.ty)
+            if c.isGenericInst(ref: effRef) {
+                pty = self.llvmTypeOfRef(c: inout c, ref: effRef)
+                pRef = effRef
+                val pgs: U64 = self.genStructSlot(c: inout c, ref: effRef)
                 if pgs < self.genStructRefs.count() {
                     pSidx = self.genStructDefs[pgs]
                 }
             }
-            if c.isRefInst(ref: p.ty) {
+            if c.isRefInst(ref: effRef) {
                 pty = self.ptrty
-                pRef = p.ty
+                pRef = effRef
             }
             // a function-value param (`f: fn(n: I32) -> I32`): track the fn TypeRef so a
             // call `f(n: x)` resolves the closure signature for the indirect call.
-            if c.isFnType(ref: p.ty) {
-                pRef = p.ty
+            if c.isFnType(ref: effRef) {
+                pRef = effRef
             }
             if pRef == 0U64 {
                 // grounded span so a `Self` param on an enum receiver tracks the enum.
@@ -292,7 +305,7 @@ pub impl LlvmCtx {
         // resolves through the enum-receiver dispatch — the pre-ground enum check above
         // only sees the Self-grounded span, missing a `T`-named param.
         if pRef == 0U64 {
-            if !(p.tyIsArray) {
+            if !(effIsArray) {
                 mut val gs2: U64 = p.tyStart
                 mut val gl2: U64 = p.tyLen
                 if p.ty != 0U64 {
@@ -362,17 +375,30 @@ pub impl LlvmCtx {
         }
         val pKind: U64 = kindFromTySpan(c: inout c, tyStart: pKindStart, tyLen: pKindLen)
         if p.isInout {
-            self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, argIdx), ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
+            self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: LLVMGetParam(fv, argIdx), ty: pty, kind: pKind, structIdx: pSidx, isArr: effIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
         } else {
             val slot2: LLVMValueRef = self.entryAlloca(ty: pty)
             LLVMBuildStore(self.b, LLVMGetParam(fv, argIdx), slot2)
-            self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: p.tyIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
+            self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: effIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
         }
         // an array-of-struct param (`lhsNames: Array[Bind]`): track the element struct
         // so `param[i].field` resolves (mirrors the Let handler — bindOneParam alone
         // left this unset, breaking field access on a struct-array param's element).
-        if p.tyIsArray {
-            val esi: U64 = self.localStructIdxFor(c: inout c, start: p.tyStart, len: p.tyLen)
+        if effIsArray {
+            // the element type name: for a directly-written array param p.tyStart already
+            // names the element; a `Self`-as-array param has p.tyStart = "Self", so recover
+            // the element from the grounded Array[E] arg instead.
+            mut val elemStart: U64 = p.tyStart
+            mut val elemLen: U64 = p.tyLen
+            if effRef != p.ty {
+                mut val gg: U64 = effRef
+                if c.cur.typeParams.count() > 0U64 { gg = c.groundTypeRef(ref: effRef) }
+                if c.arena.types[gg].args.count() > 0U64 {
+                    elemStart = c.arena.types[c.arena.types[gg].args[0]].nameStart
+                    elemLen = c.arena.types[c.arena.types[gg].args[0]].nameLen
+                }
+            }
+            val esi: U64 = self.localStructIdxFor(c: inout c, start: elemStart, len: elemLen)
             if esi < c.arena.structs.count() {
                 self.setLocalElemStruct(esi: esi)
             }
@@ -381,10 +407,10 @@ pub impl LlvmCtx {
             // `impl[E]` records the concrete element (`I64` for `Box[I64].from`), not the bare
             // param `E` — else a `.count()`/index over the param can't synthesize its Array
             // receiver (the element ref must be a concrete type). Mirrors pKind's grounding.
-            if p.ty != 0U64 {
-                mut val gpty: U64 = p.ty
+            if effRef != 0U64 {
+                mut val gpty: U64 = effRef
                 if c.cur.typeParams.count() > 0U64 {
-                    gpty = c.groundTypeRef(ref: p.ty)
+                    gpty = c.groundTypeRef(ref: effRef)
                 }
                 val at: TypeRef = c.arena.types[gpty]
                 if at.args.count() > 0U64 {

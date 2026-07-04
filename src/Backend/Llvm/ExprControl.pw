@@ -350,7 +350,7 @@ pub impl LlvmCtx {
                         cav.append(errVal)
                         // the error-conversion factory (free fn or assoc fn — no self) is its
                         // own 0-type-arg `gf` instance (B4-1).
-                        val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [])
+                        val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [], recvInstRef: 0U64)
                         if fgslot < self.genFnK.count() {
                             convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
                         }

@@ -268,6 +268,18 @@ pub impl LlvmCtx {
         if pnm.nameLen != 0U64 {
             return c.findAssocByName(typeStart: pnm.nameStart, typeLen: pnm.nameLen, name: "eq")
         }
+        // an opaque named type carrying an Eq witness but which is neither a registered
+        // struct/enum nor a scalar: the collection floor `Buffer[T]` is a bare-pointer
+        // primitive (buffer-floor.md §6), so `buf == buf` inside an Array/Dictionary witness
+        // resolves `impl[T] Buffer[T] as Eq` by the operand's type-ref head name. Gated on an
+        // actual `eq` assoc existing, so a witness-less type still falls through to `none`.
+        val tr: U64 = self.exprTypeRef(c: inout c, id: lhs)
+        if tr != 0U64 {
+            val hn: TypeRef = c.arena.types[tr]
+            if hn.nameLen != 0U64 {
+                return c.findAssocByName(typeStart: hn.nameStart, typeLen: hn.nameLen, name: "eq")
+            }
+        }
         return c.arena.funcs.count()
     }
 
@@ -350,8 +362,46 @@ pub impl LlvmCtx {
         }
         // a witness may be a pure free function (its 0-type-arg `gf` instance) or an assoc fn
         // on a lang-item (`String.add` for `"a" + "b"` — still on `pf`, declared lazily like a
-        // provided method).
-        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: [])
+        // provided method). A GENERIC witness (`impl[T] Array[T] as Eq`, `impl[T] Buffer[T] as
+        // Eq`) must be monomorphized for the operand's concrete element: infer its type args
+        // from the operand exprs (the same unification `genLlvmResolvedFreeCall` uses), so
+        // `Array[Pt] == Array[Pt]` reaches `Array.eq[Pt]` (which in turn rides `Buffer.eq[Pt]`,
+        // etc.). A non-generic witness keeps its 0-type-arg instance.
+        // the receiver instance for an `assoc fn` witness — the lhs operand's type
+        // (`Array[I64]` for `Array[I64] == …`) — so emitOneGenFn binds `Self` to it and a
+        // `Self` param / `.data` field access in the witness body grounds. A free-function
+        // witness (`pow`) has no receiver, so 0.
+        mut val recvInst: U64 = 0
+        if af.isAssoc {
+            recvInst = self.exprTypeRef(c: inout c, id: lhs)
+        }
+        mut val targs: Array[U64] = []
+        if af.typeParams.count() > 0U64 {
+            mut val wargs: Array[Arg] = []
+            wargs.append(<Arg expr=lhs isInout=false labelStart=0 labelLen=0 hasLabel=false />)
+            if binary {
+                wargs.append(<Arg expr=rhs isInout=false labelStart=0 labelLen=0 hasLabel=false />)
+            }
+            targs = self.llvmInferFnArgs(c: inout c, f: af, args: wargs)
+            // a `Self`-param witness (`impl[T] Buffer[T] as Eq` — its params name `Self`, not
+            // `T`) leaves `T` uninferred, so the element type would default to i64 and a struct
+            // element would compare only its first word. Fill any uninferred (0) param from the
+            // receiver instance's args, which align 1:1 with the impl's type params (Buffer[T]
+            // -> T = element). This grounds the element so `get`/element-`==` see the real type.
+            if recvInst != 0U64 {
+                val ra: Array[U64] = c.arena.types[recvInst].args
+                mut val ti2: U64 = 0
+                while ti2 < targs.count() {
+                    if targs[ti2] == 0U64 {
+                        if ti2 < ra.count() {
+                            targs[ti2] = ra[ti2]
+                        }
+                    }
+                    ti2 += 1
+                }
+            }
+        }
+        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: targs, recvInstRef: recvInst)
         if gslot < self.genFnK.count() {
             return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av), av.count(), anon())
         }

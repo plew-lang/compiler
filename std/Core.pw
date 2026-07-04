@@ -703,10 +703,16 @@ export extern "plew-intrinsic" {
     fn bufferSwapRemove[T](buffer: inout Buffer[T], index: U64) -> T
     fn bufferClear[T](buffer: inout Buffer[T])
     fn bufferTruncate[T](buffer: inout Buffer[T], count: U64)
-    // Element-wise equality of two buffers (same count AND each element equal). For a POD
-    // element type this is a byte compare of `count * sizeof(T)`; it is the floor primitive
-    // that `Array`/`String` equality (`@[Eq]`) ride via the `buffer` field. (collections.md §1.)
+    // Raw byte-compare of two buffers over `count * sizeof(T)` bytes — EXACT value equality
+    // only when the element type has no padding and no heap-owned fields (a scalar). The
+    // `Buffer as Eq` witness gates this behind `bufferBytewiseComparable` and otherwise
+    // compares element-by-element via `T`'s own `Eq`. (collections.md §1.)
     fn bufferEq[T](lhs: Buffer[T], rhs: Buffer[T]) -> Bool
+    // Whether `T` is byte-comparable (a scalar: memcmp equals value equality). Lowered to a
+    // COMPILE-TIME constant per monomorphized `T` (the backend inspects the element LLVM
+    // type), so the `if` selecting memcmp vs the element-wise loop folds to one static path —
+    // no runtime branch, and scalar buffers (`Buffer[U8]`) keep the memcmp fast path.
+    fn bufferBytewiseComparable[T](buffer: Buffer[T]) -> Bool
 }
 
 // Methods on the Buffer floor, in pure Plew over the intrinsics above. Like Array's
@@ -798,11 +804,27 @@ pub impl[T] Buffer[T] {
     }
 }
 
-// Buffer equality (spec/02): the floor's `==` is element-wise (NOT pointer identity) — a
-// `@[Eq]` struct over a Buffer field (`Array`/`String`) compares its buffer through this.
-pub impl[T] Buffer[T] as Eq {
+// Buffer equality (spec/02): the floor's `==` is element-wise VALUE equality (NOT pointer
+// identity), so it requires `T: Eq` and rides each element's own witness — a `Buffer[String]`
+// compares string CONTENTS, not their `{ptr,len}` bytes. A `@[Eq]` struct over a Buffer field
+// (`Array`) and `String` compare their buffer through this. Scalars take the memcmp fast path
+// (`bufferBytewiseComparable` is a compile-time constant, so the branch folds statically).
+pub impl[T] Buffer[T] as Eq where T: Eq {
     assoc fn eq(lhs~: Self, rhs~: Self) -> Bool {
-        return bufferEq(lhs: lhs, rhs: rhs)
+        if bufferBytewiseComparable(buffer: lhs) {
+            return bufferEq(lhs: lhs, rhs: rhs)
+        }
+        if lhs.count() != rhs.count() {
+            return false
+        }
+        mut val i: U64 = 0
+        while i < lhs.count() {
+            if !(lhs.get(index: i) == rhs.get(index: i)) {
+                return false
+            }
+            i += 1
+        }
+        return true
     }
 }
 

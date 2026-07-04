@@ -148,6 +148,18 @@ struct Array[T] {
     mut val data: Buffer[T]
 }
 
+// Array equality is value equality (spec/02): compare the single `data` field through
+// Buffer's element-wise Eq (which rides each element's own witness), so `[a] == [b]`
+// compares CONTENTS. This is exactly what `@[Eq]` would derive (`lhs.data == rhs.data`);
+// written by hand because running `plew gen` on this large lang module is blocked by
+// separate gen-mode codegen issues (worklog). `Array` has no `Ord` — order is not intrinsic
+// to a collection — so `arr < arr` is a clean "no Ord witness" reject.
+pub impl[T] Array[T] as Eq where T: Eq {
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool {
+        return lhs.data == rhs.data
+    }
+}
+
 // Methods on the builtin Array, in pure Plew over its `data` Buffer floor (Array A:
 // Array is an ordinary `struct { data: Buffer[T] }`, so its methods just forward to the
 // Buffer floor — the inner `buffer*` intrinsics are lowered by function identity, and the

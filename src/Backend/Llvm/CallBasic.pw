@@ -84,7 +84,7 @@ pub impl LlvmCtx {
             ai += 1
         }
         // the `pow` conformance fn (free or assoc) is its own 0-type-arg `gf` instance.
-        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [])
+        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [], recvInstRef: 0U64)
         if gslot < self.genFnK.count() {
             return LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av), av.count(), anon())
         }
@@ -102,7 +102,7 @@ pub impl LlvmCtx {
         if c.isGenericFreeFn(fi: cfi) {
             inferred = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
         }
-        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: cfi, args: inferred)
+        val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: cfi, args: inferred, recvInstRef: 0U64)
         if gslot < self.genFnK.count() {
             val cf: Func = c.arena.funcs[cfi]
             val savedP: Array[Bind] = c.cur.typeParams
@@ -234,6 +234,20 @@ pub impl LlvmCtx {
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferEq") {
             return self.genLlvmBufferEq(c: inout c, lhs: args[0].expr, rhs: args[1].expr)
+        }
+        // COMPILE-TIME constant: is the element type byte-comparable (memcmp == value eq)?
+        // True only for a scalar element (integer/float LLVM kind) — a struct/enum/pointer
+        // element has padding or heap-owned fields, so `Buffer as Eq` must fall to the
+        // element-wise witness loop. Emitting a constant `i1` lets that source-level `if`
+        // fold to a single static path (no runtime branch; scalars keep memcmp).
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferBytewiseComparable") {
+            val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: args[0].expr)
+            val k: U32 = LLVMGetTypeKind(elemTy)
+            mut val bytewise: U64 = 0
+            if k == 8U32 { bytewise = 1U64 }
+            if k == 2U32 { bytewise = 1U64 }
+            if k == 3U32 { bytewise = 1U64 }
+            return LLVMConstInt(self.i1ty, bytewise, 0I32)
         }
         // `Ref`/`WeakRef` control-block intrinsics (spec/03), backing weak()/upgrade(). The
         // cell value IS the argument's value (an opaque pointer); each op touches a counter.

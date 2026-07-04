@@ -124,6 +124,20 @@ pub impl Comp {
     // no Eq/Ord here and keeps its own lowering (the dispatch handles those first).
     inout fn hasCompareWitness(op: I64, lhs: U64, rhs: U64) -> Bool {
         val lt: TypeInfo = self.cmpOperandType(lhs: lhs, rhs: rhs)
+        // An array operand (kind 3, whose (nameStart,nameLen) name the ELEMENT type) carries
+        // only `Eq` (`impl[T] Array[T] as Eq where T: Eq`), no `Ord`. The `where T: Eq` bound
+        // requires the element type to carry Eq too, so `eqWitnessReady(lt)` — which reads
+        // lt's name = the element — gates on the element's own Eq. `Array.eq` then rides the
+        // element's witness (via `Buffer.eq`). `< <= > >=` on arrays stays unwitnessed.
+        if lt.kind == 3 {
+            if op == opEq() || op == opNe() {
+                if self.eqWitnessReady(ti: lt) {
+                    val arr: Bind = self.internBytes(s: "Array")
+                    return self.findAssocByName(typeStart: arr.nameStart, typeLen: arr.nameLen, name: "eq") < self.arena.funcs.count()
+                }
+            }
+            return false
+        }
         if lt.kind == 2 || lt.kind == 0 {
             if lt.nameLen == 0 {
                 return false

@@ -1,0 +1,35 @@
+import @Std/Io with { print }
+
+// `Array[T] == Array[T]` desugars to the `impl[T] Array[T] as Eq where T: Eq`
+// witness (spec/12: comparison is trait sugar). The witness rides the buffer floor
+// (`lhs.data == rhs.data` -> `Buffer.eq[T]`), which STATICALLY selects between the
+// bytewise `memcmp` fast path (scalar element) and the element-wise `T.eq` loop
+// (struct element) via the `bufferBytewiseComparable` compile-time const. Both
+// element kinds are exercised here.
+struct Point { pub val x: I64  pub val y: I64 }
+pub impl Point as Eq {
+    assoc fn eq(lhs~: Self, rhs~: Self) -> Bool {
+        return lhs.x == rhs.x && lhs.y == rhs.y
+    }
+}
+
+fn boolI(b: Bool) -> I64 { if b { return 1I64 } return 0I64 }
+
+fn main() {
+    // scalar element -> Buffer.eq[I64] bytewise fast path
+    val a: Array[I64] = [1, 2, 3]
+    val b: Array[I64] = [1, 2, 3]
+    val c: Array[I64] = [1, 2, 9]
+    print(boolI(b: a == b))   // 1
+    print(boolI(b: a == c))   // 0
+    print(boolI(b: a != c))   // 1
+    val d: Array[I64] = [1, 2]
+    print(boolI(b: a == d))   // 0  (length differs)
+
+    // struct element -> element-wise loop calling Point.eq
+    val ps: Array[Point] = [<Point x=1 y=2 />, <Point x=3 y=4 />]
+    val qs: Array[Point] = [<Point x=1 y=2 />, <Point x=3 y=4 />]
+    val rs: Array[Point] = [<Point x=1 y=2 />, <Point x=3 y=9 />]
+    print(boolI(b: ps == qs))  // 1
+    print(boolI(b: ps == rs))  // 0
+}
