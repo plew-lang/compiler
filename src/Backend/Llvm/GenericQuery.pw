@@ -450,31 +450,35 @@ pub impl LlvmCtx {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
                     if fidx < c.arena.structs[bsi].fields.count() {
                         val fd: FieldDef = c.arena.structs[bsi].fields[fidx]
-                        if fd.tyIsArray {
-                            if fd.ty != 0U64 {
-                                val ft: TypeRef = c.arena.types[fd.ty]
-                                if ft.args.count() > 0U64 {
-                                    val baseRef: U64 = self.exprTypeRef(c: inout c, id: fbase)
-                                    val savedP: Array[Bind] = c.cur.typeParams
-                                    val savedA: Array[U64] = c.cur.typeArgs
-                                    val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
-                                    val g: U64 = c.groundTypeRef(ref: ft.args[0])
-                                    val gt: TypeRef = c.arena.types[g]
-                                    mut val r: U64 = c.arena.structs.count()
-                                    if c.isGenericInst(ref: g) {
-                                        val gs: U64 = self.genStructSlot(c: inout c, ref: g)
-                                        if gs < self.genStructRefs.count() {
-                                            r = self.genStructDefs[gs]
-                                        }
-                                    } else {
-                                        r = self.localStructIdxFor(c: inout c, start: gt.nameStart, len: gt.nameLen)
+                        // the indexed field's element type is its first type argument —
+                        // whether it is the `[E]` array sugar (`fd.tyIsArray`) OR a named
+                        // collection floor `Buffer[E]` / `Array[E]` (a generic instance with
+                        // args). Dictionary's `keys: Buffer[K]` is the latter, so gating on
+                        // `tyIsArray` alone missed it and `self.keys[i] == key`'s Eq witness
+                        // could not be found in a monomorphized `Dictionary[Pair]` body.
+                        if fd.ty != 0U64 {
+                            val ft: TypeRef = c.arena.types[fd.ty]
+                            if ft.args.count() > 0U64 {
+                                val baseRef: U64 = self.exprTypeRef(c: inout c, id: fbase)
+                                val savedP: Array[Bind] = c.cur.typeParams
+                                val savedA: Array[U64] = c.cur.typeArgs
+                                val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
+                                val g: U64 = c.groundTypeRef(ref: ft.args[0])
+                                val gt: TypeRef = c.arena.types[g]
+                                mut val r: U64 = c.arena.structs.count()
+                                if c.isGenericInst(ref: g) {
+                                    val gs: U64 = self.genStructSlot(c: inout c, ref: g)
+                                    if gs < self.genStructRefs.count() {
+                                        r = self.genStructDefs[gs]
                                     }
-                                    if didSet {
-                                        c.cur.typeParams = savedP
-                                        c.cur.typeArgs = savedA
-                                    }
-                                    return r
+                                } else {
+                                    r = self.localStructIdxFor(c: inout c, start: gt.nameStart, len: gt.nameLen)
                                 }
+                                if didSet {
+                                    c.cur.typeParams = savedP
+                                    c.cur.typeArgs = savedA
+                                }
+                                return r
                             }
                         }
                     }
