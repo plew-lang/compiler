@@ -2,9 +2,27 @@
 
 pub impl Comp {
     inout fn collectFnInsts() {
+        // gen mode (spec/16): the synthesized harness `genMainIdx` is the sole entry
+        // point — the user's own `main` is dead (never linked). Skip it as a discovery
+        // root so its body (which may call a `where T: Eq` generic over a type whose Eq
+        // is produced by the derive we're about to GENERATE) doesn't register a premature
+        // instance and trip a bounds check against a not-yet-materialized conformance.
+        mut val deadMainId: U64 = 0
+        if self.genMode {
+            val mainN: Bind = self.internBytes(s: "main")
+            deadMainId = intern(c: inout self, start: mainN.nameStart, len: mainN.nameLen)
+        }
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
+            if self.genMode {
+                if f.nameId == deadMainId {
+                    if fi != self.genMainIdx {
+                        fi += 1
+                        continue
+                    }
+                }
+            }
             // skip generic templates (their instances come from call sites) and extern
             // fns (body == 0 is a sentinel; walking block 0 would scan an unrelated body).
             if !(f.typeParams.count() > 0 || f.isExtern) {

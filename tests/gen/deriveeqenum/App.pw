@@ -1,7 +1,8 @@
+// `@[Eq]` on an enum, exercised through the real derive pipeline (`plew gen`
+// synthesizes `Shape.eq` into App.gen.pw). Structural equality: tags must agree,
+// then payloads compare field-wise — payload variants need no manual impl.
 import @Std/Io with { print }
 
-// `@[Eq]` on an enum synthesizes structural equality: tags must agree, then
-// payloads compare field-wise (payload variants no longer need a manual impl).
 @[Eq]
 enum Shape {
     Circle(r: I64)

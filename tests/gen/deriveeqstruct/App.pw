@@ -1,7 +1,9 @@
+// `@[Eq]` on a struct, exercised through the real derive pipeline (`plew gen`
+// synthesizes `Point.eq` into App.gen.pw). The derived witness makes `==`/`!=`
+// work AND registers the conformance, so `Point` satisfies a `where T: Eq`
+// bound with no manual impl.
 import @Std/Io with { print }
 
-// `@[Eq]` synthesizes a field-wise Eq witness (and registers the conformance),
-// so `==`/`!=` work and the type satisfies a `where T: Eq` bound — no manual impl.
 @[Eq]
 struct Point { pub val x: I64  pub val y: I64 }
 
