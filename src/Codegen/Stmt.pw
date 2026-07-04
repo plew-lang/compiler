@@ -124,14 +124,36 @@ pub impl Comp {
     // no Eq/Ord here and keeps its own lowering (the dispatch handles those first).
     inout fn hasCompareWitness(op: I64, lhs: U64, rhs: U64) -> Bool {
         val lt: TypeInfo = self.cmpOperandType(lhs: lhs, rhs: rhs)
-        // An array operand (kind 3, whose (nameStart,nameLen) name the ELEMENT type) carries
-        // only `Eq` (`impl[T] Array[T] as Eq where T: Eq`), no `Ord`. The `where T: Eq` bound
-        // requires the element type to carry Eq too, so `eqWitnessReady(lt)` — which reads
-        // lt's name = the element — gates on the element's own Eq. `Array.eq` then rides the
-        // element's witness (via `Buffer.eq`). `< <= > >=` on arrays stays unwitnessed.
+        // An array operand (kind 3) carries only `Eq` (`impl[T] Array[T] as Eq where T: Eq`),
+        // no `Ord`. The `where T: Eq` bound requires the ELEMENT type to carry Eq too. An array
+        // is represented as kind 3 with its element carried by NAME (its whole-array ref is not
+        // tracked), so the element's structured ref is recovered from that name via arrayElemRef
+        // and `conformsInstance` answers the bound exactly — recursing for a nested
+        // `Array[Array[NoEq]]` (the element ref is itself `Array[NoEq]`) so it is rejected HERE
+        // at the operator, not deferred to a deeper monomorphization with a mislocated
+        // diagnostic. `Array.eq` then rides the element's witness (via `Buffer.eq`). Falls back
+        // to the name-only element check for a bare element with no registered ref.
+        // `< <= > >=` on arrays stays unwitnessed.
         if lt.kind == 3 {
             if op == opEq() || op == opNe() {
-                if self.eqWitnessReady(ti: lt) {
+                mut val elemOk: Bool = false
+                // Resolve the element's structured ref from its (possibly mangled)
+                // name — an array is carried as kind 3 with the element by name, so
+                // its full ref is recovered here, not from lt.ref. conformsInstance
+                // answers the `where T: Eq` bound exactly, recursing for a nested
+                // `Array[Array[E]]` (the element ref is `Array[E]`, whose own element
+                // is re-checked) — so a nested `Array[Array[NoEq]]` is rejected HERE
+                // at the operator, not deferred to a mislocated deep diagnostic.
+                val er: U64 = self.arrayElemRef(start: lt.nameStart, len: lt.nameLen)
+                if er != 0U64 {
+                    val eqB: Bind = self.internBytes(s: "Eq")
+                    elemOk = self.conformsInstance(ref: er, traitStart: eqB.nameStart, traitLen: eqB.nameLen)
+                } else {
+                    // a bare scalar/named element with no registered structured ref
+                    // (no type args to constrain): the name-based Eq check suffices.
+                    elemOk = self.eqWitnessReady(ti: lt)
+                }
+                if elemOk {
                     val arr: Bind = self.internBytes(s: "Array")
                     return self.findAssocByName(typeStart: arr.nameStart, typeLen: arr.nameLen, name: "eq") < self.arena.funcs.count()
                 }

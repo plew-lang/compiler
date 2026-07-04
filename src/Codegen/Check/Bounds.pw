@@ -353,6 +353,94 @@ pub impl Comp {
         return false
     }
 
+    // The witness fn (assoc or method) named (nameStart,nameLen) on type (typeStart,typeLen),
+    // by receiver + name id — used to reach a conditional impl's `where`-bounds, which the
+    // lowerer records as funcBounds on each witness fn (Lower/Impl.pw). funcs.count() = none.
+    inout fn witnessFnFor(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> U64 {
+        val qRecv: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[i]
+            if f.isAssoc || f.hasRecv {
+                if f.recvId == qRecv {
+                    if f.nameId == qName {
+                        return i
+                    }
+                }
+            }
+            i += 1
+        }
+        return self.arena.funcs.count()
+    }
+
+    // Does the concrete type INSTANCE `ref` (a TypeRef, args carried) conform to the trait?
+    // The single authoritative conformance query — CONDITIONAL conformance is a first-class
+    // answer here, not a cascade of name checks across monomorphization levels. For
+    // `impl[T] Array[T] as Eq where T: Eq`, `Array[NoEq]` returns FALSE by binding the impl's
+    // `where` bound (recorded as a funcBound on the witness `Array.eq`, its param at position
+    // i in the witness typeParams ↔ instance arg i) and recursing on `NoEq`. Name-level
+    // conformance (primitive/String registered impls, newtype inheritance) is delegated to
+    // `typeConformsTo`; the recursion terminates on finite type depth. Both the operator gate
+    // (hasCompareWitness) and the `where` bound-check consult this, so acceptance == the
+    // reality of instantiation and the diagnostic lands where the type is written.
+    inout fn conformsInstance(ref: U64, traitStart: U64, traitLen: U64) -> Bool {
+        if ref >= self.arena.types.count() {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        // name-level: is there ANY `impl <head> as Trait` (unconditional part; also handles
+        // primitives/String/newtype). No name-level conformance ⟹ definitely not.
+        if !(self.typeConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, traitStart: traitStart, traitLen: traitLen)) {
+            return false
+        }
+        // a non-generic instance (no args) has no conditional bounds to check.
+        if t.args.count() == 0U64 {
+            return true
+        }
+        // conditional impl: check the impl-level `where` bounds against THIS instance's args.
+        val traitIdx: U64 = self.findTraitIdxByName(start: traitStart, len: traitLen)
+        if traitIdx >= self.decls.traits.count() {
+            return true
+        }
+        val tr: TraitDef = self.decls.traits[traitIdx]
+        if tr.reqs.count() == 0U64 {
+            return true
+        }
+        // any requirement's witness carries the impl-level bounds (the lowerer duplicates them
+        // onto every method of the impl), so one witness fn suffices to read them.
+        val wfi: U64 = self.witnessFnFor(typeStart: t.nameStart, typeLen: t.nameLen, nameStart: tr.reqs[0].nameStart, nameLen: tr.reqs[0].nameLen)
+        if wfi >= self.arena.funcs.count() {
+            return true
+        }
+        val wf: Func = self.arena.funcs[wfi]
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count() {
+            val fb: FuncBound = self.decls.funcBounds[bi]
+            if fb.fnIdx == wfi {
+                // map the bound's type-param name to its position in the witness type params;
+                // a receiver/impl param (position < instance arity) is checked against the
+                // matching instance arg, a method-own param (position ≥ arity) is unrelated
+                // to this instance and skipped.
+                mut val pos: U64 = wf.typeParams.count()
+                mut val k: U64 = 0
+                while k < wf.typeParams.count() {
+                    if wf.typeParams[k].nameId == fb.paramNameId {
+                        pos = k
+                    }
+                    k += 1
+                }
+                if pos < t.args.count() {
+                    if !(self.conformsInstance(ref: t.args[pos], traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                        return false
+                    }
+                }
+            }
+            bi += 1
+        }
+        return true
+    }
+
     inout fn typeConformsToName(typeStart: U64, typeLen: U64, traitName: String) -> Bool {
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
@@ -386,7 +474,10 @@ pub impl Comp {
                                 // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
                                 // spec/09) satisfies the bound via the conformance path the
                                 // view selects, even when the bare type does not conform.
-                                mut val ok: Bool = self.typeConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                                // conformsInstance checks CONDITIONAL conformance against the
+                                // arg's full ref (`Array[NoEq]` ⟹ false here, at this bound's
+                                // location — no deferral to a deeper monomorphization level).
+                                mut val ok: Bool = self.conformsInstance(ref: fin.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen)
                                 if !ok && at.viewExtId != 0U64 {
                                     ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
                                 }
@@ -423,8 +514,7 @@ pub impl Comp {
                                 val tp: Bind = f.typeParams[pi]
                                 if tp.nameId == fb.paramNameId {
                                     if pi < inst.args.count() {
-                                        val at: TypeRef = self.arena.types[inst.args[pi]]
-                                        if !(self.typeConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                                        if !(self.conformsInstance(ref: inst.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen)) {
                                             compileErrorAt(line: self.lineOf(offset: fb.paramStart), msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                         }
                                     }

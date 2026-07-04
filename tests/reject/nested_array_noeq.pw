@@ -1,0 +1,14 @@
+// `Array[T] == Array[T]` desugars to `impl[T] Array[T] as Eq where T: Eq`, whose
+// bound requires the ELEMENT to carry Eq. For a nested `Array[Array[NoEq]]` the
+// element is itself `Array[NoEq]`, which conditionally conforms ONLY if `NoEq: Eq`.
+// `NoEq` has no `Eq` witness, so the conditional conformance is answered NEGATIVELY
+// (conformsInstance recurses through the element ref) and the operator is rejected
+// HERE — not accepted at the front and crashed later in a deep monomorphization
+// with a mislocated diagnostic.
+struct NoEq { pub val x: I64 }
+
+fn main() {
+    val a: Array[Array[NoEq]] = [[<NoEq x=1 />]]
+    val b: Array[Array[NoEq]] = [[<NoEq x=1 />]]
+    if a == b { }
+}

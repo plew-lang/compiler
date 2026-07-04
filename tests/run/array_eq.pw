@@ -43,4 +43,14 @@ fn main() {
     val zp: Array[F64] = [0.0]
     val zn: Array[F64] = [-0.0]
     print(boolI(b: zp == zn))  // 1  (F64.eq: -0.0 == +0.0, not bytewise)
+
+    // nested array: `Array[Array[Point]]` conditionally conforms to Eq because its
+    // element `Array[Point]` does (which in turn rides `Point: Eq`). The operator
+    // resolves the element's structured ref and answers the `where T: Eq` bound
+    // exactly — so a valid nesting compiles and compares recursively element-wise.
+    val ns: Array[Array[Point]] = [[<Point x=1 y=2 />], [<Point x=3 y=4 />]]
+    val ms: Array[Array[Point]] = [[<Point x=1 y=2 />], [<Point x=3 y=4 />]]
+    val ks: Array[Array[Point]] = [[<Point x=9 y=9 />]]
+    print(boolI(b: ns == ms))  // 1
+    print(boolI(b: ns == ks))  // 0
 }
