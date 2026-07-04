@@ -442,17 +442,18 @@ pub impl LlvmCtx {
             // the strty aggregate from the array's data + count. The validated public path is
             // `<String.checked source=bytes/>` (TryFrom[Array[U8]]); this is the unchecked floor.
             val arr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: args[0].expr)
-            // the Array[U8]'s buffer is MOVED into the returned String (same {ptr,len}, no
-            // copy) — which outlives this call. If the source is an array local, mark it
-            // moved so the CoW scope-exit release does not free the bytes out from under
-            // the String (the String becomes the buffer's owner; freed when strings drop).
-            match c.arena.exprs[args[0].expr] {
-                Expr.Ident(start: val ms, len: val ml) => {
-                    self.markLocalMoved(c: inout c, start: ms, len: ml)
-                }
-                _ => {}
-            }
-            return self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: arr), count: self.arrValCount(c: inout c, arr: arr), aggTy: self.stringLlvmTy(c: inout c))
+            // the returned String shares the source Array[U8]'s buffer (same {ptr,len}, no
+            // copy) and outlives this call. Take ownership the SAME way any by-value array
+            // bind does (shareArrayIfPlace): when the source is a PLACE still owned elsewhere
+            // — a local reused later, a struct field (`self.bytes` in `Src.finish`), an
+            // element — RETAIN the shared buffer so the owner's own release does not free the
+            // bytes out from under the String (true CoW; the copy is deferred to first
+            // mutation). A non-place (literal / call result) already owns its lone reference
+            // and passes through — the String just inherits it. (Previously this only marked
+            // a local Ident source moved, so a field/element source left the String dangling
+            // once its owner dropped.)
+            val owned: LLVMValueRef = self.shareArrayIfPlace(c: inout c, arrVal: arr, elemTy: self.i8ty, valueExpr: args[0].expr)
+            return self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: owned), count: self.arrValCount(c: inout c, arr: owned), aggTy: self.stringLlvmTy(c: inout c))
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "floatToString") {
             // a double -> String via the runtime (snprintf %g into a malloc'd buffer).

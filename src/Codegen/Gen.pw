@@ -14,21 +14,7 @@
 // slice (`source: "", start: 0, end: 0`) since `parseItem` is a stub. M1 passes
 // the annotated item's real source slice so macros can read the declaration.
 
-// Is `(start,len)` a compiler-privileged built-in derive (`@[Eq]`/`@[Ord]`),
-// synthesized directly by the compiler rather than run as a user macro? Those are
-// skipped by the harness (they have no `Derive`-implementing struct to call).
-
 pub impl Comp {
-    inout fn isBuiltinDerive(start: U64, len: U64) -> Bool {
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "Eq") {
-            return true
-        }
-        if rangeEquals(bytes: self.arena.bytes, start: start, len: len, kw: "Ord") {
-            return true
-        }
-        return false
-    }
-
     inout fn internSourceLiteral(from: U64, to: U64) -> Bind {
         val start: U64 = self.arena.bytes.count()
         self.arena.bytes.append('"')
@@ -103,42 +89,42 @@ pub impl Comp {
                 i += 1
                 continue
             }
-            if !(self.isBuiltinDerive(start: d.nameStart, len: d.nameLen)) {
-                // directive arguments must set publicly-settable fields (enforce the
-                // construction rule the post-checks pass skipped for this synthetic Make).
-                self.checkDirectiveArgsPublic(d: d)
-                // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
-                // annotated item's own source slice, with its original offset so the macro
-                // sees spans in original coordinates. (Synthesized post-checks, so the
-                // free-fn cross-module use of `parseItem` bypasses import hygiene.)
-                val srcLit: Bind = self.internSourceLiteral(from: d.declStart, to: d.declEnd)
-                val srcE: U64 = self.pushExpr(e: <Expr.Str start=srcLit.nameStart len=srcLit.nameLen />)
-                val startE: U64 = self.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
-                val endE: U64 = self.pushExpr(e: <Expr.Int value=d.declEnd offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
-                mut val pargs: Array[Arg] = []
-                pargs.append(<Arg expr=srcE isInout=false labelStart=srcN.nameStart labelLen=srcN.nameLen hasLabel=true />)
-                pargs.append(<Arg expr=startE isInout=false labelStart=startN.nameStart labelLen=startN.nameLen hasLabel=true />)
-                pargs.append(<Arg expr=endE isInout=false labelStart=endN.nameStart labelLen=endN.nameLen hasLabel=true />)
-                val parseCall: U64 = self.pushExpr(e: <Expr.Call nameStart=parseN.nameStart nameLen=parseN.nameLen args=pargs />)
-                // the receiver of `.derive`: a bare `@[X]` (no args) names the type/trait X
-                // directly (assoc `Derive`); `@[X(args)]` constructs `<X args/>` first
-                // (instance `ParameterizedDerive`, `self` = the config).
-                mut val recv: U64 = 0
-                if d.args.count() == 0 {
-                    recv = self.pushExpr(e: <Expr.Ident start=d.nameStart len=d.nameLen />)
-                } else {
-                    recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=d.args />)
-                }
-                // `recv.derive(input: parseItem(...))`
-                mut val dargs: Array[Arg] = []
-                dargs.append(<Arg expr=parseCall isInout=false labelStart=inputN.nameStart labelLen=inputN.nameLen hasLabel=true />)
-                val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=deriveN.nameStart nameLen=deriveN.nameLen args=dargs />)
-                // `write(s: <that>)`.
-                mut val wargs: Array[Arg] = []
-                wargs.append(<Arg expr=call isInout=false labelStart=sN.nameStart labelLen=sN.nameLen hasLabel=true />)
-                val wc: U64 = self.pushExpr(e: <Expr.Call nameStart=writeN.nameStart nameLen=writeN.nameLen args=wargs />)
-                stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=wc />))
+            // every `@[Name]` — `@[Eq]`/`@[Hash]` included — is a real derive macro now
+            // (a type/trait implementing `Derive`), so all are run the same way.
+            // directive arguments must set publicly-settable fields (enforce the
+            // construction rule the post-checks pass skipped for this synthetic Make).
+            self.checkDirectiveArgsPublic(d: d)
+            // `parseItem(source: <item src>, start: declStart, end: declEnd)` — the
+            // annotated item's own source slice, with its original offset so the macro
+            // sees spans in original coordinates. (Synthesized post-checks, so the
+            // free-fn cross-module use of `parseItem` bypasses import hygiene.)
+            val srcLit: Bind = self.internSourceLiteral(from: d.declStart, to: d.declEnd)
+            val srcE: U64 = self.pushExpr(e: <Expr.Str start=srcLit.nameStart len=srcLit.nameLen />)
+            val startE: U64 = self.pushExpr(e: <Expr.Int value=d.declStart offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
+            val endE: U64 = self.pushExpr(e: <Expr.Int value=d.declEnd offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
+            mut val pargs: Array[Arg] = []
+            pargs.append(<Arg expr=srcE isInout=false labelStart=srcN.nameStart labelLen=srcN.nameLen hasLabel=true />)
+            pargs.append(<Arg expr=startE isInout=false labelStart=startN.nameStart labelLen=startN.nameLen hasLabel=true />)
+            pargs.append(<Arg expr=endE isInout=false labelStart=endN.nameStart labelLen=endN.nameLen hasLabel=true />)
+            val parseCall: U64 = self.pushExpr(e: <Expr.Call nameStart=parseN.nameStart nameLen=parseN.nameLen args=pargs />)
+            // the receiver of `.derive`: a bare `@[X]` (no args) names the type/trait X
+            // directly (assoc `Derive`); `@[X(args)]` constructs `<X args/>` first
+            // (instance `ParameterizedDerive`, `self` = the config).
+            mut val recv: U64 = 0
+            if d.args.count() == 0 {
+                recv = self.pushExpr(e: <Expr.Ident start=d.nameStart len=d.nameLen />)
+            } else {
+                recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=d.args />)
             }
+            // `recv.derive(input: parseItem(...))`
+            mut val dargs: Array[Arg] = []
+            dargs.append(<Arg expr=parseCall isInout=false labelStart=inputN.nameStart labelLen=inputN.nameLen hasLabel=true />)
+            val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=deriveN.nameStart nameLen=deriveN.nameLen args=dargs />)
+            // `write(s: <that>)`.
+            mut val wargs: Array[Arg] = []
+            wargs.append(<Arg expr=call isInout=false labelStart=sN.nameStart labelLen=sN.nameLen hasLabel=true />)
+            val wc: U64 = self.pushExpr(e: <Expr.Call nameStart=writeN.nameStart nameLen=writeN.nameLen args=wargs />)
+            stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=wc />))
             i += 1
         }
         val blkId: U64 = self.arena.blocks.count()
