@@ -1,0 +1,10 @@
+// `<` is trait-backed (Ord). `String` conforms to `Eq` (`impl String as Eq`) but
+// NOT to `Ord` — a collection/string has no intrinsic total order witness — so
+// `str < str` must be a clean "needs an Ord witness" reject, not a blind byte
+// comparison. (Since the removal of the structural Eq/Ord shortcut, every
+// conformance is an explicit `impl`; String's missing `Ord` now fails the operator.)
+fn main() {
+    val a: String = "x"
+    val b: String = "y"
+    if a < b { }
+}

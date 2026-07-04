@@ -322,21 +322,12 @@ pub impl Comp {
         }
     }
 
-    inout fn builtinEqOrd(typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
-        val isEqOrd: Bool = rangeEquals(bytes: self.arena.bytes, start: traitStart, len: traitLen, kw: "Eq") || rangeEquals(bytes: self.arena.bytes, start: traitStart, len: traitLen, kw: "Ord")
-        if isEqOrd {
-            if self.isPrimType(start: typeStart, len: typeLen) {
-                return true
-            }
-            return rangeEquals(bytes: self.arena.bytes, start: typeStart, len: typeLen, kw: "String")
-        }
-        return false
-    }
-
     inout fn typeConformsTo(typeStart: U64, typeLen: U64, traitStart: U64, traitLen: U64) -> Bool {
-        if self.builtinEqOrd(typeStart: typeStart, typeLen: typeLen, traitStart: traitStart, traitLen: traitLen) {
-            return true
-        }
+        // No structural shortcut for Eq/Ord: every conformance is an explicit `impl` (spec/12,
+        // operators are trait sugar). Primitives conform via their real `impl I64 as Eq`/`as
+        // Ord` witnesses in Core/Num.pw, String via `impl String as Eq` in Core — all recorded
+        // in decls.conforms below. A type with no witness (String/Bool have no `Ord`) correctly
+        // fails the bound, the same clean reject a missing struct/enum witness gives.
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         val qTrait: U64 = intern(c: inout self, start: traitStart, len: traitLen)
         mut val i: U64 = 0
