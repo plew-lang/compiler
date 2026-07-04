@@ -704,14 +704,16 @@ export extern "plew-intrinsic" {
     fn bufferClear[T](buffer: inout Buffer[T])
     fn bufferTruncate[T](buffer: inout Buffer[T], count: U64)
     // Raw byte-compare of two buffers over `count * sizeof(T)` bytes — EXACT value equality
-    // only when the element type has no padding and no heap-owned fields (a scalar). The
-    // `Buffer as Eq` witness gates this behind `bufferBytewiseComparable` and otherwise
-    // compares element-by-element via `T`'s own `Eq`. (collections.md §1.)
+    // only when the element type is an INTEGER (its bits ARE its value). The `Buffer as Eq`
+    // witness gates this behind `bufferBytewiseComparable` and otherwise compares element-by-
+    // element via `T`'s own `Eq`. (collections.md §1.)
     fn bufferEq[T](lhs: Buffer[T], rhs: Buffer[T]) -> Bool
-    // Whether `T` is byte-comparable (a scalar: memcmp equals value equality). Lowered to a
-    // COMPILE-TIME constant per monomorphized `T` (the backend inspects the element LLVM
-    // type), so the `if` selecting memcmp vs the element-wise loop folds to one static path —
-    // no runtime branch, and scalar buffers (`Buffer[U8]`) keep the memcmp fast path.
+    // Whether `T` is byte-comparable (an INTEGER element: memcmp equals value equality).
+    // Lowered to a COMPILE-TIME constant per monomorphized `T` (the backend inspects the
+    // element LLVM type), so the `if` selecting memcmp vs the element-wise loop folds to one
+    // static path — no runtime branch, and integer buffers (`Buffer[U8]`) keep the memcmp fast
+    // path. FLOAT elements return false (memcmp diverges from IEEE `==`: `-0.0`==`+0.0`, NaN
+    // must panic), so they compare via `F64`/`F32`'s own `Eq` witness like any other element.
     fn bufferBytewiseComparable[T](buffer: Buffer[T]) -> Bool
 }
 

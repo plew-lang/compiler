@@ -603,6 +603,11 @@ pub impl LlvmCtx {
         // recvInstRef: the operand instance for an `assoc fn` witness (`impl[T] Array[T]
         // as Eq` -> Array[I64]), so emitOneGenFn can bind `Self`/`Item` to the receiver
         // (its `Self` params/field access ground). 0 for a free-function witness.
+        // ⚠ genFnSlotFor keys the instance cache on (fnIdx, args) ONLY, not recvInstRef —
+        // sound today because each `impl T as Eq` has a distinct `eq` fnIdx, so (fnIdx, args)
+        // determines the receiver. A trait-provided DEFAULT `assoc fn` shared across receiver
+        // types (same fnIdx, args=[], differing recvInstRef) would alias to the first-seen
+        // `Self` — add recvInstRef to the key if that lands.
         c.monoWork.fnInsts.append(<FnInst fnIdx=fnIdx args=args recvInstRef=recvInstRef />)
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs

@@ -32,4 +32,15 @@ fn main() {
     val rs: Array[Point] = [<Point x=1 y=2 />, <Point x=3 y=9 />]
     print(boolI(b: ps == qs))  // 1
     print(boolI(b: ps == rs))  // 0
+
+    // float element -> element-wise F64.eq (NOT bytewise memcmp), so it matches scalar
+    // IEEE `==`: `-0.0 == +0.0` is true even though the bits differ.
+    val fs: Array[F64] = [1.5, 2.5]
+    val gs: Array[F64] = [1.5, 2.5]
+    val hs: Array[F64] = [1.5, 9.9]
+    print(boolI(b: fs == gs))  // 1
+    print(boolI(b: fs == hs))  // 0
+    val zp: Array[F64] = [0.0]
+    val zn: Array[F64] = [-0.0]
+    print(boolI(b: zp == zn))  // 1  (F64.eq: -0.0 == +0.0, not bytewise)
 }

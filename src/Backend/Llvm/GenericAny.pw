@@ -388,6 +388,10 @@ pub impl LlvmCtx {
             // element would compare only its first word. Fill any uninferred (0) param from the
             // receiver instance's args, which align 1:1 with the impl's type params (Buffer[T]
             // -> T = element). This grounds the element so `get`/element-`==` see the real type.
+            // ⚠ ASSUMES an IDENTITY impl (`impl[P] Foo[P]` — witness type param i ↔ receiver
+            // arg i). All operator witnesses today are identity (Buffer[T]/Array[T]); a future
+            // non-identity witness (`impl[T] Foo[Pair[T]] as Eq`, a multi-param/reordered Eq)
+            // would fill the wrong arg here and must instead unify param types against recvInst.
             if recvInst != 0U64 {
                 val ra: Array[U64] = c.arena.types[recvInst].args
                 mut val ti2: U64 = 0
@@ -399,6 +403,19 @@ pub impl LlvmCtx {
                     }
                     ti2 += 1
                 }
+            }
+            // A witness type param still uninferred after the receiver-arg fill would ground
+            // its element to i64 and compare a multi-word struct by its first word only — a
+            // SILENT wrong result. Refuse loudly instead (hidden behavior is forbidden): this
+            // fires only if an operand's type couldn't be recovered with concrete args (an
+            // argless/ungrounded receiver ref), which no reachable operator-witness path hits
+            // today; the guard keeps a future one from miscompiling silently.
+            mut val ci: U64 = 0
+            while ci < targs.count() {
+                if targs[ci] == 0U64 {
+                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "cannot ground a type argument of this operator's witness — the operand's element type is not statically recoverable here; annotate the operand's type or bind it to a typed local")
+                }
+                ci += 1
             }
         }
         val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: targs, recvInstRef: recvInst)

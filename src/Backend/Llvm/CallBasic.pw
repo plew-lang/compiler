@@ -236,17 +236,19 @@ pub impl LlvmCtx {
             return self.genLlvmBufferEq(c: inout c, lhs: args[0].expr, rhs: args[1].expr)
         }
         // COMPILE-TIME constant: is the element type byte-comparable (memcmp == value eq)?
-        // True only for a scalar element (integer/float LLVM kind) — a struct/enum/pointer
-        // element has padding or heap-owned fields, so `Buffer as Eq` must fall to the
-        // element-wise witness loop. Emitting a constant `i1` lets that source-level `if`
-        // fold to a single static path (no runtime branch; scalars keep memcmp).
+        // True ONLY for an INTEGER element (LLVM kind 8) — its bit pattern is its value, so
+        // memcmp matches `iN.eq` exactly. FLOATS are excluded (kinds 2/3): memcmp of the raw
+        // bits diverges from the element's real `F64`/`F32` witness — `-0.0`/`+0.0` are equal
+        // under IEEE `oeq` but differ bytewise, and a NaN element must PANIC (spec/02) yet
+        // memcmp silently reports NaN==NaN equal. A struct/enum/pointer element likewise has
+        // padding or heap-owned fields. All non-integer elements fall to the element-wise
+        // witness loop (each element's own `eq`), so array `==` never diverges from scalar
+        // `==`. The constant `i1` folds the source-level `if` to a single static path.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferBytewiseComparable") {
             val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: args[0].expr)
             val k: U32 = LLVMGetTypeKind(elemTy)
             mut val bytewise: U64 = 0
             if k == 8U32 { bytewise = 1U64 }
-            if k == 2U32 { bytewise = 1U64 }
-            if k == 3U32 { bytewise = 1U64 }
             return LLVMConstInt(self.i1ty, bytewise, 0I32)
         }
         // `Ref`/`WeakRef` control-block intrinsics (spec/03), backing weak()/upgrade(). The
