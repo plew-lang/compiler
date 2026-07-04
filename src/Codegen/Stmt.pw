@@ -25,51 +25,11 @@ pub impl Comp {
         return false
     }
 
-    // Whether every variant of the named enum is nullary (no payload). Tag-only
-    // `==` is exact for such enums; payload-bearing enums need structural Eq.
-    inout fn isAllNullary(start: U64, len: U64) -> Bool {
-        val qId: U64 = intern(c: inout self, start: start, len: len)
-        mut val ei: U64 = 0
-        while ei < self.arena.enums.count() {
-            val e: EnumDef = self.arena.enums[ei]
-            if e.nameId == qId {
-                val vars: Array[Variant] = e.variants
-                mut val vi: U64 = 0
-                while vi < vars.count() {
-                    val v: Variant = vars[vi]
-                    if v.fields.count() > 0 {
-                        return false
-                    }
-                    vi += 1
-                }
-                return true
-            }
-            ei += 1
-        }
-        return false
-    }
-
-    // Whether `lhs OP rhs` is an enum `==` / `!=`. Provisional: lowered to a tag
-    // (variant) comparison, NOT a payload-aware structural Eq. For all-nullary
-    // enums this coincides with structural equality; full Eq comes with @[Eq].
-    inout fn isEnumEq(op: I64, lhs: U64) -> Bool {
-        if op != opEq() {
-            if op != opNe() {
-                return false
-            }
-        }
-        val lt: TypeInfo = self.typeOf(id: lhs)
-        if lt.kind == 2 {
-            return self.isEnumName(start: lt.nameStart, len: lt.nameLen)
-        }
-        return false
-    }
-
-    // Acceptance soundness: comparison operators (== != < <= > >=) are trait-backed
-    // (Eq/Ord). The compiler hardcodes them for numbers, String `==`/`!=`, and
-    // all-nullary enum `==`; applied to a struct or array there is no Eq/Ord, so it
-    // must be a compile error rather than broken C. (Reached only after the
-    // String-eq and enum-eq paths have been ruled out.)
+    // Acceptance soundness: comparison operators (== != < <= > >=) are pure trait sugar
+    // (Eq/Ord, spec/12). Numbers/String/derived-`@[Eq]` types conform via a real witness
+    // (resolved by hasCompareWitness); anything else — a struct/enum/array with no witness
+    // — has no comparison and must be a clean compile error rather than broken codegen.
+    // (Reached only after the witness path has been ruled out.)
     // The comparison operand type for witness lookup. A `newtype` inherits its underlying's
     // `Eq`/`Ord` with `Self` substituted, so a comparison of two values of the SAME newtype
     // resolves to the underlying's witness; a newtype compared with anything else stays the
@@ -101,10 +61,11 @@ pub impl Comp {
         if lt.kind == 3 {
             return true
         }
+        // A named aggregate — struct OR enum — with no witness (a witnessed type is
+        // accepted by hasCompareWitness before this) needs an explicit `Eq`/`Ord` impl.
+        // Enums are no longer exempt: there is no built-in tag comparison, so a bare
+        // `enum ==` without `@[Eq]` is a clean "needs a witness" error, same as a struct.
         if lt.kind == 2 {
-            if self.isEnumName(start: lt.nameStart, len: lt.nameLen) {
-                return false
-            }
             return true
         }
         return false

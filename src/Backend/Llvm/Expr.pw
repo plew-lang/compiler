@@ -135,70 +135,16 @@ pub impl LlvmCtx {
                 }
                 mut val l: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
                 mut val r: LLVMValueRef = self.genLlvmExpr(c: inout c, id: rhs)
-                // struct ==/!= : structural (field-by-field) equality (the Eq witness).
-                if op == opEq() || op == opNe() {
-                    val sidxE: U64 = self.exprStructIdx(c: inout c, id: lhs)
-                    if sidxE < c.arena.structs.count() {
-                        if self.structEqSupported(c: inout c, sidx: sidxE) {
-                            val eqv: LLVMValueRef = self.emitStructEq(c: inout c, a: l, b: r, sidx: sidxE)
-                            if op == opNe() {
-                                return LLVMBuildNot(self.b, eqv, anon())
-                            }
-                            return eqv
-                        }
-                    }
-                    // enum ==/!= : a payload-less enum compares by tag (field 0). A
-                    // payload-carrying enum needs a per-variant switch (deferred).
-                    mut val eidE: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-                    if eidE >= c.arena.enums.count() {
-                        eidE = self.exprEnumIdx(c: inout c, id: rhs)
-                    }
-                    if eidE < c.arena.enums.count() {
-                        if enumPayloadless(c: inout c, eid: eidE) {
-                            val tagL: LLVMValueRef = LLVMBuildExtractValue(self.b, l, 0U64, anon())
-                            val tagR: LLVMValueRef = LLVMBuildExtractValue(self.b, r, 0U64, anon())
-                            mut val pred: U32 = llvmIntEq()
-                            if op == opNe() {
-                                pred = llvmIntNe()
-                            }
-                            return LLVMBuildICmp(self.b, pred, tagL, tagR, anon())
-                        }
-                        // a payload-carrying enum with all-scalar payloads: tag + word
-                        // bit-equality (correct on the zero-initialized payload).
-                        if self.enumEqWordable(c: inout c, eid: eidE) {
-                            val eqv: LLVMValueRef = self.emitEnumEqWords(c: inout c, l: l, r: r, eid: eidE)
-                            if op == opNe() {
-                                return LLVMBuildNot(self.b, eqv, anon())
-                            }
-                            return eqv
-                        }
-                    }
-                }
-                // struct ordering (`< <= > >=`): lexicographic field compare (the Ord
-                // witness) -> an i32 ordering compared against 0.
-                if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                    val sidxO: U64 = self.exprStructIdx(c: inout c, id: lhs)
-                    if sidxO < c.arena.structs.count() {
-                        if self.structOrdSupported(c: inout c, sidx: sidxO) {
-                            return self.emitStructOrdOp(c: inout c, op: op, a: l, b: r, sidx: sidxO)
-                        }
-                    }
-                    // enum ordering (`< <= > >=`): tag-then-payload lexicographic compare.
-                    mut val eidO: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-                    if eidO >= c.arena.enums.count() {
-                        eidO = self.exprEnumIdx(c: inout c, id: rhs)
-                    }
-                    if eidO < c.arena.enums.count() {
-                        if self.enumOrdSupported(c: inout c, eid: eidO) {
-                            return self.emitEnumOrdOp(c: inout c, op: op, a: l, b: r, eid: eidO, sty: LLVMTypeOf(l))
-                        }
-                    }
-                }
-                // any remaining struct/enum (aggregate) operand routes through an Eq/Ord
-                // witness in the C backend; not modeled here — reject loudly rather than
-                // emit an invalid icmp/arith on an aggregate.
+                // A struct/enum (aggregate) operand reaching here carries NO witness for
+                // this operator. Comparison and arithmetic are pure trait sugar (spec/12):
+                // `==`/`!=` desugar solely to `Eq.eq`, `< <= > >=` to `Ord.compare`, `+`…
+                // to `Add.add`… — all resolved above. The backend no longer synthesizes a
+                // structural field-by-field eq/ord fallback, so a type without the witness
+                // is a clean "no witness" error (the same reject a missing trait impl gives
+                // elsewhere), not a silently fabricated comparison. Scalars (integer kind 8)
+                // fall through to the direct `icmp` path below.
                 if LLVMGetTypeKind(LLVMTypeOf(l)) != 8U32 {
-                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: struct/enum operator (Eq/Ord/Add/... witness) not yet supported")
+                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "no witness for this operator on a struct/enum operand — `==`/`!=` need `impl T as Eq` (e.g. derive `@[Eq]`), `< <= > >=` need `impl T as Ord`, arithmetic needs the matching operator trait; the backend does not synthesize structural comparison")
                     return LLVMConstInt(self.i1ty, 0U64, 0I32)
                 }
                 // normalize operand widths: a context-less literal defaults to i64 but

@@ -1817,19 +1817,6 @@ fn strDecodeBytes(c: inout Comp, start: U64, len: U64) -> Array[U8] {
     return out
 }
 
-// Whether every variant of an enum is payload-less (so `==` is a tag comparison;
-// payload-carrying enums need a per-variant switch, deferred).
-fn enumPayloadless(c: inout Comp, eid: U64) -> Bool {
-    val ed: EnumDef = c.arena.enums[eid]
-    mut val i: U64 = 0
-    while i < ed.variants.count() {
-        if ed.variants[i].fields.count() > 0U64 {
-            return false
-        }
-        i += 1
-    }
-    return true
-}
 
 // Whether a struct is registerable as a named LLVM value type in this increment:
 // non-generic, non-extern, non-unique, and every field is either an array (the

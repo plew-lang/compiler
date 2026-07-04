@@ -1,0 +1,30 @@
+// `@[Eq]` on a payload-less enum, through the real derive pipeline (`plew gen`
+// synthesizes `Paren.eq` — a tag match — into App.gen.pw). This is the pure-witness
+// replacement for the backend's old ad-hoc enum tag-compare: `==`/`!=` on a
+// payload-less enum dispatch the derived Eq witness, no built-in machinery.
+// (The enum is NOT named `Kind`: a gen test force-loads @Plew/Syntax, whose own
+// `Kind` token enum would otherwise collide with a module-0 type of the same name.)
+import @Std/Io with { print }
+
+@[Eq]
+enum Paren {
+    LParen
+    RParen
+    Int
+}
+
+fn classify(k: Paren) -> I64 {
+    if k == <Paren.LParen /> {
+        return 1
+    }
+    if k != <Paren.Int /> {
+        return 2
+    }
+    return 3
+}
+
+fn main() {
+    print(classify(k: <Paren.LParen />))
+    print(classify(k: <Paren.RParen />))
+    print(classify(k: <Paren.Int />))
+}

@@ -426,12 +426,8 @@ pub impl Comp {
         if self.hasCompareWitness(op: op, lhs: lhs, rhs: rhs) {
             return
         }
-        if self.isEnumEq(op: op, lhs: lhs) {
-            self.verifyEnumEqPayload(lhs: lhs, rhs: rhs)
-            return
-        }
         if self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "comparison needs Eq/Ord; not available for a struct or array")
+            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison")
             return
         }
         if self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs) {
@@ -439,23 +435,6 @@ pub impl Comp {
         }
         if self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
             compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
-        }
-    }
-
-    inout fn verifyEnumEqPayload(lhs: U64, rhs: U64) {
-        val lt: TypeInfo = self.typeOf(id: lhs)
-        mut val enStart: U64 = 0
-        mut val enLen: U64 = 0
-        if lt.kind == 2 {
-            enStart = lt.nameStart
-            enLen = lt.nameLen
-        } else {
-            val rt: TypeInfo = self.typeOf(id: rhs)
-            enStart = rt.nameStart
-            enLen = rt.nameLen
-        }
-        if !(self.isAllNullary(start: enStart, len: enLen)) {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "enum == needs structural Eq for payload variants (only all-nullary enums compare by tag)")
         }
     }
 

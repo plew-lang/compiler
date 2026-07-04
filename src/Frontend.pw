@@ -664,8 +664,13 @@ export fn runFrontend() -> Comp {
             }
             // auto-part (spec/16): a file annotated with `@[...]` pulls in its
             // generated sibling `<file>.gen.pw` as a part of the same module (when it
-            // exists); suppressed in gen mode, which is producing that sibling.
-            if !(genMode) {
+            // exists). In gen mode this is suppressed ONLY for the entry (module 0) —
+            // that is the file whose `.gen.pw` this `--gen` run is producing, so parting
+            // its (stale/absent) sibling would be wrong. A DEPENDENCY's committed
+            // `.gen.pw` (e.g. @Plew/Syntax's `Kind` Eq witness) is a pre-built artifact
+            // and MUST still be parted, else the dependency's own `==` loses its witness
+            // during the harness compile (now that the backend synthesizes no fallback).
+            if !(genMode) || moduleId != 0U64 {
                 if sawDirective {
                     val genPath: Array[U8] = genSiblingPath(path: path)
                     if genPath.count() != 0 {

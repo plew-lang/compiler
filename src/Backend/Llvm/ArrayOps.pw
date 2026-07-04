@@ -458,9 +458,9 @@ pub impl LlvmCtx {
 
     // `bufferEq(lhs, rhs)`: element-wise equality (spec/02 — the floor's `==` is NOT pointer
     // identity). For a POD element type this is a byte compare of `count * sizeof(T)` bytes
-    // (lengths differ -> unequal). `Array`/`String` `@[Eq]` ride this through their buffer
-    // field. (Element types that own heap would need element-wise Eq; covered as the element
-    // is itself `@[Eq]` and `cmpFieldEq` recurses — POD is the common floor case here.)
+    // (lengths differ -> unequal). `Array`/`String` `as Eq` ride this through their buffer
+    // field. (Element types that own heap would need element-wise Eq via the element's own
+    // `Eq` witness; POD is the common floor case handled here.)
     inout fn genLlvmBufferEq(c: inout Comp, lhs: U64, rhs: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: lhs)
         val size: LLVMValueRef = LLVMSizeOf(elemTy)
