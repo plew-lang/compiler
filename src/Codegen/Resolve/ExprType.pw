@@ -42,17 +42,28 @@ pub impl Comp {
             }
             Expr.Ident(val start, val len) => {
                 if self.isSelfRef(start: start, len: len) {
-                    if self.cur.recvInstRef != 0 {
-                        val rt: TypeRef = self.arena.types[self.cur.recvInstRef]
+                    // the grounded Self instance ref. At backend emission `cur.recvInstRef` is
+                    // NOT set (it drives front-end mono only); the per-instance Self is carried
+                    // in `cur.selfRef` (setSelfItemEnv / emitOneGenMethod), so a `self` inside a
+                    // provided or adapter method reports the CONCRETE instance
+                    // (`SkipIter[Counter,I64]`), not the base receiver. Prefer selfRef, then the
+                    // front-end recvInstRef, then the declared receiver name. (The typeOf cache
+                    // gate excludes selfRef!=0 so this instance-specific answer is never cached.)
+                    mut val sref: U64 = self.cur.selfRef
+                    if sref == 0U64 {
+                        sref = self.cur.recvInstRef
+                    }
+                    if sref != 0U64 {
+                        val rt: TypeRef = self.arena.types[sref]
                         // self inside an `impl Array[T]` method types as an array (kind 3,
                         // element name) so the array/raw intrinsics dispatch on it.
                         if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                             if rt.args.count() == 1 {
                                 val en: Bind = self.arrayElemNameForRef(elemRef: rt.args[0])
-                                return <TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=self.cur.recvInstRef />
+                                return <TypeInfo kind=3 nameStart=en.nameStart nameLen=en.nameLen ref=sref />
                             }
                         }
-                        return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=self.cur.recvInstRef />
+                        return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=sref />
                     }
                     return self.typeInfoOfName(start: self.cur.recvStart, len: self.cur.recvLen, isArray: false)
                 }
@@ -242,8 +253,17 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
-                if self.isGenericInst(ref: ty) {
-                    return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=ty />
+                // ground the constructed instance's ref under the active env so a generic
+                // build inside a generic body (`<Box v=x />` with x: T) reports the CONCRETE
+                // instance (`Box[U8]`), matching the backend — not the parametric `Box[T]`.
+                mut val g: U64 = ty
+                if ty != 0U64 {
+                    if self.cur.typeParams.count() > 0U64 {
+                        g = self.groundTypeRef(ref: ty)
+                    }
+                }
+                if self.isGenericInst(ref: g) {
+                    return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=g />
                 }
                 return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 />
             }
@@ -435,6 +455,8 @@ pub impl Comp {
                                 // args inferred from the call; Self/Item resolve to the receiver
                                 // inst and its element (else the chain's loop var types as the
                                 // literal `Item`/`B`).
+                                val gSavedSelf: U64 = self.cur.selfRef
+                                val gSavedItem: U64 = self.cur.itemRef
                                 self.setSelfItemEnv(recvStart: gt.nameStart, recvLen: gt.nameLen, recvInstRef: rt.ref)
                                 val gSavedP: Array[Bind] = self.cur.typeParams
                                 val gSavedA: Array[U64] = self.cur.typeArgs
@@ -460,7 +482,8 @@ pub impl Comp {
                                 val gr: U64 = self.groundTypeRef(ref: mf.retTy)
                                 self.cur.typeParams = gSavedP
                                 self.cur.typeArgs = gSavedA
-                                self.clearSelfItemEnv()
+                                self.cur.selfRef = gSavedSelf
+                                self.cur.itemRef = gSavedItem
                                 return self.typeInfoOfRef(ref: gr)
                             }
                             val gei: U64 = self.genericEnumIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
@@ -475,6 +498,8 @@ pub impl Comp {
                         // provided combinator (`Counter.filter() -> FilterIter[Self,…,Item]`)
                         // yields `FilterIter[Counter,…,I64]`, not the literal template.
                         if self.isGenericInst(ref: mf.retTy) {
+                            val g2SavedSelf: U64 = self.cur.selfRef
+                            val g2SavedItem: U64 = self.cur.itemRef
                             self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: 0)
                             // a generic method (`Counter.map[B]`): bind its method-own type
                             // params from the call (B from the closure arg) so the return
@@ -488,7 +513,8 @@ pub impl Comp {
                             val gr2: U64 = self.groundTypeRef(ref: mf.retTy)
                             self.cur.typeParams = savedTP
                             self.cur.typeArgs = savedTA
-                            self.clearSelfItemEnv()
+                            self.cur.selfRef = g2SavedSelf
+                            self.cur.itemRef = g2SavedItem
                             return self.typeInfoOfRef(ref: gr2)
                         }
                         return self.typeInfoOfName(start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)

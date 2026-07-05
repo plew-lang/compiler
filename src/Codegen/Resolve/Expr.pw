@@ -118,7 +118,7 @@ pub impl Comp {
                 // instance. So we return the fresh instance-specific type WITHOUT caching:
                 // a generic body's slots stay unfilled and are recomputed per instance (perf
                 // is secondary). Non-generic bodies always fill — their env is clear.
-                if self.cur.recvInstRef == 0U64 && self.cur.typeParams.count() == 0U64 {
+                if self.cur.recvInstRef == 0U64 && self.cur.typeParams.count() == 0U64 && self.cur.selfRef == 0U64 && self.cur.itemRef == 0U64 {
                     self.typeCache.kind[id] = t.kind
                     self.typeCache.start[id] = t.nameStart
                     self.typeCache.len[id] = t.nameLen

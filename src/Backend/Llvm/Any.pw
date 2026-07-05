@@ -368,6 +368,12 @@ pub impl LlvmCtx {
     // substitution env, if any — used for both plain functions and generic instances).
     inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef) {
         val f: Func = c.arena.funcs[fi]
+        // save the Self/Item env so this body fully restores it on exit — the body binds `self`
+        // and sets cur.selfRef from the receiver ref (see the self-local binding below), which
+        // must not leak into the next body (a pf-drain / free-fn emission has no per-call
+        // save/restore around genLlvmFuncBody).
+        val savedSelfFB: U64 = c.cur.selfRef
+        val savedItemFB: U64 = c.cur.itemRef
         self.curFn = fv
         self.curIsMain = false
         self.curRetVoid = !f.hasRet
@@ -498,6 +504,13 @@ pub impl LlvmCtx {
                 }
             }
             self.pushLocalR(nameStart: self.selfStart, nameLen: self.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)
+            // keep the front-end `self` type in lockstep with the bound self local's ref: the
+            // backend reads this local's typeRef (recvRef), exprType's `self` branch reads
+            // cur.selfRef — set from the SAME value so the two type-recovery engines agree for
+            // `self` in every emission path (restored from savedSelfFB on body exit).
+            if recvRef != 0U64 {
+                c.cur.selfRef = recvRef
+            }
             // a `move fn` self is owned (deinit'd in the callee); `fn`/`inout fn`/
             // `borrow fn` self is a borrow the caller owns.
             self.setLocalOwned(owned: f.selfMove)
@@ -527,5 +540,9 @@ pub impl LlvmCtx {
         if didSelf {
             c.clearSelfItemEnv()
         }
+        // restore the Self/Item env captured on entry (covers the self-local's cur.selfRef set
+        // above, so it never leaks past this body).
+        c.cur.selfRef = savedSelfFB
+        c.cur.itemRef = savedItemFB
     }
 }
