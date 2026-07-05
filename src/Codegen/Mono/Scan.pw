@@ -70,13 +70,19 @@ pub impl Comp {
         self.cur.typeParams = params
         self.cur.typeArgs = instArgs
         val grounded: U64 = self.groundTypeRef(ref: at.args[0])
+        // carry the STRUCTURED `Array[<grounded elem>]` ref alongside the kind-3
+        // element-name view (a compound element's name is a mangle — `Entry_K_V` —
+        // so without the ref, downstream element recovery re-interns the mangle as
+        // a meaningless name-ref). Existing kind-3 consumers key off the kind and
+        // the element name; the ref only ADDS recoverable structure.
+        val aref: U64 = self.arrayRefOfElem(elemRef: grounded)
         mut val ti: TypeInfo = scalarInfo()
         if self.isCompoundType(ref: grounded) {
             val mn: Bind = self.appendMangleSpan(ref: grounded)
-            ti = <TypeInfo kind=3 nameStart=mn.nameStart nameLen=mn.nameLen ref=0 />
+            ti = <TypeInfo kind=3 nameStart=mn.nameStart nameLen=mn.nameLen ref=aref />
         } else {
             val gt: TypeRef = self.arena.types[grounded]
-            ti = <TypeInfo kind=3 nameStart=gt.nameStart nameLen=gt.nameLen ref=0 />
+            ti = <TypeInfo kind=3 nameStart=gt.nameStart nameLen=gt.nameLen ref=aref />
         }
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA

@@ -460,11 +460,53 @@ pub impl Comp {
                                 }
                             }
                         }
+                        // a GENERIC assoc fn / factory (`Array.overBuffer(buffer:)` on
+                        // `impl[T] Array[T]`): its declared return mentions the impl's own
+                        // type params, so ground it under the args INFERRED from the call
+                        // (T = U8 from `buffer: Buffer[U8]`) — the template form
+                        // (`Array[T]`) would mis-ground under the enclosing body's env.
+                        if af.typeParams.count() > 0U64 && af.retTy != 0U64 {
+                            // only a COMPLETE inference is trusted (every param bound to a
+                            // real ref): grounding under a partial env (an argless factory)
+                            // yields a garbage inst (`Set[<sentinel>]`) that poisons every
+                            // downstream consumer. Partial -> fall through to the
+                            // name-level recovery below.
+                            val ainf: Array[U64] = self.inferFnArgs(f: af, args: args)
+                            mut val aComplete: Bool = ainf.count() >= af.typeParams.count()
+                            mut val aci: U64 = 0
+                            while aci < ainf.count() {
+                                if ainf[aci] == 0U64 {
+                                    aComplete = false
+                                }
+                                aci += 1
+                            }
+                            if aComplete {
+                                val aSavedP: Array[Bind] = self.cur.typeParams
+                                val aSavedA: Array[U64] = self.cur.typeArgs
+                                self.cur.typeParams = af.typeParams
+                                self.cur.typeArgs = ainf
+                                val agr: U64 = self.groundTypeRef(ref: af.retTy)
+                                self.cur.typeParams = aSavedP
+                                self.cur.typeArgs = aSavedA
+                                if agr != 0U64 && self.tyRefIsGround(ref: agr) {
+                                    return self.typeInfoOfRef(ref: agr)
+                                }
+                            }
+                        }
                         return self.typeInfoOfName(start: af.retStart, len: af.retLen, isArray: af.retIsArray)
                     }
                     return scalarInfo()
                 }
                 mut val rt: TypeInfo = self.exprType(id: recv)
+                // a newtype receiver inherits its underlying's members (spec/10):
+                // resolve the name to the underlying BEFORE method lookup (`u.bytes()`
+                // where `newtype UserId = String` dispatches String's `bytes`).
+                if rt.nameLen > 0U64 {
+                    val ntu: Bind = self.newtypeUnderName(start: rt.nameStart, len: rt.nameLen)
+                    if ntu.nameStart != rt.nameStart {
+                        rt = <TypeInfo kind=rt.kind nameStart=ntu.nameStart nameLen=ntu.nameLen ref=rt.ref />
+                    }
+                }
                 // a NAMED prim receiver (kind 0 carrying its name: `n.format(…)` on U64)
                 // joins the concrete-receiver path: its `impl U64 { … }` methods resolve
                 // through the same findMethod table, and a prim is never a generic inst,
@@ -643,6 +685,16 @@ pub impl Comp {
                             if mf.retTy < self.arena.types.count() {
                                 val rtt: TypeRef = self.arena.types[mf.retTy]
                                 if rtt.nameId == mf.typeParams[0].nameId {
+                                    // element result (`arr.get(i:) -> T`): prefer the
+                                    // STRUCTURED element ref off the carried `Array[E]`
+                                    // (a compound element's registered name is a mangle
+                                    // — `Entry_K_V` — meaningless as a name-ref).
+                                    if rt.ref != 0U64 && rt.ref < self.arena.types.count() {
+                                        val art: TypeRef = self.arena.types[rt.ref]
+                                        if art.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: art.nameStart, len: art.nameLen, kw: "Array") {
+                                            return self.typeInfoOfRef(ref: art.args[0])
+                                        }
+                                    }
                                     return self.typeInfoOfName(start: rt.nameStart, len: rt.nameLen, isArray: false)
                                 }
                             }
