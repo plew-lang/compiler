@@ -969,6 +969,17 @@ export struct Cursor {
     pub mut val itemRef: U64 = 0
     pub mut val typeParams: Array[Bind] = []
     pub mut val typeArgs: Array[U64] = []
+    // the BODY-scoped instance env (typed-IR read path): a snapshot of
+    // typeParams/typeArgs/selfRef/itemRef taken at body-emission entry
+    // (genLlvmFuncBody), immune to the transient callee-env swaps the emission
+    // does while resolving calls (grounding a callee's param types clobbers
+    // cur.typeParams — reads of CALLER exprs must still ground under the
+    // caller's env). groundedTypeOf grounds against these. rustc analog: the
+    // Instance args of the body being compiled, not an ambient cursor.
+    pub mut val bodyTypeParams: Array[Bind] = []
+    pub mut val bodyTypeArgs: Array[U64] = []
+    pub mut val bodySelfRef: U64 = 0
+    pub mut val bodyItemRef: U64 = 0
     pub mut val closureId: U64 = 0
     pub mut val inClosure: Bool = false
     pub mut val captureMark: U64 = 0

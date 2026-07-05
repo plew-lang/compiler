@@ -212,7 +212,15 @@ pub impl Comp {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 self.recordExpr(exprId: init)
                 self.recordArrayLitCtx(exprId: init, ctxRef: ty)
-                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
+                // an UNANNOTATED let (`mut val it = self`) infers its local type from the
+                // init (rustc-style local inference) — without this every later read of
+                // the local is unknown. The declared annotation wins when present.
+                if tyLen == 0U64 {
+                    val iti: TypeInfo = self.exprType(id: init)
+                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: iti.nameStart, tyLen: iti.nameLen, isArray: iti.kind == 3, ty: self.typedIrRefOfInfo(ti: iti), isInout: false, isMut: mutable, owned: true)
+                } else {
+                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
+                }
             }
             Stmt.Assign(val target, val value) => {
                 self.recordExpr(exprId: target)

@@ -174,17 +174,33 @@ pub impl Comp {
         return self.tyRefOfInfo(ti: ti)
     }
 
-    // The grounded TypeRef of expression `id` under the CURRENT instance env — the typed-IR
+    // The grounded TypeRef of expression `id` under the BODY instance env — the typed-IR
     // read口 that replaces the backend's per-form exprTypeRef re-derivation. If the parametric
     // store has this expr's type (recorded during a locals-populated front-end walk), SUBSTITUTE
-    // the instance's type args into it (groundTypeRef resolves `T`/`Self`/`Item` from cur env);
-    // an already-grounded / scalar parametric ref grounds to itself. Otherwise fall back to the
-    // instance-independent typeCache/typeOf projection (a non-generic body's expr, unrecorded).
+    // the emitted body's type args into it (groundTypeRef resolves `T`/`Self`/`Item`);
+    // an already-grounded / scalar parametric ref grounds to itself. Grounding uses the
+    // body-scoped env snapshot (cur.body*) — NOT the ambient cursor, which call
+    // resolution transiently points at a CALLEE's env while this expr belongs to the
+    // caller. Falls back to the instance-independent typeCache/typeOf projection (a
+    // node the record pass could not reach).
     inout fn groundedTypeOf(id: U64) -> U64 {
         if id < self.parametricRef.count() {
             val pr: U64 = self.parametricRef[id]
             if pr != 0U64 {
-                return self.groundTypeRef(ref: pr)
+                val savedP: Array[Bind] = self.cur.typeParams
+                val savedA: Array[U64] = self.cur.typeArgs
+                val savedS: U64 = self.cur.selfRef
+                val savedI: U64 = self.cur.itemRef
+                self.cur.typeParams = self.cur.bodyTypeParams
+                self.cur.typeArgs = self.cur.bodyTypeArgs
+                self.cur.selfRef = self.cur.bodySelfRef
+                self.cur.itemRef = self.cur.bodyItemRef
+                val g: U64 = self.groundTypeRef(ref: pr)
+                self.cur.typeParams = savedP
+                self.cur.typeArgs = savedA
+                self.cur.selfRef = savedS
+                self.cur.itemRef = savedI
+                return g
             }
         }
         return self.typedIrRefOfInfo(ti: self.typeOf(id: id))

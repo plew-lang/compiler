@@ -5,6 +5,97 @@
 // of a field/index/method are precise; everything else falls back to scalar.
 
 pub impl Comp {
+
+    // The declared return TypeInfo of trait `traitNameId`'s member `qName` (requirement
+    // or provided method, supertraits included) — the type-recovery analog of
+    // traitProvidesMember, for typing a method reached through a type parameter's
+    // bounds. A bare `Self` return maps back to the PARAMETRIC receiver name
+    // (tpStart/tpLen — the conformer IS the type param, so it grounds per instance); a
+    // structured return mentioning `Self`/`Item` stays unknown for now (recording it
+    // raw would let the ENCLOSING method's Self substitute in — a different Self).
+    inout fn traitMemberRetInfo(traitNameId: U64, qName: U64, args: Array[Arg], tpStart: U64, tpLen: U64, depth: U64) -> TypeInfo {
+        if depth > 64U64 {
+            return scalarInfo()
+        }
+        mut val ti: U64 = 0
+        while ti < self.decls.traits.count() {
+            val t: TraitDef = self.decls.traits[ti]
+            if t.nameId == traitNameId {
+                mut val ri: U64 = 0
+                while ri < t.reqs.count() {
+                    val r: Func = t.reqs[ri]
+                    if r.nameId == qName {
+                        if self.paramsLabelsOk(params: r.params, args: args) {
+                            return self.boundRetInfoOf(f: r, tpStart: tpStart, tpLen: tpLen)
+                        }
+                    }
+                    ri += 1
+                }
+                mut val sti: U64 = 0
+                while sti < t.supertraits.count() {
+                    val sup: Bind = t.supertraits[sti]
+                    val supId: U64 = intern(c: inout self, start: sup.nameStart, len: sup.nameLen)
+                    val sr: TypeInfo = self.traitMemberRetInfo(traitNameId: supId, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: depth + 1U64)
+                    if sr.nameLen != 0U64 {
+                        return sr
+                    }
+                    sti += 1
+                }
+            }
+            ti += 1
+        }
+        mut val gi: U64 = 0
+        while gi < self.arena.funcs.count() {
+            val g: Func = self.arena.funcs[gi]
+            if g.hasRecv && g.recvId == traitNameId && g.nameId == qName {
+                if self.paramsLabelsOk(params: g.params, args: args) {
+                    return self.boundRetInfoOf(f: g, tpStart: tpStart, tpLen: tpLen)
+                }
+            }
+            gi += 1
+        }
+        return scalarInfo()
+    }
+
+    inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {
+        if !(f.hasRet) {
+            return scalarInfo()
+        }
+        if !(f.retIsArray) {
+            if rangeEquals(bytes: self.arena.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
+                return <TypeInfo kind=2 nameStart=tpStart nameLen=tpLen ref=0 />
+            }
+        }
+        // a structured return (`Optional[Self]`, an `Item`-mentioning combinator) is
+        // left unknown: its inner Self/Item belong to the BOUND trait, not the
+        // enclosing method's env, so recording the raw ref would mis-ground.
+        if self.isGenericInst(ref: f.retTy) {
+            return scalarInfo()
+        }
+        return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+    }
+
+    // The return TypeInfo of `value.name(args)` where `value: T` and T is a bound type
+    // parameter of `fnIdx` — rustc-style bound-based method typing: search each of T's
+    // bound traits for the member and take its declared return.
+    inout fn boundMethodRetInfo(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> TypeInfo {
+        val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count() {
+            val fb: FuncBound = self.decls.funcBounds[bi]
+            if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
+                val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
+                val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64)
+                if r.nameLen != 0U64 {
+                    return r
+                }
+            }
+            bi += 1
+        }
+        return scalarInfo()
+    }
+
     inout fn exprType(id: U64) -> TypeInfo {
         val e: Expr = self.arena.exprs[id]
         match e {
@@ -374,7 +465,17 @@ pub impl Comp {
                     return scalarInfo()
                 }
                 mut val rt: TypeInfo = self.exprType(id: recv)
-                if rt.kind == 2 {
+                // a NAMED prim receiver (kind 0 carrying its name: `n.format(…)` on U64)
+                // joins the concrete-receiver path: its `impl U64 { … }` methods resolve
+                // through the same findMethod table, and a prim is never a generic inst,
+                // so the generic-receiver blocks are naturally inert for it.
+                if rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0) {
+                    // a method on a BOUND type-parameter value (`value.format()` where
+                    // value: T, T: Format): the bound trait's member signature types the
+                    // result (rustc-style bound-based method typing).
+                    if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
+                        return self.boundMethodRetInfo(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    }
                     // a method call on `self` (Self) in a trait provided-method body being
                     // abstract-checked: resolve the result from the trait requirement's
                     // declared return type (concrete primitive/String only, so a `Self`/

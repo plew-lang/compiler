@@ -523,8 +523,25 @@ pub impl LlvmCtx {
             self.setLocalOwned(owned: f.params[pi].isMove)
             pi += 1
         }
+        // snapshot the BODY instance env for the typed-IR read path (groundedTypeOf):
+        // taken after the emitters (emitOneGenFn/emitOneGenMethod) set the instance's
+        // typeParams/typeArgs and after the self-local bound cur.selfRef above, so a
+        // read during this body grounds under THIS env even while call resolution
+        // transiently swaps cur.typeParams/selfRef to a callee's.
+        val savedBodyP: Array[Bind] = c.cur.bodyTypeParams
+        val savedBodyA: Array[U64] = c.cur.bodyTypeArgs
+        val savedBodyS: U64 = c.cur.bodySelfRef
+        val savedBodyI: U64 = c.cur.bodyItemRef
+        c.cur.bodyTypeParams = c.cur.typeParams
+        c.cur.bodyTypeArgs = c.cur.typeArgs
+        c.cur.bodySelfRef = c.cur.selfRef
+        c.cur.bodyItemRef = c.cur.itemRef
         self.curBodyMark = self.nLocals
         self.genLlvmBlock(c: inout c, id: f.body)
+        c.cur.bodyTypeParams = savedBodyP
+        c.cur.bodyTypeArgs = savedBodyA
+        c.cur.bodySelfRef = savedBodyS
+        c.cur.bodyItemRef = savedBodyI
         if !(self.terminated) {
             // fall-through: the body block dropped its body locals; now drop owned
             // params (a `move` param / `move fn` self the callee deinits).
