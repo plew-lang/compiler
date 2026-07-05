@@ -347,9 +347,61 @@ pub impl LlvmCtx {
         }
     }
 
-    // The owning struct index of an expression (Ident local / Make), or
-    // c.arena.structs.count() if it is not a (resolvable) struct value.
+    // TOTAL-REF: the struct def index a (grounded) TypeRef denotes, or the sentinel
+    // (structs.count()) for a non-struct ref. The single ref→struct-idx map that
+    // exprStructIdx derives from. An `Array`/`String` head resolves to that registered def
+    // (an array/String VALUE dispatches as the Array/String struct — matching the classifier
+    // tail); a generic instance → its registered gen-struct def; any other named type →
+    // localStructIdxFor (a bare registered struct, or the sentinel for a scalar/enum/
+    // newtype-over-scalar). Array/String are checked before isGenericInst since an `Array[E]`
+    // ref is gen-instance-pinned but must map to the Array def, not a gen slot.
+    inout fn structIdxOfRef(c: inout Comp, ref: U64) -> U64 {
+        if ref == 0U64 {
+            return c.arena.structs.count()
+        }
+        if ref >= c.arena.types.count() {
+            return c.arena.structs.count()
+        }
+        val t: TypeRef = c.arena.types[ref]
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            return c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
+            return c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
+        }
+        if c.isGenericInst(ref: ref) {
+            val gs: U64 = self.genStructSlot(c: inout c, ref: ref)
+            if gs < self.genStructRefs.count() {
+                return self.genStructDefs[gs]
+            }
+            return c.arena.structs.count()
+        }
+        return self.localStructIdxFor(c: inout c, start: t.nameStart, len: t.nameLen)
+    }
+
+    // The owning struct index of an expression. TOTAL-REF collapse (ref-primary): derive it
+    // from the expr's TypeRef via structIdxOfRef — the single ref→struct-idx map — whenever
+    // the ref resolves a struct, so the ref is the authority and the per-form classifier can
+    // no longer drift from it. Falls back to the classifier (exprStructIdxRaw) only for the
+    // residual populate gaps where exprTypeRef is still 0 (dominated by bare-struct Idents
+    // whose locTypeRef isn't populated yet — closed by populating locTypeRef next). Applied at
+    // EMISSION only: the collection phase keeps the classifier (its env-specific struct-idx
+    // feeds instance discovery and is not yet validated against the ref path). Shadow-proven:
+    // at emission structIdxOfRef never yields a WRONG struct — only this equal-or-more-precise
+    // result, or the sentinel when the ref is unpopulated (→ fall back).
     inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
+        if !(c.inCollection) {
+            val nw: U64 = self.structIdxOfRef(c: inout c, ref: self.exprTypeRef(c: inout c, id: id))
+            if nw < c.arena.structs.count() {
+                return nw
+            }
+        }
+        return self.exprStructIdxRaw(c: inout c, id: id)
+    }
+
+    // The per-form struct-idx classifier (Ident local / Make / …), or c.arena.structs.count()
+    // if not a resolvable struct value. The fallback for exprStructIdx's populate gaps.
+    inout fn exprStructIdxRaw(c: inout Comp, id: U64) -> U64 {
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
