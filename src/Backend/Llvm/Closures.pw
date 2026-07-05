@@ -324,6 +324,14 @@ pub impl LlvmCtx {
                                     if self.enumRegSlot(c: inout c, start: cap.tyStart, len: cap.tyLen) < self.genEnumRefs.count() {
                                         cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
                                     }
+                                    // TOTAL-REF: a bare (non-generic) struct capture (`val p: Pt`
+                                    // used in a closure body) carries its TypeRef so exprTypeRef
+                                    // recovers it; formerly left 0 (recovered via struct-idx).
+                                    if cRef == 0U64 {
+                                        if self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen) < c.arena.structs.count() {
+                                            cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
+                                        }
+                                    }
                                 }
                             }
                             mut val cElem: LLVMTypeRef = self.i64ty

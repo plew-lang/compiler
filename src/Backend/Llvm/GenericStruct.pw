@@ -333,12 +333,16 @@ pub impl LlvmCtx {
                 // the same Index/Iterator/generic witnesses as a bound array — no literal
                 // type-name special case (collections.md E3).
                 val er: U64 = self.arrayLitElemRef(c: inout c, elems: elems)
+                val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+                mut val aargs: Array[U64] = []
                 if er != 0U64 {
-                    val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
-                    mut val aargs: Array[U64] = []
                     aargs.append(er)
-                    return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
                 }
+                // TOTAL-REF: even an EMPTY literal `[]` (element type absent at the literal — a
+                // typed-IR gap the frontend would close) carries an argless `Array` ref, which
+                // structIdxOfRef resolves by name so a `[].count()` still recovers the Array
+                // struct from the ref, retiring the exprStructIdxRaw Array-literal special case.
+                return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
             }
             Expr.OptChain(val base, val memberStart, val memberLen) => {
                 // `base?.member : Optional[U]` — so a chained `a?.b?.c` types its inner.
@@ -405,7 +409,7 @@ pub impl LlvmCtx {
                     return rc.typeRef
                 }
             }
-            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
+            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, fields: _) => {
                 // a struct/enum construction: carry its (grounded) instance ref so a field
                 // access / chained method on the freshly-built value recovers the substitution
                 // env AND valueArc dispatches on the constructed value. TOTAL-REF: this now
@@ -419,6 +423,13 @@ pub impl LlvmCtx {
                         g = c.groundTypeRef(ref: ty)
                     }
                     return g
+                }
+                // a bare struct build whose `ty` node the parser left unset: synthesize the ref
+                // from the head name so exprStructIdx still derives the struct-idx from the ref.
+                if !(isEnum) {
+                    if typeLen > 0U64 {
+                        return c.simpleTypeRef(nameStart: typeStart, nameLen: typeLen)
+                    }
                 }
             }
             // a value-position `if`/`match`: its TypeRef is a (non-diverging) branch's `give`
@@ -453,13 +464,38 @@ pub impl LlvmCtx {
             // No `_` catch-all: every Expr variant is classified so a new one forces a decision.
             Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {}
             Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {}
-            Expr.Str(start: _, len: _) => {}
+            // TOTAL-REF: a string literal is a `String` value (a registered struct); carry its ref
+            // so a String-typed use recovers the struct-idx from the ref, not the String-name tail.
+            Expr.Str(start: _, len: _) => {
+                val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
+                return c.simpleTypeRef(nameStart: sb.nameStart, nameLen: sb.nameLen)
+            }
             Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {}
-            // a unary/binary operator result: the witness fn's return type drives chaining via
-            // exprStructIdx; in every exercised case it is concrete (not a generic instance), so
-            // no instance ref to track here → 0.
-            Expr.Unary(op: _, operand: _) => {}
-            Expr.Binary(op: _, lhs: _, rhs: _) => {}
+            // TOTAL-REF: a unary/binary operator result used as a struct (`(a + b).x`, `(-m).cents`)
+            // carries the witness fn's return-type ref, so exprStructIdx derives its struct-idx from
+            // the ref uniformly (mirrors the exprStructIdxRaw witness-ret classifier).
+            Expr.Unary(val op, val operand) => {
+                val uwfi: U64 = self.unaryWitnessFn(c: inout c, op: op, operand: operand)
+                if uwfi < c.arena.funcs.count() {
+                    if c.arena.funcs[uwfi].hasRet {
+                        if c.arena.funcs[uwfi].retLen > 0U64 {
+                            return c.simpleTypeRef(nameStart: c.arena.funcs[uwfi].retStart, nameLen: c.arena.funcs[uwfi].retLen)
+                        }
+                    }
+                }
+            }
+            Expr.Binary(val op, val lhs, val rhs) => {
+                if isBinTraitOp(op: op) {
+                    val wfi: U64 = self.binWitnessFn(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                    if wfi < c.arena.funcs.count() {
+                        if c.arena.funcs[wfi].hasRet {
+                            if c.arena.funcs[wfi].retLen > 0U64 {
+                                return c.simpleTypeRef(nameStart: c.arena.funcs[wfi].retStart, nameLen: c.arena.funcs[wfi].retLen)
+                            }
+                        }
+                    }
+                }
+            }
             // `x as T` where T is a generic instance (`x as Box[I32]`): its instance ref, so a
             // chained method on the cast result recovers the env. A scalar/plain-struct cast has
             // no tracked instance ref → 0 (resolved via exprStructIdx).
@@ -480,6 +516,13 @@ pub impl LlvmCtx {
                 if cr != 0U64 {
                     return cr
                 }
+                // a bare-struct cast target (`x as Point`): the cast ref names a registered
+                // struct, so carry it (TOTAL-REF) — exprStructIdx then derives the struct-idx.
+                if cref != 0U64 {
+                    if self.structIdxOfRef(c: inout c, ref: cref) < c.arena.structs.count() {
+                        return cref
+                    }
+                }
             }
             // `try e` (e: Result[T,E]): the unwrapped value is a T — its instance ref when T is
             // a generic instance, so `(try mk()).method()` on a generic payload recovers the env.
@@ -490,6 +533,11 @@ pub impl LlvmCtx {
                     val rt: TypeRef = c.arena.types[er]
                     if rt.args.count() > 0U64 {
                         if c.isGenericInst(ref: rt.args[0]) {
+                            return rt.args[0]
+                        }
+                        // a bare-struct (or String) Ok payload (`try mk() : Result[Point,E]`):
+                        // carry the payload ref so exprStructIdx derives the struct-idx (TOTAL-REF).
+                        if self.structIdxOfRef(c: inout c, ref: rt.args[0]) < c.arena.structs.count() {
                             return rt.args[0]
                         }
                     }

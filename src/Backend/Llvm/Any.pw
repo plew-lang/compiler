@@ -459,6 +459,15 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            // TOTAL-REF: a bare (non-generic) struct receiver (`impl Point { fn m() }`). Track
+            // its TypeRef so `self` and `self.field` recover the struct-idx from the ref uniformly
+            // (formerly left 0, recovered via recvSidx classifier — the dominant Ident gap). Set
+            // before the extension-view layering below so `self#Ext` still wraps this ref's args.
+            if recvRef == 0U64 {
+                if recvSidx < c.arena.structs.count() {
+                    recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+                }
+            }
             mut val selfPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
             if !(f.selfInout) {
                 selfPtr = self.entryAlloca(ty: recvTy)

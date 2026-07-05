@@ -359,6 +359,22 @@ pub impl LlvmCtx {
                         pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
                     }
                 }
+                // TOTAL-REF: a bare (non-generic) registered-struct param (`fn f(p: Point)`).
+                // Formerly left 0 (recovered via localStructIdxFor at each use), leaving
+                // exprTypeRef(p) unpopulated and forcing exprStructIdx onto the classifier. Track
+                // the struct's TypeRef so the struct-idx derives from the ref uniformly. gs2/gl2
+                // covers a generic-`T` param grounded to a struct; pgStart/pgLen covers a `Self`
+                // param (`assoc fn eq(lhs~: Self)` on a struct conformance) grounded to the recv.
+                if pRef == 0U64 {
+                    if self.localStructIdxFor(c: inout c, start: gs2, len: gl2) < c.arena.structs.count() {
+                        pRef = c.simpleTypeRef(nameStart: gs2, nameLen: gl2)
+                    }
+                }
+                if pRef == 0U64 {
+                    if self.localStructIdxFor(c: inout c, start: pgStart, len: pgLen) < c.arena.structs.count() {
+                        pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
+                    }
+                }
             }
         }
         // ground a generic param type for its kind (a `key: K` with K -> String must be

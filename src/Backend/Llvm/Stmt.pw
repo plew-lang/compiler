@@ -275,6 +275,25 @@ pub impl LlvmCtx {
                         }
                     }
                 }
+                // TOTAL-REF: a bare (non-generic) registered-struct local — `val p: Point = …`
+                // (annotated) or `val p = mkPoint()` (un-annotated, RHS a struct). Formerly left
+                // 0 (recovered via locStructIdx), which left exprTypeRef(p) unpopulated and forced
+                // exprStructIdx onto the classifier fallback. Track the struct's TypeRef so the
+                // struct-idx derives from the ref uniformly and valueArc dispatches on the local.
+                if tref == 0U64 {
+                    if !(isArr) {
+                        if tyLen > 0U64 {
+                            if self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen) < c.arena.structs.count() {
+                                tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
+                            }
+                        } else {
+                            val sref: U64 = self.exprTypeRef(c: inout c, id: init)
+                            if self.structIdxOfRef(c: inout c, ref: sref) < c.arena.structs.count() {
+                                tref = sref
+                            }
+                        }
+                    }
+                }
                 // a `mut val` captured by a closure (Swift-style reference capture) is
                 // stored in a heap cell that outlives this scope; locPtr IS that cell, so
                 // reads/writes and the closure share it. Otherwise a plain stack alloca.

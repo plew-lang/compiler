@@ -95,7 +95,7 @@ pub impl LlvmCtx {
                 si = self.localStructIdxFor(c: inout c, start: tStart, len: tLen)
             }
         }
-        return <ResolvedExpr structIdx=si typeRef=tr />
+        return <ResolvedExpr structIdx=si typeRef=self.structFallbackRef(c: inout c, tr: tr, si: si) />
     }
 
     // The single classification of a free CALL's result — struct-idx AND type-ref AND
@@ -109,6 +109,25 @@ pub impl LlvmCtx {
     // ALSO carries its declared ref (callRetRef); struct-idx stays the authority for which
     // struct it is, and the ref drives valueArc's ARC dispatch on the result value.
     // (`pow`'s Pow-Output special case stays local to exprTypeRef, before this.)
+    // TOTAL-REF: when a resolver knows the result STRUCT (struct-idx) but carries no ref — a
+    // bare non-generic struct, the old struct-idx-only partition — synthesize the ref from the
+    // struct's name so exprTypeRef is total and exprStructIdx can derive the idx from the ref.
+    // Guarded by a round-trip (structIdxOfRef(synth) == si): the ref is adopted only when it
+    // resolves back to the same struct, so a generic-head-without-instance case (where the bare
+    // name would not round-trip) is left at 0 rather than silently mis-resolved.
+    inout fn structFallbackRef(c: inout Comp, tr: U64, si: U64) -> U64 {
+        if tr != 0U64 {
+            return tr
+        }
+        if si < c.arena.structs.count() {
+            val syn: U64 = c.simpleTypeRef(nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
+            if self.structIdxOfRef(c: inout c, ref: syn) == si {
+                return syn
+            }
+        }
+        return tr
+    }
+
     inout fn resolveCall(c: inout Comp, id: U64) -> ResolvedExpr {
         match c.arena.exprs[id] {
             Expr.Call(nameStart: _, nameLen: _, val args) => {
@@ -141,7 +160,7 @@ pub impl LlvmCtx {
                     }
                     tr = self.callRetRef(c: inout c, ref: cf.retTy)
                 }
-                return <ResolvedExpr structIdx=si typeRef=tr isArray=cf.retIsArray />
+                return <ResolvedExpr structIdx=si typeRef=self.structFallbackRef(c: inout c, tr: tr, si: si) isArray=cf.retIsArray />
             }
             _ => {
                 return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
@@ -190,7 +209,7 @@ pub impl LlvmCtx {
                         isArr = true
                     }
                 }
-                return <ResolvedExpr structIdx=si typeRef=tr isArray=isArr />
+                return <ResolvedExpr structIdx=si typeRef=self.structFallbackRef(c: inout c, tr: tr, si: si) isArray=isArr />
             }
             _ => {
                 return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
@@ -308,6 +327,31 @@ pub impl LlvmCtx {
                         if bli < self.nLocals {
                             tr = self.locElemTypeRef[bli]
                         }
+                        // TOTAL-REF: a `Buffer[E]` / `Array[E]` local whose element ref was not
+                        // separately pinned (a Buffer subscript in user code) — peel the element
+                        // from the base's own instance ref so exprTypeRef recovers the element.
+                        if tr == 0U64 {
+                            val br: U64 = self.exprTypeRef(c: inout c, id: base)
+                            if br != 0U64 {
+                                val bt: TypeRef = c.arena.types[br]
+                                // the subscript RESULT type peeled from the base collection's
+                                // instance ref: Array[E]/Buffer[E] → E (arg 0); Dictionary[K,V] →
+                                // V (arg 1). A struct result then resolves via the ref uniformly.
+                                if bt.args.count() > 0U64 {
+                                    if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Array") {
+                                        tr = bt.args[0]
+                                    }
+                                    if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Buffer") {
+                                        tr = bt.args[0]
+                                    }
+                                }
+                                if bt.args.count() > 1U64 {
+                                    if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Dictionary") {
+                                        tr = bt.args[1]
+                                    }
+                                }
+                            }
+                        }
                     }
                     Expr.Field(base: val fb, nameStart: val fns2, nameLen: val fnl2) => {
                         val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
@@ -339,7 +383,7 @@ pub impl LlvmCtx {
                         isArr = true
                     }
                 }
-                return <ResolvedExpr structIdx=si typeRef=tr isArray=isArr />
+                return <ResolvedExpr structIdx=si typeRef=self.structFallbackRef(c: inout c, tr: tr, si: si) isArray=isArr />
             }
             _ => {
                 return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
@@ -382,13 +426,13 @@ pub impl LlvmCtx {
     // The owning struct index of an expression. TOTAL-REF collapse (ref-primary): derive it
     // from the expr's TypeRef via structIdxOfRef — the single ref→struct-idx map — whenever
     // the ref resolves a struct, so the ref is the authority and the per-form classifier can
-    // no longer drift from it. Falls back to the classifier (exprStructIdxRaw) only for the
-    // residual populate gaps where exprTypeRef is still 0 (dominated by bare-struct Idents
-    // whose locTypeRef isn't populated yet — closed by populating locTypeRef next). Applied at
-    // EMISSION only: the collection phase keeps the classifier (its env-specific struct-idx
-    // feeds instance discovery and is not yet validated against the ref path). Shadow-proven:
-    // at emission structIdxOfRef never yields a WRONG struct — only this equal-or-more-precise
-    // result, or the sentinel when the ref is unpopulated (→ fall back).
+    // no longer drift from it. At EMISSION the populate is COMPLETE: a shadow over self-compile
+    // + the whole corpus finds ZERO cases where the classifier resolves a struct the ref-path
+    // misses, so exprStructIdxRaw is dead code on the emission path — kept only as (a) the
+    // collection-phase engine (inCollection bypasses the ref-path: the ref machinery / gen-struct
+    // slots aren't ready during registration) and (b) a defensive net. Shadow-proven: structIdxOfRef
+    // never yields a WRONG struct — only the equal-or-more-precise result, or the sentinel (→ fall
+    // back). Retiring the classifier fully needs collection-phase ref-readiness (a separate change).
     inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
         if !(c.inCollection) {
             val nw: U64 = self.structIdxOfRef(c: inout c, ref: self.exprTypeRef(c: inout c, id: id))
