@@ -110,8 +110,9 @@ pub impl LlvmCtx {
     // retStart/retLen as the value struct, but for an `Array[E]` return that names the
     // ELEMENT — routing `mk() == mk()` to the element's witness). An array return is left
     // struct-idx-less (its element name is not the value's struct); the caller's array
-    // catch resolves it to the Array def. A bare non-generic struct return carries no ref
-    // (typeRef 0) and is recovered via structIdx — the same partition resolveField uses.
+    // catch resolves it to the Array def. TOTAL-REF: a bare non-generic struct return now
+    // ALSO carries its declared ref (callRetRef); struct-idx stays the authority for which
+    // struct it is, and the ref drives valueArc's ARC dispatch on the result value.
     // (`pow`'s Pow-Output special case stays local to exprTypeRef, before this.)
     inout fn resolveCall(c: inout Comp, id: U64) -> ResolvedExpr {
         match c.arena.exprs[id] {
@@ -153,18 +154,17 @@ pub impl LlvmCtx {
         }
     }
 
-    // The type ref a call result carries (exprTypeRef's partition): a return that carries
-    // type args (`Array[E]`, a generic instance, `Ref[T]`) is itself; a concrete scalar /
-    // String return keeps its ref (so `print[T]` infers T); a bare non-generic struct return
-    // yields 0 (recovered via structIdx instead). ref 0 in → 0 out.
+    // The type ref a call result carries. TOTAL-REF: a call result carries its
+    // (already-grounded) declared ref verbatim — a generic instance / `Array[E]` /
+    // `Ref[T]`, a concrete scalar / String, AND a bare non-generic struct/enum/newtype
+    // (formerly discarded to 0 and recovered by struct-idx). Carrying the bare-struct
+    // ref lets valueArc dispatch on it, so a struct's owned ARC-managed fields
+    // (String / Ref / Buffer / nested struct) are shallow-retained at by-value arg
+    // sites and released at scope exit — closing the latent under-retain that the old
+    // `→ 0` partition silently skipped. (`ref` is 0 only for a void return, which
+    // resolveCall filters via `hasRet` before calling here.)
     inout fn callRetRef(c: inout Comp, ref: U64) -> U64 {
-        if ref == 0U64 {
-            return 0U64
-        }
-        if self.typeRefCarriesArgs(c: inout c, ref: ref) {
-            return ref
-        }
-        return self.concreteLangItemRef(c: inout c, g: ref)
+        return ref
     }
 
     // The single classification of a METHOD call's result — the struct-idx, type-ref, and
