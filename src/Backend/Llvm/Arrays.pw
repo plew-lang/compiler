@@ -134,12 +134,11 @@ pub impl LlvmCtx {
                     return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array")
                 }
             }
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                // an array-returning call (`val a = mk()`): tracked as an array.
-                val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count() {
-                    return c.arena.funcs[cfi].retIsArray
-                }
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                // an array-returning call (`val a = mk()`): tracked as an array — via the
+                // shared resolver so exprStructIdx/exprTypeRef/exprIsArray agree on the Call
+                // form (see resolveCall).
+                return self.resolveCall(c: inout c, id: id).isArray
             }
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
                 // an array-returning method call (`s.bytes()` -> Array[U8], `h.items()`):

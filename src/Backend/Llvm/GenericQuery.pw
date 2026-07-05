@@ -103,6 +103,70 @@ pub impl LlvmCtx {
         return <ResolvedExpr structIdx=si typeRef=tr />
     }
 
+    // The single classification of a free CALL's result — struct-idx AND type-ref AND
+    // is-array computed once under one inferred-type-arg env, so the exprStructIdx /
+    // exprTypeRef / exprIsArray projections can no longer drift (the G1 bug was those
+    // three deriving the Call form independently: exprStructIdx read the return's
+    // retStart/retLen as the value struct, but for an `Array[E]` return that names the
+    // ELEMENT — routing `mk() == mk()` to the element's witness). An array return is left
+    // struct-idx-less (its element name is not the value's struct); the caller's array
+    // catch resolves it to the Array def. A bare non-generic struct return carries no ref
+    // (typeRef 0) and is recovered via structIdx — the same partition resolveField uses.
+    // (`pow`'s Pow-Output special case stays local to exprTypeRef, before this.)
+    inout fn resolveCall(c: inout Comp, id: U64) -> ResolvedExpr {
+        match c.arena.exprs[id] {
+            Expr.Call(nameStart: _, nameLen: _, val args) => {
+                val cfi: U64 = c.resolvedCallee(id: id)
+                if cfi >= c.arena.funcs.count() {
+                    return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
+                }
+                val cf: Func = c.arena.funcs[cfi]
+                if !(cf.hasRet) {
+                    return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
+                }
+                mut val si: U64 = c.arena.structs.count()
+                mut val tr: U64 = 0U64
+                if c.isGenericFreeFn(fi: cfi) {
+                    val savedP: Array[Bind] = c.cur.typeParams
+                    val savedA: Array[U64] = c.cur.typeArgs
+                    c.cur.typeParams = cf.typeParams
+                    c.cur.typeArgs = self.llvmInferFnArgs(c: inout c, f: cf, args: args)
+                    if !(cf.retIsArray) {
+                        si = self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
+                    }
+                    if cf.retTy != 0U64 {
+                        tr = self.callRetRef(c: inout c, ref: c.groundTypeRef(ref: cf.retTy))
+                    }
+                    c.cur.typeParams = savedP
+                    c.cur.typeArgs = savedA
+                } else {
+                    if !(cf.retIsArray) {
+                        si = self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
+                    }
+                    tr = self.callRetRef(c: inout c, ref: cf.retTy)
+                }
+                return <ResolvedExpr structIdx=si typeRef=tr isArray=cf.retIsArray />
+            }
+            _ => {
+                return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
+            }
+        }
+    }
+
+    // The type ref a call result carries (exprTypeRef's partition): a return that carries
+    // type args (`Array[E]`, a generic instance, `Ref[T]`) is itself; a concrete scalar /
+    // String return keeps its ref (so `print[T]` infers T); a bare non-generic struct return
+    // yields 0 (recovered via structIdx instead). ref 0 in → 0 out.
+    inout fn callRetRef(c: inout Comp, ref: U64) -> U64 {
+        if ref == 0U64 {
+            return 0U64
+        }
+        if self.typeRefCarriesArgs(c: inout c, ref: ref) {
+            return ref
+        }
+        return self.concreteLangItemRef(c: inout c, g: ref)
+    }
+
     // The pointee TypeRef T of an expression of type `Ref[T]` (for grounding `base->field`
     // under the pointee's instance env), or 0 if base is not a Ref. Mirror of the Deref
     // arm's resolution.
@@ -243,38 +307,14 @@ pub impl LlvmCtx {
                 // a value re-view has recv's struct (the view is zero-cost).
                 return self.exprStructIdx(c: inout c, id: recv)
             }
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                // a call result used as a struct (`firstOf(...).get()`): resolve the
-                // callee's return struct, grounding a generic return under the inferred
-                // type arguments.
-                val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count() {
-                    val cf: Func = c.arena.funcs[cfi]
-                    // an Array-returning call (`mk() -> Array[E]`) is an ARRAY value, not the
-                    // element struct: retStart/retLen names the ELEMENT (`Point` for
-                    // `Array[Point]`), so resolving it here would wrongly return the element's
-                    // struct (and route `mk() == mk()` to `Point.eq` instead of `Array.eq`).
-                    // Fall through to the array catch, which resolves it to the Array def so
-                    // index/method/`==` ride the Array witness — same as a bound array local.
-                    if cf.hasRet && !(cf.retIsArray) {
-                        if c.isGenericFreeFn(fi: cfi) {
-                            val savedP: Array[Bind] = c.cur.typeParams
-                            val savedA: Array[U64] = c.cur.typeArgs
-                            c.cur.typeParams = cf.typeParams
-                            c.cur.typeArgs = self.llvmInferFnArgs(c: inout c, f: cf, args: args)
-                            val r: U64 = self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
-                            c.cur.typeParams = savedP
-                            c.cur.typeArgs = savedA
-                            if r < c.arena.structs.count() {
-                                return r
-                            }
-                        } else {
-                            val r: U64 = self.localStructIdxFor(c: inout c, start: cf.retStart, len: cf.retLen)
-                            if r < c.arena.structs.count() {
-                                return r
-                            }
-                        }
-                    }
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                // a call result used as a struct (`firstOf(...).get()`): the callee's return
+                // struct, via the shared resolver (grounds a generic return, and leaves an
+                // Array return struct-idx-less so the array catch below resolves it — see
+                // resolveCall). A bare scalar/String return is struct-idx-less too.
+                val rc: ResolvedExpr = self.resolveCall(c: inout c, id: id)
+                if rc.structIdx < c.arena.structs.count() {
+                    return rc.structIdx
                 }
             }
             Expr.Unary(val op, val operand) => {

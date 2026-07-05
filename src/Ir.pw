@@ -152,6 +152,10 @@ export struct TypeInfo {
 export struct ResolvedExpr {
     pub val structIdx: U64
     pub val typeRef: U64
+    // is the resolved value an `Array[E]`? Part of the single classification the
+    // exprStructIdx / exprTypeRef / exprIsArray projections all read from one resolver
+    // (an array carries its element by name, so its ref/struct-idx alone can't say "array").
+    pub val isArray: Bool = false
 }
 
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.

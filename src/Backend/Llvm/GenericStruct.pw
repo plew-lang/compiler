@@ -436,37 +436,12 @@ pub impl LlvmCtx {
                 }
                 // a free call's grounded return TypeRef when it carries type args: an
                 // `Array[E]` (`mk().count()`/`mk()[i]`), a `Ref[T]` (`mk()->m()`), a generic
-                // instance, or an `any P`. A generic free fn's return is grounded under the
-                // inferred type args; a plain (non-type-carrying) return yields 0 (resolved via
-                // exprStructIdx instead). No per-head special case — one general resolution so
-                // every type-carrying return rides the same path (was: Array-only).
-                val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count() {
-                    val cf: Func = c.arena.funcs[cfi]
-                    mut val rt: U64 = cf.retTy
-                    if rt != 0U64 {
-                        if c.isGenericFreeFn(fi: cfi) {
-                            val savedP: Array[Bind] = c.cur.typeParams
-                            val savedA: Array[U64] = c.cur.typeArgs
-                            c.cur.typeParams = cf.typeParams
-                            c.cur.typeArgs = self.llvmInferFnArgs(c: inout c, f: cf, args: args)
-                            rt = c.groundTypeRef(ref: cf.retTy)
-                            c.cur.typeParams = savedP
-                            c.cur.typeArgs = savedA
-                        }
-                        if rt != 0U64 {
-                            if self.typeRefCarriesArgs(c: inout c, ref: rt) {
-                                return rt
-                            }
-                            // a concrete scalar / String return (`sumList(…) -> I64`): return its
-                            // ref too, so `print(f(…))` recovers the type for `print[T]` inference.
-                            // (A struct return stays 0 here and is recovered by exprStructIdx.)
-                            val cr: U64 = self.concreteLangItemRef(c: inout c, g: rt)
-                            if cr != 0U64 {
-                                return cr
-                            }
-                        }
-                    }
+                // instance, or an `any P`; a concrete scalar/String keeps its ref; a bare
+                // non-generic struct yields 0 (resolved via exprStructIdx). One shared resolver
+                // with exprStructIdx/exprIsArray so the Call form can't drift (see resolveCall).
+                val rc: ResolvedExpr = self.resolveCall(c: inout c, id: id)
+                if rc.typeRef != 0U64 {
+                    return rc.typeRef
                 }
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
