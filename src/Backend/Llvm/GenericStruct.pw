@@ -406,18 +406,19 @@ pub impl LlvmCtx {
                 }
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
-                // a generic struct/enum construction (`<Box[I32] …/>`): its instance ref
-                // (grounded under any active env), so a field access / chained method on the
-                // freshly-built value recovers the substitution env. A non-generic build has no
-                // instance ref to track (its struct is found by name), so → 0.
+                // a struct/enum construction: carry its (grounded) instance ref so a field
+                // access / chained method on the freshly-built value recovers the substitution
+                // env AND valueArc dispatches on the constructed value. TOTAL-REF: this now
+                // covers a BARE (non-generic) build too — the `ty` node the parser attached is
+                // the declared type, formerly discarded to 0 (struct found by name) which left
+                // the value's owned ARC fields unretained when passed by value. struct-idx stays
+                // the by-name authority; the ref rides alongside it.
                 if ty != 0U64 {
                     mut val g: U64 = ty
                     if c.cur.typeParams.count() > 0U64 {
                         g = c.groundTypeRef(ref: ty)
                     }
-                    if c.isGenericInst(ref: g) {
-                        return g
-                    }
+                    return g
                 }
             }
             // a value-position `if`/`match`: its TypeRef is a (non-diverging) branch's `give`
