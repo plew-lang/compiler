@@ -341,7 +341,7 @@ pub impl LlvmCtx {
                 // TOTAL-REF: even an EMPTY literal `[]` (element type absent at the literal — a
                 // typed-IR gap the frontend would close) carries an argless `Array` ref, which
                 // structIdxOfRef resolves by name so a `[].count()` still recovers the Array
-                // struct from the ref, retiring the exprStructIdxRaw Array-literal special case.
+                // struct from the ref (the former Array-literal struct-idx special case is gone).
                 return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
             }
             Expr.OptChain(val base, val memberStart, val memberLen) => {
@@ -473,7 +473,8 @@ pub impl LlvmCtx {
             Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {}
             // TOTAL-REF: a unary/binary operator result used as a struct (`(a + b).x`, `(-m).cents`)
             // carries the witness fn's return-type ref, so exprStructIdx derives its struct-idx from
-            // the ref uniformly (mirrors the exprStructIdxRaw witness-ret classifier).
+            // the ref uniformly (the sole witness-ret struct resolution now that the classifier
+            // is retired — exprStructIdx derives the struct-idx from this ref).
             Expr.Unary(val op, val operand) => {
                 val uwfi: U64 = self.unaryWitnessFn(c: inout c, op: op, operand: operand)
                 if uwfi < c.arena.funcs.count() {

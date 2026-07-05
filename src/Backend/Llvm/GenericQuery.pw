@@ -423,16 +423,17 @@ pub impl LlvmCtx {
         return self.localStructIdxFor(c: inout c, start: t.nameStart, len: t.nameLen)
     }
 
-    // The owning struct index of an expression. TOTAL-REF collapse (ref-primary): derive it
-    // from the expr's TypeRef via structIdxOfRef — the single ref→struct-idx map — whenever
-    // the ref resolves a struct, so the ref is the authority and the per-form classifier can
-    // no longer drift from it. At EMISSION the populate is COMPLETE: a shadow over self-compile
-    // + the whole corpus finds ZERO cases where the classifier resolves a struct the ref-path
-    // misses, so exprStructIdxRaw is dead code on the emission path — kept only as (a) the
-    // collection-phase engine (inCollection bypasses the ref-path: the ref machinery / gen-struct
-    // slots aren't ready during registration) and (b) a defensive net. Shadow-proven: structIdxOfRef
-    // never yields a WRONG struct — only the equal-or-more-precise result, or the sentinel (→ fall
-    // back). Retiring the classifier fully needs collection-phase ref-readiness (a separate change).
+    // The owning struct index of an expression, or c.arena.structs.count() (the sentinel) for a
+    // non-struct value. TOTAL-REF single source: derive it from the expr's TypeRef via
+    // structIdxOfRef — the one ref→struct-idx map — so the ref is the sole authority and no
+    // per-form classifier can drift from it. The old per-form classifier (exprStructIdxRaw) was
+    // RETIRED: a shadow over the self-compile + the whole corpus found ZERO exprs it resolved
+    // that the ref-path missed — every value form now carries a real ref (see exprTypeRef). The
+    // only residue is a REFLESS Array/String value (an indirect closure-call result, or any
+    // Array/String value whose ref didn't populate): resolved via the frontend type, tied to
+    // Array/String's representation pinning (collections.md §3-付録3), NOT a per-form fallback.
+    // (The `inCollection` guard is vestigial — exprStructIdx is only reachable during emission,
+    // where inCollection is always false; kept as a cheap invariant marker.)
     inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
         if !(c.inCollection) {
             val nw: U64 = self.structIdxOfRef(c: inout c, ref: self.exprTypeRef(c: inout c, id: id))
@@ -440,221 +441,18 @@ pub impl LlvmCtx {
                 return nw
             }
         }
-        return self.exprStructIdxRaw(c: inout c, id: id)
-    }
-
-    // The per-form struct-idx classifier (Ident local / Make / …), or c.arena.structs.count()
-    // if not a resolvable struct value. The fallback for exprStructIdx's populate gaps.
-    inout fn exprStructIdxRaw(c: inout Comp, id: U64) -> U64 {
-        match c.arena.exprs[id] {
-            Expr.Ident(val start, val len) => {
-                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if li < self.nLocals {
-                    if self.locStructIdx[li] < c.arena.structs.count() {
-                        return self.locStructIdx[li]
-                    }
-                    // an array local whose struct idx wasn't pinned (e.g. a closure-captured
-                    // `Array[E]` param) falls through to the array catch below, which resolves
-                    // it to the `Array` def so its index/method rides the witness; a plain
-                    // scalar local likewise falls through and the catch returns the sentinel.
-                }
-            }
-            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, val ty, fields: _) => {
-                if !(isEnum) {
-                    // a generic struct construction (`<Holder[I64] … />`): point at the
-                    // generic def so field access on the binding works.
-                    if c.isGenericInst(ref: ty) {
-                        val gs: U64 = self.genStructSlot(c: inout c, ref: ty)
-                        if gs < self.genStructRefs.count() {
-                            return self.genStructDefs[gs]
-                        }
-                    }
-                    return self.localStructIdxFor(c: inout c, start: typeStart, len: typeLen)
-                }
-            }
-            Expr.Field(val base, val nameStart, val nameLen) => {
-                // a nested-struct field access (`ln.b`): the field's declared type is
-                // itself a (registered) struct, so its struct index drives further
-                // field access / method dispatch on the result. Shared with `->field` (Arrow)
-                // via resolveField — one source for field grounding.
-                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: self.exprStructIdx(c: inout c, id: base), baseRef: self.exprTypeRef(c: inout c, id: base), nameStart: nameStart, nameLen: nameLen)
-                if rf.structIdx < c.arena.structs.count() {
-                    return rf.structIdx
-                }
-            }
-            Expr.Arrow(val base, val nameStart, val nameLen) => {
-                // a pointee field through a `Ref` deref (`r->inner`): resolves on the pointee
-                // struct exactly like `.`-field does, so `r->inner.method()` dispatches the
-                // result's struct. Same resolveField helper as Field — `->` and `.` field
-                // resolution stay in lockstep (no drift).
-                val rf: ResolvedExpr = self.resolveField(c: inout c, baseSi: self.refPointeeStructIdx(c: inout c, base: base), baseRef: self.refPointeeTypeRef(c: inout c, base: base), nameStart: nameStart, nameLen: nameLen)
-                if rf.structIdx < c.arena.structs.count() {
-                    return rf.structIdx
-                }
-            }
-            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                // a method/assoc-fn result used as a struct (`p.scaled().x`, `arr.get(i).key`):
-                // via the shared resolver so exprStructIdx/exprTypeRef/exprIsArray agree on the
-                // Method form (see resolveMethod). A non-struct result is struct-idx-less and
-                // falls through to the array catch below.
-                val rc: ResolvedExpr = self.resolveMethod(c: inout c, id: id)
-                if rc.structIdx < c.arena.structs.count() {
-                    return rc.structIdx
-                }
-            }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
-                // a value re-view has recv's struct (the view is zero-cost).
-                return self.exprStructIdx(c: inout c, id: recv)
-            }
-            Expr.Call(nameStart: _, nameLen: _, args: _) => {
-                // a call result used as a struct (`firstOf(...).get()`): the callee's return
-                // struct, via the shared resolver (grounds a generic return, and leaves an
-                // Array return struct-idx-less so the array catch below resolves it — see
-                // resolveCall). A bare scalar/String return is struct-idx-less too.
-                val rc: ResolvedExpr = self.resolveCall(c: inout c, id: id)
-                if rc.structIdx < c.arena.structs.count() {
-                    return rc.structIdx
-                }
-            }
-            Expr.Unary(val op, val operand) => {
-                // a unary operator result used as a struct (`(-m).cents`): the witness's
-                // return type drives further field access.
-                val uwfi: U64 = self.unaryWitnessFn(c: inout c, op: op, operand: operand)
-                if uwfi < c.arena.funcs.count() {
-                    if c.arena.funcs[uwfi].hasRet {
-                        return self.localStructIdxFor(c: inout c, start: c.arena.funcs[uwfi].retStart, len: c.arena.funcs[uwfi].retLen)
-                    }
-                }
-            }
-            Expr.Binary(val op, val lhs, val rhs) => {
-                // a binary operator result used as a struct (`(a + b).x`): the witness's
-                // return type drives further field access.
-                if isBinTraitOp(op: op) {
-                    val wfi: U64 = self.binWitnessFn(c: inout c, op: op, lhs: lhs, rhs: rhs)
-                    if wfi < c.arena.funcs.count() {
-                        if c.arena.funcs[wfi].hasRet {
-                            return self.localStructIdxFor(c: inout c, start: c.arena.funcs[wfi].retStart, len: c.arena.funcs[wfi].retLen)
-                        }
-                    }
-                }
-            }
-            Expr.Index(base: _, index: _) => {
-                // an array element used as a struct (`h.items[0].v`): the element struct via
-                // the shared resolver so exprStructIdx/exprTypeRef/exprIsArray agree on the
-                // Index form (see resolveIndex). A nested-array element is itself an Array (no
-                // element struct) and falls through to the array catch below.
-                val rc: ResolvedExpr = self.resolveIndex(c: inout c, id: id)
-                if rc.structIdx < c.arena.structs.count() {
-                    return rc.structIdx
-                }
-            }
-            Expr.Deref(val base) => {
-                // `*ref` (the pointee place behind `ref->method()`): the pointee struct index,
-                // so a registered-struct method on the pointee dispatches like a local receiver.
-                // (A generic-instance pointee resolves via exprTypeRef in the generic path.)
-                return self.refPointeeStructIdx(c: inout c, base: base)
-            }
-            // --- scalars and non-struct values: the correct answer to "what struct is this?"
-            // is "none" — they are not registered structs (their actual type is carried by the
-            // front-end `exprType`). A `Str` / `Array` literal falls through to the String /
-            // Array tail below. No `_` catch-all: every Expr variant is classified so a new one
-            // forces a decision here (the drift that caused the `->` gaps).
-            Expr.Int(value: _, offset: _, isBool: _, tyStart: _, tyLen: _, isNeg: _) => {}
-            Expr.Float(start: _, len: _, tyStart: _, tyLen: _) => {}
-            Expr.Str(start: _, len: _) => {}
-            Expr.Array(elems: _) => {}
-            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {}
-            // a value-position `if`/`match`: its struct is the struct of a (non-diverging)
-            // branch's `give` value (every branch has the same type) — delegate so a scalar
-            // branch yields "none" and a struct branch resolves, like a plain receiver.
-            Expr.IfExpr(cond: _, val thenBlk, elseBlk: _) => {
-                val gv: U64 = c.blockGiveExpr(blkId: thenBlk)
-                if gv < c.arena.exprs.count() {
-                    return self.exprStructIdx(c: inout c, id: gv)
-                }
-            }
-            Expr.MatchExpr(scrut: _, val arms) => {
-                mut val ai: U64 = 0
-                while ai < arms.count() {
-                    if !(arms[ai].isDiverge) {
-                        val gv: U64 = c.blockGiveExpr(blkId: arms[ai].body)
-                        if gv < c.arena.exprs.count() {
-                            return self.exprStructIdx(c: inout c, id: gv)
-                        }
-                    }
-                    ai += 1
-                }
-            }
-            // `move x` / `borrow x` evaluates to the operand's value, so its struct is the
-            // operand's.
-            Expr.Move(val operand, isBorrow: _) => {
-                return self.exprStructIdx(c: inout c, id: operand)
-            }
-            // `x as T` where T (or its newtype underlying) is a registered/generic struct:
-            // dispatch on T's struct, so `(x as Plain).method()` resolves like a plain receiver.
-            // A cast to a scalar/newtype-over-scalar yields the sentinel (localStructIdxFor) and
-            // falls through.
-            Expr.Cast(operand: _, val tyStart, val tyLen, val ty) => {
-                if c.isGenericInst(ref: ty) {
-                    val gs: U64 = self.genStructSlot(c: inout c, ref: ty)
-                    if gs < self.genStructRefs.count() {
-                        return self.genStructDefs[gs]
-                    }
-                }
-                val r: U64 = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
-                if r < c.arena.structs.count() {
-                    return r
-                }
-            }
-            // `try e` (e: Result[T,E]): the unwrapped `Ok` payload value is a T — resolve T's
-            // struct so `(try mk()).method()` dispatches on it. Couples to @Std/Core's Result
-            // shape (Ok payload = the first type arg), like the Try lowering itself.
-            Expr.Try(val expr) => {
-                val er: U64 = self.exprTypeRef(c: inout c, id: expr)
-                if er != 0U64 {
-                    val rt: TypeRef = c.arena.types[er]
-                    if rt.args.count() > 0U64 {
-                        val payload: U64 = rt.args[0]
-                        if c.isGenericInst(ref: payload) {
-                            val gs: U64 = self.genStructSlot(c: inout c, ref: payload)
-                            if gs < self.genStructRefs.count() {
-                                return self.genStructDefs[gs]
-                            }
-                        }
-                        val pt: TypeRef = c.arena.types[payload]
-                        val r: U64 = self.localStructIdxFor(c: inout c, start: pt.nameStart, len: pt.nameLen)
-                        if r < c.arena.structs.count() {
-                            return r
-                        }
-                    }
-                }
-            }
-            // these resolve to a non-struct value in every exercised case → sentinel via the
-            // tail: a `?.` chain (Optional — an enum, dispatched via exprTypeRef), an
-            // extension-method scalar result, an `await` (statement-head only today, so its
-            // value is never itself a receiver). NOTE (latent gap): the struct-producing
-            // `(await p).m()` / `recv#Ext.m().field` sub-cases are not resolved here yet; kept
-            // explicit (not `_`) so a new Expr variant still forces a decision.
-            Expr.Await(operand: _) => {}
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {}
-            Expr.OptChain(base: _, memberStart: _, memberLen: _) => {}
-        }
-        // a fall-through array-typed expr (an array struct field `s.items`, an array-returning
-        // call/method result `mk()` / `s.bytes()`, a nested-array element `m[i]`) is an `Array`
-        // value — resolve to the Array generic def so a direct index / method on it dispatches
-        // the Index / generic-method witness uniformly (collections.md E3: no `exprIsArray`
-        // type-name fallback). Array is gen-instance pinned, so it is found arena-wide.
+        // a refless `Array` value (an array field / array-returning call / nested-array element
+        // whose ref didn't resolve above) is an `Array` value — resolve to the Array generic def
+        // so a direct index / method on it dispatches the Index / generic-method witness (Array is
+        // gen-instance pinned, found arena-wide).
         if self.exprIsArray(c: inout c, id: id) {
             val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
             return c.structDefByNameAny(start: ab.nameStart, len: ab.nameLen)
         }
-        // a fall-through String value (a `"…"` literal, a concat result, a String-typed
-        // local/field/call whose ref didn't resolve above) is a `String` struct value —
-        // resolve to the registered String struct so its methods / `==` / `+` ride the
-        // uniform `exprStructIdx -> findMethod` witness path, replacing the scattered
-        // `valueKind==1` String dispatch fallbacks. String's value rep is pinned to strty
-        // (a representation residue, collections.md §3-付録3), but its DISPATCH is structural
-        // like any other registered struct.
+        // a refless `String` value (a concat / indirect-closure-call result whose ref didn't
+        // resolve above) is a `String` struct value — resolve to the registered String struct so
+        // its methods / `==` / `+` ride the uniform exprStructIdx→findMethod witness path. String's
+        // value rep is pinned to strty (representation residue) but its DISPATCH is structural.
         if self.valueKind(c: inout c, id: id) == 1U64 {
             val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
             return c.structDefByNameAny(start: sb.nameStart, len: sb.nameLen)
