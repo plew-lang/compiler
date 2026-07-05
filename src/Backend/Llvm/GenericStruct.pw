@@ -627,6 +627,19 @@ pub impl LlvmCtx {
                     if gcr != 0U64 {
                         return gcr
                     }
+                    // TOTAL-REF: a bare (non-generic) struct/enum method result carries its
+                    // grounded return ref (formerly discarded to 0, recovered via struct-idx)
+                    // so valueArc dispatches on the returned value. Guarded to a REGISTERED
+                    // struct/enum head so an un-grounded method-own type-param return
+                    // (`fold[B] -> B` before B is inferred from the args) still yields 0 and is
+                    // grounded on the emission path instead of leaking a bare parameter ref.
+                    val gn: TypeRef = c.arena.types[g]
+                    if self.localStructIdxFor(c: inout c, start: gn.nameStart, len: gn.nameLen) < c.arena.structs.count() {
+                        return g
+                    }
+                    if self.enumRegSlot(c: inout c, start: gn.nameStart, len: gn.nameLen) < self.genEnumRefs.count() {
+                        return g
+                    }
                 }
             }
         }

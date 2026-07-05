@@ -65,19 +65,14 @@ pub impl LlvmCtx {
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
         }
-        // typeRef: a generic-instance or existential field type carries args worth grounding
-        // (an Array field's `Array[E]` instance too — it is gen-instance pinned). A plain
-        // registered-struct field yields 0 here (resolved via structIdx instead).
-        mut val tr: U64 = 0U64
-        if g != 0U64 {
-            if c.isGenericInst(ref: g) {
-                tr = g
-            } else {
-                if refIsAny(c: inout c, ref: g) {
-                    tr = g
-                }
-            }
-        }
+        // typeRef: TOTAL-REF — the field's grounded declared type, carried verbatim
+        // (generic instance, existential, an Array field's gen-instance-pinned `Array[E]`,
+        // a scalar/String, AND a bare registered-struct/enum field, formerly discarded to
+        // 0 and recovered via structIdx). struct-idx below stays the by-name authority for
+        // which struct; the ref rides alongside so valueArc dispatches on a field value read
+        // by value. (`g` is grounded under the base env above, so a generic base's type-param
+        // field resolves to its concrete argument, not a bare parameter.)
+        val tr: U64 = g
         // structIdx: the field's registered/generic struct def. Array fields are skipped here
         // (resolved through the array witness via Index / the exprStructIdx array catch).
         mut val si: U64 = c.arena.structs.count()
