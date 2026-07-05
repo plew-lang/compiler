@@ -128,11 +128,9 @@ pub impl LlvmCtx {
             Expr.Array(elems: _) => { return true }
             Expr.Index(base: _, index: _) => {
                 // a nested-array element (`m[i]` where m: Array[Array[I32]]): its element
-                // type ref is itself an Array.
-                val r: U64 = self.exprTypeRef(c: inout c, id: id)
-                if r != 0U64 {
-                    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array")
-                }
+                // type ref is itself an Array. Via the shared resolver so the Index form
+                // agrees across the projections (see resolveIndex).
+                return self.resolveIndex(c: inout c, id: id).isArray
             }
             Expr.Call(nameStart: _, nameLen: _, args: _) => {
                 // an array-returning call (`val a = mk()`): tracked as an array — via the

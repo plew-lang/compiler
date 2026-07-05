@@ -296,6 +296,62 @@ pub impl LlvmCtx {
         return 0U64
     }
 
+    // The single classification of an INDEX `base[i]` result — element type-ref, element
+    // struct-idx, and is-array computed once so the three projections agree (mirrors
+    // resolveCall / resolveMethod). type-ref is the array's element ref (a tracked local
+    // element, a struct field's grounded element, or one Array level unwrapped for a nested
+    // index); struct-idx is the element struct; is-array holds when the element is itself an
+    // Array (`m[i]` for m: Array[Array[E]]). (dict/buffer value subscripts are typed by the
+    // front-end exprType, not here — this arm is the array-element recovery.)
+    inout fn resolveIndex(c: inout Comp, id: U64) -> ResolvedExpr {
+        match c.arena.exprs[id] {
+            Expr.Index(val base, index: _) => {
+                mut val tr: U64 = 0U64
+                match c.arena.exprs[base] {
+                    Expr.Ident(start: val bs, len: val bl) => {
+                        val bli: U64 = self.findLocal(c: inout c, start: bs, len: bl)
+                        if bli < self.nLocals {
+                            tr = self.locElemTypeRef[bli]
+                        }
+                    }
+                    Expr.Field(base: val fb, nameStart: val fns2, nameLen: val fnl2) => {
+                        val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
+                        if bsi < c.arena.structs.count() {
+                            val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns2, len: fnl2)
+                            if fidx < c.arena.structs[bsi].fields.count() {
+                                tr = self.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
+                            }
+                        }
+                    }
+                    _ => {
+                        // a nested index (`t[0][0]`): unwrap one Array level from the base
+                        // array's element type ref.
+                        val br: U64 = self.exprTypeRef(c: inout c, id: base)
+                        if br != 0U64 {
+                            val bt: TypeRef = c.arena.types[br]
+                            if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Array") {
+                                if bt.args.count() > 0U64 {
+                                    tr = bt.args[0]
+                                }
+                            }
+                        }
+                    }
+                }
+                val si: U64 = self.arrFieldElemStructIdx(c: inout c, arrayExpr: base)
+                mut val isArr: Bool = false
+                if tr != 0U64 {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[tr].nameStart, len: c.arena.types[tr].nameLen, kw: "Array") {
+                        isArr = true
+                    }
+                }
+                return <ResolvedExpr structIdx=si typeRef=tr isArray=isArr />
+            }
+            _ => {
+                return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
+            }
+        }
+    }
+
     // The owning struct index of an expression (Ident local / Make), or
     // c.arena.structs.count() if it is not a (resolvable) struct value.
     inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
@@ -391,14 +447,14 @@ pub impl LlvmCtx {
                     }
                 }
             }
-            Expr.Index(val base, index: _) => {
-                // an array element used as a struct (`h.items[0].v`): the array's element
-                // struct, grounded under the base value's instance env. A nested-array element
-                // (`m[i]` for m: Array[Array[T]]) is itself an Array — not an element struct,
-                // so fall through to the array catch below rather than returning the sentinel.
-                val ei: U64 = self.arrFieldElemStructIdx(c: inout c, arrayExpr: base)
-                if ei < c.arena.structs.count() {
-                    return ei
+            Expr.Index(base: _, index: _) => {
+                // an array element used as a struct (`h.items[0].v`): the element struct via
+                // the shared resolver so exprStructIdx/exprTypeRef/exprIsArray agree on the
+                // Index form (see resolveIndex). A nested-array element is itself an Array (no
+                // element struct) and falls through to the array catch below.
+                val rc: ResolvedExpr = self.resolveIndex(c: inout c, id: id)
+                if rc.structIdx < c.arena.structs.count() {
+                    return rc.structIdx
                 }
             }
             Expr.Deref(val base) => {

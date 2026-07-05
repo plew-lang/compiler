@@ -318,40 +318,13 @@ pub impl LlvmCtx {
                     }
                 }
             }
-            Expr.Index(val base, index: _) => {
+            Expr.Index(base: _, index: _) => {
                 // `arr[i]` : the array's element TypeRef (a Ref element `Array[Ref[Box]]`
-                // -> `ys[i]->v`, a generic element, or a nested-array element).
-                match c.arena.exprs[base] {
-                    Expr.Ident(start: val bs, len: val bl) => {
-                        val bli: U64 = self.findLocal(c: inout c, start: bs, len: bl)
-                        if bli < self.nLocals {
-                            return self.locElemTypeRef[bli]
-                        }
-                    }
-                    Expr.Field(base: val fb, nameStart: val fns2, nameLen: val fnl2) => {
-                        // an array struct field's element (`hc.items[0]` for
-                        // items: Array[Ref[Cell]]): the field's grounded element ref.
-                        val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                        if bsi < c.arena.structs.count() {
-                            val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns2, len: fnl2)
-                            if fidx < c.arena.structs[bsi].fields.count() {
-                                return self.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
-                            }
-                        }
-                    }
-                    _ => {
-                        // a nested index (`t[0][0]`): unwrap one Array level from the base
-                        // array's element type ref.
-                        val br: U64 = self.exprTypeRef(c: inout c, id: base)
-                        if br != 0U64 {
-                            val bt: TypeRef = c.arena.types[br]
-                            if rangeEquals(bytes: c.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Array") {
-                                if bt.args.count() > 0U64 {
-                                    return bt.args[0]
-                                }
-                            }
-                        }
-                    }
+                // -> `ys[i]->v`, a generic element, or a nested-array element). Via the shared
+                // resolver so exprStructIdx/exprTypeRef/exprIsArray agree (see resolveIndex).
+                val rc: ResolvedExpr = self.resolveIndex(c: inout c, id: id)
+                if rc.typeRef != 0U64 {
+                    return rc.typeRef
                 }
             }
             Expr.Array(val elems) => {
