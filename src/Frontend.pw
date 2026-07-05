@@ -50,6 +50,12 @@ export struct Comp {
     // rejecting, so its coverage can be developed/triaged against self-compile
     // without breaking the build. Off in a normal build (no behavior change yet).
     pub mut val tcLog: Bool = false
+    // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
+    // triple and marks every DEFINED function `sanitize_address`, so a downstream
+    // `opt -passes=asan` actually instruments loads/stores (a bare `.ll` has no
+    // sanitize_address attribute — clang's asan pass then skips every function, which is
+    // why the old gate only caught the interceptor layer). Off in a normal build.
+    pub mut val asan: Bool = false
     // collection phase (mono): set ONLY while the collection passes run (collectGenInsts /
     // collectFnInsts). Grounding an anonymous record to a concrete instance is otherwise
     // PURE — it just names the grounded record. The one place that may REGISTER a new
@@ -347,6 +353,7 @@ export fn runFrontend() -> Comp {
     // instead of compiling the user program. The entry path then sits at argv[2].
     mut val genMode: Bool = false
     mut val tcLog: Bool = false
+    mut val asan: Bool = false
     mut val entryArgIdx: I64 = 1
     if argCount() > 1 {
         if argAt(1) == "--gen" {
@@ -357,6 +364,13 @@ export fn runFrontend() -> Comp {
         // log-only mode (print mismatches, reject nothing) for development/triage.
         if argAt(1) == "--tc-log" {
             tcLog = true
+            entryArgIdx = 2
+        }
+        // `plewc --asan <file>`: emit a module that a downstream `opt -passes=asan`
+        // can actually instrument (host target triple + `sanitize_address` on every
+        // defined function). See Comp.asan and Backend emitLlvm.
+        if argAt(1) == "--asan" {
+            asan = true
             entryArgIdx = 2
         }
     }
@@ -380,6 +394,7 @@ export fn runFrontend() -> Comp {
     c.arena.blocks.append(<Block stmts=[] />)
     c.genMode = genMode
     c.tcLog = tcLog
+    c.asan = asan
     mut val nextModuleId: U64 = 1
     if argCount() > entryArgIdx {
         // Module loader: a recursive, deduplicated worklist over local includes.

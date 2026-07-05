@@ -386,6 +386,20 @@ extern(c) {
     fn LLVMGetParam(func~: LLVMValueRef, index~: U64) -> LLVMValueRef
     fn LLVMAppendBasicBlockInContext(ctx~: LLVMContextRef, func~: LLVMValueRef, name~: CPtr[U8]) -> LLVMBasicBlockRef
 
+    // ASan gate (`--asan`): target triple + `sanitize_address` on every defined fn.
+    type LLVMAttributeRef
+    fn LLVMSetTarget(m~: LLVMModuleRef, triple~: CPtr[U8])
+    fn LLVMGetEnumAttributeKindForName(name~: CPtr[U8], len~: U64) -> U32
+    fn LLVMCreateEnumAttribute(ctx~: LLVMContextRef, kindID~: U32, val~: U64) -> LLVMAttributeRef
+    // The function-iteration handles are opaque pointers. libLLVM signals "no more"
+    // by returning a NULL pointer, which LLVMIsNull (a null-CONSTANT test) can't
+    // detect — so we thread the handle as U64 (pointer-as-integer, ABI-identical on
+    // LP64, same convention as the `count~: U64` bindings above) and stop on `== 0`.
+    fn LLVMGetFirstFunction(m~: LLVMModuleRef) -> U64
+    fn LLVMGetNextFunction(func~: U64) -> U64
+    fn LLVMIsDeclaration(func~: U64) -> I32
+    fn LLVMAddAttributeAtIndex(func~: U64, idx~: U32, attr~: LLVMAttributeRef)
+
     // Constants / introspection.
     fn LLVMConstInt(ty~: LLVMTypeRef, n~: U64, signExtend~: I32) -> LLVMValueRef
     fn LLVMConstNull(ty~: LLVMTypeRef) -> LLVMValueRef
@@ -984,6 +998,27 @@ export fn emitLlvm(c: inout Comp) {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
     }
 
+    // `--asan`: a bare `.ll` carries no target triple and no `sanitize_address`
+    // attribute, so a downstream `opt -passes=asan` instruments NOTHING (the asan
+    // pass skips every function that lacks the attribute — the old gate then only
+    // exercised the free/double-free interceptor layer and missed raw load/store
+    // UAF). Stamp the host triple and mark every DEFINED function so the pass
+    // actually instruments memory accesses. Declarations (runtime externs) are left
+    // untouched — they carry no body and are compiled/instrumented by clang.
+    if c.asan {
+        LLVMSetTarget(st.mod, cstr(s: "arm64-apple-macosx15.0.0"))
+        val kind: U32 = LLVMGetEnumAttributeKindForName(cstr(s: "sanitize_address"), 16U64)
+        val attr: LLVMAttributeRef = LLVMCreateEnumAttribute(st.ctx, kind, 0U64)
+        // LLVMAttributeFunctionIndex (~0u) targets the function itself, not a param.
+        val fnIndex: U32 = 4294967295U32
+        mut val fh: U64 = LLVMGetFirstFunction(st.mod)
+        while fh != 0U64 {
+            if LLVMIsDeclaration(fh) == 0I32 {
+                LLVMAddAttributeAtIndex(fh, fnIndex, attr)
+            }
+            fh = LLVMGetNextFunction(fh)
+        }
+    }
     val ir: CPtr[U8] = LLVMPrintModuleToString(st.mod)
     write(s: stringFromCString(ir))
     LLVMDisposeMessage(ir)
