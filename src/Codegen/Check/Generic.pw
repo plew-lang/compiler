@@ -234,6 +234,14 @@ pub impl Comp {
     }
 
     inout fn checkBoundsExpr(exprId: U64) {
+        // typed-IR fill: record this expression's PARAMETRIC type (the walk runs under the
+        // template's own type params left ungrounded — cur.typeParams empty, cur.locals
+        // populated — so exprType yields the parametric form with `T`). The backend later
+        // substitutes per instance via groundedTypeOf. Recorded once here; 0 stays for a node
+        // this walk never reaches (a non-generic body, or a hole like a closure body).
+        if exprId < self.parametricRef.count() {
+            self.parametricRef.set(i: exprId, value: self.tyRefOfInfo(ti: self.exprType(id: exprId)))
+        }
         match self.arena.exprs[exprId] {
             Expr.Unary(val op, val operand) => {
                 self.checkBoundsExpr(exprId: operand)

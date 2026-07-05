@@ -144,6 +144,22 @@ pub impl Comp {
         }
         return t
     }
+
+    // The grounded TypeRef of expression `id` under the CURRENT instance env — the typed-IR
+    // read口 that replaces the backend's per-form exprTypeRef re-derivation. If the parametric
+    // store has this expr's type (recorded during a locals-populated front-end walk), SUBSTITUTE
+    // the instance's type args into it (groundTypeRef resolves `T`/`Self`/`Item` from cur env);
+    // an already-grounded / scalar parametric ref grounds to itself. Otherwise fall back to the
+    // instance-independent typeCache/typeOf projection (a non-generic body's expr, unrecorded).
+    inout fn groundedTypeOf(id: U64) -> U64 {
+        if id < self.parametricRef.count() {
+            val pr: U64 = self.parametricRef[id]
+            if pr != 0U64 {
+                return self.groundTypeRef(ref: pr)
+            }
+        }
+        return self.tyRefOfInfo(ti: self.typeOf(id: id))
+    }
 }
 
 pub impl Comp {

@@ -71,6 +71,15 @@ export struct Comp {
     // typed-AST cache (Phase B): each expression node's recovered type, keyed by
     // expr id (see `TypeCache`). Built by buildExprTyTable before emission.
     pub mut val typeCache: TypeCache = <TypeCache />
+    // typed-IR PARAMETRIC type store (rustc TypeckResults analog), keyed by expr id.
+    // Filled during a locals-populated front-end walk (checkGenericBodies /
+    // recordParametricTypes) with the expression's PARAMETRIC type (type params left as
+    // `T`); the backend reads it via groundedTypeOf and SUBSTITUTES the instance's type
+    // args (groundTypeRef) — the single type authority replacing the backend's per-form
+    // exprTypeRef re-derivation. 0 = not recorded (fall back to typeCache/typeOf). A
+    // SEPARATE array from typeCache.ref so it holds parametric `T` without violating
+    // typeCache's instance-independent gated-write invariant (generic-unification §33).
+    pub mut val parametricRef: Array[U64] = []
     // monomorphization work lists + derived tables (see `MonoWork`): generic
     // instantiations, fn instances / types / thunks, closure captures, Array
     // element types, and recursive-field boxing. Collected after parsing, used
@@ -808,6 +817,15 @@ export fn runFrontend() -> Comp {
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.
     c.checkFnBounds()
+    // typed-IR parametric store: one slot per expression node (0 = unrecorded), sized
+    // now while expr ids are stable and BEFORE checkGenericBodies fills it (its
+    // locals-populated, parametric-env walk of generic template bodies records each
+    // expr's parametric type). A separate array from typeCache (built later).
+    mut val peI: U64 = 0
+    while peI < c.arena.exprs.count() {
+        c.parametricRef.append(0U64)
+        peI += 1U64
+    }
     // eager generic type-check (#9): every generic template body is checked once
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").

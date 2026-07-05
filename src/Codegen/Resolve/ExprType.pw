@@ -96,7 +96,13 @@ pub impl Comp {
                         // codegen (index/for/.count()/methods/value-semantics) keys off
                         // kind 3, so it must not be reported as a kind-2 instantiation.
                         if lo.isArray {
-                            return self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: true)
+                            // carry the full `Array[E]` ref (lo.ty) alongside the kind-3 element-name
+                            // view so tyRefOfInfo recovers the structured ref (the typed-IR store
+                            // needs `Array[U8]`, not a ref-less kind-3 that projects to 0). The kind
+                            // and element name are unchanged, so existing kind-3 consumers are
+                            // unaffected; only ref goes from 0 to the declared array instance.
+                            val ab: TypeInfo = self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: true)
+                            return <TypeInfo kind=3 nameStart=ab.nameStart nameLen=ab.nameLen ref=lo.ty />
                         }
                         if self.isGenericInst(ref: lo.ty) {
                             val lt: TypeRef = self.arena.types[lo.ty]
