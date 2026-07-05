@@ -188,7 +188,10 @@ pub impl Comp {
             i += 1
         }
         if changed {
-            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs />)
+            // rebuild with the identity facets preserved: the view (`P#Ext`) and the
+            // existential (`any P`) are part of type identity — grounding the args
+            // must not strip them.
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels />)
         }
         return ref
     }

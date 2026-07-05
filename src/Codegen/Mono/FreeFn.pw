@@ -21,7 +21,10 @@ pub impl Comp {
         while i < self.arena.types.count() {
             val t: TypeRef = self.arena.types[i]
             if t.args.count() == 0 {
-                if t.nameId == q {
+                // a bare NAME lookup must not alias a facet-carrying ref: `P#Ext`
+                // (viewExtId) and `any P` (isAny) are distinct types from plain `P`
+                // (spec/08,09) — returning one for the other leaks the facet.
+                if t.nameId == q && t.viewExtId == 0U64 && !(t.isAny) {
                     return i
                 }
             }

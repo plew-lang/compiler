@@ -192,7 +192,9 @@ pub impl LlvmCtx {
             return c.findOrAddTypeRef(nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
         }
         val t: TypeInfo = c.typeOf(id: argExpr)
-        if t.kind == 0 {
+        // nameLen guard: an UNKNOWN scalar (kind 0, empty span) must yield 0, not an
+        // empty-named TypeRef — a fabricated empty ref registers a garbage fn instance.
+        if t.kind == 0 && t.nameLen > 0U64 {
             return c.findOrAddTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
         }
         // a named-type argument (kind 2): a float literal (`1.5` -> F64/F32) or a String.

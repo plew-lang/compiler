@@ -9,6 +9,11 @@ pub impl Comp {
     inout fn typeInfoOfRef(ref: U64) -> TypeInfo {
         val t: TypeRef = self.arena.types[ref]
         if t.args.count() == 0 {
+            // an argless existential (`any Dup`): the isAny ref IS the type identity —
+            // name-only recovery would degrade it to the plain trait name.
+            if t.isAny {
+                return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
+            }
             val base: TypeInfo = self.typeInfoOfName(start: t.nameStart, len: t.nameLen, isArray: false)
             // carry the view (`Person#Ext` has no args but a viewExtId) so recovery is
             // not lossy; the `ref`-shape is unchanged so downstream behavior is identical.
@@ -18,8 +23,13 @@ pub impl Comp {
             return base
         }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+            // kind 3 (element by name) as everywhere, but CARRY the structured
+            // `Array[E]` ref alongside (TOTAL-REF, same as the array-local branch):
+            // a field/method on an Array-typed `Self` value (`lhs.data` in Array's
+            // own Eq witness) needs the instance ref to resolve.
             val el: TypeRef = self.arena.types[t.args[0]]
-            return self.typeInfoOfName(start: el.nameStart, len: el.nameLen, isArray: true)
+            val ab: TypeInfo = self.typeInfoOfName(start: el.nameStart, len: el.nameLen, isArray: true)
+            return <TypeInfo kind=3 nameStart=ab.nameStart nameLen=ab.nameLen ref=ref />
         }
         // a compound type (`Ref[T]`, `Box[I32]`, `Optional[I32]`): keep its structured
         // ref so downstream `->`/`.field`/method resolution can recover the pointee or
@@ -29,6 +39,34 @@ pub impl Comp {
 
     inout fn iterableItemInfo(et: TypeInfo) -> TypeInfo {
         val noArgs: Array[Arg] = []
+        // an existential iterand (`for x in it` with `it: any Iter2[Item=I64]`,
+        // spec/08): the item is the trait's `next` requirement return
+        // (`Optional[Item]`) grounded under the existential's bindings.
+        if et.ref != 0U64 && et.ref < self.arena.types.count() {
+            if self.arena.types[et.ref].isAny {
+                val atri: U64 = self.findTraitIdxByName(start: et.nameStart, len: et.nameLen)
+                if atri < self.decls.traits.count() {
+                    val nxq: Bind = self.kwSpan(kw: "next", kwLen: 4)
+                    val nxId: U64 = intern(c: inout self, start: nxq.nameStart, len: nxq.nameLen)
+                    val areqs: Array[Func] = self.decls.traits[atri].reqs
+                    mut val ari: U64 = 0
+                    while ari < areqs.count() {
+                        if areqs[ari].nameId == nxId {
+                            val oi: TypeInfo = self.anyMemberRetInfo(anyRef: et.ref, req: areqs[ari])
+                            if oi.ref != 0U64 && oi.ref < self.arena.types.count() {
+                                val ot2: TypeRef = self.arena.types[oi.ref]
+                                if ot2.args.count() > 0U64 {
+                                    return self.typeInfoOfRef(ref: ot2.args[0])
+                                }
+                            }
+                            return scalarInfo()
+                        }
+                        ari += 1
+                    }
+                }
+                return scalarInfo()
+            }
+        }
         // Iterable: iterator() returns the iterator; bare Iterator: the iterand is the
         // iterator (so `for v in xs.filter(p)` recovers the right element type).
         val itName: Bind = self.kwSpan(kw: "iterator", kwLen: 8)

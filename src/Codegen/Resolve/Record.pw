@@ -44,6 +44,15 @@ pub impl Comp {
             val sb: Bind = self.kwSpan(kw: "Self", kwLen: 4)
             return self.simpleTypeRef(nameStart: sb.nameStart, nameLen: sb.nameLen)
         }
+        // an extension method's self is viewed as `Recv#Ext` (spec/09), and a
+        // view-rooted conferred witness's as `Recv#root` — the same view layering
+        // genLlvmFuncBody applies to the self local, so a bare `self.m()` records
+        // the view-refined receiver (it resolves the extension's sibling method,
+        // not a shadowed bare one).
+        mut val vid: U64 = f.extId
+        if vid == 0U64 {
+            vid = f.selfViewId
+        }
         mut val rcount: U64 = 0
         val si: U64 = self.anyStructIndex(nameStart: f.recvStart, nameLen: f.recvLen)
         if si < self.arena.structs.count() {
@@ -54,9 +63,6 @@ pub impl Comp {
                 rcount = self.arena.enums[ei].typeParams.count()
             }
         }
-        if rcount == 0U64 {
-            return self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
-        }
         mut val args: Array[U64] = []
         mut val i: U64 = 0
         while i < rcount {
@@ -65,7 +71,7 @@ pub impl Comp {
             }
             i += 1
         }
-        return self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=args />)
+        return self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=args viewExtId=vid />)
     }
 
     // Context-type an array literal from its expected type (the record-pass analog of

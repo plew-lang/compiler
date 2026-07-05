@@ -259,7 +259,16 @@ pub impl LlvmCtx {
         return self.concreteLangItemRef(c: inout c, g: fr)
     }
 
+    // The grounded TypeRef of expression `id` — THE typed-IR read: the frontend's
+    // parametric store substituted under the emitted body's instance env
+    // (groundedTypeOf). The per-form re-derivation this replaces lives on as
+    // exprTypeRefArm until its deletion slice (shadow-verified: the store covers
+    // its full domain and is strictly richer on ~600 nodes).
     inout fn exprTypeRef(c: inout Comp, id: U64) -> U64 {
+        return c.groundedTypeOf(id: id)
+    }
+
+    inout fn exprTypeRefArm(c: inout Comp, id: U64) -> U64 {
         // a desugared non-Optional `?.` (a Chain rewrite) records its result `Head[U]`; use
         // it so a method call on the result (`(a?.x).chain()` in a nested `a?.x?.y`) resolves
         // its receiver type. Checked first since the node is a generic MatchExpr.

@@ -96,6 +96,73 @@ pub impl Comp {
         return scalarInfo()
     }
 
+    // The result type of trait member `req` called through the existential `anyRef`
+    // (spec/08): `any P[I32]` binds P's type parameters positionally, `any
+    // P[Item=I64]` binds a type parameter or associated type by label, and `Self`
+    // re-erases to the existential itself — so the declared return grounds to a
+    // concrete type under that env. Unknown (scalarInfo) when the grounded form
+    // still mentions an unbound name — never record a half-ground type.
+    inout fn anyMemberRetInfo(anyRef: U64, req: Func) -> TypeInfo {
+        if !(req.hasRet) || req.retTy == 0U64 {
+            return scalarInfo()
+        }
+        val t: TypeRef = self.arena.types[anyRef]
+        val tri: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
+        if tri >= self.decls.traits.count() {
+            return scalarInfo()
+        }
+        val tr: TraitDef = self.decls.traits[tri]
+        mut val tp: Array[Bind] = []
+        mut val ta: Array[U64] = []
+        mut val pos: U64 = 0
+        mut val ai: U64 = 0
+        while ai < t.args.count() {
+            mut val lbl: U64 = 0
+            if ai < t.argLabels.count() {
+                lbl = t.argLabels[ai]
+            }
+            if lbl == 0U64 {
+                if pos < tr.typeParams.count() {
+                    tp.append(tr.typeParams[pos])
+                    ta.append(t.args[ai])
+                    pos += 1
+                }
+            } else {
+                mut val k: U64 = 0
+                while k < tr.typeParams.count() {
+                    if tr.typeParams[k].nameId == lbl {
+                        tp.append(tr.typeParams[k])
+                        ta.append(t.args[ai])
+                    }
+                    k += 1
+                }
+                k = 0
+                while k < tr.assocTypes.count() {
+                    if tr.assocTypes[k].nameId == lbl {
+                        tp.append(tr.assocTypes[k])
+                        ta.append(t.args[ai])
+                    }
+                    k += 1
+                }
+            }
+            ai += 1
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedS: U64 = self.cur.selfRef
+        self.cur.typeParams = tp
+        self.cur.typeArgs = ta
+        self.cur.selfRef = anyRef
+        val g: U64 = self.groundTypeRef(ref: req.retTy)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedS
+        if g != 0U64 && self.tyRefIsGround(ref: g) {
+            return self.typeInfoOfRef(ref: g)
+        }
+        return scalarInfo()
+    }
+
     inout fn exprType(id: U64) -> TypeInfo {
         val e: Expr = self.arena.exprs[id]
         match e {
@@ -237,6 +304,13 @@ pub impl Comp {
                                 if self.arena.types[lo.ty].isAny {
                                     return <TypeInfo kind=2 nameStart=self.arena.types[lo.ty].nameStart nameLen=self.arena.types[lo.ty].nameLen ref=lo.ty />
                                 }
+                                // a view-typed local/param (`a: P#Ext`, `val v = p#Ext`): keep
+                                // the declared ref — the view (viewExtId, spec/09) is a static
+                                // type facet the name-only form loses.
+                                if self.arena.types[lo.ty].viewExtId != 0U64 {
+                                    val vb: TypeInfo = self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
+                                    return <TypeInfo kind=vb.kind nameStart=vb.nameStart nameLen=vb.nameLen ref=lo.ty viewExtId=self.arena.types[lo.ty].viewExtId />
+                                }
                             }
                         }
                         return self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
@@ -283,8 +357,27 @@ pub impl Comp {
                 // (I/O builtins are ordinary `extern "plew-intrinsic"` declarations now,
                 // so their return type comes from the resolved Func below — no special
                 // cases here.)
+                // `pow(base:, exp:)` (spec/12): the bare call dispatches on the base
+                // argument's type to its `Pow[Exp]` conformance's `pow` assoc fn — so its
+                // type is that conformance's declared return (`type Output`), resolved
+                // HERE (the type authority; the backend's genPowCall mirrors the same
+                // dispatch at emission). Falls through to normal overload resolution when
+                // the base has no matching `pow` (a user free `pow` with other labels).
+                mut val fi: U64 = self.arena.funcs.count()
+                if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
+                    if args.count() == 2U64 {
+                        val br: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: args[0].expr))
+                        if br != 0U64 {
+                            val brt: TypeRef = self.arena.types[br]
+                            val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)
+                            fi = self.findAssoc(recvStart: brt.nameStart, recvLen: brt.nameLen, nameStart: powN.nameStart, nameLen: powN.nameLen, args: args)
+                        }
+                    }
+                }
                 // resolve the right overload (by labels + arg types) for its return.
-                val fi: U64 = self.resolvedCallee(id: id)
+                if fi >= self.arena.funcs.count() {
+                    fi = self.resolvedCallee(id: id)
+                }
                 if fi < self.arena.funcs.count() {
                     val f: Func = self.arena.funcs[fi]
                     if f.hasRet {
@@ -427,16 +520,66 @@ pub impl Comp {
                 }
                 return scalarInfo()
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
-                // a value re-view has the same value/type as recv (the view only steers
-                // method resolution, handled at the dispatch site).
-                return self.exprType(id: recv)
+            Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+                // `recv#Ext` refines recv's TYPE with the extension view (spec/09): the
+                // view is a static facet of the type (`TypeRef.viewExtId`), steering
+                // method resolution and view-aware overload selection downstream — so the
+                // typed IR must carry it, not drop it for the dispatch site to re-derive.
+                // `recv#!Ext` (strip) removes the view (the result type is plain).
+                val bt: TypeInfo = self.exprType(id: recv)
+                mut val vid: U64 = intern(c: inout self, start: srcStart, len: srcLen)
+                if strip {
+                    vid = 0U64
+                }
+                val br: U64 = self.typedIrRefOfInfo(ti: bt)
+                if br != 0U64 {
+                    val brt: TypeRef = self.arena.types[br]
+                    val vr: U64 = self.pushType(t: <TypeRef nameStart=brt.nameStart nameLen=brt.nameLen args=brt.args viewExtId=vid />)
+                    return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=vr viewExtId=vid />
+                }
+                return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=bt.ref viewExtId=vid />
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-                // `recv#Ext.name(args)` (spec/09): return type from the extension method.
+                // `recv#X.name(args)` (spec/09): return type from the resolved method. A
+                // NAMED prim receiver (kind 0 carrying its name: `x#Doubler.double()` on
+                // I64) joins the same lookup — extensions extend prims too. A `#X` view is
+                // ADDITIVE: it never hides the receiver's other views or its base surface,
+                // so resolution falls through X → the receiver's remaining view chain →
+                // bare (which also covers `#P` naming a trait: its witnesses/provided
+                // copies live on the type and resolve bare).
                 val rt: TypeInfo = self.exprType(id: recv)
-                if rt.kind == 2 {
-                    val mfi: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0) {
+                    mut val mfi: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if mfi >= self.arena.funcs.count() {
+                        // the receiver's own view chain: nested `v#A#B` re-view nodes
+                        // (a `#!Ext` strip ends the chain), then the unwrapped base
+                        // value's static type view (a `Type#Ext` param/binding).
+                        mut val cvr: U64 = recv
+                        mut val go: Bool = true
+                        while go {
+                            match self.arena.exprs[cvr] {
+                                Expr.ExtView(recv: val vr, srcStart: val vs, srcLen: val vl, strip: val vstrip) => {
+                                    if vstrip {
+                                        go = false
+                                    } else {
+                                        if mfi >= self.arena.funcs.count() {
+                                            mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: intern(c: inout self, start: vs, len: vl), nameStart: nameStart, nameLen: nameLen, args: args)
+                                        }
+                                        cvr = vr
+                                    }
+                                }
+                                _ => { go = false }
+                            }
+                        }
+                        if mfi >= self.arena.funcs.count() && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
+                            if self.arena.types[rt.ref].viewExtId != 0U64 {
+                                mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args)
+                            }
+                        }
+                    }
+                    if mfi >= self.arena.funcs.count() {
+                        mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    }
                     if mfi < self.arena.funcs.count() {
                         val mf: Func = self.arena.funcs[mfi]
                         if mf.hasRet {
@@ -558,10 +701,11 @@ pub impl Comp {
                         return scalarInfo()
                     }
                     // a method call on an `any P` existential: the receiver names the trait
-                    // P, so findMethod (which resolves methods on a TYPE) misses it. Recover
-                    // the result from P's requirement method's return type, but only for a
-                    // CONCRETE primitive/String return (Self / associated / generic returns
-                    // stay unknown — conservative, and avoids disturbing existential codegen).
+                    // P, so findMethod (which resolves methods on a TYPE) misses it. The
+                    // result is the requirement's declared return grounded under the
+                    // existential's bindings (`any P[I32]` / `any P[Item=I64]`, Self
+                    // re-erased to the existential) — anyMemberRetInfo. Unknown when the
+                    // return doesn't fully ground.
                     if rt.ref != 0U64 {
                         if rt.ref < self.arena.types.count() {
                             if self.arena.types[rt.ref].isAny {
@@ -574,14 +718,7 @@ pub impl Comp {
                                         mut val ri: U64 = 0
                                         while ri < reqs.count() {
                                             if reqs[ri].nameId == qMethod {
-                                                if reqs[ri].hasRet {
-                                                    if !(reqs[ri].retIsArray) {
-                                                        if self.isPrimType(start: reqs[ri].retStart, len: reqs[ri].retLen) || rangeEquals(bytes: self.arena.bytes, start: reqs[ri].retStart, len: reqs[ri].retLen, kw: "String") {
-                                                            return self.typeInfoOfName(start: reqs[ri].retStart, len: reqs[ri].retLen, isArray: false)
-                                                        }
-                                                    }
-                                                }
-                                                return scalarInfo()
+                                                return self.anyMemberRetInfo(anyRef: rt.ref, req: reqs[ri])
                                             }
                                             ri += 1
                                         }
@@ -592,7 +729,15 @@ pub impl Comp {
                             }
                         }
                     }
-                    val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    mut val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    // a viewed binding (`val sa = s#A; sa.a()`): a bare call resolves
+                    // through the value's static view too (additive, spec/09) — the
+                    // extension's method is reachable without re-viewing.
+                    if mi == self.arena.funcs.count() && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
+                        if self.arena.types[rt.ref].viewExtId != 0U64 {
+                            mi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args)
+                        }
+                    }
                     if mi == self.arena.funcs.count() {
                         return scalarInfo()
                     }
@@ -675,8 +820,12 @@ pub impl Comp {
                             val savedTP: Array[Bind] = self.cur.typeParams
                             val savedTA: Array[U64] = self.cur.typeArgs
                             if mf.typeParams.count() > 0 {
+                                // infer BEFORE swapping the env (see the own-param hunk
+                                // below): exprType inside inferFnArgs must not see the
+                                // method's typeParams paired with the enclosing typeArgs.
+                                val g2inf: Array[U64] = self.inferFnArgs(f: mf, args: args)
                                 self.cur.typeParams = mf.typeParams
-                                self.cur.typeArgs = self.inferFnArgs(f: mf, args: args)
+                                self.cur.typeArgs = g2inf
                             }
                             val gr2: U64 = self.groundTypeRef(ref: mf.retTy)
                             self.cur.typeParams = savedTP
@@ -684,6 +833,29 @@ pub impl Comp {
                             self.cur.selfRef = g2SavedSelf
                             self.cur.itemRef = g2SavedItem
                             return self.typeInfoOfRef(ref: gr2)
+                        }
+                        // a method with OWN type params on a non-generic receiver whose
+                        // return mentions one (`upTo.fold[A](init: 0U64, …) -> A`): bind
+                        // them from the call and ground. An unresolved return must stay
+                        // UNKNOWN — reporting the literal param name (`A`) would record a
+                        // garbage type that registers a bogus instance downstream.
+                        if mf.typeParams.count() > 0 && mf.retTy != 0U64 && !(mf.retIsArray) {
+                            // infer BEFORE swapping the env: inferFnArgs types the call's
+                            // arguments via exprType, which reads cur.typeParams/typeArgs —
+                            // swapping typeParams first would pair the method's params with
+                            // the ENCLOSING env's typeArgs (length mismatch = OOB).
+                            val oinf: Array[U64] = self.inferFnArgs(f: mf, args: args)
+                            val oSavedP: Array[Bind] = self.cur.typeParams
+                            val oSavedA: Array[U64] = self.cur.typeArgs
+                            self.cur.typeParams = mf.typeParams
+                            self.cur.typeArgs = oinf
+                            val og: U64 = self.groundTypeRef(ref: mf.retTy)
+                            self.cur.typeParams = oSavedP
+                            self.cur.typeArgs = oSavedA
+                            if og != 0U64 && self.tyRefIsGround(ref: og) {
+                                return self.typeInfoOfRef(ref: og)
+                            }
+                            return scalarInfo()
                         }
                         return self.typeInfoOfName(start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
                     }

@@ -209,6 +209,15 @@ pub impl Comp {
                             if self.isGenericInst(ref: f.ty) {
                                 return <TypeInfo kind=2 nameStart=f.tyStart nameLen=f.tyLen ref=f.ty />
                             }
+                            // an existential (`inner: any Drawable`) or view-typed
+                            // (`p: P#Ext`) field: the ref IS the identity facet
+                            // (spec/08,09) — name-only recovery would drop it and a
+                            // method on the field couldn't dispatch through it.
+                            if f.ty != 0U64 && f.ty < self.arena.types.count() {
+                                if self.arena.types[f.ty].isAny || self.arena.types[f.ty].viewExtId != 0U64 {
+                                    return self.typeInfoOfRef(ref: f.ty)
+                                }
+                            }
                         }
                         return self.typeInfoOfName(start: f.tyStart, len: f.tyLen, isArray: f.tyIsArray)
                     }
