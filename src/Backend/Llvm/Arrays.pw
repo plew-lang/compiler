@@ -142,13 +142,10 @@ pub impl LlvmCtx {
             }
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
                 // an array-returning method call (`s.bytes()` -> Array[U8], `h.items()`):
-                // its grounded result TypeRef (methodResultRef) heads `Array`, so a chained
-                // `.count()` / index / `for` over the call result routes through the array
-                // path just like a local. (Mirrors the nested-Index arm above.)
-                val r: U64 = self.exprTypeRef(c: inout c, id: id)
-                if r != 0U64 {
-                    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array")
-                }
+                // its grounded result TypeRef heads `Array`, so a chained `.count()` / index /
+                // `for` over the call result routes through the array path just like a local.
+                // Via the shared resolver so the Method form agrees across the projections.
+                return self.resolveMethod(c: inout c, id: id).isArray
             }
             Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => {
                 // `<Array data=buf />` — the array struct built directly from a Buffer (the

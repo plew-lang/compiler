@@ -167,6 +167,121 @@ pub impl LlvmCtx {
         return self.concreteLangItemRef(c: inout c, g: ref)
     }
 
+    // The single classification of a METHOD call's result — the struct-idx, type-ref, and
+    // is-array facets computed once so exprStructIdx / exprTypeRef / exprIsArray read one
+    // source for the Method form (mirrors resolveCall / resolveField). type-ref rides the
+    // grounded-ref authority (any-receiver requirement / lazy adapter instance / general
+    // methodResultRef); struct-idx rides methodStructIdx (get-sugar element / assoc / method /
+    // enum-receiver); is-array is the result ref heading `Array`. A bare non-generic struct
+    // return carries no ref (recovered via struct-idx) — the same partition resolveCall uses.
+    inout fn resolveMethod(c: inout Comp, id: U64) -> ResolvedExpr {
+        match c.arena.exprs[id] {
+            Expr.Method(val recv, val nameStart, val nameLen, args: val margs) => {
+                mut val tr: U64 = 0U64
+                val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
+                if atIdx < c.decls.traits.count() {
+                    tr = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: margs)
+                }
+                if tr == 0U64 {
+                    tr = self.adapterCallResultInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen)
+                }
+                if tr == 0U64 {
+                    tr = self.methodResultRef(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
+                }
+                val si: U64 = self.methodStructIdx(c: inout c, mrecv: recv, mnameStart: nameStart, mnameLen: nameLen, margs: margs)
+                mut val isArr: Bool = false
+                if tr != 0U64 {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[tr].nameStart, len: c.arena.types[tr].nameLen, kw: "Array") {
+                        isArr = true
+                    }
+                }
+                return <ResolvedExpr structIdx=si typeRef=tr isArray=isArr />
+            }
+            _ => {
+                return <ResolvedExpr structIdx=c.arena.structs.count() typeRef=0U64 />
+            }
+        }
+    }
+
+    // The owning struct of a method/assoc-fn result (the struct-idx facet of resolveMethod):
+    // `arr.get(i:)` element sugar, a `Type.assoc(...)` result, a value-method result, or an
+    // enum-receiver method result grounded under its instance ref. structs.count() when the
+    // result is not a (resolvable) struct value — the caller falls through to the array catch.
+    inout fn methodStructIdx(c: inout Comp, mrecv: U64, mnameStart: U64, mnameLen: U64, margs: Array[Arg]) -> U64 {
+        // `arr.get(i:)` is array-index sugar — its element struct (so
+        // `self.entries.get(i:i).key` resolves Entry[K,V] inside a generic method).
+        if rangeEquals(bytes: c.arena.bytes, start: mnameStart, len: mnameLen, kw: "get") {
+            val ger: U64 = self.arrFieldElemStructIdx(c: inout c, arrayExpr: mrecv)
+            if ger < c.arena.structs.count() {
+                return ger
+            }
+        }
+        // a method/assoc-fn result used as a struct (`Vec2.add(...).sum()`,
+        // `p.scaled().x`): resolve the callee's return struct.
+        val marn: Bind = c.assocRecvName(recv: mrecv)
+        if marn.nameLen != 0U64 {
+            val afi: U64 = c.findAssoc(recvStart: marn.nameStart, recvLen: marn.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
+            if afi < c.arena.funcs.count() {
+                // an Array-returning assoc fn: retStart/retLen names the ELEMENT, so
+                // skip it and fall through to the array catch (as with an array call).
+                if c.arena.funcs[afi].hasRet && !(c.arena.funcs[afi].retIsArray) {
+                    val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[afi].retStart, len: c.arena.funcs[afi].retLen)
+                    if r < c.arena.structs.count() {
+                        return r
+                    }
+                }
+            }
+        } else {
+            val mrsi: U64 = self.exprStructIdx(c: inout c, id: mrecv)
+            if mrsi < c.arena.structs.count() {
+                val mfi: U64 = c.findMethod(recvStart: c.arena.structs[mrsi].nameStart, recvLen: c.arena.structs[mrsi].nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
+                if mfi < c.arena.funcs.count() {
+                    // an Array-returning method (`h.items() -> Array[I64]`) is an ARRAY
+                    // value: retStart/retLen names the ELEMENT, so resolving it would
+                    // wrongly return the element's struct. Skip and fall through to the
+                    // array catch so `h.items()[i]` / `h.items() == …` ride the witness.
+                    if c.arena.funcs[mfi].hasRet && !(c.arena.funcs[mfi].retIsArray) {
+                        val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[mfi].retStart, len: c.arena.funcs[mfi].retLen)
+                        if r < c.arena.structs.count() {
+                            return r
+                        }
+                    }
+                }
+            } else {
+                // an enum-receiver method result (`Optional[(…)].unwrapOr() -> the
+                // record payload`): exprStructIdx doesn't see enums, so resolve via the
+                // receiver's instance ref and ground the method's return under it.
+                val mrRef: U64 = self.exprTypeRef(c: inout c, id: mrecv)
+                if mrRef != 0U64 {
+                    val rt: TypeRef = c.arena.types[mrRef]
+                    val emfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
+                    if emfi < c.arena.funcs.count() {
+                        if c.arena.funcs[emfi].hasRet {
+                            if c.arena.funcs[emfi].retTy != 0U64 {
+                                val savedP: Array[Bind] = c.cur.typeParams
+                                val savedA: Array[U64] = c.cur.typeArgs
+                                val didSet: Bool = self.setInstanceEnv(c: inout c, ref: mrRef)
+                                val g: U64 = c.groundTypeRef(ref: c.arena.funcs[emfi].retTy)
+                                if didSet {
+                                    c.cur.typeParams = savedP
+                                    c.cur.typeArgs = savedA
+                                }
+                                if g != 0U64 {
+                                    val gt: TypeRef = c.arena.types[g]
+                                    val r: U64 = self.localStructIdxFor(c: inout c, start: gt.nameStart, len: gt.nameLen)
+                                    if r < c.arena.structs.count() {
+                                        return r
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return c.arena.structs.count()
+    }
+
     // The pointee TypeRef T of an expression of type `Ref[T]` (for grounding `base->field`
     // under the pointee's instance env), or 0 if base is not a Ref. Mirror of the Deref
     // arm's resolution.
@@ -230,77 +345,14 @@ pub impl LlvmCtx {
                     return rf.structIdx
                 }
             }
-            Expr.Method(recv: val mrecv, nameStart: val mnameStart, nameLen: val mnameLen, args: val margs) => {
-                // `arr.get(i:)` is array-index sugar — its element struct (so
-                // `self.entries.get(i:i).key` resolves Entry[K,V] inside a generic method).
-                if rangeEquals(bytes: c.arena.bytes, start: mnameStart, len: mnameLen, kw: "get") {
-                    val ger: U64 = self.arrFieldElemStructIdx(c: inout c, arrayExpr: mrecv)
-                    if ger < c.arena.structs.count() {
-                        return ger
-                    }
-                }
-                // a method/assoc-fn result used as a struct (`Vec2.add(...).sum()`,
-                // `p.scaled().x`): resolve the callee's return struct.
-                val marn: Bind = c.assocRecvName(recv: mrecv)
-                if marn.nameLen != 0U64 {
-                    val afi: U64 = c.findAssoc(recvStart: marn.nameStart, recvLen: marn.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
-                    if afi < c.arena.funcs.count() {
-                        // an Array-returning assoc fn: retStart/retLen names the ELEMENT, so
-                        // skip it and fall through to the array catch (as with an array call).
-                        if c.arena.funcs[afi].hasRet && !(c.arena.funcs[afi].retIsArray) {
-                            val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[afi].retStart, len: c.arena.funcs[afi].retLen)
-                            if r < c.arena.structs.count() {
-                                return r
-                            }
-                        }
-                    }
-                } else {
-                    val mrsi: U64 = self.exprStructIdx(c: inout c, id: mrecv)
-                    if mrsi < c.arena.structs.count() {
-                        val mfi: U64 = c.findMethod(recvStart: c.arena.structs[mrsi].nameStart, recvLen: c.arena.structs[mrsi].nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
-                        if mfi < c.arena.funcs.count() {
-                            // an Array-returning method (`h.items() -> Array[I64]`) is an ARRAY
-                            // value: retStart/retLen names the ELEMENT, so resolving it would
-                            // wrongly return the element's struct. Skip and fall through to the
-                            // array catch so `h.items()[i]` / `h.items() == …` ride the witness.
-                            if c.arena.funcs[mfi].hasRet && !(c.arena.funcs[mfi].retIsArray) {
-                                val r: U64 = self.localStructIdxFor(c: inout c, start: c.arena.funcs[mfi].retStart, len: c.arena.funcs[mfi].retLen)
-                                if r < c.arena.structs.count() {
-                                    return r
-                                }
-                            }
-                        }
-                    } else {
-                        // an enum-receiver method result (`Optional[(…)].unwrapOr() -> the
-                        // record payload`): exprStructIdx doesn't see enums, so resolve via the
-                        // receiver's instance ref and ground the method's return under it.
-                        val mrRef: U64 = self.exprTypeRef(c: inout c, id: mrecv)
-                        if mrRef != 0U64 {
-                            val rt: TypeRef = c.arena.types[mrRef]
-                            val emfi: U64 = c.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: mnameStart, nameLen: mnameLen, args: margs)
-                            if emfi < c.arena.funcs.count() {
-                                if c.arena.funcs[emfi].hasRet {
-                                    if c.arena.funcs[emfi].retTy != 0U64 {
-                                        val savedP: Array[Bind] = c.cur.typeParams
-                                        val savedA: Array[U64] = c.cur.typeArgs
-                                        val didSet: Bool = self.setInstanceEnv(c: inout c, ref: mrRef)
-                                        val g: U64 = c.groundTypeRef(ref: c.arena.funcs[emfi].retTy)
-                                        if didSet {
-                                            c.cur.typeParams = savedP
-                                            c.cur.typeArgs = savedA
-                                        }
-                                        if g != 0U64 {
-                                            val gt: TypeRef = c.arena.types[g]
-                                            val r: U64 = self.localStructIdxFor(c: inout c, start: gt.nameStart, len: gt.nameLen)
-                                            if r < c.arena.structs.count() {
-                                                return r
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                // a method/assoc-fn result used as a struct (`p.scaled().x`, `arr.get(i).key`):
+                // via the shared resolver so exprStructIdx/exprTypeRef/exprIsArray agree on the
+                // Method form (see resolveMethod). A non-struct result is struct-idx-less and
+                // falls through to the array catch below.
+                val rc: ResolvedExpr = self.resolveMethod(c: inout c, id: id)
+                if rc.structIdx < c.arena.structs.count() {
+                    return rc.structIdx
                 }
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {

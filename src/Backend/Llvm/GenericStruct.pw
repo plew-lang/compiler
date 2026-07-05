@@ -389,27 +389,15 @@ pub impl LlvmCtx {
                     return c.pushType(t: <TypeRef nameStart=c.arena.structs[si].nameStart nameLen=c.arena.structs[si].nameLen args=noArgs viewExtId=vid />)
                 }
             }
-            Expr.Method(val recv, val nameStart, val nameLen, args: val margs) => {
-                // an `any P` receiver: the requirement's return TypeRef, grounded under
-                // the existential's bindings (so a `match it.next()` on `any Iter[Item=I64]`
-                // recovers `Optional[I64]`).
-                val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
-                if atIdx < c.decls.traits.count() {
-                    val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: margs)
-                    if rr != 0U64 {
-                        return rr
-                    }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                // a method result's TypeRef — an `any P` requirement return, a lazy adapter
+                // instance (`xs.map(f)`), or a general grounded `methodResultRef` (`d.get(k) ->
+                // Optional[V]`). Via the shared resolver so exprStructIdx/exprTypeRef/exprIsArray
+                // agree on the Method form (see resolveMethod).
+                val rc: ResolvedExpr = self.resolveMethod(c: inout c, id: id)
+                if rc.typeRef != 0U64 {
+                    return rc.typeRef
                 }
-                // `xs.map(f)` / `xs.filter(p)` : the lazy adapter instance it produces,
-                // so a `for v in xs.map(f).filter(p)` (and the chain) types its iterand.
-                val adp: U64 = self.adapterCallResultInst(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen)
-                if adp != 0U64 {
-                    return adp
-                }
-                // a general method whose return is a generic instance (`d.get(k) ->
-                // Optional[V]`): ground it under the receiver's env so a chained call on
-                // the result (`d.get(k).unwrapOr(...)`) recovers the instance to dispatch.
-                return self.methodResultRef(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, margs: margs)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 // `pow(base: x, exp: n)` (spec/12) yields the base type's `Pow` Output — the
