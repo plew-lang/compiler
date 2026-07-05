@@ -818,14 +818,18 @@ export fn runFrontend() -> Comp {
     // type argument must conform to the trait its parameter is bound to.
     c.checkFnBounds()
     // typed-IR parametric store: one slot per expression node (0 = unrecorded), sized
-    // now while expr ids are stable and BEFORE checkGenericBodies fills it (its
-    // locals-populated, parametric-env walk of generic template bodies records each
-    // expr's parametric type). A separate array from typeCache (built later).
+    // now while expr ids are stable. A separate array from typeCache (built later).
     mut val peI: U64 = 0
     while peI < c.arena.exprs.count() {
         c.parametricRef.append(0U64)
         peI += 1U64
     }
+    // typed-IR recording (Resolve/Record): a dedicated check-free walk of every
+    // function body stores each expr's PARAMETRIC type; the backend substitutes
+    // per instance at read (groundedTypeOf). Separate from checkGenericBodies on
+    // purpose — recording needs an env (parametric self, non-generic coverage)
+    // the check pass must not run under.
+    c.recordParametricTypes()
     // eager generic type-check (#9): every generic template body is checked once
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").

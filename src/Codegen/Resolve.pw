@@ -12,3 +12,4 @@ part ./Resolve/Expr
 part ./Resolve/Operator
 part ./Resolve/ExprType
 part ./Resolve/MatchBind
+part ./Resolve/Record
