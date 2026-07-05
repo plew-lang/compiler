@@ -221,6 +221,14 @@ pub impl Comp {
                                 }
                                 k += 1
                             }
+                            // a `Self`-typed local/param (an assoc fn's `lhs~: Self`)
+                            // resolves through the active Self binding — parametric
+                            // (`Buffer[T]`) during recording, concrete at emission.
+                            if self.cur.selfRef != 0U64 {
+                                if rangeEquals(bytes: self.arena.bytes, start: lo.tyStart, len: lo.tyLen, kw: "Self") {
+                                    return self.typeInfoOfRef(ref: self.cur.selfRef)
+                                }
+                            }
                         }
                         // an `any P` local: keep the structured ref so its method calls can
                         // resolve through the trait P (the name-only form loses isAny).
@@ -637,7 +645,18 @@ pub impl Comp {
                             }
                             val gei: U64 = self.genericEnumIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
                             if gei < self.arena.enums.count() {
-                                return self.substTypeInfo(instRef: rt.ref, params: self.arena.enums[gei].typeParams, tyRef: mf.retTy)
+                                // FULL grounding under the receiver's env (substTypeInfo only
+                                // substitutes a bare param / an array element, so a compound
+                                // return `Optional[T]` on `Loaded[Box].chain()` stayed the
+                                // raw template and poisoned every downstream consumer).
+                                val eSavedP: Array[Bind] = self.cur.typeParams
+                                val eSavedA: Array[U64] = self.cur.typeArgs
+                                self.cur.typeParams = self.arena.enums[gei].typeParams
+                                self.cur.typeArgs = gt.args
+                                val ger: U64 = self.groundTypeRef(ref: mf.retTy)
+                                self.cur.typeParams = eSavedP
+                                self.cur.typeArgs = eSavedA
+                                return self.typeInfoOfRef(ref: ger)
                             }
                         }
                         // a non-generic receiver whose method returns a generic instantiation

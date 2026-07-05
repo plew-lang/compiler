@@ -34,7 +34,10 @@ pub impl Comp {
     // non-generic receiver records its argless name ref (grounds to itself). No
     // receiver: 0.
     inout fn parametricSelfRef(f: Func) -> U64 {
-        if !(f.hasRecv) {
+        // an assoc fn has no `self` value (hasRecv false) but its recv spans still
+        // name the owning type, and its `Self`-typed params (`assoc fn eq(lhs~:
+        // Self, …)`) must resolve to the same parametric receiver.
+        if !(f.hasRecv) && f.recvLen == 0U64 {
             return 0U64
         }
         if self.methodRecvIsTrait(f: f) {
