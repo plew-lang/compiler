@@ -114,12 +114,45 @@ pub impl Comp {
                     }
                 }
             }
-            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.recordExpr(exprId: recv)
                 mut val i: U64 = 0
                 while i < args.count() {
                     self.recordExpr(exprId: args[i].expr)
                     i += 1
+                }
+                // context-type an array-literal argument from the resolved method's
+                // declared param (mirrors the Call arm). A kind-3 receiver's methods
+                // live on `Array`; a generic-receiver param (`append(value: T)`) is
+                // grounded under the receiver's instance first — and only a GROUND
+                // context applies (the callee's own `T` means nothing in this body's
+                // env, so recording it would mis-ground at emission).
+                val mrt: TypeInfo = self.typeOf(id: recv)
+                mut val mrS: U64 = mrt.nameStart
+                mut val mrL: U64 = mrt.nameLen
+                if mrt.kind == 3 {
+                    val mar: Bind = self.kwSpan(kw: "Array", kwLen: 5)
+                    mrS = mar.nameStart
+                    mrL = mar.nameLen
+                }
+                if mrL > 0U64 {
+                    val mmi: U64 = self.findMethod(recvStart: mrS, recvLen: mrL, nameStart: nameStart, nameLen: nameLen, args: args)
+                    if mmi < self.arena.funcs.count() {
+                        val mps: Array[Param] = self.arena.funcs[mmi].params
+                        mut val mk: U64 = 0
+                        while mk < args.count() {
+                            if mk < mps.count() {
+                                mut val mctx: U64 = mps[mk].ty
+                                if mrt.ref != 0U64 {
+                                    mctx = self.groundUnderInst(instRef: mrt.ref, tyRef: mctx)
+                                }
+                                if mctx != 0U64 && self.tyRefIsGround(ref: mctx) {
+                                    self.recordArrayLitCtx(exprId: args[mk].expr, ctxRef: mctx)
+                                }
+                            }
+                            mk += 1
+                        }
+                    }
                 }
             }
             Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
@@ -264,7 +297,17 @@ pub impl Comp {
                         self.addForStructBinds(et: et, binds: binds)
                     } else {
                         if et.kind == 3 {
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                            // carry the ELEMENT ref off the array's carried `Array[E]`
+                            // (an `any P` / generic-inst element loses its structure as
+                            // a bare name — `for s in shapes` then can't dispatch on s).
+                            mut val fer: U64 = 0
+                            if et.ref != 0U64 && et.ref < self.arena.types.count() {
+                                val fat: TypeRef = self.arena.types[et.ref]
+                                if fat.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: fat.nameStart, len: fat.nameLen, kw: "Array") {
+                                    fer = fat.args[0]
+                                }
+                            }
+                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: fer, isInout: false, isMut: false, owned: false)
                         } else {
                             val elemTi: TypeInfo = self.iterableItemInfo(et: et)
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
@@ -313,6 +356,24 @@ pub impl Comp {
     inout fn recordParametricTypes() {
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
+        // global initializers first (`val nums: Array[I64] = [...]` at module level):
+        // their exprs are emitted too, and an array-literal init has no other record
+        // point (the fallback typeOf reports a literal as unknown). recordStmt(Let)
+        // adds each global as a local as it goes, so a later init reading an earlier
+        // global resolves.
+        self.cur.locals = []
+        self.cur.hasRecv = false
+        self.cur.recvInstRef = 0
+        self.cur.selfRef = 0
+        self.cur.itemRef = 0
+        self.cur.typeParams = noParams
+        self.cur.typeArgs = noArgs
+        self.cur.checkFn = self.arena.funcs.count()
+        mut val gvi: U64 = 0
+        while gvi < self.arena.globals.count() {
+            self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
+            gvi += 1
+        }
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
