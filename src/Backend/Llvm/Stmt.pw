@@ -726,19 +726,15 @@ pub impl LlvmCtx {
                                     // caller for EVERY class (array/Ref/struct/enum/String
                                     // alike): its own count rides out unchanged — no retain
                                     // — and the local is excluded from the drop below, so
-                                    // the move balances. (The enumeration this replaces
-                                    // moved only arrays and Ref/WeakRef; a returned owned
-                                    // struct/enum local was excluded from the drop AND
-                                    // retained = one whole count leaked per return.) A
-                                    // borrowed param (below the body mark) instead RETAINS
-                                    // via consumeIntoOwned so the caller gets a fresh owner.
-                                    // Arrays keep their historical unconditional move: their
-                                    // by-value ARG pass retains (deferred-release
-                                    // convention), so a param's buffer moves out carrying
-                                    // that count.
-                                    if self.locIsArr[li] {
-                                        moveOut = true
-                                    } else if self.locOwned[li] && li >= self.curBodyMark && !(self.locMoved[li]) {
+                                    // the move balances. A borrowed param (below the body
+                                    // mark) instead RETAINS via consumeIntoOwned so the
+                                    // caller gets a fresh owner — under the guaranteed (+0)
+                                    // arg convention the caller-side binding keeps its own
+                                    // count, so returning a param without the retain would
+                                    // double-release. (Arrays previously moved
+                                    // UNCONDITIONALLY — balanced only by the arg-pass
+                                    // retain that convention removed.)
+                                    if self.locOwned[li] && li >= self.curBodyMark && !(self.locMoved[li]) {
                                         moveOut = true
                                     }
                                 }

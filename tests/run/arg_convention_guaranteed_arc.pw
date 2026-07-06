@@ -1,0 +1,61 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+struct Box[T] {
+    pub val v: T
+}
+
+fn peek(box: Box[Ref[Cell]]) {
+    print("peek")
+}
+
+fn makeBox(n: I32) -> Box[Ref[Cell]] {
+    val b: Box[Ref[Cell]] = <Box[Ref[Cell]] v=<Ref value=<Cell v=n /> /> />
+    return b
+}
+
+fn keepInto(box: Box[Ref[Cell]], sink: inout Array[Box[Ref[Cell]]]) {
+    sink.append(box)
+}
+
+fn placeArg() {
+    val b: Box[Ref[Cell]] = makeBox(n: 41I32)
+    peek(box: b)
+    print("place-scope-end")
+}
+
+fn tempArg() {
+    peek(box: makeBox(n: 42I32))
+    print("temp-scope-end")
+}
+
+fn escapeArg() {
+    mut val sink: Array[Box[Ref[Cell]]] = []
+    val b: Box[Ref[Cell]] = makeBox(n: 43I32)
+    keepInto(box: b, sink: inout sink)
+    print("escape-scope-end")
+}
+
+fn passthru(xs: Array[I64]) -> Array[I64] {
+    return xs
+}
+
+fn arrayParamReturn() {
+    val a: Array[I64] = [1, 2, 3]
+    val b: Array[I64] = passthru(xs: a)
+    print(b[0])
+    print(a[2])
+}
+
+fn main() {
+    placeArg()
+    tempArg()
+    escapeArg()
+    arrayParamReturn()
+    print("done")
+}

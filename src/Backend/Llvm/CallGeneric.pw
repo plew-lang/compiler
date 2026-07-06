@@ -470,19 +470,38 @@ pub impl LlvmCtx {
                             argElemRef = c.arena.types[p.ty].args[0]
                         }
                     }
-                    return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+                    val litArg: LLVMValueRef = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
+                    // a literal arg is a temporary: give it a home so its buffer is
+                    // released at the block exit (an escape inside the callee retains).
+                    if !(p.isMove) {
+                        mut val latr: U64 = p.ty
+                        if latr != 0U64 {
+                            if c.cur.typeParams.count() > 0U64 {
+                                latr = c.groundTypeRef(ref: p.ty)
+                            }
+                        }
+                        self.registerArgTemp(c: inout c, v: litArg, typeRef: latr)
+                    }
+                    return litArg
                 }
                 _ => {}
             }
             val arrArg: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
-            // a by-value array argument from a place SHARES the caller's buffer: retain it
-            // so the callee co-owns (the refcount now exceeds 1, so a callee mutation CoWs
-            // instead of clobbering the caller's binding, and `plew_arr_grow` will not free
-            // the caller's buffer out from under it). A `move` arg transfers ownership
-            // instead (markLocalMoved above), so it is not also retained.
+            // Swift-guaranteed (+0) convention: a by-value array PLACE arg is a BORROW —
+            // no retain here; the caller's binding outlives the call, the callee cannot
+            // mutate its (immutable) param in place, and every ESCAPE inside the callee
+            // retains via consumeIntoOwned. A `move` arg transfers ownership
+            // (markLocalMoved above). A TEMPORARY (call result) has no home binding —
+            // register it as an anonymous owned local (block-exit drop; see the tail).
             if !(p.isMove) {
-                if exprAliasesPlace(c: inout c, id: argExpr) {
-                    self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: arrArg))
+                if !(exprAliasesPlace(c: inout c, id: argExpr)) {
+                    mut val atr: U64 = p.ty
+                    if atr != 0U64 {
+                        if c.cur.typeParams.count() > 0U64 {
+                            atr = c.groundTypeRef(ref: p.ty)
+                        }
+                    }
+                    self.registerArgTemp(c: inout c, v: arrArg, typeRef: atr)
                 }
             }
             return arrArg
@@ -500,48 +519,45 @@ pub impl LlvmCtx {
         val argV: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
         self.expectedTy = 0U64
         val out: LLVMValueRef = self.coerceIntTo(c: inout c, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
-        // value semantics (CoW): a by-value struct / String / enum argument from a PLACE
-        // SHARES the caller's heap, and the callee owns its param and runs its deinit at
-        // scope exit — so SHALLOW-retain the arg's heap (bump its rc) so the callee's release
-        // balances and the caller's value survives. A shallow retain (like an array arg, above)
-        // is O(type-depth); a deep copy here would be O(subtree) and quadratic for recursive
-        // AST args. A `move` arg transfers ownership (markLocalMoved above) and a literal /
-        // call result already owns its value (not a place), so neither is retained.
+        // Swift-guaranteed (+0) convention for EVERY by-value class (spec/14 の同期呼び
+        // 出し・Swift 4.2+ の既定と同型): a PLACE arg is a BORROW — no retain here, no
+        // release in the callee. The caller's binding outlives the call (single thread;
+        // inout exclusivity enforced), and every ESCAPE inside the callee (field store /
+        // return / append / async frame capture) retains through consumeIntoOwned. A
+        // `move` arg transfers ownership (markLocalMoved above; the callee's owned param
+        // drops at its scope exit). A TEMPORARY (construction / call result / concat)
+        // has no home binding — register it as an anonymous owned local so the enclosing
+        // block's scope-exit drop destroys it deterministically (Swift releases
+        // temporaries at the end of the full expression; Plew uses the block exit).
         if !(p.isMove) {
-            // a `Ref` by-value arg (place OR temporary): the callee's param is a BORROW (not
-            // released at callee scope — curBodyMark-gated); storing / returning it inside the
-            // callee retains via consumeIntoOwned. A PLACE arg (`r`) is owned by the caller's
-            // own binding, which drops at its scope — nothing to do here. A TEMPORARY (`<Ref
-            // .../>` literal / call result) has no home binding, so register it as an owned
-            // anonymous local: the enclosing block's scope-exit drop releases it (strong--,
-            // pointee deinit + free at 0), balancing the construction's initial rc and any
-            // store-retain the callee took. This makes Ref EXACT (no leak, no UAF) where
-            // struct / String / enum place args still shallow-retain (a tolerated leak).
-            val refTy: U64 = self.argRefTypeRef(c: inout c, argExpr: argExpr)
-            if refTy != 0U64 {
-                if !(exprAliasesPlace(c: inout c, id: argExpr)) {
-                    val slot: LLVMValueRef = self.entryAlloca(ty: self.ptrty)
-                    LLVMBuildStore(self.b, out, slot)
-                    self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: self.ptrty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: refTy)
-                }
-            } else if exprAliasesPlace(c: inout c, id: argExpr) {
-                val atr: U64 = self.exprTypeRef(c: inout c, id: argExpr)
-                // struct / String / enum place args shallow-retain (their param's deferred
-                // release is a tolerated leak, never a UAF). A Ref/WeakRef place is diverted
-                // above (refTy != 0); the guard is defensive in case argRefTypeRef missed it.
-                if !(c.isRefInst(ref: atr)) && !(c.isWeakRefInst(ref: atr)) {
-                    self.valueArc(c: inout c, v: out, typeRef: atr, retain: true)
-                }
+            if !(exprAliasesPlace(c: inout c, id: argExpr)) {
+                self.registerArgTemp(c: inout c, v: out, typeRef: self.argValueTypeRef(c: inout c, argExpr: argExpr))
             }
         }
         return out
     }
 
-    // The grounded `Ref[T]` TypeRef of a by-value argument expression, or 0 if it is not a
-    // Ref. A `<Ref[T] .../>` construction carries its type on the Make node (which
-    // exprRefTypeRef can't see); a place / call result resolves via exprRefTypeRef. Grounds
-    // a generic literal type (`<Ref[U] .../>` inside a generic caller) under the caller env.
-    inout fn argRefTypeRef(c: inout Comp, argExpr: U64) -> U64 {
+    // Register a heap-carrying argument TEMPORARY as an anonymous owned local: the
+    // enclosing block's scope-exit drop destroys it (classifier-routed via locTypeRef).
+    // The slot is zero-initialized at fn entry (entryAllocaZeroed) because the store may
+    // sit in a conditionally-executed BB (a short-circuit RHS) while the drop always
+    // reads the slot — a zero value releases as a no-op. A scalar-classed value needs no
+    // home (nothing to release).
+    inout fn registerArgTemp(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
+        if !(c.arcNeedsRelease(ref: typeRef)) {
+            return
+        }
+        val slot: LLVMValueRef = self.entryAllocaZeroed(ty: LLVMTypeOf(v))
+        LLVMBuildStore(self.b, v, slot)
+        self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: LLVMTypeOf(v), kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: typeRef)
+    }
+
+    // The grounded TypeRef of a by-value argument VALUE, for ARC classification of a
+    // temporary: a `<T .../>` construction carries its type on the Make node (which
+    // exprTypeRef can't see); everything else resolves via exprTypeRef. Grounds a
+    // generic construction type (`<Ref[U] .../>` inside a generic caller) under the
+    // caller env.
+    inout fn argValueTypeRef(c: inout Comp, argExpr: U64) -> U64 {
         match c.arena.exprs[argExpr] {
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: val mty, fields: _) => {
                 mut val g: U64 = mty
@@ -550,25 +566,11 @@ pub impl LlvmCtx {
                         g = c.groundTypeRef(ref: mty)
                     }
                 }
-                if c.isRefInst(ref: g) || c.isWeakRefInst(ref: g) {
-                    return g
-                }
-                return 0U64
+                return g
             }
             _ => {}
         }
-        val rt: U64 = self.exprRefTypeRef(c: inout c, id: argExpr)
-        if rt != 0U64 {
-            return rt
-        }
-        // a `WeakRef[T]` temporary (e.g. `f(r.weak())`): its scope-exit drop must release the
-        // weak count, so register it as an owned local too (emitDeinitCall routes WeakRef to
-        // weakRelease). exprRefTypeRef only recognises Ref, so resolve WeakRef separately.
-        val et: U64 = self.exprTypeRef(c: inout c, id: argExpr)
-        if c.isWeakRefInst(ref: et) {
-            return et
-        }
-        return 0U64
+        return self.exprTypeRef(c: inout c, id: argExpr)
     }
 
     // Index into st.fn* for a cached user function (by c.arena.funcs index), or st.fnIdx.count().

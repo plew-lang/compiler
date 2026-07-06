@@ -240,8 +240,8 @@ pub impl LlvmCtx {
         }
         // an owned array BODY local (CoW): release its OWN buffer, free at 0. Gated on
         // `li >= curBodyMark` so params / seeded globals / closure captures (bound before
-        // the mark) are NOT released here — they are borrows of an owner elsewhere, or a
-        // retained arg whose release is deferred (a tolerated leak, never a UAF). All
+        // the mark) are NOT released here — they are borrows of an owner elsewhere
+        // (Swift-guaranteed +0 arg convention: the caller's binding or temp home owns). All
         // element types: only the rc-tracked outer buffer is freed (element heap is
         // shallow-shared and leaks; never double-freed since it is never freed here).
         if self.locIsArr[li] {
@@ -286,7 +286,7 @@ pub impl LlvmCtx {
         // 0 run the pointee deinit (if its type needs one) then free the cell (spec/03: the
         // pointee deinit runs when the LAST owner drops). Covers EVERY Ref local (whether or
         // not the pointee needs a deinit — the cell heap must be freed regardless), balancing
-        // the rawbufRetain consumeIntoOwned emits at each Ref place-copy / by-value arg-pass.
+        // the rawbufRetain consumeIntoOwned emits at each Ref place-copy (escape).
         if c.isRefInst(ref: self.locTypeRef[li]) {
             // gated on `li >= curBodyMark` like arrays/structs/enums: a param / capture /
             // seeded global is a BORROW (the owner lives in the caller / enclosing scope),
@@ -308,11 +308,20 @@ pub impl LlvmCtx {
         }
         val sidx: U64 = self.locStructIdx[li]
         if sidx >= c.arena.structs.count() {
-            // an owned enum BODY local: release its active variant's payload heap. Gated on
-            // li >= curBodyMark like arrays/structs (params / globals / captures excluded).
+            // an owned BODY local with no struct index: an enum local, or an anonymous
+            // argument TEMPORARY (registerArgTemp — any class). Route through the
+            // classifier when the grounded ref is stored; the legacy enum path covers a
+            // ref-less enum local. Gated on li >= curBodyMark (params / globals /
+            // captures are borrows).
             if li >= self.curBodyMark {
                 val ev: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                self.emitEnumReleaseRef(c: inout c, v: ev, ref: self.locTypeRef[li])
+                if self.locTypeRef[li] != 0U64 {
+                    if c.arcNeedsRelease(ref: self.locTypeRef[li]) {
+                        self.valueArc(c: inout c, v: ev, typeRef: self.locTypeRef[li], retain: false)
+                    }
+                } else {
+                    self.emitEnumReleaseRef(c: inout c, v: ev, ref: self.locTypeRef[li])
+                }
             }
             return
         }

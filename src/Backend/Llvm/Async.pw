@@ -431,10 +431,18 @@ pub impl LlvmCtx {
         val frame: LLVMValueRef = self.asyncFrameAlloc(c: inout c, frameTy: frameTy)
         // __f->__state = 0
         LLVMBuildStore(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32), LLVMBuildStructGEP2(self.b, frameTy, frame, 0U64, anon()))
-        // copy params into frame fields 3..
+        // copy params into frame fields 3.. — an ESCAPE: the frame OWNS its copy
+        // (spec/14: no borrow crosses the async boundary — the returned Promise can
+        // outlive the caller's binding), so retain each heap-carrying param here,
+        // balancing the guaranteed (+0) arg pass. The symmetric frame-teardown release
+        // is a pending gap (a tracked leak, never a UAF).
         mut val pi: U64 = 0
         while pi < f.params.count() {
-            LLVMBuildStore(self.b, LLVMGetParam(entryFn, pi), LLVMBuildStructGEP2(self.b, frameTy, frame, 3U64 + pi, anon()))
+            val pv: LLVMValueRef = LLVMGetParam(entryFn, pi)
+            LLVMBuildStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, 3U64 + pi, anon()))
+            if c.arcNeedsRelease(ref: f.params[pi].ty) {
+                self.valueArc(c: inout c, v: pv, typeRef: f.params[pi].ty, retain: true)
+            }
             pi += 1
         }
         // __self = plew_promise_new(); __f->__self = __self (capture before resume — a

@@ -72,6 +72,23 @@ pub impl LlvmCtx {
         return a
     }
 
+    // As entryAlloca, but zero-initialized IN THE ENTRY BLOCK (unconditionally executed
+    // before any branch). For slots whose STORE may sit in a conditionally-executed BB
+    // (an argument temporary inside a short-circuit RHS) while the scope-exit drop
+    // always reads the slot: a zero value is a no-op for every release path (the
+    // runtime null-guards retain/release/strong/weak/free/dispose, and user deinit
+    // exists only on unique structs, which are move-only and never by-value temps).
+    inout fn entryAllocaZeroed(ty: LLVMTypeRef) -> LLVMValueRef {
+        val cur: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        val entry: LLVMBasicBlockRef = LLVMGetEntryBasicBlock(self.curFn)
+        val term: LLVMValueRef = LLVMGetBasicBlockTerminator(entry)
+        LLVMPositionBuilderBefore(self.b, term)
+        val a: LLVMValueRef = LLVMBuildAlloca(self.b, ty, anon())
+        LLVMBuildStore(self.b, LLVMConstNull(ty), a)
+        LLVMPositionBuilderAtEnd(self.b, cur)
+        return a
+    }
+
     // Push a loop's (break, continue) target blocks (overwrite-in-place; loopDepth is
     // the live count). Break/Continue branch to the top of this stack.
     // Push a loop's (break, continue) target blocks plus `unwindMark` — the local mark at
