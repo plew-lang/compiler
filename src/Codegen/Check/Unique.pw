@@ -50,7 +50,7 @@ pub impl Comp {
                     val f: FieldDef = s.fields[j]
                     if !(f.tyIsArray) {
                         if self.typeIsTransitivelyUnique(start: f.tyStart, len: f.tyLen) {
-                            compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "a struct with a unique field must be declared `unique`")
+                            self.errorAt(offset: f.nameStart, msg: "a struct with a unique field must be declared `unique`")
                         }
                     }
                     j += 1
@@ -185,7 +185,7 @@ pub impl Comp {
     // that is never used would silently keep a spec-invalid default (`val b: I64 = a`).
     inout fn checkDefaultSelfContained(exprId: U64, forbidden: Array[U64], offset: U64, what: String) {
         if self.exprMentionsAny(exprId: exprId, forbidden: forbidden) {
-            compileErrorAt(line: self.lineOf(offset: offset), msg: what)
+            self.errorAt(offset: offset, msg: what)
         }
     }
 
@@ -203,7 +203,7 @@ pub impl Comp {
                 if si < self.arena.structs.count() {
                     off = self.arena.structs[si].defOffset
                 }
-                compileErrorAt(line: self.lineOf(offset: off), msg: "`deinit` is only allowed on a `unique` type (a copyable type would run it on every copy — spec/03)")
+                self.errorAt(offset: off, msg: "`deinit` is only allowed on a `unique` type (a copyable type would run it on every copy — spec/03)")
             }
             i += 1
         }
@@ -254,14 +254,14 @@ pub impl Comp {
                 if self.typeIsUnique(start: p.tyStart, len: p.tyLen) {
                     val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
                     if !(hasMode) {
-                        compileErrorAt(line: self.lineOf(offset: p.nameStart), msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
+                        self.errorAt(offset: p.nameStart, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
                     }
                 } else {
                     if p.isMove {
-                        compileErrorAt(line: self.lineOf(offset: p.nameStart), msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
+                        self.errorAt(offset: p.nameStart, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
                     }
                     if p.isBorrow {
-                        compileErrorAt(line: self.lineOf(offset: p.nameStart), msg: "`borrow` is redundant on a copyable type; pass by value")
+                        self.errorAt(offset: p.nameStart, msg: "`borrow` is redundant on a copyable type; pass by value")
                     }
                 }
             }
@@ -279,7 +279,7 @@ pub impl Comp {
         while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
             if self.typeIsUnique(start: ae.nameStart, len: ae.nameLen) {
-                compileErrorAt(line: self.lineOf(offset: ae.nameStart), msg: "a unique type cannot be stored in an Array; wrap it in Ref[T]")
+                self.errorAt(offset: ae.nameStart, msg: "a unique type cannot be stored in an Array; wrap it in Ref[T]")
             }
             i += 1
         }
@@ -302,7 +302,7 @@ pub impl Comp {
                         val ai: TypeInfo = self.typeInfoOfRef(ref: t.args[j])
                         if ai.kind == 2 {
                             if self.typeIsUnique(start: ai.nameStart, len: ai.nameLen) {
-                                compileErrorAt(line: self.lineOf(offset: ai.nameStart), msg: "a unique type cannot be a generic type argument; wrap it in Ref[T]")
+                                self.errorAt(offset: ai.nameStart, msg: "a unique type cannot be a generic type argument; wrap it in Ref[T]")
                             }
                         }
                         j += 1

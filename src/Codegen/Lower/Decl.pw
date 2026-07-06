@@ -16,7 +16,7 @@ pub impl Comp {
             mut val k: U64 = 0
             while k < out.count() {
                 if intern(c: inout self, start: out[k].nameStart, len: out[k].nameLen) == bId {
-                    compileErrorAt(line: self.lineOf(offset: b.nameStart), msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)")
+                    self.errorAt(offset: b.nameStart, msg: "duplicate type-parameter name (each `[T]` in a generic must be distinct — spec/06)")
                 }
                 k += 1
             }

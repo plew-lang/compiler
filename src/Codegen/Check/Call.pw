@@ -18,7 +18,7 @@ pub impl Comp {
             val ti: TypeInfo = self.typeOf(id: exprId)
             if ti.kind == 2 {
                 if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: exprId)), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "a unique value cannot be copied; use `move`, `borrow`, or `inout`")
                 }
             }
         }
@@ -52,7 +52,7 @@ pub impl Comp {
                                     firstRef = ar
                                 } else {
                                     if !(self.typesCompatible(expected: firstRef, inferred: ar)) {
-                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: args[ai].expr)), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
+                                        self.errorAt(offset: self.exprOffset(id: args[ai].expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
                                     }
                                 }
                             }
@@ -72,17 +72,17 @@ pub impl Comp {
                 // a local/field/subscript/Ref-pointee, not a literal or call result — and
                 // (b) be mutable (spec/03: `inc(x: inout n)` needs `mut val n`).
                 if !(self.exprIsPlace(id: arg.expr)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
+                    self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
                 }
                 if !(self.placeIsMutable(id: arg.expr)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
+                    self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
                 }
             } else {
-                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)")
+                self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "this parameter is `inout`; pass the argument with `inout` (spec/03)")
             }
         } else {
             if arg.isInout {
-                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: arg.expr)), msg: "this parameter is not `inout`; remove `inout` from the argument (spec/03)")
+                self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "this parameter is not `inout`; remove `inout` from the argument (spec/03)")
             }
         }
     }
@@ -92,7 +92,7 @@ pub impl Comp {
         if ft.args.count() >= 1U64 {
             if retTy != 0U64 {
                 if !(self.typesCompatible(expected: ft.args[0], inferred: retTy)) {
-                    compileErrorAt(line: self.lineOf(offset: offset), msg: "function value's return type does not match the expected function type (spec/04)")
+                    self.errorAt(offset: offset, msg: "function value's return type does not match the expected function type (spec/04)")
                 }
             }
         }
@@ -101,7 +101,7 @@ pub impl Comp {
             if k + 1U64 < ft.args.count() {
                 if params[k].ty != 0U64 {
                     if !(self.typesCompatible(expected: ft.args[k + 1U64], inferred: params[k].ty)) {
-                        compileErrorAt(line: self.lineOf(offset: offset), msg: "function value's parameter type does not match the expected function type (spec/04)")
+                        self.errorAt(offset: offset, msg: "function value's parameter type does not match the expected function type (spec/04)")
                     }
                 }
             }
@@ -216,14 +216,14 @@ pub impl Comp {
                                 val expLbl: U64 = expLabels[pj + 1U64]
                                 if expLbl != 0U64 {
                                     if params[pj].nameId != expLbl {
-                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: argExpr)), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)")
+                                        self.errorAt(offset: self.exprOffset(id: argExpr), msg: "closure parameter label does not match the expected function type (spec/04: a function type's labels are part of its identity — rename the closure's parameter to match)")
                                     }
                                 }
                             }
                             pj += 1U64
                         }
                     } else {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: argExpr)), msg: "closure has the wrong number of parameters for the expected function type")
+                        self.errorAt(offset: self.exprOffset(id: argExpr), msg: "closure has the wrong number of parameters for the expected function type")
                     }
                     // the closure's declared return type must match the expected function
                     // type's return (`fn(...)->R` args = [R, param0, …]) — else the caller
@@ -234,7 +234,7 @@ pub impl Comp {
                             val expRet: U64 = self.arena.types[p.ty].args[0]
                             if expRet != 0U64 {
                                 if !(self.typesCompatible(expected: expRet, inferred: retTy)) {
-                                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: argExpr)), msg: "closure return type does not match the expected function type")
+                                    self.errorAt(offset: self.exprOffset(id: argExpr), msg: "closure return type does not match the expected function type")
                                 }
                             }
                         }

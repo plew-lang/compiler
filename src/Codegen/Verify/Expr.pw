@@ -57,7 +57,7 @@ pub impl Comp {
                     }
                     if !(retIsUnit) {
                         if !(self.blockDiverges(blkId: body)) {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
+                            self.errorAt(offset: self.exprOffset(id: id), msg: "this closure has a return type but can reach the end of its body without returning a value; add a `return` (or `panic`) on every path (spec/04)")
                         }
                     }
                 }
@@ -114,7 +114,7 @@ pub impl Comp {
                             vk += 1
                         }
                         if !(vfound) {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "unknown enum variant in construction (this enum has no such variant)")
+                            self.errorAt(offset: self.exprOffset(id: id), msg: "unknown enum variant in construction (this enum has no such variant)")
                         }
                         val cvi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
                         if cvi < self.arena.enums[cei].variants.count() {
@@ -127,7 +127,7 @@ pub impl Comp {
                             mut val cfi: U64 = 0
                             while cfi < cfs.count() {
                                 if !(self.makeFieldsCoverField(fields: fields, fieldStart: cfs[cfi].nameStart, fieldLen: cfs[cfi].nameLen)) {
-                                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "variant construction is missing a payload field; every field of the variant must be set")
+                                    self.errorAt(offset: self.exprOffset(id: id), msg: "variant construction is missing a payload field; every field of the variant must be set")
                                 }
                                 if !(enumIsGen) {
                                     mut val mfk: U64 = 0
@@ -168,7 +168,7 @@ pub impl Comp {
                         }
                         if tpCount <= self.arena.structs.count() + self.arena.enums.count() {
                             if tr.args.count() != tpCount {
-                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "wrong number of type arguments for this generic type")
+                                self.errorAt(offset: self.exprOffset(id: id), msg: "wrong number of type arguments for this generic type")
                             }
                         }
                     }
@@ -210,7 +210,7 @@ pub impl Comp {
                     mut val j: U64 = 0
                     while j < i {
                         if spansEqual(c: inout self, aStart: fields[j].nameStart, aLen: fields[j].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
-                            compileErrorAt(line: self.lineOf(offset: fields[i].offset), msg: "duplicate field in construction; each field may be set at most once")
+                            self.errorAt(offset: fields[i].offset, msg: "duplicate field in construction; each field may be set at most once")
                         }
                         j += 1U64
                     }
@@ -252,7 +252,7 @@ pub impl Comp {
                 // ref is 0 like a scalar's, so the isRefInst branches are unaffected.)
                 val abt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefInst(ref: abt.ref) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
                 } else if self.isRefInst(ref: abt.ref) {
                     // `->` touches the POINTEE's field, so it obeys the pointee type's field
                     // visibility exactly like `.` does (spec/05) — `->` must not be a privacy
@@ -273,9 +273,9 @@ pub impl Comp {
                 // (typeOf: cached; only `.ref` read — int context ref is 0, branches unaffected.)
                 val bt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefInst(ref: bt.ref) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
                 } else if !(self.isRefInst(ref: bt.ref)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "`->` requires a `Ref[T]` on the left (it dereferences a Ref's pointee)")
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "`->` requires a `Ref[T]` on the left (it dereferences a Ref's pointee)")
                 }
             }
             Expr.OptChain(val base, memberStart: _, memberLen: _) => {
@@ -296,7 +296,7 @@ pub impl Comp {
                     }
                 }
                 if !(retIsResult) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: expr)), msg: "`try` is only valid in a function that returns a Result (spec/13)")
+                    self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` is only valid in a function that returns a Result (spec/13)")
                 }
                 // `try` works only on a Result (spec/13). The operand being some OTHER
                 // registered enum (notably `Optional`) used to crash the backend (it
@@ -310,7 +310,7 @@ pub impl Comp {
                     }
                     if isEnum {
                         if !(rangeEquals(bytes: self.arena.bytes, start: tti.nameStart, len: tti.nameLen, kw: "Result")) {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: expr)), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
+                            self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
                         }
                     }
                     // the operand's error type E' must match the enclosing function's
@@ -331,7 +331,7 @@ pub impl Comp {
                                                     // E != E' is allowed when E owns a `from` factory:
                                                     // `try` then converts E' -> E via E.from (spec/13).
                                                     if !(self.typeRefHasFromFactory(errRef: fnR.args[1])) {
-                                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: expr)), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
+                                                        self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
                                                     }
                                                 }
                                             }
@@ -347,7 +347,7 @@ pub impl Comp {
                 self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 }
                 mut val ai: U64 = 0
                 while ai < arms.count() {
@@ -381,12 +381,12 @@ pub impl Comp {
                 // a non-generic body has no type params, so pass the funcs.count() sentinel.
                 val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.arena.funcs.count())
                 if !(self.bindIsValue(code: bindCode)) {
-                    compileErrorAt(line: self.lineOf(offset: start), msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
+                    self.errorAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
                 }
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
                 if self.cur.verifyMovedIdx.count() > 0U64 {
                     if self.verifyIsMoved(idx: self.localIndexByName(start: start, len: len)) {
-                        compileErrorAt(line: self.lineOf(offset: start), msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
+                        self.errorAt(offset: start, msg: "use of a value after it was moved (`move` transfers ownership away — the variable is dead; bind a fresh value to use it again) (spec/03)")
                     }
                 }
             }
@@ -399,14 +399,14 @@ pub impl Comp {
                     match self.arena.exprs[operand] {
                         Expr.Ident(val start, val len) => {
                             if self.isSelfRef(start: start, len: len) {
-                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "moving `self` is not yet supported")
+                                self.errorAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported")
                             }
                             if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
-                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                                self.errorAt(offset: self.exprOffset(id: operand), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
                             }
                         }
                         _ => {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
+                            self.errorAt(offset: self.exprOffset(id: operand), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
                         }
                     }
                 }
@@ -485,7 +485,7 @@ pub impl Comp {
                 mut val fi: U64 = 0
                 while fi < sd.fields.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
-                        compileErrorAt(line: self.lineOf(offset: a.enumStart), msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
+                        self.errorAt(offset: a.enumStart, msg: "struct destructure must bind or discard every field (a field is missing — bind it or use `field: _`; `..` is not allowed)")
                     }
                     fi += 1
                 }
@@ -506,7 +506,7 @@ pub impl Comp {
                 mut val fi: U64 = 0
                 while fi < fs.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {
-                        compileErrorAt(line: self.lineOf(offset: a.binds[0].offset), msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
+                        self.errorAt(offset: a.binds[0].offset, msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
                     }
                     fi += 1
                 }
@@ -524,7 +524,7 @@ pub impl Comp {
             return
         }
         if self.blockGiveExpr(blkId: blkId) >= self.arena.exprs.count() {
-            compileErrorAt(line: self.lineOf(offset: offset), msg: "a value-position `if`/`match` branch must end with `give` to yield a value (a block with no `give` yields `()` — spec/11)")
+            self.errorAt(offset: offset, msg: "a value-position `if`/`match` branch must end with `give` to yield a value (a block with no `give` yields `()` — spec/11)")
         }
     }
 
@@ -539,7 +539,7 @@ pub impl Comp {
             val st: TypeInfo = self.typeOf(id: scrut)
             if st.nameLen > 0U64 {
                 if !(spansEqual(c: inout self, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
-                    compileErrorAt(line: self.lineOf(offset: armDiagOffset(a: a)), msg: "struct destructure pattern type does not match the scrutinee type")
+                    self.errorAt(offset: armDiagOffset(a: a), msg: "struct destructure pattern type does not match the scrutinee type")
                 }
             }
         }

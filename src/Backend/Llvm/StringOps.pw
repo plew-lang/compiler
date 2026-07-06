@@ -116,7 +116,7 @@ pub impl LlvmCtx {
     inout fn emitFormatPrint(c: inout Comp, argExpr: U64, tyStart: U64, tyLen: U64) -> LLVMValueRef {
         val ffi: U64 = c.findMethodByName(typeStart: tyStart, typeLen: tyLen, name: "format")
         if ffi >= c.arena.funcs.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: print of a type that does not conform to Format")
+            c.errorAt(offset: c.exprOffset(id: argExpr), msg: "LLVM backend: print of a type that does not conform to Format")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // a Format witness on a registered struct / enum is the receiver's 0-type-arg `gm`
@@ -149,7 +149,7 @@ pub impl LlvmCtx {
             slot = self.ensureProvidedDeclared(c: inout c, fi: ffi)
         }
         if slot >= self.fnIdx.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: argExpr)), msg: "LLVM backend: Format witness not emittable yet")
+            c.errorAt(offset: c.exprOffset(id: argExpr), msg: "LLVM backend: Format witness not emittable yet")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val sval: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(cav), 2U64, anon())

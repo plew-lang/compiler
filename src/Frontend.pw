@@ -15,13 +15,13 @@ import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileByte
 import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
-import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
 import ./Cache with { cacheRoot }
-import ./Diag with { compileErrorAt, eprintInt, digitByte }
+import ./Diag with { compileErrorAt, compileErrorAtFile, eprintInt, digitByte }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 export struct Comp {
@@ -146,10 +146,13 @@ pub impl Comp {
             i += 1
         }
     }
-    // Append an expression node, returning its arena index.
+    // Append an expression node, returning its arena index. The span-start slot is
+    // appended in lockstep (0 = unknown); Lower overwrites it with the parsed
+    // ExprAst's span for AST-lowered nodes.
     inout fn pushExpr(e: Expr) -> U64 {
         val id: U64 = self.arena.exprs.count()
         self.arena.exprs.append(e)
+        self.arena.exprSpanStart.append(0U64)
         return id
     }
     // Append a statement node, returning its arena index.
@@ -543,6 +546,7 @@ export fn runFrontend() -> Comp {
             val fileStart: U64 = c.arena.bytes.count()
             c.appendSrc(from: sb)
             c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count() - fileStart fieldStart=moduleId fieldLen=0 />)
+            c.modules.rangePaths.append(stringFromBytesUnchecked(b: path))
             // parse the file and lower its items; the returned tree drives discovery.
             val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: sb, fileStart: fileStart)
             // spec/15: a `part` file (a non-root file of an already-seen module) may
@@ -582,7 +586,7 @@ export fn runFrontend() -> Comp {
                         // you may only import what the manifest declares + `@Std`).
                         if childPath.count() == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
-                                compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)")
+                                c.errorAt(offset: imp.pathSpan.start, msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)")
                             }
                         }
                         if childPath.count() != 0 {
@@ -595,7 +599,7 @@ export fn runFrontend() -> Comp {
                             // instead: importing the same module from many places is fine.)
                             if !(imp.isImport) {
                                 if seen {
-                                    compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)")
+                                    c.errorAt(offset: imp.pathSpan.start, msg: "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)")
                                 }
                             }
                             if !seen {
@@ -603,7 +607,7 @@ export fn runFrontend() -> Comp {
                                 // import/part path — reject loudly (acceptance soundness:
                                 // never silently load nothing).
                                 if !(fileExists(path: childPath)) {
-                                    compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "cannot open module file: the import/part path does not resolve to an existing file")
+                                    c.errorAt(offset: imp.pathSpan.start, msg: "cannot open module file: the import/part path does not resolve to an existing file")
                                 }
                                 // a `part` (isImport=false) joins this module; an
                                 // `import` (true) starts a fresh module.
@@ -645,13 +649,13 @@ export fn runFrontend() -> Comp {
                         }
                         if rePath.count() == 0 {
                             if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
-                                compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)")
+                                c.errorAt(offset: imp.pathSpan.start, msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)")
                             }
                         }
                         if rePath.count() != 0 {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
                                 if !(fileExists(path: rePath)) {
-                                    compileErrorAt(line: c.lineOf(offset: imp.pathSpan.start), msg: "cannot open module file: the re-export path does not resolve to an existing file")
+                                    c.errorAt(offset: imp.pathSpan.start, msg: "cannot open module file: the re-export path does not resolve to an existing file")
                                 }
                                 val rm: U64 = nextModuleId
                                 nextModuleId = nextModuleId + 1
@@ -714,6 +718,7 @@ export fn runFrontend() -> Comp {
         val fileStart: U64 = c.arena.bytes.count()
         c.appendSrc(from: s.bytes())
         c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count() - fileStart fieldStart=0 fieldLen=0 />)
+        c.modules.rangePaths.append("<stdin>")
         val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: s.bytes(), fileStart: fileStart)
     }
     // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried

@@ -356,9 +356,9 @@ pub impl LlvmCtx {
             // generic template with no concrete type arguments. Report it honestly at the
             // construction (front-end inference already handled every inferable case).
             if c.genericStructIndex(nameStart: rtStart, nameLen: rtLen) < c.arena.structs.count() {
-                compileErrorAt(line: c.lineOf(offset: typeStart), msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)")
+                c.errorAt(offset: typeStart, msg: "cannot infer the type argument(s) of this generic construction; annotate it (e.g. `Type[Arg]`, or a typed binding / return type)")
             } else {
-                compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this type is not supported")
+                c.errorAt(offset: typeStart, msg: "LLVM backend: construction of this type is not supported")
             }
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
@@ -452,7 +452,7 @@ pub impl LlvmCtx {
                 if fld.hasDefault {
                     valExpr = fld.defaultVal
                 } else {
-                    compileErrorAt(line: c.lineOf(offset: errOffset), msg: "LLVM backend: missing struct field in construction")
+                    c.errorAt(offset: errOffset, msg: "LLVM backend: missing struct field in construction")
                     return agg
                 }
             }

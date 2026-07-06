@@ -28,7 +28,7 @@ pub impl Comp {
                 // 5I64`) reinterprets the scalar bits as an array — a definite mismatch.
                 if tyIsArray {
                     if self.valueIsReliablyNonArray(value: init) {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: init)), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
+                        self.errorAt(offset: self.exprOffset(id: init), msg: "this binding is declared as an array, but the value is not an array (Plew has no implicit conversion — spec/12)")
                     }
                 }
                 if tyLen > 0U64 {
@@ -69,7 +69,7 @@ pub impl Comp {
                                                 if self.isPrimType(start: de.nameStart, len: de.nameLen) {
                                                     if self.isPrimType(start: it.nameStart, len: it.nameLen) {
                                                         if !(spansEqual(c: inout self, aStart: de.nameStart, aLen: de.nameLen, bStart: it.nameStart, bLen: it.nameLen)) {
-                                                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: init)), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
+                                                            self.errorAt(offset: self.exprOffset(id: init), msg: "array element type does not match the declared element type (Plew has no implicit conversion — spec/12)")
                                                         }
                                                     }
                                                 }
@@ -121,7 +121,7 @@ pub impl Comp {
                     // unless the value is itself the unit `()` (a bare-record construction).
                     if self.cur.retVoid {
                         if !(self.exprIsUnit(id: value)) {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: value)), msg: "a function with no return type cannot return a value (spec/04)")
+                            self.errorAt(offset: self.exprOffset(id: value), msg: "a function with no return type cannot return a value (spec/04)")
                         }
                     }
                     self.checkLitSpanCtx(id: value, tyStart: self.cur.retStart, tyLen: self.cur.retLen, isArray: self.cur.retIsArray, ctxRef: self.cur.retTy)
@@ -129,7 +129,7 @@ pub impl Comp {
                     // (`return 5I64` from `-> Array[I64]`) reinterprets the scalar bits.
                     if self.cur.retIsArray {
                         if self.valueIsReliablyNonArray(value: value) {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: value)), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
+                            self.errorAt(offset: self.exprOffset(id: value), msg: "this function returns an array, but the returned value is not an array (Plew has no implicit conversion — spec/12)")
                         }
                     }
                     // a returned value whose category disagrees with the declared return
@@ -148,7 +148,7 @@ pub impl Comp {
                         retIsUnit = true
                     }
                     if !(retIsUnit) {
-                        compileErrorAt(line: self.lineOf(offset: offset), msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
+                        self.errorAt(offset: offset, msg: "a bare `return` cannot appear in a function that returns a value — return a value (spec/04)")
                     }
                 }
             }
@@ -191,7 +191,7 @@ pub impl Comp {
                         }
                     }
                     if rangeIsFloat {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: iter)), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)")
+                        self.errorAt(offset: self.exprOffset(id: iter), msg: "a range is iterated via Step, which is integer-only — a float range cannot be a for-loop iterable (spec/02,11)")
                     }
                     // a range bound annotated by the loop var (`for val i: I32 in …`)
                     // types both bounds; otherwise each must determine its own type, so a
@@ -233,7 +233,7 @@ pub impl Comp {
                         if isStruct {
                             // the destructure pattern type must name the element struct.
                             if intern(c: inout self, start: patStart, len: patLen) != intern(c: inout self, start: et.nameStart, len: et.nameLen) {
-                                compileErrorAt(line: self.lineOf(offset: patStart), msg: "for-loop destructure pattern type does not match the element type")
+                                self.errorAt(offset: patStart, msg: "for-loop destructure pattern type does not match the element type")
                             }
                             mut val bi: U64 = 0
                             while bi < binds.count() {
@@ -271,7 +271,7 @@ pub impl Comp {
                 self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: scrut)), msg: "match must be exhaustive: cover all variants or add a wildcard")
+                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 }
                 mut val ai: U64 = 0
                 while ai < arms.count() {
@@ -295,19 +295,19 @@ pub impl Comp {
                 val gvt: TypeInfo = self.typeOf(id: value)
                 if gvt.kind == 2 {
                     if self.typeIsUnique(start: gvt.nameStart, len: gvt.nameLen) {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: value)), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
+                        self.errorAt(offset: self.exprOffset(id: value), msg: "a value-position if/match cannot yield a unique value yet; use a statement form")
                     }
                 }
                 self.verifyExpr(id: value)
             }
             Stmt.Break(val offset) => {
                 if self.cur.verifyLoopDepth == 0U64 {
-                    compileErrorAt(line: self.lineOf(offset: offset), msg: "`break` outside a loop (spec/11)")
+                    self.errorAt(offset: offset, msg: "`break` outside a loop (spec/11)")
                 }
             }
             Stmt.Continue(val offset) => {
                 if self.cur.verifyLoopDepth == 0U64 {
-                    compileErrorAt(line: self.lineOf(offset: offset), msg: "`continue` outside a loop (spec/11)")
+                    self.errorAt(offset: offset, msg: "`continue` outside a loop (spec/11)")
                 }
             }
         }
@@ -317,7 +317,7 @@ pub impl Comp {
         match self.arena.exprs[target] {
             Expr.Index(val base, val index) => {
                 if !(self.placeIsMutable(id: base)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "cannot assign to an element of an immutable binding; declare it with `mut val`")
                 }
                 self.verifyExpr(id: base)
                 self.verifyExpr(id: index)
@@ -326,7 +326,7 @@ pub impl Comp {
             Expr.Field(base: val fbase, val nameStart, val nameLen) => {
                 // the whole place must be mutable (binding + field both `mut val`).
                 if !(self.placeIsMutable(id: target)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: target)), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
+                    self.errorAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable place; the binding and field must be declared `mut val`")
                 }
                 // field-write visibility on the base's owner type.
                 val bt: TypeInfo = self.typeOf(id: fbase)
@@ -337,7 +337,7 @@ pub impl Comp {
             }
             Expr.Ident(val start, val len) => {
                 if !(self.placeIsMutable(id: target)) {
-                    compileErrorAt(line: self.lineOf(offset: start), msg: "cannot assign to an immutable binding; declare it with `mut val`")
+                    self.errorAt(offset: start, msg: "cannot assign to an immutable binding; declare it with `mut val`")
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -347,12 +347,12 @@ pub impl Comp {
                 // past it into the opaque backend "not a registered struct" error.
                 val abt: TypeInfo = self.typeOf(id: base)
                 if self.isWeakRefInst(ref: abt.ref) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: base)), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
                 } else if self.isRefInst(ref: abt.ref) {
                     // the pointee FIELD must be `mut val` — the Ref exception waives only the
                     // binding's mutability, not the field's (spec/03 `val` immutability).
                     if !(self.placeIsMutable(id: target)) {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: target)), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `Ref` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)")
+                        self.errorAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `Ref` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)")
                     }
                     val inst: TypeRef = self.arena.types[abt.ref]
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])

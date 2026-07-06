@@ -56,17 +56,17 @@ pub impl Comp {
             // scalar (`mut val`) cells; mutable non-scalar capture is additive later.
             // (an array's type span names its element, so guard isArray explicitly.)
             if lo.isArray {
-                compileErrorAt(line: self.lineOf(offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
+                self.errorAt(offset: lo.nameStart, msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
             } else {
                 if self.isPrimType(start: lo.tyStart, len: lo.tyLen) {
                     boxed = true
                 } else {
-                    compileErrorAt(line: self.lineOf(offset: lo.nameStart), msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
+                    self.errorAt(offset: lo.nameStart, msg: "capturing a mutable non-scalar value (`mut val` array/struct/string) in a closure is not yet supported")
                 }
             }
         } else {
             if !(self.captureSupported(lo: lo)) {
-                compileErrorAt(line: self.lineOf(offset: lo.nameStart), msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
+                self.errorAt(offset: lo.nameStart, msg: "capturing this value (unique / generic / enum / function) in a closure is not yet supported")
             }
         }
         self.monoWork.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
@@ -215,7 +215,7 @@ pub impl Comp {
                 // env construction would have to reach the outer env, which is not
                 // wired yet — reject loudly rather than miscompile.
                 if self.cur.inClosure {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: exprId)), msg: "nested closures are not yet supported")
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "nested closures are not yet supported")
                 }
                 // walk the body with the closure's own scope so enclosing references
                 // become captures. Save/restore the capture context (single-level;

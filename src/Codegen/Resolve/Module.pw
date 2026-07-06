@@ -519,7 +519,7 @@ pub impl Comp {
                 if self.arena.funcs[typeMatch].srcTraitId != 0U64 {
                     if self.arena.funcs[typeMatch2].srcTraitId != 0U64 {
                         if self.arena.funcs[typeMatch].srcTraitId != self.arena.funcs[typeMatch2].srcTraitId {
-                            compileErrorAt(line: self.lineOf(offset: nameStart), msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
+                            self.errorAt(offset: nameStart, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
                         }
                     }
                 }

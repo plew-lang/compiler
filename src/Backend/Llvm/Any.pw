@@ -294,12 +294,12 @@ pub impl LlvmCtx {
         val tr: TypeRef = c.arena.types[anyRef]
         val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
         if traitIdx >= c.decls.traits.count() {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `any` over an unknown trait")
+            c.errorAt(offset: nameStart, msg: "LLVM backend: `any` over an unknown trait")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
         if slot == 0U64 {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
+            c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val req: Func = c.decls.traits[traitIdx].reqs[slot - 1U64]
@@ -307,7 +307,7 @@ pub impl LlvmCtx {
         // through `any` (the erased concretes need not match, so a `Self` argument cannot
         // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.
         if reqUsesSelfInInput(c: inout c, req: req) {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
+            c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)

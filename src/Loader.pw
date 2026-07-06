@@ -21,7 +21,7 @@ pub impl Comp {
         mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
         val items: Array[TopItemAst] = parseProgramAst(p: inout p)
         if p.hasErr {
-            compileErrorAt(line: self.lineOf(offset: p.errOff), msg: p.errMsg)
+            self.errorAt(offset: p.errOff, msg: p.errMsg)
         }
         mut val i: U64 = 0
         while i < items.count() {
@@ -69,6 +69,6 @@ pub impl Comp {
     }
 
     inout fn partItemError(offset: U64) {
-        compileErrorAt(line: self.lineOf(offset: offset), msg: "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module")
+        self.errorAt(offset: offset, msg: "a `part` file may contain only `impl` blocks (spec/15) — move this free function / type / extern / top-level `val` to the module root or another module")
     }
 }

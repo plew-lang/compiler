@@ -37,7 +37,7 @@ pub impl Comp {
                 onBuiltin = false
             }
             if onBuiltin {
-                compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
+                self.errorAt(offset: f.nameStart, msg: "cannot define methods on a built-in type you do not own (use a trait conformance via core, or an extension `#Ext`)")
             }
             i += 1
         }
@@ -49,7 +49,7 @@ pub impl Comp {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv || f.isAssoc {
                 if self.newtypeUnderRef(start: f.recvStart, len: f.recvLen) != 0U64 {
-                    compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
+                    self.errorAt(offset: f.nameStart, msg: "cannot write `impl` on a newtype — it inherits the underlying type's methods and conformances automatically; wrap in a struct to add behaviour (spec/10)")
                 }
             }
             i += 1
@@ -63,7 +63,7 @@ pub impl Comp {
             if f.hasRecv {
                 if f.selfMove {
                     if !(self.typeIsUnique(start: f.recvStart, len: f.recvLen)) {
-                        compileErrorAt(line: self.lineOf(offset: f.nameStart), msg: "`move fn` (consuming self) is only allowed on a unique type")
+                        self.errorAt(offset: f.nameStart, msg: "`move fn` (consuming self) is only allowed on a unique type")
                     }
                 }
             }

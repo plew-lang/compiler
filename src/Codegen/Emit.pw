@@ -196,9 +196,43 @@ pub impl Comp {
         return line
     }
 
-    // Best-effort byte offset for an expression (for diagnostics). Leaf nodes with
-    // a span return it; compound nodes recurse to a representative child.
+    // Report a compile error at a byte offset and stop: maps the offset to its
+    // source file via the module ranges and reports `path:line` (line counted from
+    // the file's start, not the concatenated buffer). An offset outside every range
+    // (interner-appended synthetic names) falls back to the buffer-wide line count.
+    inout fn errorAt(offset: U64, msg: String) {
+        mut val i: U64 = 0
+        while i < self.modules.ranges.count() {
+            val r: Bind = self.modules.ranges[i]
+            if offset >= r.nameStart && offset < r.nameStart + r.nameLen {
+                if i < self.modules.rangePaths.count() {
+                    mut val line: I64 = 1
+                    mut val j: U64 = r.nameStart
+                    while j < offset {
+                        if self.arena.bytes[j] == 10 {
+                            line += 1
+                        }
+                        j += 1
+                    }
+                    compileErrorAtFile(path: self.modules.rangePaths[i], line: line, msg: msg)
+                }
+            }
+            i += 1
+        }
+        compileErrorAt(line: self.lineOf(offset: offset), msg: msg)
+    }
+
+    // Byte offset for an expression (for diagnostics). THE read is the span store
+    // (exprSpanStart — Lower records every parsed node's ExprAst span); the per-form
+    // recursion below remains only as the fallback for backend-SYNTHESIZED nodes
+    // (store slot 0/absent), which recurse to a representative child that is
+    // usually a stored AST node.
     inout fn exprOffset(id: U64) -> U64 {
+        if id < self.arena.exprSpanStart.count() {
+            if self.arena.exprSpanStart[id] != 0U64 {
+                return self.arena.exprSpanStart[id]
+            }
+        }
         val e: Expr = self.arena.exprs[id]
         match e {
             Expr.Int(value: _, val offset, isBool: _, tyStart: _, tyLen: _, isNeg: _) => { return offset }

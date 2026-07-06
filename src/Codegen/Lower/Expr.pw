@@ -26,7 +26,9 @@ pub impl Comp {
                                 // inner literal lowers context-free and the backend can't build it).
                                 val recName: String = stringFromBytesUnchecked(b: extractSpan(buf: self.arena.bytes, start: ct.nameStart, len: ct.nameLen))
                                 val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: recName, variant: "", isEnum: false)
-                                return self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
+                                val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
+                                self.arena.exprSpanStart[rid] = span.start
+                                return rid
                             }
                             _ => {}
                         }
@@ -40,7 +42,9 @@ pub impl Comp {
                                     val tn: Bind = self.internBytes(s: typeName)
                                     if intern(c: inout self, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
                                         val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: "", isEnum: false)
-                                        return self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
+                                        val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
+                                        self.arena.exprSpanStart[rid] = span.start
+                                        return rid
                                     }
                                 }
                             }
@@ -295,6 +299,11 @@ pub impl Comp {
                 val o: U64 = self.lowerExpr(e: operand)
                 result = self.pushExpr(e: <Expr.Await operand=o />)
             }
+        }
+        // record the AST node's span for the lowered root (diagnostic-position store;
+        // desugarings above may create several nodes — the root carries the source span)
+        if result < self.arena.exprSpanStart.count() {
+            self.arena.exprSpanStart[result] = exprAstSpan(e: e).start
         }
         return result
     }

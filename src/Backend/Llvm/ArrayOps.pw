@@ -59,7 +59,7 @@ pub impl LlvmCtx {
                 return self.genLlvmExpr(c: inout c, id: m)
             }
         }
-        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: user Index subscript needs an `index` method")
+        c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: user Index subscript needs an `index` method")
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 

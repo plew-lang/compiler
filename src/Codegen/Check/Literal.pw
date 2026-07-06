@@ -81,18 +81,18 @@ pub impl Comp {
         if tyLen != 0 {
             // explicit type suffix: range-check against it (never ambiguous).
             if !(self.litFitsType(value: value, neg: neg, dstStart: tyStart, dstLen: tyLen)) {
-                compileErrorAt(line: self.lineOf(offset: offset), msg: "integer literal is out of range for its type")
+                self.errorAt(offset: offset, msg: "integer literal is out of range for its type")
             }
             return
         }
         if eKind == 1 {
             if !(litFitsBits(value: value, neg: neg, bits: eBits, sgn: eSgn)) {
-                compileErrorAt(line: self.lineOf(offset: offset), msg: "integer literal is out of range for its type")
+                self.errorAt(offset: offset, msg: "integer literal is out of range for its type")
             }
             return
         }
         if eKind == 0 {
-            compileErrorAt(line: self.lineOf(offset: offset), msg: "integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)")
+            self.errorAt(offset: offset, msg: "integer literal has no type from context; add a type annotation or a suffix (e.g. `5I32`)")
         }
     }
 }
@@ -189,7 +189,7 @@ pub impl Comp {
                                 val cf: ConstInt = self.foldConst(id: id)
                                 if cf.isConst {
                                     if !(litFitsBits(value: cf.value, neg: cf.neg, bits: eBits, sgn: eSgn)) {
-                                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: id)), msg: "constant expression is out of range for its type")
+                                        self.errorAt(offset: self.exprOffset(id: id), msg: "constant expression is out of range for its type")
                                     }
                                 }
                                 self.checkLitCtx(id: lhs, eKind: 1, eBits: eBits, eSgn: eSgn)
@@ -330,7 +330,7 @@ pub impl Comp {
             if rt.kind == 0 {
                 if rt.nameLen == 0 {
                     if self.intRhsWitnessCount(typeStart: lt.nameStart, typeLen: lt.nameLen, name: binTraitMethodName(op: op)) >= 2U64 {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: rhs)), msg: "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)")
+                        self.errorAt(offset: self.exprOffset(id: rhs), msg: "ambiguous operator: the right operand matches more than one integer overload — add a suffix to the literal (e.g. `10I64`)")
                     }
                 }
             }

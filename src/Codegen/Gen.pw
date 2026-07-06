@@ -60,7 +60,7 @@ pub impl Comp {
             val mf: MakeField = d.args[ai]
             val v: U64 = self.fieldVis(structStart: d.nameStart, structLen: d.nameLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             if v == 0U64 {
-                compileErrorAt(line: self.lineOf(offset: mf.nameStart), msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
+                self.errorAt(offset: mf.nameStart, msg: "directive argument sets a private field of the macro struct; a macro taking `@[Name(field: …)]` arguments must expose those fields publicly (mark them `pub`)")
             }
             ai += 1
         }

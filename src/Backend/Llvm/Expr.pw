@@ -86,7 +86,7 @@ pub impl LlvmCtx {
                         return cv
                     }
                 }
-                compileErrorAt(line: c.lineOf(offset: start), msg: "LLVM backend: unknown identifier (only locals supported so far)")
+                c.errorAt(offset: start, msg: "LLVM backend: unknown identifier (only locals supported so far)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Binary(val op, val lhs, val rhs) => {
@@ -144,7 +144,7 @@ pub impl LlvmCtx {
                 // elsewhere), not a silently fabricated comparison. Scalars (integer kind 8)
                 // fall through to the direct `icmp` path below.
                 if LLVMGetTypeKind(LLVMTypeOf(l)) != 8U32 {
-                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "no witness for this operator on a struct/enum operand — `==`/`!=` need `impl T as Eq` (e.g. derive `@[Eq]`), `< <= > >=` need `impl T as Ord`, arithmetic needs the matching operator trait; the backend does not synthesize structural comparison")
+                    c.errorAt(offset: c.exprOffset(id: lhs), msg: "no witness for this operator on a struct/enum operand — `==`/`!=` need `impl T as Eq` (e.g. derive `@[Eq]`), `< <= > >=` need `impl T as Ord`, arithmetic needs the matching operator trait; the backend does not synthesize structural comparison")
                     return LLVMConstInt(self.i1ty, 0U64, 0I32)
                 }
                 // normalize operand widths: a context-less literal defaults to i64 but
@@ -220,7 +220,7 @@ pub impl LlvmCtx {
                         return raw
                     }
                 }
-                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: field access only on a registered struct value (so far)")
+                c.errorAt(offset: nameStart, msg: "LLVM backend: field access only on a registered struct value (so far)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
@@ -270,7 +270,7 @@ pub impl LlvmCtx {
                     cv = LLVMBuildInsertValue(self.b, cv, env, 1U64, anon())
                     return cv
                 }
-                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: closure not declared")
+                c.errorAt(offset: c.exprOffset(id: id), msg: "LLVM backend: closure not declared")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -284,7 +284,7 @@ pub impl LlvmCtx {
                         return LLVMBuildExtractValue(self.b, self.loadRefPointee(c: inout c, base: base), fidx, anon())
                     }
                 }
-                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
+                c.errorAt(offset: nameStart, msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Deref(val base) => {
@@ -371,7 +371,7 @@ pub impl LlvmCtx {
                         return ov
                     }
                 }
-                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
+                c.errorAt(offset: c.exprOffset(id: operand), msg: "LLVM backend: this `as` conversion is not yet supported (int-width only)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Unary(val op, val operand) => {
@@ -396,14 +396,14 @@ pub impl LlvmCtx {
                 if op == opNot() || op == opBitNot() {
                     return LLVMBuildNot(self.b, self.genLlvmExpr(c: inout c, id: operand), anon())
                 }
-                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: operand)), msg: "LLVM backend: unary operator not yet supported")
+                c.errorAt(offset: c.exprOffset(id: operand), msg: "LLVM backend: unary operator not yet supported")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             _ => {
                 eprint(text: "[exprform] ")
                 eprint(text: exprFormName(c: inout c, id: id))
                 eprint(text: "\n")
-                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: id)), msg: "LLVM backend: expression form not yet supported")
+                c.errorAt(offset: c.exprOffset(id: id), msg: "LLVM backend: expression form not yet supported")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }

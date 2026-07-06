@@ -753,6 +753,11 @@ export struct NewtypeDef {
 export struct Arena {
     pub mut val bytes: Array[U8] = []
     pub mut val exprs: Array[Expr] = []
+    // Source byte offset of each expr (parallel to `exprs`; 0 = unknown). Lower
+    // records the parsed ExprAst's span start (the AST carries a span on every
+    // node); backend-synthesized exprs keep 0. THE diagnostic-position store:
+    // exprOffset reads this before any per-form fallback.
+    pub mut val exprSpanStart: Array[U64] = []
     pub mut val stmts: Array[Stmt] = []
     pub mut val blocks: Array[Block] = []
     pub mut val funcs: Array[Func] = []
@@ -802,6 +807,9 @@ pub impl Decls { factory }
 // exported by its own module). Aliases / namespace imports are additive.
 export struct Modules {
     pub mut val ranges: Array[Bind] = []
+    // source file path of each range (parallel to `ranges`) — lets diagnostics
+    // report `path:line` instead of a line number into the concatenated buffer.
+    pub mut val rangePaths: Array[String] = []
     pub mut val exports: Array[Bind] = []
     pub mut val imports: Array[Bind] = []
     // import EDGES (fieldStart = importing module, fieldLen = the module the import

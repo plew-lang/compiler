@@ -196,14 +196,14 @@ pub impl Comp {
             if !(a.isWildcard || a.isStruct || a.enumLen == 0U64) {
                 val aId: U64 = self.knownNamedTypeId(start: a.enumStart, len: a.enumLen)
                 if aId != 0U64 && aId != sId {
-                    compileErrorAt(line: self.lineOf(offset: a.enumStart), msg: "this match arm pattern is a variant of a different enum than the value being matched")
+                    self.errorAt(offset: a.enumStart, msg: "this match arm pattern is a variant of a different enum than the value being matched")
                 } else {
                     // the named variant must exist on the enum (`Optional.Other` is not a
                     // variant of Optional) — else the arm is unreachable and the match's
                     // exhaustiveness count is wrong.
                     if a.variantLen > 0U64 {
                         if !(self.variantExists(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen)) {
-                            compileErrorAt(line: self.lineOf(offset: a.variantStart), msg: "unknown variant: this enum has no such variant")
+                            self.errorAt(offset: a.variantStart, msg: "unknown variant: this enum has no such variant")
                         }
                     }
                 }

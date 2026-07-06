@@ -60,7 +60,7 @@ pub impl Comp {
             if off == 0 {
                 off = mf.nameStart
             }
-            compileErrorAt(line: self.lineOf(offset: off), msg: "no such field on this struct/variant (check the field name)")
+            self.errorAt(offset: off, msg: "no such field on this struct/variant (check the field name)")
         }
     }
 
@@ -118,7 +118,7 @@ pub impl Comp {
                 if off == 0 {
                     off = bd.fieldStart
                 }
-                compileErrorAt(line: self.lineOf(offset: off), msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
+                self.errorAt(offset: off, msg: "match pattern binds a field that does not exist on this variant/struct (check the field name; payload binds are `Variant(field: val name)` or punning `Variant(val field)`)")
             }
             i += 1
         }

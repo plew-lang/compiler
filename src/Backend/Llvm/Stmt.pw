@@ -16,7 +16,7 @@ pub impl LlvmCtx {
                 if ty != 0U64 {
                     if tyLen > 0U64 {
                         if c.arena.types[ty].viewExtId != self.exprViewExtId(c: inout c, id: init) {
-                            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: init)), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
+                            c.errorAt(offset: c.exprOffset(id: init), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
                         }
                     }
                 }
@@ -367,7 +367,7 @@ pub impl LlvmCtx {
                 // extension-view invariance (spec/09): an assignment must not implicitly
                 // change a value's view — the target's and value's views must match.
                 if self.exprViewExtId(c: inout c, id: target) != self.exprViewExtId(c: inout c, id: value) {
-                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: value)), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
+                    c.errorAt(offset: c.exprOffset(id: value), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
                 }
                 // compound assign is desugared upstream in the Lower pass to `place = place OP
                 // value` (spec/12, place-once), so every `Stmt.Assign` reaching the backend is a
@@ -439,7 +439,7 @@ pub impl LlvmCtx {
                             self.locMoved[li] = false
                             LLVMBuildStore(self.b, rv, self.locPtr[li])
                         } else {
-                            compileErrorAt(line: c.lineOf(offset: start), msg: "LLVM backend: assignment target must be a local (so far)")
+                            c.errorAt(offset: start, msg: "LLVM backend: assignment target must be a local (so far)")
                         }
                     }
                     Expr.Index(base: val ibase, index: val iindex) => {
@@ -471,7 +471,7 @@ pub impl LlvmCtx {
                         // and `exprStructIdx` recovers the Array struct for any array place) —
                         // there is no built-in array element-store path and no `exprIsArray`
                         // type-name dispatch here. A base with no `indexSet` witness is an error.
-                        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: ibase)), msg: "LLVM backend: subscript assignment requires an `indexSet` method")
+                        c.errorAt(offset: c.exprOffset(id: ibase), msg: "LLVM backend: subscript assignment requires an `indexSet` method")
                         return
                     }
                     Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
@@ -538,7 +538,7 @@ pub impl LlvmCtx {
                                         return
                                     }
                                 }
-                                compileErrorAt(line: c.lineOf(offset: fnameStart), msg: "LLVM backend: field assignment only on a registered struct local (so far)")
+                                c.errorAt(offset: fnameStart, msg: "LLVM backend: field assignment only on a registered struct local (so far)")
                             }
                             _ => {
                                 // a general place base (`arr[i].field = v`, get-modify-set):
@@ -574,7 +574,7 @@ pub impl LlvmCtx {
                                     }
                                 }
                                 if !(handled) {
-                                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: target)), msg: "LLVM backend: nested place assignment not yet supported")
+                                    c.errorAt(offset: c.exprOffset(id: target), msg: "LLVM backend: nested place assignment not yet supported")
                                 }
                             }
                         }
@@ -621,10 +621,10 @@ pub impl LlvmCtx {
                                 return
                             }
                         }
-                        compileErrorAt(line: c.lineOf(offset: ans), msg: "LLVM backend: `->` assignment only on a Ref to a registered struct (so far)")
+                        c.errorAt(offset: ans, msg: "LLVM backend: `->` assignment only on a Ref to a registered struct (so far)")
                     }
                     _ => {
-                        compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: target)), msg: "LLVM backend: only simple `name = …` assignment is supported so far")
+                        c.errorAt(offset: c.exprOffset(id: target), msg: "LLVM backend: only simple `name = …` assignment is supported so far")
                     }
                 }
             }
@@ -666,7 +666,7 @@ pub impl LlvmCtx {
                         // must match the declared return type's view.
                         if self.curRetRef != 0U64 {
                             if c.arena.types[self.curRetRef].viewExtId != self.exprViewExtId(c: inout c, id: value) {
-                                compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: value)), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
+                                c.errorAt(offset: c.exprOffset(id: value), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
                             }
                         }
                         // an existential `any P` return (spec/08): box a concrete

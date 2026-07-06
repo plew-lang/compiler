@@ -121,7 +121,7 @@ pub impl Comp {
                 if args.count() > 0 {
                     off = self.exprOffset(id: args[0].expr)
                 }
-                compileErrorAt(line: self.lineOf(offset: off), msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)")
+                self.errorAt(offset: off, msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)")
             }
         }
     }

@@ -14,7 +14,7 @@ pub impl Comp {
             // capture arms are desugared by lowerEnumMatchCapture{Into,Expr} before reaching
             // here (the arm body binds the name), so any capture left is a desugar gap.
             if arm.pattern.captureName.bytes().count() > 0 {
-                compileErrorAt(line: self.lineOf(offset: arm.pattern.span.start), msg: "internal: enum-match capture binding was not desugared")
+                self.errorAt(offset: arm.pattern.span.start, msg: "internal: enum-match capture binding was not desugared")
             }
             val pi: PatInfo = self.lowerPatternInfo(p: arm.pattern)
             val body: U64 = self.lowerBlock(b: arm.body)
@@ -113,7 +113,7 @@ pub impl Comp {
         } else {
             // no terminal else: a literal match can't be structurally exhaustive without a
             // wildcard `_` (spec/11 requires exhaustiveness).
-            compileErrorAt(line: self.lineOf(offset: span.start), msg: "this `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
+            self.errorAt(offset: span.start, msg: "this `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
             mut val es: Array[U64] = []
             elseBlkId = self.blockOfStmts(stmts: es)
         }
@@ -175,7 +175,7 @@ pub impl Comp {
         val elseIdx: U64 = self.scalarMatchElseIdx(arms: arms)
         val haveElse: Bool = elseIdx < arms.count()
         if !(haveElse) {
-            compileErrorAt(line: self.lineOf(offset: span.start), msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
+            self.errorAt(offset: span.start, msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
         }
         // a value-giving arm's give AST, re-lowered for the dead `else` of the non-Ident
         // wrapper (any value arm has the match's result type).

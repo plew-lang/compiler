@@ -191,7 +191,7 @@ pub impl Comp {
     // program's type nesting is far below 64.
     inout fn checkInstDepth(ref: U64) {
         if self.tyRefDepth(ref: ref) > 64U64 {
-            compileErrorAt(line: self.lineOf(offset: self.arena.types[ref].nameStart), msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
+            self.errorAt(offset: self.arena.types[ref].nameStart, msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
         }
     }
 
@@ -433,7 +433,7 @@ pub impl Comp {
                     j += 1
                 }
                 if self.instArgCollidesParamName(instRef: ref) {
-                    compileErrorAt(line: self.lineOf(offset: self.arena.types[ref].nameStart), msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
+                    self.errorAt(offset: self.arena.types[ref].nameStart, msg: "a type argument's name collides with this generic's type-parameter name (e.g. `struct V` used as the value of `Dictionary[K, V]`); rename the type")
                 }
                 // gen mode: don't instantiate a generic over a to-be-derived type (spec/16).
                 if self.genMode {

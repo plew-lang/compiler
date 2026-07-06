@@ -48,7 +48,7 @@ pub impl Comp {
         while i < self.modules.imports.count() {
             val im: Bind = self.modules.imports[i]
             if !(self.isExportedName(nameStart: im.nameStart, nameLen: im.nameLen)) {
-                compileErrorAt(line: self.lineOf(offset: im.nameStart), msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
+                self.errorAt(offset: im.nameStart, msg: "imported name is not exported (mark it `export` in its module, or import it from the right module)")
             }
             i += 1
         }
@@ -91,7 +91,7 @@ pub impl Comp {
                         if self.firstFuncByName(nameStart: nameStart, nameLen: nameLen) < self.arena.funcs.count() {
                             // a free fn of this name exists only in other (loaded) modules and
                             // was not imported here — the use needs an import.
-                            compileErrorAt(line: self.lineOf(offset: nameStart), msg: "use of a function from another module without importing it (add `import … with { … }`)")
+                            self.errorAt(offset: nameStart, msg: "use of a function from another module without importing it (add `import … with { … }`)")
                         } else {
                             // no free fn of this name anywhere: a local/closure/builtin, or an
                             // `@Std` intrinsic the backend intercepts by raw name (print /
@@ -99,7 +99,7 @@ pub impl Comp {
                             // items are) and must be imported.
                             if self.isAmbientInterceptedName(start: nameStart, len: nameLen) {
                                 if !(self.isImportedInto(mod: useMod, nameStart: nameStart, nameLen: nameLen)) {
-                                    compileErrorAt(line: self.lineOf(offset: nameStart), msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)")
+                                    self.errorAt(offset: nameStart, msg: "this @Std function is not ambient — import it (e.g. `import @Std/Io with { print }`); only lang items are usable without import (spec/15)")
                                 }
                             }
                         }
@@ -110,7 +110,7 @@ pub impl Comp {
                         // (name, module) visibility failure cleanly instead of an opaque backend
                         // error (spec/15).
                         if self.labelMatchOnlyInvisible(useMod: useMod, nameStart: nameStart, nameLen: nameLen, args: args) {
-                            compileErrorAt(line: self.lineOf(offset: nameStart), msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)")
+                            self.errorAt(offset: nameStart, msg: "this call matches only a function that is not visible here — it is private to another module (spec/15: a private free fn is not reachable through an unrelated module's same-named export)")
                         }
                     }
                     i += 1
@@ -232,7 +232,7 @@ pub impl Comp {
         val real: Bind = self.realTypeNameInModule(useMod: useMod, start: start, len: len)
         if self.typeDeclVisibleFrom(useMod: useMod, start: real.nameStart, len: real.nameLen) { return }
         if self.typeDeclExistsGlobally(start: real.nameStart, len: real.nameLen) {
-            compileErrorAt(line: self.lineOf(offset: siteOffset), msg: "use of a type from another module without importing it (add `import … with { … }`)")
+            self.errorAt(offset: siteOffset, msg: "use of a type from another module without importing it (add `import … with { … }`)")
         }
     }
 
@@ -317,7 +317,7 @@ pub impl Comp {
             if ef[k] == node {
                 val w: U64 = et[k]
                 if color[w] == 1U64 {
-                    compileErrorAt(line: self.lineOf(offset: eo[k]), msg: "circular import: the module import graph must be acyclic (spec/15). A cycle means these files are logically one module — join them with `part` instead of `import`.")
+                    self.errorAt(offset: eo[k], msg: "circular import: the module import graph must be acyclic (spec/15). A cycle means these files are logically one module — join them with `part` instead of `import`.")
                 }
                 if color[w] == 0U64 {
                     self.dfsImportCycle(node: w, color: inout color, ef: ef, et: et, eo: eo)

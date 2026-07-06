@@ -45,9 +45,24 @@ export fn eprintInt(n: I64) {
     eprint(text: digitStr(d: n % 10))
 }
 
-// Report a compile error at a source line and stop (exit 1).
+// Report a compile error at a source line and stop (exit 1). Kept for positionless
+// backend-limitation reports (`line: 0`); offset-carrying sites use Comp.errorAt,
+// which maps the offset to file:line and calls compileErrorAtFile.
 export fn compileErrorAt(line: I64, msg: String) {
     eprint(text: "plewc: error: line ")
+    eprintInt(n: line)
+    eprint(text: ": ")
+    eprint(text: msg)
+    eprint(text: "\n")
+    exit(code: 1)
+}
+
+// Positioned diagnostic with the standard `path:line:` prefix (the offset->file:line
+// mapping lives in Comp.errorAt — this leaf module only formats and exits).
+export fn compileErrorAtFile(path: String, line: I64, msg: String) {
+    eprint(text: "plewc: error: ")
+    eprint(text: path)
+    eprint(text: ":")
     eprintInt(n: line)
     eprint(text: ": ")
     eprint(text: msg)

@@ -173,7 +173,7 @@ pub impl LlvmCtx {
                 }
                 // a resolved Plew fn that could not be instantiated is an error, never an
                 // intrinsic — report it here rather than fall into the name intercepts.
-                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
+                c.errorAt(offset: nameStart, msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
@@ -588,7 +588,7 @@ pub impl LlvmCtx {
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
-        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
+        c.errorAt(offset: nameStart, msg: "LLVM backend: this call is not yet supported (intrinsic or plain user function only)")
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 }

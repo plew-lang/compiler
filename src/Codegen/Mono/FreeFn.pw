@@ -172,7 +172,7 @@ pub impl Comp {
                         // parametric candidate in a template body is not evidence).
                         if self.tyRefIsGround(ref: found) && self.tyRefIsGround(ref: cand) {
                             if !(self.sameMangle(refA: found, refB: cand)) {
-                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: args[pi].expr)), msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
+                                self.errorAt(offset: self.exprOffset(id: args[pi].expr), msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
                             }
                         }
                     }

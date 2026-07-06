@@ -209,18 +209,18 @@ pub impl Comp {
                         tpi += 1
                     }
                     if positional < posNeed {
-                        compileErrorAt(line: self.lineOf(offset: t.nameStart), msg: "`any P` leaves a type parameter unbound — bind all of the trait's type arguments (spec/08)")
+                        self.errorAt(offset: t.nameStart, msg: "`any P` leaves a type parameter unbound — bind all of the trait's type arguments (spec/08)")
                     }
                     // each associated type must be bound by name.
                     mut val asi: U64 = 0
                     while asi < tr.assocTypes.count() {
                         if !(self.anyHasNamedBinding(t: t, nameId: tr.assocTypes[asi].nameId)) {
-                            compileErrorAt(line: self.lineOf(offset: t.nameStart), msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
+                            self.errorAt(offset: t.nameStart, msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
                         }
                         asi += 1
                     }
                 } else {
-                    compileErrorAt(line: self.lineOf(offset: t.nameStart), msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)")
+                    self.errorAt(offset: t.nameStart, msg: "`any P` names an unknown trait — `any` exists only over a trait (spec/08)")
                 }
             }
             ti += 1
@@ -262,7 +262,7 @@ pub impl Comp {
                 while ri < t.reqs.count() {
                     val r: Func = t.reqs[ri]
                     if !(self.witnessedHas(witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
-                        compileErrorAt(line: self.lineOf(offset: cf.typeStart), msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
+                        self.errorAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                     }
                     ri += 1
                 }
@@ -272,12 +272,12 @@ pub impl Comp {
                 while sti < t.supertraits.count() {
                     val sup: Bind = t.supertraits[sti]
                     if !(self.typeConformsTo(typeStart: cf.typeStart, typeLen: cf.typeLen, traitStart: sup.nameStart, traitLen: sup.nameLen)) {
-                        compileErrorAt(line: self.lineOf(offset: cf.typeStart), msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
+                        self.errorAt(offset: cf.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
                     }
                     sti += 1
                 }
             } else {
-                compileErrorAt(line: self.lineOf(offset: cf.traitStart), msg: "conformance to an unknown trait (is it declared / imported?)")
+                self.errorAt(offset: cf.traitStart, msg: "conformance to an unknown trait (is it declared / imported?)")
             }
             ci += 1
             }
@@ -316,7 +316,7 @@ pub impl Comp {
         while i < self.decls.methodAliases.count() {
             val al: MethodAlias = self.decls.methodAliases[i]
             if !(self.typeHasMember(recvStart: al.recvStart, recvLen: al.recvLen, nameStart: al.realStart, nameLen: al.realLen)) {
-                compileErrorAt(line: self.lineOf(offset: al.aliasStart), msg: "`via` target is not a member of this type")
+                self.errorAt(offset: al.aliasStart, msg: "`via` target is not a member of this type")
             }
             i += 1
         }
@@ -483,7 +483,7 @@ pub impl Comp {
                                 ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
                             }
                             if !ok {
-                                compileErrorAt(line: self.lineOf(offset: fb.paramStart), msg: "type argument does not conform to the trait required by `where`")
+                                self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
                             }
                         }
                     }
@@ -522,7 +522,7 @@ pub impl Comp {
                                 if tp.nameId == fb.paramNameId {
                                     if pi < inst.args.count() {
                                         if !(self.conformsInstance(ref: inst.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen)) {
-                                            compileErrorAt(line: self.lineOf(offset: fb.paramStart), msg: "receiver type argument does not conform to the trait required by the method's `where`")
+                                            self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                         }
                                     }
                                 }

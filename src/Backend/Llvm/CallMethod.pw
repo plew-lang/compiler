@@ -56,7 +56,7 @@ pub impl LlvmCtx {
                 if mfi < c.arena.funcs.count() {
                     if mfi != cand {
                         if report {
-                            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view)")
+                            c.errorAt(offset: nameStart, msg: "stacked extension views provide the same method; the call is ambiguous (drop one view)")
                         }
                     }
                 } else {
@@ -95,7 +95,7 @@ pub impl LlvmCtx {
                 if mfi < c.arena.funcs.count() {
                     if mfi != cand {
                         if report {
-                            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "stacked extension views provide the same method; the call is ambiguous (drop one view, or select with `value#Ext.method()`)")
+                            c.errorAt(offset: nameStart, msg: "stacked extension views provide the same method; the call is ambiguous (drop one view, or select with `value#Ext.method()`)")
                         }
                     }
                 } else {
@@ -115,12 +115,12 @@ pub impl LlvmCtx {
         mut val recvNameLen: U64 = 0
         val mfi: U64 = self.resolveExtMethodMfi(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvNameStart: inout recvNameStart, recvNameLen: inout recvNameLen, report: true)
         if recvNameLen == 0U64 {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: extension method call only on a struct / enum / primitive value (so far)")
+            c.errorAt(offset: nameStart, msg: "LLVM backend: extension method call only on a struct / enum / primitive value (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
         if mfi >= c.arena.funcs.count() {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
+            c.errorAt(offset: nameStart, msg: "no such extension method on this type (is the extension name right, and a `pub impl`?)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // an extension method on a registered struct / enum is the receiver's 0-type-arg `gm`
@@ -150,7 +150,7 @@ pub impl LlvmCtx {
             slot = self.ensureProvidedDeclared(c: inout c, fi: mfi)
         }
         if slot >= self.fnIdx.count() {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this extension method is not emittable yet (generic / provided)")
+            c.errorAt(offset: nameStart, msg: "LLVM backend: this extension method is not emittable yet (generic / provided)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val mf: Func = c.arena.funcs[mfi]
@@ -264,7 +264,7 @@ pub impl LlvmCtx {
                     self.releaseInoutPins(c: inout c, mark: aPinMark)
                     return arv
                 }
-                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this assoc fn is not emittable yet (generic / std / trait)")
+                c.errorAt(offset: nameStart, msg: "LLVM backend: this assoc fn is not emittable yet (generic / std / trait)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
@@ -337,7 +337,7 @@ pub impl LlvmCtx {
                     if gslot < self.genMethK.count() {
                         return self.genGenMethodCall(c: inout c, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
                     }
-                    compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this generic method is not emittable yet (provided / std / method-own type params)")
+                    c.errorAt(offset: nameStart, msg: "LLVM backend: this generic method is not emittable yet (provided / std / method-own type params)")
                     return LLVMConstInt(self.i64ty, 0U64, 0I32)
                 }
             }
@@ -399,12 +399,12 @@ pub impl LlvmCtx {
                             self.releaseInoutPins(c: inout c, mark: ePinMark)
                             return erv
                         }
-                        compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this enum method is not emittable yet (generic / provided)")
+                        c.errorAt(offset: nameStart, msg: "LLVM backend: this enum method is not emittable yet (generic / provided)")
                         return LLVMConstInt(self.i64ty, 0U64, 0I32)
                     }
                 }
             }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: method call only on a registered struct value (so far)")
+            c.errorAt(offset: nameStart, msg: "LLVM backend: method call only on a registered struct value (so far)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val sd: StructDef = c.arena.structs[rsidx]
@@ -430,17 +430,17 @@ pub impl LlvmCtx {
             // a bare call to a method that exists only as an extension method (spec/09):
             // extension methods don't join bare resolution — point the user at the view.
             if c.extMethodNameExists(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
-                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "this method is only provided by an extension — call it through the view (`value#Ext.method()`) or declare `defaultExtension #Ext` on the type")
+                c.errorAt(offset: nameStart, msg: "this method is only provided by an extension — call it through the view (`value#Ext.method()`) or declare `defaultExtension #Ext` on the type")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             // a multi-path inter-trait conformance (spec/09): the type reaches the target
             // trait through more than one subject trait, so it does not conform bare —
             // the method is reachable only by selecting a path with `value#P`.
             if c.viewOnlyMethodExists(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
-                compileErrorAt(line: c.lineOf(offset: nameStart), msg: "ambiguous inter-trait conformance: this type reaches the trait providing this method through more than one subject trait — select a conformance path with `value#P.method()` (spec/09)")
+                c.errorAt(offset: nameStart, msg: "ambiguous inter-trait conformance: this type reaches the trait providing this method through more than one subject trait — select a conformance path with `value#P.method()` (spec/09)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: method not found / not yet supported")
+            c.errorAt(offset: nameStart, msg: "LLVM backend: method not found / not yet supported")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // a method with its OWN type params (`absorb[S](sink: inout S) where S: Sink`):
@@ -484,7 +484,7 @@ pub impl LlvmCtx {
             slot = self.ensureProvidedDeclared(c: inout c, fi: mfi)
         }
         if slot >= self.fnIdx.count() {
-            compileErrorAt(line: c.lineOf(offset: nameStart), msg: "LLVM backend: this method is not emittable yet (generic / provided / trait receiver)")
+            c.errorAt(offset: nameStart, msg: "LLVM backend: this method is not emittable yet (generic / provided / trait receiver)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val pinMark: U64 = self.pinCells.count()

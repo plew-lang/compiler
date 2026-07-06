@@ -87,7 +87,7 @@ pub impl Comp {
             return
         }
         if state[i] == 1U64 {
-            compileErrorAt(line: self.lineOf(offset: self.arena.globals[i].nameStart), msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)")
+            self.errorAt(offset: self.arena.globals[i].nameStart, msg: "module-level variables form an initialization cycle (a global's initializer depends on itself transitively — spec/15)")
             return
         }
         state[i] = 1U64

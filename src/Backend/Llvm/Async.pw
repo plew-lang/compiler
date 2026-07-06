@@ -164,10 +164,10 @@ pub impl LlvmCtx {
         while fi < c.arena.funcs.count() {
             if isAsyncFn(c: inout c, fi: fi) {
                 if c.arena.funcs[fi].typeParams.count() > 0U64 {
-                    compileErrorAt(line: c.lineOf(offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: generic `async fn` is not yet supported")
+                    c.errorAt(offset: c.arena.funcs[fi].nameStart, msg: "LLVM backend: generic `async fn` is not yet supported")
                 }
                 if c.arena.funcs[fi].hasRecv {
-                    compileErrorAt(line: c.lineOf(offset: c.arena.funcs[fi].nameStart), msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
+                    c.errorAt(offset: c.arena.funcs[fi].nameStart, msg: "LLVM backend: `async fn` methods are not yet supported (only free `async fn`)")
                 }
                 val frameTy: LLVMTypeRef = self.buildAsyncFrameTy(c: inout c, fi: fi)
                 // resume fn: void __af<fi>_resume(void*).

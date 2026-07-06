@@ -67,7 +67,7 @@ pub impl LlvmCtx {
                         isKnownDef = true
                     }
                     if isKnownDef {
-                        compileErrorAt(line: c.lineOf(offset: lt.nameStart), msg: "internal error (compiler bug): a ground generic instance reached emission unregistered and demand registration declined — please report this")
+                        c.errorAt(offset: lt.nameStart, msg: "internal error (compiler bug): a ground generic instance reached emission unregistered and demand registration declined — please report this")
                     }
                 }
             }
@@ -437,7 +437,7 @@ pub impl LlvmCtx {
             mut val ci: U64 = 0
             while ci < targs.count() {
                 if targs[ci] == 0U64 {
-                    compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "cannot ground a type argument of this operator's witness — the operand's element type is not statically recoverable here; annotate the operand's type or bind it to a typed local")
+                    c.errorAt(offset: c.exprOffset(id: lhs), msg: "cannot ground a type argument of this operator's witness — the operand's element type is not statically recoverable here; annotate the operand's type or bind it to a typed local")
                 }
                 ci += 1
             }
@@ -448,7 +448,7 @@ pub impl LlvmCtx {
         }
         val aslot: U64 = self.userFnSlot(idx: fi)
         if aslot >= self.fnIdx.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: lhs)), msg: "LLVM backend: operator witness not emittable yet")
+            c.errorAt(offset: c.exprOffset(id: lhs), msg: "LLVM backend: operator witness not emittable yet")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         return LLVMBuildCall2(self.b, self.fnTy[aslot], self.fnVal[aslot], arrayCPtr(av), av.count(), anon())

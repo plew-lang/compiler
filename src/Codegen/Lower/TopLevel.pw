@@ -9,7 +9,7 @@
 pub impl Comp {
     inout fn lowerExtern(e: ExternAst) {
         if !(e.abiOk) {
-            compileErrorAt(line: self.lineOf(offset: e.abiSpan.start), msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
+            self.errorAt(offset: e.abiSpan.start, msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
         }
         mut val fi: U64 = 0
         while fi < e.fns.count() {
@@ -23,7 +23,7 @@ pub impl Comp {
                 mut val pj: U64 = 0
                 while pj < sig.params.count() {
                     if !(sig.params[pj].noLabel) {
-                        compileErrorAt(line: self.lineOf(offset: sig.params[pj].span.start), msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
+                        self.errorAt(offset: sig.params[pj].span.start, msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
                     }
                     pj += 1
                 }

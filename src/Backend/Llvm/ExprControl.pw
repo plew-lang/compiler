@@ -212,7 +212,7 @@ pub impl LlvmCtx {
         val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
         val bge: U64 = self.genEnumSlot(c: inout c, ref: baseRef)
         if bge >= self.genEnumRefs.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` base must be a registered Optional instance")
+            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` base must be a registered Optional instance")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val beid: U64 = self.genEnumDefs[bge]
@@ -227,12 +227,12 @@ pub impl LlvmCtx {
         val tName: TypeRef = c.arena.types[tRef]
         val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
         if tSidx >= c.arena.structs.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` element must be a registered struct")
+            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` element must be a registered struct")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
         if fidx >= c.arena.structs[tSidx].fields.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` element has no such field")
+            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` element has no such field")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // result Optional[U] where U is the member field's type: build the ref and find
@@ -248,7 +248,7 @@ pub impl LlvmCtx {
         val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
         val rge: U64 = self.genEnumSlot(c: inout c, ref: rr)
         if rge >= self.genEnumRefs.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: base)), msg: "LLVM backend: `?.` result Optional instance is not registered")
+            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` result Optional instance is not registered")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val reid: U64 = self.genEnumDefs[rge]
@@ -300,11 +300,11 @@ pub impl LlvmCtx {
         val ege: U64 = self.genEnumSlot(c: inout c, ref: exprRef)
         val rge: U64 = self.genEnumSlot(c: inout c, ref: self.curRetRef)
         if ege >= self.genEnumRefs.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: expr)), msg: "LLVM backend: `try` needs a registered Result instance")
+            c.errorAt(offset: c.exprOffset(id: expr), msg: "LLVM backend: `try` needs a registered Result instance")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         if rge >= self.genEnumRefs.count() {
-            compileErrorAt(line: c.lineOf(offset: c.exprOffset(id: expr)), msg: "LLVM backend: `try` is only valid in a function returning a registered Result")
+            c.errorAt(offset: c.exprOffset(id: expr), msg: "LLVM backend: `try` is only valid in a function returning a registered Result")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val eeid: U64 = self.genEnumDefs[ege]

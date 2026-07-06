@@ -14,7 +14,7 @@ pub impl Comp {
         // (`val x: I64 = doNothing()`) is a type error (spec/04).
         if self.exprIsVoidCall(id: valueExpr) {
             if !(self.tcLog) {
-                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "cannot use the result of a function that returns no value (spec/04)")
+                self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "cannot use the result of a function that returns no value (spec/04)")
             }
             return
         }
@@ -27,7 +27,7 @@ pub impl Comp {
                 match self.arena.exprs[valueExpr] {
                     Expr.Array(elems: _) => {
                         if !(self.tcLog) {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "a dictionary value cannot be an array literal — use `[:]` for an empty dictionary, or `[k: v]` for entries (`[]` is an array literal; spec/02)")
+                            self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "a dictionary value cannot be an array literal — use `[:]` for an empty dictionary, or `[k: v]` for entries (`[]` is an array literal; spec/02)")
                         }
                         return
                     }
@@ -111,7 +111,7 @@ pub impl Comp {
             eprintInt(n: self.lineOf(offset: self.exprOffset(id: valueExpr)))
             eprint(text: "\n")
         } else {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: valueExpr)), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)")
+            self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch: this value's type does not match the type required here (Plew has no implicit conversion — spec/12)")
         }
     }
 
@@ -194,7 +194,7 @@ pub impl Comp {
             eprintInt(n: self.lineOf(offset: self.exprOffset(id: operand)))
             eprint(text: "\n")
         } else {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: msg)
+            self.errorAt(offset: self.exprOffset(id: operand), msg: msg)
         }
     }
 

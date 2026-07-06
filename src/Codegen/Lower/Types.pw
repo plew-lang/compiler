@@ -501,7 +501,7 @@ pub impl Comp {
             }
         }
         if !(ok) {
-            compileErrorAt(line: self.lineOf(offset: span.start), msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
+            self.errorAt(offset: span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
             return self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
         }
         val ct: TypeRef = self.arena.types[ctxRef]
@@ -535,6 +535,8 @@ pub impl Comp {
         val elseBlk: U64 = self.arena.blocks.count()
         self.arena.blocks.append(<Block stmts=elseStmts />)
         val cond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
-        return self.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
+        val rid: U64 = self.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
+        self.arena.exprSpanStart[rid] = span.start
+        return rid
     }
 }

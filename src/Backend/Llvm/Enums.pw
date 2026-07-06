@@ -798,7 +798,7 @@ pub impl LlvmCtx {
         }
         val reg: U64 = self.enumRegSlot(c: inout c, start: typeStart, len: typeLen)
         if reg >= self.genEnumRefs.count() {
-            compileErrorAt(line: c.lineOf(offset: typeStart), msg: "LLVM backend: construction of this enum not yet supported (generic / array-field enums are TODO)")
+            c.errorAt(offset: typeStart, msg: "LLVM backend: construction of this enum not yet supported (generic / array-field enums are TODO)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         return self.buildEnumValue(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)

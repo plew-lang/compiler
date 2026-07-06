@@ -37,7 +37,7 @@ pub impl Comp {
     // or subexpression is ever re-evaluated.
     inout fn checkInoutPair(a: U64, b: U64) {
         if self.classifyInoutPair(a: a, b: b) == 1U64 {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: b)), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)")
+            self.errorAt(offset: self.exprOffset(id: b), msg: "two `inout` positions in one call overlap: they reach into the same variable (or one contains the other) without diverging at distinct fields; overlapping `inout` is forbidden (spec/03)")
         }
     }
 
@@ -324,7 +324,7 @@ pub impl Comp {
         if bt.kind == 2 {
             if self.fieldVis(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
                 if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
-                    compileErrorAt(line: self.lineOf(offset: nameStart), msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")
+                    self.errorAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")
                 }
             }
             self.checkFieldReadVis(ownerStart: bt.nameStart, ownerLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen, offset: nameStart)
@@ -350,10 +350,10 @@ pub impl Comp {
                 // value that is immediately discarded — spec/03).
                 if self.arena.funcs[mi].selfInout {
                     if !(self.exprIsPlace(id: recv)) {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: recv)), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
+                        self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
                     }
                     if !(self.placeIsMutable(id: recv)) {
-                        compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+                        self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
                     }
                     // overlapping `inout` (spec/03): an `inout fn` self IS an inout
                     // position, so it pairs with every `inout` argument — statically-
@@ -374,10 +374,10 @@ pub impl Comp {
         if rt.kind == 3 {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "append") {
                 if !(self.exprIsPlace(id: recv)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: recv)), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)")
+                    self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot `append` to a temporary array; the receiver must be a place declared `mut val` (spec/03)")
                 }
                 if !(self.placeIsMutable(id: recv)) {
-                    compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: recv)), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
+                    self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
                 }
             }
         }
@@ -416,7 +416,7 @@ pub impl Comp {
         // op); `%`/`Rem` is integer-only, so reject it on a float (spec/12).
         if self.exprIsFloat(id: lhs) || self.exprIsFloat(id: rhs) {
             if op == opRem() {
-                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)")
+                self.errorAt(offset: self.exprOffset(id: lhs), msg: "`%` (remainder) is integer-only; not defined for floats (spec/12)")
             }
             return
         }
@@ -427,14 +427,14 @@ pub impl Comp {
             return
         }
         if self.compareNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison")
+            self.errorAt(offset: self.exprOffset(id: lhs), msg: "comparison needs an `Eq`/`Ord` witness — a struct/enum needs `impl T as Eq` (e.g. derive `@[Eq]`) for `==`/`!=` or `impl T as Ord` for `< <= > >=`; there is no built-in structural/tag comparison")
             return
         }
         if self.hasBinTraitWitness(op: op, lhs: lhs, rhs: rhs) {
             return
         }
         if self.binTraitNeedsTrait(op: op, lhs: lhs, rhs: rhs) {
-            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: lhs)), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
+            self.errorAt(offset: self.exprOffset(id: lhs), msg: "arithmetic operator needs Add/Sub/Mul/Div/Rem; not implemented for this type")
         }
     }
 
@@ -460,12 +460,12 @@ pub impl Comp {
         val targetNum: Bool = self.isIntType(start: tyStart, len: tyLen) || self.isFloatType(start: tyStart, len: tyLen)
         if self.castOperandIsBool(operand: operand) {
             if targetNum {
-                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)")
+                self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast a Bool to a numeric type (Bool is not numeric; spec/12)")
                 return
             }
         } else {
             if targetBool {
-                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "`as` cannot cast to Bool (Bool is not numeric; spec/12)")
+                self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` cannot cast to Bool (Bool is not numeric; spec/12)")
                 return
             }
         }
@@ -473,20 +473,20 @@ pub impl Comp {
             // a float -> int `as` truncates the fractional part = lossy, so it is not a
             // valid `as` conversion (spec/12: `as` is lossless/total only). Use TryFrom.
             if self.exprIsFloat(id: operand) {
-                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)")
+                self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` cannot convert a float to an integer (it would truncate the fractional part); use a fallible TryFrom conversion (spec/12)")
                 return
             }
             match self.arena.exprs[operand] {
                 Expr.Int(val value, val offset, isBool: _, tyStart: _, tyLen: _, val isNeg) => {
                     if !(self.litFitsType(value: value, neg: isNeg, dstStart: tyStart, dstLen: tyLen)) {
-                        compileErrorAt(line: self.lineOf(offset: offset), msg: "integer literal is out of range for the target type of `as`")
+                        self.errorAt(offset: offset, msg: "integer literal is out of range for the target type of `as`")
                     }
                 }
                 _ => {
                     val st: TypeInfo = self.typeOf(id: operand)
                     if self.isIntType(start: st.nameStart, len: st.nameLen) {
                         if !(self.losslessInt(srcStart: st.nameStart, srcLen: st.nameLen, dstStart: tyStart, dstLen: tyLen)) {
-                            compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: operand)), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion")
+                            self.errorAt(offset: self.exprOffset(id: operand), msg: "`as` would lose information (narrowing or signedness change); use a fallible TryFrom conversion")
                         }
                     }
                 }
