@@ -397,9 +397,8 @@ pub impl LlvmCtx {
             LLVMBuildStore(self.b, LLVMGetParam(fv, argIdx), slot2)
             self.pushLocalR(nameStart: p.nameStart, nameLen: p.nameLen, ptr: slot2, ty: pty, kind: pKind, structIdx: pSidx, isArr: effIsArray, elemTy: pElem, elemKind: pKind, typeRef: pRef)
         }
-        // an array-of-struct param (`lhsNames: Array[Bind]`): track the element struct
-        // so `param[i].field` resolves (mirrors the Let handler — bindOneParam alone
-        // left this unset, breaking field access on a struct-array param's element).
+        // an array param: track the element's TypeRef so `param[i]` recovers the
+        // element (mirrors the Let handler).
         if effIsArray {
             // element TypeRef (a Ref / nested-array / generic element): Array[E]'s first arg,
             // GROUNDED under the active instantiation env so a generic element `Array[E]` in

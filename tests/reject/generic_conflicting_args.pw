@@ -1,0 +1,11 @@
+// Two arguments pinning the SAME type parameter to different concrete types
+// is a type error (spec/06) — 曖昧はエラー, not first-one-wins. Regression
+// probe: inference silently kept the first (T=I64), and emission crashed the
+// compiler chasing a witness for the Array[String] argument that doesn't
+// exist under T=I64.
+fn lens[T](a: Array[T], b: Array[T]) -> U64 {
+    return a.count() + b.count()
+}
+fn main() {
+    val n: U64 = lens(a: [1I64, 2I64], b: ["x"])
+}

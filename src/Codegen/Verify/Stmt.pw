@@ -84,6 +84,27 @@ pub impl Comp {
                 // register the binding (after the init, so it can't see itself) with its
                 // effective type and mutability, so later places resolve / check.
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                // an UN-annotated array-literal binding infers `Array[E]` from its FIRST
+                // element (inferLetType); the remaining elements must be checked against
+                // that E exactly like the annotated loop above — without this a
+                // heterogeneous literal (`val xs = ["a", 1I64]`) sails through and the
+                // stray element's bits are reinterpreted at run time.
+                if tyLen == 0U64 && le.arr && le.ty != 0U64 {
+                    match self.arena.exprs[init] {
+                        Expr.Array(val elems) => {
+                            if self.arena.types[le.ty].args.count() > 0U64 {
+                                val infElemRef: U64 = self.arena.types[le.ty].args[0]
+                                // element 0 DEFINED E; check the rest against it.
+                                mut val ek: U64 = 1
+                                while ek < elems.count() {
+                                    self.tcCheckValue(expectedRef: infElemRef, valueExpr: elems[ek], pos: "element")
+                                    ek += 1
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {

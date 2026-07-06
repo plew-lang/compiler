@@ -123,8 +123,36 @@ pub impl Comp {
                             if elems.count() > 0 {
                                 val eRef: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
                                 if eRef != 0 {
-                                    val et: TypeRef = self.arena.types[eRef]
-                                    return <LetEff start=et.nameStart len=et.nameLen arr=true ty=self.arrayRefOfElem(elemRef: eRef) />
+                                    // name the element by its REGISTERED span (the mangled
+                                    // form for a compound element `Box[I64]`/`Ref[Cell]`) —
+                                    // the kind-3 convention every consumer keys on. The bare
+                                    // head name would alias an ARGLESS generic head and send
+                                    // the field grounding into infinite recursion. During
+                                    // collection the element AND the `Array[E]` instance are
+                                    // registered here, exactly like a written annotation
+                                    // (this is what makes the inferred type emittable —
+                                    // an ARC-element array with no registered witnesses
+                                    // loops at emission); later passes look the entry up.
+                                    if self.inCollection {
+                                        self.registerArrayElemRef(elemRef: eRef)
+                                        self.scanType(ref: self.arrayRefOfElem(elemRef: eRef))
+                                    }
+                                    val en: Bind = self.arrayElemNameForRef(elemRef: eRef)
+                                    // post-collection, a compound element whose mangled span
+                                    // never got registered (the collection walk couldn't type
+                                    // it) must NOT adopt the bare-head fallback name — leave
+                                    // the binding untyped so downstream reports cleanly.
+                                    mut val named: Bool = true
+                                    if !(self.inCollection) {
+                                        if self.isCompoundType(ref: eRef) {
+                                            if self.arrayElemRef(start: en.nameStart, len: en.nameLen) == 0U64 {
+                                                named = false
+                                            }
+                                        }
+                                    }
+                                    if named {
+                                        return <LetEff start=en.nameStart len=en.nameLen arr=true ty=self.arrayRefOfElem(elemRef: eRef) />
+                                    }
                                 }
                             }
                         }

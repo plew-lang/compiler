@@ -1,0 +1,9 @@
+// An UN-annotated array literal infers `Array[E]` from its FIRST element
+// (spec/06 local inference); the remaining elements must BE that E — Plew has
+// no implicit conversion (spec/12), so a heterogeneous literal is a type
+// error, same as the annotated form. Regression probe: the first-element
+// inference initially skipped the element check, so `["a", 1I64]` compiled
+// and the stray I64's bits were dereferenced as a String pointer at run time.
+fn main() {
+    val xs = ["a", 1I64]
+}

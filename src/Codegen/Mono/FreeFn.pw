@@ -91,6 +91,8 @@ pub impl Comp {
     // The element ref of an `Array[E]`-typed argument, from the expression's type —
     // an array local's carried ref, a call's declared `Array[E]` return, a field, … —
     // not just an Ident local (an Ident-only walk left `f(xs: mkArr())` uninferred).
+    // A NON-EMPTY array-literal argument (`f(xs: ["a", "b"])`) derives from its first
+    // element (exprType reports the literal itself as unknown — element-wise typing).
     inout fn argArrayElemRef(argExpr: U64) -> U64 {
         val r: U64 = self.typedIrRefOfInfo(ti: self.typeOf(id: argExpr))
         if r != 0 && r < self.arena.types.count() {
@@ -100,6 +102,14 @@ pub impl Comp {
                     return t.args[0]
                 }
             }
+        }
+        match self.arena.exprs[argExpr] {
+            Expr.Array(val elems) => {
+                if elems.count() > 0 {
+                    return self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
+                }
+            }
+            _ => {}
         }
         return 0
     }
@@ -132,13 +142,12 @@ pub impl Comp {
             mut val pi: U64 = 0
             while pi < f.params.count() {
                 val p: Param = f.params[pi]
+                mut val cand: U64 = 0
                 if p.tyIsArray {
                     // `Array[T]` param: infer T from the argument array's element.
                     if p.tyNameId == tp.nameId {
                         if pi < args.count() {
-                            if found == 0 {
-                                found = self.argArrayElemRef(argExpr: args[pi].expr)
-                            }
+                            cand = self.argArrayElemRef(argExpr: args[pi].expr)
                         }
                     }
                 } else {
@@ -146,10 +155,25 @@ pub impl Comp {
                     // `T` is found whether it is the whole parameter type (`x: T`) or
                     // nested in it (`f: fn(x: Item) -> T`).
                     if pi < args.count() {
-                        if found == 0 {
-                            val at: TypeInfo = self.typeOf(id: args[pi].expr)
-                            val argRef: U64 = self.argViewRef(argExpr: args[pi].expr, baseRef: self.tyRefOfInfo(ti: at))
-                            found = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
+                        val at: TypeInfo = self.typeOf(id: args[pi].expr)
+                        val argRef: U64 = self.argViewRef(argExpr: args[pi].expr, baseRef: self.tyRefOfInfo(ti: at))
+                        cand = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
+                    }
+                }
+                if cand != 0 {
+                    if found == 0 {
+                        found = cand
+                    } else {
+                        // two arguments pinning the SAME param to different concrete
+                        // types (`lens(a: [1I64], b: ["x"])` with `a/b: Array[T]`) is a
+                        // type error, not a first-one-wins (曖昧はエラー) — silently
+                        // keeping the first sent emission after a witness that does not
+                        // exist. Only two GROUND disagreeing refs are conclusive (a
+                        // parametric candidate in a template body is not evidence).
+                        if self.tyRefIsGround(ref: found) && self.tyRefIsGround(ref: cand) {
+                            if !(self.sameMangle(refA: found, refB: cand)) {
+                                compileErrorAt(line: self.lineOf(offset: self.exprOffset(id: args[pi].expr)), msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
+                            }
                         }
                     }
                 }

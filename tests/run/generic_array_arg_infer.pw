@@ -4,7 +4,6 @@
 // Ident-only walk left `firstOf(xs: mkStrs())` uninferred (T=0), so the outer
 // generic (`print[T]`) had no instance and the program was wrongly rejected.
 import @Std/Io with { print }
-import @Std/Core with { Add }
 
 fn firstOf[T](xs: Array[T]) -> T {
     return xs[0]

@@ -431,12 +431,21 @@ pub impl Comp {
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
-                // an INFERRED type registers its instance the same way an annotation
-                // does (collectGenInsts scans Let.ty): `val names = ["a", "b"]` needs
-                // the `Array[String]` instance + witnesses just like
-                // `val names: Array[String] = …`.
+                // an INFERRED non-literal type registers its instance the same way an
+                // annotation does: `val r = makeBox()` reaches Box[I64] just like
+                // `val r: Box[I64] = …`. (An array-literal let registers inside
+                // inferLetType itself — shared with the flat module-level walk.)
                 if tyLen == 0U64 && le.ty != ty {
                     self.scanType(ref: le.ty)
+                }
+                // an ANNOTATED let inside a generic body needs its type scanned UNDER
+                // the active instance env (scanType grounds): `val xs: Array[Box[T]]`
+                // in `wrapAll[I64]` registers Array[Box[I64]] + its element — the flat
+                // env-less walk only sees the parametric template, and an unregistered
+                // grounded instance died as a null value at emission (mirrors the
+                // grounded param scanType above).
+                if ty != 0U64 {
+                    self.scanType(ref: ty)
                 }
             }
             Stmt.Assign(val target, val value) => {

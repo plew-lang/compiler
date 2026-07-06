@@ -1,0 +1,32 @@
+// Un-annotated array-literal lets over the harder element categories
+// (spec/06): a generic-INSTANCE element (`Box[I64]` — named by its registered
+// mangled span, not the bare head), a module-level literal let (registered by
+// the flat collection walk, not the body walk), and an enum element.
+// Regression probes: the bare-head element name aliased an argless generic
+// head and hung the compiler; a module-level literal let missed instance
+// registration entirely and hung emission.
+import @Std/Io with { print }
+
+struct Box[T] { pub val v: T }
+pub impl Box { factory }
+
+enum Color { Red  Green }
+
+val nums = [4I64, 5I64]
+val labels = ["hot", "cold"]
+
+fn main() {
+    val bs = [<Box[I64] v=7I64 />]
+    print(bs[0].v)              // 7
+    val cs = [<Color.Red />, <Color.Green />]
+    mut val greens: U64 = 0
+    for c in cs {
+        match c {
+            Color.Green => { greens += 1 }
+            _ => {}
+        }
+    }
+    print(greens)               // 1
+    print(nums[1])              // 5
+    print(labels[0])            // hot
+}

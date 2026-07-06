@@ -403,6 +403,29 @@ pub impl Comp {
                                         return self.typeInfoOfRef(ref: gr)
                                     }
                                 }
+                            } else {
+                                // an `Array[E]` return grounds the same way (`idArr(xs: zs)
+                                // -> Array[U]` types as Array[I64]), so a generic CONSUMER
+                                // of the call result can infer from it — without this the
+                                // parametric `Array[U]` leaks out (uninferrable at best,
+                                // self-referential grounding at worst). Gated on COMPLETE
+                                // inference: a partial env substitutes holes for the
+                                // unfound params (see the record pass's identical gate).
+                                if f.retTy != 0U64 && f.retTy < self.arena.types.count() {
+                                    val ainf: Array[U64] = self.inferFnArgs(f: f, args: args)
+                                    if self.fnArgsAllGround(args: ainf) {
+                                        val savedAP: Array[Bind] = self.cur.typeParams
+                                        val savedAA: Array[U64] = self.cur.typeArgs
+                                        self.cur.typeParams = f.typeParams
+                                        self.cur.typeArgs = ainf
+                                        val agr: U64 = self.groundTypeRef(ref: f.retTy)
+                                        self.cur.typeParams = savedAP
+                                        self.cur.typeArgs = savedAA
+                                        if agr != f.retTy && self.tyRefIsGround(ref: agr) {
+                                            return self.typeInfoOfRef(ref: agr)
+                                        }
+                                    }
+                                }
                             }
                         }
                         // an `Array[E]` return stays kind 3 (handled below); only a true

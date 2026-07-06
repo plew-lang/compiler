@@ -221,6 +221,14 @@ pub impl Comp {
             Expr.Arrow(val base, val nameStart, val nameLen) => { return self.exprOffset(id: base) }
             Expr.Deref(val base) => { return self.exprOffset(id: base) }
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => { return retStart }
+            // an array literal anchors at its first element (the literal node itself
+            // carries no source span); an empty `[]` stays 0 like the other spanless forms.
+            Expr.Array(val elems) => {
+                if elems.count() > 0 {
+                    return self.exprOffset(id: elems[0])
+                }
+                return 0
+            }
             _ => { return 0 }
         }
     }

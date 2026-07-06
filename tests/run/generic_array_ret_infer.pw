@@ -1,0 +1,35 @@
+// A generic fn's `Array[E]` RETURN grounds under the call's inferred type args
+// (spec/06), so a generic consumer infers from the call result — including
+// nested (`idArr(idArr(xs))`), a direct non-empty literal argument, and a
+// generic-element literal let inside a generic template body. Regression
+// probes: the parametric `Array[U]` leaked to the consumer (wrongly rejected)
+// or sent emission into self-referential grounding (compiler stack overflow);
+// `val xs: Array[Box[T]]` in a template body was never scanned under the
+// instance env and died as a null value at emission.
+import @Std/Io with { print }
+
+struct Box[T] { pub val v: T }
+pub impl Box { factory }
+
+fn idArr[U](xs: Array[U]) -> Array[U] {
+    return xs
+}
+
+fn firstOf[T](xs: Array[T]) -> T {
+    return xs[0]
+}
+
+fn wrapAll[T](t: T) -> T {
+    val xs: Array[Box[T]] = [<Box[T] v=t />]
+    return xs[0].v
+}
+
+fn main() {
+    val zs: Array[I64] = [5I64, 6I64]
+    print(firstOf(xs: idArr(xs: zs)))         // 5
+    val ys: Array[I64] = idArr(xs: idArr(xs: zs))
+    print(ys[1])                              // 6
+    print(firstOf(xs: ["a", "b"]))            // a (direct literal arg)
+    print(wrapAll(t: "boxed"))                // boxed
+    print(wrapAll(t: 9I64))                   // 9
+}
