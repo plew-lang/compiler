@@ -18,7 +18,6 @@ pub impl LlvmCtx {
             self.locElemTy[self.nLocals] = elemTy
             self.locElemKind[self.nLocals] = elemKind
             self.locTypeRef[self.nLocals] = typeRef
-            self.locElemStructIdx[self.nLocals] = 18446744073709551615U64
             self.locElemTypeRef[self.nLocals] = 0U64
             self.locOwned[self.nLocals] = true
             self.locMoved[self.nLocals] = false
@@ -33,7 +32,6 @@ pub impl LlvmCtx {
             self.locElemTy.append(elemTy)
             self.locElemKind.append(elemKind)
             self.locTypeRef.append(typeRef)
-            self.locElemStructIdx.append(18446744073709551615U64)
             self.locElemTypeRef.append(0U64)
             self.locOwned.append(true)
             self.locMoved.append(false)
@@ -41,8 +39,6 @@ pub impl LlvmCtx {
         self.nLocals = self.nLocals + 1
     }
 
-    // Set the just-pushed local's array element struct index (for an array-of-struct
-    // local, so `arr[i].field` resolves the element). Call right after pushLocalR.
     // Set up a function/closure body's blocks: an `entry` block holding ALL the
     // function's allocas, ending in `br body0`, then `body0` where straight-line code
     // begins. `entryAlloca` inserts before entry's `br`, so an alloca emitted inside a
@@ -100,12 +96,6 @@ pub impl LlvmCtx {
     inout fn popLoop() {
         if self.loopDepth > 0U64 {
             self.loopDepth = self.loopDepth - 1U64
-        }
-    }
-
-    inout fn setLocalElemStruct(esi: U64) {
-        if self.nLocals > 0U64 {
-            self.locElemStructIdx[self.nLocals - 1U64] = esi
         }
     }
 

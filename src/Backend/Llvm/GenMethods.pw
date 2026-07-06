@@ -401,23 +401,6 @@ pub impl LlvmCtx {
         // so `param[i].field` resolves (mirrors the Let handler — bindOneParam alone
         // left this unset, breaking field access on a struct-array param's element).
         if effIsArray {
-            // the element type name: for a directly-written array param p.tyStart already
-            // names the element; a `Self`-as-array param has p.tyStart = "Self", so recover
-            // the element from the grounded Array[E] arg instead.
-            mut val elemStart: U64 = p.tyStart
-            mut val elemLen: U64 = p.tyLen
-            if effRef != p.ty {
-                mut val gg: U64 = effRef
-                if c.cur.typeParams.count() > 0U64 { gg = c.groundTypeRef(ref: effRef) }
-                if c.arena.types[gg].args.count() > 0U64 {
-                    elemStart = c.arena.types[c.arena.types[gg].args[0]].nameStart
-                    elemLen = c.arena.types[c.arena.types[gg].args[0]].nameLen
-                }
-            }
-            val esi: U64 = self.localStructIdxFor(c: inout c, start: elemStart, len: elemLen)
-            if esi < c.arena.structs.count() {
-                self.setLocalElemStruct(esi: esi)
-            }
             // element TypeRef (a Ref / nested-array / generic element): Array[E]'s first arg,
             // GROUNDED under the active instantiation env so a generic element `Array[E]` in
             // `impl[E]` records the concrete element (`I64` for `Box[I64].from`), not the bare

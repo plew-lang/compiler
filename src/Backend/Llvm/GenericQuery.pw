@@ -36,18 +36,7 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // The single classification of a free CALL's result — struct-idx AND type-ref AND
-    // is-array computed once under one inferred-type-arg env, so the exprStructIdx /
-    // exprTypeRef / exprIsArray projections can no longer drift (the G1 bug was those
-    // three deriving the Call form independently: exprStructIdx read the return's
-    // retStart/retLen as the value struct, but for an `Array[E]` return that names the
-    // ELEMENT — routing `mk() == mk()` to the element's witness). An array return is left
-    // struct-idx-less (its element name is not the value's struct); the caller's array
-    // catch resolves it to the Array def. TOTAL-REF: a bare non-generic struct return now
-    // ALSO carries its declared ref (callRetRef); struct-idx stays the authority for which
-    // struct it is, and the ref drives valueArc's ARC dispatch on the result value.
-    // (`pow`'s Pow-Output special case stays local to exprTypeRef, before this.)
-    // TOTAL-REF: when a resolver knows the result STRUCT (struct-idx) but carries no ref — a
+    // TOTAL-REF: when the caller knows the result STRUCT (struct-idx) but carries no ref — a
     // bare non-generic struct, the old struct-idx-only partition — synthesize the ref from the
     // struct's name so exprTypeRef is total and exprStructIdx can derive the idx from the ref.
     // Guarded by a round-trip (structIdxOfRef(synth) == si): the ref is adopted only when it
@@ -131,77 +120,6 @@ pub impl LlvmCtx {
         if self.valueKind(c: inout c, id: id) == 1U64 {
             val sb: Bind = c.kwSpan(kw: "String", kwLen: 6U64)
             return c.structDefByNameAny(start: sb.nameStart, len: sb.nameLen)
-        }
-        return c.arena.structs.count()
-    }
-
-    // The element struct def index of an array-typed struct field expression
-    // (`h.items` / `self.entries`), grounded under the base value's generic instance
-    // env, or c.arena.structs.count() if not such an array. Drives `arr[i].field` /
-    // `arr.get(i:).field` dispatch.
-    inout fn arrFieldElemStructIdx(c: inout Comp, arrayExpr: U64) -> U64 {
-        match c.arena.exprs[arrayExpr] {
-            Expr.Ident(val start, val len) => {
-                // an array-of-struct local (`store : Array[Box]`): its tracked element
-                // struct (sentinel-large = element is not a struct). Safe now that array
-                // value-semantics CoW makes an aliased `b = a` independent.
-                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if li < self.nLocals {
-                    if self.locElemStructIdx[li] < c.arena.structs.count() {
-                        return self.locElemStructIdx[li]
-                    }
-                    // a generic struct element (`Array[Box[I32]]`): via the element ref.
-                    if self.locElemTypeRef[li] != 0U64 {
-                        if c.isGenericInst(ref: self.locElemTypeRef[li]) {
-                            val gs: U64 = self.genStructSlot(c: inout c, ref: self.locElemTypeRef[li])
-                            if gs < self.genStructRefs.count() {
-                                return self.genStructDefs[gs]
-                            }
-                        }
-                    }
-                }
-            }
-            Expr.Field(base: val fbase, nameStart: val fns, nameLen: val fnl) => {
-                val bsi: U64 = self.exprStructIdx(c: inout c, id: fbase)
-                if bsi < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                    if fidx < c.arena.structs[bsi].fields.count() {
-                        val fd: FieldDef = c.arena.structs[bsi].fields[fidx]
-                        // the indexed field's element type is its first type argument —
-                        // whether it is the `[E]` array sugar (`fd.tyIsArray`) OR a named
-                        // collection floor `Buffer[E]` / `Array[E]` (a generic instance with
-                        // args). Dictionary's `keys: Buffer[K]` is the latter, so gating on
-                        // `tyIsArray` alone missed it and `self.keys[i] == key`'s Eq witness
-                        // could not be found in a monomorphized `Dictionary[Pair]` body.
-                        if fd.ty != 0U64 {
-                            val ft: TypeRef = c.arena.types[fd.ty]
-                            if ft.args.count() > 0U64 {
-                                val baseRef: U64 = self.exprTypeRef(c: inout c, id: fbase)
-                                val savedP: Array[Bind] = c.cur.typeParams
-                                val savedA: Array[U64] = c.cur.typeArgs
-                                val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
-                                val g: U64 = c.groundTypeRef(ref: ft.args[0])
-                                val gt: TypeRef = c.arena.types[g]
-                                mut val r: U64 = c.arena.structs.count()
-                                if c.isGenericInst(ref: g) {
-                                    val gs: U64 = self.genStructSlot(c: inout c, ref: g)
-                                    if gs < self.genStructRefs.count() {
-                                        r = self.genStructDefs[gs]
-                                    }
-                                } else {
-                                    r = self.localStructIdxFor(c: inout c, start: gt.nameStart, len: gt.nameLen)
-                                }
-                                if didSet {
-                                    c.cur.typeParams = savedP
-                                    c.cur.typeArgs = savedA
-                                }
-                                return r
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
         }
         return c.arena.structs.count()
     }

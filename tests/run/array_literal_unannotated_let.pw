@@ -1,0 +1,21 @@
+// An UNANNOTATED let with an array-literal init (`mut val xs = [10U8, 20U8]`)
+// types the local from the literal's recorded `Array[E]` (element-derived), so
+// indexing / append / iteration work without an annotation. Regression probe:
+// the record pass re-derived the init via exprType (which reports a literal as
+// unknown) and dropped the just-recorded literal type, leaving the local
+// untyped — every later use was rejected.
+import @Std/Io with { print }
+
+fn main() {
+    mut val xs = [10U8, 20U8]
+    xs.append(30U8)
+    print(xs[2])            // 30
+    print(xs.count())       // 3
+    mut val total: U64 = 0
+    for x in xs {
+        total += x as U64
+    }
+    print(total)            // 60
+    val names = ["ada", "bob"]
+    print(names[1])         // bob
+}

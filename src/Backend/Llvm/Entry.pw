@@ -39,7 +39,6 @@ pub impl LlvmCtx {
         self.locElemTy = []
         self.locElemKind = []
         self.locTypeRef = []
-        self.locElemStructIdx = []
         self.locElemTypeRef = []
         self.locOwned = []
         self.locMoved = []
@@ -60,7 +59,6 @@ pub impl LlvmCtx {
             self.gvalElemTy.append(self.locElemTy[li])
             self.gvalElemKind.append(self.locElemKind[li])
             self.gvalTref.append(self.locTypeRef[li])
-            self.gvalElemStructIdx.append(self.locElemStructIdx[li])
             self.gvalElemTypeRef.append(self.locElemTypeRef[li])
             gi += 1
         }
@@ -80,7 +78,6 @@ pub impl LlvmCtx {
         mut val gi: U64 = 0
         while gi < self.gvalRef.count() {
             self.pushLocalR(nameStart: c.arena.globals[gi].nameStart, nameLen: c.arena.globals[gi].nameLen, ptr: self.gvalRef[gi], ty: self.gvalLty[gi], kind: self.gvalKind[gi], structIdx: self.gvalSidx[gi], isArr: self.gvalIsArr[gi], elemTy: self.gvalElemTy[gi], elemKind: self.gvalElemKind[gi], typeRef: self.gvalTref[gi])
-            self.setLocalElemStruct(esi: self.gvalElemStructIdx[gi])
             self.setLocalElemTypeRef(ref: self.gvalElemTypeRef[gi])
             gi += 1
         }
@@ -124,7 +121,6 @@ pub impl LlvmCtx {
         self.locElemTy = []
         self.locElemKind = []
         self.locTypeRef = []
-        self.locElemStructIdx = []
         self.locElemTypeRef = []
         self.locOwned = []
         self.locMoved = []

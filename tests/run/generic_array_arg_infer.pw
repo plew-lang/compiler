@@ -1,0 +1,34 @@
+// Generic type-arg inference from an `Array[T]` parameter (spec/06): the element
+// comes from the argument EXPRESSION's type — a call result, a field, a nested
+// generic — not just an array-typed local binding. Regression probe: an
+// Ident-only walk left `firstOf(xs: mkStrs())` uninferred (T=0), so the outer
+// generic (`print[T]`) had no instance and the program was wrongly rejected.
+import @Std/Io with { print }
+import @Std/Core with { Add }
+
+fn firstOf[T](xs: Array[T]) -> T {
+    return xs[0]
+}
+
+fn mkStrs() -> Array[String] {
+    return ["p", "q"]
+}
+
+fn mkNums() -> Array[I64] {
+    return [7I64, 9I64]
+}
+
+struct Holder { pub val items: Array[String] }
+pub impl Holder { factory }
+
+fn main() {
+    // array arg = a call result (the regression case).
+    print(firstOf(xs: mkStrs()))                          // p
+    print(firstOf(xs: mkNums()))                          // 7
+    // array arg = a struct field.
+    val h: Holder = <Holder items=["x", "y"] />
+    print(firstOf(xs: h.items))                           // x
+    // array arg = a local binding (the previously-covered case still works).
+    val zs: Array[I64] = [3I64]
+    print(firstOf(xs: zs))                                // 3
+}

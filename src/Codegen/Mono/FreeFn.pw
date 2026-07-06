@@ -88,23 +88,18 @@ pub impl Comp {
         return self.findOrAddTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
     }
 
+    // The element ref of an `Array[E]`-typed argument, from the expression's type —
+    // an array local's carried ref, a call's declared `Array[E]` return, a field, … —
+    // not just an Ident local (an Ident-only walk left `f(xs: mkArr())` uninferred).
     inout fn argArrayElemRef(argExpr: U64) -> U64 {
-        match self.arena.exprs[argExpr] {
-            Expr.Ident(val start, val len) => {
-                val li: U64 = self.localIndexByName(start: start, len: len)
-                if li < self.cur.locals.count() {
-                    val lo: Local = self.cur.locals[li]
-                    if lo.ty < self.arena.types.count() {
-                        val lt: TypeRef = self.arena.types[lo.ty]
-                        if rangeEquals(bytes: self.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
-                            if lt.args.count() > 0 {
-                                return lt.args[0]
-                            }
-                        }
-                    }
+        val r: U64 = self.typedIrRefOfInfo(ti: self.typeOf(id: argExpr))
+        if r != 0 && r < self.arena.types.count() {
+            val t: TypeRef = self.arena.types[r]
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                if t.args.count() == 1 {
+                    return t.args[0]
                 }
             }
-            _ => {}
         }
         return 0
     }

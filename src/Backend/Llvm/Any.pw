@@ -405,7 +405,6 @@ pub impl LlvmCtx {
         self.locElemTy = []
         self.locElemKind = []
         self.locTypeRef = []
-        self.locElemStructIdx = []
         self.locElemTypeRef = []
         self.locOwned = []
         self.locMoved = []

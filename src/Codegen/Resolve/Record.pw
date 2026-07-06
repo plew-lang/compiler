@@ -110,11 +110,38 @@ pub impl Comp {
                 }
                 val cfi: U64 = self.resolvedCallee(id: exprId)
                 if cfi < self.arena.funcs.count() {
-                    val ps: Array[Param] = self.arena.funcs[cfi].params
+                    val cf: Func = self.arena.funcs[cfi]
+                    val ps: Array[Param] = cf.params
+                    // a generic callee's parametric param (`xs: Array[T]`) is grounded
+                    // under THIS call's inferred type args before use as a literal
+                    // context; only a GROUND context applies — the callee's own `T`
+                    // means nothing in this body's env, and recording it sends emission
+                    // into self-referential grounding (mirrors the Method arm's gate).
+                    mut val canGround: Bool = false
+                    mut val inferred: Array[U64] = []
+                    if cf.typeParams.count() > 0U64 {
+                        inferred = self.inferFnArgs(f: cf, args: args)
+                        // only a COMPLETE inference grounds (a partially-inferred env
+                        // substitutes 0 for the unfound param and the hole would pass
+                        // the ground gate as an empty-named ref).
+                        canGround = self.fnArgsAllGround(args: inferred)
+                    }
                     mut val k: U64 = 0
                     while k < args.count() {
                         if k < ps.count() {
-                            self.recordArrayLitCtx(exprId: args[k].expr, ctxRef: ps[k].ty)
+                            mut val cctx: U64 = ps[k].ty
+                            if cctx != 0U64 && canGround && !(self.tyRefIsGround(ref: cctx)) {
+                                val savedP: Array[Bind] = self.cur.typeParams
+                                val savedA: Array[U64] = self.cur.typeArgs
+                                self.cur.typeParams = cf.typeParams
+                                self.cur.typeArgs = inferred
+                                cctx = self.groundTypeRef(ref: cctx)
+                                self.cur.typeParams = savedP
+                                self.cur.typeArgs = savedA
+                            }
+                            if cctx != 0U64 && self.tyRefIsGround(ref: cctx) {
+                                self.recordArrayLitCtx(exprId: args[k].expr, ctxRef: cctx)
+                            }
                         }
                         k += 1
                     }
@@ -266,14 +293,12 @@ pub impl Comp {
                 self.recordExpr(exprId: init)
                 self.recordArrayLitCtx(exprId: init, ctxRef: ty)
                 // an UNANNOTATED let (`mut val it = self`) infers its local type from the
-                // init (rustc-style local inference) — without this every later read of
-                // the local is unknown. The declared annotation wins when present.
-                if tyLen == 0U64 {
-                    val iti: TypeInfo = self.exprType(id: init)
-                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: iti.nameStart, tyLen: iti.nameLen, isArray: iti.kind == 3, ty: self.typedIrRefOfInfo(ti: iti), isInout: false, isMut: mutable, owned: true)
-                } else {
-                    self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, isArray: tyIsArray, ty: ty, isInout: false, isMut: mutable, owned: true)
-                }
+                // init (rustc-style local inference, incl. an array-literal init) —
+                // without this every later read of the local is unknown. The declared
+                // annotation wins when present (inferLetType passes it through). Shared
+                // with the scan pass so both see the same local type.
+                val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
                 self.recordExpr(exprId: target)

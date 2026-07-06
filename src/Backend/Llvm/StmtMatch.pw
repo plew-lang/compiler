@@ -354,16 +354,10 @@ pub impl LlvmCtx {
                 self.pushLocalR(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
                 // borrow: this bind never deinit's (it shares the scrutinee's still-owned heap).
                 self.setLocalOwned(owned: false)
-                // an array-of-struct payload bind (`Expr.Call(.., val args)` with
-                // args: Array[Arg]): track the element struct + ref so `args[i].field`
-                // and nested-array/Ref elements resolve in the arm body.
+                // an array payload bind (`Expr.Call(.., val args)` with args: Array[Arg]):
+                // track the element ref so nested-array/Ref elements resolve in the arm body.
                 if isArrF {
                     if elemRef != 0U64 {
-                        val et2: TypeRef = c.arena.types[elemRef]
-                        val esi: U64 = self.localStructIdxFor(c: inout c, start: et2.nameStart, len: et2.nameLen)
-                        if esi < c.arena.structs.count() {
-                            self.setLocalElemStruct(esi: esi)
-                        }
                         self.setLocalElemTypeRef(ref: elemRef)
                     }
                 }

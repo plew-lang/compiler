@@ -340,17 +340,10 @@ pub impl LlvmCtx {
                 // (`val r2 = r` Ref share-retain now rides the general copyValueIfPlace path
                 // above — consumeIntoOwned's Ref class rawbufRetains a Ref place — so no
                 // bespoke retain here. Balanced by emitRefRelease at this local's drop.)
-                // an array-of-struct local (`store: Array[Box]`): track the element struct
-                // so `store[i].field` resolves the element (tyStart names the element type).
+                // an array local: track the element's TypeRef so `ys[i]` recovers a
+                // Ref / nested-array element. `ty` is the Array[E] ref, so the element
+                // is its first arg.
                 if isArr {
-                    if tyLen > 0U64 {
-                        val esi: U64 = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
-                        if esi < c.arena.structs.count() {
-                            self.setLocalElemStruct(esi: esi)
-                        }
-                    }
-                    // track the element's TypeRef so `ys[i]` recovers a Ref / nested-array
-                    // element. `ty` is the Array[E] ref, so the element is its first arg.
                     if tyIsArray {
                         if ty != 0U64 {
                             val at: TypeRef = c.arena.types[ty]

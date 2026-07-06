@@ -182,8 +182,8 @@ pub impl Comp {
                 }
                 // a compound generic field (`Buffer[T]`, `Optional[T]`, `Box[T]`): ground its
                 // type args through the instance env so `inst.buf` reports the CONCRETE
-                // `Buffer[U8]` (matching the backend's resolveField), not the parametric
-                // `Buffer[T]`. A non-generic field is grounded to itself (identity).
+                // `Buffer[U8]`, not the parametric `Buffer[T]`. A non-generic field is
+                // grounded to itself (identity).
                 return self.typeInfoOfRef(ref: self.groundUnderInst(instRef: instRef, tyRef: fd.ty))
             }
             i += 1

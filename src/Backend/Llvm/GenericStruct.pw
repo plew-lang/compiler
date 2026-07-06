@@ -239,8 +239,8 @@ pub impl LlvmCtx {
     // Set the substitution env from ANY generic instance `ref` — struct, enum, or the opaque
     // Ref/WeakRef externs — to its concrete args. The single env-setup so callers that ground a
     // method/field result under "the receiver's instance" don't each re-implement the kind
-    // cascade and drift (the resolveField lesson). Returns whether it set the env (caller
-    // restores).
+    // cascade and drift (the lesson from the retired per-form resolvers). Returns whether
+    // it set the env (caller restores).
     inout fn setInstanceEnv(c: inout Comp, ref: U64) -> Bool {
         if self.setStructEnv(c: inout c, ref: ref) {
             return true

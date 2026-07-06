@@ -112,9 +112,30 @@ pub impl Comp {
         if tyLen == 0 {
             if !(tyIsArray) {
                 val ti: TypeInfo = self.exprType(id: init)
+                // an array-literal init reports unknown via exprType (literal typing is
+                // element-wise/bidirectional in the check passes), so derive `Array[E]`
+                // from the first element HERE — the one un-annotated-let inference the
+                // scan and record passes share — and `val xs = [10U8, 20U8]` types the
+                // local everywhere. An empty literal stays unknown (annotation required).
+                if ti.kind == 0 && ti.nameLen == 0 {
+                    match self.arena.exprs[init] {
+                        Expr.Array(val elems) => {
+                            if elems.count() > 0 {
+                                val eRef: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
+                                if eRef != 0 {
+                                    val et: TypeRef = self.arena.types[eRef]
+                                    return <LetEff start=et.nameStart len=et.nameLen arr=true ty=self.arrayRefOfElem(elemRef: eRef) />
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 effStart = ti.nameStart
                 effLen = ti.nameLen
-                effTy = ti.ref
+                // carry the FULL ref (a name-only kind-3 rebuilds its `Array[E]`) so the
+                // local's type matches the store convention (locals' ty = the array ref).
+                effTy = self.typedIrRefOfInfo(ti: ti)
                 if ti.kind == 3 {
                     effArr = true
                 }

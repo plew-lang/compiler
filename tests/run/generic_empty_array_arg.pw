@@ -1,0 +1,22 @@
+// An EMPTY `[]` argument to a generic fn whose `T` is pinned by a SIBLING arg
+// (spec/06): `sum(xs: [], seed: 1.5)` infers T=F64 from `seed`, and the record
+// pass grounds the callee's parametric `Array[T]` context under the call's
+// inferred args before typing the literal. Regression probe: recording the raw
+// `Array[T]` sent emission into self-referential grounding (compiler stack
+// overflow); a partial inference must not ground (an unfound param substitutes
+// a hole that would pass the ground gate).
+import @Std/Io with { print }
+import @Std/Core with { Add }
+
+fn sum[T](xs: Array[T], seed: T) -> T where T: Add {
+    mut val acc: T = seed
+    for x in xs {
+        acc = acc + x
+    }
+    return acc
+}
+
+fn main() {
+    print(sum(xs: [], seed: 1.5))            // 1.5 (empty: seed alone)
+    print(sum(xs: [2I64, 3I64], seed: 1I64)) // 6
+}

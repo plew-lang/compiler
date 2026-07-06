@@ -431,6 +431,13 @@ pub impl Comp {
                 // call like `print(p.x + p.y)` fails to discover its instantiation.
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
                 self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
+                // an INFERRED type registers its instance the same way an annotation
+                // does (collectGenInsts scans Let.ty): `val names = ["a", "b"]` needs
+                // the `Array[String]` instance + witnesses just like
+                // `val names: Array[String] = …`.
+                if tyLen == 0U64 && le.ty != ty {
+                    self.scanType(ref: le.ty)
+                }
             }
             Stmt.Assign(val target, val value) => {
                 self.scanExprInsts(exprId: target)
