@@ -64,4 +64,153 @@ pub impl Comp {
         }
         return <ArcClass.Scalar />
     }
+
+    // A struct/variant FIELD's type ref grounded under the ACTIVE instance env, for
+    // ARC classification: a bare-type-param field (`v: T` with T -> Ref[Cell]) resolves
+    // to its concrete class. Falls back to the declared name span when the field
+    // carries no structured ref. (Array fields are the callers' fast path — they
+    // check fd.tyIsArray before classifying.)
+    inout fn arcFieldTy(f: FieldDef) -> U64 {
+        if f.ty != 0U64 {
+            if self.cur.typeParams.count() > 0U64 {
+                return self.groundTypeRef(ref: f.ty)
+            }
+            return f.ty
+        }
+        if f.tyLen == 0U64 {
+            return 0U64
+        }
+        return self.findOrAddTypeRef(nameStart: f.tyStart, nameLen: f.tyLen)
+    }
+
+    // The `deinit` method index of struct `sidx`, or funcs.count() if it has none.
+    // (The Comp-level canonical; the backend's structDeinitFi free fn delegates here.)
+    inout fn structOwnDeinitFi(sidx: U64) -> U64 {
+        val sd: StructDef = self.arena.structs[sidx]
+        val b: Bind = self.kwSpan(kw: "deinit", kwLen: 6U64)
+        val noArgs: Array[Arg] = []
+        return self.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
+    }
+
+    // Whether destroying a value of (grounded) type `ref` performs ANY ARC action —
+    // an owned cell/buffer (String/Buffer/Ref/WeakRef/array field), its own deinit,
+    // or a field/payload that recursively does. THE needs-heap gate over the
+    // classifier: the old per-site gates (structNeedsDeinit / variantHasHeap)
+    // walked DECLARED field names without grounding and had no enum branch, so a
+    // bare-T -> heap field, a generic-instance field, or an enum payload never
+    // gated true — their heap was silently skipped by every downstream drop.
+    inout fn arcNeedsRelease(ref: U64) -> Bool {
+        mut val visited: Array[U64] = []
+        return self.arcRefNeedsRelease(ref: ref, visited: inout visited)
+    }
+
+    // The recursive kernel. `visited` terminates containment cycles (the cyclic
+    // field is auto-boxed; a re-visited def contributes false — its own answer was
+    // produced at the first visit). Struct keys are the bare sidx; enum keys are
+    // offset by 2^62 (mirrors the backend's enumArcKey split).
+    inout fn arcRefNeedsRelease(ref: U64, visited: inout Array[U64]) -> Bool {
+        match self.arcClassOfRef(ref: ref) {
+            ArcClass.Scalar => { return false }
+            ArcClass.StringLike => { return true }
+            ArcClass.BufferLike(elem: _) => { return true }
+            ArcClass.RefCell(inst: _) => { return true }
+            ArcClass.WeakCell(inst: _) => { return true }
+            ArcClass.StructVal(val sidx) => {
+                mut val vk: U64 = 0
+                while vk < visited.count() {
+                    if visited[vk] == sidx {
+                        return false
+                    }
+                    vk += 1
+                }
+                visited.append(sidx)
+                if self.structOwnDeinitFi(sidx: sidx) < self.arena.funcs.count() {
+                    return true
+                }
+                val sd: StructDef = self.arena.structs[sidx]
+                val savedP: Array[Bind] = self.cur.typeParams
+                val savedA: Array[U64] = self.cur.typeArgs
+                // ground this level's fields under ITS instance env (`Box[Ref[Cell]]`
+                // -> T = Ref[Cell]); an argless generic def (legacy sidx-only query)
+                // clears the env so an unrelated ambient T never leaks in.
+                if sd.typeParams.count() > 0U64 {
+                    if ref < self.arena.types.count() && self.arena.types[ref].args.count() == sd.typeParams.count() {
+                        self.cur.typeParams = sd.typeParams
+                        self.cur.typeArgs = self.arena.types[ref].args
+                    } else {
+                        self.cur.typeParams = []
+                        self.cur.typeArgs = []
+                    }
+                }
+                mut val need: Bool = false
+                mut val i: U64 = 0
+                while i < sd.fields.count() {
+                    if !need {
+                        val fd: FieldDef = sd.fields[i]
+                        if !(self.fieldIsBoxed(f: fd)) {
+                            if fd.tyIsArray {
+                                need = true
+                            } else {
+                                val g: U64 = self.arcFieldTy(f: fd)
+                                if self.arcRefNeedsRelease(ref: g, visited: inout visited) {
+                                    need = true
+                                }
+                            }
+                        }
+                    }
+                    i += 1
+                }
+                self.cur.typeParams = savedP
+                self.cur.typeArgs = savedA
+                return need
+            }
+            ArcClass.EnumVal(val eidx) => {
+                mut val vk: U64 = 0
+                while vk < visited.count() {
+                    if visited[vk] == 4611686018427387904U64 + eidx {
+                        return false
+                    }
+                    vk += 1
+                }
+                visited.append(4611686018427387904U64 + eidx)
+                val ed: EnumDef = self.arena.enums[eidx]
+                val savedP: Array[Bind] = self.cur.typeParams
+                val savedA: Array[U64] = self.cur.typeArgs
+                if ed.typeParams.count() > 0U64 {
+                    if ref < self.arena.types.count() && self.arena.types[ref].args.count() == ed.typeParams.count() {
+                        self.cur.typeParams = ed.typeParams
+                        self.cur.typeArgs = self.arena.types[ref].args
+                    } else {
+                        self.cur.typeParams = []
+                        self.cur.typeArgs = []
+                    }
+                }
+                mut val need: Bool = false
+                mut val vi: U64 = 0
+                while vi < ed.variants.count() {
+                    mut val fj: U64 = 0
+                    while fj < ed.variants[vi].fields.count() {
+                        if !need {
+                            val fd: FieldDef = ed.variants[vi].fields[fj]
+                            if !(self.fieldIsBoxed(f: fd)) {
+                                if fd.tyIsArray {
+                                    need = true
+                                } else {
+                                    val g: U64 = self.arcFieldTy(f: fd)
+                                    if self.arcRefNeedsRelease(ref: g, visited: inout visited) {
+                                        need = true
+                                    }
+                                }
+                            }
+                        }
+                        fj += 1
+                    }
+                    vi += 1
+                }
+                self.cur.typeParams = savedP
+                self.cur.typeArgs = savedA
+                return need
+            }
+        }
+    }
 }

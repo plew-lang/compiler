@@ -1749,10 +1749,7 @@ fn anon() -> CPtr[U8] {
 }
 
 fn structDeinitFi(c: inout Comp, sidx: U64) -> U64 {
-    val sd: StructDef = c.arena.structs[sidx]
-    val b: Bind = c.kwSpan(kw: "deinit", kwLen: 6U64)
-    val noArgs: Array[Arg] = []
-    return c.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
+    return c.structOwnDeinitFi(sidx: sidx)
 }
 
 // ---- string literals ----

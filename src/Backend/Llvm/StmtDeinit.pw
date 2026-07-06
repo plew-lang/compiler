@@ -32,69 +32,13 @@ pub impl LlvmCtx {
     }
 
     // Whether destroying a value of struct `sidx` runs any deinit — its own, or a
-    // (registered, non-array) field's, recursively (spec/03).
+    // field's, recursively (spec/03). Legacy sidx-only entry to the classifier gate
+    // (arcNeedsRelease, audit-5 F7): builds the struct's argless def ref, so a generic
+    // def's param-typed fields stay unclassified (Scalar) — matching the old exclusion.
+    // Instance-precise callers pass their grounded instance ref to arcNeedsRelease.
     inout fn structNeedsDeinit(c: inout Comp, sidx: U64) -> Bool {
-        mut val visited: Array[U64] = []
-        return self.structNeedsDeinitV(c: inout c, sidx: sidx, visited: inout visited)
-    }
-
-    // The visited set terminates a containment CYCLE (`struct A { val a: A }`, or a
-    // mutual A/B pair): the cyclic field is auto-boxed (markBoxedFields), but this walk
-    // follows field type NAMES and used to recurse forever — the compiler hung on any
-    // drop of such a value (audit-5 L5). A re-visited struct contributes false: its own
-    // heap needs were already answered on the first visit, and the boxed pointer itself
-    // is a known, tolerated leak (never a UAF) until boxed-field release lands with the
-    // unified ARC classifier (audit-5 F7).
-    inout fn structNeedsDeinitV(c: inout Comp, sidx: U64, visited: inout Array[U64]) -> Bool {
-        mut val vi: U64 = 0
-        while vi < visited.count() {
-            if visited[vi] == sidx {
-                return false
-            }
-            vi += 1
-        }
-        visited.append(sidx)
-        if structDeinitFi(c: inout c, sidx: sidx) < c.arena.funcs.count() {
-            return true
-        }
         val sd: StructDef = c.arena.structs[sidx]
-        mut val i: U64 = 0
-        while i < sd.fields.count() {
-            val fd: FieldDef = sd.fields[i]
-            // an array OR Buffer field owns an rc-managed buffer that must be released. This
-            // now INCLUDES the Array struct itself (`struct { data: Buffer[T] }`): its single
-            // Buffer field makes it deinit-needing, and its drop/copy/ARC run through the
-            // ordinary struct field-recursion (valueArc's struct path / the drop witness),
-            // not a dedicated "Array" name-branch. An array LOCAL is still dropped by
-            // emitDeinitCall's locIsArr fast path (returns early, so no double-processing).
-            if fd.tyIsArray {
-                return true
-            }
-            if fieldIsBufferType(c: inout c, f: fd) {
-                return true
-            }
-            // a `Ref[T]` field owns a strong rc on its shared cell that must be released at
-            // the owning struct's drop (extern opaque pointer — not reachable by the
-            // registered-struct recursion below, so checked explicitly like Buffer).
-            if fieldIsRefType(c: inout c, f: fd) {
-                return true
-            }
-            // a `WeakRef[T]` field owns a weak count to release at the owning struct's drop
-            // (extern opaque pointer — handled explicitly like Ref/Buffer).
-            if fieldIsWeakRefType(c: inout c, f: fd) {
-                return true
-            }
-            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-            if fsi < c.arena.structs.count() {
-                if !(c.arena.structs[fsi].isExtern) {
-                    if self.structNeedsDeinitV(c: inout c, sidx: fsi, visited: inout visited) {
-                        return true
-                    }
-                }
-            }
-            i += 1
-        }
-        return false
+        return c.arcNeedsRelease(ref: c.findOrAddTypeRef(nameStart: sd.nameStart, nameLen: sd.nameLen))
     }
 
     // The dropWit* slot for struct `sidx`, or dropWitSidx.count() if none declared yet.
@@ -193,7 +137,12 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count() {
             val fd: FieldDef = sd.fields[i]
-            if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
+            if c.fieldIsBoxed(f: fd) {
+                // a boxed (recursive) field is a shared box pointer — leaked-but-safe
+                // until boxed-pointee release lands. Walking it as if it were an inline
+                // struct value (the pre-classifier behavior when the name resolved) would
+                // mis-interpret the pointer as an aggregate.
+            } else if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
                 // release the field's rc-managed array/Buffer buffer (its elements cascade
                 // when they own heap; scalar elements just free the buffer at rc 0). Sound
                 // because every site that places a struct value deep-copies / CoW-shares its
@@ -207,33 +156,24 @@ pub impl LlvmCtx {
                     ety = self.llvmTypeOfRef(c: inout c, ref: er)
                 }
                 self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety, elemRef: er)
-            } else if fieldIsRefType(c: inout c, f: fd) {
-                // release the field's `Ref` cell (strong--; pointee deinit + free at 0).
-                // Balanced by the rawbufRetain at every struct-place CoW-share / field init.
-                self.emitRefRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()), refTy: refFieldTypeRef(c: inout c, f: fd))
-            } else if fieldIsWeakRefType(c: inout c, f: fd) {
-                // release the field's `WeakRef` (weak--; free iff strong also 0). Balanced by
-                // the weak retain (refWeakDowngrade) at every struct-place share / field init.
-                self.weakRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()))
             } else {
-                val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                if fsi < c.arena.structs.count() {
-                    if !(c.arena.structs[fsi].isExtern) {
-                        if self.structNeedsDeinit(c: inout c, sidx: fsi) {
-                            self.emitDeinitValue(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), sidx: fsi)
+                // every other class routes through the classifier + valueArc (the single
+                // class->action table): Ref/WeakRef cells, String, sub-struct (GROUNDED —
+                // the old structIndexByName here missed bare-T / generic-inst fields, so
+                // their heap was retained by the retain twin but never dropped), and enums.
+                val g: U64 = c.arcFieldTy(f: fd)
+                match c.arcClassOfRef(ref: g) {
+                    ArcClass.Scalar => {}
+                    ArcClass.StructVal(sidx: _) => {
+                        // instance-aware gate: `g` carries the grounded type args, so a
+                        // generic-instance field (Box[Ref[Cell]]) gates on ITS payload.
+                        if c.arcNeedsRelease(ref: g) {
+                            self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), typeRef: g, retain: false)
                         }
                     }
-                } else {
-                    // an enum-typed field (`Optional[Ref[Child]]`, `Result`, a plain enum):
-                    // release its active variant's payload heap — SYMMETRIC with the enum branch
-                    // in emitRetainWitnessWalk. Without it a struct's enum field leaked its
-                    // payload (e.g. a `Ref` inside `Optional`): the walker handled Ref/WeakRef/
-                    // array/sub-struct fields but had NO enum case. A no-op off a non-enum field.
-                    mut val gref: U64 = fd.ty
-                    if c.cur.typeParams.count() > 0U64 {
-                        gref = c.groundTypeRef(ref: fd.ty)
+                    _ => {
+                        self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), typeRef: g, retain: false)
                     }
-                    self.emitEnumReleaseRef(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), ref: gref)
                 }
             }
             i += 1

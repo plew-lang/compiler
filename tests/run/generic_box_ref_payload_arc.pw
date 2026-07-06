@@ -1,0 +1,36 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+struct Box[T] {
+    pub val v: T
+}
+
+struct Outer {
+    pub val b: Box[Ref[Cell]]
+}
+
+enum Wrap {
+    Hold(b: Box[Ref[Cell]])
+    Empty
+}
+
+fn holdStruct() {
+    val o: Outer = <Outer b=<Box[Ref[Cell]] v=<Ref value=<Cell v=1I32 /> /> /> />
+    print("struct-scope-end")
+}
+
+fn holdEnum() {
+    val w: Wrap = <Wrap.Hold b=<Box[Ref[Cell]] v=<Ref value=<Cell v=2I32 /> /> /> />
+    print("enum-scope-end")
+}
+
+fn main() {
+    holdStruct()
+    holdEnum()
+    print("done")
+}

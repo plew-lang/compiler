@@ -334,10 +334,13 @@ pub impl LlvmCtx {
         return v
     }
 
-    // Whether variant `vi` of enum `eid` has a non-boxed heap-owning field (array, or a
-    // struct that needs deinit). Boxed (recursive) fields are skipped — they are heap
-    // pointers handled like Ref (not yet released; also breaks codegen recursion for
-    // recursive enums, so no arcStack guard is needed here).
+    // Whether variant `vi` of enum `eid` has a non-boxed heap-owning field. Boxed
+    // (recursive) fields are skipped — shared box pointers, leaked-but-safe (also breaks
+    // codegen recursion for recursive enums, so no arcStack guard is needed here). Each
+    // field grounds under the CURRENT env (caller — emitEnumReleaseRef etc. — has set
+    // the enum instance env) and gates on the classifier's recursive needs-heap answer
+    // (arcNeedsRelease): the old name-check chain missed enum payloads and
+    // generic-instance struct payloads entirely (their heap was silently skipped).
     inout fn variantHasHeap(c: inout Comp, eid: U64, vi: U64) -> Bool {
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         mut val fj: U64 = 0
@@ -347,22 +350,8 @@ pub impl LlvmCtx {
                 if fd.tyIsArray {
                     return true
                 }
-                // ground first (fieldGroundedRefTy) so a generic payload `v: T` with T -> Ref
-                // is recognised — a name-check on the declared `T` would miss it. Requires the
-                // caller (emitEnumReleaseRef etc.) to have set the enum instance env.
-                if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
+                if c.arcNeedsRelease(ref: c.arcFieldTy(f: fd)) {
                     return true
-                }
-                if fieldGroundedWeakTy(c: inout c, f: fd) != 0U64 {
-                    return true
-                }
-                val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                if fsi < c.arena.structs.count() {
-                    if !(c.arena.structs[fsi].isExtern) {
-                        if self.structNeedsDeinit(c: inout c, sidx: fsi) {
-                            return true
-                        }
-                    }
                 }
             }
             fj += 1
@@ -421,17 +410,21 @@ pub impl LlvmCtx {
                                 ety2 = self.llvmTypeOfRef(c: inout c, ref: er)
                             }
                             self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety2, elemRef: er)
-                        } else if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
-                            self.emitRefRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()), refTy: fieldGroundedRefTy(c: inout c, f: fd))
-                        } else if fieldGroundedWeakTy(c: inout c, f: fd) != 0U64 {
-                            self.weakRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
                         } else {
-                            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                            if fsi < c.arena.structs.count() {
-                                if !(c.arena.structs[fsi].isExtern) {
-                                    if self.structNeedsDeinit(c: inout c, sidx: fsi) {
-                                        self.emitDeinitValue(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), sidx: fsi)
+                            // classifier + valueArc (the single class->action table):
+                            // GROUNDED struct/enum payloads included — the old
+                            // structIndexByName chain skipped generic-inst / bare-T /
+                            // enum payloads (their heap leaked or was never released).
+                            val g: U64 = c.arcFieldTy(f: fd)
+                            match c.arcClassOfRef(ref: g) {
+                                ArcClass.Scalar => {}
+                                ArcClass.StructVal(sidx: _) => {
+                                    if c.arcNeedsRelease(ref: g) {
+                                        self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), typeRef: g, retain: false)
                                     }
+                                }
+                                _ => {
+                                    self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), typeRef: g, retain: false)
                                 }
                             }
                         }
@@ -477,17 +470,20 @@ pub impl LlvmCtx {
                     if !(c.fieldIsBoxed(f: fd)) {
                         if fd.tyIsArray {
                             self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: LLVMBuildExtractValue(self.b, pv, fj, anon())))
-                        } else if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
-                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
-                        } else if fieldGroundedWeakTy(c: inout c, f: fd) != 0U64 {
-                            self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
                         } else {
-                            val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
-                            if fsi < c.arena.structs.count() {
-                                if !(c.arena.structs[fsi].isExtern) {
-                                    if self.structNeedsDeinit(c: inout c, sidx: fsi) {
-                                        self.emitStructRetain(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), sidx: fsi)
+                            // classifier + valueArc — mirrors emitEnumRelease's kernel
+                            // (grounded struct/enum payloads included) so retain and
+                            // release stay symmetric by construction.
+                            val g: U64 = c.arcFieldTy(f: fd)
+                            match c.arcClassOfRef(ref: g) {
+                                ArcClass.Scalar => {}
+                                ArcClass.StructVal(sidx: _) => {
+                                    if c.arcNeedsRelease(ref: g) {
+                                        self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), typeRef: g, retain: true)
                                     }
+                                }
+                                _ => {
+                                    self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, pv, fj, anon()), typeRef: g, retain: true)
                                 }
                             }
                         }

@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+enum Inner {
+    Keep(r: Ref[Cell])
+    Nothing
+}
+
+enum Outer {
+    Hold(inner: Inner)
+    Empty
+}
+
+fn hold() {
+    val o: Outer = <Outer.Hold inner=<Inner.Keep r=<Ref value=<Cell v=7I32 /> /> /> />
+    print("scope-end")
+}
+
+fn main() {
+    hold()
+    print("done")
+}
