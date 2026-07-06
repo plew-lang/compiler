@@ -1,0 +1,2 @@
+fn main() {
+    val x: I64 = 1
