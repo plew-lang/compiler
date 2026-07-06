@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+struct Holder {
+    pub val r: Ref[Cell]
+}
+
+pub impl Holder {
+    factory
+}
+
+fn pointeeFromPlace() {
+    val h: Holder = <Holder r=<Ref value=<Cell v=31I32 /> /> />
+    val shared: Ref[Holder] = <Ref value=h />
+    print("made")
+}
+
+fn main() {
+    pointeeFromPlace()
+    print("done")
+}

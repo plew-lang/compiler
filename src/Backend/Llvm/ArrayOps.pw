@@ -231,12 +231,14 @@ pub impl LlvmCtx {
     // (CoW-shared) — its drop balances this retain, and the buffer's own element release at
     // drop is unaffected. (A scalar passes through.)
     //
-    // A `Ref[T]` element is the EXCEPTION: the read BORROWS (no retain). A Ref is shared-
-    // mutable (not value-copied), so reading it yields a borrow of the cell, and the single
-    // strong retain is taken by the CONSUMER (consumeIntoOwned, when the read value is bound /
-    // stored / passed / returned). A transient read (`xs[i]->field`) is then a pure borrow
-    // with no leak; binding (`val r = xs[i]`) retains exactly once at the bind. Retaining here
-    // too would double-count (the buffer's element release would never reach strong 0).
+    // A `Ref[T]` / `WeakRef[T]` element is the EXCEPTION: the read BORROWS (no retain). A
+    // cell value is shared (not value-copied), so reading it yields a borrow of the cell,
+    // and the single strong/weak retain is taken by the CONSUMER (consumeIntoOwned, when
+    // the read value is bound / stored / passed / returned). A transient read
+    // (`xs[i]->field`) is then a pure borrow with no leak; binding (`val r = xs[i]`)
+    // retains exactly once at the bind. Retaining here too would double-count (the
+    // buffer's element release would never reach strong/weak 0 — the WeakRef case kept
+    // dead cells alive forever, audit-1 新規1).
     inout fn genLlvmBufferGet(c: inout Comp, recv: U64, indexExpr: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
         val er: U64 = self.bufElemRef(c: inout c, id: recv)
@@ -246,7 +248,7 @@ pub impl LlvmCtx {
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
         if c.arcNeedsRelease(ref: er) {
-            if !(c.isRefInst(ref: er)) {
+            if !(c.isRefInst(ref: er)) && !(c.isWeakRefInst(ref: er)) {
                 self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
             }
         }

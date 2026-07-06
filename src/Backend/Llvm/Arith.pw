@@ -425,6 +425,15 @@ pub impl LlvmCtx {
         if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
             v = self.coerceInt(v: v, target: pty, unsigned: false)
         }
+        // the cell OWNS its pointee (spec/03 value semantics): `<Ref value=place />`
+        // must not alias the place's heap — the place's own drop would free it under
+        // the cell, and the strong-0 pointee destroy would then double-free (#7). A
+        // place pointee is CoW-shared/retained into the cell; a fresh value moves in.
+        mut val pr: U64 = 0
+        if c.isRefInst(ref: ty) {
+            pr = c.arena.types[ty].args[0]
+        }
+        v = self.consumeIntoOwned(c: inout c, v: v, expr: valExpr, typeRef: pr)
         LLVMBuildStore(self.b, v, cell)
         return cell
     }
