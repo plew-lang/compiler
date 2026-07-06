@@ -204,7 +204,7 @@ pub impl LlvmCtx {
                 if tref == 0U64 {
                     if tyLen == 0U64 {
                         if !(isArr) {
-                            val rref: U64 = self.exprResultRef(c: inout c, id: init)
+                            val rref: U64 = self.exprTypeRef(c: inout c, id: init)
                             if c.isGenericInst(ref: rref) {
                                 val gslot2: U64 = self.genStructSlot(c: inout c, ref: rref)
                                 if gslot2 < self.genStructRefs.count() {
