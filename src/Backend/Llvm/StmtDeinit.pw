@@ -316,6 +316,20 @@ pub impl LlvmCtx {
             }
             return
         }
+        // instance-precise gate + route when the local carries its grounded type ref:
+        // a generic-instance local's locStructIdx is the generic DEF, so the sidx-keyed
+        // gate below excluded it and its payload heap (Box[Ref[Cell]]) was never
+        // dropped. valueArc's StructVal arm sets the instance env itself (setStructEnv),
+        // so the walk grounds `v: T` to its concrete class.
+        val ltr: U64 = self.locTypeRef[li]
+        if ltr != 0U64 {
+            if !(c.arcNeedsRelease(ref: ltr)) {
+                return
+            }
+            val sv: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+            self.valueArc(c: inout c, v: sv, typeRef: ltr, retain: false)
+            return
+        }
         if !(self.structNeedsDeinit(c: inout c, sidx: sidx)) {
             return
         }

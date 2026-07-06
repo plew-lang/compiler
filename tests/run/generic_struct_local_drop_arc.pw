@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+struct Box[T] {
+    pub val v: T
+}
+
+fn peek(box: Box[Ref[Cell]]) {
+    print("peek")
+}
+
+fn holdLocal() {
+    val b: Box[Ref[Cell]] = <Box[Ref[Cell]] v=<Ref value=<Cell v=3I32 /> /> />
+    print("local-scope-end")
+}
+
+fn passByValue() {
+    val b: Box[Ref[Cell]] = <Box[Ref[Cell]] v=<Ref value=<Cell v=4I32 /> /> />
+    peek(box: b)
+    print("pass-scope-end")
+}
+
+fn main() {
+    holdLocal()
+    passByValue()
+    print("done")
+}
