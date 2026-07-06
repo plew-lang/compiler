@@ -1,0 +1,8 @@
+// Same as global_array_literal_heterogeneous but WITHOUT the annotation: the
+// un-annotated form infers Array[E] from the first element and the remaining
+// elements must match that E at module level too.
+val ys = ["a", 1I64]
+
+fn main() {
+    val n: U64 = ys.count()
+}

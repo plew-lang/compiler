@@ -6,6 +6,30 @@
 
 pub impl Comp {
     inout fn verifyProgram() {
+        // global initializers first: module-level `val g = …` is program code too, and
+        // the acceptance rules (literal context/range, array-element consistency,
+        // unique-copy, generic arity) reach it exactly like a function body. Without
+        // this walk a module-level `val xs: Array[String] = ["a", 1I64]` was accepted
+        // and the stray element's bits were reinterpreted at run time (SIGSEGV). Each
+        // Let adds itself as a local as it goes, so a later init reading an earlier
+        // global resolves — same shape as the record pass's globals walk.
+        self.cur.retVoid = true
+        self.cur.retStart = 0
+        self.cur.retLen = 0
+        self.cur.retIsArray = false
+        self.cur.retTy = 0
+        self.cur.hasRecv = false
+        self.clearSelfItemEnv()
+        self.cur.branchBase = 0
+        self.cur.locals = []
+        self.cur.verifyMovedIdx = []
+        mut val gvi: U64 = 0
+        while gvi < self.arena.globals.count() {
+            self.verifyStmt(stmtId: self.arena.globals[gvi].letStmt)
+            gvi += 1
+        }
+        self.cur.locals = []
+        self.cur.verifyMovedIdx = []
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]

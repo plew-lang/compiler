@@ -1,0 +1,9 @@
+// A module-level array literal with a stray element of another type must be
+// rejected exactly like the in-function form: global initializers are program
+// code and the element-consistency check reaches them (audit-5 L1 — this used
+// to compile and reinterpret the I64's bits as a String pointer at run time).
+val xs: Array[String] = ["a", 1I64]
+
+fn main() {
+    val n: U64 = xs.count()
+}
