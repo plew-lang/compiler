@@ -561,16 +561,14 @@ pub impl Comp {
         mut val sti: U64 = 0
         while sti < self.arena.stmts.count() {
             match self.arena.stmts[sti] {
-                Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _) => {
+                    // annotations only: un-annotated lets register their INFERRED types
+                    // via inferLetType's collection-time side effects inside the proper
+                    // walks (scanStmtInsts — fn bodies, worklist template bodies, and the
+                    // globals walk in collectFnInsts), which carry the right locals env.
+                    // An env-less flat inference here typed body-locals under an empty
+                    // scope, making the registered instance set walk-order dependent.
                     self.scanType(ref: ty)
-                    // an UN-annotated array-literal let registers its inferred element +
-                    // `Array[E]` instance via inferLetType's collection-time side effects
-                    // — this flat walk is what reaches a MODULE-LEVEL `val nums = [1I64]`
-                    // (scanStmtInsts only walks function bodies); a body-local literal
-                    // let registering twice just dedups.
-                    if tyLen == 0U64 {
-                        val gle: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                    }
                 }
                 _ => {}
             }

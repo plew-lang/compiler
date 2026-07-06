@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// A module-level global whose INITIALIZER is a generic call (`val g =
+// makeBox(v: 42I64)`): the collection pass must walk global initializers like
+// function bodies so the callee instance, the inferred `Box[I64]`, and the
+// method instances a use needs are all registered (audit-5 L3: field access
+// gave a misleading "not a registered struct" reject; a method call SIGSEGV'd).
+struct Box[T] { pub val v: T }
+
+pub impl[T] Box[T] {
+    fn get() -> T { return self.v }
+}
+
+fn makeBox[T](v: T) -> Box[T] { return <Box[T] v=v /> }
+
+val g = makeBox(v: 42I64)
+val h = makeBox(v: "hello")
+
+fn main() {
+    print(g.v)
+    print(g.get())
+    print(h.get())
+}

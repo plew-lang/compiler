@@ -211,6 +211,25 @@ pub impl LlvmCtx {
                 }
             }
         }
+        // ground the param ref under the active instance env, mirroring paramLlvmTy (the
+        // DECLARED signature grounds `Box[T]` -> `Box[I64]`, so the body's binding must
+        // bind the same representation). Without this the generic-instance branch below
+        // matched the raw template ref against the registered instances, missed every
+        // slot, and fell through to the i64 scalar default — the body then extractvalue'd
+        // a non-aggregate (null → SIGSEGV) on any use of the param (`fn unwrap[T](box:
+        // Box[T]) -> T { return box.v }`, audit-5 L2). An array param keeps its spans:
+        // p.tyStart/tyLen name the ELEMENT (kind-3), which the array branch below needs
+        // for pElem; it grounds effRef itself.
+        if effRef != 0U64 && !(effIsArray) {
+            if c.cur.typeParams.count() > 0U64 {
+                val eg: U64 = c.groundTypeRef(ref: effRef)
+                if eg != effRef {
+                    effRef = eg
+                    pgStart = c.arena.types[eg].nameStart
+                    pgLen = c.arena.types[eg].nameLen
+                }
+            }
+        }
         mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: pgStart, tyLen: pgLen)
         mut val pElem: LLVMTypeRef = self.i64ty
         mut val pSidx: U64 = self.localStructIdxFor(c: inout c, start: pgStart, len: pgLen)

@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// A generic free function whose parameter is a generic-struct INSTANCE type
+// (`box: Box[T]`) — the param must bind under the instance env so the body's
+// field access / pass-through sees the registered `Box[I64]` aggregate, not the
+// i64 scalar default (audit-5 L2: this SIGSEGV'd the compiler; the corpus had
+// only `Array[T]`-param generic fns).
+struct Box[T] { pub val v: T }
+
+fn unwrap[T](box: Box[T]) -> T { return box.v }
+
+fn idBox[T](box: Box[T]) -> Box[T] { return box }
+
+fn pick[T](box: Box[T], fallback: T) -> T { return box.v }
+
+fn main() {
+    val l: Box[I64] = <Box[I64] v=42I64 />
+    print(unwrap(box: l))
+    val m: Box[I64] = idBox(box: l)
+    print(unwrap(box: m))
+    print(pick(box: l, fallback: 7I64))
+    val s: Box[String] = <Box[String] v="boxed" />
+    print(unwrap(box: s))
+}

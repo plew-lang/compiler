@@ -12,6 +12,25 @@ pub impl Comp {
             val mainN: Bind = self.internBytes(s: "main")
             deadMainId = intern(c: inout self, start: mainN.nameStart, len: mainN.nameLen)
         }
+        // global initializers first: a module-level `val g = makeBox(v: 42I64)` is
+        // program code too — its initializer expression registers the fn/method/type
+        // instances it reaches, exactly like a function body (an un-scanned initializer
+        // left the callee instance and the inferred type unregistered: a misleading
+        // "not a registered struct" reject on field access, SIGSEGV on a method call).
+        // Each Let adds itself as a local as it goes, so a later init reading an
+        // earlier global resolves — same shape as the record and verify walks.
+        val noParamsG: Array[Bind] = []
+        val noArgsG: Array[U64] = []
+        self.cur.locals = []
+        self.cur.hasRecv = false
+        self.cur.recvInstRef = 0
+        self.cur.typeParams = noParamsG
+        self.cur.typeArgs = noArgsG
+        mut val gvi: U64 = 0
+        while gvi < self.arena.globals.count() {
+            self.scanStmtInsts(stmtId: self.arena.globals[gvi].letStmt)
+            gvi += 1
+        }
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
