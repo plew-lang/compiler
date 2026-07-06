@@ -164,6 +164,37 @@ pub impl Comp {
         return self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs />)
     }
 
+    // Structural nesting depth of a TypeRef (`I64`=1, `Box[I64]`=2, `Box[Box[I64]]`=3).
+    // Terminates because a ref's args are always pushed before the ref itself (indices
+    // strictly decrease). Used by the instantiation-depth gate below.
+    inout fn tyRefDepth(ref: U64) -> U64 {
+        if ref >= self.arena.types.count() {
+            return 0
+        }
+        val t: TypeRef = self.arena.types[ref]
+        mut val d: U64 = 0
+        mut val i: U64 = 0
+        while i < t.args.count() {
+            val ad: U64 = self.tyRefDepth(ref: t.args[i])
+            if ad > d {
+                d = ad
+            }
+            i += 1
+        }
+        return d + 1U64
+    }
+
+    // POLYMORPHIC RECURSION guard (rustc recursion_limit analogue): a generic that
+    // recurses with an ever-deepening type argument (`deep(v: <Box[T] v=v />)`) grows a
+    // fresh, deeper instance every worklist round — without a ceiling the collection
+    // fixpoint never converges and the compiler hangs (audit-5 L5). Any legitimate
+    // program's type nesting is far below 64.
+    inout fn checkInstDepth(ref: U64) {
+        if self.tyRefDepth(ref: ref) > 64U64 {
+            compileErrorAt(line: self.lineOf(offset: self.arena.types[ref].nameStart), msg: "type recursion limit reached while instantiating a generic type — a generic appears to recurse with an ever-deepening type argument (polymorphic recursion is not supported)")
+        }
+    }
+
     inout fn groundTypeRef(ref: U64) -> U64 {
         if ref >= self.arena.types.count() {
             return ref
@@ -410,6 +441,7 @@ pub impl Comp {
                         return
                     }
                 }
+                self.checkInstDepth(ref: ref)
                 self.monoWork.genInsts.append(ref)
                 // scan the generic struct's fields under this instantiation's env so an
                 // `Array[T]` field registers its concrete element (`Array[I32]`) — the

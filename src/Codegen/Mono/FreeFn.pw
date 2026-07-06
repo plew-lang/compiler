@@ -239,6 +239,14 @@ pub impl Comp {
                 val inferred: Array[U64] = self.inferFnArgs(f: self.arena.funcs[fi], args: args)
                 if self.fnArgsAllGround(args: inferred) {
                     if !(self.fnInstExists(fnIdx: fi, args: inferred)) {
+                        // polymorphic-recursion ceiling: an ever-deepening type argument
+                        // (`deep(v: (v, v))` through an anonymous record) grows fn instances
+                        // without a matching genInst — gate here too, not only in scanType.
+                        mut val di: U64 = 0
+                        while di < inferred.count() {
+                            self.checkInstDepth(ref: inferred[di])
+                            di += 1
+                        }
                         self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
                     }
                 }

@@ -1,0 +1,13 @@
+// A generic that recurses with an ever-deepening type argument would grow a
+// fresh instance every collection round — the fixpoint never converges. The
+// instantiation-depth ceiling turns the hang into this diagnostic (audit-5 L5).
+struct Box[T] { pub val v: T }
+
+fn deep[T](v: T, n: I64) -> I64 {
+    if n <= 0I64 { return 0I64 }
+    return deep(v: <Box[T] v=v />, n: n - 1I64)
+}
+
+fn main() {
+    val r: I64 = deep(v: 1I64, n: 3I64)
+}

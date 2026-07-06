@@ -1,0 +1,8 @@
+// A newtype chain that never reaches a concrete type has no representation —
+// every underlying-chase would loop forever (the compiler hung; audit-5 L5).
+newtype A = B
+newtype B = A
+
+fn main() {
+    val n: I64 = 1I64
+}

@@ -610,6 +610,14 @@ pub impl LlvmCtx {
             if args.count() != f.typeParams.count() || !(c.fnArgsAllGround(args: args)) {
                 compileErrorAt(line: c.lineOf(offset: f.nameStart), msg: "cannot infer the type arguments of a call to this generic function — annotate the arguments or the receiving binding so every type parameter is pinned (spec/06)")
             }
+            // polymorphic-recursion ceiling on the demand side too: the emission drain
+            // (emitOneGenFn -> ensureFnInst) is its own fixpoint and would otherwise
+            // queue ever-deeper instances forever (mirrors registerCallInst's gate).
+            mut val di: U64 = 0
+            while di < args.count() {
+                c.checkInstDepth(ref: args[di])
+                di += 1
+            }
         }
         val k: U64 = c.monoWork.fnInsts.count()
         // recvInstRef: the operand instance for an `assoc fn` witness (`impl[T] Array[T]

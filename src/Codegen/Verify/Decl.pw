@@ -100,6 +100,7 @@ pub impl Comp {
         }
         self.checkLangItemRedef()
         self.checkBlanketHeadless()
+        self.checkNewtypeCycles()
         self.checkDupTypeNames()
         self.checkDupFns()
         self.checkDupParamLabels()
@@ -132,6 +133,49 @@ pub impl Comp {
                 }
             }
             ei += 1
+        }
+    }
+
+    // A newtype whose underlying chain never reaches a concrete type (`newtype A = B` /
+    // `newtype B = A`) has no representation — resolution (llvmScalarTy and every other
+    // underlying-chase) would follow the chain forever, hanging the compiler on first
+    // use (audit-5 L5). Reject at declaration: more hops than there are newtypes is a
+    // cycle by pigeonhole.
+    inout fn checkNewtypeCycles() {
+        mut val i: U64 = 0
+        while i < self.arena.newtypes.count() {
+            val nt: NewtypeDef = self.arena.newtypes[i]
+            mut val curStart: U64 = nt.underStart
+            mut val curLen: U64 = nt.underLen
+            mut val hops: U64 = 0
+            mut val chasing: Bool = true
+            while chasing {
+                // step by "is the current name itself a newtype?" — NOT by span progress:
+                // a direct self-cycle (`newtype A = A`) resolves to the same span and a
+                // progress test would wrongly conclude "done".
+                val qid: U64 = intern(c: inout self, start: curStart, len: curLen)
+                mut val found: Bool = false
+                mut val j: U64 = 0
+                while j < self.arena.newtypes.count() {
+                    if self.arena.newtypes[j].nameId == qid {
+                        curStart = self.arena.newtypes[j].underStart
+                        curLen = self.arena.newtypes[j].underLen
+                        found = true
+                        j = self.arena.newtypes.count()
+                    } else {
+                        j += 1
+                    }
+                }
+                if found {
+                    hops += 1
+                    if hops > self.arena.newtypes.count() {
+                        compileErrorAt(line: self.lineOf(offset: nt.defOffset), msg: "newtype cycle: this newtype's underlying chain never reaches a concrete type (spec/10)")
+                    }
+                } else {
+                    chasing = false
+                }
+            }
+            i += 1
         }
     }
 

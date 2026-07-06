@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+// An Array of a self-recursive struct (its cyclic field is auto-boxed): the
+// deinit-need classifier used to follow the field's type name forever and the
+// compiler hung on the local's scope-exit drop (audit-5 L5).
+struct A { val a: A }
+
+fn main() {
+    mut val xs: Array[A] = []
+    print(xs.count())
+}

@@ -1,0 +1,7 @@
+// The direct self-cycle: resolution makes "no progress", which a naive
+// progress test mistakes for "done" — the decl check steps by is-a-newtype.
+newtype A = A
+
+fn main() {
+    val n: I64 = 1I64
+}

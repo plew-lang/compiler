@@ -34,6 +34,26 @@ pub impl LlvmCtx {
     // Whether destroying a value of struct `sidx` runs any deinit — its own, or a
     // (registered, non-array) field's, recursively (spec/03).
     inout fn structNeedsDeinit(c: inout Comp, sidx: U64) -> Bool {
+        mut val visited: Array[U64] = []
+        return self.structNeedsDeinitV(c: inout c, sidx: sidx, visited: inout visited)
+    }
+
+    // The visited set terminates a containment CYCLE (`struct A { val a: A }`, or a
+    // mutual A/B pair): the cyclic field is auto-boxed (markBoxedFields), but this walk
+    // follows field type NAMES and used to recurse forever — the compiler hung on any
+    // drop of such a value (audit-5 L5). A re-visited struct contributes false: its own
+    // heap needs were already answered on the first visit, and the boxed pointer itself
+    // is a known, tolerated leak (never a UAF) until boxed-field release lands with the
+    // unified ARC classifier (audit-5 F7).
+    inout fn structNeedsDeinitV(c: inout Comp, sidx: U64, visited: inout Array[U64]) -> Bool {
+        mut val vi: U64 = 0
+        while vi < visited.count() {
+            if visited[vi] == sidx {
+                return false
+            }
+            vi += 1
+        }
+        visited.append(sidx)
         if structDeinitFi(c: inout c, sidx: sidx) < c.arena.funcs.count() {
             return true
         }
@@ -67,7 +87,7 @@ pub impl LlvmCtx {
             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
             if fsi < c.arena.structs.count() {
                 if !(c.arena.structs[fsi].isExtern) {
-                    if self.structNeedsDeinit(c: inout c, sidx: fsi) {
+                    if self.structNeedsDeinitV(c: inout c, sidx: fsi, visited: inout visited) {
                         return true
                     }
                 }
