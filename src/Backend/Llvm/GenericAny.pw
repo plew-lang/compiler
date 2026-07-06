@@ -47,6 +47,30 @@ pub impl LlvmCtx {
             if ge < self.genEnumRefs.count() {
                 return self.genEnumTys[ge]
             }
+            // both slots missed AND demand registration declined. For a GROUND instance
+            // whose head is a registered non-extern generic struct/enum this used to fall
+            // through to the i64 scalar default — a silent-miscompile seed (the value's
+            // aggregate is treated as one word). Make it loud instead; ensure fires for
+            // every registrable case, so this is an internal-invariant marker. (gen mode
+            // legitimately declines instances over to-be-derived types — spec/16.)
+            if !(c.genMode) {
+                if c.tyRefIsGround(ref: ref) {
+                    val lt: TypeRef = c.arena.types[ref]
+                    mut val isKnownDef: Bool = false
+                    val lsi: U64 = c.genericStructIndex(nameStart: lt.nameStart, nameLen: lt.nameLen)
+                    if lsi < c.arena.structs.count() {
+                        if !(c.arena.structs[lsi].isExtern) {
+                            isKnownDef = true
+                        }
+                    }
+                    if c.genericEnumIndex(nameStart: lt.nameStart, nameLen: lt.nameLen) < c.arena.enums.count() {
+                        isKnownDef = true
+                    }
+                    if isKnownDef {
+                        compileErrorAt(line: c.lineOf(offset: lt.nameStart), msg: "internal error (compiler bug): a ground generic instance reached emission unregistered and demand registration declined — please report this")
+                    }
+                }
+            }
         }
         val t: TypeRef = c.arena.types[ref]
         return self.llvmScalarTy(c: inout c, tyStart: t.nameStart, tyLen: t.nameLen)
