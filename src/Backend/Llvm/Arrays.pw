@@ -88,82 +88,37 @@ pub impl LlvmCtx {
                 if op == opNot() { return self.i1ty }
                 return self.exprLlvmType(c: inout c, id: operand)
             }
-            Expr.Array(val elems) => { return self.arrayInstTy(c: inout c, elemRef: self.arrayLitElemRef(c: inout c, elems: elems)) }
+            Expr.Array(val elems) => { return self.arrayInstTy(c: inout c, elemRef: self.arrayLitElemRef(c: inout c, id: id, elems: elems)) }
             _ => { return self.i64ty }
         }
     }
 
     // Whether an expression is array-typed (for routing `.count()`/`.append`/index).
+    // Derived from the typed-IR ref (exprTypeRef heads `Array`) — the same single
+    // authority exprStructIdx already rides; the per-form arm this replaced under-
+    // detected (a generic intrinsic return grounding to an array — `bufferGet -> T`
+    // at T=Array[..] — or an `Array.overBuffer` assoc result) and never won a case
+    // over the ref (shadow: 0 arm-only hits over self-compile + full corpus).
     inout fn exprIsArray(c: inout Comp, id: U64) -> Bool {
-        match c.arena.exprs[id] {
-            Expr.Ident(val start, val len) => {
-                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if li < self.nLocals {
-                    return self.locIsArr[li]
-                }
-            }
-            Expr.Field(val base, val nameStart, val nameLen) => {
-                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count() {
-                        val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                        if fd.tyIsArray {
-                            return true
-                        }
-                        // a generic field grounding to an array (`Box[Array[I32]].v`).
-                        return self.fieldArrayElemRefUnderBase(c: inout c, base: base, fd: fd) != 0U64
-                    }
-                }
-            }
-            Expr.Arrow(val base, val nameStart, val nameLen) => {
-                val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
-                if psidx < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[psidx].fields.count() {
-                        return c.arena.structs[psidx].fields[fidx].tyIsArray
-                    }
-                }
-            }
-            Expr.Array(elems: _) => { return true }
-            Expr.Index(base: _, index: _) => {
-                // a nested-array element (`m[i]` where m: Array[Array[I32]]): its element
-                // type ref is itself an Array. Via the shared resolver so the Index form
-                // agrees across the projections (see resolveIndex).
-                return self.resolveIndex(c: inout c, id: id).isArray
-            }
-            Expr.Call(nameStart: _, nameLen: _, args: _) => {
-                // an array-returning call (`val a = mk()`): tracked as an array — via the
-                // shared resolver so exprStructIdx/exprTypeRef/exprIsArray agree on the Call
-                // form (see resolveCall).
-                return self.resolveCall(c: inout c, id: id).isArray
-            }
-            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                // an array-returning method call (`s.bytes()` -> Array[U8], `h.items()`):
-                // its grounded result TypeRef heads `Array`, so a chained `.count()` / index /
-                // `for` over the call result routes through the array path just like a local.
-                // Via the shared resolver so the Method form agrees across the projections.
-                return self.resolveMethod(c: inout c, id: id).isArray
-            }
-            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => {
-                // `<Array data=buf />` — the array struct built directly from a Buffer (the
-                // only way to wrap an existing buffer as an array, e.g. `String.bytes()`).
-                // The Make builds the `{ptr}` aggregate (= arrayTy), so it IS an array value.
-                return rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "Array")
-            }
-            _ => {}
+        val r: U64 = self.exprTypeRef(c: inout c, id: id)
+        if r != 0U64 && r < c.arena.types.count() {
+            return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen, kw: "Array")
         }
         return false
     }
 
-    // The element TypeRef of an array LITERAL `[e0, …]` — its first element's type, so the
-    // literal can carry a full `Array[E]` instance ref (exprTypeRef) and route index/`for`/
-    // method use through the same Index/Iterator/generic witnesses as a bound array (no
-    // literal-specific type-name fallback). A generic/any/struct element resolves via
-    // exprTypeRef or the element's recorded instance ref; a scalar element (a suffixed int
-    // literal, a Bool/String) is synthesized from its type-name span. 0 for an empty literal
-    // (always annotated + bound, never used directly).
-    inout fn arrayLitElemRef(c: inout Comp, elems: Array[U64]) -> U64 {
+    // The element TypeRef of an array LITERAL `[e0, …]` — primarily the literal's OWN
+    // typed-IR `Array[E]` ref (which also covers a context-typed EMPTY `[]`: the record
+    // pass stores the declared/expected type); a store miss (a backend-synthesized
+    // literal the record pass never saw) falls back to the first element's type.
+    inout fn arrayLitElemRef(c: inout Comp, id: U64, elems: Array[U64]) -> U64 {
+        val lr: U64 = self.exprTypeRef(c: inout c, id: id)
+        if lr != 0U64 && lr < c.arena.types.count() {
+            val lt: TypeRef = c.arena.types[lr]
+            if lt.args.count() == 1U64 && rangeEquals(bytes: c.arena.bytes, start: lt.nameStart, len: lt.nameLen, kw: "Array") {
+                return lt.args[0]
+            }
+        }
         if elems.count() == 0U64 {
             return 0U64
         }
@@ -318,7 +273,7 @@ pub impl LlvmCtx {
                     // Prefer the literal's own (concrete) element type; for an empty `[]` fall
                     // back to the field's declared element (`fld.ty` = `Array[E]`, args[0] = E),
                     // grounded through the active env so `Array[T]` resolves to `Array[I64]`.
-                    mut val feRef: U64 = self.arrayLitElemRef(c: inout c, elems: elems)
+                    mut val feRef: U64 = self.arrayLitElemRef(c: inout c, id: valExpr, elems: elems)
                     if feRef == 0U64 {
                         if fld.ty != 0U64 {
                             mut val gft: U64 = fld.ty

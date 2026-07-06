@@ -175,7 +175,7 @@ pub impl LlvmCtx {
                 if elems.count() > 0U64 {
                     et = self.exprLlvmType(c: inout c, id: elems[0])
                 }
-                return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et, elemRef: self.arrayLitElemRef(c: inout c, elems: elems))
+                return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et, elemRef: self.arrayLitElemRef(c: inout c, id: id, elems: elems))
             }
             Expr.Index(val base, val index) => {
                 return self.genLlvmIndex(c: inout c, base: base, index: index)

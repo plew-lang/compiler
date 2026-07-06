@@ -142,22 +142,6 @@ export struct TypeInfo {
     pub val viewExtId: U64 = 0
 }
 
-// The backend's resolution of an expression's owning type, computed once and projected
-// two ways: `structIdx` (the c.arena.structs def index for method/field dispatch, or
-// c.arena.structs.count() sentinel when not a registered struct) and `typeRef` (the
-// grounded c.arena.types index when the type carries args — a generic instance, an
-// `any P` existential, an Array, a Ref pointee — else 0). `exprStructIdx` and
-// `exprTypeRef` are thin projections of this so a single arm (Field, Arrow, …) feeds
-// both — no parallel per-variant resolvers that drift apart.
-export struct ResolvedExpr {
-    pub val structIdx: U64
-    pub val typeRef: U64
-    // is the resolved value an `Array[E]`? Part of the single classification the
-    // exprStructIdx / exprTypeRef / exprIsArray projections all read from one resolver
-    // (an array carries its element by name, so its ref/struct-idx alone can't say "array").
-    pub val isArray: Bool = false
-}
-
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
 export struct MakeField {
     pub val nameStart: U64
@@ -1008,7 +992,6 @@ pub impl TypeRef { factory }
 pub impl CaptureEntry { factory }
 pub impl Local { factory }
 pub impl TypeInfo { factory }
-pub impl ResolvedExpr { factory }
 pub impl MakeField { factory }
 pub impl Bind { factory }
 pub impl Arg { factory }

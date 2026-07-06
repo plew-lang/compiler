@@ -171,12 +171,23 @@ pub impl Comp {
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { self.recordExpr(exprId: recv) }
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.recordExpr(exprId: base) }
-            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
                 while i < fields.count() {
                     self.recordExpr(exprId: fields[i].value)
                     val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
-                    self.recordArrayLitCtx(exprId: fields[i].value, ctxRef: self.typedIrRefOfInfo(ti: ft))
+                    mut val ctxRef: U64 = self.typedIrRefOfInfo(ti: ft)
+                    // a generic construction's field context is the DECLARED field type
+                    // (`items: Array[T]` on `<Box[I64] …/>`) — ground it under the
+                    // instance so the literal records `Array[I64]`, and never store a
+                    // still-parametric context (a non-instance Make leaves it as-is).
+                    if ctxRef != 0U64 && ty != 0U64 && self.isGenericInst(ref: ty) {
+                        ctxRef = self.groundUnderInst(instRef: ty, tyRef: ctxRef)
+                    }
+                    if ctxRef != 0U64 && !(self.tyRefIsGround(ref: ctxRef)) {
+                        ctxRef = 0
+                    }
+                    self.recordArrayLitCtx(exprId: fields[i].value, ctxRef: ctxRef)
                     i += 1
                 }
             }
