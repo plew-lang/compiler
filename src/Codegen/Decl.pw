@@ -397,7 +397,7 @@ pub impl Comp {
 
     // Like `structIndexByName` but ALSO matches a GENERIC struct def (`Array`, `Buffer`'s
     // user-side wrappers, any `struct Foo[T]`) — the structural ARC queries (valueArc /
-    // arrElemNeedsValueArc / structNeedsDeinit) resolve a generic struct VALUE by its type
+    // arcNeedsRelease / structNeedsDeinit) resolve a generic struct VALUE by its type
     // name to enumerate its fields, with the instance env supplied separately (setStructEnv)
     // for grounding. `structIndexByName` intentionally excludes generics (concrete-struct
     // codegen routes those through the genStruct instance machinery); this is its any-arity

@@ -251,7 +251,7 @@ pub impl LlvmCtx {
                 // an element type that owns heap (a nested array): release its buffer rc and,
                 // at 0, release each element's heap (recursively) before freeing — instead of
                 // just dropping the outer (which would leak the elements).
-                if self.arrElemNeedsValueArc(c: inout c, elemRef: self.locElemTypeRef[li]) {
+                if c.arcNeedsRelease(ref: self.locElemTypeRef[li]) {
                     self.emitReleaseArrayValue(c: inout c, data: data, count: self.arrValCount(c: inout c, arr: arr), elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
                 } else {
                     self.rawbufDrop(c: inout c, cell: data)
@@ -273,7 +273,7 @@ pub impl LlvmCtx {
                     if c.arena.types[self.locTypeRef[li]].args.count() > 0U64 {
                         ber = c.arena.types[self.locTypeRef[li]].args[0]
                     }
-                    if self.arrElemNeedsValueArc(c: inout c, elemRef: ber) {
+                    if c.arcNeedsRelease(ref: ber) {
                         self.emitReleaseArrayValue(c: inout c, data: bdata, count: self.rawbufCount(c: inout c, data: bdata), elemTy: self.llvmTypeOfRef(c: inout c, ref: ber), elemRef: ber)
                     } else {
                         self.rawbufDrop(c: inout c, cell: bdata)

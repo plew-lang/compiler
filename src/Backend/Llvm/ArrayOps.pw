@@ -245,7 +245,7 @@ pub impl LlvmCtx {
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
-        if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
+        if c.arcNeedsRelease(ref: er) {
             if !(c.isRefInst(ref: er)) {
                 self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
             }
@@ -287,7 +287,7 @@ pub impl LlvmCtx {
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: valueExpr), elemTy: elemTy), expr: valueExpr, typeRef: er)
         val slotPtr: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
-        if self.arrElemNeedsValueArc(c: inout c, elemRef: er) {
+        if c.arcNeedsRelease(ref: er) {
             val old: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, slotPtr, anon())
             LLVMBuildStore(self.b, rv, slotPtr)
             self.valueArc(c: inout c, v: old, typeRef: er, retain: false)

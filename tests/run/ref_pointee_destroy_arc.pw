@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+struct Box[T] {
+    pub val v: T
+}
+
+enum Inner {
+    Keep(r: Ref[Cell])
+    Nothing
+}
+
+fn genericPointee() {
+    val r: Ref[Box[Ref[Cell]]] = <Ref value=<Box[Ref[Cell]] v=<Ref value=<Cell v=5I32 /> /> /> />
+    print("generic-pointee-end")
+}
+
+fn enumPointee() {
+    val r: Ref[Inner] = <Ref value=<Inner.Keep r=<Ref value=<Cell v=6I32 /> /> /> />
+    print("enum-pointee-end")
+}
+
+fn main() {
+    genericPointee()
+    enumPointee()
+    print("done")
+}

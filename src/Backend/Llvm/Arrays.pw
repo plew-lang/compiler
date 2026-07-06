@@ -466,7 +466,7 @@ pub impl LlvmCtx {
         av.append(LLVMSizeOf(elemTy))
         av.append(count)
         val nd: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 3U64, anon())
-        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
+        if c.arcNeedsRelease(ref: elemRef) {
             self.emitRetainArrayElems(c: inout c, data: nd, count: count, elemTy: elemTy, elemRef: elemRef)
         }
         // Preserve the source value's aggregate type (`{ptr}` String `%st` / Array `arrayTy`)
@@ -864,10 +864,16 @@ pub impl LlvmCtx {
         val decBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "refrel.dec"))
         LLVMBuildCondBr(self.b, isLast, deinitBB, decBB)
         LLVMPositionBuilderAtEnd(self.b, deinitBB)
-        val rpsi: U64 = self.refDeinitPointeeSidx(c: inout c, refTy: refTy)
-        if rpsi < c.arena.structs.count() {
-            val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
-            self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, pty, cell, anon()), sidx: rpsi)
+        // destroy the pointee through the classifier (arcNeedsRelease gate + valueArc
+        // action) — the old sidx-keyed gate (refDeinitPointeeSidx) resolved the pointee
+        // by NAME only, so a generic-instance pointee (Ref[Box[String]]) and any
+        // non-struct pointee (enum / String / nested Ref) were silently never destroyed.
+        if c.isRefInst(ref: refTy) {
+            val pr: U64 = c.arena.types[refTy].args[0]
+            if c.arcNeedsRelease(ref: pr) {
+                val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
+                self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, pty, cell, anon()), typeRef: pr, retain: false)
+            }
         }
         LLVMBuildBr(self.b, decBB)
         LLVMPositionBuilderAtEnd(self.b, decBB)
@@ -888,7 +894,7 @@ pub impl LlvmCtx {
     // for EVERY element type: rc-shared on bind/arg/payload-bind/enum-construct, CoW'd on
     // mutation (append/set/`[i]=`/inout), and released (freed at rc 0) at scope exit.
     // Element heap (String buffers, inner arrays, struct/enum payload buffers, and `Ref`
-    // cells) CASCADES (1-3b): arrElemNeedsValueArc returns true for each, so when a CoW
+    // cells) CASCADES (1-3b): arcNeedsRelease is true for each, so when a CoW
     // duplicates the buffer the elements are retained, and when the buffer is freed they are
     // released — element heap is reclaimed, not leaked. A `Ref` element rides the same path
     // with its own strong-rc retain / emitRefRelease (pointee deinit + free at strong 0).
@@ -928,7 +934,7 @@ pub impl LlvmCtx {
         // when the CoW actually duplicated the buffer (nd != old data), the shallow memcpy
         // duplicated every element's leading heap reference too — retain each so the new
         // owner co-owns it (balanced by this owner's eventual element release at drop).
-        if self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef) {
+        if c.arcNeedsRelease(ref: elemRef) {
             val copied: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), nd, data, anon())
             val retBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.retain"))
             val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "cow.cont"))
@@ -944,74 +950,13 @@ pub impl LlvmCtx {
     // ---- recursive value ARC over array element heap (1-3b: element cascade) ----
     //
     // Only the array's own ({data,count}) buffer is rc-managed by the array machinery; an
-    // element that itself owns heap — a nested array, a String, a struct/enum that needs a
-    // deinit — is retained when an outer CoW duplicates it and released when the outer is
-    // freed, so the element heap is reclaimed instead of leaked. retain is SHALLOW (bump the
-    // element's leading rc / co-own its fields); release CASCADES (frees at rc 0, recursing
-    // into deeper elements). `Ref` elements are intentionally NOT covered (their own rc
-    // semantics own the pointee) — arrElemNeedsValueArc returns false for them, so they are
-    // never retained/released here and can never be double-freed.
-    inout fn arrElemNeedsValueArc(c: inout Comp, elemRef: U64) -> Bool {
-        if elemRef == 0U64 {
-            return false
-        }
-        // a `Ref[T]` element owns one strong rc on its shared cell — retained when an outer
-        // CoW duplicates the buffer, released (pointee deinit + free at strong 0) when the
-        // buffer is freed or the element is overwritten. valueArc's Ref case does both.
-        if c.isRefInst(ref: elemRef) {
-            return true
-        }
-        // a `WeakRef[T]` element owns one WEAK rc on its shared cell — bumped when an outer
-        // CoW duplicates the buffer, released when the buffer is freed or the element is
-        // overwritten (cell freed iff both strong and weak reach 0). valueArc's WeakRef case
-        // does both (refWeakDowngrade / weakRelease).
-        if c.isWeakRefInst(ref: elemRef) {
-            return true
-        }
-        val t: TypeRef = c.arena.types[elemRef]
-        // `Buffer[T]` owns an rc-managed heap buffer, so a Buffer element is value-ARC'd.
-        // (`Array[T]` is no longer named: as an ordinary `struct { data: Buffer }` it is caught
-        // by the registered-struct case below via structNeedsDeinit — its Buffer field counts.)
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer") {
-            return true
-        }
-        // a String element owns an rc-managed Array[U8] buffer — retained on outer CoW,
-        // released on outer drop (its value IS the buffer; see valueArc's String case).
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
-            return true
-        }
-        // a struct element that releases heap on destruction (array/struct field or `deinit`):
-        // its elements are retained on outer CoW and released on outer drop. Uses the any-arity
-        // lookup so a GENERIC struct element (`Array[I64]` — an ordinary `struct { data: Buffer }`)
-        // is resolved by name and its Buffer field counts via structNeedsDeinit (collections.md §3-付録3).
-        val sidx: U64 = c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        if sidx < c.arena.structs.count() {
-            if !(c.arena.structs[sidx].isExtern) {
-                return self.structNeedsDeinit(c: inout c, sidx: sidx)
-            }
-        }
-        // an enum element that owns heap (a variant with a non-boxed array/struct field):
-        // its elements are retained on outer CoW and released on outer drop (like structs).
-        val gei: U64 = self.genEnumSlot(c: inout c, ref: elemRef)
-        if gei < self.genEnumRefs.count() {
-            // set the instance env so a type-param `Ref` payload (`Array[Optional[Ref[T]]]`)
-            // grounds in variantHasHeap (fieldGroundedRefTy) and the element is ARC'd.
-            val savedP: Array[Bind] = c.cur.typeParams
-            val savedA: Array[U64] = c.cur.typeArgs
-            val didSet: Bool = self.setEnumEnv(c: inout c, ref: elemRef)
-            val needs: Bool = self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[gei])
-            if didSet {
-                c.cur.typeParams = savedP
-                c.cur.typeArgs = savedA
-            }
-            return needs
-        }
-        val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
-        if reg < self.genEnumRefs.count() {
-            return self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg])
-        }
-        return false
-    }
+    // element that itself owns heap — a nested array, a String, a Ref/WeakRef cell, a
+    // struct/enum that needs a deinit — is retained when an outer CoW duplicates it and
+    // released when the outer is freed, so the element heap is reclaimed instead of leaked.
+    // retain is SHALLOW (bump the element's leading rc / co-own its fields); release
+    // CASCADES (frees at rc 0, recursing into deeper elements). The element needs-gate is
+    // the classifier's arcNeedsRelease (audit-5 F7 — the per-site name-check enumeration
+    // this section used to carry is gone), and the per-element action is valueArc.
 
     // Free a rawbuf cell unconditionally (rc already at 0); null / sentinel-rc left alone.
     inout fn rawbufFree(c: inout Comp, cell: LLVMValueRef) {
@@ -1236,8 +1181,8 @@ pub impl LlvmCtx {
         // at-0 is exactly plew_rawbuf_drop, so emit one call instead of inlining release +
         // icmp + 2 blocks + condbr + free at every site (~8800 sites — most array releases).
         // Semantically identical; cuts ~60k IR lines. (String / Ref / struct / enum elements
-        // DO need the per-element cascade below — arrElemNeedsValueArc returns true for them.)
-        if !(self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef)) {
+        // DO need the per-element cascade below — arcNeedsRelease is true for them.)
+        if !(c.arcNeedsRelease(ref: elemRef)) {
             self.rawbufDrop(c: inout c, cell: data)
             return
         }
@@ -1283,7 +1228,7 @@ pub impl LlvmCtx {
     // clear/truncate to drop a removed suffix). A no-op when the element type carries no
     // value-ARC. The caller must have committed the smaller count first (commit-then-release).
     inout fn emitArrayElemRangeRelease(c: inout Comp, data: LLVMValueRef, start: LLVMValueRef, end: LLVMValueRef, elemTy: LLVMTypeRef, elemRef: U64) {
-        if !(self.arrElemNeedsValueArc(c: inout c, elemRef: elemRef)) {
+        if !(c.arcNeedsRelease(ref: elemRef)) {
             return
         }
         val iSlot: LLVMValueRef = self.entryAlloca(ty: self.i64ty)
@@ -1301,23 +1246,6 @@ pub impl LlvmCtx {
         LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
-    }
-
-    // The pointee struct index of a `Ref[T]` instance ref if T is a registered struct
-    // that needs a deinit, else c.arena.structs.count().
-    inout fn refDeinitPointeeSidx(c: inout Comp, refTy: U64) -> U64 {
-        if c.isRefInst(ref: refTy) {
-            if c.arena.types[refTy].args.count() > 0U64 {
-                val pt: TypeRef = c.arena.types[c.arena.types[refTy].args[0]]
-                val psi: U64 = c.structIndexByName(start: pt.nameStart, len: pt.nameLen)
-                if psi < c.arena.structs.count() {
-                    if self.structNeedsDeinit(c: inout c, sidx: psi) {
-                        return psi
-                    }
-                }
-            }
-        }
-        return c.arena.structs.count()
     }
 
     // Bounds-check `i` against `count` via the runtime (panics on out-of-range).
