@@ -481,7 +481,7 @@ pub impl LlvmCtx {
             // the caller's buffer out from under it). A `move` arg transfers ownership
             // instead (markLocalMoved above), so it is not also retained.
             if !(p.isMove) {
-                if arrayExprIsPlace(c: inout c, id: argExpr) {
+                if exprAliasesPlace(c: inout c, id: argExpr) {
                     self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: arrArg))
                 }
             }
@@ -519,12 +519,12 @@ pub impl LlvmCtx {
             // struct / String / enum place args still shallow-retain (a tolerated leak).
             val refTy: U64 = self.argRefTypeRef(c: inout c, argExpr: argExpr)
             if refTy != 0U64 {
-                if !(arrayExprIsPlace(c: inout c, id: argExpr)) {
+                if !(exprAliasesPlace(c: inout c, id: argExpr)) {
                     val slot: LLVMValueRef = self.entryAlloca(ty: self.ptrty)
                     LLVMBuildStore(self.b, out, slot)
                     self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: self.ptrty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: refTy)
                 }
-            } else if structExprIsPlace(c: inout c, id: argExpr) {
+            } else if exprAliasesPlace(c: inout c, id: argExpr) {
                 val atr: U64 = self.exprTypeRef(c: inout c, id: argExpr)
                 // struct / String / enum place args shallow-retain (their param's deferred
                 // release is a tolerated leak, never a UAF). A Ref/WeakRef place is diverted

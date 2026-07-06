@@ -604,7 +604,7 @@ pub impl LlvmCtx {
                                     // freed (the field and the source both release the one cell).
                                     val gfTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: gfr3)
                                     self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, gfTy, gep, anon()), typeRef: gfr3, retain: false)
-                                    if structExprIsPlace(c: inout c, id: value) {
+                                    if exprAliasesPlace(c: inout c, id: value) {
                                         self.valueArc(c: inout c, v: gv3, typeRef: gfr3, retain: true)
                                     }
                                     LLVMBuildStore(self.b, gv3, gep)

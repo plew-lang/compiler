@@ -181,7 +181,7 @@ pub impl LlvmCtx {
     // a value-semantics copy of its already-emitted value `rv`; else `rv` unchanged.
     inout fn copyAnyIfPlace(c: inout Comp, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
         if refIsAny(c: inout c, ref: self.exprTypeRef(c: inout c, id: valueExpr)) {
-            if anyExprIsPlace(c: inout c, id: valueExpr) {
+            if exprAliasesPlace(c: inout c, id: valueExpr) {
                 return self.copyAnyValue(c: inout c, fat: rv)
             }
         }

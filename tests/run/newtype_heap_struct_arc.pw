@@ -1,0 +1,25 @@
+// A newtype over a HEAP-OWNING struct shares the struct's ARC class (spec/10):
+// its values retain/release the underlying's buffers like the struct itself.
+// The old per-site enumeration in valueArc missed the newtype->underlying
+// resolution, so newtype-of-struct values skipped ARC entirely (leak; caught
+// when arcClassOfRef became the single classifier).
+import @Std/Io with { print }
+
+struct Holder { pub val name: String  pub val tags: Array[String] }
+
+newtype Labeled = Holder
+
+fn describe(x: Labeled) -> String {
+    return x.name
+}
+
+fn main() {
+    val h: Holder = <Holder name="alpha" tags=["x", "y"] />
+    val l: Labeled = h as Labeled
+    // pass by value (retains under the hood), read through the newtype
+    print(describe(x: l))
+    print(l.tags[1])
+    // unwrap back and confirm the underlying is intact
+    val back: Holder = l as Holder
+    print(back.name)
+}

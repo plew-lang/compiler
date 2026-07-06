@@ -10,7 +10,7 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, runFrontend }
 import ./Diag with { compileErrorAt, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
@@ -533,15 +533,6 @@ fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
     return false
 }
 
-// Whether `id` is an `any P` PLACE (an Ident or Field) whose copy into a new owner
-// must duplicate the boxed value (value semantics).
-fn anyExprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: _, len: _) => { return true }
-        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
-        _ => { return false }
-    }
-}
 
 // The slot index (into the vtable) of trait `traitIdx`'s requirement matching method
 // (nameStart,nameLen) with the call's argument labels, or 0 (the reserved drop slot
@@ -633,31 +624,35 @@ fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
     return 9000U64 + checkedOpIdx(op: op) * 8U64 + sgn + wi
 }
 
-// Whether an array-valued expression is an existing PLACE (an array local or a
-// struct field) — copying it makes a new independent owner (value semantics). A
-// literal `[…]`, an append/call result, etc. already produce a fresh owned buffer
-// and must NOT be re-copied.
-fn arrayExprIsPlace(c: inout Comp, id: U64) -> Bool {
+// Whether an expression's value ALIASES existing storage (reads a live place) —
+// vs producing a freshly-owned value. THE single aliasing gate for the ARC copy
+// cluster (consumeIntoOwned and friends): copying an aliasing value must make the
+// new owner independent (retain / CoW-share / deep-copy); a fresh value (literal,
+// call/append result, construction) already owns itself and must NOT be re-owned.
+//
+// This is deliberately a DIFFERENT question from the frontend's `exprIsPlace`
+// (lvalue-ness for inout/assignment targets): a cast `x as T` or a view `x#Ext`
+// is not an assignable place, but its VALUE is the same storage as `x` — a
+// representation no-op must be transparent to ownership. Conversely `move x`
+// transfers ownership (the source's drop is suppressed), so the moved value is
+// fresh by construction. Replaces the three drifted per-class siblings
+// (any/array/structExprIsPlace: Ident/Field[/Index] only — the missing
+// Arrow/Deref/Cast arms were live UAF/double-free classes, review/12 §1).
+fn exprAliasesPlace(c: inout Comp, id: U64) -> Bool {
     match c.arena.exprs[id] {
         Expr.Ident(start: _, len: _) => { return true }
         Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
-        // a nested-array element `outer[i]` (Array[Array[E]]) aliases the inner buffer,
-        // so binding/storing it must copy (`val inner = outer[i]` then `inner[0]=…` must
-        // leave outer unchanged) — same as an Ident/Field place.
+        // an element `outer[i]` aliases the container's storage (a nested-array
+        // element, an Array[Struct] element): binding/storing it must copy so a
+        // later write leaves the container unchanged.
         Expr.Index(base: _, index: _) => { return true }
-        _ => { return false }
-    }
-}
-
-// Whether a non-array expression is an existing struct PLACE (Ident/Field/element)
-// whose value-copy must deep-copy array fields.
-fn structExprIsPlace(c: inout Comp, id: U64) -> Bool {
-    match c.arena.exprs[id] {
-        Expr.Ident(start: _, len: _) => { return true }
-        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
-        // a struct element `arr[i]` (Array[Struct]) aliases the array's storage, so its
-        // value-copy must deep-copy the struct's array fields.
-        Expr.Index(base: _, index: _) => { return true }
+        // pointee reads through a Ref cell: the value lives in the cell — a second
+        // owner must retain/copy it (binding `r->xs` without a copy was a UAF).
+        Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
+        Expr.Deref(base: _) => { return true }
+        // representation no-ops: the value IS the operand's storage.
+        Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return exprAliasesPlace(c: inout c, id: operand) }
+        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return exprAliasesPlace(c: inout c, id: recv) }
         _ => { return false }
     }
 }

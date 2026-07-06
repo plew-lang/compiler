@@ -769,6 +769,33 @@ export struct Arena {
 }
 pub impl Arena { factory }
 
+// The ARC ownership class of a grounded TypeRef — THE single classification that
+// every ARC decision reads (needs-heap gates, retain/release/deep-copy walkers,
+// make-owned construction, local drops, place stores). Produced only by
+// Comp.arcClassOfRef (Codegen/Arc.pw); consumers match on it instead of
+// re-enumerating the ownership classes per site (the drift that produced the
+// review/06/07/12 leak/UAF families — audit-1 "owningKindOf" blueprint).
+// Boxed (recursive-field box pointers) is a FIELD property, not a type property:
+// field walkers check FieldDef.boxed BEFORE classifying the field type.
+export enum ArcClass {
+    // no ARC: primitives, extern/opaque handles, unresolved names (a MISS is
+    // deliberately quiet here — gates that need loudness check resolution first)
+    Scalar
+    // a String value: one rc-managed rawbuf (literals carry a sentinel rc)
+    StringLike
+    // `Buffer[elem]`: the opaque rawbuf floor; release cascades into elements
+    BufferLike(elem: U64)
+    // `Ref[T]` cell: strong rc; release runs pointee deinit at 0
+    RefCell(inst: U64)
+    // `WeakRef[T]` cell: weak rc; never keeps the pointee alive
+    WeakCell(inst: U64)
+    // a registered non-extern struct value (incl. Array[T] and any grounded
+    // generic instance): field-recursive walkers / witnesses
+    StructVal(sidx: U64)
+    // a declared enum value (grounded instance): variant-payload walkers
+    EnumVal(eidx: U64)
+}
+
 // Declaration / conformance / name side-tables built during loading & analysis.
 // `traits`/`conforms`/`methodAliases` drive trait conformance (spec/08): trait
 // decls, recorded conformances, and `via` requirement→witness redirects.

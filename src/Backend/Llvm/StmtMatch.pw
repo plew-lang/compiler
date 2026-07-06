@@ -27,7 +27,7 @@ pub impl LlvmCtx {
                 // fall-through below. A place scrutinee is owned by its local/field elsewhere.
                 val sStructSentinel: U64 = 18446744073709551615U64
                 mut val sStructTempLi: U64 = sStructSentinel
-                if !(arrayExprIsPlace(c: inout c, id: scrut)) {
+                if !(exprAliasesPlace(c: inout c, id: scrut)) {
                     self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot0, ty: sty, kind: 0U64, structIdx: ssidx, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: structScrutRef)
                     sStructTempLi = self.nLocals - 1U64
                 }
@@ -85,7 +85,7 @@ pub impl LlvmCtx {
         // its real owner (the local/field) releases it at its own scope.
         val scrutSentinel: U64 = 18446744073709551615U64
         mut val scrutTempLi: U64 = scrutSentinel
-        if !(arrayExprIsPlace(c: inout c, id: scrut)) {
+        if !(exprAliasesPlace(c: inout c, id: scrut)) {
             self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot, ty: sty, kind: 0U64, structIdx: scrutSentinel, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: scrutRef)
             scrutTempLi = self.nLocals - 1U64
         }

@@ -1,0 +1,18 @@
+// Binding a Ref pointee's heap field (`r->xs`, `r->name`) creates a second owner
+// of the field's buffers, so the bind must retain/CoW-share — the aliasing gate's
+// Arrow arm (review/12 §1: binding through `->` was an unretained alias; the
+// pointee's release then freed the buffer under the binding = use-after-free).
+import @Std/Io with { print }
+
+struct Inner { pub val xs: Array[I64]  pub val name: String }
+
+fn main() {
+    mut val r: Ref[Inner] = <Ref value=<Inner xs=[1, 2, 3] name="pointee" /> />
+    val xs: Array[I64] = r->xs
+    val nm: String = r->name
+    // drop the only Ref owner: the pointee deinits here; the bindings must survive
+    r = <Ref value=<Inner xs=[9] name="other" /> />
+    print(xs[2])
+    print(nm)
+    print(r->name)
+}

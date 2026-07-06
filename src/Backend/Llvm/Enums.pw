@@ -927,7 +927,7 @@ pub impl LlvmCtx {
                             // a generic enum payload with heap (`A(o: Optional[Array[I64]])`)
                             // from a place: CoW-SHARE its active variant's heap (rc++); the
                             // gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
-                            if structExprIsPlace(c: inout c, id: valExpr) {
+                            if exprAliasesPlace(c: inout c, id: valExpr) {
                                 self.emitEnumRetainRef(c: inout c, v: giv, ref: gpf)
                             }
                             agg = LLVMBuildInsertValue(self.b, agg, giv, fj, anon())
@@ -938,7 +938,7 @@ pub impl LlvmCtx {
                             val psi: U64 = self.localStructIdxFor(c: inout c, start: fs[fj].tyStart, len: fs[fj].tyLen)
                             if psi < c.arena.structs.count() {
                                 if self.structNeedsDeinit(c: inout c, sidx: psi) {
-                                    if structExprIsPlace(c: inout c, id: valExpr) {
+                                    if exprAliasesPlace(c: inout c, id: valExpr) {
                                         // CoW-SHARE the struct place into the payload (rc++ its
                                         // heap fields); the gateway CoWs before any mutation.
                                         val psv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
@@ -958,7 +958,7 @@ pub impl LlvmCtx {
                                 // it (it is an enum, not a struct), so it would otherwise bit-copy.
                                 // emitEnumRetainRef is a no-op off an enum type, so scalar places keep
                                 // their width coercion (coerceIntTo above) unchanged.
-                                if structExprIsPlace(c: inout c, id: valExpr) {
+                                if exprAliasesPlace(c: inout c, id: valExpr) {
                                     mut val gef: U64 = fs[fj].ty
                                     if c.cur.typeParams.count() > 0U64 {
                                         gef = c.groundTypeRef(ref: fs[fj].ty)

@@ -1,0 +1,67 @@
+// Part of the Plew compiler module (root: _.pw). THE ARC ownership classifier:
+// the single place that decides which ownership class a grounded TypeRef falls
+// in (see ArcClass in Ir.pw). Every ARC decision — needs-heap gates, the
+// retain/release/deep-copy walkers, make-owned construction, local drops and
+// place stores — is a match over this classification plus an action table; no
+// consumer re-enumerates the classes itself (audit-1: per-site enumeration is
+// the drift that produced the leak/UAF families of review/06/07/12).
+//
+// Contract: the caller passes a GROUNDED ref (groundTypeRef output / an
+// instance-env-substituted field type). The classifier itself resolves only
+// representation-transparent layers (newtype -> underlying, spec/10). An
+// unresolved or unknown name classifies as Scalar (ARC no-op) — deliberately
+// quiet so action sites stay total; a gate that must be loud checks resolution
+// before classifying.
+
+pub impl Comp {
+
+    inout fn arcClassOfRef(ref: U64) -> ArcClass {
+        if ref == 0U64 {
+            return <ArcClass.Scalar />
+        }
+        if ref >= self.arena.types.count() {
+            return <ArcClass.Scalar />
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
+            return <ArcClass.StringLike />
+        }
+        // Buffer/Ref/WeakRef are blessed EXTERN structs (single opaque pointer), so
+        // they must classify BEFORE the registered-struct lookup (which skips externs)
+        // — and before any arity-generic paths (an extern with type args is not a
+        // user generic instance).
+        if t.args.count() == 1U64 {
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer") {
+                return <ArcClass.BufferLike elem=t.args[0] />
+            }
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref") {
+                return <ArcClass.RefCell inst=ref />
+            }
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRef") {
+                return <ArcClass.WeakCell inst=ref />
+            }
+        }
+        // a newtype shares its underlying type's representation AND ownership class
+        // (spec/10) — classify the underlying.
+        val ntu: U64 = self.newtypeUnderRef(start: t.nameStart, len: t.nameLen)
+        if ntu != 0U64 {
+            if ntu != ref {
+                return self.arcClassOfRef(ref: ntu)
+            }
+        }
+        // a registered struct (any arity: `Point`, `Array[I64]`, any grounded generic
+        // instance). Extern structs other than the blessed three are opaque handles.
+        val sidx: U64 = self.structDefByNameAny(start: t.nameStart, len: t.nameLen)
+        if sidx < self.arena.structs.count() {
+            if self.arena.structs[sidx].isExtern {
+                return <ArcClass.Scalar />
+            }
+            return <ArcClass.StructVal sidx=sidx />
+        }
+        val eidx: U64 = self.enumIdxByName(start: t.nameStart, len: t.nameLen)
+        if eidx < self.arena.enums.count() {
+            return <ArcClass.EnumVal eidx=eidx />
+        }
+        return <ArcClass.Scalar />
+    }
+}

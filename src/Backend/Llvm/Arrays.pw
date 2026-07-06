@@ -276,7 +276,7 @@ pub impl LlvmCtx {
                 // a generic enum instance with heap (`Optional[Array[I64]]`) from a place:
                 // CoW-SHARE its payload (rc++) so the field co-owns it; the gateway CoWs
                 // before any later mutation. Mirrors consumeIntoOwned's enum class.
-                if structExprIsPlace(c: inout c, id: valExpr) {
+                if exprAliasesPlace(c: inout c, id: valExpr) {
                     self.emitEnumRetainRef(c: inout c, v: giv, ref: g)
                     return giv
                 }
@@ -290,7 +290,7 @@ pub impl LlvmCtx {
         val fsi2: U64 = self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen)
         if fsi2 < c.arena.structs.count() {
             if self.structNeedsDeinit(c: inout c, sidx: fsi2) {
-                if structExprIsPlace(c: inout c, id: valExpr) {
+                if exprAliasesPlace(c: inout c, id: valExpr) {
                     // CoW-SHARE the struct place into the field (rc++ its heap fields under the
                     // active construction env, matching what deepCopyStructValue would copy);
                     // the gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
@@ -305,7 +305,7 @@ pub impl LlvmCtx {
         // independent (else the source enum's drop frees the shared payload → UAF). Generic
         // enum instances are handled by the isGenericInst path above.
         if self.enumRegSlot(c: inout c, start: fld.tyStart, len: fld.tyLen) < self.genEnumRefs.count() {
-            if structExprIsPlace(c: inout c, id: valExpr) {
+            if exprAliasesPlace(c: inout c, id: valExpr) {
                 // CoW-SHARE the enum place into the field (rc++ its active variant's heap);
                 // the gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
                 val ev: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
@@ -668,7 +668,7 @@ pub impl LlvmCtx {
         // release / struct-field deinit / removeLast). A fresh String (literal / call
         // result) already owns its buffer and passes through; literals carry a sentinel
         // rc making the retain a no-op. Mirrors the array / struct / enum classes below.
-        if structExprIsPlace(c: inout c, id: expr) {
+        if exprAliasesPlace(c: inout c, id: expr) {
             mut val sr: U64 = typeRef
             if sr == 0U64 {
                 sr = self.exprTypeRef(c: inout c, id: expr)
@@ -697,7 +697,7 @@ pub impl LlvmCtx {
             rr = self.exprRefTypeRef(c: inout c, id: expr)
         }
         if c.isRefInst(ref: rr) {
-            if arrayExprIsPlace(c: inout c, id: expr) {
+            if exprAliasesPlace(c: inout c, id: expr) {
                 self.rawbufRetain(c: inout c, cell: v)
             }
             return v
@@ -710,7 +710,7 @@ pub impl LlvmCtx {
             wr = self.exprTypeRef(c: inout c, id: expr)
         }
         if c.isWeakRefInst(ref: wr) {
-            if arrayExprIsPlace(c: inout c, id: expr) {
+            if exprAliasesPlace(c: inout c, id: expr) {
                 self.refWeakDowngrade(c: inout c, cell: v)
             }
             return v
@@ -733,7 +733,7 @@ pub impl LlvmCtx {
         if self.exprIsBuffer(c: inout c, id: expr) {
             return self.shareArrayIfPlace(c: inout c, arrVal: v, elemTy: self.bufElemTyOf(c: inout c, id: expr), valueExpr: expr)
         }
-        if structExprIsPlace(c: inout c, id: expr) {
+        if exprAliasesPlace(c: inout c, id: expr) {
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
             if sidx < c.arena.structs.count() {
                 // 1-3a (struct class): CoW-SHARE the struct place — retain its heap fields
@@ -928,7 +928,7 @@ pub impl LlvmCtx {
     // to the first mutation). A non-place (literal / call result) already owns its buffer
     // and passes through.
     inout fn shareArrayIfPlace(c: inout Comp, arrVal: LLVMValueRef, elemTy: LLVMTypeRef, valueExpr: U64) -> LLVMValueRef {
-        if !(arrayExprIsPlace(c: inout c, id: valueExpr)) {
+        if !(exprAliasesPlace(c: inout c, id: valueExpr)) {
             return arrVal
         }
         self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: arrVal))
@@ -1061,74 +1061,60 @@ pub impl LlvmCtx {
     // the active variant). The type dispatch is shared; only the leaf op differs by `retain`.
     // Scalars / unsupported types: nop. The single value-ARC entry (retain and release).
     inout fn valueArc(c: inout Comp, v: LLVMValueRef, typeRef: U64, retain: Bool) {
-        if typeRef == 0U64 {
-            return
-        }
-        val t: TypeRef = c.arena.types[typeRef]
-        // `Buffer[T]`: the opaque rawbuf floor (single data pointer, header count, rc).
-        // retain = bump the buffer rc (shallow CoW-share); release = the rc-aware cascade
-        // (release each element at rc 0, then free). The element ref is the type argument.
-        // (`Array[T]` is NOT named here any more — it is an ordinary `struct { data: Buffer }`
-        // and value-ARCs by field recursion through the struct path below, which descends into
-        // its single Buffer field and lands back here. collections.md §3-付録3.)
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer") {
-            if retain {
-                self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
-            } else {
-                mut val innerRef: U64 = 0
-                if t.args.count() > 0U64 {
-                    innerRef = t.args[0]
+        match c.arcClassOfRef(ref: typeRef) {
+            ArcClass.Scalar => {}
+            // a String value IS the Array[U8] buffer — value-ARC it directly (U8
+            // scalars, so just the rc-managed outer buffer; literal Strings carry a
+            // sentinel rc, making retain/drop a no-op for them). Matches
+            // emitDeinitValue's String handling.
+            ArcClass.StringLike => {
+                if retain {
+                    self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
+                } else {
+                    self.rawbufDrop(c: inout c, cell: self.arrValData(c: inout c, arr: v))
                 }
-                val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: innerRef)
-                self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), count: self.arrValCount(c: inout c, arr: v), elemTy: innerTy, elemRef: innerRef)
             }
-            return
-        }
-        // a String element: its value IS the Array[U8] buffer — value-ARC it directly (U8
-        // scalars, so just the rc-managed outer buffer; literal Strings carry a sentinel rc,
-        // making retain/drop a no-op for them). Matches emitDeinitValue's String handling.
-        if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
-            if retain {
-                self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
-            } else {
-                self.rawbufDrop(c: inout c, cell: self.arrValData(c: inout c, arr: v))
+            // `Buffer[T]`: the opaque rawbuf floor (single data pointer, header count,
+            // rc). retain = bump the buffer rc (shallow CoW-share); release = the
+            // rc-aware cascade (release each element at rc 0, then free). (`Array[T]`
+            // is NOT named here — it is an ordinary `struct { data: Buffer }` and
+            // value-ARCs by field recursion through the struct arm, which descends
+            // into its single Buffer field and lands back here. collections.md §3-付録3.)
+            ArcClass.BufferLike(val elem) => {
+                if retain {
+                    self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: v))
+                } else {
+                    val innerTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elem)
+                    self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: v), count: self.arrValCount(c: inout c, arr: v), elemTy: innerTy, elemRef: elem)
+                }
             }
-            return
-        }
-        // a `Ref[T]` value: the cell pointer itself, with a strong rc. retain = bump strong
-        // (shallow — the pointee aliases); release = decrement strong, and at 0 run the
-        // pointee deinit then free the cell (gated on weak observers). Matches String's
-        // single-rawbuf treatment, plus the pointee deinit. (Ref is an extern struct, so it
-        // must be handled HERE before the registered-struct lookup, which skips externs.)
-        if c.isRefInst(ref: typeRef) {
-            if retain {
-                self.rawbufRetain(c: inout c, cell: v)
-            } else {
-                self.emitRefRelease(c: inout c, cell: v, refTy: typeRef)
+            // a `Ref[T]` value: the cell pointer itself, with a strong rc. retain =
+            // bump strong (shallow — the pointee aliases); release = decrement strong,
+            // and at 0 run the pointee deinit then free the cell (gated on weak
+            // observers).
+            ArcClass.RefCell(val inst) => {
+                if retain {
+                    self.rawbufRetain(c: inout c, cell: v)
+                } else {
+                    self.emitRefRelease(c: inout c, cell: v, refTy: inst)
+                }
             }
-            return
-        }
-        // a `WeakRef[T]` value: the cell pointer with a WEAK rc. retain = bump weak (shallow
-        // share — does NOT keep the pointee alive); release = decrement weak, and free the
-        // cell only when BOTH strong and weak are 0. Like Ref, an extern struct, so handled
-        // HERE before the registered-struct lookup (which skips externs).
-        if c.isWeakRefInst(ref: typeRef) {
-            if retain {
-                self.refWeakDowngrade(c: inout c, cell: v)
-            } else {
-                self.weakRelease(c: inout c, cell: v)
+            // a `WeakRef[T]` value: the cell pointer with a WEAK rc. retain = bump
+            // weak (shallow share — does NOT keep the pointee alive); release =
+            // decrement weak, and free the cell only when BOTH counts are 0.
+            ArcClass.WeakCell(inst: _) => {
+                if retain {
+                    self.refWeakDowngrade(c: inout c, cell: v)
+                } else {
+                    self.weakRelease(c: inout c, cell: v)
+                }
             }
-            return
-        }
-        // any-arity lookup: a generic struct value (`Array[I64]`) resolves by name, with its
-        // instance env supplied below (setStructEnv) for grounding the field recursion.
-        val sidx: U64 = c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
-        if sidx < c.arena.structs.count() {
-            if !(c.arena.structs[sidx].isExtern) {
-                // ground this value's own instance env (`Array[String]` -> T=String) so a
-                // generic field (`data: Buffer[T]`) resolves to its concrete element while the
-                // inline walker descends. setStructEnv is a no-op for an unregistered / already-
-                // ungrounded ref, so a caller-set env is preserved.
+            // a registered struct value (`Array[I64]`, any grounded generic inst):
+            // ground this value's own instance env (`Array[String]` -> T=String) so a
+            // generic field (`data: Buffer[T]`) resolves to its concrete element while
+            // the inline walker descends. setStructEnv is a no-op for an unregistered /
+            // already-ungrounded ref, so a caller-set env is preserved.
+            ArcClass.StructVal(val sidx) => {
                 val savedP: Array[Bind] = c.cur.typeParams
                 val savedA: Array[U64] = c.cur.typeArgs
                 val didSet: Bool = self.setStructEnv(c: inout c, ref: typeRef)
@@ -1141,14 +1127,15 @@ pub impl LlvmCtx {
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
                 }
-                return
             }
-        }
-        // an enum element: value-ARC its active variant's non-boxed heap.
-        if retain {
-            self.emitEnumRetainRef(c: inout c, v: v, ref: typeRef)
-        } else {
-            self.emitEnumReleaseRef(c: inout c, v: v, ref: typeRef)
+            // an enum value: value-ARC its active variant's non-boxed heap.
+            ArcClass.EnumVal(eidx: _) => {
+                if retain {
+                    self.emitEnumRetainRef(c: inout c, v: v, ref: typeRef)
+                } else {
+                    self.emitEnumReleaseRef(c: inout c, v: v, ref: typeRef)
+                }
+            }
         }
     }
 
