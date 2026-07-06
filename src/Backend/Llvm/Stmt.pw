@@ -716,38 +716,39 @@ pub impl LlvmCtx {
                         // scope-exit deinits for all live locals — but a returned local is
                         // moved out to the caller, so exclude it.
                         mut val excludeLi: U64 = sentinel
-                        mut val scalarArrMove: Bool = false
+                        mut val moveOut: Bool = false
                         match c.arena.exprs[value] {
                             Expr.Ident(start: val s, len: val l) => {
                                 val li: U64 = self.findLocal(c: inout c, start: s, len: l)
                                 if li < self.nLocals {
                                     excludeLi = li
-                                    // a returned array local MOVES its buffer to the caller:
-                                    // the {data,count} carries the local's refcount out
-                                    // unchanged — no copy, no retain — and the local is
-                                    // excluded from the drop below, so it balances.
+                                    // a returned OWNED body local MOVES its value to the
+                                    // caller for EVERY class (array/Ref/struct/enum/String
+                                    // alike): its own count rides out unchanged — no retain
+                                    // — and the local is excluded from the drop below, so
+                                    // the move balances. (The enumeration this replaces
+                                    // moved only arrays and Ref/WeakRef; a returned owned
+                                    // struct/enum local was excluded from the drop AND
+                                    // retained = one whole count leaked per return.) A
+                                    // borrowed param (below the body mark) instead RETAINS
+                                    // via consumeIntoOwned so the caller gets a fresh owner.
+                                    // Arrays keep their historical unconditional move: their
+                                    // by-value ARG pass retains (deferred-release
+                                    // convention), so a param's buffer moves out carrying
+                                    // that count.
                                     if self.locIsArr[li] {
-                                        scalarArrMove = true
-                                    } else if c.isRefInst(ref: self.locTypeRef[li]) || c.isWeakRefInst(ref: self.locTypeRef[li]) {
-                                        // a returned OWNED body Ref/WeakRef local likewise MOVES its
-                                        // one owner to the caller: excluded from the drop below, so
-                                        // the move balances without a retain. (A borrowed Ref param —
-                                        // li < curBodyMark — instead RETAINS via copyValueIfPlace so
-                                        // the caller gets a fresh owner.) Without this a `return r`
-                                        // over-retains by one and leaks the cell.
-                                        if self.locOwned[li] && li >= self.curBodyMark {
-                                            scalarArrMove = true
-                                        }
+                                        moveOut = true
+                                    } else if self.locOwned[li] && li >= self.curBodyMark && !(self.locMoved[li]) {
+                                        moveOut = true
                                     }
                                 }
                             }
                             _ => {}
                         }
-                        // value semantics: returning an array/struct PLACE (a field, or a
-                        // non-scalar array) gives the caller an independent value
-                        // (`return b.xs` then caller's `r[0]=…`). A moved scalar-array local
-                        // passes through unchanged.
-                        if !(scalarArrMove) {
+                        // value semantics: returning a non-moved PLACE (a field, a borrowed
+                        // param) gives the caller an independent value (`return b.xs` then
+                        // caller's `r[0]=…`). A moved local passes through unchanged.
+                        if !(moveOut) {
                             rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
                         }
                         self.dropScope(c: inout c, fromMark: 0U64, excludeLi: excludeLi)

@@ -1,0 +1,25 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+struct Holder {
+    pub val r: Ref[Cell]
+}
+
+pub impl Holder {
+    factory
+}
+
+fn makeHolder() -> Holder {
+    val h: Holder = <Holder r=<Ref value=<Cell v=21I32 /> /> />
+    return h
+}
+
+fn main() {
+    val h: Holder = makeHolder()
+    print("bound")
+}
