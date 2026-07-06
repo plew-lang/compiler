@@ -1,0 +1,50 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+struct Holder {
+    pub val r: Ref[Cell]
+}
+
+struct Named {
+    pub val name: String
+}
+
+struct Box[T] {
+    pub val v: T
+}
+
+struct Carton {
+    pub val b: Box[Ref[Cell]]
+}
+
+fn refField() {
+    val r: Ref[Cell] = <Ref value=<Cell v=9I32 /> />
+    val h: Holder = <Holder r=r />
+    print("ref-scope-end")
+}
+
+fn stringField() {
+    mut val s: String = "dyn"
+    s += "amic"
+    val n: Named = <Named name=s />
+    print(n.name)
+    print("string-scope-end")
+}
+
+fn genericStructField() {
+    val b: Box[Ref[Cell]] = <Box[Ref[Cell]] v=<Ref value=<Cell v=8I32 /> /> />
+    val ca: Carton = <Carton b=b />
+    print("carton-scope-end")
+}
+
+fn main() {
+    refField()
+    stringField()
+    genericStructField()
+    print("done")
+}

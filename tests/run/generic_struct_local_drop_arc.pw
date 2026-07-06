@@ -10,6 +10,10 @@ struct Box[T] {
     pub val v: T
 }
 
+// NOTE: a by-value heap-carrying arg is retained by the caller and NOT dropped by the
+// callee (deferred release = tolerated leak, never a UAF — see emitDeinitCall). So the
+// passByValue case expects NO deinit for 4: the arg-pass retain (+1) is never balanced.
+// This pin flips to "4 fires once" when the owned-param drop convention lands.
 fn peek(box: Box[Ref[Cell]]) {
     print("peek")
 }

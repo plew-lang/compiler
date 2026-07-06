@@ -218,17 +218,18 @@ pub impl LlvmCtx {
                 _ => {}
             }
             // value semantics: an array field initialized from a place (`<Holder items=a/>`)
-            // CoW-SHARES the buffer (rc++) — the gateway (1-0) privatizes before any later
-            // mutation of the field or the source, so they stay independent. Mirrors
-            // consumeIntoOwned's array class.
-            return self.shareArrayIfPlace(c: inout c, arrVal: self.genLlvmExpr(c: inout c, id: valExpr), elemTy: self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen), valueExpr: valExpr)
+            // CoW-SHARES the buffer (rc++) via consumeIntoOwned's array class — the gateway
+            // (1-0) privatizes before any later mutation, so field and source stay
+            // independent. typeRef 0 = derive lazily (eager derivation perturbs the type
+            // cache on the array path; see consumeIntoOwned's doc).
+            return self.consumeIntoOwned(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), expr: valExpr, typeRef: 0U64)
         }
         // a Buffer field initialized from a place CoW-SHARES the buffer (rc++) — same as an
-        // array field (rep-identical); a fresh buffer (call result) passes through. Placed
-        // before the generic-instance branch below so a `Buffer[T]` place is not misrouted
-        // through the enum/struct-instance retain path.
+        // array field (rep-identical, consumeIntoOwned's buffer class); a fresh buffer (call
+        // result) passes through. Placed before the delegated tail below so a `Buffer[T]`
+        // place skips the expected-type seeding (no JSX form constructs a Buffer).
         if fieldIsBufferType(c: inout c, f: fld) {
-            return self.shareArrayIfPlace(c: inout c, arrVal: self.genLlvmExpr(c: inout c, id: valExpr), elemTy: self.i64ty, valueExpr: valExpr)
+            return self.consumeIntoOwned(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), expr: valExpr, typeRef: 0U64)
         }
         // an existential `any P` field (spec/08): box a concrete conforming initializer,
         // or value-semantics-copy an existing `any` place.
@@ -261,59 +262,28 @@ pub impl LlvmCtx {
             LLVMBuildStore(self.b, boxedVal, cell)
             return cell
         }
-        // a (non-boxed) generic-instance field by value (`a: Optional[I64]`,
-        // `inner: Box[I32]`): ground the field's declared type and pass it as the expected
-        // type so an un-suffixed nested JSX construction (`a=<Optional.Some v=7 />`) infers
-        // the instance's type args (genLlvmMakeEnum / genLlvmMake consume self.expectedTy).
-        if fld.ty != 0U64 {
-            mut val g: U64 = fld.ty
+        // build the value in the field's (grounded) type context, then route ALL
+        // ownership through consumeIntoOwned — THE single place-gate + class dispatch
+        // (1-3a). The per-class re-enumeration this replaces had NO String/Ref/WeakRef
+        // arm (a place init passed through un-retained, so the source's drop freed the
+        // field's buffer/cell — live UAF, review/07 §1) and misrouted a generic STRUCT
+        // instance place through the enum retain (a no-op — its payload heap was never
+        // co-owned).
+        mut val g: U64 = fld.ty
+        if g != 0U64 {
             if c.cur.typeParams.count() > 0U64 {
                 g = c.groundTypeRef(ref: fld.ty)
             }
+            // a generic-instance field by value (`a: Optional[I64]`, `inner: Box[I32]`):
+            // pass the grounded type as the expected type so an un-suffixed nested JSX
+            // construction (`a=<Optional.Some v=7 />`) infers the instance's type args
+            // (genLlvmMakeEnum / genLlvmMake consume self.expectedTy).
             if c.isGenericInst(ref: g) {
                 self.expectedTy = g
-                val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
-                // a generic enum instance with heap (`Optional[Array[I64]]`) from a place:
-                // CoW-SHARE its payload (rc++) so the field co-owns it; the gateway CoWs
-                // before any later mutation. Mirrors consumeIntoOwned's enum class.
-                if exprAliasesPlace(c: inout c, id: valExpr) {
-                    self.emitEnumRetainRef(c: inout c, v: giv, ref: g)
-                    return giv
-                }
-                return giv
             }
         }
-        // a struct-typed field that owns heap (e.g. `FieldAst.ty: TypeAst` whose `args` is an
-        // array), initialized from a struct PLACE: deep-copy so the constructed struct's field
-        // is independent of the source (else the bit-copy below shares the source's array
-        // fields and the source's drop frees them under the new struct).
-        val fsi2: U64 = self.localStructIdxFor(c: inout c, start: fld.tyStart, len: fld.tyLen)
-        if fsi2 < c.arena.structs.count() {
-            if self.structNeedsDeinit(c: inout c, sidx: fsi2) {
-                if exprAliasesPlace(c: inout c, id: valExpr) {
-                    // CoW-SHARE the struct place into the field (rc++ its heap fields under the
-                    // active construction env, matching what deepCopyStructValue would copy);
-                    // the gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
-                    val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
-                    self.emitStructRetain(c: inout c, v: sv, sidx: fsi2)
-                    return sv
-                }
-            }
-        }
-        // a NON-generic enum field that owns heap (`Field.value: Value` whose `SVal` holds an
-        // Array[U8]), from a place: deep-copy its payload so the constructed struct's field is
-        // independent (else the source enum's drop frees the shared payload → UAF). Generic
-        // enum instances are handled by the isGenericInst path above.
-        if self.enumRegSlot(c: inout c, start: fld.tyStart, len: fld.tyLen) < self.genEnumRefs.count() {
-            if exprAliasesPlace(c: inout c, id: valExpr) {
-                // CoW-SHARE the enum place into the field (rc++ its active variant's heap);
-                // the gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
-                val ev: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
-                self.emitEnumRetainRef(c: inout c, v: ev, ref: self.exprTypeRef(c: inout c, id: valExpr))
-                return ev
-            }
-        }
-        return self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), tyStart: fld.tyStart, tyLen: fld.tyLen)
+        val fv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+        return self.coerceIntTo(c: inout c, v: self.consumeIntoOwned(c: inout c, v: fv, expr: valExpr, typeRef: g), tyStart: fld.tyStart, tyLen: fld.tyLen)
     }
 
     // Declare/cache `plew_rawbuf_alloc(i64 elemSize, i64 cap) -> ptr`.
@@ -1165,7 +1135,11 @@ pub impl LlvmCtx {
 
     // The retain-the-fields walker — emitted ONCE inside each type's witness body (and the
     // inline fallback for an unregistered generic struct). Sub-struct fields recurse through
-    // `emitStructRetain`, routing each to its own witness call.
+    // `emitStructRetain`, routing each to its own witness call. Mirrors emitDropWitnessWalk's
+    // classifier kernel EXACTLY so retain and release stay symmetric by construction — the
+    // old name-based dispatch here missed a grounded bare-T / generic-instance field (the
+    // drop kernel releases it, but an un-kernel-ized retain never bumped it on a CoW-share
+    // = double-release UAF).
     inout fn emitRetainWitnessWalk(c: inout Comp, v: LLVMValueRef, sidx: U64) {
         if self.arcOnStack(sidx: sidx) {
             return
@@ -1175,39 +1149,27 @@ pub impl LlvmCtx {
         mut val i: U64 = 0
         while i < sd.fields.count() {
             val fd: FieldDef = sd.fields[i]
-            val er: U64 = arrayOrBufferFieldElemRef(c: inout c, f: fd)
-            if er != 0U64 {
-                // an array or Buffer field: retain its buffer (shallow CoW-share).
+            if c.fieldIsBoxed(f: fd) {
+                // a boxed (recursive) field is the compiler's auto-box shared pointer —
+                // left alone (leaked-but-safe; NOT a user Ref).
+            } else if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
+                // an array/Buffer field: retain the buffer (shallow CoW-share) — the drop
+                // twin's emitReleaseArrayValue cascades into elements at rc 0, so shallow
+                // is balanced.
                 self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: LLVMBuildExtractValue(self.b, v, i, anon())))
-            } else if fieldIsRefType(c: inout c, f: fd) {
-                // a `Ref` field: retain its cell's strong rc (shallow CoW-share), balancing
-                // the emitRefRelease in the drop walker. (A boxed recursive-value field below
-                // is a DIFFERENT shared pointer — the compiler's auto-box, not a user Ref —
-                // and is intentionally left alone; value semantics hold via deep-copy there.)
-                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()))
-            } else if fieldIsWeakRefType(c: inout c, f: fd) {
-                // a `WeakRef` field: bump the WEAK count (shallow share), balancing weakRelease
-                // in the drop walker.
-                self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()))
             } else {
-                if c.fieldIsBoxed(f: fd) {
-                    // a boxed (recursive) field is a shared heap pointer — leave it (like Ref).
-                } else {
-                    val nsi: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
-                    if nsi < c.arena.structs.count() {
-                        // skip a no-heap struct field (nothing to retain) — coverage-neutral but
-                        // cuts the inline expansion (matches emitDeinitValue's drop-side gate).
-                        if self.structNeedsDeinit(c: inout c, sidx: nsi) {
-                            self.emitStructRetain(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), sidx: nsi)
+                val g: U64 = c.arcFieldTy(f: fd)
+                match c.arcClassOfRef(ref: g) {
+                    ArcClass.Scalar => {}
+                    ArcClass.StructVal(sidx: _) => {
+                        // instance-aware needs gate — matches the drop walker's, so a
+                        // no-heap struct field skips the witness on both sides.
+                        if c.arcNeedsRelease(ref: g) {
+                            self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), typeRef: g, retain: true)
                         }
-                    } else {
-                        // an enum field (generic instance like `Optional[Array]` or a plain enum):
-                        // retain its active variant's payload heap. A non-enum field is a no-op.
-                        mut val gref: U64 = fd.ty
-                        if c.cur.typeParams.count() > 0U64 {
-                            gref = c.groundTypeRef(ref: fd.ty)
-                        }
-                        self.emitEnumRetainRef(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), ref: gref)
+                    }
+                    _ => {
+                        self.valueArc(c: inout c, v: LLVMBuildExtractValue(self.b, v, i, anon()), typeRef: g, retain: true)
                     }
                 }
             }
