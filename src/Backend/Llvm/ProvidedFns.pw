@@ -150,67 +150,9 @@ pub impl LlvmCtx {
     }
 
 
-    // The TypeRef of a call argument, using the LLVM backend's own local tracking
-    // (the front-end `typeOf` can't see locals — the LLVM backend doesn't populate
-    // c.cur.locals). A generic-instance local carries its ref; a struct value maps to a
-    // bare TypeRef by its struct name; a scalar/String comes from the typed-AST cache
-    // (which works for literals/expressions). 0 when no type can be recovered.
-    inout fn llvmArgTypeRef(c: inout Comp, argExpr: U64) -> U64 {
-        // a closure-literal argument (`f: fn(x: I64) -> B`): build its fn TypeRef
-        // (args = [ret, p0, …]) so a type param in the return/param position infers.
-        match c.arena.exprs[argExpr] {
-            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
-                val fnB: Bind = c.kwSpan(kw: "fn", kwLen: 2U64)
-                mut val fargs: Array[U64] = []
-                fargs.append(retTy)
-                mut val pj: U64 = 0
-                while pj < params.count() {
-                    fargs.append(params[pj].ty)
-                    pj += 1
-                }
-                return c.pushType(t: <TypeRef nameStart=fnB.nameStart nameLen=fnB.nameLen args=fargs />)
-            }
-            Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, isEnum: _, val ty, fields: _) => {
-                // an inline construction argument (`f(x: <Color.Blue/>)` / `<Point x=1/>`):
-                // its type is the constructed type, so a generic call infers `T` from it
-                // (exprTypeRef has no Make case — a Make arg would otherwise infer to 0 and
-                // miss the registered instance). Prefer the annotated ref (carries generic
-                // args), else the bare type name.
-                if ty != 0U64 {
-                    return ty
-                }
-                return c.findOrAddTypeRef(nameStart: typeStart, nameLen: typeLen)
-            }
-            _ => {}
-        }
-        val tr: U64 = self.exprTypeRef(c: inout c, id: argExpr)
-        if tr != 0U64 {
-            return tr
-        }
-        val si: U64 = self.exprStructIdx(c: inout c, id: argExpr)
-        if si < c.arena.structs.count() {
-            return c.findOrAddTypeRef(nameStart: c.arena.structs[si].nameStart, nameLen: c.arena.structs[si].nameLen)
-        }
-        val t: TypeInfo = c.typeOf(id: argExpr)
-        // nameLen guard: an UNKNOWN scalar (kind 0, empty span) must yield 0, not an
-        // empty-named TypeRef — a fabricated empty ref registers a garbage fn instance.
-        if t.kind == 0 && t.nameLen > 0U64 {
-            return c.findOrAddTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
-        }
-        // a named-type argument (kind 2): a float literal (`1.5` -> F64/F32) or a String.
-        // Recover its type ref so a generic call `sum(a: 1.5, …)` infers `T = F64` and picks
-        // the float instance — without this a float arg left T uninferred and mis-selected
-        // the i64-default instance (its double args then flowed into an i64 signature).
-        if t.kind == 2 {
-            return c.findOrAddTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
-        }
-        return 0U64
-    }
-
     // Infer a generic free function's type arguments from a call's arguments, mirroring
-    // the front-end `inferFnArgs` but recovering each argument's type via the LLVM
-    // backend's local tracking (so a struct local arg resolves, which front-end typeOf
-    // can't for an unpopulated c.cur.locals).
+    // the front-end `inferFnArgs` but reading each argument's type from the parametric
+    // store (exprTypeRef), grounded under the current instance env.
     inout fn llvmInferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
         mut val out: Array[U64] = []
         mut val ti: U64 = 0
@@ -224,8 +166,6 @@ pub impl LlvmCtx {
                     if p.tyNameId == tp.nameId {
                         if pi < args.count() {
                             if found == 0U64 {
-                                // recover the array arg's element ref via LLVM-side tracking
-                                // (locElemTypeRef); c.cur.locals is unpopulated in this backend.
                                 found = self.arrayExprElemRef(c: inout c, arrayExpr: args[pi].expr)
                             }
                         }
@@ -233,7 +173,7 @@ pub impl LlvmCtx {
                 } else {
                     if pi < args.count() {
                         if found == 0U64 {
-                            val argRef: U64 = self.llvmArgTypeRef(c: inout c, argExpr: args[pi].expr)
+                            val argRef: U64 = self.exprTypeRef(c: inout c, id: args[pi].expr)
                             found = c.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                         }
                     }

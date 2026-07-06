@@ -64,9 +64,7 @@ pub impl LlvmCtx {
     // type to its `Pow[Exp]` conformance's `pow` assoc fn. Returns a null value when the
     // base type has no matching `pow` (the caller then falls through to normal resolution).
     inout fn genPowCall(c: inout Comp, base: U64, args: Array[Arg]) -> LLVMValueRef {
-        // llvmArgTypeRef (not exprTypeRef) so a suffixed literal base (`pow(base: 10I64,…)`)
-        // recovers its type via typeOf, not just a typed local.
-        val br: U64 = self.llvmArgTypeRef(c: inout c, argExpr: base)
+        val br: U64 = self.exprTypeRef(c: inout c, id: base)
         if br == 0U64 {
             return LLVMConstNull(self.ptrty)
         }

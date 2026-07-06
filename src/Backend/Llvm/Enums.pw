@@ -977,36 +977,6 @@ pub impl LlvmCtx {
         return LLVMBuildLoad2(self.b, ety, slot, anon())
     }
 
-    // The element type ref of an array-typed field `fd` of a base value `base` (a
-    // struct expr), resolved under base's generic instance env — covers a field whose
-    // type is a param grounding to `Array[E]` (`Box[Array[I32]].v`). 0 if not array.
-    inout fn fieldArrayElemRefUnderBase(c: inout Comp, base: U64, fd: FieldDef) -> U64 {
-        if fd.ty == 0U64 {
-            return 0U64
-        }
-        // ground the field type under base's instance env (a direct `Array[Box[T]]`
-        // grounds to `Array[Box[I64]]`; a type-param field `v: T` to `Array[I32]`).
-        val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
-        val savedP: Array[Bind] = c.cur.typeParams
-        val savedA: Array[U64] = c.cur.typeArgs
-        val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
-        mut val g: U64 = fd.ty
-        if c.cur.typeParams.count() > 0U64 {
-            g = c.groundTypeRef(ref: fd.ty)
-        }
-        val gt: TypeRef = c.arena.types[g]
-        mut val r: U64 = 0U64
-        if rangeEquals(bytes: c.arena.bytes, start: gt.nameStart, len: gt.nameLen, kw: "Array") {
-            if gt.args.count() > 0U64 {
-                r = gt.args[0]
-            }
-        }
-        if didSet {
-            c.cur.typeParams = savedP
-            c.cur.typeArgs = savedA
-        }
-        return r
-    }
 }
 
 pub impl LlvmCtx {

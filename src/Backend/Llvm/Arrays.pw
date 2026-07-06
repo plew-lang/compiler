@@ -138,95 +138,23 @@ pub impl LlvmCtx {
         return 0U64
     }
 
-    // The element type of an array-typed receiver (Ident local / struct field).
+    // The element LLVM type of an array-valued expression — via the single
+    // typed-IR element ref (arrayExprElemRef); i64 when the element is unknown.
     inout fn arrElemTyOf(c: inout Comp, id: U64) -> LLVMTypeRef {
-        match c.arena.exprs[id] {
-            Expr.Ident(val start, val len) => {
-                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if li < self.nLocals {
-                    if self.locIsArr[li] { return self.locElemTy[li] }
-                }
-            }
-            Expr.Field(val base, val nameStart, val nameLen) => {
-                val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
-                if sidx < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[sidx].fields.count() {
-                        val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                        // an array field's element type, resolved under the base's instance
-                        // env (`Holder[I64].items : Array[Box[T]]` -> Box[I64]; a generic
-                        // field `Box[Array[I32]].v` -> I32).
-                        val er: U64 = self.fieldArrayElemRefUnderBase(c: inout c, base: base, fd: fd)
-                        if er != 0U64 {
-                            return self.llvmTypeOfRef(c: inout c, ref: er)
-                        }
-                        return self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
-                    }
-                }
-            }
-            Expr.Arrow(val base, val nameStart, val nameLen) => {
-                val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
-                if psidx < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
-                    if fidx < c.arena.structs[psidx].fields.count() {
-                        return self.llvmScalarTy(c: inout c, tyStart: c.arena.structs[psidx].fields[fidx].tyStart, tyLen: c.arena.structs[psidx].fields[fidx].tyLen)
-                    }
-                }
-            }
-            Expr.Index(base: _, index: _) => {
-                // a nested-array element's element type (`m[i]` -> the inner element of
-                // m[i], e.g. i32 for m: Array[Array[I32]]): unwrap the element ref.
-                val r: U64 = self.exprTypeRef(c: inout c, id: id)
-                if r != 0U64 {
-                    val t: TypeRef = c.arena.types[r]
-                    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                        if t.args.count() > 0U64 {
-                            return self.llvmTypeOfRef(c: inout c, ref: t.args[0])
-                        }
-                    }
-                }
-            }
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                // an array-returning call's element type (`val a = mk()` -> element of
-                // mk's Array return).
-                val cfi: U64 = c.resolvedCallee(id: id)
-                if cfi < c.arena.funcs.count() {
-                    if c.arena.funcs[cfi].retIsArray {
-                        return self.llvmScalarTy(c: inout c, tyStart: c.arena.funcs[cfi].retStart, tyLen: c.arena.funcs[cfi].retLen)
-                    }
-                }
-            }
-            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                // an array-returning method call's element type (`s.bytes()[i]` -> U8): the
-                // grounded result ref heads `Array[E]`, so its first arg is the element ref.
-                // (Mirrors the Index arm; without it the element defaults to i64 and the
-                // load stride/width is wrong — e.g. reading U8 bytes 8 at a time.)
-                val r: U64 = self.exprTypeRef(c: inout c, id: id)
-                if r != 0U64 {
-                    val t: TypeRef = c.arena.types[r]
-                    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                        if t.args.count() > 0U64 {
-                            return self.llvmTypeOfRef(c: inout c, ref: t.args[0])
-                        }
-                    }
-                }
-            }
-            _ => {}
+        val er: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: id)
+        if er != 0U64 {
+            return self.llvmTypeOfRef(c: inout c, ref: er)
         }
         return self.i64ty
     }
 
     // The element kind (0 int/signed, 1 String, 2 Bool, 3 unsigned) of an array-valued
-    // expression — for tracking an un-annotated array binding's element kind.
+    // expression — from the typed-IR element ref's head name (for tracking an
+    // un-annotated array binding's element kind).
     inout fn arrElemKindOf(c: inout Comp, id: U64) -> U64 {
-        match c.arena.exprs[id] {
-            Expr.Ident(val start, val len) => {
-                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if li < self.nLocals {
-                    if self.locIsArr[li] { return self.locElemKind[li] }
-                }
-            }
-            _ => {}
+        val er: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: id)
+        if er != 0U64 && er < c.arena.types.count() {
+            return kindFromTySpan(c: inout c, tyStart: c.arena.types[er].nameStart, tyLen: c.arena.types[er].nameLen)
         }
         return 0U64
     }

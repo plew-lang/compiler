@@ -63,51 +63,16 @@ pub impl LlvmCtx {
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 
-    // `arr.append(v)` on an array local: grow the buffer if full, store v at `count`,
-    // increment count (mutating the local's {data,count}). No CoW yet (shares buffer).
-    // The element TypeRef of an array-valued expression (an array local's
-    // locElemTypeRef, or a struct field's grounded element ref), or 0.
+    // The element TypeRef of an array-valued expression: its typed-IR `Array[E]` ref's
+    // single argument (the per-form arms — local tracking / field-under-base / Arrow —
+    // were retired; a structural shadow over the self-compile + full corpus showed the
+    // store agrees everywhere). 0 when the expression's type is not a structured Array.
     inout fn arrayExprElemRef(c: inout Comp, arrayExpr: U64) -> U64 {
-        match c.arena.exprs[arrayExpr] {
-            Expr.Ident(val start, val len) => {
-                val li: U64 = self.findLocal(c: inout c, start: start, len: len)
-                if li < self.nLocals {
-                    return self.locElemTypeRef[li]
-                }
-            }
-            Expr.Field(base: val fb, nameStart: val fns, nameLen: val fnl) => {
-                val bsi: U64 = self.exprStructIdx(c: inout c, id: fb)
-                if bsi < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
-                    if fidx < c.arena.structs[bsi].fields.count() {
-                        return self.fieldArrayElemRefUnderBase(c: inout c, base: fb, fd: c.arena.structs[bsi].fields[fidx])
-                    }
-                }
-            }
-            Expr.Arrow(base: val ab, nameStart: val ans, nameLen: val anl) => {
-                // an array field through a `Ref` deref (`s->items` with items: Array[E]): the
-                // field's element ref, so `s->items.count()`/`s->items[i]` synthesize their
-                // `Array[elem]` receiver (mirrors the Field arm via the ref's pointee struct).
-                val psi: U64 = self.refPointeeStructIdx(c: inout c, base: ab)
-                if psi < c.arena.structs.count() {
-                    val fidx: U64 = structFieldIndex(c: inout c, sidx: psi, start: ans, len: anl)
-                    if fidx < c.arena.structs[psi].fields.count() {
-                        return arrayFieldElemRef(c: inout c, f: c.arena.structs[psi].fields[fidx])
-                    }
-                }
-            }
-            _ => {}
-        }
-        // fallback (a nested element `m[i]`, a call result): unwrap the expression's own
-        // `Array[E]` type ref to E. Needed so an ARC-bearing element (a nested array) is
-        // retained/released even when bound from a non-Ident/Field place.
         val r: U64 = self.exprTypeRef(c: inout c, id: arrayExpr)
-        if r != 0U64 {
+        if r != 0U64 && r < c.arena.types.count() {
             val t: TypeRef = c.arena.types[r]
-            if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-                if t.args.count() > 0U64 {
-                    return t.args[0]
-                }
+            if t.args.count() == 1U64 && rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                return t.args[0]
             }
         }
         return 0U64
