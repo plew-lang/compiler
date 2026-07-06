@@ -1,0 +1,40 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+enum Inner {
+    Keep(r: Ref[Cell])
+    Nothing
+}
+
+struct Slot {
+    pub mut val r: Ref[Cell]
+}
+
+pub impl Slot {
+    factory
+}
+
+fn enumLocalReassign() {
+    mut val o: Inner = <Inner.Keep r=<Ref value=<Cell v=11I32 /> /> />
+    o = <Inner.Nothing />
+    print("after-reassign")
+}
+
+fn nestedPlaceStore() {
+    mut val xs: Array[Slot] = [<Slot r=<Ref value=<Cell v=12I32 /> /> />]
+    val other: Ref[Cell] = <Ref value=<Cell v=13I32 /> />
+    xs[0].r = other
+    print("after-nested-store")
+}
+
+fn main() {
+    enumLocalReassign()
+    print("---")
+    nestedPlaceStore()
+    print("done")
+}

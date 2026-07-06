@@ -1406,26 +1406,6 @@ fn structFieldIndex(c: inout Comp, sidx: U64, start: U64, len: U64) -> U64 {
 // instance TypeRef (under the active env), else 0. Used at assignment sites to set
 // st.expectedTy so an un-suffixed RHS construction (`b.a = <Optional.Some v=9 />`)
 // infers the instance's type args, mirroring genFieldValue at construction.
-fn fieldGenInstRef(c: inout Comp, fld: FieldDef) -> U64 {
-    if fld.tyIsArray {
-        return 0U64
-    }
-    if fld.ty == 0U64 {
-        return 0U64
-    }
-    mut val g: U64 = fld.ty
-    if c.cur.typeParams.count() > 0U64 {
-        g = c.groundTypeRef(ref: fld.ty)
-    }
-    if c.isGenericInst(ref: g) {
-        if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[g].nameStart, len: c.arena.types[g].nameLen, kw: "Array") {
-            return 0U64
-        }
-        return g
-    }
-    return 0U64
-}
-
 // Concatenate two type-param lists (`add` first, then `base`). Used to MERGE a
 // nested generic construct's env onto the enclosing one — e.g. building
 // `<Optional.Some v=self.f(x:v) />` inside a monomorphized `MapIter.next`: the

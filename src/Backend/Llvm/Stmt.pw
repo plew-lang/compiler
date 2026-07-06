@@ -3,6 +3,63 @@
 // ---- statement / block emission ----
 
 pub impl LlvmCtx {
+
+    // THE raw store-to-place choke point (audit-5 F8): every assignment that compiles
+    // to a memory store — a local reassign, a struct-field / nested-place / Ref-pointee
+    // -field write — routes here after resolving its place pointer, so the ownership
+    // protocol lives in ONE place: seed the expected type (generic-instance RHS
+    // construction inference), evaluate the RHS, width-coerce an int RHS to the place,
+    // make the value owned (consumeIntoOwned — a place RHS is CoW-shared/retained),
+    // destroy the place's PREVIOUS occupant through the classifier (spec/03: it loses
+    // its owner), and store. The per-branch enumerations this replaces each dropped
+    // classes: an enum local's and an array/String field's old value leaked on
+    // reassign, and a nested-place generic-instance store neither released the old
+    // value nor retained a place RHS (leak + UAF). The RHS is evaluated BEFORE the old
+    // value is destroyed (a desugared compound RHS reads the target place); the new
+    // value is made owned before the old is destroyed, so a same-place RHS can never
+    // observe a transient dead value. `unsigned` is the caller's width-coercion
+    // signedness (locKind- or type-name-derived); `destroyOld` is false only for a
+    // moved-out local (no live previous value).
+    inout fn storeToPlace(c: inout Comp, placePtr: LLVMValueRef, placeTy: LLVMTypeRef, typeRef: U64, valueExpr: U64, destroyOld: Bool, unsigned: Bool) {
+        if c.isGenericInst(ref: typeRef) {
+            self.expectedTy = typeRef
+        }
+        mut val rv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valueExpr)
+        self.expectedTy = 0U64
+        if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
+            rv = self.coerceInt(v: rv, target: placeTy, unsigned: unsigned)
+        }
+        rv = self.consumeIntoOwned(c: inout c, v: rv, expr: valueExpr, typeRef: typeRef)
+        if destroyOld {
+            if c.arcNeedsRelease(ref: typeRef) {
+                self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, placeTy, placePtr, anon()), typeRef: typeRef, retain: false)
+            }
+        }
+        LLVMBuildStore(self.b, rv, placePtr)
+    }
+
+    // The grounded type ref of field `fld` for a store through base instance `baseRef`:
+    // ground under the base's OWN instance env (setStructEnv — no-op for a non-generic
+    // base), so a bare-T field of a generic-instance base classifies concretely. 0 when
+    // unknown (an array field declared without a structured ref — its declared span
+    // names the ELEMENT, not the array, so it must not be classified as one).
+    inout fn fieldStoreTypeRef(c: inout Comp, fld: FieldDef, baseRef: U64) -> U64 {
+        if fld.tyIsArray {
+            if fld.ty == 0U64 {
+                return 0U64
+            }
+        }
+        val savedP: Array[Bind] = c.cur.typeParams
+        val savedA: Array[U64] = c.cur.typeArgs
+        val didSet: Bool = self.setStructEnv(c: inout c, ref: baseRef)
+        val g: U64 = c.arcFieldTy(f: fld)
+        if didSet {
+            c.cur.typeParams = savedP
+            c.cur.typeArgs = savedA
+        }
+        return g
+    }
+
     inout fn genLlvmStmt(c: inout Comp, id: U64) {
         if self.terminated {
             return
@@ -389,55 +446,24 @@ pub impl LlvmCtx {
                                 LLVMBuildStore(self.b, arv, self.locPtr[li])
                                 return
                             }
-                            // a generic-instance local (`r: Result[I64, String]`): pass its
-                            // tracked TypeRef as the expected type so an un-suffixed RHS
-                            // construction (`r = <Result.Err error="x" />`) infers the
-                            // instance's type args (genLlvmMakeEnum / genLlvmMake consume it).
-                            if c.isGenericInst(ref: self.locTypeRef[li]) {
-                                self.expectedTy = self.locTypeRef[li]
-                            }
-                            mut val rv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
-                            self.expectedTy = 0U64
-                            // coerce the value to the local's width (a context-less
-                            // literal may default wider/narrower).
-                            if LLVMGetTypeKind(LLVMTypeOf(rv)) == 8U32 {
-                                rv = self.coerceInt(v: rv, target: self.locTy[li], unsigned: self.locKind[li] == 3U64)
-                            }
-                            // value semantics: a plain assignment from an array/struct place
-                            // (`b = a`) copies so the two bindings stay independent. (The
-                            // desugared compound RHS is a Binary — never a place — so this is a
-                            // no-op for `x += v`.)
-                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
-                            // reassigning a local destroys its PREVIOUS value first
-                            // (spec/03) — load and destroy the old, unless the local was
-                            // moved out (no live value). NOT gated on locOwned: that flag
-                            // is about SCOPE-EXIT ownership, and the one assignable
-                            // non-owned local — an `inout` param (its locPtr IS the
-                            // caller's storage) — replaces the caller's value in place,
-                            // so the old value must still die here (skipping it leaked
-                            // the old Ref cell on `r = …` through an `inout Ref[T]`).
-                            if !(self.locMoved[li]) {
+                            // route through the single store choke point. The old-value
+                            // destroy is NOT gated on locOwned: that flag is about
+                            // SCOPE-EXIT ownership, and the one assignable non-owned local
+                            // — an `inout` param (its locPtr IS the caller's storage) —
+                            // replaces the caller's value in place, so the old value must
+                            // still die here. A local without a stored type ref falls back
+                            // to its struct index's argless def ref so a struct old value
+                            // still classifies.
+                            mut val tr: U64 = self.locTypeRef[li]
+                            if tr == 0U64 {
                                 val osi: U64 = self.locStructIdx[li]
                                 if osi < c.arena.structs.count() {
-                                    if self.structNeedsDeinit(c: inout c, sidx: osi) {
-                                        self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()), sidx: osi)
-                                    }
-                                } else if c.isRefInst(ref: self.locTypeRef[li]) {
-                                    // a `Ref` local has no registered struct index, so the
-                                    // struct old-drop above misses it: release the PREVIOUS
-                                    // owner (strong--, pointee deinit + free at 0) before the
-                                    // store, balancing the new value's retain (copyValueIfPlace).
-                                    // Without this a reassigned `mut val r: Ref[T]` leaks the old cell.
-                                    self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
-                                } else if c.isWeakRefInst(ref: self.locTypeRef[li]) {
-                                    // same for a `WeakRef` local: drop the old weak observer
-                                    // (weak--, free iff both counts 0) before the store.
-                                    self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
+                                    tr = c.findOrAddTypeRef(nameStart: c.arena.structs[osi].nameStart, nameLen: c.arena.structs[osi].nameLen)
                                 }
                             }
+                            self.storeToPlace(c: inout c, placePtr: self.locPtr[li], placeTy: self.locTy[li], typeRef: tr, valueExpr: value, destroyOld: !(self.locMoved[li]), unsigned: self.locKind[li] == 3U64)
                             // the local re-owns the new value (clear any moved flag).
                             self.locMoved[li] = false
-                            LLVMBuildStore(self.b, rv, self.locPtr[li])
                         } else {
                             c.errorAt(offset: start, msg: "LLVM backend: assignment target must be a local (so far)")
                         }
@@ -503,38 +529,16 @@ pub impl LlvmCtx {
                                             LLVMBuildStore(self.b, cell, gep)
                                             return
                                         }
-                                        val gfr: U64 = fieldGenInstRef(c: inout c, fld: fld)
-                                        if gfr != 0U64 {
-                                            self.expectedTy = gfr
-                                            mut val gv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
-                                            self.expectedTy = 0U64
-                                            // value semantics: assigning a generic-instance PLACE
-                                            // (an opaque `Buffer[T]` field, a `Box`/`Optional` place)
-                                            // into a field copies/retains its heap so the field and
-                                            // the RHS binding stay independent (`self.buf = nb` must
-                                            // co-own nb's buffer, not alias one nb's drop will free).
-                                            // A fresh construction RHS is a non-place and passes
-                                            // through. Mirrors the scalar-field path below.
-                                            // release the OLD occupant of this owned field before
-                                            // overwriting (it loses one owner) — without this a
-                                            // `Ref`/`WeakRef` (or other heap-bearing generic-inst)
-                                            // field reassign leaks the old cell. Balances the new
-                                            // value's retain (copyValueIfPlace) below. Mirrors the
-                                            // `->` pointee-field-assign path.
-                                            self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: gfr), gep, anon()), typeRef: gfr, retain: false)
-                                            gv = self.copyValueIfPlace(c: inout c, rv: gv, valueExpr: value)
-                                            LLVMBuildStore(self.b, gv, gep)
-                                            return
+                                        // route through the single store choke point (owned
+                                        // field write: the old occupant is destroyed, a place
+                                        // RHS is CoW-shared/retained — `s.xs = a` then `a[0]=…`
+                                        // must leave `s.xs` unchanged).
+                                        val g: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: self.locTypeRef[li])
+                                        mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                        if g != 0U64 {
+                                            pty = self.llvmTypeOfRef(c: inout c, ref: g)
                                         }
-                                        // scalar field: `s.f = v` / (desugared) `s.f = s.f OP v`.
-                                        mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
-                                        // value semantics (spec/03): assigning an array/struct
-                                        // PLACE into a field copies, so the field and the RHS
-                                        // binding stay independent (`s.xs = a` then `a[0]=…`
-                                        // must leave `s.xs` unchanged). A desugared compound RHS
-                                        // is a Binary (non-place), so this is a no-op for `s.f += v`.
-                                        rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
-                                        LLVMBuildStore(self.b, rv, gep)
+                                        self.storeToPlace(c: inout c, placePtr: gep, placeTy: pty, typeRef: g, valueExpr: value, destroyOld: true, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen))
                                         return
                                     }
                                 }
@@ -553,22 +557,17 @@ pub impl LlvmCtx {
                                             val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
                                             val basePtr: LLVMValueRef = self.placePtrOfWrite(c: inout c, id: fbase)
                                             val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, baseTy, basePtr, fidx, anon())
-                                            val gfr2: U64 = fieldGenInstRef(c: inout c, fld: fld)
-                                            if gfr2 != 0U64 {
-                                                self.expectedTy = gfr2
-                                                val gv2: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
-                                                self.expectedTy = 0U64
-                                                LLVMBuildStore(self.b, gv2, gep)
-                                                return
+                                            // route through the single store choke point. (The
+                                            // enumeration this replaces stored a generic-instance
+                                            // value RAW — no old-value release, no place-RHS
+                                            // retain: `arr[i].r = otherRef` leaked the old cell
+                                            // and double-freed the shared one.)
+                                            val g2: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: self.exprTypeRef(c: inout c, id: fbase))
+                                            mut val pty2: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                            if g2 != 0U64 {
+                                                pty2 = self.llvmTypeOfRef(c: inout c, ref: g2)
                                             }
-                                            // scalar nested field: `arr[i].f = v` / (desugared)
-                                            // `arr[i].f = arr[i].f OP v`.
-                                            mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
-                                            // value semantics: copy an array/struct PLACE RHS
-                                            // (`arr[i].xs = a`) so the field stays independent.
-                                            // A desugared compound RHS is a Binary (non-place) = no-op.
-                                            rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
-                                            LLVMBuildStore(self.b, rv, gep)
+                                            self.storeToPlace(c: inout c, placePtr: gep, placeTy: pty2, typeRef: g2, valueExpr: value, destroyOld: true, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen))
                                             handled = true
                                         }
                                     }
@@ -588,36 +587,25 @@ pub impl LlvmCtx {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: ans, len: anl)
                             if fidx < c.arena.structs[psidx].fields.count() {
                                 val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
-                                val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: self.exprRefTypeRef(c: inout c, id: abase))
+                                val refTy: U64 = self.exprRefTypeRef(c: inout c, id: abase)
+                                val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                                 val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: abase)
                                 val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
-                                val gfr3: U64 = fieldGenInstRef(c: inout c, fld: fld)
-                                if gfr3 != 0U64 {
-                                    self.expectedTy = gfr3
-                                    val gv3: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
-                                    self.expectedTy = 0U64
-                                    // the shared pointee field is overwritten in place: release the
-                                    // OLD occupant (one owner drops) and, when the RHS is a PLACE,
-                                    // retain the NEW value (the field becomes a co-owner; a temporary
-                                    // is moved in as-is). Covers Ref/WeakRef/Array/struct/enum-bearing
-                                    // fields — without it a Ref-carrying value stored here is double-
-                                    // freed (the field and the source both release the one cell).
-                                    val gfTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: gfr3)
-                                    self.valueArc(c: inout c, v: LLVMBuildLoad2(self.b, gfTy, gep, anon()), typeRef: gfr3, retain: false)
-                                    if exprAliasesPlace(c: inout c, id: value) {
-                                        self.valueArc(c: inout c, v: gv3, typeRef: gfr3, retain: true)
-                                    }
-                                    LLVMBuildStore(self.b, gv3, gep)
-                                    return
+                                // route through the single store choke point: the shared
+                                // pointee field's old occupant is destroyed (one owner
+                                // drops) and a place RHS is retained (the field becomes a
+                                // co-owner) — the write is visible through every alias of
+                                // the Ref, but the assigned VALUE keeps value semantics.
+                                mut val pref: U64 = 0
+                                if c.isRefInst(ref: refTy) {
+                                    pref = c.arena.types[refTy].args[0]
                                 }
-                                // scalar pointee field: `r->f = v` / (desugared) `r->f = r->f OP v`.
-                                mut val rv: LLVMValueRef = self.coerceIntTo(c: inout c, v: self.genLlvmExpr(c: inout c, id: value), tyStart: fld.tyStart, tyLen: fld.tyLen)
-                                // value semantics: copy an array/struct PLACE RHS so the pointee
-                                // field is independent of the source binding (the Ref aliasing is
-                                // about the cell, not the assigned value). A desugared compound RHS
-                                // is a Binary (non-place) = no-op.
-                                rv = self.copyValueIfPlace(c: inout c, rv: rv, valueExpr: value)
-                                LLVMBuildStore(self.b, rv, gep)
+                                val g3: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)
+                                mut val pty3: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fld.tyStart, tyLen: fld.tyLen)
+                                if g3 != 0U64 {
+                                    pty3 = self.llvmTypeOfRef(c: inout c, ref: g3)
+                                }
+                                self.storeToPlace(c: inout c, placePtr: gep, placeTy: pty3, typeRef: g3, valueExpr: value, destroyOld: true, unsigned: isUnsignedName(c: inout c, start: fld.tyStart, len: fld.tyLen))
                                 return
                             }
                         }
