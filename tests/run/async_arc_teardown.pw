@@ -1,0 +1,23 @@
+// Async ARC teardown (spec/14 + guaranteed(+0)): an async fn's params are
+// FRAME-OWNED (a borrow cannot cross the async boundary, so the entry thunk
+// retains them into the frame), and the final resolve releases them with every
+// other owned frame local before freeing the frame. Argument temporaries made
+// inside an async body (the concat below) drop at the suspension point; awaited
+// temp promises drop after their value is read; a Promise binding releases its
+// owner count at scope exit. LeakSanitizer over this program must be clean.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+async fn shout(text: String, times: I64) -> Promise[I64] {
+    await sleep(ms: 1)
+    print(text)
+    return times
+}
+
+async fn main() {
+    val n: I64 = await shout(text: "plew" + "!", times: 2)
+    print(n)
+    val p: Promise[I64] = shout(text: "again", times: 3)
+    val m: I64 = await p
+    print(m)
+}

@@ -40,6 +40,9 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRef") {
                 return <ArcClass.WeakCell inst=ref />
             }
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise") {
+                return <ArcClass.PromiseCell inst=ref />
+            }
         }
         // a newtype shares its underlying type's representation AND ownership class
         // (spec/10) — classify the underlying.
@@ -115,6 +118,7 @@ pub impl Comp {
             ArcClass.BufferLike(elem: _) => { return true }
             ArcClass.RefCell(inst: _) => { return true }
             ArcClass.WeakCell(inst: _) => { return true }
+            ArcClass.PromiseCell(inst: _) => { return true }
             ArcClass.StructVal(val sidx) => {
                 mut val vk: U64 = 0
                 while vk < visited.count() {

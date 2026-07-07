@@ -1709,13 +1709,19 @@ export fn emitLlvmRuntime() {
     write(s: "static int plew_dequeue(PlewTask* out) { if (plew_ready_head >= plew_ready_len) { plew_ready_head = 0; plew_ready_len = 0; return 0; } *out = plew_ready[plew_ready_head++]; return 1; }\n")
     write(s: "typedef struct { long long deadline; PlewPromise* p; } PlewTimer;\n")
     write(s: "static PlewTimer* plew_timers = 0; static long long plew_timers_len = 0, plew_timers_cap = 0; static long long plew_vnow = 0;\n")
-    write(s: "void* plew_frame_alloc(long long sz) { return malloc((size_t)sz); }\n")
+    write(s: "void* plew_frame_alloc(long long sz) { return calloc(1, (size_t)sz); }\n")
     write(s: "void plew_frame_free(void* p) { free(p); }\n")
-    write(s: "PlewPromise* plew_promise_new(void) { PlewPromise* p = (PlewPromise*)malloc(sizeof(PlewPromise)); p->done = 0; p->value = 0; p->k = 0; p->kframe = 0; return p; }\n")
+    // a promise is an rc'd rawbuf cell (header rc=1 = the creator's ownership): the async
+    // fn's frame owns one count (released after the final resolve), the returned Promise
+    // VALUE owns another (retained at the entry thunk's return; released by its binding's
+    // scope-exit drop / awaited-temp drop), and a pending timer owns a third.
+    write(s: "PlewPromise* plew_promise_new(void) { PlewPromise* p = (PlewPromise*)plew_rawbuf_alloc((long long)sizeof(PlewPromise), 1); p->done = 0; p->value = 0; p->k = 0; p->kframe = 0; return p; }\n")
     write(s: "void plew_promise_resolve(PlewPromise* p, long long v) { p->done = 1; p->value = v; if (p->k) { PlewResumeFn k = p->k; void* f = p->kframe; p->k = 0; plew_enqueue(k, f); } }\n")
     write(s: "static void plew_timer_add(long long delay, PlewPromise* p) { if (plew_timers_len == plew_timers_cap) { plew_timers_cap = plew_timers_cap ? plew_timers_cap * 2 : 8; plew_timers = (PlewTimer*)realloc(plew_timers, (size_t)plew_timers_cap * sizeof(PlewTimer)); } plew_timers[plew_timers_len].deadline = plew_vnow + delay; plew_timers[plew_timers_len].p = p; plew_timers_len++; }\n")
-    write(s: "PlewPromise* plew_sleep(long long ms) { PlewPromise* p = plew_promise_new(); plew_timer_add(ms, p); return p; }\n")
-    write(s: "void plew_loop_run(void) { PlewTask t; while (1) { while (plew_dequeue(&t)) { t.fn(t.arg); } if (plew_timers_len == 0) break; long long bi = -1, bd = 0; for (long long i = 0; i < plew_timers_len; i++) { if (bi < 0 || plew_timers[i].deadline < bd) { bi = i; bd = plew_timers[i].deadline; } } PlewPromise* p = plew_timers[bi].p; plew_vnow = plew_timers[bi].deadline; plew_timers[bi] = plew_timers[--plew_timers_len]; plew_promise_resolve(p, 0); } }\n")
+    // the timer co-owns the promise until it fires (retain here, drop in plew_loop_run
+    // after the resolve) — the returned value keeps the creation count.
+    write(s: "PlewPromise* plew_sleep(long long ms) { PlewPromise* p = plew_promise_new(); plew_rawbuf_retain(p); plew_timer_add(ms, p); return p; }\n")
+    write(s: "void plew_loop_run(void) { PlewTask t; while (1) { while (plew_dequeue(&t)) { t.fn(t.arg); } if (plew_timers_len == 0) break; long long bi = -1, bd = 0; for (long long i = 0; i < plew_timers_len; i++) { if (bi < 0 || plew_timers[i].deadline < bd) { bi = i; bd = plew_timers[i].deadline; } } PlewPromise* p = plew_timers[bi].p; plew_vnow = plew_timers[bi].deadline; plew_timers[bi] = plew_timers[--plew_timers_len]; plew_promise_resolve(p, 0); plew_rawbuf_drop(p); } }\n")
 }
 
 fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {

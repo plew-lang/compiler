@@ -789,6 +789,10 @@ export enum ArcClass {
     RefCell(inst: U64)
     // `WeakRef[T]` cell: weak rc; never keeps the pointee alive
     WeakCell(inst: U64)
+    // `Promise[T]` cell: an rc'd rawbuf holding the resolve state; retain/drop the
+    // cell only (the resolved value is type-erased i64 today — a heap-typed resolved
+    // value is not yet released at cell death, see provisional.md)
+    PromiseCell(inst: U64)
     // a registered non-extern struct value (incl. Array[T] and any grounded
     // generic instance): field-recursive walkers / witnesses
     StructVal(sidx: U64)

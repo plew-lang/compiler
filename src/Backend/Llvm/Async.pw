@@ -247,6 +247,12 @@ pub impl LlvmCtx {
         val state: U64 = self.curAsyncState
         val subPromise: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operandId)
         LLVMBuildStore(self.b, subPromise, self.asyncFrameSlot(c: inout c, idx: 2U64))
+        // drop every live anonymous argument/receiver TEMP before suspending: their
+        // borrowers (calls in already-completed statements, and the just-evaluated
+        // await operand) have returned, and a temp's alloca home does not survive a
+        // resume (fresh stack frame; the entry re-zeroes it, so its block-exit drop
+        // would silently no-op — a leak). Marked moved so the block exit skips them.
+        self.dropLiveAnonTemps(c: inout c)
         LLVMBuildStore(self.b, LLVMConstInt(self.i32ty, state, 0I32), self.asyncFrameSlot(c: inout c, idx: 0U64))
         val donePtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 0U64, anon())
         val done: LLVMValueRef = LLVMBuildLoad2(self.b, self.i32ty, donePtr, anon())
@@ -273,6 +279,35 @@ pub impl LlvmCtx {
         val valPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, sub, 1U64, anon())
         return LLVMBuildLoad2(self.b, self.i64ty, valPtr, anon())
     }
+
+    // Drop (and mark moved) every live anonymous owned temp (registerArgTemp homes:
+    // nameLen 0, owned, not yet moved, above the body mark) — called at each
+    // suspension point. The entries stay on the locals stack (no splice); the moved
+    // flag keeps the block-exit drop from double-releasing.
+    inout fn dropLiveAnonTemps(c: inout Comp) {
+        mut val li: U64 = self.curBodyMark
+        while li < self.nLocals {
+            if self.locLen[li] == 0U64 && self.locOwned[li] && !(self.locMoved[li]) {
+                if self.locTypeRef[li] != 0U64 {
+                    self.emitDeinitCall(c: inout c, li: li)
+                    self.locMoved[li] = true
+                }
+            }
+            li += 1
+        }
+    }
+
+    // Drop the just-awaited promise when the operand was a TEMPORARY (`await f()`,
+    // `await sleep(ms:…)`): the temp's ownership ends once its value is read — mirror
+    // of the sync temp protocol, whose block-exit home an await cannot use (the frame
+    // outlives blocks). A PLACE operand (`await p`) keeps its binding's ownership and
+    // may be awaited again. Called AFTER the resume's value read.
+    inout fn asyncDropAwaitedTemp(c: inout Comp, operandId: U64) {
+        if !(exprAliasesPlace(c: inout c, id: operandId)) {
+            val sub: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 2U64), anon())
+            self.rawbufDrop(c: inout c, cell: sub)
+        }
+    }
 }
 
 pub impl LlvmCtx {
@@ -283,6 +318,7 @@ pub impl LlvmCtx {
     inout fn genLlvmAsyncAwaitLet(c: inout Comp, nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, ty: U64, operand: U64) {
         self.emitLlvmAsyncSuspend(c: inout c, operandId: operand)
         mut val v: LLVMValueRef = self.asyncSubValue(c: inout c)
+        self.asyncDropAwaitedTemp(c: inout c, operandId: operand)
         val lty: LLVMTypeRef = self.asyncFieldTy(c: inout c, tyStart: tyStart, tyLen: tyLen, ty: ty, isArray: false)
         if tyLen > 0U64 {
             v = self.coerceIntTo(c: inout c, v: v, tyStart: tyStart, tyLen: tyLen)
@@ -308,6 +344,7 @@ pub impl LlvmCtx {
                     Expr.Await(val operand) => {
                         self.emitLlvmAsyncSuspend(c: inout c, operandId: operand)
                         rv = self.asyncSubValue(c: inout c)
+                        self.asyncDropAwaitedTemp(c: inout c, operandId: operand)
                     }
                     _ => {}
                 }
@@ -321,6 +358,10 @@ pub impl LlvmCtx {
     // Resolve `__self` with an i64 value, free the frame, and `ret void` from the
     // resume fn. The shared tail of return and fall-through.
     inout fn asyncResolveAndReturn(c: inout Comp, value: LLVMValueRef) {
+        // frame teardown: drop every owned frame local in scope (params included — the
+        // frame owns them; `value` is already computed and type-erased i64, so dropping
+        // first is safe), resolve, release the frame's own promise count, free the frame.
+        self.dropScope(c: inout c, fromMark: 0U64, excludeLi: self.nLocals)
         val promiseSelf: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.asyncFrameSlot(c: inout c, idx: 1U64), anon())
         mut val rargs: Array[LLVMValueRef] = []
         rargs.append(promiseSelf)
@@ -331,6 +372,7 @@ pub impl LlvmCtx {
         val resolveTy: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(rty), 2U64, 0I32)
         val resolve: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_promise_resolve", nameId: 41U64, fnTy: resolveTy)
         val ignore: LLVMValueRef = LLVMBuildCall2(self.b, resolveTy, resolve, arrayCPtr(rargs), 2U64, anon())
+        self.rawbufDrop(c: inout c, cell: promiseSelf)
         self.asyncFreeFrame(c: inout c, frame: self.curFrameBase)
         LLVMBuildRetVoid(self.b)
         self.terminated = true
@@ -449,6 +491,14 @@ pub impl LlvmCtx {
         // synchronously-completing resume frees the frame, so __f->__self would dangle).
         val promiseSelf: LLVMValueRef = self.asyncPromiseNew(c: inout c)
         LLVMBuildStore(self.b, promiseSelf, LLVMBuildStructGEP2(self.b, frameTy, frame, 1U64, anon()))
+        if !(isMain) {
+            // the to-be-returned Promise VALUE is a second owner, retained BEFORE the
+            // resume call: a synchronously-completing resume releases the frame's count
+            // in asyncResolveAndReturn, and without the caller's count already held the
+            // cell would be freed before this thunk returns it (UAF). Balanced by the
+            // caller binding's scope-exit drop or the awaited-temp drop.
+            self.rawbufRetain(c: inout c, cell: promiseSelf)
+        }
         mut val cargs: Array[LLVMValueRef] = []
         cargs.append(frame)
         mut val cty: Array[LLVMTypeRef] = []
@@ -487,10 +537,6 @@ pub impl LlvmCtx {
         self.curAsyncSwitch = LLVMBuildSwitch(self.b, state, startBB, 8U32)
         LLVMPositionBuilderAtEnd(self.b, startBB)
         self.terminated = false
-        // async bodies keep their locals in the resume frame (not allocas) and exit across
-        // suspend points — scope-exit array release is out of scope here, so the sentinel
-        // body mark disables it (a tolerated leak, never a UAF).
-        self.curBodyMark = 18446744073709551615U64
         // fresh locals: params bound to frame fields 3..; lets/binds get fields after.
         self.nLocals = 0
         self.locStart = []
@@ -509,6 +555,12 @@ pub impl LlvmCtx {
         // module-level variables (spec/15): seed them as locals (pointing at the true
         // LLVM globals, not frame slots) before async params bind to frame fields.
         self.seedGlobals(c: inout c)
+        // the body mark sits between the seeded globals (ambient, never dropped) and the
+        // params: unlike a sync fn's borrowed params, async params are FRAME-OWNED (the
+        // entry thunk retained them into the frame — a borrow cannot cross the async
+        // boundary, spec/14), so scope-exit drops must include them. Block-exit and
+        // resolve-time dropScope release every owned frame local through the frame slots.
+        self.curBodyMark = self.nLocals
         mut val qi: U64 = 0
         while qi < f.params.count() {
             self.bindAsyncParam(c: inout c, p: f.params[qi], fieldIdx: 3U64 + qi)

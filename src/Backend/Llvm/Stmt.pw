@@ -313,6 +313,23 @@ pub impl LlvmCtx {
                         }
                     }
                 }
+                // a `Promise[T]` binding (annotated or inferred from an async call):
+                // track its TypeRef so the local's scope-exit drop releases its owner
+                // count of the promise cell (PromiseCell class).
+                if tref == 0U64 {
+                    mut val pr: U64 = ty
+                    if pr == 0U64 {
+                        if tyLen == 0U64 {
+                            pr = self.exprTypeRef(c: inout c, id: init)
+                        }
+                    }
+                    if pr != 0U64 {
+                        match c.arcClassOfRef(ref: pr) {
+                            ArcClass.PromiseCell(inst: _) => { tref = pr }
+                            _ => {}
+                        }
+                    }
+                }
                 // a `Type#Ext`-viewed binding: track the viewed TypeRef (carrying
                 // viewExtId) so a bare `v.m()` resolves the extension (spec/09). The view
                 // comes from an explicit annotation (`val v: P#Ext = …`) or, for an
@@ -641,6 +658,7 @@ pub impl LlvmCtx {
                         match c.arena.exprs[expr] {
                             Expr.Await(val operand) => {
                                 self.emitLlvmAsyncSuspend(c: inout c, operandId: operand)
+                                self.asyncDropAwaitedTemp(c: inout c, operandId: operand)
                             }
                             _ => {}
                         }
@@ -648,6 +666,18 @@ pub impl LlvmCtx {
                     }
                 }
                 val ignore: LLVMValueRef = self.genLlvmExpr(c: inout c, id: expr)
+                // a DISCARDED owned result (a call / concat / construction in statement
+                // position) has no owner — destroy it now, classifier-routed. A place
+                // expression is a borrow (nothing owned was produced); a void result
+                // carries no type ref and skips.
+                if !(exprAliasesPlace(c: inout c, id: expr)) {
+                    val dtr: U64 = self.exprTypeRef(c: inout c, id: expr)
+                    if dtr != 0U64 {
+                        if c.arcNeedsRelease(ref: dtr) {
+                            self.valueArc(c: inout c, v: ignore, typeRef: dtr, retain: false)
+                        }
+                    }
+                }
             }
             Stmt.Panic(val msg, offset: _) => {
                 val ignore: LLVMValueRef = self.emitStrSink(c: inout c, rtName: "plew_panic_raw", rtId: 4U64, argExpr: msg)

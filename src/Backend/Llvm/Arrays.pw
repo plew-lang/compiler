@@ -1054,6 +1054,17 @@ pub impl LlvmCtx {
                     self.weakRelease(c: inout c, cell: v)
                 }
             }
+            // a `Promise[T]` value: the rc'd promise cell pointer. retain = one more
+            // owner of the cell; release = drop one owner, free at 0 (the producer's
+            // frame count is released after its final resolve). The resolved value is
+            // type-erased i64 today, so cell death releases no payload (provisional).
+            ArcClass.PromiseCell(inst: _) => {
+                if retain {
+                    self.rawbufRetain(c: inout c, cell: v)
+                } else {
+                    self.rawbufDrop(c: inout c, cell: v)
+                }
+            }
             // a registered struct value (`Array[I64]`, any grounded generic inst):
             // ground this value's own instance env (`Array[String]` -> T=String) so a
             // generic field (`data: Buffer[T]`) resolves to its concrete element while

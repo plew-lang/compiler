@@ -1,0 +1,31 @@
+// A discarded owned result (spec/03): a heap-returning call / concat in statement
+// position has no binding to own it — the statement releases it immediately
+// (classifier-routed). A discarded place read is a borrow and releases nothing.
+// LeakSanitizer over this program must be clean; the sharer stays intact.
+import @Std/Io with { print }
+
+struct Wrap {
+    pub val tag: String
+}
+pub impl Wrap {
+    factory tagged(tag: String) {
+        return <Wrap tag=tag />
+    }
+}
+
+fn label(n: I64) -> String {
+    if n > 0 {
+        return "pos"
+    }
+    return "neg"
+}
+
+fn main() {
+    label(n: 1)                      // discarded String result
+    label(n: 0) + label(n: 1)        // discarded concat of two temps
+    Wrap.tagged(tag: "x" + "y")      // discarded struct with heap field
+    val keep: String = label(n: 5)
+    keep                             // discarded place read (borrow — must NOT free keep)
+    print(keep)
+    print("done")
+}

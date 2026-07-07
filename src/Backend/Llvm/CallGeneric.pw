@@ -563,6 +563,11 @@ pub impl LlvmCtx {
         if !(c.arcNeedsRelease(ref: typeRef)) {
             return
         }
+        // The home is an alloca even inside an async fn: a temp's borrower (the call)
+        // returns before any suspension can happen, and every suspension point first
+        // drops all live anonymous temps (emitLlvmAsyncSuspend), so a temp never needs
+        // to survive a resume (whose fresh entry re-zeroes the slot, making the
+        // block-exit drop a no-op rather than a UAF).
         val slot: LLVMValueRef = self.entryAllocaZeroed(ty: LLVMTypeOf(v))
         LLVMBuildStore(self.b, v, slot)
         self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: LLVMTypeOf(v), kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: typeRef)
