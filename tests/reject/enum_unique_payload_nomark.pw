@@ -1,0 +1,14 @@
+// contagion (spec/03,05): an enum owning a unique payload must be declared
+// `unique enum` — a copyable enum would multi-run the payload's deinit.
+unique struct Cell {
+    pub val v: I32
+    deinit { }
+}
+
+enum Holder {
+    Full(c: Cell)
+    Empty
+}
+
+fn main() {
+}

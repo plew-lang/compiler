@@ -54,12 +54,12 @@ pub impl LlvmCtx {
         LLVMBuildBr(self.b, body0)
         LLVMPositionBuilderAtEnd(self.b, body0)
         self.terminated = false
-        // scope-exit array release is gated on `li >= curBodyMark` (so params / seeded
-        // globals / captures are excluded). Default to a sentinel so an entry that forgets
-        // to set its real body mark releases NOTHING — failing safe: an unset mark can
-        // only under-release (a leak the ASan gate's LeakSanitizer level catches), never
-        // over-release (a UAF). genLlvmFuncBody, main, and closures set it after binding
-        // params.
+        // scope-exit release reads the locOwned flag (borrows — by-value params, seeded
+        // globals, borrow-class captures — are flagged un-owned at bind). curBodyMark no
+        // longer gates the drop kernel; it remains the boundary between the binding
+        // prologue and body locals for the emitters that need it (async frame walk,
+        // loop unwind marks). Default to a sentinel so an entry that forgets to set its
+        // real body mark fails safe.
         self.curBodyMark = 18446744073709551615U64
     }
 

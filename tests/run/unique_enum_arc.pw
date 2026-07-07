@@ -1,0 +1,35 @@
+// `unique enum` (spec/03,05): a move-only enum legally holding a unique payload.
+// The payload's deinit runs EXACTLY once — at the inner scope exit, at the end of
+// a consuming (move-param) callee, and never for the moved-from binding.
+import @Std/Io with { print, write }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+unique enum Holder {
+    Full(c: Cell)
+    Empty
+}
+
+fn consume(h: move Holder) {
+    match h {
+        Holder.Full(val c) => { print(c.v + 100) }
+        Holder.Empty => { print(0I32) }
+    }
+    write(s: "consumed\n")
+}
+
+fn main() {
+    if true {
+        val scoped: Holder = <Holder.Full c=<Cell v=7 /> />
+        print(1I32)
+    }
+    write(s: "scoped-done\n")
+    val h: Holder = <Holder.Full c=<Cell v=9 /> />
+    consume(h: move h)
+    write(s: "after\n")
+    val e: Holder = <Holder.Empty />
+    print(2I32)
+}

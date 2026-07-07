@@ -404,8 +404,10 @@ pub impl LlvmCtx {
                                 self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
                                 // the bound capture IS the shared cell (a borrow — the env owns
                                 // its count): mark it so a NESTED closure's env creation retains
-                                // the cell it re-captures. Below curBodyMark, so never dropped here.
+                                // the cell it re-captures, and flag it un-owned so no scope-exit
+                                // drop ever releases the env's count.
                                 self.setLocalCellHome()
+                                self.setLocalOwned(owned: false)
                                 ci += 1
                             } else {
                             val a: LLVMValueRef = self.entryAlloca(ty: slotTy)
@@ -442,20 +444,25 @@ pub impl LlvmCtx {
                             // that balances a call site's shallow-retained struct arg).
                             // The env holds only ONE count, so each activation must take
                             // its own +1 here, or every call nets -1 on the captured heap
-                            // (second call = UAF). Array/Ref/WeakRef/Buffer captures take
-                            // the curBodyMark-GATED arms (true borrows) — no retain.
+                            // (second call = UAF). Array/Ref/WeakRef/Buffer captures are
+                            // true borrows of the env's value — no retain, and the binding
+                            // is flagged un-owned so the scope-exit drop skips it (the
+                            // ownership flag is the single truth; there is no position gate).
+                            mut val capOwned: Bool = false
                             if !(cap.isArray) {
                                 if cRef != 0U64 && capSidx < c.arena.structs.count() {
                                     if !(c.isRefInst(ref: cRef)) && !(c.isWeakRefInst(ref: cRef)) {
                                         if !(rangeEquals(bytes: c.arena.bytes, start: cap.tyStart, len: cap.tyLen, kw: "Buffer")) {
                                             if c.arcNeedsRelease(ref: cRef) {
                                                 self.valueArc(c: inout c, v: cv, typeRef: cRef, retain: true)
+                                                capOwned = true
                                             }
                                         }
                                     }
                                 }
                             }
                             self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: capSidx, isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
+                            self.setLocalOwned(owned: capOwned)
                             ci += 1
                             }
                         }

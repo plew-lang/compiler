@@ -272,54 +272,50 @@ pub impl LlvmCtx {
         // count — the pointee is destroyed (and the cell freed) only when the LAST
         // owner (binding or closure) lets go. Checked before every value class: the
         // cell is heap regardless of the pointee's class (even a scalar frees it).
-        // Gated on li >= curBodyMark: a closure BODY binds its boxed capture to the
-        // same cell (borrow — the env owns that count).
+        // (A closure BODY's own boxed-capture binding is a borrow of the env's count
+        // — it is flagged un-owned at bind, so the top gate already skipped it.)
         if self.locCellHome[li] {
-            if li >= self.curBodyMark {
-                self.emitCellRelease(c: inout c, cell: self.locPtr[li], ref: self.locTypeRef[li])
-            }
+            self.emitCellRelease(c: inout c, cell: self.locPtr[li], ref: self.locTypeRef[li])
             return
         }
-        // an owned array BODY local (CoW): release its OWN buffer, free at 0. Gated on
-        // `li >= curBodyMark` so params / seeded globals / closure captures (bound before
-        // the mark) are NOT released here — they are borrows of an owner elsewhere
-        // (Swift-guaranteed +0 arg convention: the caller's binding or temp home owns).
-        // A heap-owning element type gets the rc-aware cascade below (release [0,count)
-        // then free); a scalar element type just drops the rc-tracked outer buffer.
+        // an owned array local (CoW): release its OWN buffer, free at 0. Ownership is
+        // the locOwned flag alone (checked at the top): a by-value param / borrow-class
+        // capture / seeded global is flagged un-owned at bind (Swift-guaranteed +0 arg
+        // convention: the caller's binding or temp home owns), while a `move` param IS
+        // owned and must release here. A heap-owning element type gets the rc-aware
+        // cascade below (release [0,count) then free); a scalar element type just drops
+        // the rc-tracked outer buffer.
         if self.locIsArr[li] {
-            if li >= self.curBodyMark {
-                val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
-                // an element type that owns heap (a nested array): release its buffer rc and,
-                // at 0, release each element's heap (recursively) before freeing — instead of
-                // just dropping the outer (which would leak the elements).
-                if c.arcNeedsRelease(ref: self.locElemTypeRef[li]) {
-                    self.emitReleaseArrayValue(c: inout c, data: data, count: self.arrValCount(c: inout c, arr: arr), elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
-                } else {
-                    self.rawbufDrop(c: inout c, cell: data)
-                }
+            val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+            val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
+            // an element type that owns heap (a nested array): release its buffer rc and,
+            // at 0, release each element's heap (recursively) before freeing — instead of
+            // just dropping the outer (which would leak the elements).
+            if c.arcNeedsRelease(ref: self.locElemTypeRef[li]) {
+                self.emitReleaseArrayValue(c: inout c, data: data, count: self.arrValCount(c: inout c, arr: arr), elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
+            } else {
+                self.rawbufDrop(c: inout c, cell: data)
             }
             return
         }
-        // an owned `Buffer[T]` BODY local: drop its single data pointer (dec rc, free at
-        // 0). Gated on `li >= curBodyMark` (params / globals / captures are borrows). An
-        // element type that owns heap (String / nested Buffer / array-field struct) gets
-        // the same rc-aware element cascade as arrays (release [0,count) then free) via
-        // emitReleaseArrayValue — the Buffer value is the data pointer, identical to an
-        // array value, and the element ref comes from the `Buffer[T]` type argument.
+        // an owned `Buffer[T]` local: drop its single data pointer (dec rc, free at 0).
+        // Un-owned bindings (by-value params / borrow captures / globals) were skipped
+        // at the top. An element type that owns heap (String / nested Buffer /
+        // array-field struct) gets the same rc-aware element cascade as arrays
+        // (release [0,count) then free) via emitReleaseArrayValue — the Buffer value is
+        // the data pointer, identical to an array value, and the element ref comes from
+        // the `Buffer[T]` type argument.
         if self.locTypeRef[li] != 0U64 {
             if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[self.locTypeRef[li]].nameStart, len: c.arena.types[self.locTypeRef[li]].nameLen, kw: "Buffer") {
-                if li >= self.curBodyMark {
-                    val bdata: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
-                    mut val ber: U64 = 0
-                    if c.arena.types[self.locTypeRef[li]].args.count() > 0U64 {
-                        ber = c.arena.types[self.locTypeRef[li]].args[0]
-                    }
-                    if c.arcNeedsRelease(ref: ber) {
-                        self.emitReleaseArrayValue(c: inout c, data: bdata, count: self.rawbufCount(c: inout c, data: bdata), elemTy: self.llvmTypeOfRef(c: inout c, ref: ber), elemRef: ber)
-                    } else {
-                        self.rawbufDrop(c: inout c, cell: bdata)
-                    }
+                val bdata: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon())
+                mut val ber: U64 = 0
+                if c.arena.types[self.locTypeRef[li]].args.count() > 0U64 {
+                    ber = c.arena.types[self.locTypeRef[li]].args[0]
+                }
+                if c.arcNeedsRelease(ref: ber) {
+                    self.emitReleaseArrayValue(c: inout c, data: bdata, count: self.rawbufCount(c: inout c, data: bdata), elemTy: self.llvmTypeOfRef(c: inout c, ref: ber), elemRef: ber)
+                } else {
+                    self.rawbufDrop(c: inout c, cell: bdata)
                 }
                 return
             }
@@ -330,40 +326,36 @@ pub impl LlvmCtx {
         // not the pointee needs a deinit — the cell heap must be freed regardless), balancing
         // the rawbufRetain consumeIntoOwned emits at each Ref place-copy (escape).
         if c.isRefInst(ref: self.locTypeRef[li]) {
-            // gated on `li >= curBodyMark` like arrays/structs/enums: a param / capture /
-            // seeded global is a BORROW (the owner lives in the caller / enclosing scope),
-            // and a by-value Ref arg is passed without a retain (genArgValue), so releasing
-            // it here would under-count the strong rc and free a cell the caller still owns.
-            if li >= self.curBodyMark {
-                self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
-            }
+            // un-owned bindings were skipped at the top: a by-value Ref param / borrow
+            // capture / seeded global is a BORROW (the owner lives in the caller /
+            // enclosing scope) and is flagged un-owned at bind — a by-value Ref arg is
+            // passed without a retain (genArgValue), so releasing it here would
+            // under-count the strong rc and free a cell the caller still owns. A `move`
+            // Ref param IS owned and releases here.
+            self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
             return
         }
         // a `WeakRef[T]` local: drop one weak observer — decrement the weak count and free the
         // cell only when BOTH counters are 0 (the pointee deinit already ran at strong 0). Same
         // curBodyMark borrow gate as Ref. Balances the weak retain at each WeakRef place-copy.
         if c.isWeakRefInst(ref: self.locTypeRef[li]) {
-            if li >= self.curBodyMark {
-                self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
-            }
+            self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
             return
         }
         val sidx: U64 = self.locStructIdx[li]
         if sidx >= c.arena.structs.count() {
-            // an owned BODY local with no struct index: an enum local, or an anonymous
-            // argument TEMPORARY (registerArgTemp — any class). Route through the
-            // classifier when the grounded ref is stored; the legacy enum path covers a
-            // ref-less enum local. Gated on li >= curBodyMark (params / globals /
-            // captures are borrows).
-            if li >= self.curBodyMark {
-                val ev: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                if self.locTypeRef[li] != 0U64 {
-                    if c.arcNeedsRelease(ref: self.locTypeRef[li]) {
-                        self.valueArc(c: inout c, v: ev, typeRef: self.locTypeRef[li], retain: false)
-                    }
-                } else {
-                    self.emitEnumReleaseRef(c: inout c, v: ev, ref: self.locTypeRef[li])
+            // an owned local with no struct index: an enum local (incl. a `move` enum
+            // param — owned, so its payload deinit runs HERE in the callee), or an
+            // anonymous argument TEMPORARY (registerArgTemp — any class). Route through
+            // the classifier when the grounded ref is stored; the legacy enum path
+            // covers a ref-less enum local.
+            val ev: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+            if self.locTypeRef[li] != 0U64 {
+                if c.arcNeedsRelease(ref: self.locTypeRef[li]) {
+                    self.valueArc(c: inout c, v: ev, typeRef: self.locTypeRef[li], retain: false)
                 }
+            } else {
+                self.emitEnumReleaseRef(c: inout c, v: ev, ref: self.locTypeRef[li])
             }
             return
         }

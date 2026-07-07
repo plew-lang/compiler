@@ -324,13 +324,18 @@ pub impl LlvmCtx {
                 // AND the scope-exit drop releases a heap payload. The un-annotated
                 // variant (`val m = makeMsg()`) classifies via the initializer's ref.
                 if tref == 0U64 {
+                    // declaration-keyed (enumIdxByName), not registration-keyed
+                    // (enumRegSlot): registration is demand-driven, so a binding
+                    // emitted before any construction of the enum missed here and
+                    // its scope-exit release never ran (the drop path itself
+                    // demand-registers via genEnumSlot).
                     if tyLen > 0U64 {
-                        if self.enumRegSlot(c: inout c, start: tyStart, len: tyLen) < self.genEnumRefs.count() {
+                        if c.enumIdxByName(start: tyStart, len: tyLen) < c.arena.enums.count() {
                             tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                         }
                     } else {
                         if clsRef != 0U64 {
-                            if self.enumRegSlot(c: inout c, start: c.arena.types[clsRef].nameStart, len: c.arena.types[clsRef].nameLen) < self.genEnumRefs.count() {
+                            if c.enumIdxByName(start: c.arena.types[clsRef].nameStart, len: c.arena.types[clsRef].nameLen) < c.arena.enums.count() {
                                 tref = clsRef
                             }
                         }
@@ -832,19 +837,18 @@ pub impl LlvmCtx {
                                 val li: U64 = self.findLocal(c: inout c, start: s, len: l)
                                 if li < self.nLocals {
                                     excludeLi = li
-                                    // a returned OWNED body local MOVES its value to the
-                                    // caller for EVERY class (array/Ref/struct/enum/String
-                                    // alike): its own count rides out unchanged — no retain
-                                    // — and the local is excluded from the drop below, so
-                                    // the move balances. A borrowed param (below the body
-                                    // mark) instead RETAINS via consumeIntoOwned so the
-                                    // caller gets a fresh owner — under the guaranteed (+0)
-                                    // arg convention the caller-side binding keeps its own
-                                    // count, so returning a param without the retain would
-                                    // double-release. (Arrays previously moved
-                                    // UNCONDITIONALLY — balanced only by the arg-pass
-                                    // retain that convention removed.)
-                                    if self.locOwned[li] && li >= self.curBodyMark && !(self.locMoved[li]) {
+                                    // a returned OWNED local MOVES its value to the caller
+                                    // for EVERY class (array/Ref/struct/enum/String alike):
+                                    // its own count rides out unchanged — no retain — and
+                                    // the local is excluded from the drop below, so the
+                                    // move balances. That includes a `move` param (owned
+                                    // here). A BORROWED binding (by-value param / capture /
+                                    // global — flagged un-owned at bind) instead RETAINS
+                                    // via consumeIntoOwned so the caller gets a fresh owner
+                                    // — under the guaranteed (+0) arg convention the
+                                    // caller-side binding keeps its own count, so returning
+                                    // it without the retain would double-release.
+                                    if self.locOwned[li] && !(self.locMoved[li]) {
                                         moveOut = true
                                     }
                                 }

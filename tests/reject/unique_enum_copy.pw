@@ -1,0 +1,15 @@
+// a `unique enum` value is move-only (spec/03): a bare copy is rejected.
+unique struct Cell {
+    pub val v: I32
+    deinit { }
+}
+
+unique enum Holder {
+    Full(c: Cell)
+    Empty
+}
+
+fn main() {
+    val h: Holder = <Holder.Full c=<Cell v=7 /> />
+    val h2: Holder = h
+}

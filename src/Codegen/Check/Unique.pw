@@ -13,25 +13,49 @@ pub impl Comp {
             return true
         }
         val si: U64 = self.structIndexByName(start: start, len: len)
-        if si >= self.arena.structs.count() {
-            return false
-        }
-        val s: StructDef = self.arena.structs[si]
-        mut val i: U64 = 0
-        while i < s.fields.count() {
-            val f: FieldDef = s.fields[i]
-            if self.fieldIsBoxed(f: f) {
-                // a boxed (recursive) field is behind indirection (like an array); its
-                // contents don't transmit unique contagion, and skipping it breaks the
-                // cycle that would otherwise make this walk diverge.
-            } else {
-                if !(f.tyIsArray) {
-                    if self.typeIsTransitivelyUnique(start: f.tyStart, len: f.tyLen) {
-                        return true
+        if si < self.arena.structs.count() {
+            val s: StructDef = self.arena.structs[si]
+            mut val i: U64 = 0
+            while i < s.fields.count() {
+                val f: FieldDef = s.fields[i]
+                if self.fieldIsBoxed(f: f) {
+                    // a boxed (recursive) field is behind indirection (like an array); its
+                    // contents don't transmit unique contagion, and skipping it breaks the
+                    // cycle that would otherwise make this walk diverge.
+                } else {
+                    if !(f.tyIsArray) {
+                        if self.typeIsTransitivelyUnique(start: f.tyStart, len: f.tyLen) {
+                            return true
+                        }
                     }
                 }
+                i += 1
             }
-            i += 1
+            return false
+        }
+        // an enum owns its payloads by value, so a unique payload makes the enum
+        // transmit uniqueness exactly like a struct field (typeIsUnique already
+        // answered a DECLARED `unique enum` above via the shared predicate).
+        val ei: U64 = self.anyEnumIndex(nameStart: start, nameLen: len)
+        if ei < self.arena.enums.count() {
+            val e: EnumDef = self.arena.enums[ei]
+            mut val vi: U64 = 0
+            while vi < e.variants.count() {
+                val vfs: Array[FieldDef] = e.variants[vi].fields
+                mut val fj: U64 = 0
+                while fj < vfs.count() {
+                    val vf: FieldDef = vfs[fj]
+                    if !(self.fieldIsBoxed(f: vf)) {
+                        if !(vf.tyIsArray) {
+                            if self.typeIsTransitivelyUnique(start: vf.tyStart, len: vf.tyLen) {
+                                return true
+                            }
+                        }
+                    }
+                    fj += 1
+                }
+                vi += 1
+            }
         }
         return false
     }
@@ -57,6 +81,31 @@ pub impl Comp {
                 }
             }
             i += 1
+        }
+        // variant-payload contagion (spec/03,05): an enum owning a unique value must
+        // itself be declared `unique enum` — copies of a copyable enum would multi-run
+        // the payload's deinit (double free), same as a struct field.
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count() {
+            val e: EnumDef = self.arena.enums[ei]
+            if !(e.isUnique) {
+                mut val vi: U64 = 0
+                while vi < e.variants.count() {
+                    val vfs: Array[FieldDef] = e.variants[vi].fields
+                    mut val fj: U64 = 0
+                    while fj < vfs.count() {
+                        val vf: FieldDef = vfs[fj]
+                        if !(vf.tyIsArray) {
+                            if self.typeIsTransitivelyUnique(start: vf.tyStart, len: vf.tyLen) {
+                                self.errorAt(offset: vf.nameStart, msg: "an enum with a unique payload must be declared `unique enum`")
+                            }
+                        }
+                        fj += 1
+                    }
+                    vi += 1
+                }
+            }
+            ei += 1
         }
     }
 }

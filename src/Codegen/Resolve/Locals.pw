@@ -130,10 +130,16 @@ pub impl Comp {
             rLen = ntu.nameLen
         }
         val si: U64 = self.structIndexByName(start: rStart, len: rLen)
-        if si >= self.arena.structs.count() {
-            return false
+        if si < self.arena.structs.count() {
+            return self.arena.structs[si].isUnique
         }
-        return self.arena.structs[si].isUnique
+        // `unique enum` (spec/03): the same predicate serves enums, so every
+        // uniqueness consumer (copy rejection, param modes, contagion) covers both.
+        val ei: U64 = self.anyEnumIndex(nameStart: rStart, nameLen: rLen)
+        if ei < self.arena.enums.count() {
+            return self.arena.enums[ei].isUnique
+        }
+        return false
     }
 
     inout fn localIndexByName(start: U64, len: U64) -> U64 {

@@ -616,6 +616,9 @@ export struct EnumDef {
     // generic type parameters `[T, U]` (see StructDef.typeParams).
     pub val typeParams: Array[Bind]
     pub val variants: Array[Variant]
+    // `unique enum` (spec/03): copy-forbidden, move-only — same single-ownership
+    // regime as a unique struct (a unique payload may live in it legally).
+    pub val isUnique: Bool = false
     // original source offset of the declaration (see StructDef.defOffset): kept for
     // `moduleOf` (the lang-item redefinition check), since nameStart is re-interned.
     pub val defOffset: U64 = 0
