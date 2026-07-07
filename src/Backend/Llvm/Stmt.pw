@@ -234,26 +234,30 @@ pub impl LlvmCtx {
                 }
                 // a `Ref[T]` local: track the instance so `->` resolves the pointee
                 // struct (Ref isn't a registered generic struct/enum, so isGenericInst
-                // is false for it).
-                if c.isRefInst(ref: ty) {
-                    tref = ty
+                // is false for it). These class checks use the env-GROUNDED `gty`: a
+                // bare-`T` annotation in a generic body (`val v: T` with T = Ref[Cell])
+                // must classify as its concrete class — checking the raw `ty` left tref
+                // 0 and the local's scope-exit release never fired (a leaked count per
+                // iterator handover).
+                if c.isRefInst(ref: gty) {
+                    tref = gty
                 }
                 // a `WeakRef[T]` local: track the instance so `w.upgrade()` dispatches its
                 // opaque-intrinsic method and the weak-count drop fires at scope exit.
-                if c.isWeakRefInst(ref: ty) {
-                    tref = ty
+                if c.isWeakRefInst(ref: gty) {
+                    tref = gty
                 }
                 // a `Buffer[T]` local: track its type so the floor intrinsics recover
                 // the element type T (the buffer is just a data pointer).
-                if ty != 0U64 {
-                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[ty].nameStart, len: c.arena.types[ty].nameLen, kw: "Buffer") {
-                        tref = ty
+                if gty != 0U64 {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[gty].nameStart, len: c.arena.types[gty].nameLen, kw: "Buffer") {
+                        tref = gty
                     }
                 }
                 // a function-value local (`val g: fn(n: I32) -> I32 = …`): track the fn
                 // TypeRef so a call `g(n: 4)` resolves the closure signature.
-                if c.isFnType(ref: ty) {
-                    tref = ty
+                if c.isFnType(ref: gty) {
+                    tref = gty
                 }
                 // an un-annotated binding to a call returning a generic instance
                 // (`val r = makeBox()` -> Box[I64]): recover the instance ref + def so

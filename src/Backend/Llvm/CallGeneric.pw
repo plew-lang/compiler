@@ -191,7 +191,9 @@ pub impl LlvmCtx {
                 // `Ref`), so mutation is visible through every alias of the Ref.
                 val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
                 if refTy != 0U64 {
-                    val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                    // genBorrowedArg: a non-place base (element read / call result) is an
+                    // owned (+1) temporary — home it so the count releases at block exit.
+                    val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
                     self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                     return cellPtr
                 }
@@ -208,7 +210,7 @@ pub impl LlvmCtx {
                     if fidx < c.arena.structs[psidx].fields.count() {
                         val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
                         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
-                        val cellPtr: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                        val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
                         self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                         return LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
                     }

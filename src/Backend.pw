@@ -646,10 +646,14 @@ fn exprAliasesPlace(c: inout Comp, id: U64) -> Bool {
     match c.arena.exprs[id] {
         Expr.Ident(start: _, len: _) => { return true }
         Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
-        // an element `outer[i]` aliases the container's storage (a nested-array
-        // element, an Array[Struct] element): binding/storing it must copy so a
-        // later write leaves the container unchanged.
-        Expr.Index(base: _, index: _) => { return true }
+        // an element READ `outer[i]` is NOT a place alias: it routes through the
+        // `index`/`get`/`at` witness (spec/12, collections.md E3), whose return
+        // already RETAINED an ARC element (buffer-floor.md §4) — the value arrives
+        // as an owned (+1) temporary. Answering `true` here (the pre-witness raw-
+        // load era) made every consumer treat it as a borrow: a bind/store retained
+        // a SECOND count and a sink arg homed nothing — one leaked count per read.
+        // (Index as a WRITE place goes through placePtrStrict, not this predicate.)
+        Expr.Index(base: _, index: _) => { return false }
         // pointee reads through a Ref cell: the value lives in the cell — a second
         // owner must retain/copy it (binding `r->xs` without a copy was a UAF).
         Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
@@ -1629,7 +1633,7 @@ export fn emitLlvmRuntime() {
     // header `count` accessors (the Buffer floor's live-element count).
     write(s: "long long plew_rawbuf_count(void* p){ return p?((long long*)p)[-2]:0; }\n")
     write(s: "void plew_rawbuf_set_count(void* p, long long n){ if(p) ((long long*)p)[-2]=n; }\n")
-    write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } if(data && ((long long*)data)[-1]<=1) free((long long*)data-3); return nd; }\n")
+    write(s: "void* plew_arr_grow(void* data, long long elemSize, long long count){ long long cap=plew_rawbuf_cap(data); if(count<cap) return data; long long nc=cap<8?8:cap*2; void* nd=plew_rawbuf_alloc(elemSize,nc); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } if(data){ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; } return nd; }\n")
     write(s: "void* plew_arr_copy(void* data, long long elemSize, long long count){ void* nd=plew_rawbuf_alloc(elemSize,count<1?1:count); if(count){ memcpy(nd,data,(size_t)(elemSize*count)); ((long long*)nd)[-2]=((long long*)data)[-2]; } return nd; }\n")
     write(s: "void plew_rawbuf_retain(void* p){ if(p) ((long long*)p)[-1]++; }\n")
     write(s: "long long plew_rawbuf_release(void* p){ if(!p) return 0; return --((long long*)p)[-1]; }\n")
@@ -1662,7 +1666,7 @@ export fn emitLlvmRuntime() {
     // grow a buffer's capacity to at least `mincap` (reserve), preserving the live
     // elements + count; a no-op when cap already suffices. The caller has privatized
     // (rc<=1), so the old cell is freed when reallocated.
-    write(s: "void* plew_arr_reserve(void* data, long long elemSize, long long mincap){ long long cap=plew_rawbuf_cap(data); if(cap>=mincap) return data; void* nd=plew_rawbuf_alloc(elemSize,mincap); long long cnt=plew_rawbuf_count(data); if(cnt){ memcpy(nd,data,(size_t)(elemSize*cnt)); ((long long*)nd)[-2]=cnt; } if(data && ((long long*)data)[-1]<=1) free((long long*)data-3); return nd; }\n")
+    write(s: "void* plew_arr_reserve(void* data, long long elemSize, long long mincap){ long long cap=plew_rawbuf_cap(data); if(cap>=mincap) return data; void* nd=plew_rawbuf_alloc(elemSize,mincap); long long cnt=plew_rawbuf_count(data); if(cnt){ memcpy(nd,data,(size_t)(elemSize*cnt)); ((long long*)nd)[-2]=cnt; } if(data){ if(((long long*)data)[-1]<=1) free((long long*)data-3); else ((long long*)data)[-1]--; } return nd; }\n")
     // relocate `n` element slots within a buffer (insertAt/removeAt shift). A pure byte
     // move: each element's inline bytes (incl any heap reference) move intact, so no
     // element retain/release is needed (buffer-floor.md §5 relocation = memmove).

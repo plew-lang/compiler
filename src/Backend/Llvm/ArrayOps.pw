@@ -247,10 +247,12 @@ pub impl LlvmCtx {
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
         val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+        // an element READ returns an OWNED (+1) value for EVERY ARC class (buffer-floor
+        // §4; exprAliasesPlace answers false for Index, so every consumer balances this
+        // one count). Ref/WeakRef retain here too — the old exclusion assumed the
+        // borrow-era contract where the consumer retained instead.
         if c.arcNeedsRelease(ref: er) {
-            if !(c.isRefInst(ref: er)) && !(c.isWeakRefInst(ref: er)) {
-                self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
-            }
+            self.valueArc(c: inout c, v: elem, typeRef: er, retain: true)
         }
         return elem
     }
