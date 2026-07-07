@@ -1,0 +1,26 @@
+// try error path: a statement temp (heap string arg) + a live named heap local
+// when the Err propagates — is anything dropped on the try.err return path?
+import @Std/Core
+import @Std/Io with { print }
+
+struct Fail { pub val code: I32 }
+
+fn mayFail(tag: String, ok: Bool) -> Result[U64, Fail] {
+    if ok {
+        return <Result[U64, Fail].Ok value=tag.bytes().count() />
+    }
+    return <Result[U64, Fail].Err error=<Fail code=7 /> />
+}
+
+fn stage(ok: Bool) -> Result[U64, Fail] {
+    val held: String = "held" + "heap"        // named heap local live across try
+    val n: U64 = try mayFail(tag: "temp" + "heap", ok: ok)
+    return <Result[U64, Fail].Ok value=n + held.bytes().count() />
+}
+
+fn main() {
+    val good: Result[U64, Fail] = stage(ok: true)
+    print("v=" + good.unwrapOr(fallback: 0U64).format(format: ""))
+    val bad: Result[U64, Fail] = stage(ok: false)
+    print(bad.isErr())
+}

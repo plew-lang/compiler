@@ -43,6 +43,10 @@ pub impl LlvmCtx {
         LLVMBuildBr(self.b, condBB)
         LLVMPositionBuilderAtEnd(self.b, endBB)
         self.terminated = false
+        // release any temporaries the lo/hi expressions homed (`for i in 0 ..< f().n`)
+        // before popping them — the bare reset used to strand them (never drained:
+        // popped below the enclosing statement's drain mark).
+        self.drainStmtTemps(c: inout c, fromMark: mark)
         self.nLocals = mark
     }
 

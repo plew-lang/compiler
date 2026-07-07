@@ -319,6 +319,11 @@ pub impl LlvmCtx {
         errArgs.append(convErrVal)
         val retResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: errVi, payloadVals: errArgs)
         if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
+        // this is a RETURN: unwind every live owned local and unmoved statement temp
+        // exactly as Stmt.Return does (the error payload was moved into retResult and
+        // the operand's temp home is not registered — neither is touched). Without
+        // this, every error propagation leaked the whole live frame.
+        self.dropScope(c: inout c, fromMark: 0U64, excludeLi: 18446744073709551615U64)
         LLVMBuildRet(self.b, retResult)
         // Ok: extract and yield the value; control continues at okBB.
         LLVMPositionBuilderAtEnd(self.b, okBB)
