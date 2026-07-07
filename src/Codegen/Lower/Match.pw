@@ -439,9 +439,17 @@ pub impl Comp {
                     val fe: Bind = self.internBytes(s: "__fe")
                     val lo2: U64 = self.lowerExpr(e: iter)
                     val inner: U64 = self.lowerBlock(b: body)
+                    // completeness check input (spec/03) — isElem: the site's type is
+                    // the loop SOURCE's element, not the source itself.
+                    self.decls.destructureSites.append(<DestructureSite initId=lo2 offset=span.start isElem=true binds=self.destructureSiteBinds(binds: binds) />)
                     mut val bstmts: Array[U64] = []
                     mut val bi: U64 = 0
                     while bi < binds.count() {
+                        // a `label: _` discard covers the field without creating a local.
+                        if binds[bi].name.bytes().count() == 0U64 {
+                            bi += 1
+                            continue
+                        }
                         // field name by SOURCE span (see lowerDestructureInto) — precise
                         // typo diagnostics; only the bound local's name is interned.
                         val nameB: Bind = self.internBytes(s: binds[bi].name)
@@ -523,13 +531,22 @@ pub impl Comp {
     // value), so no annotation is needed. The temp name is UNIQUE per destructure
     // (the same lowerTmpSeq counter the compound-assign `__ce` temps use) — temp
     // hygiene: no reliance on same-name shadowing, no collision with a user local.
-    inout fn lowerDestructureInto(binds: Array[BindAst], init: ExprAst, stmts: inout Array[U64]) {
+    inout fn lowerDestructureInto(binds: Array[BindAst], init: ExprAst, offset: U64, stmts: inout Array[U64]) {
         self.cur.lowerTmpSeq += 1U64
         val tmp: Bind = self.internTmpName(prefix: "__dt", n: self.cur.lowerTmpSeq)
         val iv: U64 = self.lowerExpr(e: init)
         stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+        // record the bind LIST for the completeness check (spec/03: every field bound
+        // or discarded, no duplicates) — the desugar below erases it.
+        self.decls.destructureSites.append(<DestructureSite initId=iv offset=offset isElem=false binds=self.destructureSiteBinds(binds: binds) />)
         mut val bi: U64 = 0
         while bi < binds.count() {
+            // a `label: _` discard covers the field without creating a local — the
+            // whole record lives in the temp, so the field needs no read at all.
+            if binds[bi].name.bytes().count() == 0U64 {
+                bi += 1
+                continue
+            }
             // the synthesized Field points at the SOURCE occurrence of the field name
             // (the explicit label, or the punned bind name — the bytes there ARE the
             // field name), so a typo'd field errors with a precise source span exactly
@@ -544,6 +561,25 @@ pub impl Comp {
         }
     }
 
+    // The Bind list of a destructure site: bound-local span (len 0 = discard), the
+    // field's SOURCE span, and the bind's source offset for diagnostics.
+    inout fn destructureSiteBinds(binds: Array[BindAst]) -> Array[Bind] {
+        mut val out: Array[Bind] = []
+        mut val bi: U64 = 0
+        while bi < binds.count() {
+            mut val nameStart: U64 = 0
+            mut val nameLen: U64 = 0
+            if binds[bi].name.bytes().count() > 0U64 {
+                val nb: Bind = self.internBytes(s: binds[bi].name)
+                nameStart = nb.nameStart
+                nameLen = nb.nameLen
+            }
+            out.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=binds[bi].fieldStart fieldLen=binds[bi].field.bytes().count() offset=binds[bi].span.start />)
+            bi += 1
+        }
+        return out
+    }
+
     inout fn lowerBlock(b: BlockAst) -> U64 {
         mut val stmts: Array[U64] = []
         mut val i: U64 = 0
@@ -551,7 +587,7 @@ pub impl Comp {
             // a destructuring statement expands to several arena statements (temp + fields).
             match b.stmts[i] {
                 StmtAst.Destructure(val binds, val init, val span) => {
-                    self.lowerDestructureInto(binds: binds, init: init, stmts: inout stmts)
+                    self.lowerDestructureInto(binds: binds, init: init, offset: span.start, stmts: inout stmts)
                 }
                 // a compound assign `place OP= v` expands to the temp bindings for its
                 // place's side-effecting index keys plus the desugared `place = place OP v`

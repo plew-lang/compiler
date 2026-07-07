@@ -14,6 +14,10 @@ pub impl Comp {
                 // a bare unique place on the rhs is a forbidden copy (`val g = f`).
                 self.checkUniquePlaceCopy(exprId: init, inoutOk: false)
                 self.verifyExpr(id: init)
+                // a record-destructure statement lowered to this temp Let: check its
+                // bind list against the record's fields (spec/03 — the locals env is
+                // live here, so a variable initializer types).
+                self.checkDestructureSite(initId: init, isElem: false)
                 // an explicit annotation whose category clearly disagrees with the
                 // initializer reinterprets the bits — a hidden-meaning bug (`val x: I64 =
                 // "s"` / `val a: A = <B…/>`). Reject only when the INITIALIZER is RELIABLY
@@ -179,6 +183,9 @@ pub impl Comp {
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, inclusive: _, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 self.verifyExpr(id: iter)
+                // a record loop pattern lowered to this For: check its bind list
+                // against the ELEMENT record's fields (spec/03).
+                self.checkDestructureSite(initId: iter, isElem: true)
                 if isRange {
                     self.verifyExpr(id: rangeHi)
                     // a range is iterated via `Step`, which is integer-only (spec/02,11):

@@ -1,0 +1,9 @@
+// A record destructure must name EVERY field — bind it or discard it with
+// `label: _` (spec/03: no implicit dropping, no `..`). `extra` is unnamed here,
+// so this must reject rather than silently drop it.
+import @Std/Io with { print }
+
+fn main() {
+    (val name, val n) = (name: "s", n: 4I64, extra: 1I64)
+    print(n)
+}

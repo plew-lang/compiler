@@ -1,0 +1,13 @@
+// A pattern names each field exactly once: binding the variant payload field
+// `a` twice must reject (the second bind shadows nothing — it reads the same
+// field into two locals while completeness lets `b` slip uncovered elsewhere).
+import @Std/Io with { print }
+
+enum E { V(a: I64, b: I64) }
+
+fn main() {
+    val e: E = <E.V a=1 b=2 />
+    match e {
+        E.V(val a, a: val b) => { print(a + b) }
+    }
+}

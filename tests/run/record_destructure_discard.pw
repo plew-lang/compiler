@@ -1,0 +1,21 @@
+// `label: _` discards a field while satisfying the completeness check: the
+// field is covered but no local is created. The discarded heap field stays
+// owned by the destructure temp and is released at scope end (deinit fires
+// exactly once). Works in the statement and the loop-pattern forms.
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+fn main() {
+    (val name, n: _) = (name: "s", n: <Ref value=<Cell v=7 /> />)
+    print(name)
+    val xs = [(a: 10I64, b: 20I64), (a: 30I64, b: 40I64)]
+    for (val a, b: _) in xs {
+        print(a)
+    }
+    write(s: "end\n")
+}

@@ -842,6 +842,24 @@ export struct ChainSite {
 }
 pub impl ChainSite { factory }
 
+// One record-destructuring site (`(val a, b: _) = init` statement or the
+// `for (val a, val b) in xs` loop pattern), recorded at Lower time because the
+// desugar (temp + per-field lets) erases the bind LIST the completeness check
+// needs (spec/03: every field must be bound or discarded, no duplicates).
+// Keyed by the lowered init/iter expr id; Verify checks the site while walking
+// the owning statement (the locals env is live there, so a variable init
+// types). Each bind reuses Bind: nameStart/nameLen = the bound local (len 0 =
+// a `label: _` discard), fieldStart/fieldLen = the field's SOURCE span,
+// offset = the bind's source offset (diagnostics). isElem: the init is the
+// loop SOURCE (an array) — check its element type, not its own.
+export struct DestructureSite {
+    pub val initId: U64
+    pub val offset: U64
+    pub val isElem: Bool
+    pub val binds: Array[Bind]
+}
+pub impl DestructureSite { factory }
+
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val conforms: Array[Conform] = []
@@ -855,6 +873,7 @@ export struct Decls {
     pub mut val namespaces: Array[Bind] = []
     pub mut val importAliases: Array[Bind] = []
     pub mut val chainSites: Array[ChainSite] = []
+    pub mut val destructureSites: Array[DestructureSite] = []
     pub mut val kwCache: Array[Bind] = []
 }
 pub impl Decls { factory }

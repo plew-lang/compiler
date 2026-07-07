@@ -1,0 +1,10 @@
+// The record loop pattern is a destructure too: `for (val a) in xs` over
+// 2-field record elements omits `b`, so it must reject (spec/03).
+import @Std/Io with { print }
+
+fn main() {
+    val xs = [(a: 1I64, b: 2I64)]
+    for (val a) in xs {
+        print(a)
+    }
+}

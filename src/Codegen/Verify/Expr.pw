@@ -469,12 +469,104 @@ pub impl Comp {
         return false
     }
 
+    // Whether any declared field matches the given name span (byte content).
+    inout fn structFieldsContain(fields: Array[FieldDef], fieldStart: U64, fieldLen: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < fields.count() {
+            if spansEqual(c: inout self, aStart: fields[i].nameStart, aLen: fields[i].nameLen, bStart: fieldStart, bLen: fieldLen) {
+                return true
+            }
+            i += 1
+        }
+        return false
+    }
+
+    // A record-destructuring statement / loop pattern must name EVERY field of the
+    // record — bind it or discard it with `label: _` — and may name each field only
+    // once (spec/03: no implicit dropping, no `..`, so adding a field to a record
+    // breaks stale destructures loudly). Lower records each site's bind list
+    // (DestructureSite — the temp+field-lets desugar erases it); this runs from the
+    // owning statement's verify arm, where the locals env is live, keyed by the
+    // lowered init/iter expr id. An unknown/non-record init type is left to the
+    // regular per-field machinery (the synthesized Field reads still check).
+    inout fn checkDestructureSite(initId: U64, isElem: Bool) {
+        mut val si: U64 = 0
+        while si < self.decls.destructureSites.count() {
+            val site: DestructureSite = self.decls.destructureSites[si]
+            if site.initId == initId && site.isElem == isElem {
+                self.checkDestructureSiteBinds(site: site)
+                return
+            }
+            si += 1
+        }
+    }
+
+    inout fn checkDestructureSiteBinds(site: DestructureSite) {
+        val ti: TypeInfo = self.typeOf(id: site.initId)
+        mut val tnStart: U64 = ti.nameStart
+        mut val tnLen: U64 = ti.nameLen
+        if site.isElem {
+            // the loop-source case: the record is the array's ELEMENT — a kind-3
+            // TypeInfo's name span already names the element.
+            if ti.kind != 3 {
+                return
+            }
+        } else {
+            if ti.ref != 0U64 && ti.ref < self.arena.types.count() {
+                tnStart = self.arena.types[ti.ref].nameStart
+                tnLen = self.arena.types[ti.ref].nameLen
+            }
+        }
+        val sidx: U64 = self.structIndexByName(start: tnStart, len: tnLen)
+        if sidx >= self.arena.structs.count() {
+            return
+        }
+        val sd: StructDef = self.arena.structs[sidx]
+        mut val bi: U64 = 0
+        while bi < site.binds.count() {
+            // each named field must exist on the record (also covers a typo'd
+            // `nope: _` discard, which synthesizes no Field read)…
+            if !(self.structFieldsContain(fields: sd.fields, fieldStart: site.binds[bi].fieldStart, fieldLen: site.binds[bi].fieldLen)) {
+                self.errorAt(offset: site.binds[bi].offset, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)")
+            }
+            // …and only once.
+            mut val bj: U64 = bi + 1U64
+            while bj < site.binds.count() {
+                if spansEqual(c: inout self, aStart: site.binds[bi].fieldStart, aLen: site.binds[bi].fieldLen, bStart: site.binds[bj].fieldStart, bLen: site.binds[bj].fieldLen) {
+                    self.errorAt(offset: site.binds[bj].offset, msg: "this field is destructured more than once — a record destructure names each field exactly once (spec/03)")
+                }
+                bj += 1
+            }
+            bi += 1
+        }
+        mut val fi: U64 = 0
+        while fi < sd.fields.count() {
+            if !(self.bindsCoverField(binds: site.binds, fieldStart: sd.fields[fi].nameStart, fieldLen: sd.fields[fi].nameLen)) {
+                self.errorAt(offset: site.offset, msg: "a record destructure must bind or discard every field (a field is missing — bind it or use `label: _`; `..` is not allowed, spec/03)")
+            }
+            fi += 1
+        }
+    }
+
     // A struct-destructure pattern `S { … }` must bind OR discard (`field: _`) EVERY
     // field — `..` is not allowed (spec/05,11). Omitting a field silently dropped it
     // before; now a missing field is a loud error, so adding a field to a struct makes
     // existing patterns fail (catching silent take-misses). Generic-struct patterns
     // (`Box[I32] { … }`) resolve fields via the generic def.
     inout fn checkDestructureComplete(a: MatchArm) {
+        // a pattern names each field at most once — a duplicate bind would read the
+        // same field into two locals while completeness lets another field slip.
+        mut val di: U64 = 0
+        while di < a.binds.count() {
+            mut val dj: U64 = di + 1U64
+            while dj < a.binds.count() {
+                if spansEqual(c: inout self, aStart: a.binds[di].fieldStart, aLen: a.binds[di].fieldLen, bStart: a.binds[dj].fieldStart, bLen: a.binds[dj].fieldLen) {
+                    self.errorAt(offset: a.binds[dj].offset, msg: "this field is destructured more than once — a pattern names each field exactly once (spec/05,11)")
+                }
+                dj += 1
+            }
+            di += 1
+        }
         if a.isStruct {
             mut val si: U64 = self.structIndexByName(start: a.enumStart, len: a.enumLen)
             if si >= self.arena.structs.count() {

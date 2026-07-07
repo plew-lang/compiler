@@ -1,0 +1,9 @@
+// A record destructure names each field exactly once: binding `name` twice
+// (while omitting `n`) must reject — the construction side already enforces
+// "each field set at most once", and the destructure side mirrors it.
+import @Std/Io with { print }
+
+fn main() {
+    (val name, name: val n2) = (name: "s", n: 4I64)
+    print(n2)
+}
