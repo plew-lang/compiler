@@ -6,7 +6,8 @@ pub impl LlvmCtx {
 
     // value-ARC emit-recursion guard (breaks self-referential types like `struct S {
     // items: Array[S] }` at codegen): push on entry to a struct's release/retain emission,
-    // pop on exit; a struct already on the stack is skipped (its deeper level leaks).
+    // pop on exit; a struct already on the stack is skipped — only the INLINE walk stops
+    // there (runtime recursion goes through the type's witness CALL, see dropWitSlot).
     inout fn arcPush(sidx: U64) {
         if self.arcDepth < self.arcStack.count() {
             self.arcStack[self.arcDepth] = sidx
@@ -296,9 +297,9 @@ pub impl LlvmCtx {
         // an owned array BODY local (CoW): release its OWN buffer, free at 0. Gated on
         // `li >= curBodyMark` so params / seeded globals / closure captures (bound before
         // the mark) are NOT released here — they are borrows of an owner elsewhere
-        // (Swift-guaranteed +0 arg convention: the caller's binding or temp home owns). All
-        // element types: only the rc-tracked outer buffer is freed (element heap is
-        // shallow-shared and leaks; never double-freed since it is never freed here).
+        // (Swift-guaranteed +0 arg convention: the caller's binding or temp home owns).
+        // A heap-owning element type gets the rc-aware cascade below (release [0,count)
+        // then free); a scalar element type just drops the rc-tracked outer buffer.
         if self.locIsArr[li] {
             if li >= self.curBodyMark {
                 val arr: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())

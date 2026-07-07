@@ -242,7 +242,8 @@ pub impl LlvmCtx {
             return self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valExpr), valueExpr: valExpr)
         }
         // a boxed (recursive) struct field: build the value, heap-allocate a cell, store
-        // it, and put the cell pointer in the struct (leaky, like Ref — no free yet).
+        // it, and put the cell pointer in the struct (the cell is released by the owner
+        // value's drop — emitCellRelease via the boxed-field walker arm).
         if c.fieldIsBoxed(f: fld) {
             // the boxed value is in the field's (pointee) type context, so a nested
             // un-suffixed JSX construction (`next=<Optional.Some … />`) infers its args.
@@ -1158,8 +1159,9 @@ pub impl LlvmCtx {
     // `emitEnumRetainRef`) so it rc-bumps precisely the buffers deep-copy would have made
     // independent — i.e. every buffer a later in-place mutation must CoW (rc>1) for value
     // semantics. The active generic env must be set by the caller (consumeIntoOwned does so via
-    // setStructEnv) for the grounding to resolve. Balanced by `emitDeinitValue` at drop (which
-    // gates on declared types, so an over-retained generic field is leaked-but-safe, never UAF).
+    // setStructEnv) for the grounding to resolve. Balanced by `emitDeinitValue` at drop; the
+    // release side never exceeds the retain side, so any residual asymmetry surfaces as a
+    // LeakSanitizer report in the ASan gate (level C), never as a UAF.
     inout fn emitStructRetain(c: inout Comp, v: LLVMValueRef, sidx: U64) {
         // a concrete registered struct: call its retain witness instead of inlining the
         // walker (fields are concrete, so the witness body is env-independent). A generic

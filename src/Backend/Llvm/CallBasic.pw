@@ -438,6 +438,15 @@ pub impl LlvmCtx {
             av.append(self.arrValCount(c: inout c, arr: s))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
         }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "cFree") {
+            mut val ptys: Array[LLVMTypeRef] = []
+            ptys.append(self.ptrty)
+            val fty: LLVMTypeRef = LLVMFunctionType(LLVMVoidTypeInContext(self.ctx), arrayCPtr(ptys), 1U64, 0I32)
+            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_cFree", nameId: 72U64, fnTy: fty)
+            mut val av: Array[LLVMValueRef] = []
+            av.append(self.genLlvmExpr(c: inout c, id: args[0].expr))
+            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "stringFromCString") {
             mut val ptys: Array[LLVMTypeRef] = []
             ptys.append(self.ptrty)

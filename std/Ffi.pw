@@ -10,9 +10,14 @@
 
 export extern(plewIntrinsic) {
     // Plew `String` -> a freshly heap-allocated NUL-terminated C string
-    // (`const char*` == `CPtr[U8]`). The buffer is owned by C until freed
-    // (spec/15 point 3). For a call-and-forget argument this leaks a small buffer.
+    // (`const char*` == `CPtr[U8]`) — the RAW floor: the caller owns the buffer
+    // and must release it with `cFree`. `CString` (below) is the canonical owned
+    // form (spec/15 point 3) whose deinit does that for you.
     fn cString(text~: String) -> CPtr[U8]
+
+    // Release a buffer obtained from `cString` (the raw floor's free;
+    // `CString`'s deinit is the canonical caller).
+    fn cFree(ptr~: CPtr[U8])
 
     // Copy a NUL-terminated C string into a Plew `String` (bytes assumed valid
     // UTF-8). spec/15 point 3 — the eventual fallible form returns Result.
@@ -22,4 +27,19 @@ export extern(plewIntrinsic) {
     // handle/scalar array to C (e.g. `LLVMTypeRef *Params, unsigned ParamCount`).
     // Valid ONLY while the array is alive and unmodified (unsafe borrow, point 4).
     fn arrayCPtr[T](a~: Array[T]) -> CPtr[T]
+}
+
+// The owned Plew->C string (spec/15 point 3): a `unique` value holding the
+// NUL-terminated UTF-8 copy. Pass `.ptr` to C — valid exactly while this value
+// lives (lexically explicit) — and the deinit frees the buffer at scope exit,
+// so a bound conversion can never leak.
+export unique struct CString {
+    pub val ptr: CPtr[U8]
+    deinit { cFree(self.ptr) }
+}
+
+pub impl CString {
+    factory from(text: String) {
+        return <CString ptr=cString(text) />
+    }
 }

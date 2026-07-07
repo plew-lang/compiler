@@ -192,7 +192,9 @@ struct LlvmCtx {
     pub mut val gvalElemTypeRef: Array[U64] = []
     // struct indices currently on the value-ARC emit stack (emitDeinitValue / emitStructRetain),
     // so a self-referential type (`struct S { items: Array[S] }`) does not recurse forever at
-    // codegen — a struct already being emitted is skipped (its deeper level leaks, never crashes).
+    // codegen — a struct already being emitted is skipped. Only the INLINE walk must
+    // terminate: runtime recursion routes through the type's retain/release witness CALL,
+    // so deeper levels are still retained/released at run time.
     pub mut val arcStack: Array[U64] = []
     pub mut val arcDepth: U64 = 0
     // Cell pin (spec/03): a deref-crossing `inout` place retains its Ref cell for the
@@ -1620,8 +1622,10 @@ export fn emitLlvmRuntime() {
     write(s: "void plew_f64_nan_check(double a, double b){ if(a!=a || b!=b) plew_panic_raw(\"NaN comparison\",14); }\n")
     write(s: "char* plew_readStdin(void){ size_t cap=4096,len=0; char* buf=(char*)malloc(cap); int ch; while((ch=getchar())!=EOF){ if(len+1>=cap){cap*=2;buf=(char*)realloc(buf,cap);} buf[len++]=(char)ch; } char* b=plew_str_buf((long long)len); if(len) memcpy(b,buf,len); b[len]=0; free(buf); plew_rawbuf_set_count(b,(long long)len); return b; }\n")
     // FFI String <-> C-string (spec/15): cString materializes a NUL-terminated copy
-    // (owned by C until freed); stringFromCString copies a NUL-terminated C string.
+    // (caller-owned; cFree releases it — CString's deinit is the canonical caller);
+    // stringFromCString copies a NUL-terminated C string.
     write(s: "unsigned char* plew_cString(char* d, long long n){ unsigned char* b=(unsigned char*)malloc((size_t)n+1); if(n) memcpy(b,d,(size_t)n); b[n]=0; return b; }\n")
+    write(s: "void plew_cFree(unsigned char* p){ free(p); }\n")
     write(s: "char* plew_stringFromCString(unsigned char* p){ if(!p) return plew_str_empty(); size_t n=strlen((const char*)p); char* b=plew_str_buf((long long)n); memcpy(b,p,n); b[n]=0; plew_rawbuf_set_count(b,(long long)n); return b; }\n")
     // Array / Buffer storage floor (a [cap][count][rc][data...] block). The pointer is
     // the data; three header words sit before it: cap=[-3], count=[-2], rc=[-1]. `count`
@@ -1702,7 +1706,7 @@ export fn emitLlvmRuntime() {
     // exit status in plew_last_exit (read via plew_execCode). One static holds the
     // status so both values cross the intrinsic boundary as plain scalars/String.
     write(s: "static long long plew_last_exit = 0;\n")
-    write(s: "char* plew_execOut(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; FILE* f=popen(p,\"r\"); free(p); if(!f){ plew_last_exit=-1; return plew_str_empty(); } size_t cap=4096,len=0; char* buf=(char*)malloc(cap); size_t r; while((r=fread(buf+len,1,cap-len,f))>0){ len+=r; if(len==cap){ cap*=2; buf=(char*)realloc(buf,cap); } } int st=pclose(f); plew_last_exit=(long long)(WIFEXITED(st)?WEXITSTATUS(st):-1); char* ob=plew_str_buf((long long)len); if(len) memcpy(ob,buf,len); ob[len]=0; plew_rawbuf_set_count(ob,(long long)len); return ob; }\n")
+    write(s: "char* plew_execOut(char* d, long long n){ char* p=(char*)malloc((size_t)n+1); if(n) memcpy(p,d,(size_t)n); p[n]=0; FILE* f=popen(p,\"r\"); free(p); if(!f){ plew_last_exit=-1; return plew_str_empty(); } size_t cap=4096,len=0; char* buf=(char*)malloc(cap); size_t r; while((r=fread(buf+len,1,cap-len,f))>0){ len+=r; if(len==cap){ cap*=2; buf=(char*)realloc(buf,cap); } } int st=pclose(f); plew_last_exit=(long long)(WIFEXITED(st)?WEXITSTATUS(st):-1); char* ob=plew_str_buf((long long)len); if(len) memcpy(ob,buf,len); ob[len]=0; free(buf); plew_rawbuf_set_count(ob,(long long)len); return ob; }\n")
     write(s: "long long plew_execCode(void){ return plew_last_exit; }\n")
     // ---- async runtime (event loop / promises / timers) ----
     //

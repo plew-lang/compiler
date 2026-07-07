@@ -56,8 +56,10 @@ pub impl LlvmCtx {
         self.terminated = false
         // scope-exit array release is gated on `li >= curBodyMark` (so params / seeded
         // globals / captures are excluded). Default to a sentinel so an entry that forgets
-        // to set its real body mark releases NOTHING (a tolerated leak, never a UAF);
-        // genLlvmFuncBody, main, and closures set it after binding params.
+        // to set its real body mark releases NOTHING — failing safe: an unset mark can
+        // only under-release (a leak the ASan gate's LeakSanitizer level catches), never
+        // over-release (a UAF). genLlvmFuncBody, main, and closures set it after binding
+        // params.
         self.curBodyMark = 18446744073709551615U64
     }
 

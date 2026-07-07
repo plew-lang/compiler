@@ -7,7 +7,7 @@
 // extern(c) functions take NO argument labels (C has none): every parameter is
 // written label-suppressed `name~:` (explicit, spec/15) and called positionally.
 import @Std/Io with { print }
-import @Std/Ffi with { cString, stringFromCString }
+import @Std/Ffi with { CString, stringFromCString }
 
 extern(c) {
     type ModuleRef
@@ -17,7 +17,10 @@ extern(c) {
 }
 
 fn main() {
-    val m: ModuleRef = moduleCreate(cString("plew_hello"))
+    // spec/15 point 3: the owned Plew->C string — `.ptr` is valid while `cname`
+    // lives; its deinit frees the buffer at scope exit (no manual free, no leak).
+    val cname: CString = CString.from(text: "plew_hello")
+    val m: ModuleRef = moduleCreate(cname.ptr)
     print(stringFromCString(moduleName(m)))
     moduleDispose(m)
 }

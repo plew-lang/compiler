@@ -549,7 +549,22 @@ pub impl LlvmCtx {
         // temporaries at the end of the full expression; Plew uses the block exit).
         if !(p.isMove) {
             if !(exprAliasesPlace(c: inout c, id: argExpr)) {
-                self.registerArgTemp(c: inout c, v: out, typeRef: self.argValueTypeRef(c: inout c, argExpr: argExpr))
+                mut val ttr: U64 = self.argValueTypeRef(c: inout c, argExpr: argExpr)
+                if ttr == 0U64 {
+                    // a context-typed literal (`[:]`, a record literal) records no type
+                    // of its own — classify by the parameter's DECLARED type instead
+                    // (`out` was just coerced to it, so it is the value's contract
+                    // type). A bare type-param ref stays unground here (caller env
+                    // can't substitute the callee's T) and classifies scalar — the
+                    // pre-existing gap, not a regression.
+                    ttr = p.ty
+                    if ttr != 0U64 {
+                        if c.cur.typeParams.count() > 0U64 {
+                            ttr = c.groundTypeRef(ref: ttr)
+                        }
+                    }
+                }
+                self.registerArgTemp(c: inout c, v: out, typeRef: ttr)
             }
         }
         return out
@@ -596,13 +611,15 @@ pub impl LlvmCtx {
     inout fn argValueTypeRef(c: inout Comp, argExpr: U64) -> U64 {
         match c.arena.exprs[argExpr] {
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: val mty, fields: _) => {
-                mut val g: U64 = mty
-                if g != 0U64 {
+                // a plain construction (`<Bag …/>`) carries ty=0 — fall through to the
+                // typed-IR store below (otherwise the temp classifies as scalar, its
+                // home is skipped, and the construction's heap leaks).
+                if mty != 0U64 {
                     if c.cur.typeParams.count() > 0U64 {
-                        g = c.groundTypeRef(ref: mty)
+                        return c.groundTypeRef(ref: mty)
                     }
+                    return mty
                 }
-                return g
             }
             _ => {}
         }

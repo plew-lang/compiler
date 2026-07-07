@@ -44,8 +44,10 @@ TMP=/tmp/plew_asan
 mkdir -p "$TMP"
 RT="$TMP/rt.c"
 "$PLEWC" --runtime > "$RT"
-# No leak detection: plewc is a batch compiler with an intentionally un-freed
-# arena; abort loudly on any real memory error so the gate fails fast.
+# Levels A/B run the COMPILER under ASan without leak detection: plewc is a
+# batch compiler whose arena lives for the whole process by design (freed by
+# exit). Level C runs GENERATED programs with detect_leaks=1 — a leak in
+# generated code is a bug (ARC must balance), so LeakSanitizer reports FAIL.
 export ASAN_OPTIONS=detect_leaks=0:abort_on_error=0
 
 # Levels B/C fan out one test per worker (xargs -P); workers print one status
@@ -93,7 +95,7 @@ else
     fail=1
 fi
 
-echo "== C. run corpus under ASan =="
+echo "== C. run corpus under ASan + LeakSanitizer =="
 c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw)
     [ -f "tests/run/$name.out" ] || exit 0
@@ -103,10 +105,12 @@ c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || exit 0
     "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null || exit 0
     infile="tests/run/$name.in"
-    if [ -f "$infile" ]; then "$bin" < "$infile" > /dev/null 2>"$err" || true
-    else "$bin" > /dev/null 2>"$err" || true; fi
+    if [ -f "$infile" ]; then ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" < "$infile" > /dev/null 2>"$err" || true
+    else ASAN_OPTIONS=detect_leaks=1:abort_on_error=0 "$bin" > /dev/null 2>"$err" || true; fi
     if grep -q "ERROR: AddressSanitizer" "$err"; then
         echo "FAIL running $name: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
+    elif grep -q "LeakSanitizer: detected memory leaks" "$err"; then
+        echo "FAIL running $name: $(grep "SUMMARY: AddressSanitizer:" "$err" | head -1 | sed "s/.*SUMMARY: //")"
     else
         echo "RAN $name"
     fi
