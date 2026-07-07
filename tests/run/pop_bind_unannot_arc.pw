@@ -1,0 +1,19 @@
+// An UN-annotated binding of an Array method's COMPOUND generic return
+// (`pop() -> Optional[T]`): the result type must ground (T = Ref[Cell]) so the
+// local classifies for release — its pointee deinits at scope exit, not never.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn main() {
+    mut val xs: Array[Ref[Cell]] = []
+    xs.append(<Ref[Cell] value=<Cell v=1 /> />)
+    xs.append(<Ref[Cell] value=<Cell v=2 /> />)
+    xs.append(<Ref[Cell] value=<Cell v=3 /> />)
+    val popped = xs.pop()
+    print(100I32)
+}

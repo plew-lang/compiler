@@ -1,0 +1,20 @@
+// isolate: pop() and removeAt() with Ref elements.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn main() {
+    mut val xs: Array[Ref[Cell]] = []
+    xs.append(<Ref[Cell] value=<Cell v=1 /> />)
+    xs.append(<Ref[Cell] value=<Cell v=2 /> />)
+    xs.append(<Ref[Cell] value=<Cell v=3 /> />)
+    xs.pop()                 // discarded Optional[Ref]: expect deinit 3
+    print(100I32)
+    xs.removeAt(index: 0U64) // discarded Ref: expect deinit 1
+    print(200I32)
+}
+// expected: 3, 100, 1, 200, 2

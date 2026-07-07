@@ -886,8 +886,13 @@ pub impl Comp {
                 }
                 if rt.kind == 3 {
                     // a user method on `Array[E]` (`impl[T] Array[T] { … }`): resolve via
-                    // the "Array" receiver, then substitute a return type that is exactly
-                    // the type parameter T with the array's element type E.
+                    // the "Array" receiver, then GROUND the declared return under the
+                    // receiver's element (T = E, plus any method-own params inferred from
+                    // the call) — mirroring the generic-struct receiver arm above. The old
+                    // bare-`T`-only substitution left every COMPOUND return
+                    // (`pop() -> Optional[T]`) as the raw template span: the recorded
+                    // typed-IR slot was unusable, so a discarded or un-annotated result
+                    // was never classified for release (its deinit silently skipped).
                     val arrName: Bind = self.kwSpan(kw: "Array", kwLen: 5)
                     val mi: U64 = self.findMethod(recvStart: arrName.nameStart, recvLen: arrName.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     if mi == self.arena.funcs.count() {
@@ -895,21 +900,74 @@ pub impl Comp {
                     }
                     val mf: Func = self.arena.funcs[mi]
                     if mf.hasRet {
-                        if mf.typeParams.count() >= 1 {
-                            if mf.retTy < self.arena.types.count() {
-                                val rtt: TypeRef = self.arena.types[mf.retTy]
-                                if rtt.nameId == mf.typeParams[0].nameId {
-                                    // element result (`arr.get(i:) -> T`): prefer the
-                                    // STRUCTURED element ref off the carried `Array[E]`
-                                    // (a compound element's registered name is a mangle
-                                    // — `Entry_K_V` — meaningless as a name-ref).
-                                    if rt.ref != 0U64 && rt.ref < self.arena.types.count() {
-                                        val art: TypeRef = self.arena.types[rt.ref]
-                                        if art.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: art.nameStart, len: art.nameLen, kw: "Array") {
-                                            return self.typeInfoOfRef(ref: art.args[0])
-                                        }
+                        if mf.typeParams.count() >= 1 && mf.retTy != 0U64 && !(mf.retIsArray) {
+                            // the element ref E — only the STRUCTURED ref off the carried
+                            // `Array[E]` grounds (a compound element's registered name is a
+                            // mangle — `Entry_K_V` — and grounding through a name-minted ref
+                            // would record a garbage instance); a ref-less receiver falls to
+                            // the bare-`T` name substitution below, as before.
+                            mut val elemRef: U64 = 0
+                            if rt.ref != 0U64 && rt.ref < self.arena.types.count() {
+                                val art: TypeRef = self.arena.types[rt.ref]
+                                if art.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: art.nameStart, len: art.nameLen, kw: "Array") {
+                                    elemRef = art.args[0]
+                                }
+                            }
+                            if elemRef != 0U64 {
+                                mut val aargs: Array[U64] = []
+                                aargs.append(elemRef)
+                                if mf.typeParams.count() > 1U64 {
+                                    // method-own params beyond the impl's T, from the call
+                                    // (infer BEFORE swapping the env — inferFnArgs types the
+                                    // arguments via exprType under the CURRENT env).
+                                    val ainf: Array[U64] = self.inferFnArgs(f: mf, args: args)
+                                    mut val ak: U64 = 1
+                                    while ak < ainf.count() {
+                                        aargs.append(ainf[ak])
+                                        ak += 1
                                     }
-                                    return self.typeInfoOfName(start: rt.nameStart, len: rt.nameLen, isArray: false)
+                                }
+                                // an honest env (no inference hole) substitutes
+                                // unconditionally, like the generic-struct receiver arm —
+                                // a PARAMETRIC element (`Entry[K,V]` inside the template
+                                // body) legitimately yields a parametric result that the
+                                // typed-IR store grounds per instance at emission.
+                                mut val envOk: Bool = true
+                                mut val ac: U64 = 0
+                                while ac < aargs.count() {
+                                    if aargs[ac] == 0U64 {
+                                        envOk = false
+                                    }
+                                    ac += 1
+                                }
+                                if envOk {
+                                    val aSavedP: Array[Bind] = self.cur.typeParams
+                                    val aSavedA: Array[U64] = self.cur.typeArgs
+                                    self.cur.typeParams = mf.typeParams
+                                    self.cur.typeArgs = aargs
+                                    val agr: U64 = self.groundTypeRef(ref: mf.retTy)
+                                    self.cur.typeParams = aSavedP
+                                    self.cur.typeArgs = aSavedA
+                                    if agr != 0U64 {
+                                        return self.typeInfoOfRef(ref: agr)
+                                    }
+                                }
+                                // an inference hole: a bare-`T` return still substitutes the
+                                // structured element ref (the pre-grounding behavior).
+                                if mf.retTy < self.arena.types.count() {
+                                    if self.arena.types[mf.retTy].nameId == mf.typeParams[0].nameId {
+                                        return self.typeInfoOfRef(ref: elemRef)
+                                    }
+                                }
+                            }
+                            // a ref-less receiver: substitute a return that is EXACTLY the
+                            // type parameter T with the element's name (the pre-grounding
+                            // behavior — serves plain named elements only).
+                            if mf.retTy < self.arena.types.count() {
+                                if self.arena.types[mf.retTy].nameId == mf.typeParams[0].nameId {
+                                    if rt.nameLen > 0U64 {
+                                        return self.typeInfoOfName(start: rt.nameStart, len: rt.nameLen, isArray: false)
+                                    }
                                 }
                             }
                         }
