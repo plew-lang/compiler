@@ -384,7 +384,13 @@ pub impl LlvmCtx {
                 return self.genLlvmMatchExpr(c: inout c, scrut: scrut, arms: arms, exprId: id)
             }
             Expr.OptChain(val base, val memberStart, val memberLen) => {
-                return self.genLlvmOptChain(c: inout c, base: base, memberStart: memberStart, memberLen: memberLen)
+                // every `?.` is rewritten to the Chain trait's match desugar during the
+                // Mono scan (spec/12 — Optional included); an OptChain reaching emission
+                // means the receiver's type never resolved there. Loud > a bespoke
+                // inlining that silently diverges from the desugar's ARC (the deleted
+                // fast path leaked temp bases and double-released projected members).
+                c.errorAt(offset: c.exprOffset(id: base), msg: "internal: `?.` reached the backend undesugared — its receiver type did not resolve to a Chain conformer during monomorphization")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Try(val expr) => {
                 return self.genLlvmTry(c: inout c, expr: expr)

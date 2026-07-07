@@ -1,0 +1,25 @@
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+struct Holder {
+    pub val cell: Ref[Cell]
+    pub val other: Ref[Cell]
+}
+
+fn makeOpt() -> Optional[Holder] {
+    return <Optional.Some v=<Holder cell=<Ref value=<Cell v=77 /> /> other=<Ref value=<Cell v=88 /> /> /> />
+}
+
+fn main() {
+    val r: Optional[Ref[Cell]] = match makeOpt() {
+        Optional.Some(v: val h) => { give <Optional.Some v=h.cell /> }
+        Optional.None => { give <Optional.None /> }
+    }
+    write(s: "bound\n")
+    write(s: "end\n")
+}

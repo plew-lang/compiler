@@ -34,6 +34,12 @@ pub impl LlvmCtx {
                 val mark0: U64 = self.nLocals
                 self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
                 self.genLlvmBlock(c: inout c, id: arms[0].body)
+                // release the retained field binds on fall-through (they co-own the
+                // scrutinee's heap; a return inside the body dropped them via its
+                // unwind) before popping them off the stack.
+                if !(self.terminated) {
+                    self.dropScope(c: inout c, fromMark: mark0, excludeLi: sStructSentinel)
+                }
                 self.nLocals = mark0
                 if didSetS {
                     c.cur.typeParams = savedSP

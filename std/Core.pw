@@ -512,9 +512,10 @@ export trait Chain {
 }
 
 // Optional's own conformance is the identity: it already is the value-or-empty shape,
-// so `chain()` returns self and the factories rebuild Some/None. (The backend inlines
-// this identity case rather than emitting the trait calls — an observable-equivalent
-// optimization, not a special case in the language.)
+// so `chain()` returns self and the factories rebuild Some/None. `?.` on an Optional
+// rides the same match desugar as every other Chain conformer (a bespoke backend
+// inlining once claimed observable equivalence and was not — it broke the temp base's
+// destruction and the projected member's retain).
 pub impl[T] Optional[T] as Chain {
     type Value = T
     fn chain() -> Optional[T] { return self }

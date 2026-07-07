@@ -86,21 +86,41 @@ pub impl LlvmCtx {
         if arms.count() > 0U64 {
             if arms[0].isStruct {
                 val ssidx: U64 = self.exprStructIdx(c: inout c, id: scrut)
+                val structScrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
                 val savedSP: Array[Bind] = c.cur.typeParams
                 val savedSA: Array[U64] = c.cur.typeArgs
-                val didSetS: Bool = self.setStructEnv(c: inout c, ref: self.exprTypeRef(c: inout c, id: scrut))
+                val didSetS: Bool = self.setStructEnv(c: inout c, ref: structScrutRef)
                 val sslot0: LLVMValueRef = self.entryAlloca(ty: sty)
                 LLVMBuildStore(self.b, sv, sslot0)
+                // an owned temporary scrutinee: register it so it is released on every
+                // exit (mirrors the statement struct-match; a raw alloca leaked it).
+                val sStructSentinel: U64 = 18446744073709551615U64
+                mut val sStructTempLi: U64 = sStructSentinel
+                if !(exprAliasesPlace(c: inout c, id: scrut)) {
+                    self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot0, ty: sty, kind: 0U64, structIdx: ssidx, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: structScrutRef)
+                    sStructTempLi = self.nLocals - 1U64
+                }
                 val mark0: U64 = self.nLocals
                 self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
                 self.terminated = false
                 self.expectedTy = matchExpectedTy
                 self.genLlvmBlock(c: inout c, id: arms[0].body)
                 val rv: LLVMValueRef = self.giveValue
+                // release the retained field binds (they co-own the scrutinee's heap;
+                // the give value is already independent) before popping them.
+                if !(self.terminated) {
+                    self.dropScope(c: inout c, fromMark: mark0, excludeLi: sStructSentinel)
+                }
                 self.nLocals = mark0
                 if didSetS {
                     c.cur.typeParams = savedSP
                     c.cur.typeArgs = savedSA
+                }
+                if sStructTempLi != sStructSentinel {
+                    if !(self.terminated) {
+                        self.emitDeinitCall(c: inout c, li: sStructTempLi)
+                    }
+                    self.nLocals = sStructTempLi
                 }
                 return rv
             }
@@ -129,6 +149,19 @@ pub impl LlvmCtx {
         }
         val sslot: LLVMValueRef = self.entryAlloca(ty: sty)
         LLVMBuildStore(self.b, sv, sslot)
+        // An owned temporary scrutinee (a call/construction result — e.g. the `?.`
+        // desugar's `base.chain()`): the match is its only owner, so register it as an
+        // anonymous owned local, released on every exit — a diverging arm's return
+        // drops it via dropScope, and fall-through drops it at vmatch.end below
+        // (mirrors genLlvmMatch's statement protocol; leaving the raw alloca
+        // unregistered leaked the whole payload heap and silently skipped its
+        // deinits). A place scrutinee stays with its real owner.
+        val scrutSentinel: U64 = 18446744073709551615U64
+        mut val scrutTempLi: U64 = scrutSentinel
+        if !(exprAliasesPlace(c: inout c, id: scrut)) {
+            self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot, ty: sty, kind: 0U64, structIdx: scrutSentinel, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: scrutRef)
+            scrutTempLi = self.nLocals - 1U64
+        }
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vmatch.end"))
         mut val checkBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
@@ -195,104 +228,26 @@ pub impl LlvmCtx {
         }
         LLVMPositionBuilderAtEnd(self.b, contBB)
         self.terminated = false
-        // all arms diverged: the continuation is unreachable (the match never yields).
+        // all arms diverged: the continuation is unreachable (the match never yields);
+        // each arm's return unwind already dropped the owned scrutinee temp — just pop.
         if phiVals.count() == 0U64 {
             LLVMBuildUnreachable(self.b)
             self.terminated = true
+            if scrutTempLi != scrutSentinel {
+                self.nLocals = scrutTempLi
+            }
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val phi: LLVMValueRef = LLVMBuildPhi(self.b, LLVMTypeOf(phiVals[0]), anon())
         LLVMAddIncoming(phi, arrayCPtr(phiVals), arrayCPtr(phiBlocks), phiVals.count())
+        // release the owned scrutinee temp on the fall-through path (the arm values are
+        // independent — `give` copies places and the fromValue projection retains), then
+        // pop it so the enclosing statement's drain doesn't see it again.
+        if scrutTempLi != scrutSentinel {
+            self.emitDeinitCall(c: inout c, li: scrutTempLi)
+            self.nLocals = scrutTempLi
+        }
         return phi
-    }
-
-    // `base?.member` (spec/12): read the Optional `base`; `Some(v)` yields
-    // `Some(v.member)`, `None` yields `None` (short-circuit). Result is `Optional[U]`
-    // where U is the member field type. Couples to @Std/Core Optional. The base and
-    // result Optional instances must both be registered generic enums.
-    inout fn genLlvmOptChain(c: inout Comp, base: U64, memberStart: U64, memberLen: U64) -> LLVMValueRef {
-        // resolve the base Optional[T] instance via the LLVM-side type tracker (the
-        // typed-AST cache typeOf relies on isn't populated in this backend).
-        val baseRef: U64 = self.exprTypeRef(c: inout c, id: base)
-        val bge: U64 = self.genEnumSlot(c: inout c, ref: baseRef)
-        if bge >= self.genEnumRefs.count() {
-            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` base must be a registered Optional instance")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val beid: U64 = self.genEnumDefs[bge]
-        val bety: LLVMTypeRef = self.genEnumTys[bge]
-        val ed: EnumDef = c.arena.enums[beid]
-        val someB: Bind = c.kwSpan(kw: "Some", kwLen: 4U64)
-        val noneB: Bind = c.kwSpan(kw: "None", kwLen: 4U64)
-        val someVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: someB.nameStart, variantLen: someB.nameLen)
-        val noneVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: noneB.nameStart, variantLen: noneB.nameLen)
-        // the inner element struct (Optional's arg0) and the member field index.
-        val tRef: U64 = c.arena.types[baseRef].args[0]
-        val tName: TypeRef = c.arena.types[tRef]
-        val tSidx: U64 = c.structIndexByName(start: tName.nameStart, len: tName.nameLen)
-        if tSidx >= c.arena.structs.count() {
-            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` element must be a registered struct")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val fidx: U64 = structFieldIndex(c: inout c, sidx: tSidx, start: memberStart, len: memberLen)
-        if fidx >= c.arena.structs[tSidx].fields.count() {
-            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` element has no such field")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        // result Optional[U] where U is the member field's type: build the ref and find
-        // its registered instance (structural match in genEnumSlot).
-        val memberFd: FieldDef = c.arena.structs[tSidx].fields[fidx]
-        mut val uRef: U64 = memberFd.ty
-        if uRef == 0U64 {
-            val noArgs: Array[U64] = []
-            uRef = c.pushType(t: <TypeRef nameStart=memberFd.tyStart nameLen=memberFd.tyLen args=noArgs />)
-        }
-        mut val rArgs: Array[U64] = []
-        rArgs.append(uRef)
-        val rr: U64 = c.pushType(t: <TypeRef nameStart=ed.nameStart nameLen=ed.nameLen args=rArgs />)
-        val rge: U64 = self.genEnumSlot(c: inout c, ref: rr)
-        if rge >= self.genEnumRefs.count() {
-            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: `?.` result Optional instance is not registered")
-            return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        val reid: U64 = self.genEnumDefs[rge]
-        val rety: LLVMTypeRef = self.genEnumTys[rge]
-        val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
-        val sslot: LLVMValueRef = self.entryAlloca(ty: bety)
-        LLVMBuildStore(self.b, sv, sslot)
-        val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, bety, sslot, 0U64, anon()), anon())
-        val isSome: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), tag, LLVMConstInt(self.i64ty, someVi, 0I32), anon())
-        val resSlot: LLVMValueRef = self.entryAlloca(ty: rety)
-        val someBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "oc.some"))
-        val noneBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "oc.none"))
-        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "oc.end"))
-        LLVMBuildCondBr(self.b, isSome, someBB, noneBB)
-        // Some: extract the inner value (under base env), read its member, rebuild Some.
-        LLVMPositionBuilderAtEnd(self.b, someBB)
-        val savedP: Array[Bind] = c.cur.typeParams
-        val savedA: Array[U64] = c.cur.typeArgs
-        val didB: Bool = self.setEnumEnv(c: inout c, ref: baseRef)
-        val basePayloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: beid, vi: someVi)
-        if didB { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
-        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, basePayloadTy, LLVMBuildStructGEP2(self.b, bety, sslot, 1U64, anon()), anon())
-        val innerVal: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, 0U64, anon())
-        val memberVal: LLVMValueRef = LLVMBuildExtractValue(self.b, innerVal, fidx, anon())
-        val didR: Bool = self.setEnumEnv(c: inout c, ref: rr)
-        mut val someArgs: Array[LLVMValueRef] = []
-        someArgs.append(memberVal)
-        val someResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: someVi, payloadVals: someArgs)
-        if didR { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
-        LLVMBuildStore(self.b, someResult, resSlot)
-        LLVMBuildBr(self.b, contBB)
-        // None: rebuild None.
-        LLVMPositionBuilderAtEnd(self.b, noneBB)
-        mut val noneArgs: Array[LLVMValueRef] = []
-        val noneResult: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: reid, ety: rety, vi: noneVi, payloadVals: noneArgs)
-        LLVMBuildStore(self.b, noneResult, resSlot)
-        LLVMBuildBr(self.b, contBB)
-        LLVMPositionBuilderAtEnd(self.b, contBB)
-        self.terminated = false
-        return LLVMBuildLoad2(self.b, rety, resSlot, anon())
     }
 
     // `try expr` (spec/13): evaluate the Result `expr`; on `Err(e)` early-return the

@@ -336,25 +336,27 @@ pub impl Comp {
             Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { self.scanExprInsts(exprId: operand) }
             Expr.OptChain(val base, val memberStart, val memberLen) => {
                 self.scanExprInsts(exprId: base)
-                // a non-Optional `Chain` receiver: rewrite to the trait desugar (a match
-                // over `base.chain()` with `fromValue`/`empty`) and scan the new tree so
-                // its method/assoc instances are discovered. Optional keeps the backend
-                // fast path (an observable-equivalent inlining, not a special case).
+                // EVERY `Chain` receiver — Optional included — rewrites to the trait
+                // desugar (a match over `base.chain()` with `fromValue`/`empty`, spec/12)
+                // and the new tree is scanned so its method/assoc instances are
+                // discovered. Optional used to keep a bespoke backend inlining claimed
+                // observable-equivalent; it was not — it neither destroyed a temporary
+                // base (leak of the non-projected fields' heap) nor retained the
+                // projected member (double release with the base place). The desugar
+                // rides the match-scrutinee temp protocol, which does both.
                 val bt: TypeInfo = self.typeOf(id: base)
                 if bt.kind == 2 {
-                    if !(rangeEquals(bytes: self.arena.bytes, start: bt.nameStart, len: bt.nameLen, kw: "Optional")) {
-                        val chN: Bind = self.internBytes(s: "chain")
-                        if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
-                            self.rewriteOptChainToChainMatch(exprId: exprId, base: base, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
-                            self.scanExprInsts(exprId: exprId)
-                            // the result `Head[U]` and the no-arg `empty()` factory's
-                            // instance can't be inferred from arguments (empty has none),
-                            // so register them explicitly: U = member's type on the chain
-                            // Value (the receiver's first type arg, by the v1 assumption
-                            // that `type Value` is the first type parameter).
-                            self.registerChainResultInsts(exprId: exprId, baseRef: bt.ref, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
-                            return
-                        }
+                    val chN: Bind = self.internBytes(s: "chain")
+                    if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
+                        self.rewriteOptChainToChainMatch(exprId: exprId, base: base, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
+                        self.scanExprInsts(exprId: exprId)
+                        // the result `Head[U]` and the no-arg `empty()` factory's
+                        // instance can't be inferred from arguments (empty has none),
+                        // so register them explicitly: U = member's type on the chain
+                        // Value (the receiver's first type arg, by the v1 assumption
+                        // that `type Value` is the first type parameter).
+                        self.registerChainResultInsts(exprId: exprId, baseRef: bt.ref, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
+                        return
                     }
                 }
                 // register the Optional[U] result so its C struct is emitted.
