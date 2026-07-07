@@ -74,8 +74,11 @@ echo "== A. self-compile under ASan =="
 if ! ./plewc_asan src/_.pw > /dev/null 2>"$TMP/self.err"; then
     if grep -q "ERROR: AddressSanitizer" "$TMP/self.err"; then
         echo "  FAIL self-compile:"; grep -A3 "ERROR: AddressSanitizer" "$TMP/self.err" | head -8
-        fail=1
+    else
+        # a non-ASan failure (crash, reject) must not read as clean.
+        echo "  FAIL self-compile (non-ASan):"; head -3 "$TMP/self.err" | sed 's/^/  /'
     fi
+    fail=1
 fi
 [ "$fail" = 0 ] && echo "  clean"
 
@@ -111,16 +114,29 @@ c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
         echo "FAIL running $name: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
     elif grep -q "LeakSanitizer: detected memory leaks" "$err"; then
         echo "FAIL running $name: $(grep "SUMMARY: AddressSanitizer:" "$err" | head -1 | sed "s/.*SUMMARY: //")"
+    elif grep -q "detect_leaks is not supported" "$err"; then
+        # LSan unavailable would silently void the leak level of this gate.
+        echo "FAIL running $name: LeakSanitizer unavailable on this platform/toolchain"
     else
         echo "RAN $name"
     fi
 ' sh)
 cn=$(printf '%s' "$c_results" | grep -c '^RAN' || true)
 cfail=$(printf '%s' "$c_results" | grep -c '^FAIL' || true)
-if [ "$cfail" = 0 ]; then
+# every run test with an .out MUST reach execution: a worker that bails on a
+# compile/instrument/link failure (|| exit 0) would otherwise silently
+# vanish from coverage while the level still prints clean.
+expected=0
+for f in tests/run/*.pw; do
+    [ -f "tests/run/$(basename "$f" .pw).out" ] && expected=$((expected + 1))
+done
+if [ "$cfail" = 0 ] && [ "$cn" = "$expected" ]; then
     echo "  clean ($cn programs)"
 else
     printf '%s\n' "$c_results" | grep '^FAIL' | sed 's/^/  /'
+    if [ "$cn" != "$expected" ] && [ "$cfail" = 0 ]; then
+        echo "  FAIL: only $cn of $expected run tests reached execution (silent compile/instrument/link losses)"
+    fi
     fail=1
 fi
 

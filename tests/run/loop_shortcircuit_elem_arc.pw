@@ -1,0 +1,24 @@
+// Short-circuit RHS inside a loop (spec/03 ARC): the `xs[i].name` temp home's
+// store sits in a conditionally-executed BB, but the block-exit drop re-runs
+// every iteration. A skipped store must not re-release the previous iteration's
+// value — a drop CONSUMES the slot (double release / UAF without the re-zero).
+// This is the shape that once miscompiled the compiler itself one self-host
+// generation late; the assertion is the ASan gate.
+import @Std/Io with { print }
+
+struct Item { pub val name: String }
+
+fn main() {
+    mut val xs: Array[Item] = []
+    xs.append(<Item name="a" + "a" />)
+    xs.append(<Item name="b" + "b" />)
+    mut val i: U64 = 0
+    mut val hits: I64 = 0
+    while i < 4U64 {
+        if i % 2U64 == 0U64 && xs[i / 2U64].name != "zz" {
+            hits += 1
+        }
+        i += 1U64
+    }
+    print(hits)
+}

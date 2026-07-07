@@ -444,6 +444,15 @@ pub impl LlvmCtx {
                         }
                         if bindTref != 0U64 {
                             self.setLocalTypeRef(ref: bindTref)
+                            // a heap-carrying field bind (String / Ref / nested struct /
+                            // enum / any) is a fresh VALUE COPY sharing the field's heap:
+                            // retain it so the bind's scope-exit release (classifier-routed
+                            // via the typeRef just set) balances — mirrors the array
+                            // branch's rawbufRetain above. Without this the bind's drop and
+                            // the scrutinee owner's drop double-release the shared heap.
+                            if c.arcNeedsRelease(ref: bindTref) {
+                                self.valueArc(c: inout c, v: fv, typeRef: bindTref, retain: true)
+                            }
                         }
                     }
                 }

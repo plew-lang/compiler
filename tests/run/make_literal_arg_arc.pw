@@ -1,0 +1,17 @@
+// A plain construction (`<Bag …/>`, a Make carrying no recorded type) passed
+// directly as an argument, and as the value of a subscript-assign (indexSet
+// witness): the heap-owning temporary gets an anonymous owned home and drops at
+// block exit (leak regression pin; the assertion is the LeakSanitizer gate).
+import @Std/Io with { print }
+
+struct Bag { pub val label: String }
+
+fn tag(bag: Bag) -> String { return bag.label }
+
+fn main() {
+    print(tag(bag: <Bag label="h" + "i" />))   // hi
+    mut val xs: Array[Bag] = []
+    xs.append(<Bag label="a" + "x" />)
+    xs[0] = <Bag label="b" + "y" />            // Make literal through the indexSet witness
+    print(xs[0].label)                         // by
+}

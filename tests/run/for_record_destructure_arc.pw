@@ -1,0 +1,17 @@
+// Record-destructuring loop over elements CARRYING HEAP (spec/02,11 + spec/03):
+// same ARC contract as the struct form — the bound String field retains its
+// share, the owned element drops each iteration (leak/UAF regression pin; the
+// assertion is the ASan+LeakSanitizer gate).
+import @Std/Io with { print }
+
+fn main() {
+    mut val ps: Array[(name: String, n: I64)] = []
+    val p1: (name: String, n: I64) = (name: "a" + "b", n: 1)
+    ps.append(p1)
+    val p2: (name: String, n: I64) = (name: "c" + "d", n: 2)
+    ps.append(p2)
+    for (val name, val n) in ps {
+        print(name)     // ab, cd
+        print(n)        // 1, 2
+    }
+}

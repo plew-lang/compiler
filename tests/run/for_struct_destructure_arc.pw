@@ -1,0 +1,22 @@
+// Destructuring loop over structs CARRYING HEAP (spec/11 + spec/03 ARC): the
+// iterator hands each element over owned (+1); a heap field bind (String) is a
+// fresh value copy sharing the element's heap, so it must retain — and the
+// element itself needs its per-iteration owned home. Double release (bind drop +
+// element-home drop of the same buffer) is the regression this pins (ASan).
+import @Std/Io with { print }
+
+struct Person {
+    val name: String
+    val age: I64
+}
+
+fn main() {
+    // heap strings (concat), not literals (literals carry a sentinel rc)
+    val people: Array[Person] = [<Person name="ali" + "ce" age=30 />, <Person name="b" + "ob" age=40 />]
+    mut val sum: I64 = 0
+    for Person { val name, val age } in people {
+        print(name)
+        sum += age
+    }
+    print(sum)
+}

@@ -1,0 +1,20 @@
+// Field projection OUT OF AN OWNED TEMP (spec/03): `xs[i].name` / `f().name`
+// project a heap field out of a witness-owned (+1) element / call result — the
+// projected String is independently retained, so it survives both the temp's
+// block-exit drop and the retirement of the source element.
+import @Std/Io with { print }
+
+struct Item { pub val name: String }
+
+fn make() -> Item { return <Item name="fre" + "sh" /> }
+
+fn main() {
+    mut val xs: Array[Item] = []
+    xs.append(<Item name="fir" + "st" />)
+    val s: String = xs[0].name
+    xs[0] = <Item name="sec" + "ond" />   // retires the old element (releases its fields)
+    print(s)                              // first — UAF if the projection didn't retain
+    val t: String = make().name           // projection out of a call-result temp
+    print(t)                              // fresh
+    print(xs[0].name)                     // second
+}
