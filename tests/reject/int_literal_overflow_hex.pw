@@ -1,0 +1,5 @@
+// A hex literal beyond 2^64-1 is a clean compile error, not a compiler crash:
+// the same pre-accumulation overflow check as decimal, through the base-16 arm.
+fn main() {
+    val x: U64 = 0x1FFFFFFFFFFFFFFFF
+}

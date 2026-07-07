@@ -1600,7 +1600,10 @@ export fn emitLlvmRuntime() {
     write(s: "void plew_exit(long long code){ exit((int)code); }\n")
     write(s: "void plew_write_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); }\n")
     write(s: "void plew_eprint_raw(const char* d, long long n){ fwrite(d,1,(size_t)n,stderr); }\n")
-    write(s: "__attribute__((noreturn)) void plew_panic_raw(const char* d, long long n){ fputs(\"panic: \",stderr); fwrite(d,1,(size_t)n,stderr); fputc('\\n',stderr); exit(1); }\n")
+    // panic = abort (spec/11 "panic と発散"): print the message, then trap — no
+    // unwind, no exit-time flushing/handlers, no deinit. Every runtime panic
+    // funnels through this one kernel so the termination style cannot drift.
+    write(s: "__attribute__((noreturn)) void plew_panic_raw(const char* d, long long n){ fputs(\"panic: \",stderr); fwrite(d,1,(size_t)n,stderr); fputc('\\n',stderr); abort(); }\n")
     // print(x) formatters (textual form + newline), matching the Plew Format impls.
     write(s: "void plew_print_str(const char* d, long long n){ fwrite(d,1,(size_t)n,stdout); fputc('\\n',stdout); }\n")
     write(s: "void plew_print_i64(long long v){ printf(\"%lld\\n\", v); }\n")
@@ -1679,11 +1682,11 @@ export fn emitLlvmRuntime() {
     // move: each element's inline bytes (incl any heap reference) move intact, so no
     // element retain/release is needed (buffer-floor.md §5 relocation = memmove).
     write(s: "void plew_rawbuf_move(void* data, long long elemSize, long long dst, long long src, long long n){ if(n>0) memmove((char*)data+(size_t)(elemSize*dst),(char*)data+(size_t)(elemSize*src),(size_t)(elemSize*n)); }\n")
-    write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n){ fputs(\"panic: index out of bounds\\n\",stderr); exit(1); } }\n")
+    write(s: "void plew_bounds(long long i, long long n){ if(i<0||i>=n) plew_panic_raw(\"index out of bounds\",19); }\n")
     // overlapping `inout` (spec/03): two `inout` positions of one call resolved to the
     // SAME place at runtime (`arr[i]`/`arr[j]` with i==j, two Refs to one cell) — the
     // exclusivity the callee relies on does not hold, so panic loudly at the call.
-    write(s: "void plew_inout_overlap(void* a, void* b){ if(a&&a==b){ fputs(\"panic: overlapping inout: two inout positions of one call overlap in the same shared cell\\n\",stderr); exit(1); } }\n")
+    write(s: "void plew_inout_overlap(void* a, void* b){ if(a&&a==b) plew_panic_raw(\"overlapping inout: two inout positions of one call overlap in the same shared cell\",82); }\n")
     // checked integer arithmetic floor (overflow / divide-by-zero panic, spec/12):
     // the witness/compound paths call `plew_<w><Op>` instead of a raw IR op, so the
     // LLVM backend matches the C backend's loud overflow/div-zero behaviour.

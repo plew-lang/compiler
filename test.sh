@@ -30,6 +30,26 @@ PLEW_RT="$RT"
 PLEW_LD="$("$LC" --ldflags)"
 export PLEW_RT PLEW_LD
 
+# --- suite hygiene: every companion file must pair with a .pw and vice versa.
+#     A rename/delete that leaves an orphan .out (or a .pw without its golden)
+#     would otherwise silently drop that test from coverage — the runners skip
+#     unpaired files without a word. ---
+hygiene=""
+for f in tests/run/*.out tests/run/*.in tests/run/*.c; do
+    [ -f "$f" ] || continue
+    [ -f "${f%.*}.pw" ] || hygiene="$hygiene orphan:$f"
+done
+for pw in tests/run/*.pw; do
+    [ -f "${pw%.pw}.out" ] || hygiene="$hygiene no-golden:$pw"
+done
+for f in tests/panic/*.panic; do
+    [ -f "$f" ] || continue
+    [ -f "${f%.panic}.pw" ] || hygiene="$hygiene orphan:$f"
+done
+for pw in tests/panic/*.pw; do
+    [ -f "${pw%.pw}.panic" ] || hygiene="$hygiene no-golden:$pw"
+done
+
 # --- run/ : compile, link, run, compare stdout to the golden .out ---
 run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw); out="tests/run/$name.out"
@@ -46,14 +66,18 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
 ' sh)
 pass=$(printf '%s\n' "$run_results" | grep -c '^PASS' || true)
 fail=0; failed=""
+for n in $hygiene; do
+    fail=$((fail + 1)); failed="$failed $n"
+done
 for n in $(printf '%s\n' "$run_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
 done
 skip=0
 
-# --- panic/ : valid code that compiles and links but must ABORT at runtime with
-#     the expected panic text (overflow / div-by-zero / OOB / assert). The
-#     checked-arithmetic floor (plew_<w><Op>) is held to loud behaviour. ---
+# --- panic/ : valid code that compiles and links but must die by SIGABRT
+#     (panic = abort, spec/11) with the expected panic text on stderr
+#     (overflow / div-by-zero / OOB / assert). The checked-arithmetic floor
+#     (plew_<w><Op>) is held to loud behaviour. 134 = 128 + SIGABRT. ---
 panic_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     pw="$1"; [ -f "$pw" ] || exit 0
     name=$(basename "$pw" .pw)
@@ -62,20 +86,29 @@ panic_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     if ! ./plewc "$pw" > "$ll" 2>/dev/null; then echo "FAIL panic/$name(reject)"; exit 0; fi
     if ! clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL panic/$name(link)"; exit 0; fi
     code=0
-    "$bin" >/dev/null 2>"$perr" || code=$?
-    if [ "$code" -ne 0 ] && grep -qF "$want" "$perr"; then echo "PASS panic/$name"; else echo "FAIL panic/$name"; fi
+    # nested sh: the shell that reaps a SIGABRT child prints "Abort trap" on
+    # ITS stderr — run the binary one shell deeper so that note is droppable
+    # without touching the binary own stderr capture ($perr).
+    sh -c "\"\$1\" >/dev/null 2>\"\$2\"" sh "$bin" "$perr" 2>/dev/null || code=$?
+    if [ "$code" -eq 134 ] && grep -qF "$want" "$perr"; then echo "PASS panic/$name"; else echo "FAIL panic/$name(exit=$code)"; fi
 ' sh)
 ppass=$(printf '%s\n' "$panic_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$panic_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
 done
 
-# --- reject/ : spec-invalid code the FRONT-END must reject. The shared frontend
-#     (incl. the backend-independent acceptance pass verifyProgram) rejects these. ---
+# --- reject/ : spec-invalid code the FRONT-END must reject with a DIAGNOSTIC
+#     (clean nonzero exit). The shared frontend (incl. the backend-independent
+#     acceptance pass verifyProgram) rejects these. A compiler death by signal
+#     (>= 128, e.g. its own panic/abort) is a crash, not a rejection — FAIL. ---
 reject_results=$(printf '%s\n' tests/reject/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     pw="$1"; [ -f "$pw" ] || exit 0
     name=$(basename "$pw" .pw)
-    if ./plewc "$pw" > /dev/null 2>/dev/null; then echo "FAIL reject/$name(accepted)"; else echo "PASS reject/$name"; fi
+    code=0
+    sh -c "./plewc \"\$1\" >/dev/null 2>/dev/null" sh "$pw" 2>/dev/null || code=$?
+    if [ "$code" -eq 0 ]; then echo "FAIL reject/$name(accepted)"
+    elif [ "$code" -ge 128 ]; then echo "FAIL reject/$name(crash=$code)"
+    else echo "PASS reject/$name"; fi
 ' sh)
 rpass=$(printf '%s\n' "$reject_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$reject_results" | sed -n 's/^FAIL //p'); do
@@ -105,7 +138,11 @@ done
 pr_results=$(printf '%s\n' tests/partreject/*/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
     main="$1"; [ -f "$main" ] || exit 0
     name=$(basename "$(dirname "$main")")
-    if ./plewc "$main" > /dev/null 2>/dev/null; then echo "FAIL partreject/$name(accepted)"; else echo "PASS partreject/$name"; fi
+    code=0
+    sh -c "./plewc \"\$1\" >/dev/null 2>/dev/null" sh "$main" 2>/dev/null || code=$?
+    if [ "$code" -eq 0 ]; then echo "FAIL partreject/$name(accepted)"
+    elif [ "$code" -ge 128 ]; then echo "FAIL partreject/$name(crash=$code)"
+    else echo "PASS partreject/$name"; fi
 ' sh)
 prpass=$(printf '%s\n' "$pr_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$pr_results" | sed -n 's/^FAIL //p'); do

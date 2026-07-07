@@ -10,7 +10,7 @@
 #
 # The fix: `plewc --asan` stamps the host target triple and marks every DEFINED
 # function `sanitize_address`, so a downstream `opt -passes=asan` genuinely
-# instruments every load/store. This gate wires that pipeline at three levels:
+# instruments every load/store. This gate wires that pipeline at four levels:
 #
 #   A. self-compile — an instrumented `plewc_asan` compiles src/_.pw. The
 #      richest single exercise of the compiler's own ARC/CoW memory management.
@@ -18,6 +18,9 @@
 #      through the compiler; catches UAF/overflow in the compiler itself).
 #   C. run corpus — every tests/run program is compiled WITH --asan, linked, and
 #      run; catches UAF in GENERATED code (value ARC, the collections floor).
+#   D. panic corpus — every tests/panic program runs instrumented and must die
+#      by SIGABRT (panic = abort, spec/11) with its panic text and no ASan
+#      error before the trap; catches UAF on the panic path itself.
 #
 # Deterministic UAF slips through both the fixpoint check and ./test.sh (the
 # stale bytes usually still decode correctly), so this ASan gate is the only
@@ -136,6 +139,46 @@ else
     printf '%s\n' "$c_results" | grep '^FAIL' | sed 's/^/  /'
     if [ "$cn" != "$expected" ] && [ "$cfail" = 0 ]; then
         echo "  FAIL: only $cn of $expected run tests reached execution (silent compile/instrument/link losses)"
+    fi
+    fail=1
+fi
+
+echo "== D. panic corpus under ASan (abort paths) =="
+# detect_leaks stays 0 here: abort() never reaches LSan's exit-time sweep, so
+# leak checking on this corpus would be silently vacuous, not strict.
+# handle_abort=0 keeps ASan from reporting our INTENTIONAL abort as a crash;
+# genuine memory errors before the trap still report (and fail the level).
+d_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
+    f="$1"; name=$(basename "$f" .pw)
+    [ -f "tests/panic/$name.panic" ] || exit 0
+    ll="$TMP/d_$name.ll"; bin="$TMP/d_$name.bin"; err="$TMP/d_$name.err"
+    ./plewc --asan "$f" > "$ll" 2>/dev/null || exit 0
+    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || exit 0
+    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $PLEW_LD -o "$bin" 2>/dev/null || exit 0
+    want=$(cat "tests/panic/$name.panic")
+    code=0
+    # nested sh: drop the reaping shell own "Abort trap" note, keep $err intact.
+    sh -c "ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:handle_abort=0 \"\$1\" >/dev/null 2>\"\$2\"" sh "$bin" "$err" 2>/dev/null || code=$?
+    if grep -q "ERROR: AddressSanitizer" "$err"; then
+        echo "FAIL running $name: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
+    elif [ "$code" -ne 134 ] || ! grep -qF "$want" "$err"; then
+        echo "FAIL running $name: expected SIGABRT + panic text (exit=$code)"
+    else
+        echo "RAN $name"
+    fi
+' sh)
+dn=$(printf '%s' "$d_results" | grep -c '^RAN' || true)
+dfail=$(printf '%s' "$d_results" | grep -c '^FAIL' || true)
+dexpected=0
+for f in tests/panic/*.pw; do
+    [ -f "tests/panic/$(basename "$f" .pw).panic" ] && dexpected=$((dexpected + 1))
+done
+if [ "$dfail" = 0 ] && [ "$dn" = "$dexpected" ]; then
+    echo "  clean ($dn programs)"
+else
+    printf '%s\n' "$d_results" | grep '^FAIL' | sed 's/^/  /'
+    if [ "$dn" != "$dexpected" ] && [ "$dfail" = 0 ]; then
+        echo "  FAIL: only $dn of $dexpected panic tests reached execution (silent compile/instrument/link losses)"
     fi
     fail=1
 fi
