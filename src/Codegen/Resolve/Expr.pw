@@ -70,19 +70,20 @@ pub impl Comp {
         return scalarInfo()
     }
 
-    // The recorded result TypeRef of a desugared non-Optional `?.` at `exprId` (a Chain
-    // rewrite, set by registerChainResultInsts), or 0 if this node isn't one. Lets typeOf
-    // / exprTypeRef recover a Chain stage's type without re-deriving it from the rewritten
-    // match's internal bindings (needed for a nested `a?.x?.y`).
+    // The result TypeRef of a desugared non-Optional `?.` at `exprId` (a Chain
+    // rewrite), or 0 if this node isn't one — the site's PARAMETRIC result
+    // (ChainSite.stageRef) grounded under the ACTIVE env, so every generic
+    // instance reading the SHARED rewritten tree derives its own grounding (a
+    // stored grounded result would freeze the first instance's types into all
+    // later instantiations). Lets typeOf / exprTypeRef recover a Chain stage's
+    // type without re-deriving it from the rewritten match's internal bindings
+    // (needed for a nested `a?.x?.y`).
     inout fn chainResultRef(exprId: U64) -> U64 {
-        mut val i: U64 = 0
-        while i < self.decls.chainResults.count() {
-            if self.decls.chainResults[i].nameStart == exprId {
-                return self.decls.chainResults[i].fieldStart
-            }
-            i += 1
+        val site: ChainSite = self.chainSiteFor(exprId: exprId)
+        if site.stageRef == 0 {
+            return 0
         }
-        return 0
+        return self.groundTypeRef(ref: site.stageRef)
     }
 
     // The type of expression `id` — the typed-AST read path that codegen and the

@@ -226,12 +226,12 @@ pub impl LlvmCtx {
         if LLVMIsNull(p) == 0I32 {
             return p
         }
-        // not a place (a fresh value): materialize into a temp slot so a callee taking
-        // `inout`/`borrow` still gets a pointer (it mutates the copy, harmlessly).
-        val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: id)
-        val slot: LLVMValueRef = self.entryAlloca(ty: LLVMTypeOf(v))
-        LLVMBuildStore(self.b, v, slot)
-        return slot
+        // not a place: every caller is a WRITE-place path (placePtrOfWrite*), and the
+        // front-end restricts those to places — a fresh value reaching here would get
+        // an unregistered alloca (an ARC-classed value would silently leak), so fail
+        // loudly instead of materializing one.
+        c.errorAt(offset: c.exprOffset(id: id), msg: "internal error (compiler bug): a non-place expression reached the write-place pointer path — please report this")
+        return LLVMConstNull(self.ptrty)
     }
 
     // CoW gateway (1-0): before WRITING through a place (assignment target, `inout` arg,

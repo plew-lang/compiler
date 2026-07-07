@@ -1,0 +1,56 @@
+// `?.` inside a generic body: the Chain rewrite is SHARED by every fn instance,
+// so the stage's result type must ground per instance (chainSites records the
+// stage parametrically; a stored grounded result froze instance 1's types into
+// instance 2 — and a generic-struct chain Value once overflowed the compiler's
+// stack by registering the bare param name as a concrete type).
+import @Std/Io with { print }
+import @Std/Core
+
+struct BoxG[T] { pub val value: T }
+struct Pair[T] { pub val fst: BoxG[T] }
+
+// non-generic fn, generic-struct chain Value (BoxG[I64].value: T -> I64)
+fn peekOne(o: Optional[BoxG[I64]]) -> Optional[I64] {
+    return o?.value
+}
+
+// generic fn: one rewritten `?.`, two instantiations (I64 / String)
+fn peek[T](o: Optional[BoxG[T]]) -> Optional[T] {
+    return o?.value
+}
+
+// nested chain inside a generic body: both stages ground per instance
+fn deep[T](p: Optional[Pair[T]]) -> Optional[T] {
+    return p?.fst?.value
+}
+
+fn show(o: Optional[I64]) {
+    match o {
+        Optional.Some(val v) => { print(v) }
+        Optional.None => { print("none-i") }
+    }
+}
+
+fn showS(o: Optional[String]) {
+    match o {
+        Optional.Some(val v) => { print(v) }
+        Optional.None => { print("none-s") }
+    }
+}
+
+fn main() {
+    val one: Optional[BoxG[I64]] = <Optional.Some v=<BoxG[I64] value=7 /> />
+    show(o: peekOne(o: one))
+    val ia: Optional[BoxG[I64]] = <Optional.Some v=<BoxG[I64] value=41 /> />
+    show(o: peek(o: ia))
+    val ib: Optional[BoxG[String]] = <Optional.Some v=<BoxG[String] value="hello" /> />
+    showS(o: peek(o: ib))
+    val ic: Optional[BoxG[String]] = <Optional[BoxG[String]].None />
+    showS(o: peek(o: ic))
+    val pa: Optional[Pair[I64]] = <Optional.Some v=<Pair[I64] fst=<BoxG[I64] value=9 /> /> />
+    show(o: deep(p: pa))
+    val pb: Optional[Pair[String]] = <Optional.Some v=<Pair[String] fst=<BoxG[String] value="deep" /> /> />
+    showS(o: deep(p: pb))
+    val pc: Optional[Pair[String]] = <Optional[Pair[String]].None />
+    showS(o: deep(p: pc))
+}

@@ -823,8 +823,25 @@ export enum ArcClass {
 // = receiver type span). `assocBindings`: `type Item = Concrete` lines from
 // conformances. `pubFactories`: interned ids of types with a `pub factory`.
 // `namespaces`: `import @Std/Io` namespace binds. `importAliases`: `import …
-// with { real as alias }` rewrites. `chainResults`: result TypeRef of each
-// desugared `?.` (exprId→ref). `kwCache`: cached built-in name spans (O(1) kwSpan).
+// with { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
+// recorded PARAMETRICALLY (see ChainSite) so readers and per-instance
+// registration ground it under their own env — storing a grounded result would
+// freeze the first instance's grounding into every other instantiation of a
+// generic body. `kwCache`: cached built-in name spans (O(1) kwSpan).
+// One desugared `?.` stage (the Chain-trait match rewrite): keyed by the
+// rewritten MatchExpr's expr id. `stageRef` = the stage's result `Head[U]` and
+// `valueRef` = the receiver's chain Value V, both computed ONCE at rewrite time
+// with NO substitution env active — i.e. parametric inside a generic body — so
+// every reader (chainResultRef) and every fn instance's scan registration
+// (registerChainSiteInsts) grounds them under its own active env. stageRef == 0
+// never occurs on a real site (used as the lookup-miss sentinel).
+export struct ChainSite {
+    pub val exprId: U64
+    pub val stageRef: U64
+    pub val valueRef: U64
+}
+pub impl ChainSite { factory }
+
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val conforms: Array[Conform] = []
@@ -837,7 +854,7 @@ export struct Decls {
     pub mut val pubFactories: Array[U64] = []
     pub mut val namespaces: Array[Bind] = []
     pub mut val importAliases: Array[Bind] = []
-    pub mut val chainResults: Array[Bind] = []
+    pub mut val chainSites: Array[ChainSite] = []
     pub mut val kwCache: Array[Bind] = []
 }
 pub impl Decls { factory }
