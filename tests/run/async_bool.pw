@@ -1,0 +1,16 @@
+// Pin the Bool Promise payload through the type-erased i64 slot (sext i1 on
+// resolve, re-narrow on await) — the non-I64 corner of the supported set.
+import @Std/Io with { print }
+
+async fn flag() -> Promise[Bool] {
+    return true
+}
+
+async fn main() {
+    val b: Bool = await flag()
+    print(b)
+    val n: I64 = 1
+    if b {
+        print(n + 1)
+    }
+}

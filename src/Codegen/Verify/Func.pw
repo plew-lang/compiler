@@ -30,6 +30,16 @@ pub impl Comp {
                         }
                     }
                 }
+                // provisional guard (provisional.md): the async lowering passes the
+                // resolved value through ONE type-erased i64 promise slot
+                // (genLlvmAsyncReturn extendToI64 / await re-widens), so only
+                // integer/Bool payloads survive the round-trip today — anything else
+                // would emit invalid IR. Reject loudly instead.
+                if !(self.isIntType(start: rStart, len: rLen)) {
+                    if !(rangeEquals(bytes: self.arena.bytes, start: rStart, len: rLen, kw: "Bool")) {
+                        self.errorAt(offset: f.nameStart, msg: "an async fn can only return an integer or Bool for now (the Promise payload is passed through a type-erased i64 slot; String / struct / array / float payloads are not yet supported)")
+                    }
+                }
             }
             self.cur.retStart = rStart
             self.cur.retLen = rLen

@@ -1,0 +1,14 @@
+// An async fn's Promise payload rides a type-erased i64 slot (provisional):
+// a struct payload cannot survive that round-trip — loud reject, not invalid IR.
+struct Point {
+    pub val x: I64
+    pub val y: I64
+}
+
+async fn g() -> Promise[Point] {
+    return <Point x=1 y=2 />
+}
+
+async fn main() {
+    val p: Point = await g()
+}

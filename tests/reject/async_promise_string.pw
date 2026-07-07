@@ -1,0 +1,9 @@
+// An async fn's Promise payload rides a type-erased i64 slot (provisional):
+// a String payload cannot survive that round-trip — loud reject, not invalid IR.
+async fn g() -> Promise[String] {
+    return "hi"
+}
+
+async fn main() {
+    val s: String = await g()
+}
