@@ -48,15 +48,17 @@ RT="$TMP/rt.c"
 # arena; abort loudly on any real memory error so the gate fails fast.
 export ASAN_OPTIONS=detect_leaks=0:abort_on_error=0
 
+# Levels B/C fan out one test per worker (xargs -P); workers print one status
+# line each, aggregated after the barrier. Exported for the worker shells:
+JOBS="${PLEW_TEST_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}"
+PLEW_LD="$("$LC" --ldflags)"
+export TMP RT OPT CLANG PLEW_LD
+
 fail=0
 
-# Instrument one --asan .ll into a runnable binary. $1=in.ll $2=out.bin [$3=extra.c]
-# The instrumented file must keep a .ll extension — clang infers input language
-# from it (a .inst suffix would be handed to the linker as an object → error).
-build_instrumented() {
-    "$OPT" -passes=asan -S "$1" -o "$1.inst.ll" 2>/dev/null
-    "$CLANG" -fsanitize=address -w "$1.inst.ll" "$RT" ${3:-} $("$LC" --ldflags) -o "$2" 2>/dev/null
-}
+# Instrumentation note: the instrumented file must keep a .ll extension — clang
+# infers input language from it (a .inst suffix would be handed to the linker as
+# an object → error).
 
 echo "== building instrumented plewc_asan =="
 "$PLEWC" --asan src/_.pw > "$TMP/pc.ll"
@@ -76,36 +78,47 @@ fi
 [ "$fail" = 0 ] && echo "  clean"
 
 echo "== B. compile corpus under ASan =="
-bfail=0
-for f in tests/run/*.pw tests/reject/*.pw tests/panic/*.pw; do
-    ./plewc_asan "$f" > /dev/null 2>"$TMP/b.err" || true
-    if grep -q "ERROR: AddressSanitizer" "$TMP/b.err"; then
-        echo "  FAIL compiling $f:"; grep "ERROR: AddressSanitizer" "$TMP/b.err" | head -1
-        bfail=$((bfail + 1)); fail=1
+b_results=$(ls tests/run/*.pw tests/reject/*.pw tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
+    f="$1"; err="$TMP/b_$(printf "%s" "$f" | tr "/" "_").err"
+    ./plewc_asan "$f" > /dev/null 2>"$err" || true
+    if grep -q "ERROR: AddressSanitizer" "$err"; then
+        echo "FAIL compiling $f: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
     fi
-done
-[ "$bfail" = 0 ] && echo "  clean ($(ls tests/run/*.pw tests/reject/*.pw tests/panic/*.pw | wc -l | tr -d ' ') files)"
+' sh)
+bfail=$(printf '%s' "$b_results" | grep -c '^FAIL' || true)
+if [ "$bfail" = 0 ]; then
+    echo "  clean ($(ls tests/run/*.pw tests/reject/*.pw tests/panic/*.pw | wc -l | tr -d ' ') files)"
+else
+    printf '%s\n' "$b_results" | sed 's/^/  /'
+    fail=1
+fi
 
 echo "== C. run corpus under ASan =="
-cfail=0; cn=0
-for f in tests/run/*.pw; do
-    name=$(basename "$f" .pw)
-    out="tests/run/$name.out"
-    [ -f "$out" ] || continue
-    ll="$TMP/c.ll"; bin="$TMP/c.bin"
-    ./plewc --asan "$f" > "$ll" 2>/dev/null || continue
+c_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
+    f="$1"; name=$(basename "$f" .pw)
+    [ -f "tests/run/$name.out" ] || exit 0
+    ll="$TMP/c_$name.ll"; bin="$TMP/c_$name.bin"; err="$TMP/c_$name.err"
+    ./plewc --asan "$f" > "$ll" 2>/dev/null || exit 0
     extra_c=""; [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
-    build_instrumented "$ll" "$bin" "$extra_c" 2>/dev/null || continue
+    "$OPT" -passes=asan -S "$ll" -o "$ll.inst.ll" 2>/dev/null || exit 0
+    "$CLANG" -fsanitize=address -w "$ll.inst.ll" "$RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null || exit 0
     infile="tests/run/$name.in"
-    if [ -f "$infile" ]; then ./"$bin" < "$infile" > "$TMP/c.out" 2>"$TMP/c.err" || true
-    else "$bin" > "$TMP/c.out" 2>"$TMP/c.err" || true; fi
-    cn=$((cn + 1))
-    if grep -q "ERROR: AddressSanitizer" "$TMP/c.err"; then
-        echo "  FAIL running $name:"; grep "ERROR: AddressSanitizer" "$TMP/c.err" | head -1
-        cfail=$((cfail + 1)); fail=1
+    if [ -f "$infile" ]; then "$bin" < "$infile" > /dev/null 2>"$err" || true
+    else "$bin" > /dev/null 2>"$err" || true; fi
+    if grep -q "ERROR: AddressSanitizer" "$err"; then
+        echo "FAIL running $name: $(grep "ERROR: AddressSanitizer" "$err" | head -1)"
+    else
+        echo "RAN $name"
     fi
-done
-[ "$cfail" = 0 ] && echo "  clean ($cn programs)"
+' sh)
+cn=$(printf '%s' "$c_results" | grep -c '^RAN' || true)
+cfail=$(printf '%s' "$c_results" | grep -c '^FAIL' || true)
+if [ "$cfail" = 0 ]; then
+    echo "  clean ($cn programs)"
+else
+    printf '%s\n' "$c_results" | grep '^FAIL' | sed 's/^/  /'
+    fail=1
+fi
 
 echo "---"
 if [ "$fail" = 0 ]; then echo "ASan gate: PASS (all levels clean)"; else echo "ASan gate: FAIL"; fi
