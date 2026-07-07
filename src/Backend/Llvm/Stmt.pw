@@ -215,6 +215,14 @@ pub impl LlvmCtx {
                 mut val sidx: U64 = self.exprStructIdx(c: inout c, id: init)
                 if tyLen > 0U64 {
                     sidx = self.localStructIdxFor(c: inout c, start: tyStart, len: tyLen)
+                    // a bare type-param annotation (`val v: T` in a generic body): the
+                    // span "T" resolves to nothing — retry with the env-GROUNDED type's
+                    // name so the local is a real struct to field access AND to ARC.
+                    if sidx >= c.arena.structs.count() {
+                        if gty != 0U64 {
+                            sidx = self.localStructIdxFor(c: inout c, start: c.arena.types[gty].nameStart, len: c.arena.types[gty].nameLen)
+                        }
+                    }
                 }
                 // a generic struct instance (Box[I32]): point at the generic def (so
                 // field access works) and track the instance ref for substitution. `gty`
@@ -258,6 +266,20 @@ pub impl LlvmCtx {
                 // TypeRef so a call `g(n: 4)` resolves the closure signature.
                 if c.isFnType(ref: gty) {
                     tref = gty
+                }
+                // an ANNOTATED binding whose grounded type owns heap but matched no
+                // specific arm above (`val v: T` with T = a concrete struct/enum in a
+                // generic body — ArrayIter.next's handover local): track the grounded
+                // ref so the scope-exit drop classifies and releases it. Classifier-
+                // gated, so scalar-grounded annotations stay ref-less as before.
+                if tref == 0U64 {
+                    if tyLen > 0U64 {
+                        if gty != 0U64 {
+                            if c.arcNeedsRelease(ref: gty) {
+                                tref = gty
+                            }
+                        }
+                    }
                 }
                 // an un-annotated binding to a call returning a generic instance
                 // (`val r = makeBox()` -> Box[I64]): recover the instance ref + def so

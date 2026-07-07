@@ -194,7 +194,17 @@ pub impl LlvmCtx {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                     if fidx < c.arena.structs[sidx].fields.count() {
                         val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
-                        val raw: LLVMValueRef = LLVMBuildExtractValue(self.b, self.genLlvmExpr(c: inout c, id: base), fidx, anon())
+                        val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
+                        val raw: LLVMValueRef = LLVMBuildExtractValue(self.b, bv, fidx, anon())
+                        // projecting a field OUT OF AN OWNED TEMPORARY (`xs[i].items`,
+                        // `f().name`): home the base temp (block-exit drop) and RETAIN the
+                        // projected value so it is independently owned — exprAliasesPlace
+                        // answers false for this shape, so every consumer balances the +1.
+                        // A place base stays a plain borrow projection (no retain).
+                        val baseIsPlace: Bool = exprAliasesPlace(c: inout c, id: base)
+                        if !baseIsPlace {
+                            self.registerArgTemp(c: inout c, v: bv, typeRef: self.exprTypeRef(c: inout c, id: base))
+                        }
                         // a boxed (recursive) field holds a heap pointer; deref it to the
                         // boxed value. Ground the field's pointee type under the BASE's
                         // instance env first, so a recursive GENERIC field (`next:
@@ -215,7 +225,37 @@ pub impl LlvmCtx {
                                 c.cur.typeParams = savedBP
                                 c.cur.typeArgs = savedBA
                             }
-                            return LLVMBuildLoad2(self.b, pteTy, raw, anon())
+                            val pv: LLVMValueRef = LLVMBuildLoad2(self.b, pteTy, raw, anon())
+                            if !baseIsPlace {
+                                if c.arcNeedsRelease(ref: pg) {
+                                    self.valueArc(c: inout c, v: pv, typeRef: pg, retain: true)
+                                }
+                            }
+                            return pv
+                        }
+                        if !baseIsPlace {
+                            // mirrors emitRetainWitnessWalk's kernel: an array/Buffer
+                            // field retains its buffer directly (a span-only field ref
+                            // carries no structured Array[E] for the classifier);
+                            // everything else routes classifier + valueArc.
+                            val bRefP: U64 = self.exprTypeRef(c: inout c, id: base)
+                            val savedPP: Array[Bind] = c.cur.typeParams
+                            val savedPA: Array[U64] = c.cur.typeArgs
+                            val didSetP: Bool = self.setStructEnv(c: inout c, ref: bRefP)
+                            if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
+                                self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: raw))
+                            } else {
+                                val fg: U64 = c.arcFieldTy(f: fd)
+                                if fg != 0U64 {
+                                    if c.arcNeedsRelease(ref: fg) {
+                                        self.valueArc(c: inout c, v: raw, typeRef: fg, retain: true)
+                                    }
+                                }
+                            }
+                            if didSetP {
+                                c.cur.typeParams = savedPP
+                                c.cur.typeArgs = savedPA
+                            }
                         }
                         return raw
                     }

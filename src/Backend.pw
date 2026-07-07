@@ -645,7 +645,11 @@ fn checkedNameId(op: I64, unsigned: Bool, wi: U64) -> U64 {
 fn exprAliasesPlace(c: inout Comp, id: U64) -> Bool {
     match c.arena.exprs[id] {
         Expr.Ident(start: _, len: _) => { return true }
-        Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+        // a field projection is a place ONLY when its base is: `s.name` aliases the
+        // binding's storage, but `f().name` / `xs[i].name` projects out of an owned
+        // TEMPORARY — the emission homes the temp and retains the projected value
+        // (Expr.Field arm), so the consumer must treat it as owned, not borrowed.
+        Expr.Field(val base, nameStart: _, nameLen: _) => { return exprAliasesPlace(c: inout c, id: base) }
         // an element READ `outer[i]` is NOT a place alias: it routes through the
         // `index`/`get`/`at` witness (spec/12, collections.md E3), whose return
         // already RETAINED an ARC element (buffer-floor.md §4) — the value arrives

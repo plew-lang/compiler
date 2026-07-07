@@ -954,7 +954,19 @@ pub impl LlvmCtx {
                                 }
                             }
                         }
-                        if c.isRefInst(ref: gpf) || c.isWeakRefInst(ref: gpf) {
+                        // an `any P` / closure payload: same canonical path — the box / env
+                        // cell is rc'd, so embedding a PLACE (`Optional.Some(v)` in
+                        // ArrayIter.next) must rc++ it; the source local's scope-exit
+                        // release then balances (aliasing instead under-counted the box —
+                        // a UAF once both the loop's element release and the array's
+                        // element cascade dropped their shares).
+                        mut val gpfIsAnyOrFn: Bool = false
+                        if gpf != 0U64 {
+                            if gpf < c.arena.types.count() {
+                                gpfIsAnyOrFn = c.arena.types[gpf].isAny || c.isFnType(ref: gpf)
+                            }
+                        }
+                        if c.isRefInst(ref: gpf) || c.isWeakRefInst(ref: gpf) || gpfIsAnyOrFn {
                             // a `Ref[T]`/`WeakRef[T]` payload: route through consumeIntoOwned so
                             // the constructed enum CO-OWNS it (rc++ a place; a fresh `<Ref …/>` /
                             // `r.weak()` already owns its count and passes through). This is the

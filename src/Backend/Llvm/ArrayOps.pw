@@ -116,8 +116,14 @@ pub impl LlvmCtx {
     }
 
     // The element TypeRef of a `Buffer[T]` receiver (T), or 0 — a Buffer local or a Buffer
-    // struct field.
+    // struct field. GROUNDED under the enclosing instance env: `self.data` inside an
+    // `Array[T]` method body yields the bare param T, which the ARC classifier reads as
+    // scalar — an element retain/release would then silently skip (an `any` element's
+    // box under-counts, a UAF once a consumer releases its share). Grounding makes every
+    // consumer (element LLVM type, get-retain, set-release, CoW cascade) see the
+    // CONCRETE element class.
     inout fn bufElemRef(c: inout Comp, id: U64) -> U64 {
+        mut val er: U64 = 0
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
@@ -125,7 +131,7 @@ pub impl LlvmCtx {
                     val tr: U64 = self.locTypeRef[li]
                     if tr != 0U64 {
                         if c.arena.types[tr].args.count() > 0U64 {
-                            return c.arena.types[tr].args[0]
+                            er = c.arena.types[tr].args[0]
                         }
                     }
                 }
@@ -135,13 +141,18 @@ pub impl LlvmCtx {
                 if bsi < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: fns, len: fnl)
                     if fidx < c.arena.structs[bsi].fields.count() {
-                        return bufferFieldElemRef(c: inout c, f: c.arena.structs[bsi].fields[fidx])
+                        er = bufferFieldElemRef(c: inout c, f: c.arena.structs[bsi].fields[fidx])
                     }
                 }
             }
             _ => {}
         }
-        return 0U64
+        if er != 0U64 {
+            if c.cur.typeParams.count() > 0U64 {
+                er = c.groundTypeRef(ref: er)
+            }
+        }
+        return er
     }
 
     // The LLVM element type of a `Buffer[T]` receiver (i64 fallback).

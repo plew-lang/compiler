@@ -296,6 +296,12 @@ pub impl LlvmCtx {
                 compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
                 return
             }
+            // the iterator handed the ELEMENT over as an owned (+1) value; the
+            // destructure binds only its FIELDS (each retaining its own heap), so the
+            // element itself needs an anonymous owned home — dropScope releases it at
+            // each iteration's end (the single-variable branch's loop var plays this
+            // role in bindIterElem).
+            self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: xSlot, ty: xTy, kind: 0U64, structIdx: psidx, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: xRef)
             self.bindStructPattern(c: inout c, sidx: psidx, binds: binds, scrutTy: xTy, scrutSlot: xSlot)
         } else {
             self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)
@@ -418,6 +424,12 @@ pub impl LlvmCtx {
                 compileErrorAt(line: 0, msg: "LLVM backend: struct-destructure for-loop needs a registered struct pattern")
                 return
             }
+            // the iterator handed the ELEMENT over as an owned (+1) value; the
+            // destructure binds only its FIELDS (each retaining its own heap), so the
+            // element itself needs an anonymous owned home — dropScope releases it at
+            // each iteration's end (the single-variable branch's loop var plays this
+            // role in bindIterElem).
+            self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: xSlot, ty: xTy, kind: 0U64, structIdx: psidx, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: xRef)
             self.bindStructPattern(c: inout c, sidx: psidx, binds: binds, scrutTy: xTy, scrutSlot: xSlot)
         } else {
             self.bindIterElem(c: inout c, varStart: varStart, varLen: varLen, slot: xSlot, ty: xTy, xRef: xRef, xStart: xStart, xLen: xLen)

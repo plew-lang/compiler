@@ -255,6 +255,24 @@ pub impl LlvmCtx {
     // unique struct local whose type needs a deinit (own or a field's). The struct
     // value is loaded and destroyed recursively.
     inout fn emitDeinitCall(c: inout Comp, li: U64) {
+        self.emitDeinitCallValue(c: inout c, li: li)
+        // an ANONYMOUS temp home (registerArgTemp / loop-payload home, locLen == 0):
+        // its STORE may sit in a conditionally-executed BB (a short-circuit RHS, a `?.`
+        // arm) while this drop point re-runs on every iteration of an enclosing loop.
+        // The entry-block zero-init makes the FIRST unstored drop a no-op, but a re-run
+        // after a drop would release the consumed value AGAIN (double release / UAF).
+        // Invariant: a drop CONSUMES the slot — re-zero it, so any re-run without an
+        // intervening store releases zero (a no-op). Named locals need none of this
+        // (their Let store dominates their block's exit); a cell-home's locPtr is the
+        // rc'd cell itself, not an alloca to clear.
+        if self.locLen[li] == 0U64 {
+            if !(self.locCellHome[li]) {
+                LLVMBuildStore(self.b, LLVMConstNull(self.locTy[li]), self.locPtr[li])
+            }
+        }
+    }
+
+    inout fn emitDeinitCallValue(c: inout Comp, li: U64) {
         // skip a borrow/inout param (not owned here) or a value already moved out.
         if !(self.locOwned[li]) {
             return
