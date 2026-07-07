@@ -1,0 +1,19 @@
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+fn makeOpt() -> Optional[Ref[Cell]] {
+    return <Optional.Some v=<Ref value=<Cell v=8 /> /> />
+}
+
+fn main() {
+    match makeOpt() {
+        Optional.Some(v: val r) => { write(s: "some\n") }
+        Optional.None => { write(s: "none\n") }
+    }
+    write(s: "after\n")
+}

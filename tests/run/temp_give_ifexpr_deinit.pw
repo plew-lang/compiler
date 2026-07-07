@@ -1,0 +1,28 @@
+import @Std/Io with { print, write }
+
+unique struct R {
+    pub val t: I64
+    deinit { print(self.t) }
+}
+
+fn probe(res: borrow R) -> I64 {
+    return res.t + 100
+}
+
+fn main() {
+    val flag: Bool = true
+    val x: I64 = if flag {
+        give probe(res: <R t=3 />)
+    } else {
+        give 0
+    }
+    write(s: "after\n")
+    print(x)
+    val y: I64 = if probe(res: <R t=4 />) > 100 {
+        give 1
+    } else {
+        give 2
+    }
+    write(s: "after2\n")
+    print(y)
+}

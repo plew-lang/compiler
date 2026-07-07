@@ -1,0 +1,33 @@
+import @Std/Io with { print, write }
+
+unique struct R {
+    pub val t: I64
+    deinit { print(self.t) }
+}
+
+fn check(res: borrow R) -> Bool {
+    return res.t > 0
+}
+
+fn main() {
+    mut val i: I64 = 0
+    while i < 10 {
+        i += 1
+        if check(res: <R t=6 />) {
+            write(s: "breaking\n")
+            break
+        }
+        write(s: "unreached\n")
+    }
+    write(s: "after-break\n")
+    mut val j: I64 = 0
+    while j < 2 {
+        j += 1
+        if check(res: <R t=60 />) {
+            write(s: "continuing\n")
+            continue
+        }
+        write(s: "unreached\n")
+    }
+    write(s: "after-continue\n")
+}

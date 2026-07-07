@@ -5,7 +5,11 @@
 
 pub impl LlvmCtx {
     inout fn genLlvmIfExpr(c: inout Comp, cond: U64, thenBlk: U64, elseBlk: U64) -> LLVMValueRef {
+        val condMark: U64 = self.nLocals
         val cv: LLVMValueRef = self.genLlvmCond(c: inout c, id: cond)
+        // a condition is its own full expression (spec/03): its temporaries die before
+        // the branch (mirrors the statement `if` / the per-iteration `while` drain).
+        self.drainStmtTemps(c: inout c, fromMark: condMark)
         val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vif.then"))
         val elseBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vif.else"))
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vif.end"))

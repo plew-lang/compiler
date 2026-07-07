@@ -1,0 +1,26 @@
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+struct Box {
+    pub val r: Ref[Cell]
+}
+
+fn makeArr() -> Array[Box] {
+    mut val xs: Array[Box] = []
+    xs.append(<Box r=<Ref value=<Cell v=5 /> /> />)
+    xs.append(<Box r=<Ref value=<Cell v=6 /> /> />)
+    return xs
+}
+
+fn main() {
+    for b in makeArr() {
+        val n: I64 = b.r->v
+        print(n + 10)
+    }
+    write(s: "after\n")
+}

@@ -1,0 +1,20 @@
+import @Std/Io with { print, write }
+
+unique struct R {
+    pub val t: I64
+    deinit { print(self.t) }
+}
+
+fn probe(res: borrow R) -> I64 {
+    return res.t + 100
+}
+
+fn f() -> I64 {
+    return probe(res: <R t=9 />)
+}
+
+fn main() {
+    val x: I64 = f()
+    write(s: "after-call\n")
+    print(x)
+}

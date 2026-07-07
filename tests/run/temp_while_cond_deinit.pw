@@ -1,0 +1,19 @@
+import @Std/Io with { print, write }
+
+unique struct R {
+    pub val t: I64
+    deinit { print(self.t) }
+}
+
+fn below(res: borrow R, i: I64) -> Bool {
+    return i < res.t
+}
+
+fn main() {
+    mut val i: I64 = 0
+    while below(res: <R t=2 />, i: i) {
+        write(s: "body\n")
+        i += 1
+    }
+    write(s: "after\n")
+}

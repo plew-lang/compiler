@@ -866,7 +866,12 @@ pub impl LlvmCtx {
                 self.terminated = true
             }
             Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                val condMark: U64 = self.nLocals
                 val cv: LLVMValueRef = self.genLlvmCond(c: inout c, id: cond)
+                // a condition is its own full expression (spec/03): its temporaries die
+                // when the condition's evaluation ends — before the branch — never
+                // spanning the then/else body.
+                self.drainStmtTemps(c: inout c, fromMark: condMark)
                 val thenBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "then"))
                 val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "endif"))
                 mut val elseBB: LLVMBasicBlockRef = contBB

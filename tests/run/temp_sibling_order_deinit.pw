@@ -1,0 +1,16 @@
+import @Std/Io with { print, write }
+
+unique struct R {
+    pub val t: I64
+    deinit { print(self.t) }
+}
+
+fn merge(a: borrow R, b: borrow R) -> I64 {
+    return a.t + b.t
+}
+
+fn main() {
+    val x: I64 = merge(a: <R t=1 />, b: <R t=2 />)
+    write(s: "after\n")
+    print(x)
+}

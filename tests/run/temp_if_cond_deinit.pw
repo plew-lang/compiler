@@ -1,0 +1,17 @@
+import @Std/Io with { print, write }
+
+unique struct R {
+    pub val t: I64
+    deinit { print(self.t) }
+}
+
+fn check(res: borrow R) -> Bool {
+    return res.t > 0
+}
+
+fn main() {
+    if check(res: <R t=1 />) {
+        write(s: "then\n")
+    }
+    write(s: "after\n")
+}

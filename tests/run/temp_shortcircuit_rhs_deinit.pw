@@ -1,0 +1,22 @@
+import @Std/Io with { print, write }
+
+unique struct R {
+    pub val t: I64
+    deinit { print(self.t) }
+}
+
+fn check(res: borrow R) -> Bool {
+    return res.t > 0
+}
+
+fn main() {
+    mut val i: I64 = 0
+    while i < 2 {
+        if i == 1 && check(res: <R t=7 />) {
+            write(s: "then\n")
+        }
+        write(s: "iter-end\n")
+        i += 1
+    }
+    write(s: "after\n")
+}
