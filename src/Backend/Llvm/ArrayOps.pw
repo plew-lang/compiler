@@ -180,7 +180,7 @@ pub impl LlvmCtx {
 
     // `buf.count()`: the live-element count, read from the heap header.
     inout fn genLlvmBufferCount(c: inout Comp, recv: U64) -> LLVMValueRef {
-        return self.rawbufCount(c: inout c, data: self.genLlvmExpr(c: inout c, id: recv))
+        return self.rawbufCount(c: inout c, data: self.genBorrowedArg(c: inout c, argExpr: recv))
     }
 
     // `buf.append(value)`: grow the buffer if full, store the (place-copied) value at the
@@ -242,7 +242,7 @@ pub impl LlvmCtx {
     inout fn genLlvmBufferGet(c: inout Comp, recv: U64, indexExpr: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: recv)
         val er: U64 = self.bufElemRef(c: inout c, id: recv)
-        val data: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
+        val data: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: recv)
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)
         self.emitBoundsCheck(c: inout c, idx: idx, count: count)
@@ -257,12 +257,12 @@ pub impl LlvmCtx {
 
     // `buf.capacity()`: the allocated capacity, read from the header.
     inout fn genLlvmBufferCapacity(c: inout Comp, recv: U64) -> LLVMValueRef {
-        return self.rawbufCap(c: inout c, data: self.genLlvmExpr(c: inout c, id: recv))
+        return self.rawbufCap(c: inout c, data: self.genBorrowedArg(c: inout c, argExpr: recv))
     }
 
     // `buf.isEmpty()`: header count == 0 (yields an i1).
     inout fn genLlvmBufferIsEmpty(c: inout Comp, recv: U64) -> LLVMValueRef {
-        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: self.genLlvmExpr(c: inout c, id: recv))
+        val count: LLVMValueRef = self.rawbufCount(c: inout c, data: self.genBorrowedArg(c: inout c, argExpr: recv))
         return LLVMBuildICmp(self.b, llvmIntEq(), count, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
     }
 
@@ -282,7 +282,7 @@ pub impl LlvmCtx {
         if LLVMIsNull(slot) == 0I32 {
             data = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elemTy, elemRef: er)
         } else {
-            data = self.genLlvmExpr(c: inout c, id: recv)
+            data = self.genBorrowedArg(c: inout c, argExpr: recv)
         }
         val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
         val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: indexExpr)

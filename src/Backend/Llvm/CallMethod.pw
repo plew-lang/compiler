@@ -159,7 +159,8 @@ pub impl LlvmCtx {
         if mf.selfInout {
             av.append(self.placePtrOfWritePinned(c: inout c, id: recv))
         } else {
-            av.append(self.genLlvmExpr(c: inout c, id: recv))
+            // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
+            av.append(self.genBorrowedArg(c: inout c, argExpr: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count() {
@@ -297,7 +298,8 @@ pub impl LlvmCtx {
                     if smf.selfInout {
                         sav.append(self.placePtrOfWritePinned(c: inout c, id: recv))
                     } else {
-                        sav.append(self.genLlvmExpr(c: inout c, id: recv))
+                        // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
+                        sav.append(self.genBorrowedArg(c: inout c, argExpr: recv))
                     }
                     mut val sai: U64 = 0
                     while sai < args.count() {
@@ -382,7 +384,8 @@ pub impl LlvmCtx {
                             if emf.selfInout {
                                 eav.append(self.placePtrOfWritePinned(c: inout c, id: recv))
                             } else {
-                                eav.append(self.genLlvmExpr(c: inout c, id: recv))
+                                // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
+                                eav.append(self.genBorrowedArg(c: inout c, argExpr: recv))
                             }
                             mut val eai: U64 = 0
                             while eai < args.count() {
@@ -493,7 +496,8 @@ pub impl LlvmCtx {
         if mf.selfInout {
             av.append(self.placePtrOfWritePinned(c: inout c, id: recv))
         } else {
-            av.append(self.genLlvmExpr(c: inout c, id: recv))
+            // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
+            av.append(self.genBorrowedArg(c: inout c, argExpr: recv))
         }
         mut val ai: U64 = 0
         while ai < args.count() {
