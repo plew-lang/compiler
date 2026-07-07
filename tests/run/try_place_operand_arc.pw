@@ -1,0 +1,18 @@
+import @Std/Core
+import @Std/Io with { print }
+
+struct Fail { pub val msg: String }
+
+fn stage(r: Result[U64, Fail]) -> Result[U64, Fail] {
+    val n: U64 = try r
+    return <Result[U64, Fail].Ok value=n + 1U64 />
+}
+
+fn main() {
+    val bad: Result[U64, Fail] = <Result[U64, Fail].Err error=<Fail msg="bo" + "om" /> />
+    val out: Result[U64, Fail] = stage(r: bad)
+    print(out.isErr())
+    val good: Result[U64, Fail] = <Result[U64, Fail].Ok value=41U64 />
+    val out2: Result[U64, Fail] = stage(r: good)
+    print(out2.unwrapOr(fallback: 0U64))
+}

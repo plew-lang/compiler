@@ -182,6 +182,21 @@ pub impl LlvmCtx {
                         gty = c.groundTypeRef(ref: ty)
                     }
                 }
+                // the CLASSIFICATION ref for the tref arms below: the env-grounded
+                // annotation when there is one, else the initializer's own TypeRef. The
+                // class arms (Ref/WeakRef/Buffer/fn/Promise/any/enum) must classify an
+                // UN-annotated local too — classifying only the annotation left
+                // `val cell = tmp.cell` (a Ref-typed field read) ref-less, so its
+                // scope-exit release never fired and the pointee leaked (deinit skipped);
+                // same for an un-annotated enum-returning call's heap payload.
+                mut val clsRef: U64 = gty
+                if clsRef == 0U64 {
+                    if tyLen == 0U64 {
+                        if !(isArr) {
+                            clsRef = self.exprTypeRef(c: inout c, id: init)
+                        }
+                    }
+                }
                 if !(builtArr) {
                     // a let annotation provides the expected type so an un-suffixed JSX
                     // generic construction (`val o: Optional[I64] = <Optional.Some … />`)
@@ -242,30 +257,32 @@ pub impl LlvmCtx {
                 }
                 // a `Ref[T]` local: track the instance so `->` resolves the pointee
                 // struct (Ref isn't a registered generic struct/enum, so isGenericInst
-                // is false for it). These class checks use the env-GROUNDED `gty`: a
-                // bare-`T` annotation in a generic body (`val v: T` with T = Ref[Cell])
-                // must classify as its concrete class — checking the raw `ty` left tref
-                // 0 and the local's scope-exit release never fired (a leaked count per
-                // iterator handover).
-                if c.isRefInst(ref: gty) {
-                    tref = gty
+                // is false for it). These class checks use `clsRef` — the env-GROUNDED
+                // annotation, else the initializer's TypeRef: a bare-`T` annotation in a
+                // generic body (`val v: T` with T = Ref[Cell]) and an un-annotated
+                // Ref-valued binding (`val cell = tmp.cell`, `val r2 = r`) must both
+                // classify as their concrete class — a ref-less local's scope-exit
+                // release never fires (a leaked count per binding).
+                if c.isRefInst(ref: clsRef) {
+                    tref = clsRef
                 }
                 // a `WeakRef[T]` local: track the instance so `w.upgrade()` dispatches its
                 // opaque-intrinsic method and the weak-count drop fires at scope exit.
-                if c.isWeakRefInst(ref: gty) {
-                    tref = gty
+                if c.isWeakRefInst(ref: clsRef) {
+                    tref = clsRef
                 }
                 // a `Buffer[T]` local: track its type so the floor intrinsics recover
                 // the element type T (the buffer is just a data pointer).
-                if gty != 0U64 {
-                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[gty].nameStart, len: c.arena.types[gty].nameLen, kw: "Buffer") {
-                        tref = gty
+                if clsRef != 0U64 {
+                    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[clsRef].nameStart, len: c.arena.types[clsRef].nameLen, kw: "Buffer") {
+                        tref = clsRef
                     }
                 }
-                // a function-value local (`val g: fn(n: I32) -> I32 = …`): track the fn
-                // TypeRef so a call `g(n: 4)` resolves the closure signature.
-                if c.isFnType(ref: gty) {
-                    tref = gty
+                // a function-value local (`val g: fn(n: I32) -> I32 = …` or un-annotated
+                // `val g = makeAdder(...)`): track the fn TypeRef so a call `g(n: 4)`
+                // resolves the closure signature AND the scope-exit drop releases the env.
+                if c.isFnType(ref: clsRef) {
+                    tref = clsRef
                 }
                 // an ANNOTATED binding whose grounded type owns heap but matched no
                 // specific arm above (`val v: T` with T = a concrete struct/enum in a
@@ -303,11 +320,19 @@ pub impl LlvmCtx {
                     }
                 }
                 // a non-generic enum local: track a bare TypeRef so `==`/match recover
-                // the enum (typeOf can't see locals — c.cur.locals is unpopulated here).
+                // the enum (typeOf can't see locals — c.cur.locals is unpopulated here)
+                // AND the scope-exit drop releases a heap payload. The un-annotated
+                // variant (`val m = makeMsg()`) classifies via the initializer's ref.
                 if tref == 0U64 {
                     if tyLen > 0U64 {
                         if self.enumRegSlot(c: inout c, start: tyStart, len: tyLen) < self.genEnumRefs.count() {
                             tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
+                        }
+                    } else {
+                        if clsRef != 0U64 {
+                            if self.enumRegSlot(c: inout c, start: c.arena.types[clsRef].nameStart, len: c.arena.types[clsRef].nameLen) < self.genEnumRefs.count() {
+                                tref = clsRef
+                            }
                         }
                     }
                 }
@@ -335,26 +360,9 @@ pub impl LlvmCtx {
                 // (exprTypeRef sees isAny) and the local's scope-exit drop releases its
                 // owner count of the box (AnyBox class).
                 if tref == 0U64 {
-                    mut val ar: U64 = ty
-                    if ar == 0U64 {
-                        if tyLen == 0U64 {
-                            ar = self.exprTypeRef(c: inout c, id: init)
-                        }
-                    }
-                    if ar != 0U64 {
-                        if refIsAny(c: inout c, ref: ar) {
-                            tref = ar
-                        }
-                    }
-                }
-                // an un-annotated fn-typed binding (`val g = makeAdder(...)`): track the
-                // fn TypeRef so calls resolve AND the scope-exit drop releases the env
-                // (ClosureVal class; the annotated case is the isFnType arm above).
-                if tref == 0U64 {
-                    if tyLen == 0U64 {
-                        val fr: U64 = self.exprTypeRef(c: inout c, id: init)
-                        if c.isFnType(ref: fr) {
-                            tref = fr
+                    if clsRef != 0U64 {
+                        if refIsAny(c: inout c, ref: clsRef) {
+                            tref = clsRef
                         }
                     }
                 }
@@ -362,15 +370,9 @@ pub impl LlvmCtx {
                 // track its TypeRef so the local's scope-exit drop releases its owner
                 // count of the promise cell (PromiseCell class).
                 if tref == 0U64 {
-                    mut val pr: U64 = ty
-                    if pr == 0U64 {
-                        if tyLen == 0U64 {
-                            pr = self.exprTypeRef(c: inout c, id: init)
-                        }
-                    }
-                    if pr != 0U64 {
-                        match c.arcClassOfRef(ref: pr) {
-                            ArcClass.PromiseCell(inst: _) => { tref = pr }
+                    if clsRef != 0U64 {
+                        match c.arcClassOfRef(ref: clsRef) {
+                            ArcClass.PromiseCell(inst: _) => { tref = clsRef }
                             _ => {}
                         }
                     }
@@ -406,9 +408,8 @@ pub impl LlvmCtx {
                                 tref = c.simpleTypeRef(nameStart: tyStart, nameLen: tyLen)
                             }
                         } else {
-                            val sref: U64 = self.exprTypeRef(c: inout c, id: init)
-                            if self.structIdxOfRef(c: inout c, ref: sref) < c.arena.structs.count() {
-                                tref = sref
+                            if self.structIdxOfRef(c: inout c, ref: clsRef) < c.arena.structs.count() {
+                                tref = clsRef
                             }
                         }
                     }

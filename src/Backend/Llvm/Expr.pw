@@ -192,6 +192,14 @@ pub impl LlvmCtx {
                 val sidx: U64 = self.exprStructIdx(c: inout c, id: base)
                 if sidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
+                    if fidx >= c.arena.structs[sidx].fields.count() {
+                        // distinct from the unregistered-base error below: the base's struct
+                        // IS known, the field name just doesn't exist on it. Name the field —
+                        // a record-destructure shorthand bind spells the field's name, so a
+                        // typo there surfaces here (with an interned-span offset, alas).
+                        c.errorAt(offset: nameStart, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)")
+                        return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                    }
                     if fidx < c.arena.structs[sidx].fields.count() {
                         val fd: FieldDef = c.arena.structs[sidx].fields[fidx]
                         val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)

@@ -1,0 +1,54 @@
+// Un-annotated bindings whose class comes from the INITIALIZER's TypeRef (no
+// annotation to classify from): a Ref-typed field read, a Ref share, and a
+// heap-payload enum call result must all release at scope exit.
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+struct Rec {
+    pub val tag: String
+    pub val cell: Ref[Cell]
+}
+
+enum Msg {
+    Note(text: String)
+    Nothing
+}
+
+fn makeRec() -> Rec {
+    return <Rec tag="re" + "c" cell=<Ref value=<Cell v=3 /> /> />
+}
+
+fn makeMsg() -> Msg {
+    return <Msg.Note text="he" + "ap" />
+}
+
+fn fieldRead() {
+    val tmp = makeRec()
+    val cell = tmp.cell
+    print(cell->v)
+    write(s: "fieldRead-exit\n")
+}
+
+fn share() {
+    val r: Ref[Cell] = <Ref value=<Cell v=7 /> />
+    val r2 = r
+    print(r2->v)
+    write(s: "share-exit\n")
+}
+
+fn enumLocal() {
+    val m = makeMsg()
+    write(s: "enum-exit\n")
+}
+
+fn main() {
+    fieldRead()
+    share()
+    enumLocal()
+    write(s: "end\n")
+}

@@ -1,0 +1,30 @@
+// ATTACK: record destructure of a call result — does the Ref-typed bind's
+// pointee deinit ever run?
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+fn makeRec() -> (tag: String, cell: Ref[Cell]) {
+    return (tag: "re" + "c", cell: <Ref value=<Cell v=3 /> />)
+}
+
+fn helper() {
+    (val tag, val cell) = makeRec()
+    print(tag)
+    print(cell->v)
+    write(s: "helper-exit\n")
+    // deinit 3 must fire at helper scope exit
+}
+
+fn main() {
+    helper()
+    write(s: "post\n")
+    // named-local control: identical shape without destructure
+    val direct: Ref[Cell] = <Ref value=<Cell v=4 /> />
+    print(direct->v)
+    write(s: "end\n")
+}

@@ -1,0 +1,29 @@
+// Two record destructures of the same record type in one function: unique lowered
+// temps (__dtN), renamed binds via explicit field labels, and both Ref binds'
+// pointees deinit at scope exit (each exactly once).
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+fn makePair(a: I64, b: I64) -> (x: Ref[Cell], y: Ref[Cell]) {
+    return (x: <Ref value=<Cell v=a /> />, y: <Ref value=<Cell v=b /> />)
+}
+
+fn two() {
+    (val x, val y) = makePair(a: 1, b: 2)
+    print(x->v)
+    print(y->v)
+    (x: val p, y: val q) = makePair(a: 3, b: 4)
+    print(p->v)
+    print(q->v)
+    write(s: "two-exit\n")
+}
+
+fn main() {
+    two()
+    write(s: "A\n")
+}
