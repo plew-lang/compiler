@@ -1,0 +1,10 @@
+// A record field's generic-instance type participates in structural identity
+// at FULL depth: (a: BoxG[BoxG[I64]]) and (a: BoxG[BoxG[String]]) are distinct
+// record types, so the assignment must reject (no silent type confusion).
+struct BoxG[T] { pub val value: T }
+fn main() {
+    val r1 = (a: <BoxG[BoxG[I64]] value=<BoxG[I64] value=1 /> />)
+    val r2 = (a: <BoxG[BoxG[String]] value=<BoxG[String] value="s" /> />)
+    mut val m = r1
+    m = r2
+}

@@ -59,8 +59,8 @@ pub impl Comp {
             mut val fields: Array[FieldDef] = noFields
             mut val isExt: Bool = true
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "String") {
-                val u8nm: Bind = self.internBytes(s: "U8".bytes())
-                val bufnm: Bind = self.internBytes(s: "buffer".bytes())
+                val u8nm: Bind = self.internBytes(s: "U8")
+                val bufnm: Bind = self.internBytes(s: "buffer")
                 fields.append(<FieldDef nameStart=bufnm.nameStart nameLen=bufnm.nameLen nameId=intern(c: inout self, start: bufnm.nameStart, len: bufnm.nameLen) tyStart=u8nm.nameStart tyLen=u8nm.nameLen tyNameId=intern(c: inout self, start: u8nm.nameStart, len: u8nm.nameLen) tyIsArray=true ty=0U64 isMut=false hasDefault=false defaultVal=0U64 vis=0U64 />)
                 isExt = false
             }

@@ -204,8 +204,21 @@ pub impl Comp {
     }
 
     inout fn compatNamed(te: TypeRef, tin: TypeRef) -> Bool {
-        val eId: U64 = self.knownNamedTypeId(start: te.nameStart, len: te.nameLen)
-        val iId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
+        mut val eId: U64 = self.knownNamedTypeId(start: te.nameStart, len: te.nameLen)
+        mut val iId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
+        // a GENERIC struct head (`Box` of `Box[I64]`) is a known type identity too.
+        // knownNamedTypeId's struct lookup is concrete-only (its other callers gate
+        // method/conformance checks that route generics through their own machinery),
+        // so resolve the generic head here: instances of different generic defs are
+        // incompatible, and same-def instances compare their args below — without
+        // this, `Box[I64] = boxOfString` passed as "unknown head". (A generic ENUM
+        // head is already found by knownNamedTypeId's arity-blind enum loop.)
+        if eId == 0U64 {
+            eId = self.genericStructHeadId(start: te.nameStart, len: te.nameLen)
+        }
+        if iId == 0U64 {
+            iId = self.genericStructHeadId(start: tin.nameStart, len: tin.nameLen)
+        }
         if eId == 0U64 || iId == 0U64 {
             return true
         }
@@ -223,6 +236,19 @@ pub impl Comp {
             }
         }
         return true
+    }
+
+    // The interned name id of a GENERIC struct def head (`Box` of `struct Box[T]`),
+    // 0 when the span names no generic struct. compatNamed's identity supplement —
+    // see the comment there.
+    inout fn genericStructHeadId(start: U64, len: U64) -> U64 {
+        val si: U64 = self.structDefByNameAny(start: start, len: len)
+        if si < self.arena.structs.count() {
+            if self.arena.structs[si].typeParams.count() > 0U64 {
+                return self.arena.structs[si].nameId
+            }
+        }
+        return 0U64
     }
 
     inout fn exprIsVoidCall(id: U64) -> Bool {

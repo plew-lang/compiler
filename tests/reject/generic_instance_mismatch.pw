@@ -1,0 +1,10 @@
+// Two instances of the same generic def with different type arguments are
+// distinct types: assigning Box[String] into a Box[I64] place must reject.
+// compatNamed once treated a generic struct head as an "unknown" identity and
+// passed any instance pair — reading a String's pointer as I64 at runtime.
+struct BoxG[T] { pub val value: T }
+fn mkS() -> BoxG[String] { return <BoxG[String] value="s" /> }
+fn main() {
+    mut val x: BoxG[I64] = <BoxG[I64] value=1 />
+    x = mkS()
+}
