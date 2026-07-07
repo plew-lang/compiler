@@ -340,7 +340,7 @@ pub impl LlvmCtx {
         if igs < self.genStructRefs.count() {
             val isidx: U64 = self.genStructDefs[igs]
             if self.structNeedsDeinit(c: inout c, sidx: isidx) {
-                self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, iterTy, iterSlot, anon()), sidx: isidx)
+                self.emitDeinitValue(c: inout c, v: LLVMBuildLoad2(self.b, iterTy, iterSlot, anon()), sidx: isidx, ref: iterInstRef)
             }
         }
         if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }

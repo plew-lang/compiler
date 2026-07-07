@@ -41,16 +41,22 @@ pub impl LlvmCtx {
         return c.arcNeedsRelease(ref: c.findOrAddTypeRef(nameStart: sd.nameStart, nameLen: sd.nameLen))
     }
 
-    // The dropWit* slot for struct `sidx`, or dropWitSidx.count() if none declared yet.
-    inout fn dropWitSlot(sidx: U64) -> U64 {
+    // The dropWit* slot for genStruct* instance slot `reg`, or dropWitReg.count() if
+    // none declared yet. The drop-witness table is keyed by the INSTANCE slot (not the
+    // struct def sidx): a generic instance gets its own witness whose body is emitted
+    // under ITS substitution env, so every struct drop — concrete or generic instance —
+    // is a function CALL. That makes runtime recursion expressible: a boxed (recursive)
+    // field's cell release destroys its pointee by calling the same witness, which an
+    // inline walker (guarded by arcOnStack) could never encode.
+    inout fn dropWitSlot(reg: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.dropWitSidx.count() {
-            if self.dropWitSidx[i] == sidx {
+        while i < self.dropWitReg.count() {
+            if self.dropWitReg[i] == reg {
                 return i
             }
             i += 1
         }
-        return self.dropWitSidx.count()
+        return self.dropWitReg.count()
     }
 
     // The genStruct* slot for struct `sidx` — its 0-type-arg instance — or
@@ -69,37 +75,47 @@ pub impl LlvmCtx {
         return self.genStructRefs.count()
     }
 
-    // Ensure the per-type drop witness `void @pwdrop<sidx>(structVal)` is declared, and
-    // return its dropWit* slot. The body is emitted later (emitDropWitnessBodies). Caller
-    // must have checked `sidx` is a registered struct.
-    inout fn structDropWitness(c: inout Comp, sidx: U64) -> U64 {
-        val found: U64 = self.dropWitSlot(sidx: sidx)
-        if found < self.dropWitSidx.count() {
+    // Ensure the per-instance drop witness `void @pwdrop<reg>(structVal)` is declared,
+    // and return its dropWit* slot. The body is emitted later (emitDropWitnessBodies).
+    // `reg` is a genStruct* slot (caller resolved it).
+    inout fn structDropWitness(c: inout Comp, reg: U64) -> U64 {
+        val found: U64 = self.dropWitSlot(reg: reg)
+        if found < self.dropWitReg.count() {
             return found
         }
-        val reg: U64 = self.structSlotForSidx(c: inout c, sidx: sidx)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.genStructTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwdrop".bytes())
-        appendU64Dec(into: inout nm, n: sidx)
+        appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.dropWitSidx.append(sidx)
+        self.dropWitReg.append(reg)
         self.dropWitVal.append(fv)
         self.dropWitTy.append(fty)
-        return self.dropWitSidx.count() - 1U64
+        return self.dropWitReg.count() - 1U64
     }
 
     // Destroy a struct VALUE `v` of struct `sidx` (spec/03): run its own `deinit` body
     // first, then each field's deinit in declaration order, recursively. Routed through a
     // single per-type witness call (structDropWitness) so the recursive walker is emitted
     // ONCE per type instead of inlined at every drop site (collapsing the IR).
-    inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64) {
-        // registered struct: call its drop witness instead of inlining the walker.
-        if self.structSlotForSidx(c: inout c, sidx: sidx) < self.genStructRefs.count() {
-            val slot: U64 = self.structDropWitness(c: inout c, sidx: sidx)
+    inout fn emitDeinitValue(c: inout Comp, v: LLVMValueRef, sidx: U64, ref: U64) {
+        // registered struct / grounded generic instance: call its drop witness instead
+        // of inlining the walker. A grounded instance ref routes to ITS per-instance
+        // witness; ref 0 (callers with only a sidx) falls back to the 0-type-arg slot.
+        mut val reg: U64 = self.genStructRefs.count()
+        if ref != 0U64 {
+            if c.isGenericInst(ref: ref) {
+                reg = self.genStructSlot(c: inout c, ref: ref)
+            }
+        }
+        if reg >= self.genStructRefs.count() {
+            reg = self.structSlotForSidx(c: inout c, sidx: sidx)
+        }
+        if reg < self.genStructRefs.count() {
+            val slot: U64 = self.structDropWitness(c: inout c, reg: reg)
             mut val av: Array[LLVMValueRef] = []
             av.append(v)
             LLVMBuildCall2(self.b, self.dropWitTy[slot], self.dropWitVal[slot], arrayCPtr(av), 1U64, anon())
@@ -138,10 +154,10 @@ pub impl LlvmCtx {
         while i < sd.fields.count() {
             val fd: FieldDef = sd.fields[i]
             if c.fieldIsBoxed(f: fd) {
-                // a boxed (recursive) field is a shared box pointer — leaked-but-safe
-                // until boxed-pointee release lands. Walking it as if it were an inline
-                // struct value (the pre-classifier behavior when the name resolved) would
-                // mis-interpret the pointer as an aggregate.
+                // a boxed (recursive) field: CoW-shared rc'd cell — drop one owner, and
+                // at rc 0 destroy the pointee (witness-routed, so a recursive structure
+                // walks at runtime) then free the cell.
+                self.emitBoxedFieldRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, v, i, anon()), f: fd)
             } else if fd.tyIsArray || fieldIsBufferType(c: inout c, f: fd) {
                 // release the field's rc-managed array/Buffer buffer (its elements cascade
                 // when they own heap; scalar elements just free the buffer at rc 0). Sound
@@ -181,18 +197,26 @@ pub impl LlvmCtx {
         self.arcPop()
     }
 
-    // Emit the body of every declared drop witness `void @pwdrop<sidx>(structVal)`: the
-    // recursive destruction walker over its single struct-value parameter. Drained by a
-    // growing cursor — a walk may declare further sub-struct witnesses (appended to the
-    // tables), which this same loop then picks up. Called once after the main emit pass.
+    // Emit the body of every declared drop witness `void @pwdrop<reg>(structVal)`: the
+    // recursive destruction walker over its single struct-value parameter, grounded
+    // under the instance's own env (a no-op for a 0-type-arg concrete struct). Drained
+    // by a growing cursor — a walk may declare further sub-struct witnesses (appended to
+    // the tables), which this same loop then picks up. Called once after the main emit pass.
     inout fn emitDropWitnessBodies(c: inout Comp) {
-        while self.dropWitDone < self.dropWitSidx.count() {
+        while self.dropWitDone < self.dropWitReg.count() {
             val s: U64 = self.dropWitDone
-            val sidx: U64 = self.dropWitSidx[s]
+            val reg: U64 = self.dropWitReg[s]
             val fv: LLVMValueRef = self.dropWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitDropWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: sidx)
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            val didSet: Bool = self.setStructEnv(c: inout c, ref: self.genStructRefs[reg])
+            self.emitDropWitnessWalk(c: inout c, v: LLVMGetParam(fv, 0U64), sidx: self.genStructDefs[reg])
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
+            }
             LLVMBuildRetVoid(self.b)
             self.dropWitDone += 1
         }
@@ -200,10 +224,10 @@ pub impl LlvmCtx {
 
     // Whether any witness table has an undrained body pending (count past its cursor).
     inout fn witnessPending() -> Bool {
-        if self.dropWitDone < self.dropWitSidx.count() { return true }
+        if self.dropWitDone < self.dropWitReg.count() { return true }
         if self.retWitDone < self.retWitSidx.count() { return true }
         if self.copyWitDone < self.copyWitSidx.count() { return true }
-        if self.enumRelWitDone < self.enumRelWitEid.count() { return true }
+        if self.enumRelWitDone < self.enumRelWitReg.count() { return true }
         if self.enumRetWitDone < self.enumRetWitEid.count() { return true }
         if self.enumCopyWitDone < self.enumCopyWitEid.count() { return true }
         return false
@@ -343,7 +367,7 @@ pub impl LlvmCtx {
             return
         }
         val selfVal: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-        self.emitDeinitValue(c: inout c, v: selfVal, sidx: sidx)
+        self.emitDeinitValue(c: inout c, v: selfVal, sidx: sidx, ref: 0U64)
     }
 
     // Drop (deinit) the live locals in [fromMark, nLocals) in REVERSE declaration order

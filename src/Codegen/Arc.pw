@@ -147,7 +147,12 @@ pub impl Comp {
                 while i < sd.fields.count() {
                     if !need {
                         val fd: FieldDef = sd.fields[i]
-                        if !(self.fieldIsBoxed(f: fd)) {
+                        if self.fieldIsBoxed(f: fd) {
+                            // a boxed (recursive) field is an rc'd heap cell — the box
+                            // itself always releases (its pointee cascades at rc 0), so
+                            // the recursion through the pointee is not even consulted.
+                            need = true
+                        } else {
                             if fd.tyIsArray {
                                 need = true
                             } else {
@@ -192,7 +197,11 @@ pub impl Comp {
                     while fj < ed.variants[vi].fields.count() {
                         if !need {
                             val fd: FieldDef = ed.variants[vi].fields[fj]
-                            if !(self.fieldIsBoxed(f: fd)) {
+                            if self.fieldIsBoxed(f: fd) {
+                                // boxed payload = rc'd heap cell — always releases
+                                // (mirrors the struct arm above).
+                                need = true
+                            } else {
                                 if fd.tyIsArray {
                                     need = true
                                 } else {

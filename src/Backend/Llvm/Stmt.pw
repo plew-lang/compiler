@@ -522,11 +522,29 @@ pub impl LlvmCtx {
                                         // scalar-field tail below, never here.)
                                         if c.fieldIsBoxed(f: fld) {
                                             self.expectedTy = fld.ty
-                                            val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: value)
+                                            // a place RHS deep-copies (the fresh cell must own
+                                            // its heap independently of the source binding).
+                                            val bv: LLVMValueRef = self.copyValueIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: value), valueExpr: value)
                                             self.expectedTy = 0U64
+                                            val oldCell: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, gep, anon())
                                             val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(LLVMTypeOf(bv)), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
                                             LLVMBuildStore(self.b, bv, cell)
                                             LLVMBuildStore(self.b, cell, gep)
+                                            // drop the displaced owner AFTER the repoint (the
+                                            // RHS was deep-copied above, so destroying the old
+                                            // pointee cannot free anything the new cell shares).
+                                            // Ground the pointee under the BASE instance env
+                                            // (walker callers run inside witness bodies where
+                                            // the env is already set; this site runs in the
+                                            // enclosing fn's env).
+                                            val savedP: Array[Bind] = c.cur.typeParams
+                                            val savedA: Array[U64] = c.cur.typeArgs
+                                            val didSet: Bool = self.setStructEnv(c: inout c, ref: self.locTypeRef[li])
+                                            self.emitBoxedFieldRelease(c: inout c, cell: oldCell, f: fld)
+                                            if didSet {
+                                                c.cur.typeParams = savedP
+                                                c.cur.typeArgs = savedA
+                                            }
                                             return
                                         }
                                         // route through the single store choke point (owned

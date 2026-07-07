@@ -272,12 +272,18 @@ pub impl LlvmCtx {
         val ge: U64 = self.genEnumSlot(c: inout c, ref: ref)
         if ge < self.genEnumRefs.count() {
             // set the instance env so a payload field of type-param type (`Some(v: T)`,
-            // T -> Ref[Cell]) grounds in variantHasHeap / emitEnumRelease (fieldGroundedRefTy).
+            // T -> Ref[Cell]) grounds in the enumNeedsDeinit gate (fieldGroundedRefTy).
+            // The release itself is a CALL to the instance's witness (per-instance,
+            // emitted under this same env) — never an inline walk, so a recursive
+            // (boxed) payload releases by the witness calling itself at runtime.
             val savedP: Array[Bind] = c.cur.typeParams
             val savedA: Array[U64] = c.cur.typeArgs
             val didSet: Bool = self.setEnumEnv(c: inout c, ref: ref)
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[ge]) {
-                self.emitEnumRelease(c: inout c, v: v, eid: self.genEnumDefs[ge], ety: self.genEnumTys[ge])
+                val slot: U64 = self.enumReleaseWitness(c: inout c, reg: ge)
+                mut val av: Array[LLVMValueRef] = []
+                av.append(v)
+                LLVMBuildCall2(self.b, self.enumRelWitTy[slot], self.enumRelWitVal[slot], arrayCPtr(av), 1U64, anon())
             }
             if didSet {
                 c.cur.typeParams = savedP
@@ -289,7 +295,7 @@ pub impl LlvmCtx {
         val reg: U64 = self.enumRegSlot(c: inout c, start: t.nameStart, len: t.nameLen)
         if reg < self.genEnumRefs.count() {
             if self.enumNeedsDeinit(c: inout c, eid: self.genEnumDefs[reg]) {
-                val slot: U64 = self.enumReleaseWitness(c: inout c, eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
+                val slot: U64 = self.enumReleaseWitness(c: inout c, reg: reg)
                 mut val av: Array[LLVMValueRef] = []
                 av.append(v)
                 LLVMBuildCall2(self.b, self.enumRelWitTy[slot], self.enumRelWitVal[slot], arrayCPtr(av), 1U64, anon())
@@ -334,25 +340,27 @@ pub impl LlvmCtx {
         return v
     }
 
-    // Whether variant `vi` of enum `eid` has a non-boxed heap-owning field. Boxed
-    // (recursive) fields are skipped — shared box pointers, leaked-but-safe (also breaks
-    // codegen recursion for recursive enums, so no arcStack guard is needed here). Each
-    // field grounds under the CURRENT env (caller — emitEnumReleaseRef etc. — has set
-    // the enum instance env) and gates on the classifier's recursive needs-heap answer
-    // (arcNeedsRelease): the old name-check chain missed enum payloads and
-    // generic-instance struct payloads entirely (their heap was silently skipped).
+    // Whether variant `vi` of enum `eid` has a heap-owning field. A boxed (recursive)
+    // field is an rc'd heap cell — the box itself always releases, so it answers true
+    // without consulting the pointee (which also keeps this predicate loop-free for
+    // recursive enums; no arcStack guard needed). Each other field grounds under the
+    // CURRENT env (caller — emitEnumReleaseRef etc. — has set the enum instance env)
+    // and gates on the classifier's recursive needs-heap answer (arcNeedsRelease): the
+    // old name-check chain missed enum payloads and generic-instance struct payloads
+    // entirely (their heap was silently skipped).
     inout fn variantHasHeap(c: inout Comp, eid: U64, vi: U64) -> Bool {
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         mut val fj: U64 = 0
         while fj < fs.count() {
             val fd: FieldDef = fs[fj]
-            if !(c.fieldIsBoxed(f: fd)) {
-                if fd.tyIsArray {
-                    return true
-                }
-                if c.arcNeedsRelease(ref: c.arcFieldTy(f: fd)) {
-                    return true
-                }
+            if c.fieldIsBoxed(f: fd) {
+                return true
+            }
+            if fd.tyIsArray {
+                return true
+            }
+            if c.arcNeedsRelease(ref: c.arcFieldTy(f: fd)) {
+                return true
             }
             fj += 1
         }
@@ -373,8 +381,9 @@ pub impl LlvmCtx {
 
     // Release the heap held by enum value `v` (LLVM type `ety`) of enum `eid`: store it,
     // load the tag, and for each variant that owns heap, branch on `tag == vi`, reinterpret
-    // the payload area as that variant's struct, and release each non-boxed array/struct
-    // field. (Boxed/Ref/scalar fields are left — leaked-but-safe, like struct ARC.)
+    // the payload area as that variant's struct, and release each field's heap — a boxed
+    // payload drops one cell owner (pointee destroyed at rc 0), everything else routes
+    // through the classifier.
     inout fn emitEnumRelease(c: inout Comp, v: LLVMValueRef, eid: U64, ety: LLVMTypeRef) {
         // break codegen recursion for a self-referential enum reached through a non-boxed
         // array element (`ExprAst.ArrayLit(elems: Array[ExprAst])`): keyed by enum id in the
@@ -401,7 +410,11 @@ pub impl LlvmCtx {
                 mut val fj: U64 = 0
                 while fj < fs.count() {
                     val fd: FieldDef = fs[fj]
-                    if !(c.fieldIsBoxed(f: fd)) {
+                    if c.fieldIsBoxed(f: fd) {
+                        // a boxed (recursive) payload: drop one owner of its cell; at rc 0
+                        // the pointee is destroyed (witness-routed runtime recursion).
+                        self.emitBoxedFieldRelease(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()), f: fd)
+                    } else {
                         if fd.tyIsArray {
                             val fv: LLVMValueRef = LLVMBuildExtractValue(self.b, pv, fj, anon())
                             val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
@@ -467,7 +480,11 @@ pub impl LlvmCtx {
                 mut val fj: U64 = 0
                 while fj < fs.count() {
                     val fd: FieldDef = fs[fj]
-                    if !(c.fieldIsBoxed(f: fd)) {
+                    if c.fieldIsBoxed(f: fd) {
+                        // a boxed (recursive) payload: bump the cell rc (shallow CoW-share),
+                        // balanced by emitBoxedFieldRelease in the release twin.
+                        self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
+                    } else {
                         if fd.tyIsArray {
                             self.rawbufRetain(c: inout c, cell: self.arrValData(c: inout c, arr: LLVMBuildExtractValue(self.b, pv, fj, anon())))
                         } else {
@@ -511,41 +528,57 @@ pub impl LlvmCtx {
     // byte-for-byte the inline walker, just moved into a function. Declared on demand at a
     // site, bodies drained after the main pass by a growing cursor.
 
-    inout fn enumRelWitSlot(eid: U64) -> U64 {
+    // The release-witness table is keyed by the genEnum* INSTANCE slot (not the enum id):
+    // a generic instance (`Optional[Node[I64]]`) gets its own witness whose body is
+    // emitted under ITS substitution env, so every enum release — concrete or generic
+    // instance — is a function CALL. That makes runtime recursion expressible: a boxed
+    // (recursive) payload's cell release destroys its pointee by calling the same
+    // witness, which an inline walker (guarded by arcOnStack) could never encode.
+    inout fn enumRelWitSlot(reg: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.enumRelWitEid.count() {
-            if self.enumRelWitEid[i] == eid {
+        while i < self.enumRelWitReg.count() {
+            if self.enumRelWitReg[i] == reg {
                 return i
             }
             i += 1
         }
-        return self.enumRelWitEid.count()
+        return self.enumRelWitReg.count()
     }
-    inout fn enumReleaseWitness(c: inout Comp, eid: U64, ety: LLVMTypeRef) -> U64 {
-        val found: U64 = self.enumRelWitSlot(eid: eid)
-        if found < self.enumRelWitEid.count() {
+    inout fn enumReleaseWitness(c: inout Comp, reg: U64) -> U64 {
+        val found: U64 = self.enumRelWitSlot(reg: reg)
+        if found < self.enumRelWitReg.count() {
             return found
         }
         mut val ptys: Array[LLVMTypeRef] = []
-        ptys.append(ety)
+        ptys.append(self.genEnumTys[reg])
         val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pwenumrel".bytes())
-        appendU64Dec(into: inout nm, n: eid)
+        appendU64Dec(into: inout nm, n: reg)
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.enumRelWitEid.append(eid)
+        self.enumRelWitReg.append(reg)
         self.enumRelWitVal.append(fv)
         self.enumRelWitTy.append(fty)
-        return self.enumRelWitEid.count() - 1U64
+        return self.enumRelWitReg.count() - 1U64
     }
     inout fn emitEnumReleaseWitnessBodies(c: inout Comp) {
-        while self.enumRelWitDone < self.enumRelWitEid.count() {
+        while self.enumRelWitDone < self.enumRelWitReg.count() {
             val s: U64 = self.enumRelWitDone
+            val reg: U64 = self.enumRelWitReg[s]
             val fv: LLVMValueRef = self.enumRelWitVal[s]
             self.curFn = fv
             self.beginFnBody(fv: fv)
-            self.emitEnumRelease(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.enumRelWitEid[s], ety: self.genEnumTys[self.enumRegSlotByEid(c: inout c, eid: self.enumRelWitEid[s])])
+            // ground payload fields under the instance's own env (a no-op for a
+            // 0-type-arg concrete enum).
+            val savedP: Array[Bind] = c.cur.typeParams
+            val savedA: Array[U64] = c.cur.typeArgs
+            val didSet: Bool = self.setEnumEnv(c: inout c, ref: self.genEnumRefs[reg])
+            self.emitEnumRelease(c: inout c, v: LLVMGetParam(fv, 0U64), eid: self.genEnumDefs[reg], ety: self.genEnumTys[reg])
+            if didSet {
+                c.cur.typeParams = savedP
+                c.cur.typeArgs = savedA
+            }
             LLVMBuildRetVoid(self.b)
             self.enumRelWitDone += 1
         }
@@ -705,7 +738,12 @@ pub impl LlvmCtx {
                 mut val fj: U64 = 0
                 while fj < fs.count() {
                     val fd: FieldDef = fs[fj]
-                    if !(c.fieldIsBoxed(f: fd)) {
+                    if c.fieldIsBoxed(f: fd) {
+                        // a boxed (recursive) payload: the copy CoW-SHARES the cell and
+                        // retains it (a whole-field repoint allocates a fresh cell, so a
+                        // sharer never observes mutation).
+                        self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
+                    } else {
                         if fd.tyIsArray {
                             val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
                             mut val ety2: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
@@ -846,8 +884,9 @@ pub impl LlvmCtx {
                     continue
                 }
                 // a boxed (recursive) field: build the payload value, heap-allocate a
-                // cell, store the value, and put the cell pointer in the payload. (No
-                // refcount/free yet — leaky, but observably correct, like Ref.)
+                // FRESH cell (rc=1 — this construction is its first owner), store the
+                // value, and put the cell pointer in the payload. Copies share+retain
+                // the cell; the last owner's drop destroys the pointee and frees it.
                 if c.fieldIsBoxed(f: fs[fj]) {
                     // ground the boxed field type under the env so a recursive GENERIC enum
                     // payload (`Node(l: Tree[T], r: Tree[T])` in `Tree[I64]`) grounds to the
@@ -920,11 +959,17 @@ pub impl LlvmCtx {
                         } else if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
                             self.expectedTy = gpf
                             val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
-                            // a generic enum payload with heap (`A(o: Optional[Array[I64]])`)
-                            // from a place: CoW-SHARE its active variant's heap (rc++); the
-                            // gateway CoWs before any later mutation. Mirrors consumeIntoOwned.
+                            // a generic-instance payload with heap (`A(o: Optional[Array])`,
+                            // `Some(v: Node[I64])`) from a place: CoW-SHARE its heap (rc++)
+                            // through the classifier's retain action — enum AND struct
+                            // instances alike (the old emitEnumRetainRef was a silent no-op
+                            // for a struct instance, so its boxed cell / buffers were never
+                            // co-owned — double-free at the two owners' drops). The gateway
+                            // CoWs before any later mutation. Mirrors consumeIntoOwned.
                             if exprAliasesPlace(c: inout c, id: valExpr) {
-                                self.emitEnumRetainRef(c: inout c, v: giv, ref: gpf)
+                                if c.arcNeedsRelease(ref: gpf) {
+                                    self.valueArc(c: inout c, v: giv, typeRef: gpf, retain: true)
+                                }
                             }
                             agg = LLVMBuildInsertValue(self.b, agg, giv, fj, anon())
                         } else {
