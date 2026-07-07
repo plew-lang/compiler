@@ -330,15 +330,14 @@ pub impl Comp {
     // returned id is reused for both the read and the write of the desugared compound assign.
     inout fn rebuildPlaceTemping(e: ExprAst, stmts: inout Array[U64]) -> U64 {
         match e {
-            ExprAst.Field(val base, val name, span: _) => {
+            ExprAst.Field(val base, val name, val nameSpan, span: _) => {
+                // SOURCE span for the name (see lowerExpr's Field arm).
                 val b: U64 = self.rebuildPlaceTemping(e: base, stmts: inout stmts)
-                val nm: Bind = self.internBytes(s: name)
-                return self.pushExpr(e: <Expr.Field base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+                return self.pushExpr(e: <Expr.Field base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
-            ExprAst.Arrow(val base, val name, span: _) => {
+            ExprAst.Arrow(val base, val name, val nameSpan, span: _) => {
                 val b: U64 = self.rebuildPlaceTemping(e: base, stmts: inout stmts)
-                val nm: Bind = self.internBytes(s: name)
-                return self.pushExpr(e: <Expr.Arrow base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+                return self.pushExpr(e: <Expr.Arrow base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
             ExprAst.Index(val base, val index, span: _) => {
                 val b: U64 = self.rebuildPlaceTemping(e: base, stmts: inout stmts)

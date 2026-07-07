@@ -34,15 +34,6 @@ pub impl Comp {
         mut val si: U64 = 0
         while si < e.structNames.count() {
             val nm: Bind = self.internBytes(s: e.structNames[si])
-            // generic params for a generic opaque intrinsic (`struct Buffer[T]`): the
-            // StructDef carries them like an ordinary generic struct, so `Buffer[E]` is a
-            // genuine generic instance dispatched through the uniform path. Empty for the
-            // non-generic intrinsics (`Ref`/`WeakRef`/the scalar lang-items) and FFI types.
-            mut val externTP: Array[Bind] = []
-            if si < e.structTypeParams.count() {
-                externTP = self.lowerTypeParamNames(names: e.structTypeParams[si])
-            }
-            val noFields: Array[FieldDef] = []
             // defOffset = the struct's REAL source offset (its `struct Name` span), so type
             // visibility can locate the declaring module. Without it (defOffset 0) a
             // non-ambient extern type — e.g. the internal `Buffer`, or imported `Ref`
@@ -50,6 +41,15 @@ pub impl Comp {
             // ever worked because the whole compiler is module 0 and `moduleOf(0)==0`.
             mut val defOff: U64 = 0
             if si < e.structSpans.count() { defOff = e.structSpans[si].start }
+            // generic params for a generic opaque intrinsic (`struct Buffer[T]`): the
+            // StructDef carries them like an ordinary generic struct, so `Buffer[E]` is a
+            // genuine generic instance dispatched through the uniform path. Empty for the
+            // non-generic intrinsics (`Ref`/`WeakRef`/the scalar lang-items) and FFI types.
+            mut val externTP: Array[Bind] = []
+            if si < e.structTypeParams.count() {
+                externTP = self.lowerTypeParamNames(names: e.structTypeParams[si], anchor: defOff)
+            }
+            val noFields: Array[FieldDef] = []
             // `String` is the one intrinsic that is really a value-semantics struct over a
             // single `Array[U8]` buffer (spec/02): register it as a NON-extern struct with a
             // synthetic private `buffer: Array[U8]` field so the generic struct+Array ARC frees

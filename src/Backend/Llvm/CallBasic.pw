@@ -112,10 +112,18 @@ pub impl LlvmCtx {
     // infers its concrete args. An `async fn` resolves through the async-entry table. Returns
     // a null value if neither could be declared (the caller then errors — a resolved Plew fn
     // is never re-routed to an intrinsic intercept). Caller guarantees `funcs[cfi]` non-extern.
-    inout fn genLlvmResolvedFreeCall(c: inout Comp, cfi: U64, args: Array[Arg]) -> LLVMValueRef {
+    inout fn genLlvmResolvedFreeCall(c: inout Comp, cfi: U64, args: Array[Arg], callOffset: U64) -> LLVMValueRef {
         mut val inferred: Array[U64] = []
         if c.isGenericFreeFn(fi: cfi) {
             inferred = self.llvmInferFnArgs(c: inout c, f: c.arena.funcs[cfi], args: args)
+            // report an inference hole at the CALL (the untypeable argument is here);
+            // ensureFnInst's registration-side backstop only knows the declaration,
+            // which misdirected `print(r.typo)` to std/Io instead of the caller.
+            val cf0: Func = c.arena.funcs[cfi]
+            if inferred.count() != cf0.typeParams.count() || !(c.fnArgsAllGround(args: inferred)) {
+                c.errorAt(offset: callOffset, msg: "cannot infer the type arguments of this call — an argument's type did not resolve (check the arguments; annotate them or the receiving binding so every type parameter is pinned, spec/06)")
+                return LLVMConstInt(self.i64ty, 1U64, 0I32)
+            }
         }
         val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: cfi, args: inferred, recvInstRef: 0U64)
         if gslot < self.genFnK.count() {
@@ -184,7 +192,7 @@ pub impl LlvmCtx {
         val cfi: U64 = self.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
         if cfi < c.arena.funcs.count() {
             if !(c.arena.funcs[cfi].isExtern) {
-                val uv: LLVMValueRef = self.genLlvmResolvedFreeCall(c: inout c, cfi: cfi, args: args)
+                val uv: LLVMValueRef = self.genLlvmResolvedFreeCall(c: inout c, cfi: cfi, args: args, callOffset: nameStart)
                 if LLVMIsNull(uv) == 0I32 {
                     return uv
                 }

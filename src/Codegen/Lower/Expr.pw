@@ -132,10 +132,13 @@ pub impl Comp {
                 val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
                 result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes().count() args=a />)
             }
-            ExprAst.Field(val base, val name, val span) => {
+            ExprAst.Field(val base, val name, val nameSpan, val span) => {
+                // the field name's SOURCE span, not an interned copy: the bytes there ARE
+                // the name (resolution compares by content), and a typo'd field then
+                // errors at its own token — an interned span mapped to a garbage line.
+                // Same policy as the destructure desugar's synthesized Fields.
                 val b: U64 = self.lowerExpr(e: base)
-                val nm: Bind = self.internBytes(s: name)
-                result = self.pushExpr(e: <Expr.Field base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+                result = self.pushExpr(e: <Expr.Field base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
             ExprAst.Method(val recv, val name, val nameSpan, val args, val span) => {
                 // a namespace call `Io.print(args)` (spec/15): the receiver is a namespace
@@ -258,19 +261,20 @@ pub impl Comp {
                 val eb: U64 = self.lowerBlock(b: elseBlk)
                 result = self.pushExpr(e: <Expr.IfExpr cond=cnd thenBlk=tb elseBlk=eb />)
             }
-            ExprAst.OptChain(val base, val member, val span) => {
+            ExprAst.OptChain(val base, val member, val memberSpan, val span) => {
+                // SOURCE span for the member (see ExprAst.Field): the chain desugar's
+                // synthesized stage reads then point at the real `?.member` token.
                 val b: U64 = self.lowerExpr(e: base)
-                val nm: Bind = self.internBytes(s: member)
-                result = self.pushExpr(e: <Expr.OptChain base=b memberStart=nm.nameStart memberLen=nm.nameLen />)
+                result = self.pushExpr(e: <Expr.OptChain base=b memberStart=memberSpan.start memberLen=member.bytes().count() />)
             }
             ExprAst.Try(val operand, val span) => {
                 val o: U64 = self.lowerExpr(e: operand)
                 result = self.pushExpr(e: <Expr.Try expr=o />)
             }
-            ExprAst.Arrow(val base, val name, val span) => {
+            ExprAst.Arrow(val base, val name, val nameSpan, val span) => {
+                // SOURCE span for the pointee field name (see ExprAst.Field above).
                 val b: U64 = self.lowerExpr(e: base)
-                val nm: Bind = self.internBytes(s: name)
-                result = self.pushExpr(e: <Expr.Arrow base=b nameStart=nm.nameStart nameLen=nm.nameLen />)
+                result = self.pushExpr(e: <Expr.Arrow base=b nameStart=nameSpan.start nameLen=name.bytes().count() />)
             }
             ExprAst.Closure(val params, val hasRet, val ret, val body, val span) => {
                 val ps: Array[Param] = self.lowerParams(params: params)

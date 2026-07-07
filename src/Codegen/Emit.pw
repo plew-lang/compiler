@@ -222,6 +222,16 @@ pub impl Comp {
         compileErrorAt(line: self.lineOf(offset: offset), msg: msg)
     }
 
+    // Diagnostic anchor for a function declaration: defOffset is the declaration's
+    // SOURCE offset (a real file:line); nameStart is interned (maps to no file) and
+    // remains only as the fallback for synthesized Funcs that carry no defOffset.
+    fn fnAnchor(f: Func) -> U64 {
+        if f.defOffset != 0U64 {
+            return f.defOffset
+        }
+        return f.nameStart
+    }
+
     // Byte offset for an expression (for diagnostics). THE read is the span store
     // (exprSpanStart — Lower records every parsed node's ExprAst span); the per-form
     // recursion below remains only as the fallback for backend-SYNTHESIZED nodes

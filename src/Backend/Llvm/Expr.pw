@@ -380,6 +380,10 @@ pub impl LlvmCtx {
                     if fidx < c.arena.structs[psidx].fields.count() {
                         return LLVMBuildExtractValue(self.b, self.loadRefPointee(c: inout c, base: base), fidx, anon())
                     }
+                    // the pointee struct IS known — the field just doesn't exist on it;
+                    // the unregistered-base message below would misdirect to the Ref.
+                    c.errorAt(offset: nameStart, msg: "no such field on this Ref's pointee type (check the field name)")
+                    return LLVMConstInt(self.i64ty, 0U64, 0I32)
                 }
                 c.errorAt(offset: nameStart, msg: "LLVM backend: `->` only on a Ref to a registered struct (so far)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)

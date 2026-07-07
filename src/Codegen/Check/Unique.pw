@@ -74,7 +74,10 @@ pub impl Comp {
                     val f: FieldDef = s.fields[j]
                     if !(f.tyIsArray) {
                         if self.typeIsTransitivelyUnique(start: f.tyStart, len: f.tyLen) {
-                            self.errorAt(offset: f.nameStart, msg: "a struct with a unique field must be declared `unique`")
+                            // anchor at the struct DECLARATION (defOffset — the place that
+                            // must gain `unique`); the field's nameStart is re-interned and
+                            // maps to no source file.
+                            self.errorAt(offset: s.defOffset, msg: "a struct with a unique field must be declared `unique`")
                         }
                     }
                     j += 1
@@ -97,7 +100,8 @@ pub impl Comp {
                         val vf: FieldDef = vfs[fj]
                         if !(vf.tyIsArray) {
                             if self.typeIsTransitivelyUnique(start: vf.tyStart, len: vf.tyLen) {
-                                self.errorAt(offset: vf.nameStart, msg: "an enum with a unique payload must be declared `unique enum`")
+                                // anchor at the enum DECLARATION (see the struct arm above).
+                                self.errorAt(offset: e.defOffset, msg: "an enum with a unique payload must be declared `unique enum`")
                             }
                         }
                         fj += 1
@@ -294,8 +298,9 @@ pub impl Comp {
     // mode (`move`/`borrow`/`inout`); a copyable-type parameter rejects `move` (a
     // footgun: disables a value that could just be copied) and `borrow` (redundant
     // with by-value). `inout` is valid for both. Array params are containers
-    // (copyable in v1) and not mode-checked here.
-    inout fn checkParamModes(params: Array[Param]) {
+    // (copyable in v1) and not mode-checked here. `anchor` is the owning function's
+    // declaration offset (Param.nameStart is interned = maps to no source file).
+    inout fn checkParamModes(params: Array[Param], anchor: U64) {
         mut val i: U64 = 0
         while i < params.count() {
             val p: Param = params[i]
@@ -303,19 +308,34 @@ pub impl Comp {
                 if self.typeIsUnique(start: p.tyStart, len: p.tyLen) {
                     val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
                     if !(hasMode) {
-                        self.errorAt(offset: p.nameStart, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
+                        self.errorAt(offset: anchor, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
                     }
                 } else {
                     if p.isMove {
-                        self.errorAt(offset: p.nameStart, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
+                        self.errorAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
                     }
                     if p.isBorrow {
-                        self.errorAt(offset: p.nameStart, msg: "`borrow` is redundant on a copyable type; pass by value")
+                        self.errorAt(offset: anchor, msg: "`borrow` is redundant on a copyable type; pass by value")
                     }
                 }
             }
             i += 1
         }
+    }
+
+    // Declaration offset of a unique struct/enum named by (start, len) — the anchor
+    // for diagnostics whose use site only survives as an interned span (which maps
+    // to no source file). 0 when the name matches no declaration.
+    inout fn uniqueDeclAnchor(start: U64, len: U64) -> U64 {
+        val usi: U64 = self.structIndexByName(start: start, len: len)
+        if usi < self.arena.structs.count() {
+            return self.arena.structs[usi].defOffset
+        }
+        val uei: U64 = self.enumIdxByName(start: start, len: len)
+        if uei < self.arena.enums.count() {
+            return self.arena.enums[uei].defOffset
+        }
+        return 0
     }
 
     // Reject `Array[unique]` (spec/03): unique values cannot be stored in a generic
@@ -328,7 +348,9 @@ pub impl Comp {
         while i < self.monoWork.arrayElems.count() {
             val ae: Bind = self.monoWork.arrayElems[i]
             if self.typeIsUnique(start: ae.nameStart, len: ae.nameLen) {
-                self.errorAt(offset: ae.nameStart, msg: "a unique type cannot be stored in an Array; wrap it in Ref[T]")
+                // the collected Bind span is interned — anchor at the unique type's
+                // own declaration (a real file:line) instead.
+                self.errorAt(offset: self.uniqueDeclAnchor(start: ae.nameStart, len: ae.nameLen), msg: "a unique type cannot be stored in an Array (this unique type is used as an element type somewhere); wrap it in Ref[T]")
             }
             i += 1
         }
@@ -351,7 +373,10 @@ pub impl Comp {
                         val ai: TypeInfo = self.typeInfoOfRef(ref: t.args[j])
                         if ai.kind == 2 {
                             if self.typeIsUnique(start: ai.nameStart, len: ai.nameLen) {
-                                self.errorAt(offset: ai.nameStart, msg: "a unique type cannot be a generic type argument; wrap it in Ref[T]")
+                                // the arena TypeRef has no use-site offset — anchor at the
+                                // unique type's own DECLARATION (a real file:line) instead of
+                                // the interned arg span, which maps to no source file.
+                                self.errorAt(offset: self.uniqueDeclAnchor(start: ai.nameStart, len: ai.nameLen), msg: "a unique type cannot be a generic type argument (this unique type is used as one somewhere); wrap it in Ref[T]")
                             }
                         }
                         j += 1
@@ -366,7 +391,7 @@ pub impl Comp {
     inout fn checkAllParamModes() {
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {
-            self.checkParamModes(params: self.arena.funcs[i].params)
+            self.checkParamModes(params: self.arena.funcs[i].params, anchor: self.fnAnchor(f: self.arena.funcs[i]))
             i += 1
         }
     }

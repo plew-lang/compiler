@@ -1,0 +1,25 @@
+// A NON-generic Chain conformer can only re-wrap its own Value type: `m?.n`
+// projects an I64 out of Value=Box, and `fromValue` cannot take it — the
+// desugar's mismatch rejects (and anchors at the `?.n` source token; the
+// synthesized tree once pointed at a line outside the file).
+import @Std/Core
+struct Box { pub val n: I64 }
+enum Maybe {
+    Just(b: Box)
+    Nothing
+}
+impl Maybe as Chain {
+    type Value = Box
+    fn chain() -> Optional[Box] {
+        match self {
+            Maybe.Just(val b) => { return <Optional.Some v=b /> }
+            Maybe.Nothing => { return <Optional.None /> }
+        }
+    }
+    factory fromValue(value: Box) { return <Maybe.Just b=value /> }
+    factory empty() { return <Maybe.Nothing /> }
+}
+fn main() {
+    val m: Maybe = <Maybe.Just b=<Box n=5 /> />
+    val r = m?.n
+}

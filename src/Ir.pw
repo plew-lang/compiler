@@ -708,6 +708,11 @@ export struct Func {
     // resolve through the SAME root C (e.g. an intermediate multi-path method). 0 =
     // no rooted self view (bare or single-path). Equals srcTraitId for the witness.
     pub val selfViewId: U64 = 0
+    // original source offset of the declaration's NAME token (see StructDef.defOffset):
+    // an impl method's nameStart is re-interned (maps to no source file), so a
+    // declaration-anchored diagnostic reads fnAnchor (defOffset, nameStart fallback).
+    // 0 for synthesized funcs (deinit walkers, witness sigs, the record `main`).
+    pub val defOffset: U64 = 0
 }
 
 // A module-level variable (spec/15): `val x = e` / `mut val x = e`. `letStmt` is

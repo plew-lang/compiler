@@ -37,7 +37,7 @@ pub impl Comp {
                 // would emit invalid IR. Reject loudly instead.
                 if !(self.isIntType(start: rStart, len: rLen)) {
                     if !(rangeEquals(bytes: self.arena.bytes, start: rStart, len: rLen, kw: "Bool")) {
-                        self.errorAt(offset: f.nameStart, msg: "an async fn can only return an integer or Bool for now (the Promise payload is passed through a type-erased i64 slot; String / struct / array / float payloads are not yet supported)")
+                        self.errorAt(offset: self.fnAnchor(f: f), msg: "an async fn can only return an integer or Bool for now (the Promise payload is passed through a type-erased i64 slot; String / struct / array / float payloads are not yet supported)")
                     }
                 }
             }

@@ -89,9 +89,18 @@ pub impl Comp {
         val fromRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
         val cvRef: U64 = self.pushExpr(e: <Expr.Ident start=cvN.nameStart len=cvN.nameLen />)
         val memberField: U64 = self.pushExpr(e: <Expr.Field base=cvRef nameStart=memberStart nameLen=memberLen />)
+        // every synthesized node anchors at the `?.member` source token: their own
+        // name spans are interned (`chain`/`fromValue`/`__chainVal`), so a diagnostic
+        // on the desugar (e.g. `m?.n` where `.n` is not the conformer's Value type)
+        // would otherwise point at a garbage line outside the source.
+        self.arena.exprSpanStart[scrut] = memberStart
+        self.arena.exprSpanStart[fromRecv] = memberStart
+        self.arena.exprSpanStart[cvRef] = memberStart
+        self.arena.exprSpanStart[memberField] = memberStart
         mut val fromArgs: Array[Arg] = []
         fromArgs.append(<Arg expr=memberField isInout=false labelStart=valueN.nameStart labelLen=valueN.nameLen hasLabel=true />)
         val fromCall: U64 = self.pushExpr(e: <Expr.Method recv=fromRecv nameStart=fromValueN.nameStart nameLen=fromValueN.nameLen args=fromArgs />)
+        self.arena.exprSpanStart[fromCall] = memberStart
         mut val someStmts: Array[U64] = []
         someStmts.append(self.pushStmt(s: <Stmt.Give value=fromCall />))
         val someBlk: U64 = self.arena.blocks.count()
@@ -102,6 +111,8 @@ pub impl Comp {
         // None => <Head.empty />
         val emptyRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
         val emptyCall: U64 = self.pushExpr(e: <Expr.Method recv=emptyRecv nameStart=emptyN.nameStart nameLen=emptyN.nameLen args=noArgs />)
+        self.arena.exprSpanStart[emptyRecv] = memberStart
+        self.arena.exprSpanStart[emptyCall] = memberStart
         mut val noneStmts: Array[U64] = []
         noneStmts.append(self.pushStmt(s: <Stmt.Give value=emptyCall />))
         val noneBlk: U64 = self.arena.blocks.count()

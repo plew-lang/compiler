@@ -1,0 +1,9 @@
+// `r->typo` where the pointee struct IS registered but the field doesn't
+// exist: rejects with the field-level message (the generic "`->` only on a
+// Ref to a registered struct" would misdirect to the Ref itself).
+import @Std/Core with { Ref }
+struct Pt { pub val x: I64 }
+fn main() {
+    val r: Ref[Pt] = <Ref value=<Pt x=1 /> />
+    val v = r->typo
+}

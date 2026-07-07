@@ -36,7 +36,7 @@ pub impl Comp {
             typeParams.append(implParamBinds[ipi])
             ipi += 1
         }
-        val ownParams: Array[Bind] = self.lowerTypeParamNames(names: m.typeParams)
+        val ownParams: Array[Bind] = self.lowerTypeParamNames(names: m.typeParams, anchor: m.nameSpan.start)
         mut val opi: U64 = 0
         while opi < ownParams.count() {
             typeParams.append(ownParams[opi])
@@ -126,7 +126,7 @@ pub impl Comp {
             val extN: Bind = self.internBytes(s: im.extName)
             extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
         }
-        self.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() />)
+        self.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() defOffset=m.nameSpan.start />)
         self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
         self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
         self.cur.typeParams = savedTP
@@ -134,7 +134,7 @@ pub impl Comp {
 
     inout fn lowerImpl(im: ImplAst) {
         val recvN: Bind = self.internBytes(s: im.recvType.name)
-        val implParamBinds: Array[Bind] = self.lowerTypeParamNames(names: im.implParams)
+        val implParamBinds: Array[Bind] = self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start)
         // the impl's lowering-time skip scope: its `[T]`, plus the associated types of the trait
         // it implements/extends — both a bare `impl Iterator` (recv IS the trait, its provided
         // methods name `Item`) and `impl T as Tr` (the witnessed signatures name `Tr`'s assoc
@@ -217,7 +217,7 @@ pub impl Comp {
     inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Func {
         val nameStart: U64 = sig.nameSpan.start
         val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: sig.typeParams)
+        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: sig.typeParams, anchor: nameStart)
         // a requirement signature's `[U]` (and the trait's own params, kept in self.cur.typeParams
         // by lowerTrait) are in scope for its param/return types — skip those heads in lowerType.
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -263,7 +263,7 @@ pub impl Comp {
             assocTypes.append(self.internBytes(s: t.assocTypes[ai]))
             ai += 1
         }
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams)
+        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart)
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = []
         mut val stpi: U64 = 0
