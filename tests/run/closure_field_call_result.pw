@@ -1,0 +1,7 @@
+import @Std/Io with { print, write }
+struct Handler { pub val run: fn() -> I64 }
+fn main() {
+    val h: Handler = <Handler run=fn() -> I64 { return 42I64 } />
+    print(h.run())
+    write(s: "exit\n")
+}

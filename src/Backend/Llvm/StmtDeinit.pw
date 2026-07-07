@@ -337,7 +337,8 @@ pub impl LlvmCtx {
         }
         // a `WeakRef[T]` local: drop one weak observer — decrement the weak count and free the
         // cell only when BOTH counters are 0 (the pointee deinit already ran at strong 0). Same
-        // curBodyMark borrow gate as Ref. Balances the weak retain at each WeakRef place-copy.
+        // owned-flag gate as Ref (un-owned bindings were skipped at the top). Balances the weak
+        // retain at each WeakRef place-copy.
         if c.isWeakRefInst(ref: self.locTypeRef[li]) {
             self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
             return

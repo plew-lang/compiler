@@ -343,6 +343,14 @@ pub impl Comp {
                 self.verifyExpr(id: fbase)
             }
             Expr.Ident(val start, val len) => {
+                // the target must name an existing binding (spec/03: assignment never
+                // declares). Without this, an undeclared name slid past the mutability
+                // check (localIsMutable defaults to true for names it cannot find) and
+                // surfaced as a backend codegen error or a misleading literal-context
+                // error on the RHS.
+                if !(self.identIsBinding(start: start, len: len)) {
+                    self.errorAt(offset: self.exprOffset(id: target), msg: "cannot assign to an undeclared name: it is not a local, parameter, or global in scope — declare it first with `val`/`mut val` (spec/03)")
+                }
                 if !(self.placeIsMutable(id: target)) {
                     // exprOffset, not the raw token start: a destructure's synthesized
                     // assign (`(x, val y) = r`) idents an INTERNED name — its source

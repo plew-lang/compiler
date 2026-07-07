@@ -161,8 +161,10 @@ pub impl Comp {
                 } else {
                     val r: U64 = self.lowerExpr(e: recv)
                     val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)
-                    val nm: Bind = self.internBytes(s: name)
-                    result = self.pushExpr(e: <Expr.Method recv=r nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+                    // the name's SOURCE span, not an interned copy: resolution compares
+                    // byte content (equivalent either way), and diagnostics anchored at
+                    // nameStart (method visibility) need a real file:line.
+                    result = self.pushExpr(e: <Expr.Method recv=r nameStart=nameSpan.start nameLen=name.bytes().count() args=a />)
                 }
             }
             ExprAst.ArrowMethod(val recv, val name, val nameSpan, val args, val span) => {
@@ -172,8 +174,7 @@ pub impl Comp {
                 val r: U64 = self.lowerExpr(e: recv)
                 val d: U64 = self.pushExpr(e: <Expr.Deref base=r />)
                 val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)
-                val nm: Bind = self.internBytes(s: name)
-                result = self.pushExpr(e: <Expr.Method recv=d nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
+                result = self.pushExpr(e: <Expr.Method recv=d nameStart=nameSpan.start nameLen=name.bytes().count() args=a />)
             }
             ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)

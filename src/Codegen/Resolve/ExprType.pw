@@ -57,6 +57,65 @@ pub impl Comp {
         return scalarInfo()
     }
 
+    // Raw declared TypeRef of struct `(structStart,structLen)`'s field `field`, or 0
+    // when the struct or field is unknown (the arena field ty, pre-grounding).
+    inout fn structFieldRawTyRef(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
+        val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count() {
+            val s: StructDef = self.arena.structs[si]
+            if s.nameId == qStruct {
+                mut val fi: U64 = 0
+                while fi < s.fields.count() {
+                    if s.fields[fi].nameId == qField {
+                        return s.fields[fi].ty
+                    }
+                    fi += 1
+                }
+            }
+            si += 1
+        }
+        return 0
+    }
+
+    // The result TypeInfo of `recv.name(args)` when `name` is not a method but a
+    // closure-typed FIELD (`struct Handler { val run: fn() -> I64 }`): the backend loads
+    // the field and calls it indirectly (CallMethod's closure-field branch), so the
+    // result is the fn type's return — args[0] of the {fn, [ret, p0, …]} ref. Grounded
+    // through a generic receiver's env (`fn() -> T` on `Handler[I64]`). scalarInfo when
+    // the name is not a closure field (the caller then keeps its unknown result).
+    inout fn closureFieldRetInfo(rt: TypeInfo, nameStart: U64, nameLen: U64) -> TypeInfo {
+        mut val fr: U64 = self.structFieldRawTyRef(structStart: rt.nameStart, structLen: rt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
+        if fr == 0U64 {
+            return scalarInfo()
+        }
+        if self.isGenericInst(ref: rt.ref) {
+            fr = self.groundUnderInst(instRef: rt.ref, tyRef: fr)
+        }
+        if self.isFnType(ref: fr) {
+            val ft: TypeRef = self.arena.types[fr]
+            if ft.args.count() > 0U64 {
+                return self.typeInfoOfRef(ref: ft.args[0])
+            }
+        }
+        return scalarInfo()
+    }
+
+    // A declared return's TypeInfo: an `Array[E]` return prefers the STRUCTURED
+    // retTy ref when it is ground — typeInfoOfName's kind-3 recovery drops the
+    // element instance (ref 0), so a direct-call for-in source (`for c in mkArr()`)
+    // lost `Ref[Cell]` elements and the body could not resolve `c->v`. A parametric
+    // retTy (un-grounded generic) falls back to the bare name span, as before.
+    inout fn declaredRetInfo(f: Func) -> TypeInfo {
+        if f.retIsArray && f.retTy != 0U64 && f.retTy < self.arena.types.count() {
+            if self.tyRefIsGround(ref: f.retTy) {
+                return self.typeInfoOfRef(ref: f.retTy)
+            }
+        }
+        return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+    }
+
     inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {
         if !(f.hasRet) {
             return scalarInfo()
@@ -436,7 +495,7 @@ pub impl Comp {
                                 return <TypeInfo kind=2 nameStart=rtr.nameStart nameLen=rtr.nameLen ref=f.retTy />
                             }
                         }
-                        return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
+                        return self.declaredRetInfo(f: f)
                     }
                     return scalarInfo()
                 }
@@ -620,7 +679,7 @@ pub impl Comp {
                     if mfi < self.arena.funcs.count() {
                         val mf: Func = self.arena.funcs[mfi]
                         if mf.hasRet {
-                            return self.typeInfoOfName(start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
+                            return self.declaredRetInfo(f: mf)
                         }
                     }
                 }
@@ -681,7 +740,7 @@ pub impl Comp {
                                 }
                             }
                         }
-                        return self.typeInfoOfName(start: af.retStart, len: af.retLen, isArray: af.retIsArray)
+                        return self.declaredRetInfo(f: af)
                     }
                     return scalarInfo()
                 }
@@ -776,7 +835,9 @@ pub impl Comp {
                         }
                     }
                     if mi == self.arena.funcs.count() {
-                        return scalarInfo()
+                        // not a method — but it may be a closure-typed FIELD called
+                        // indirectly (`h.run()`); recover the fn type's return.
+                        return self.closureFieldRetInfo(rt: rt, nameStart: nameStart, nameLen: nameLen)
                     }
                     val mf: Func = self.arena.funcs[mi]
                     if mf.hasRet {
@@ -875,8 +936,10 @@ pub impl Comp {
                         // return mentions one (`upTo.fold[A](init: 0U64, …) -> A`): bind
                         // them from the call and ground. An unresolved return must stay
                         // UNKNOWN — reporting the literal param name (`A`) would record a
-                        // garbage type that registers a bogus instance downstream.
-                        if mf.typeParams.count() > 0 && mf.retTy != 0U64 && !(mf.retIsArray) {
+                        // garbage type that registers a bogus instance downstream. An
+                        // ARRAY return (`-> Array[A]`) grounds through the same path: its
+                        // retTy is the structured {Array, [A]} ref (Ir.pw PType note).
+                        if mf.typeParams.count() > 0 && mf.retTy != 0U64 {
                             // infer BEFORE swapping the env: inferFnArgs types the call's
                             // arguments via exprType, which reads cur.typeParams/typeArgs —
                             // swapping typeParams first would pair the method's params with
@@ -894,7 +957,7 @@ pub impl Comp {
                             }
                             return scalarInfo()
                         }
-                        return self.typeInfoOfName(start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
+                        return self.declaredRetInfo(f: mf)
                     }
                     return scalarInfo()
                 }
@@ -914,7 +977,9 @@ pub impl Comp {
                     }
                     val mf: Func = self.arena.funcs[mi]
                     if mf.hasRet {
-                        if mf.typeParams.count() >= 1 && mf.retTy != 0U64 && !(mf.retIsArray) {
+                        // an ARRAY return (`-> Array[T]`) grounds through the same
+                        // structured path — its retTy is the {Array, [T]} ref.
+                        if mf.typeParams.count() >= 1 && mf.retTy != 0U64 {
                             // the element ref E — only the STRUCTURED ref off the carried
                             // `Array[E]` grounds (a compound element's registered name is a
                             // mangle — `Entry_K_V` — and grounding through a name-minted ref
@@ -985,7 +1050,7 @@ pub impl Comp {
                                 }
                             }
                         }
-                        return self.typeInfoOfName(start: mf.retStart, len: mf.retLen, isArray: mf.retIsArray)
+                        return self.declaredRetInfo(f: mf)
                     }
                     return scalarInfo()
                 }

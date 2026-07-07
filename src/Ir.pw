@@ -819,20 +819,6 @@ export enum ArcClass {
     EnumVal(eidx: U64)
 }
 
-// Declaration / conformance / name side-tables built during loading & analysis.
-// `traits`/`conforms`/`methodAliases` drive trait conformance (spec/08): trait
-// decls, recorded conformances, and `via` requirement→witness redirects.
-// `defaultExts`: `defaultExtension #Ext` (type id, ext id) pairs (spec/09).
-// `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
-// Trait` bounds keyed by function index. `deinits`: types with a `deinit` (Bind
-// = receiver type span). `assocBindings`: `type Item = Concrete` lines from
-// conformances. `pubFactories`: interned ids of types with a `pub factory`.
-// `namespaces`: `import @Std/Io` namespace binds. `importAliases`: `import …
-// with { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
-// recorded PARAMETRICALLY (see ChainSite) so readers and per-instance
-// registration ground it under their own env — storing a grounded result would
-// freeze the first instance's grounding into every other instantiation of a
-// generic body. `kwCache`: cached built-in name spans (O(1) kwSpan).
 // One desugared `?.` stage (the Chain-trait match rewrite): keyed by the
 // rewritten MatchExpr's expr id. `stageRef` = the stage's result `Head[U]` and
 // `valueRef` = the receiver's chain Value V, both computed ONCE at rewrite time
@@ -870,6 +856,21 @@ export struct DestructureSite {
 }
 pub impl DestructureSite { factory }
 
+// Declaration / conformance / name side-tables built during loading & analysis.
+// `traits`/`conforms`/`methodAliases` drive trait conformance (spec/08): trait
+// decls, recorded conformances, and `via` requirement→witness redirects.
+// `defaultExts`: `defaultExtension #Ext` (type id, ext id) pairs (spec/09).
+// `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
+// Trait` bounds keyed by function index. `deinits`: types with a `deinit` (Bind
+// = receiver type span). `assocBindings`: `type Item = Concrete` lines from
+// conformances. `pubFactories`: interned ids of types with a `pub factory`.
+// `namespaces`: `import @Std/Io` namespace binds. `importAliases`: `import …
+// with { real as alias }` rewrites. `chainSites`: each desugared `?.` stage,
+// recorded PARAMETRICALLY (see ChainSite) so readers and per-instance
+// registration ground it under their own env — storing a grounded result would
+// freeze the first instance's grounding into every other instantiation of a
+// generic body. `destructureSites`: each record/struct destructure's bind list
+// (see DestructureSite). `kwCache`: cached built-in name spans (O(1) kwSpan).
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val conforms: Array[Conform] = []

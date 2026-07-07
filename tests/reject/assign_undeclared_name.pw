@@ -1,0 +1,6 @@
+// Assignment never declares (spec/03): a bare `y = 5` where `y` is not a
+// local/param/global must reject at the frontend — previously localIsMutable
+// defaulted to true for unknown names, so this slid to a backend/RHS error.
+fn main() {
+    y = 5I64
+}

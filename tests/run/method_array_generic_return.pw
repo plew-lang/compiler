@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+struct Maker { pub val n: I64 }
+pub impl Maker {
+    fn pair[A](value: A) -> Array[A] { return [value, value] }
+}
+fn main() {
+    val m: Maker = <Maker n=1 />
+    val ss: Array[String] = m.pair(value: "hi")
+    print(ss[0])
+    print(ss.count())
+    val xs = m.pair(value: 7I64)
+    print(xs[0])
+}

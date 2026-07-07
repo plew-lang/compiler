@@ -306,18 +306,26 @@ pub impl LlvmCtx {
         if opErrRef != 0U64 {
             if fnErrRef != 0U64 {
                 if c.arena.types[opErrRef].nameId != c.arena.types[fnErrRef].nameId {
+                    // the conversion is REQUIRED once the types differ: falling through
+                    // with the unconverted payload would rewrap an E' bit-pattern as E
+                    // (silent type confusion). The frontend already rejects a missing
+                    // `from` factory here (Verify: "no `from` factory to convert it"), so
+                    // this is a defensive backstop — a loud error if the two ever disagree,
+                    // never the silent fallthrough the old `if ffi < count` guard allowed.
                     val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef)
-                    if ffi < c.arena.funcs.count() {
-                        mut val cav: Array[LLVMValueRef] = []
-                        cav.append(errVal)
-                        // the error-conversion factory (free fn or assoc fn — no self) is its
-                        // own 0-type-arg `gf` instance (B4-1).
-                        val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [], recvInstRef: 0U64)
-                        if fgslot < self.genFnK.count() {
-                            convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
-                            didConvert = true
-                        }
+                    if ffi >= c.arena.funcs.count() {
+                        c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` cannot convert the operand's error type to the function's error type — define a `from` factory on the function's error type that takes the operand's error (spec/13)")
                     }
+                    mut val cav: Array[LLVMValueRef] = []
+                    cav.append(errVal)
+                    // the error-conversion factory (free fn or assoc fn — no self) is its
+                    // own 0-type-arg `gf` instance (B4-1).
+                    val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [], recvInstRef: 0U64)
+                    if fgslot >= self.genFnK.count() {
+                        c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` error conversion failed to instantiate the `from` factory (internal: ensureFnInst returned no slot)")
+                    }
+                    convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
+                    didConvert = true
                 }
             }
         }

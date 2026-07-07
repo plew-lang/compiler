@@ -142,6 +142,22 @@ pub impl Comp {
         return false
     }
 
+    // Whether an assignment-target identifier names a binding at all: `self` (an
+    // inout receiver is replaceable), a closure capture, or a local / parameter /
+    // seeded global (seedGlobalLocals puts visible globals in cur.locals). A name
+    // that is none of these is undeclared — a fn or type name is not a place.
+    inout fn identIsBinding(start: U64, len: U64) -> Bool {
+        if self.isSelfRef(start: start, len: len) {
+            return true
+        }
+        if self.cur.inClosure {
+            if self.isCaptureOf(closureId: self.cur.closureId, start: start, len: len) {
+                return true
+            }
+        }
+        return self.localIndexByName(start: start, len: len) < self.cur.locals.count()
+    }
+
     inout fn localIndexByName(start: U64, len: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = self.cur.locals.count()
