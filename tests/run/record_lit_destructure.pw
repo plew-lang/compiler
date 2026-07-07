@@ -1,0 +1,30 @@
+// A record LITERAL is self-describing: its labels + field value types name its
+// structural struct, so it needs no annotation and no call-context — it can be
+// bound bare, destructured directly, and used as a for-loop element.
+import @Std/Io with { print }
+
+fn main() {
+    // bare bind + field access (no annotation)
+    val r = (name: "sun", n: 4I64)
+    print(r.n)
+    print(r.name)
+    // direct destructure of a literal (punned + explicit rename)
+    (val name, n: val count) = (name: "moon", n: 7I64)
+    print(name)
+    print(count)
+    // record literals as loop elements
+    val xs = [(a: 1I64, b: 2I64), (a: 30I64, b: 40I64)]
+    for (val a, val b) in xs {
+        print(a + b)
+    }
+    nested()
+}
+
+// nested: an inner record literal self-describes recursively, so an
+// unannotated destructure-assign binds a record-typed field too.
+fn nested() {
+    (val pos, val n) = (pos: (x: 8I64, y: 9I64), n: 10I64)
+    print(pos.x)
+    print(pos.y)
+    print(n)
+}

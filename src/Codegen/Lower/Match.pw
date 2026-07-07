@@ -432,8 +432,9 @@ pub impl Comp {
             StmtAst.For(val varName, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
                 // a record loop pattern `for (val x, val y) in xs` (patType="__rec__"): bind a
                 // fresh element local `__fe` and prepend `val x = __fe.field` per bind to the
-                // body (arena-level interned names, since an AST synthetic `Ident` reads the
-                // source by span). The element's struct is tracked by the for-over-array path.
+                // body (the `__fe` local and bound names are interned; an AST synthetic
+                // `Ident` reads the source by span). The element's struct is tracked by the
+                // for-over-array path.
                 if patType == "__rec__" {
                     val fe: Bind = self.internBytes(s: "__fe")
                     val lo2: U64 = self.lowerExpr(e: iter)
@@ -441,10 +442,13 @@ pub impl Comp {
                     mut val bstmts: Array[U64] = []
                     mut val bi: U64 = 0
                     while bi < binds.count() {
-                        val fldName: Bind = self.internBytes(s: binds[bi].field)
+                        // field name by SOURCE span (see lowerDestructureInto) — precise
+                        // typo diagnostics; only the bound local's name is interned.
                         val nameB: Bind = self.internBytes(s: binds[bi].name)
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=fe.nameStart len=fe.nameLen />)
-                        val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
+                        val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=binds[bi].fieldStart nameLen=binds[bi].field.bytes().count() />)
+                        self.arena.exprSpanStart[recv] = binds[bi].span.start
+                        self.arena.exprSpanStart[fld] = binds[bi].span.start
                         bstmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
                         bi += 1
                     }
@@ -526,10 +530,15 @@ pub impl Comp {
         stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
         mut val bi: U64 = 0
         while bi < binds.count() {
-            val fldName: Bind = self.internBytes(s: binds[bi].field)
+            // the synthesized Field points at the SOURCE occurrence of the field name
+            // (the explicit label, or the punned bind name — the bytes there ARE the
+            // field name), so a typo'd field errors with a precise source span exactly
+            // like a hand-written `x.typo`. Only the bound local's name is interned.
             val nameB: Bind = self.internBytes(s: binds[bi].name)
             val recv: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
-            val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=fldName.nameStart nameLen=fldName.nameLen />)
+            val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=binds[bi].fieldStart nameLen=binds[bi].field.bytes().count() />)
+            self.arena.exprSpanStart[recv] = binds[bi].span.start
+            self.arena.exprSpanStart[fld] = binds[bi].span.start
             stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
             bi += 1
         }

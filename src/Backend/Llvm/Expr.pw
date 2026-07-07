@@ -168,6 +168,15 @@ pub impl LlvmCtx {
                 return self.genLlvmStr(c: inout c, start: start, len: len)
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                // a context-less record literal with no construction-site expectation:
+                // its type was inferred from its own fields (typed-IR store) — feed it
+                // to the Make builder through expectedTy, the record path's context.
+                if typeLen == 0U64 && !isEnum && self.expectedTy == 0U64 {
+                    val rr: U64 = c.groundedTypeOf(id: id)
+                    if rr != 0U64 {
+                        self.expectedTy = rr
+                    }
+                }
                 return self.genLlvmMake(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
             }
             Expr.Array(val elems) => {
@@ -194,9 +203,10 @@ pub impl LlvmCtx {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: sidx, start: nameStart, len: nameLen)
                     if fidx >= c.arena.structs[sidx].fields.count() {
                         // distinct from the unregistered-base error below: the base's struct
-                        // IS known, the field name just doesn't exist on it. Name the field —
-                        // a record-destructure shorthand bind spells the field's name, so a
-                        // typo there surfaces here (with an interned-span offset, alas).
+                        // IS known, the field name just doesn't exist on it. nameStart points
+                        // at the source field name for BOTH parsed fields and destructure-
+                        // synthesized ones (Lower points those at the bind's source token),
+                        // so the offset is precise either way.
                         c.errorAt(offset: nameStart, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)")
                         return LLVMConstInt(self.i64ty, 0U64, 0I32)
                     }

@@ -474,6 +474,20 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                // a context-less record literal (`(a: e, b: f)` lowers to a Make with NO
+                // type name): the literal is self-describing — resolve its canonical
+                // record struct from the field labels + field value types
+                // (inferRecordMakeRef), so an unannotated binding / destructure types it
+                // without an annotation or construction-site context.
+                if typeLen == 0U64 {
+                    if !isEnum && ty == 0U64 {
+                        val rr: U64 = self.inferRecordMakeRef(fields: fields)
+                        if rr != 0U64 {
+                            return self.typeInfoOfRef(ref: rr)
+                        }
+                    }
+                    return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 />
+                }
                 // ground the constructed instance's ref under the active env so a generic
                 // build inside a generic body (`<Box v=x />` with x: T) reports the CONCRETE
                 // instance (`Box[U8]`), matching the backend — not the parametric `Box[T]`.

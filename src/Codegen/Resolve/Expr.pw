@@ -239,6 +239,44 @@ pub impl Comp {
         }
     }
 
+    // The synthetic record-struct TypeRef for a context-less record literal
+    // (`(a: e, b: f)` lowers to a Make with NO type name): the literal is
+    // self-describing — its labels plus its field values' types key the SAME
+    // canonical struct an annotated record type lowers to (ensureRecordStruct),
+    // so both spellings are one structural type. Returns 0 when any field
+    // value's type is not inferable here (an unsuffixed literal keeps its
+    // "no type from context" report; array-typed fields are not modeled).
+    inout fn inferRecordMakeRef(fields: Array[MakeField]) -> U64 {
+        if fields.count() == 0U64 {
+            return 0U64
+        }
+        mut val names: Array[String] = []
+        mut val tys: Array[PType] = []
+        mut val i: U64 = 0
+        while i < fields.count() {
+            val mf: MakeField = fields[i]
+            val ti: TypeInfo = self.exprType(id: mf.value)
+            if ti.kind == 3 || ti.nameLen == 0U64 {
+                return 0U64
+            }
+            mut val fref: U64 = ti.ref
+            if fref == 0U64 {
+                fref = self.simpleTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
+            }
+            mut val nb: Array[U8] = []
+            mut val k: U64 = 0
+            while k < mf.nameLen {
+                nb.append(self.arena.bytes[mf.nameStart + k])
+                k += 1
+            }
+            names.append(stringFromBytesUnchecked(b: nb))
+            tys.append(<PType start=ti.nameStart len=ti.nameLen isArray=false ref=fref />)
+            i += 1
+        }
+        val rnm: Bind = self.ensureRecordStruct(fieldNames: names, fieldTys: tys)
+        return self.simpleTypeRef(nameStart: rnm.nameStart, nameLen: rnm.nameLen)
+    }
+
     // The grounded TypeRef inferred for a generic-struct construction, or 0 when it can't
     // be inferred: not a generic struct, a parameter no bare field pins, or a field value
     // that is untyped / an array element / conflicts with another field's binding.

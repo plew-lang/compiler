@@ -37,6 +37,14 @@ pub impl LlvmCtx {
                 return self.i64ty
             }
             Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
+                // an unannotated record literal has no type name in the source — its
+                // self-described structural struct comes from the typed-IR store.
+                if typeLen == 0U64 && !isEnum {
+                    val rr: U64 = self.exprTypeRef(c: inout c, id: id)
+                    if rr != 0U64 {
+                        return self.llvmTypeOfRef(c: inout c, ref: rr)
+                    }
+                }
                 return self.llvmScalarTy(c: inout c, tyStart: typeStart, tyLen: typeLen)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {

@@ -1,0 +1,9 @@
+// A destructure of a record LITERAL checks its binds against the literal's own
+// (self-described) fields: `nope` is not a field, so this must be rejected —
+// with the error span on the bind's source token, not an interned span.
+import @Std/Io with { print }
+
+fn main() {
+    (val nope, val n) = (name: "s", n: 4I64)
+    print(n)
+}
