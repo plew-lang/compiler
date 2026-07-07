@@ -39,7 +39,13 @@ export unique struct CString {
 }
 
 pub impl CString {
-    factory from(text: String) {
+    // the public constructor: `<CString.copied text="…" />` — an owned copy of
+    // the text (the memberwise `ptr:` factory stays private; raw pointers enter
+    // only through the floor). NAMED as a compromise: the anonymous
+    // `factory(text:)` form spec/05 prefers needs general label-set overload
+    // resolution for anonymous factories, which the compiler only wires for the
+    // `from:` conversion label today.
+    factory copied(text: String) {
         return <CString ptr=cString(text) />
     }
 }
