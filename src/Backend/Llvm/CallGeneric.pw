@@ -510,7 +510,7 @@ pub impl LlvmCtx {
             // mutate its (immutable) param in place, and every ESCAPE inside the callee
             // retains via consumeIntoOwned. A `move` arg transfers ownership
             // (markLocalMoved above). A TEMPORARY (call result) has no home binding —
-            // register it as an anonymous owned local (block-exit drop; see the tail).
+            // register it as an anonymous owned local (statement-end drain; see the tail).
             if !(p.isMove) {
                 if !(exprAliasesPlace(c: inout c, id: argExpr)) {
                     mut val atr: U64 = p.ty

@@ -248,10 +248,10 @@ pub impl LlvmCtx {
         val subPromise: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operandId)
         LLVMBuildStore(self.b, subPromise, self.asyncFrameSlot(c: inout c, idx: 2U64))
         // drop every live anonymous argument/receiver TEMP before suspending: their
-        // borrowers (calls in already-completed statements, and the just-evaluated
-        // await operand) have returned, and a temp's alloca home does not survive a
-        // resume (fresh stack frame; the entry re-zeroes it, so its block-exit drop
-        // would be a stale frame read). Marked moved so no later drain re-drops them.
+        // borrowers (calls in the just-evaluated await operand's statement) have
+        // returned, and a temp's alloca home does not survive a resume (fresh stack
+        // frame — any post-resume drop would be a stale frame read). Marked moved so
+        // no later drain or exit re-drops them.
         self.dropLiveAnonTemps(c: inout c)
         LLVMBuildStore(self.b, LLVMConstInt(self.i32ty, state, 0I32), self.asyncFrameSlot(c: inout c, idx: 0U64))
         val donePtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 0U64, anon())

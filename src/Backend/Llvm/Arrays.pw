@@ -817,8 +817,8 @@ pub impl LlvmCtx {
     // decrement its rc, and at 0 destroy the pointee's owned heap (classifier-routed
     // valueArc — landing on per-instance release WITNESS calls, so a recursive
     // structure walks at runtime, never an unbounded inline expansion) then free the
-    // cell. Mirrors emitReleaseArrayValue's dec-then-cascade shape. Null-safe: a
-    // zeroed temp slot's cell is null (plew_rawbuf_release returns 0 for null), so
+    // cell. Mirrors emitReleaseArrayValue's dec-then-cascade shape. Null-safe: an
+    // unset payload slot's cell is null (plew_rawbuf_release returns 0 for null), so
     // the destroy branch is additionally gated on the cell being non-null. Shared by
     // boxed (recursive) fields and closure-capture cell homes; `ref` 0 = a scalar
     // pointee (nothing to destroy — the cell itself still frees).

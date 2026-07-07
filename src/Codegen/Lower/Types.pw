@@ -485,7 +485,7 @@ pub impl Comp {
     //   if (1) { mut val __dl: Dictionary[K,V] = <empty>; __dl.insert(k, v); ...;
     //            give move __dl } else { give <empty> }
     // `give move __dl` transfers the freshly-built dictionary out with no deep copy —
-    // the temp is marked moved so the block exit does not release it (the caller's
+    // the temp is marked moved so the scope exit does not release it (the caller's
     // binding owns it). The else branch is dead (the cond is the constant `1`) but must
     // still yield a `Dictionary[K,V]` so the value-position block type-checks.
     inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> U64 {

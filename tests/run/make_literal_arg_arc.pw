@@ -1,7 +1,7 @@
 // A plain construction (`<Bag …/>`, a Make carrying no recorded type) passed
 // directly as an argument, and as the value of a subscript-assign (indexSet
 // witness): the heap-owning temporary gets an anonymous owned home and drops at
-// block exit (leak regression pin; the assertion is the LeakSanitizer gate).
+// statement end (leak regression pin; the assertion is the LeakSanitizer gate).
 import @Std/Io with { print }
 
 struct Bag { pub val label: String }

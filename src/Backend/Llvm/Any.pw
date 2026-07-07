@@ -195,7 +195,7 @@ pub impl LlvmCtx {
 
     // Release one owner of an existential's box: decrement its rc, and at 0 destroy
     // the boxed concrete through the vtable's drop thunk (slot 1) then free the box.
-    // Null-safe (a zeroed temp home holds a null box; plew_rawbuf_release returns 0
+    // Null-safe (an unset enum payload slot holds a null box; plew_rawbuf_release returns 0
     // for null, and the destroy branch is additionally gated on non-null) — mirrors
     // emitBoxedFieldRelease's dec-then-cascade shape.
     inout fn emitAnyRelease(c: inout Comp, fat: LLVMValueRef) {

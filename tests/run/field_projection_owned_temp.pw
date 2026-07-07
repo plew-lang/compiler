@@ -1,7 +1,7 @@
 // Field projection OUT OF AN OWNED TEMP (spec/03): `xs[i].name` / `f().name`
 // project a heap field out of a witness-owned (+1) element / call result — the
 // projected String is independently retained, so it survives both the temp's
-// block-exit drop and the retirement of the source element.
+// statement-end drain and the retirement of the source element.
 import @Std/Io with { print }
 
 struct Item { pub val name: String }

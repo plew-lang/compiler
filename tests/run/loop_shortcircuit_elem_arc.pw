@@ -1,9 +1,9 @@
 // Short-circuit RHS inside a loop (spec/03 ARC): the `xs[i].name` temp home's
-// store sits in a conditionally-executed BB, but the block-exit drop re-runs
-// every iteration. A skipped store must not re-release the previous iteration's
-// value — a drop CONSUMES the slot (double release / UAF without the re-zero).
-// This is the shape that once miscompiled the compiler itself one self-host
-// generation late; the assertion is the ASan gate.
+// store sits in a conditionally-executed BB. The drop must sit on the SAME
+// path (drainStmtTemps inside the RHS arm) — a skipped iteration must not
+// release the previous iteration's value. This is the shape that once
+// miscompiled the compiler itself one self-host generation late (block-exit
+// drop era); the assertion is the ASan gate.
 import @Std/Io with { print }
 
 struct Item { pub val name: String }
