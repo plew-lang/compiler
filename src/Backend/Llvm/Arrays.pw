@@ -37,13 +37,14 @@ pub impl LlvmCtx {
                 return self.i64ty
             }
             Expr.Make(val typeStart, val typeLen, variantStart: _, variantLen: _, val isEnum, ty: _, fields: _) => {
-                // an unannotated record literal has no type name in the source — its
-                // self-described structural struct comes from the typed-IR store.
-                if typeLen == 0U64 && !isEnum {
-                    val rr: U64 = self.exprTypeRef(c: inout c, id: id)
-                    if rr != 0U64 {
-                        return self.llvmTypeOfRef(c: inout c, ref: rr)
-                    }
+                // the typed-IR store first: an unannotated record literal has no type
+                // name in the source at all, and a GENERIC instance (`Optional[I64]`,
+                // `Box[I64]`) needs its registered instance type — the head-name
+                // fallback below sizes both as i64, which strides an array literal of
+                // such elements at 8 bytes and overlaps them.
+                val rr: U64 = self.exprTypeRef(c: inout c, id: id)
+                if rr != 0U64 {
+                    return self.llvmTypeOfRef(c: inout c, ref: rr)
                 }
                 return self.llvmScalarTy(c: inout c, tyStart: typeStart, tyLen: typeLen)
             }
@@ -97,7 +98,18 @@ pub impl LlvmCtx {
                 return self.exprLlvmType(c: inout c, id: operand)
             }
             Expr.Array(val elems) => { return self.arrayInstTy(c: inout c, elemRef: self.arrayLitElemRef(c: inout c, id: id, elems: elems)) }
-            _ => { return self.i64ty }
+            _ => {
+                // any form without a per-form arm (a value-position match — including
+                // the `?.` Chain desugar, whose result groundedTypeOf reads from the
+                // ChainSite —, an if-expression, ...): the typed-IR store is the
+                // authority; a blind i64 here mis-strided an array literal of such
+                // elements (16-byte enum values overlapping at 8 bytes).
+                val rr: U64 = self.exprTypeRef(c: inout c, id: id)
+                if rr != 0U64 {
+                    return self.llvmTypeOfRef(c: inout c, ref: rr)
+                }
+                return self.i64ty
+            }
         }
     }
 

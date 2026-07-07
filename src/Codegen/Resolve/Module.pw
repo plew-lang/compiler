@@ -121,7 +121,23 @@ pub impl Comp {
                     match self.arena.exprs[init] {
                         Expr.Array(val elems) => {
                             if elems.count() > 0 {
-                                val eRef: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
+                                mut val eRef: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
+                                // an ARGLESS generic head (`<Optional.Some v=1 />` with no
+                                // inferable instance reports its bare head name) must not be
+                                // registered or named as the element: it aliases the generic
+                                // TEMPLATE and sends the field grounding into infinite
+                                // recursion. Leave the binding untyped — the element's own
+                                // construction then reports cleanly downstream.
+                                if eRef != 0 {
+                                    if self.arena.types[eRef].args.count() == 0U64 {
+                                        val eh: TypeRef = self.arena.types[eRef]
+                                        if self.genericStructIndex(nameStart: eh.nameStart, nameLen: eh.nameLen) < self.arena.structs.count() {
+                                            eRef = 0
+                                        } else if self.genericEnumIndex(nameStart: eh.nameStart, nameLen: eh.nameLen) < self.arena.enums.count() {
+                                            eRef = 0
+                                        }
+                                    }
+                                }
                                 if eRef != 0 {
                                     // name the element by its REGISTERED span (the mangled
                                     // form for a compound element `Box[I64]`/`Ref[Cell]`) —

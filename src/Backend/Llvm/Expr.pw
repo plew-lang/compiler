@@ -180,11 +180,19 @@ pub impl LlvmCtx {
                 return self.genLlvmMake(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ty, fields: fields)
             }
             Expr.Array(val elems) => {
+                // element type: the typed-IR element ref FIRST (the single authority —
+                // it covers forms exprLlvmType's per-form arms don't, e.g. a `?.` chain
+                // result of a generic-enum type, which would fall back to i64 and stride
+                // the buffer at 8 bytes, overlapping the elements); the per-form
+                // recovery remains only for a store miss.
+                val elemRef: U64 = self.arrayLitElemRef(c: inout c, id: id, elems: elems)
                 mut val et: LLVMTypeRef = self.i64ty
-                if elems.count() > 0U64 {
+                if elemRef != 0U64 {
+                    et = self.llvmTypeOfRef(c: inout c, ref: elemRef)
+                } else if elems.count() > 0U64 {
                     et = self.exprLlvmType(c: inout c, id: elems[0])
                 }
-                return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et, elemRef: self.arrayLitElemRef(c: inout c, id: id, elems: elems))
+                return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et, elemRef: elemRef)
             }
             Expr.Index(val base, val index) => {
                 return self.genLlvmIndex(c: inout c, base: base, index: index)

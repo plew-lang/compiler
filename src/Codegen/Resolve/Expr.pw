@@ -185,24 +185,32 @@ pub impl Comp {
     // caller. Falls back to the instance-independent typeCache/typeOf projection (a
     // node the record pass could not reach).
     inout fn groundedTypeOf(id: U64) -> U64 {
+        mut val pr: U64 = 0
         if id < self.parametricRef.count() {
-            val pr: U64 = self.parametricRef[id]
-            if pr != 0U64 {
-                val savedP: Array[Bind] = self.cur.typeParams
-                val savedA: Array[U64] = self.cur.typeArgs
-                val savedS: U64 = self.cur.selfRef
-                val savedI: U64 = self.cur.itemRef
-                self.cur.typeParams = self.cur.bodyTypeParams
-                self.cur.typeArgs = self.cur.bodyTypeArgs
-                self.cur.selfRef = self.cur.bodySelfRef
-                self.cur.itemRef = self.cur.bodyItemRef
-                val g: U64 = self.groundTypeRef(ref: pr)
-                self.cur.typeParams = savedP
-                self.cur.typeArgs = savedA
-                self.cur.selfRef = savedS
-                self.cur.itemRef = savedI
-                return g
-            }
+            pr = self.parametricRef[id]
+        }
+        // a Chain-desugar MatchExpr has no parametric store entry of its own — its
+        // parametric result lives in the ChainSite side list (stageRef); ground it
+        // through the same body-env substitution so every consumer of the typed IR
+        // (array-element stride, argument homes, ...) sees the stage type, not 0.
+        if pr == 0U64 {
+            pr = self.chainSiteFor(exprId: id).stageRef
+        }
+        if pr != 0U64 {
+            val savedP: Array[Bind] = self.cur.typeParams
+            val savedA: Array[U64] = self.cur.typeArgs
+            val savedS: U64 = self.cur.selfRef
+            val savedI: U64 = self.cur.itemRef
+            self.cur.typeParams = self.cur.bodyTypeParams
+            self.cur.typeArgs = self.cur.bodyTypeArgs
+            self.cur.selfRef = self.cur.bodySelfRef
+            self.cur.itemRef = self.cur.bodyItemRef
+            val g: U64 = self.groundTypeRef(ref: pr)
+            self.cur.typeParams = savedP
+            self.cur.typeArgs = savedA
+            self.cur.selfRef = savedS
+            self.cur.itemRef = savedI
+            return g
         }
         return self.typedIrRefOfInfo(ti: self.typeOf(id: id))
     }

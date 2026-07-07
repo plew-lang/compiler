@@ -1,0 +1,8 @@
+// An IMPLICIT-args generic-enum construction as an un-annotated array element
+// (`[<Optional.Some ...>]`): the element type is an argless generic head, which
+// must not be recorded as the literal's element ref (it once recursed the
+// registrar into a stack overflow) — the un-inferred construction rejects loudly.
+import @Std/Core
+fn main() {
+    val xs = [<Optional.Some v=1I64 />]
+}

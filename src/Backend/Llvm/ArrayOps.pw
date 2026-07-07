@@ -24,9 +24,20 @@ pub impl LlvmCtx {
                     ev = self.genLlvmExpr(c: inout c, id: elems[i])
                 }
             } else {
+                // flow the element's expected instance to the expression (same protocol
+                // as genArgValueV's generic-instance params): a construction inside the
+                // element — including the None arm a `?.` desugar synthesizes — grounds
+                // its head from context. The consumer resets expectedTy; reset here too
+                // so a non-construction element can't leak it into a later one.
+                if elemRef != 0U64 {
+                    if c.isGenericInst(ref: elemRef) {
+                        self.expectedTy = elemRef
+                    }
+                }
                 // value semantics: copy an array/struct PLACE element (`[a, b]` for
                 // Array[Array[T]]) so the literal is independent of the source bindings.
                 ev = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elems[i]), elemTy: elemTy), expr: elems[i], typeRef: elemRef)
+                self.expectedTy = 0U64
             }
             LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
             i += 1
