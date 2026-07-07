@@ -1,0 +1,8 @@
+// A bare destructure element assigns to an EXISTING binding — which must be
+// `mut val` (spec/03); assigning into an immutable `val` rejects like any
+// other assignment.
+fn main() {
+    val point = (x: 10I64, y: 20I64)
+    val x: I64 = 0
+    (x, val y) = point
+}

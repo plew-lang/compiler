@@ -344,7 +344,11 @@ pub impl Comp {
             }
             Expr.Ident(val start, val len) => {
                 if !(self.placeIsMutable(id: target)) {
-                    self.errorAt(offset: start, msg: "cannot assign to an immutable binding; declare it with `mut val`")
+                    // exprOffset, not the raw token start: a destructure's synthesized
+                    // assign (`(x, val y) = r`) idents an INTERNED name — its source
+                    // position lives in exprSpanStart (same for hand-written idents,
+                    // where exprOffset falls back to the token start).
+                    self.errorAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable binding; declare it with `mut val`")
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {

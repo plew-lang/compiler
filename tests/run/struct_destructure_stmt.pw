@@ -1,0 +1,24 @@
+// The struct-destructure STATEMENT `P { … } = e` (spec/03): a statement-position
+// type name (unambiguous with a block's `{` start and the record form's `(`
+// start). Same element grammar as the record form — `val` binds, renames
+// (`y: val b`), bare assigns to an existing `mut val`, and `label: _` discards —
+// and the same coverage rule (every field bound or discarded). A generic struct
+// destructures through its head name (`Box { val v } = b` for a Box[String]).
+import @Std/Io with { print }
+
+struct Pt { pub val x: I64 pub val y: I64 pub val z: I64 }
+struct Box[T] { pub val v: T pub val tag: I64 }
+
+fn main() {
+    val p = <Pt x=3 y=4 z=5 />
+    Pt { val x, y: val b, z: _ } = p
+    print(x)
+    print(b)
+    mut val a: I64 = 0
+    Pt { x: a, y: _, z: _ } = p
+    print(a)
+    val bx = <Box[String] v="hi" tag=7 />
+    Box { val v, val tag } = bx
+    print(v)
+    print(tag)
+}

@@ -515,7 +515,7 @@ pub impl Comp {
             }
             StmtAst.Break(val span) => { result = self.pushStmt(s: <Stmt.Break offset=span.start />) }
             StmtAst.Continue(val span) => { result = self.pushStmt(s: <Stmt.Continue offset=span.start />) }
-            StmtAst.Destructure(val binds, val init, val span) => {
+            StmtAst.Destructure(val binds, val typeName, val init, val span) => {
                 // normally expanded by lowerBlock into several statements; reached only if a
                 // destructuring appears outside a statement list — lower the initializer as a
                 // plain expression statement so the value is still evaluated.
@@ -525,20 +525,30 @@ pub impl Comp {
         return result
     }
 
-    // Lower a record-destructuring `(val x, val y) = init` into a temp binding plus one
-    // `val` per field, appended to `stmts`: `val __dt1 = init; val x = __dt1.x; …`. The
-    // temp's struct is recovered from the initializer (records track their struct like any
-    // value), so no annotation is needed. The temp name is UNIQUE per destructure
-    // (the same lowerTmpSeq counter the compound-assign `__ce` temps use) — temp
-    // hygiene: no reliance on same-name shadowing, no collision with a user local.
-    inout fn lowerDestructureInto(binds: Array[BindAst], init: ExprAst, offset: U64, stmts: inout Array[U64]) {
+    // Lower a destructuring statement — the record form `(val x, val y) = init` or the
+    // struct form `P { val x } = init` (typeName non-empty) — into a temp binding plus
+    // one statement per field, appended to `stmts`: `val __dt1 = init; val x = __dt1.x; …`.
+    // A `val` element becomes a Let; a bare (isAssign) element becomes an assignment to
+    // the EXISTING `mut val` binding (`x = __dt1.x` — the normal assignment checks give
+    // the undeclared / immutable diagnostics, spec/03). The temp's struct is recovered
+    // from the initializer (records track their struct like any value), so no annotation
+    // is needed. The temp name is UNIQUE per destructure (the same lowerTmpSeq counter
+    // the compound-assign `__ce` temps use) — temp hygiene: no reliance on same-name
+    // shadowing, no collision with a user local.
+    inout fn lowerDestructureInto(binds: Array[BindAst], typeName: String, init: ExprAst, offset: U64, stmts: inout Array[U64]) {
         self.cur.lowerTmpSeq += 1U64
         val tmp: Bind = self.internTmpName(prefix: "__dt", n: self.cur.lowerTmpSeq)
         val iv: U64 = self.lowerExpr(e: init)
         stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=iv />))
+        // the struct form's declared type name — Verify checks it against the
+        // initializer's actual type (len 0 = record form, no name to check).
+        mut val tyB: Bind = <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />
+        if typeName.bytes().count() > 0U64 {
+            tyB = self.internBytes(s: typeName)
+        }
         // record the bind LIST for the completeness check (spec/03: every field bound
         // or discarded, no duplicates) — the desugar below erases it.
-        self.decls.destructureSites.append(<DestructureSite initId=iv offset=offset isElem=false binds=self.destructureSiteBinds(binds: binds) />)
+        self.decls.destructureSites.append(<DestructureSite initId=iv offset=offset isElem=false typeStart=tyB.nameStart typeLen=tyB.nameLen binds=self.destructureSiteBinds(binds: binds) />)
         mut val bi: U64 = 0
         while bi < binds.count() {
             // a `label: _` discard covers the field without creating a local — the
@@ -556,7 +566,13 @@ pub impl Comp {
             val fld: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=binds[bi].fieldStart nameLen=binds[bi].field.bytes().count() />)
             self.arena.exprSpanStart[recv] = binds[bi].span.start
             self.arena.exprSpanStart[fld] = binds[bi].span.start
-            stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+            if binds[bi].isAssign {
+                val tgt: U64 = self.pushExpr(e: <Expr.Ident start=nameB.nameStart len=nameB.nameLen />)
+                self.arena.exprSpanStart[tgt] = binds[bi].span.start
+                stmts.append(self.pushStmt(s: <Stmt.Assign target=tgt value=fld />))
+            } else {
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=nameB.nameStart nameLen=nameB.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=fld />))
+            }
             bi += 1
         }
     }
@@ -586,8 +602,8 @@ pub impl Comp {
         while i < b.stmts.count() {
             // a destructuring statement expands to several arena statements (temp + fields).
             match b.stmts[i] {
-                StmtAst.Destructure(val binds, val init, val span) => {
-                    self.lowerDestructureInto(binds: binds, init: init, offset: span.start, stmts: inout stmts)
+                StmtAst.Destructure(val binds, val typeName, val init, val span) => {
+                    self.lowerDestructureInto(binds: binds, typeName: typeName, init: init, offset: span.start, stmts: inout stmts)
                 }
                 // a compound assign `place OP= v` expands to the temp bindings for its
                 // place's side-effecting index keys plus the desugared `place = place OP v`

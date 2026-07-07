@@ -1,0 +1,9 @@
+// The struct destructure statement declares the type it takes apart — an
+// initializer of a DIFFERENT type must reject even when the field names line
+// up (silently binding same-named fields would hide the type error, spec/03).
+struct Pt { pub val x: I64 pub val y: I64 }
+struct Qt { pub val x: I64 pub val y: I64 }
+fn main() {
+    val p = <Pt x=3 y=4 />
+    Qt { val x, val y } = p
+}

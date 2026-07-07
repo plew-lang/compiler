@@ -1,0 +1,26 @@
+// A destructure statement mixes NEW bindings (`val name`) with assignments to
+// EXISTING `mut val` bindings (bare `name` / `label: name`) — spec/03. The bare
+// element desugars to a normal assignment, so an old heap value held by the
+// target is released at the reassign (the Cell 1 deinit fires mid-function),
+// and the new owner releases at scope exit as usual.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+fn main() {
+    val point = (x: 10I64, y: 20I64)
+    mut val x: I64 = 0
+    (x, val y) = point
+    print(x)
+    print(y)
+    mut val r: Ref[Cell] = <Ref value=<Cell v=1 /> />
+    val pair = (r: <Ref value=<Cell v=2 /> />, n: 5I64)
+    (r, n: val n) = pair
+    print(n)
+    print(r->v)
+    print("end")
+}

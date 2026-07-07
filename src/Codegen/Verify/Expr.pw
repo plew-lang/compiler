@@ -517,6 +517,15 @@ pub impl Comp {
                 tnLen = self.arena.types[ti.ref].nameLen
             }
         }
+        // the struct form (`P { val x } = e`) declares the type it destructures —
+        // the initializer must actually BE that struct (another type silently
+        // binding same-named fields would hide a type error, spec/03).
+        if site.typeLen > 0U64 {
+            if !(spansEqual(c: inout self, aStart: site.typeStart, aLen: site.typeLen, bStart: tnStart, bLen: tnLen)) {
+                self.errorAt(offset: site.offset, msg: "the struct destructure's type name does not match the initializer's type (spec/03)")
+                return
+            }
+        }
         val sidx: U64 = self.structIndexByName(start: tnStart, len: tnLen)
         if sidx >= self.arena.structs.count() {
             return
