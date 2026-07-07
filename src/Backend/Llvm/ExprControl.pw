@@ -275,6 +275,13 @@ pub impl LlvmCtx {
         val errB: Bind = c.kwSpan(kw: "Err", kwLen: 3U64)
         val okVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: okB.nameStart, variantLen: okB.nameLen)
         val errVi: U64 = c.variantIndex(enumStart: ed.nameStart, enumLen: ed.nameLen, variantStart: errB.nameStart, variantLen: errB.nameLen)
+        // A PLACE operand (`try r` on a binding) loads a +0 alias of the place's
+        // heap: the extracted payload must be RETAINED before it escapes (the Err
+        // payload rides the return past dropScope's release of the place itself;
+        // the Ok payload is consumed as owned by the `try` expression's consumer).
+        // A temporary operand transfers ownership instead — no retain, and its
+        // unregistered slot is exactly that transfer.
+        val operandIsPlace: Bool = exprAliasesPlace(c: inout c, id: expr)
         val ev: LLVMValueRef = self.genLlvmExpr(c: inout c, id: expr)
         val eslot: LLVMValueRef = self.entryAlloca(ty: eety)
         LLVMBuildStore(self.b, ev, eslot)
@@ -295,6 +302,7 @@ pub impl LlvmCtx {
         // error conversion (spec/13): when the function's error type E differs from the
         // operand's E', convert E' -> E through E's `from` factory before rewrapping.
         mut val convErrVal: LLVMValueRef = errVal
+        mut val didConvert: Bool = false
         val opErrRef: U64 = c.resultErrArgRef(ref: exprRef)
         val fnErrRef: U64 = c.resultErrArgRef(ref: self.curRetRef)
         if opErrRef != 0U64 {
@@ -309,7 +317,26 @@ pub impl LlvmCtx {
                         val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [], recvInstRef: 0U64)
                         if fgslot < self.genFnK.count() {
                             convErrVal = LLVMBuildCall2(self.b, self.genFnTy[fgslot], self.genFnVal[fgslot], arrayCPtr(cav), cav.count(), anon())
+                            didConvert = true
                         }
+                    }
+                }
+            }
+        }
+        // ownership of the ORIGINAL error payload: conversion produced a fresh owned
+        // value from a +0 borrow of errVal — a temp operand's own +1 must then be
+        // released (it escapes nowhere) or it leaks. Without conversion the payload
+        // itself is returned: a place operand's +0 alias must be retained (dropScope
+        // below releases the place; the return must own its payload).
+        if opErrRef != 0U64 {
+            if c.arcNeedsRelease(ref: opErrRef) {
+                if didConvert {
+                    if !(operandIsPlace) {
+                        self.valueArc(c: inout c, v: errVal, typeRef: opErrRef, retain: false)
+                    }
+                } else {
+                    if operandIsPlace {
+                        self.valueArc(c: inout c, v: errVal, typeRef: opErrRef, retain: true)
                     }
                 }
             }
@@ -333,6 +360,22 @@ pub impl LlvmCtx {
         val okPayload: LLVMValueRef = LLVMBuildLoad2(self.b, okPayloadTy, LLVMBuildStructGEP2(self.b, eety, eslot, 1U64, anon()), anon())
         val okVal: LLVMValueRef = LLVMBuildExtractValue(self.b, okPayload, 0U64, anon())
         if didO { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
+        // a place operand's Ok payload is a +0 alias, but `try`'s consumer treats the
+        // yielded value as OWNED (exprAliasesPlace(Try) = false) — retain it so the
+        // place and the consumer each hold a count (a temp operand transfers instead).
+        if operandIsPlace {
+            mut val okRef: U64 = 0
+            if exprRef < c.arena.types.count() {
+                if c.arena.types[exprRef].args.count() > 0U64 {
+                    okRef = c.arena.types[exprRef].args[0]
+                }
+            }
+            if okRef != 0U64 {
+                if c.arcNeedsRelease(ref: okRef) {
+                    self.valueArc(c: inout c, v: okVal, typeRef: okRef, retain: true)
+                }
+            }
+        }
         return okVal
     }
 }

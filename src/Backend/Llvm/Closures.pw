@@ -463,13 +463,25 @@ pub impl LlvmCtx {
                     mut val pi: U64 = 0
                     while pi < params.count() {
                         self.bindOneParam(c: inout c, p: params[pi], fv: fv, argIdx: pi + 1U64)
+                        // a `move` param is owned (deinit'd here); by-value is a +0
+                        // borrow — mirrors the regular-fn binding. Without this a
+                        // String/struct-classed closure param rode the ungated
+                        // typeRef release on every return (-1 per call on the
+                        // caller's heap).
+                        self.setLocalOwned(owned: params[pi].isMove)
                         pi += 1
                     }
-                    // body locals are released at scope exit; captures + params (bound above,
-                    // owned by the enclosing scope / caller) are excluded.
+                    // body locals are released at scope exit; params are borrows;
+                    // struct-classed captures hold this activation's +1 (bound above).
                     self.curBodyMark = self.nLocals
                     self.genLlvmBlock(c: inout c, id: body)
                     if !(self.terminated) {
+                        // fall-through epilogue (mirrors the regular-fn one): release
+                        // the owned entries below the body mark — the per-activation
+                        // capture retains, and any `move` param — before returning.
+                        // Without this a void closure (no trailing `return`) leaked
+                        // one capture count per call.
+                        self.dropScope(c: inout c, fromMark: 0U64, excludeLi: 18446744073709551615U64)
                         if self.curRetVoid {
                             LLVMBuildRetVoid(self.b)
                         } else {

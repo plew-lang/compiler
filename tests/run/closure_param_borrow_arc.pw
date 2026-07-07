@@ -1,0 +1,31 @@
+import @Std/Io with { print, write }
+
+fn main() {
+    val name: String = "wo" + "rld"
+    // ARC-classed by-value closure param: must be a +0 borrow (no release in the closure).
+    val greet: fn(who: String) -> U64 = fn(who: String) -> U64 {
+        return who.bytes().count()
+    }
+    mut val i: I64 = 0
+    mut val total: U64 = 0
+    while i < 3 {
+        total += greet(who: name)
+        i += 1
+    }
+    print(total)
+    // void closure (fall-through, no return) capturing a heap String: the
+    // per-activation capture retain must be released by the fall-through unwind.
+    val tag: String = "t" + "ag"
+    val log: fn(n: I64) = fn(n: I64) {
+        if tag.bytes().count() > 100U64 {
+            write(s: "never\n")
+        }
+    }
+    i = 0
+    while i < 3 {
+        log(n: i)
+        i += 1
+    }
+    print(name.bytes().count())
+    print(tag.bytes().count())
+}

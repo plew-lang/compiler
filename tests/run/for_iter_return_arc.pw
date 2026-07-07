@@ -1,0 +1,56 @@
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Res {
+    pub val name: String
+    deinit {
+        print("deinit " + self.name)
+    }
+}
+
+struct Thing {
+    pub val name: String
+    pub val r: Ref[Res]
+}
+
+fn mk(name: String) -> Thing {
+    return <Thing name=name r=<Ref value=<Res name=name /> /> />
+}
+
+fn firstMatch(things: Array[Thing], needle: String) -> String {
+    for t in things {
+        if t.name == needle {
+            return t.name
+        }
+    }
+    return "none"
+}
+
+fn breakEarly(things: Array[Thing]) -> I64 {
+    mut val n: I64 = 0
+    for t in things {
+        n = n + 1
+        if n == 2 {
+            break
+        }
+    }
+    return n
+}
+
+fn walkAll(things: Array[Thing]) -> I64 {
+    mut val n: I64 = 0
+    for t in things {
+        n = n + 1
+    }
+    return n
+}
+
+fn main() {
+    val things: Array[Thing] = [mk(name: "a"), mk(name: "b"), mk(name: "c")]
+    print("found " + firstMatch(things: things, needle: "b"))
+    print("broke")
+    print(breakEarly(things: things))
+    print("walked")
+    print(walkAll(things: things))
+    print("end")
+}
