@@ -1,0 +1,22 @@
+import @Std/Io with { print, write }
+
+// Temporaries die at the end of the full expression (statement) that created them
+// (spec/03) — not at block exit: the borrowing call returns, the statement ends, and
+// the temp's deinit runs BEFORE the next statement. A named binding still lives to
+// scope exit.
+unique struct Res {
+    pub val tag: I64
+    deinit { print(self.tag) }
+}
+
+fn probe(res: borrow Res) -> I64 {
+    return res.tag
+}
+
+fn main() {
+    val got: I64 = probe(res: <Res tag=11 />)
+    write(s: "after\n")
+    val kept: Res = <Res tag=22 />
+    write(s: "bound\n")
+    print(got)
+}

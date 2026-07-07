@@ -197,7 +197,7 @@ pub impl LlvmCtx {
                         val bv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: base)
                         val raw: LLVMValueRef = LLVMBuildExtractValue(self.b, bv, fidx, anon())
                         // projecting a field OUT OF AN OWNED TEMPORARY (`xs[i].items`,
-                        // `f().name`): home the base temp (block-exit drop) and RETAIN the
+                        // `f().name`): home the base temp (statement-end drain) and RETAIN the
                         // projected value so it is independently owned — exprAliasesPlace
                         // answers false for this shape, so every consumer balances the +1.
                         // A place base stays a plain borrow projection (no retain).

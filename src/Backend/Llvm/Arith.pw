@@ -400,7 +400,7 @@ pub impl LlvmCtx {
     // Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
     // The base rides genBorrowedArg: a non-place base (an element read `xs[i]`, a
     // Ref-returning call) arrives as an OWNED (+1) temporary and gets an anonymous
-    // owned home (block-exit release) — reading through it must not strand that count.
+    // owned home (statement-end release) — reading through it must not strand that count.
     inout fn loadRefPointee(c: inout Comp, base: U64) -> LLVMValueRef {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: r)

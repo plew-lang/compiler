@@ -532,7 +532,12 @@ pub impl LlvmCtx {
             LLVMBuildCondBr(self.b, lv, contBB, rhsBB)
         }
         LLVMPositionBuilderAtEnd(self.b, rhsBB)
+        val rhsMark: U64 = self.nLocals
         val rv: LLVMValueRef = self.genLlvmCond(c: inout c, id: rhs)
+        // temporaries created by the conditionally-evaluated RHS die inside its own
+        // arm, before the merge (spec/03 statement-end destruction, path-precise):
+        // the drop sits on exactly the path that stored them.
+        self.drainStmtTemps(c: inout c, fromMark: rhsMark)
         val rhsEndBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)

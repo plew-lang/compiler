@@ -683,7 +683,7 @@ pub impl LlvmCtx {
                                 val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                                 // genBorrowedArg: a non-place base (`ys[0]->v = …`) arrives
                                 // as an owned (+1) temporary from the index witness — home
-                                // it so the count releases at block exit (mirrors the
+                                // it so the count releases at statement end (mirrors the
                                 // placePtrStrict Deref/Arrow arms).
                                 val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: abase)
                                 val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
@@ -899,7 +899,13 @@ pub impl LlvmCtx {
                 val endBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "while.end"))
                 LLVMBuildBr(self.b, condBB)
                 LLVMPositionBuilderAtEnd(self.b, condBB)
+                val condMark: U64 = self.nLocals
                 val cv: LLVMValueRef = self.genLlvmCond(c: inout c, id: cond)
+                // the condition re-evaluates (and re-stores its temps) on every
+                // iteration — its temporaries die here in the cond block (spec/03
+                // statement-end destruction), not once after the loop, which would
+                // leak every iteration's value but the last.
+                self.drainStmtTemps(c: inout c, fromMark: condMark)
                 LLVMBuildCondBr(self.b, cv, bodyBB, endBB)
                 LLVMPositionBuilderAtEnd(self.b, bodyBB)
                 self.terminated = false

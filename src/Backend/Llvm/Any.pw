@@ -430,7 +430,7 @@ pub impl LlvmCtx {
         if !gotFat {
             fat = self.genLlvmExpr(c: inout c, id: recv)
             // a temporary receiver (`makeAny().m()`) owns its box: give it an anonymous
-            // owned home so the block-exit drop releases it (guaranteed(+0) discipline).
+            // owned home so the statement-end drain releases it (guaranteed(+0) discipline).
             if !(exprAliasesPlace(c: inout c, id: recv)) {
                 self.registerArgTemp(c: inout c, v: fat, typeRef: anyRef)
             }

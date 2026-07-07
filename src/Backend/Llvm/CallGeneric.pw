@@ -43,7 +43,7 @@ pub impl LlvmCtx {
         } else {
             // by-value receiver = Swift-guaranteed self (+0): a PLACE passes as a bare
             // borrow; a TEMPORARY receiver (`(a + b).bytes()`, a call-result method
-            // chain) gets an anonymous owned home so the block exit drops it.
+            // chain) gets an anonymous owned home so the statement-end drain drops it.
             av.append(self.genBorrowedArg(c: inout c, argExpr: recv))
         }
         val savedP: Array[Bind] = c.cur.typeParams
@@ -192,7 +192,7 @@ pub impl LlvmCtx {
                 val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
                 if refTy != 0U64 {
                     // genBorrowedArg: a non-place base (element read / call result) is an
-                    // owned (+1) temporary — home it so the count releases at block exit.
+                    // owned (+1) temporary — home it so the count releases at statement end.
                     val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
                     self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                     return cellPtr
@@ -458,7 +458,7 @@ pub impl LlvmCtx {
         }
         // an `any P` parameter (spec/08) under guaranteed(+0): boxing a concrete
         // argument allocates a fresh box — a TEMPORARY the callee only borrows, so it
-        // gets an anonymous owned home (block-exit drop). An existing `any` PLACE is a
+        // gets an anonymous owned home (statement-end drain). An existing `any` PLACE is a
         // borrow (no retain — the binding outlives the call; escapes inside the callee
         // retain via consumeIntoOwned); an `any` temporary (an `any`-returning call)
         // is homed like every other temp class. A `move` arg hands the callee ownership.
@@ -490,7 +490,7 @@ pub impl LlvmCtx {
                     }
                     val litArg: LLVMValueRef = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
                     // a literal arg is a temporary: give it a home so its buffer is
-                    // released at the block exit (an escape inside the callee retains).
+                    // released at the statement end (an escape inside the callee retains).
                     if !(p.isMove) {
                         mut val latr: U64 = p.ty
                         if latr != 0U64 {
@@ -546,7 +546,7 @@ pub impl LlvmCtx {
         // drops at its scope exit). A TEMPORARY (construction / call result / concat)
         // has no home binding — register it as an anonymous owned local so the enclosing
         // block's scope-exit drop destroys it deterministically (Swift releases
-        // temporaries at the end of the full expression; Plew uses the block exit).
+        // temporaries at the end of the full expression; so does Plew — spec/03).
         if !(p.isMove) {
             if !(exprAliasesPlace(c: inout c, id: argExpr)) {
                 mut val ttr: U64 = self.argValueTypeRef(c: inout c, argExpr: argExpr)
@@ -584,11 +584,10 @@ pub impl LlvmCtx {
     }
 
     // Register a heap-carrying argument TEMPORARY as an anonymous owned local: the
-    // enclosing block's scope-exit drop destroys it (classifier-routed via locTypeRef).
-    // The slot is zero-initialized at fn entry (entryAllocaZeroed) because the store may
-    // sit in a conditionally-executed BB (a short-circuit RHS) while the drop always
-    // reads the slot — a zero value releases as a no-op. A scalar-classed value needs no
-    // home (nothing to release).
+    // enclosing statement's drain (drainStmtTemps — spec/03 statement-end destruction)
+    // destroys it, classifier-routed via locTypeRef, on the same control-flow path
+    // that stored it (a short-circuit RHS drains inside its arm). A scalar-classed
+    // value needs no home (nothing to release).
     inout fn registerArgTemp(c: inout Comp, v: LLVMValueRef, typeRef: U64) {
         if !(c.arcNeedsRelease(ref: typeRef)) {
             return
@@ -596,9 +595,8 @@ pub impl LlvmCtx {
         // The home is an alloca even inside an async fn: a temp's borrower (the call)
         // returns before any suspension can happen, and every suspension point first
         // drops all live anonymous temps (emitLlvmAsyncSuspend), so a temp never needs
-        // to survive a resume (whose fresh entry re-zeroes the slot, making the
-        // block-exit drop a no-op rather than a UAF).
-        val slot: LLVMValueRef = self.entryAllocaZeroed(ty: LLVMTypeOf(v))
+        // to survive a resume.
+        val slot: LLVMValueRef = self.entryAlloca(ty: LLVMTypeOf(v))
         LLVMBuildStore(self.b, v, slot)
         self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: slot, ty: LLVMTypeOf(v), kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.ptrty, elemKind: 0U64, typeRef: typeRef)
     }

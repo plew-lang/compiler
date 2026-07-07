@@ -254,26 +254,12 @@ pub impl LlvmCtx {
 
     // Run scope-exit destruction of local `li` (spec/03) if it is an owned, not-moved
     // unique struct local whose type needs a deinit (own or a field's). The struct
-    // value is loaded and destroyed recursively.
+    // value is loaded and destroyed recursively. Every drop point is emitted exactly
+    // once per store on the same control-flow path (named locals: the Let store
+    // dominates their block's exit; anonymous temps: drainStmtTemps sits at the end
+    // of the statement — or inside the conditional arm — that stored them), so the
+    // slot needs no defensive re-zeroing after release.
     inout fn emitDeinitCall(c: inout Comp, li: U64) {
-        self.emitDeinitCallValue(c: inout c, li: li)
-        // an ANONYMOUS temp home (registerArgTemp / loop-payload home, locLen == 0):
-        // its STORE may sit in a conditionally-executed BB (a short-circuit RHS, a `?.`
-        // arm) while this drop point re-runs on every iteration of an enclosing loop.
-        // The entry-block zero-init makes the FIRST unstored drop a no-op, but a re-run
-        // after a drop would release the consumed value AGAIN (double release / UAF).
-        // Invariant: a drop CONSUMES the slot — re-zero it, so any re-run without an
-        // intervening store releases zero (a no-op). Named locals need none of this
-        // (their Let store dominates their block's exit); a cell-home's locPtr is the
-        // rc'd cell itself, not an alloca to clear.
-        if self.locLen[li] == 0U64 {
-            if !(self.locCellHome[li]) {
-                LLVMBuildStore(self.b, LLVMConstNull(self.locTy[li]), self.locPtr[li])
-            }
-        }
-    }
-
-    inout fn emitDeinitCallValue(c: inout Comp, li: U64) {
         // skip a borrow/inout param (not owned here) or a value already moved out.
         if !(self.locOwned[li]) {
             return
@@ -416,6 +402,25 @@ pub impl LlvmCtx {
         }
     }
 
+    // Statement-end destruction of temporaries (spec/03: a temporary dies at the end
+    // of the full expression that created it): drop every anonymous owned temp
+    // registered at or above `fromMark` (registerArgTemp homes — nameLen 0; a
+    // cell-home is a named binding's boxed storage, never a temp) and mark it moved
+    // so no later exit (block end / return / loop unwind) re-releases it. Called at
+    // the end of each statement, and — for a conditionally-evaluated subexpression
+    // (a short-circuit RHS, a per-iteration while condition) — inside its own BB
+    // before the merge, so a temp's drop sits on exactly the path that stored it.
+    inout fn drainStmtTemps(c: inout Comp, fromMark: U64) {
+        mut val i: U64 = self.nLocals
+        while i > fromMark {
+            i -= 1U64
+            if self.locLen[i] == 0U64 && !(self.locCellHome[i]) && self.locOwned[i] && !(self.locMoved[i]) {
+                self.emitDeinitCall(c: inout c, li: i)
+                self.locMoved[i] = true
+            }
+        }
+    }
+
     // Scope unwind for a `break`/`continue`: release the live body locals of the current
     // (innermost) loop iteration — [loop-body mark, nLocals) — before the branch. The mark
     // is read from the loop frame (recorded at pushLoop = body entry), so this drops EXACTLY
@@ -440,7 +445,14 @@ pub impl LlvmCtx {
                 self.nLocals = mark
                 return
             }
+            val stmtMark: U64 = self.nLocals
             self.genLlvmStmt(c: inout c, id: blk.stmts[i])
+            // statement-end destruction of temporaries (spec/03): a temp created by
+            // this statement dies here, not at block exit. A terminated statement
+            // (return / break / continue) already dropped them in its unwind.
+            if !(self.terminated) {
+                self.drainStmtTemps(c: inout c, fromMark: stmtMark)
+            }
             i += 1
         }
         // fall-through exit: run scope-exit deinits for this block's locals (a return

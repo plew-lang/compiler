@@ -251,7 +251,7 @@ pub impl LlvmCtx {
         // borrowers (calls in already-completed statements, and the just-evaluated
         // await operand) have returned, and a temp's alloca home does not survive a
         // resume (fresh stack frame; the entry re-zeroes it, so its block-exit drop
-        // would silently no-op — a leak). Marked moved so the block exit skips them.
+        // would be a stale frame read). Marked moved so no later drain re-drops them.
         self.dropLiveAnonTemps(c: inout c)
         LLVMBuildStore(self.b, LLVMConstInt(self.i32ty, state, 0I32), self.asyncFrameSlot(c: inout c, idx: 0U64))
         val donePtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, self.promiseTy, subPromise, 0U64, anon())
@@ -283,7 +283,7 @@ pub impl LlvmCtx {
     // Drop (and mark moved) every live anonymous owned temp (registerArgTemp homes:
     // nameLen 0, owned, not yet moved, above the body mark) — called at each
     // suspension point. The entries stay on the locals stack (no splice); the moved
-    // flag keeps the block-exit drop from double-releasing.
+    // flag keeps any later drain / exit from double-releasing.
     inout fn dropLiveAnonTemps(c: inout Comp) {
         mut val li: U64 = self.curBodyMark
         while li < self.nLocals {
@@ -299,7 +299,7 @@ pub impl LlvmCtx {
 
     // Drop the just-awaited promise when the operand was a TEMPORARY (`await f()`,
     // `await sleep(ms:…)`): the temp's ownership ends once its value is read — mirror
-    // of the sync temp protocol, whose block-exit home an await cannot use (the frame
+    // of the sync temp protocol, whose alloca home an await cannot use (the frame
     // outlives blocks). A PLACE operand (`await p`) keeps its binding's ownership and
     // may be awaited again. Called AFTER the resume's value read.
     inout fn asyncDropAwaitedTemp(c: inout Comp, operandId: U64) {
