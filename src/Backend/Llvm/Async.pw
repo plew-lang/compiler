@@ -434,7 +434,12 @@ pub impl LlvmCtx {
                 }
             }
             if pRef == 0U64 {
-                if self.enumRegSlot(c: inout c, start: p.tyStart, len: p.tyLen) < self.genEnumRefs.count() {
+                // test the DECLARATION (concreteEnumIdxByName), not the registered
+                // instances: registration is demand-driven, so an async fn emitted
+                // before any construction of the enum would leave the param ref-less
+                // (its frame-owned drop then skips the payload's deinit). Mirrors
+                // bindOneParam.
+                if c.concreteEnumIdxByName(start: p.tyStart, len: p.tyLen) < c.arena.enums.count() {
                     pRef = c.simpleTypeRef(nameStart: p.tyStart, nameLen: p.tyLen)
                 }
             }
@@ -462,9 +467,11 @@ pub impl LlvmCtx {
             entryFn = self.asyncEntryVal[self.asyncEntrySlot(fi: fi)]
         }
         self.curFn = entryFn
-        val entryBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, entryFn, cstr(s: "entry"))
-        LLVMPositionBuilderAtEnd(self.b, entryBB)
-        self.terminated = false
+        // the standard fn skeleton (entry: br body0) — NOT a bare single block: the
+        // param-copy loop below retains heap-carrying params, and a payload enum's
+        // retain walker allocates its scratch slot via entryAlloca, which inserts
+        // before the entry block's terminator (a bare block has none — null deref).
+        self.beginFnBody(fv: entryFn)
         // an `async fn main`: initialize module-level variables (spec/15) before the
         // first resume runs (so an init referencing a global, or main reading one, sees it).
         if isMain {

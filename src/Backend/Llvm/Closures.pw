@@ -419,7 +419,12 @@ pub impl LlvmCtx {
                                 if c.isGenericInst(ref: cap.ty) {
                                     cRef = cap.ty
                                 } else {
-                                    if self.enumRegSlot(c: inout c, start: cap.tyStart, len: cap.tyLen) < self.genEnumRefs.count() {
+                                    // declaration test (concreteEnumIdxByName), not the
+                                    // registered instances — registration is demand-driven, so
+                                    // a closure emitted before any construction of the enum
+                                    // would leave the capture ref-less (its release then skips
+                                    // the payload's deinit). Mirrors bindOneParam.
+                                    if c.concreteEnumIdxByName(start: cap.tyStart, len: cap.tyLen) < c.arena.enums.count() {
                                         cRef = c.simpleTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
                                     }
                                     // TOTAL-REF: a bare (non-generic) struct capture (`val p: Pt`

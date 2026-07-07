@@ -429,6 +429,20 @@ pub impl Comp {
         return self.arena.enums.count()
     }
 
+    // enumIdxByName restricted to a CONCRETE (0-type-param) declaration — the backend's
+    // bare-name TypeRef recovery sites (param / capture / payload bind / receiver) test
+    // "is this name a plain enum" with this: a bare GENERIC head must not become an
+    // argless TypeRef (it grounds to nothing and poisons downstream type reads).
+    inout fn concreteEnumIdxByName(start: U64, len: U64) -> U64 {
+        val i: U64 = self.enumIdxByName(start: start, len: len)
+        if i < self.arena.enums.count() {
+            if self.arena.enums[i].typeParams.count() == 0U64 {
+                return i
+            }
+        }
+        return self.arena.enums.count()
+    }
+
     inout fn findTraitIdxByName(start: U64, len: U64) -> U64 {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val ti: U64 = 0

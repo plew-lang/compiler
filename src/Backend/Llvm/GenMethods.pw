@@ -312,13 +312,13 @@ pub impl LlvmCtx {
             }
             if pRef == 0U64 {
                 // grounded span so a `Self` param on an enum receiver tracks the enum.
-                // Test against the DECLARATION (enumIdxByName), not the registered
-                // instances (enumRegSlot): registration is demand-driven, so a fn
-                // emitted before any construction of the enum missed here and the
+                // Test against the DECLARATION (concreteEnumIdxByName), not the
+                // registered instances (enumRegSlot): registration is demand-driven, so
+                // a fn emitted before any construction of the enum missed here and the
                 // param stayed ref-less — its scope-exit drop (a `move` param owns
                 // its value) never ran the payload's deinit. The drop path itself
                 // demand-registers (genEnumSlot), so a bare ref is enough.
-                if c.enumIdxByName(start: pgStart, len: pgLen) < c.arena.enums.count() {
+                if c.concreteEnumIdxByName(start: pgStart, len: pgLen) < c.arena.enums.count() {
                     pRef = c.simpleTypeRef(nameStart: pgStart, nameLen: pgLen)
                 }
             }

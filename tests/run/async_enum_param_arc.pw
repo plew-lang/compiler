@@ -1,0 +1,33 @@
+// A heap-carrying payload enum passed into an async fn: the entry thunk
+// retains the payload into the frame (the frame OWNS its copy — no borrow
+// crosses the async boundary, spec/14) and the body's scope exit releases the
+// frame-owned param — the pointee deinit runs exactly ONCE, after the body's
+// use beyond the suspension (a missed release would print no 42; a double
+// release would crash or print it twice).
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+enum Msg {
+    Boxed(r: Ref[Cell])
+    Quit
+}
+
+async fn taker(m: Msg) -> Promise[I64] {
+    await sleep(ms: 1)
+    match m {
+        Msg.Boxed(val r) => { print(r->v) }
+        Msg.Quit => { print("quit") }
+    }
+    return 1
+}
+
+async fn main() {
+    val n: I64 = await taker(m: <Msg.Boxed r=<Ref value=<Cell v=42 /> /> />)
+    print(n)
+    print("end")
+}

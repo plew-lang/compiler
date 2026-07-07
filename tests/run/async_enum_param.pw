@@ -1,0 +1,30 @@
+// Async fn params of every heap-carrying shape (String, struct, payload enum)
+// must cross the suspension via their frame fields. A payload enum param once
+// SIGSEGV'd the compiler itself: the async entry thunk retains heap-carrying
+// params into the frame, and the enum retain walker's entryAlloca assumed the
+// entry block already had a terminator — the thunk emitted into a bare block.
+// Now the thunk uses the standard fn skeleton (entry: br body0).
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+struct Pt { pub val x: I64 pub val y: I64 }
+enum Msg {
+    Text(s: String)
+    Quit
+}
+
+async fn taker(s: String, p: Pt, m: Msg) -> Promise[I64] {
+    await sleep(ms: 1)
+    print(s)
+    print(p.x + p.y)
+    match m {
+        Msg.Text(val s) => { print(s) }
+        Msg.Quit => { print("quit") }
+    }
+    return 1
+}
+
+async fn main() {
+    val n: I64 = await taker(s: "hello", p: <Pt x=3 y=4 />, m: <Msg.Text s="world" />)
+    print(n)
+}

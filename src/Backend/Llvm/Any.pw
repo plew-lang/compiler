@@ -582,10 +582,13 @@ pub impl LlvmCtx {
                 }
             }
             // an enum receiver (`impl Color { fn code() … }`): track its TypeRef so a
-            // bare `match self` / `self == …` in the body recovers the enum.
+            // bare `match self` / `self == …` in the body recovers the enum. Tested
+            // against the DECLARATION (concreteEnumIdxByName), not the registered
+            // instances — registration is demand-driven, so a method emitted before any
+            // construction of the enum would leave `self` ref-less. Mirrors bindOneParam.
             if recvRef == 0U64 {
                 if recvSidx >= c.arena.structs.count() {
-                    if self.enumRegSlot(c: inout c, start: f.recvStart, len: f.recvLen) < self.genEnumRefs.count() {
+                    if c.concreteEnumIdxByName(start: f.recvStart, len: f.recvLen) < c.arena.enums.count() {
                         recvRef = c.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
                     }
                 }

@@ -266,7 +266,12 @@ pub impl LlvmCtx {
                 // locTypeRef must stay 0 so a `.count()`/index over it routes the array path.
                 mut val tref: U64 = 0
                 if !(isArrF) {
-                    if self.enumRegSlot(c: inout c, start: fd.tyStart, len: fd.tyLen) < self.genEnumRefs.count() {
+                    // declaration test (concreteEnumIdxByName), not the registered
+                    // instances — registration is demand-driven, so a match emitted
+                    // before any OTHER construction of the payload enum would leave the
+                    // bind ref-less (the nested match then fails to recover the enum).
+                    // Mirrors bindOneParam.
+                    if c.concreteEnumIdxByName(start: fd.tyStart, len: fd.tyLen) < c.arena.enums.count() {
                         tref = c.simpleTypeRef(nameStart: fd.tyStart, nameLen: fd.tyLen)
                     }
                 }
