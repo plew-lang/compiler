@@ -434,7 +434,28 @@ pub impl LlvmCtx {
                             if cap.isArray {
                                 cElem = self.llvmScalarTy(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen)
                             }
-                            self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen), isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
+                            val capSidx: U64 = self.localStructIdxFor(c: inout c, start: cap.tyStart, len: cap.tyLen)
+                            // A struct-classed capture (String / user struct — capSidx
+                            // registered, typeRef carried) rides the by-value arg
+                            // convention: the UNGATED scope-exit drop releases it on every
+                            // return (emitDeinitCallValue's typeRef arm — the same drop
+                            // that balances a call site's shallow-retained struct arg).
+                            // The env holds only ONE count, so each activation must take
+                            // its own +1 here, or every call nets -1 on the captured heap
+                            // (second call = UAF). Array/Ref/WeakRef/Buffer captures take
+                            // the curBodyMark-GATED arms (true borrows) — no retain.
+                            if !(cap.isArray) {
+                                if cRef != 0U64 && capSidx < c.arena.structs.count() {
+                                    if !(c.isRefInst(ref: cRef)) && !(c.isWeakRefInst(ref: cRef)) {
+                                        if !(rangeEquals(bytes: c.arena.bytes, start: cap.tyStart, len: cap.tyLen, kw: "Buffer")) {
+                                            if c.arcNeedsRelease(ref: cRef) {
+                                                self.valueArc(c: inout c, v: cv, typeRef: cRef, retain: true)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: a, ty: slotTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: capSidx, isArr: cap.isArray, elemTy: cElem, elemKind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), typeRef: cRef)
                             ci += 1
                             }
                         }

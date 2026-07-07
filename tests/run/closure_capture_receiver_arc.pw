@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+fn main() {
+    val greeting: String = "he" + "llo"
+    val f: fn(extra: I64) -> I64 = fn(extra: I64) -> I64 {
+        if greeting.bytes().count() > 0U64 {
+            return extra + 1
+        }
+        return extra
+    }
+    mut val j: I64 = 0
+    mut val tot: I64 = 0
+    while j < 3 {
+        j += 1
+        tot += f(extra: j)
+    }
+    print(tot)
+}
