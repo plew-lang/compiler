@@ -1,0 +1,14 @@
+// The empty record `()` is the unit value and is self-describing like any
+// record literal: a bare `val u = ()` types to the zero-field canonical
+// struct without an annotation — identical to the annotated `val v: () = ()`.
+import @Std/Io with { write }
+
+fn take(u: ()) { write(s: "took\n") }
+
+fn main() {
+    val u = ()
+    take(u: u)
+    val v: () = ()
+    take(u: v)
+    write(s: "end\n")
+}

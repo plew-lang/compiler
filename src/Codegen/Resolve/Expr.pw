@@ -247,9 +247,9 @@ pub impl Comp {
     // value's type is not inferable here (an unsuffixed literal keeps its
     // "no type from context" report; array-typed fields are not modeled).
     inout fn inferRecordMakeRef(fields: Array[MakeField]) -> U64 {
-        if fields.count() == 0U64 {
-            return 0U64
-        }
+        // the empty record `()` is the unit value — self-description degenerates to
+        // the zero-field canonical struct `()` (the same struct an annotated
+        // `val u: () = ()` lowers to), so a bare bind types without an annotation.
         mut val names: Array[String] = []
         mut val tys: Array[PType] = []
         mut val i: U64 = 0
