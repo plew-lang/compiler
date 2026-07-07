@@ -533,6 +533,7 @@ pub impl LlvmCtx {
         self.locElemTypeRef = []
         self.locOwned = []
         self.locMoved = []
+        self.locCellHome = []
         // module-level variables (spec/15) are visible everywhere: seed them as locals
         // (before self/params, so a same-named local shadows the global).
         self.seedGlobals(c: inout c)

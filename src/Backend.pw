@@ -171,6 +171,10 @@ struct LlvmCtx {
     // arg / `move fn` receiver / `move x`), so it is NOT deinit'd here.
     pub mut val locOwned: Array[Bool]
     pub mut val locMoved: Array[Bool]
+    // `locCellHome` = locPtr IS an rc'd rawbuf cell (a `mut val` heap-boxed for
+    // closure capture): scope exit drops one CELL owner (emitCellRelease) instead of
+    // releasing the pointee value directly, and a capturing closure's env retains it.
+    pub mut val locCellHome: Array[Bool]
     // module-level variables (spec/15), parallel arrays indexed by `Comp.arena.globals`
     // position. `genLlvmInitGlobals` builds the LLVM global `gvalRef[i]` and records
     // the binding's recovered local metadata (so `seedGlobals` can re-register each
@@ -873,7 +877,7 @@ export fn emitLlvm(c: inout Comp) {
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethOwn=[]
-        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] declId=[] declFn=[] declTy=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitSidx=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
+        locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitSidx=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty
         curResumeFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32)

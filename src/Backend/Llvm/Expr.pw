@@ -235,31 +235,62 @@ pub impl LlvmCtx {
                     if caps.count() > 0U64 {
                         val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
                         env = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(envTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+                        // env slot 0 = the drop thunk (destroys the captures when the env's
+                        // rc reaches 0 — emitClosureRelease). A boxed capture whose local is
+                        // NOT an rc'd cell (the async-frame corner: its storage is a frame
+                        // field) cannot be released by the thunk — store a null thunk so the
+                        // release still frees the env but leaves such pointers alone.
+                        mut val thunkOk: Bool = true
+                        mut val tci: U64 = 0
+                        while tci < caps.count() {
+                            if caps[tci].boxed {
+                                val tli: U64 = self.findLocal(c: inout c, start: caps[tci].nameStart, len: caps[tci].nameLen)
+                                if tli < self.nLocals {
+                                    if !(self.locCellHome[tli]) {
+                                        thunkOk = false
+                                    }
+                                } else {
+                                    thunkOk = false
+                                }
+                            }
+                            tci += 1
+                        }
+                        mut val thunkV: LLVMValueRef = LLVMConstNull(self.ptrty)
+                        if thunkOk {
+                            thunkV = self.buildClosureDropThunk(c: inout c, cloId: id, caps: caps)
+                        }
+                        LLVMBuildStore(self.b, thunkV, LLVMBuildStructGEP2(self.b, envTy, env, 0U64, anon()))
                         mut val ci: U64 = 0
                         while ci < caps.count() {
                             val cap: CaptureEntry = caps[ci]
                             val li: U64 = self.findLocal(c: inout c, start: cap.nameStart, len: cap.nameLen)
                             if li < self.nLocals {
                                 // a boxed (mut) capture stores the shared cell POINTER
-                                // (locPtr is the heap cell); a by-value capture stores the
-                                // loaded value.
+                                // (locPtr is the heap cell) and RETAINS it — the env co-owns
+                                // the cell with the enclosing binding (and any sibling
+                                // closure); the drop thunk releases that count. A non-cell
+                                // pointer (async-frame corner) is stored unretained.
                                 if cap.boxed {
-                                    LLVMBuildStore(self.b, self.locPtr[li], LLVMBuildStructGEP2(self.b, envTy, env, ci, anon()))
+                                    if self.locCellHome[li] {
+                                        self.rawbufRetain(c: inout c, cell: self.locPtr[li])
+                                    }
+                                    LLVMBuildStore(self.b, self.locPtr[li], LLVMBuildStructGEP2(self.b, envTy, env, ci + 1U64, anon()))
                                 } else {
-                                    // a by-value capture is an independent value (spec/04): copy
-                                    // an array/struct buffer so the closure's env owns it and the
-                                    // captured-from local stays independent (and its scope-exit
-                                    // drop does not free the buffer the env now holds).
-                                    mut val cv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                                    if cap.isArray {
-                                        cv2 = self.copyArrayValue(c: inout c, arrVal: cv2, elemTy: self.locElemTy[li], elemRef: self.locElemTypeRef[li])
-                                    } else {
-                                        val csi: U64 = self.locStructIdx[li]
-                                        if csi < c.arena.structs.count() {
-                                            cv2 = self.deepCopyStructValue(c: inout c, v: cv2, sidx: csi)
+                                    // a by-value capture is an owned, independent value
+                                    // (spec/04): CoW-SHARE the local's heap into the env
+                                    // (classifier-routed retain — the 1-3a place-copy
+                                    // discipline; by-value captures come from immutable `val`
+                                    // locals, so no write can ever split the share). The drop
+                                    // thunk releases the same classes symmetrically at env
+                                    // death, so the local's own scope-exit drop stays balanced.
+                                    val cv2: LLVMValueRef = LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
+                                    val ccr: U64 = self.captureArcRef(c: inout c, cap: cap)
+                                    if ccr != 0U64 {
+                                        if c.arcNeedsRelease(ref: ccr) {
+                                            self.valueArc(c: inout c, v: cv2, typeRef: ccr, retain: true)
                                         }
                                     }
-                                    LLVMBuildStore(self.b, cv2, LLVMBuildStructGEP2(self.b, envTy, env, ci, anon()))
+                                    LLVMBuildStore(self.b, cv2, LLVMBuildStructGEP2(self.b, envTy, env, ci + 1U64, anon()))
                                 }
                             }
                             ci += 1

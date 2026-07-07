@@ -21,6 +21,7 @@ pub impl LlvmCtx {
             self.locElemTypeRef[self.nLocals] = 0U64
             self.locOwned[self.nLocals] = true
             self.locMoved[self.nLocals] = false
+            self.locCellHome[self.nLocals] = false
         } else {
             self.locStart.append(nameStart)
             self.locLen.append(nameLen)
@@ -35,6 +36,7 @@ pub impl LlvmCtx {
             self.locElemTypeRef.append(0U64)
             self.locOwned.append(true)
             self.locMoved.append(false)
+            self.locCellHome.append(false)
         }
         self.nLocals = self.nLocals + 1
     }
@@ -129,6 +131,16 @@ pub impl LlvmCtx {
     inout fn setLocalTypeRef(ref: U64) {
         if self.nLocals > 0U64 {
             self.locTypeRef[self.nLocals - 1U64] = ref
+        }
+    }
+
+    // Mark the just-pushed local's storage as an rc'd rawbuf CELL (a `mut val`
+    // heap-boxed for closure capture, or a closure body's bound capture cell): scope
+    // exit drops one cell owner instead of releasing the pointee value directly, and
+    // a capturing closure's env creation retains it.
+    inout fn setLocalCellHome() {
+        if self.nLocals > 0U64 {
+            self.locCellHome[self.nLocals - 1U64] = true
         }
     }
 

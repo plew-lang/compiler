@@ -29,6 +29,10 @@ pub impl Comp {
         if t.isAny {
             return <ArcClass.AnyBox />
         }
+        // a function type (`fn(...) -> R`): a closure value whose env cell is rc'd.
+        if self.isFnType(ref: ref) {
+            return <ArcClass.ClosureVal />
+        }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
             return <ArcClass.StringLike />
         }
@@ -126,6 +130,7 @@ pub impl Comp {
             ArcClass.WeakCell(inst: _) => { return true }
             ArcClass.PromiseCell(inst: _) => { return true }
             ArcClass.AnyBox => { return true }
+            ArcClass.ClosureVal => { return true }
             ArcClass.StructVal(val sidx) => {
                 mut val vk: U64 = 0
                 while vk < visited.count() {

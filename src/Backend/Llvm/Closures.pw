@@ -32,16 +32,117 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // The env struct type for closure `cloId` (its captures in order). Caller guards on
-    // caps.count() > 0 before using it.
+    // The env struct type for closure `cloId`: slot 0 = the per-closure drop thunk
+    // pointer (release calls it at env rc 0 to destroy the captures), slots 1.. =
+    // the captures in order. Caller guards on caps.count() > 0 before using it.
     inout fn closureEnvTy(c: inout Comp, caps: Array[CaptureEntry]) -> LLVMTypeRef {
         mut val elems: Array[LLVMTypeRef] = []
+        elems.append(self.ptrty)
         mut val i: U64 = 0
         while i < caps.count() {
             elems.append(self.captureSlotTy(c: inout c, cap: caps[i]))
             i += 1
         }
         return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
+    }
+
+    // The TypeRef used to ARC a capture's VALUE (release in the drop thunk / the
+    // boxed cell's pointee): the capture's own structured ref when it carries one, a
+    // synthesized `Array[elem]` for an array capture (tyStart/tyLen span the ELEMENT
+    // type — captureValueTy's convention), else the bare name span's ref. 0 = scalar.
+    inout fn captureArcRef(c: inout Comp, cap: CaptureEntry) -> U64 {
+        if cap.ty != 0U64 {
+            return cap.ty
+        }
+        if cap.isArray {
+            val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
+            mut val aargs: Array[U64] = []
+            aargs.append(c.findOrAddTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen))
+            return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+        }
+        if cap.tyLen == 0U64 {
+            return 0U64
+        }
+        return c.findOrAddTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen)
+    }
+
+    // Build the drop thunk for closure `cloId` (env slot 0): `drop(ptr env)` destroys
+    // every capture the env owns — a boxed (mut) capture drops one owner of its shared
+    // cell (pointee destroyed at cell rc 0); a by-value capture releases its owned
+    // heap (classifier-routed valueArc). emitClosureRelease calls it when the env's
+    // own rc reaches 0, then frees the env. Rebuilt per creation site (LLVM uniques
+    // duplicate names) so a generic caller's grounded capture types are honored.
+    inout fn buildClosureDropThunk(c: inout Comp, cloId: U64, caps: Array[CaptureEntry]) -> LLVMValueRef {
+        val envTy: LLVMTypeRef = self.closureEnvTy(c: inout c, caps: caps)
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pwclodrop".bytes())
+        appendU64Dec(into: inout nm, n: cloId)
+        nm.append(0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        val savedFn: LLVMValueRef = self.curFn
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        LLVMPositionBuilderAtEnd(self.b, entry)
+        self.curFn = fv
+        val envPtr: LLVMValueRef = LLVMGetParam(fv, 0U64)
+        mut val ci: U64 = 0
+        while ci < caps.count() {
+            val cap: CaptureEntry = caps[ci]
+            val slotPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, envTy, envPtr, ci + 1U64, anon())
+            val cref: U64 = self.captureArcRef(c: inout c, cap: cap)
+            if cap.boxed {
+                self.emitCellRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon()), ref: cref)
+            } else {
+                if cref != 0U64 {
+                    if c.arcNeedsRelease(ref: cref) {
+                        val cv: LLVMValueRef = LLVMBuildLoad2(self.b, self.captureValueTy(c: inout c, cap: cap), slotPtr, anon())
+                        self.valueArc(c: inout c, v: cv, typeRef: cref, retain: false)
+                    }
+                }
+            }
+            ci += 1
+        }
+        LLVMBuildRetVoid(self.b)
+        self.curFn = savedFn
+        LLVMPositionBuilderAtEnd(self.b, savedBB)
+        return fv
+    }
+
+    // Release one owner of a closure value's env: decrement the env cell's rc, and at
+    // 0 call its drop thunk (env slot 0 — destroys the captures) then free the env.
+    // Null-safe twice over: a non-capturing closure's env is null (release no-op), and
+    // a null thunk slot (a boxed capture that is not a cell home — the async-frame
+    // corner) skips the capture destruction but still frees the env.
+    inout fn emitClosureRelease(c: inout Comp, fat: LLVMValueRef) {
+        val env: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
+        val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: env)
+        val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), env, LLVMConstNull(self.ptrty), anon())
+        val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
+        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.free"))
+        val callBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.drop"))
+        val tailBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.freetail"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "clorel.cont"))
+        LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
+        LLVMPositionBuilderAtEnd(self.b, freeBB)
+        val dropFn: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, env, anon())
+        val haveDrop: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), dropFn, LLVMConstNull(self.ptrty), anon())
+        LLVMBuildCondBr(self.b, haveDrop, callBB, tailBB)
+        LLVMPositionBuilderAtEnd(self.b, callBB)
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(env)
+        LLVMBuildCall2(self.b, dty, dropFn, arrayCPtr(av), 1U64, anon())
+        LLVMBuildBr(self.b, tailBB)
+        LLVMPositionBuilderAtEnd(self.b, tailBB)
+        self.rawbufFree(c: inout c, cell: env)
+        LLVMBuildBr(self.b, contBB)
+        LLVMPositionBuilderAtEnd(self.b, contBB)
     }
 
     // Index into st.clo* for a Closure-expr arena id, or st.cloIdx.count().
@@ -279,6 +380,7 @@ pub impl LlvmCtx {
                     self.locElemTypeRef = []
                     self.locOwned = []
                     self.locMoved = []
+                    self.locCellHome = []
                     // module-level variables (spec/15) are visible inside closures too.
                     self.seedGlobals(c: inout c)
                     // bind captures from the env pointer (param 0): each capture loads
@@ -293,13 +395,17 @@ pub impl LlvmCtx {
                         while ci < caps.count() {
                             val cap: CaptureEntry = caps[ci]
                             val slotTy: LLVMTypeRef = self.captureSlotTy(c: inout c, cap: cap)
-                            val cv: LLVMValueRef = LLVMBuildLoad2(self.b, slotTy, LLVMBuildStructGEP2(self.b, envTy, envPtr, ci, anon()), anon())
+                            val cv: LLVMValueRef = LLVMBuildLoad2(self.b, slotTy, LLVMBuildStructGEP2(self.b, envTy, envPtr, ci + 1U64, anon()), anon())
                             // a boxed (mut) capture: `cv` is the shared cell POINTER — bind
                             // the local directly to it (ty = the value type), so reads/writes
                             // in the body go through the same cell as the enclosing scope.
                             if cap.boxed {
                                 val valTy: LLVMTypeRef = self.captureValueTy(c: inout c, cap: cap)
                                 self.pushLocalR(nameStart: cap.nameStart, nameLen: cap.nameLen, ptr: cv, ty: valTy, kind: kindFromTySpan(c: inout c, tyStart: cap.tyStart, tyLen: cap.tyLen), structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: 0U64)
+                                // the bound capture IS the shared cell (a borrow — the env owns
+                                // its count): mark it so a NESTED closure's env creation retains
+                                // the cell it re-captures. Below curBodyMark, so never dropped here.
+                                self.setLocalCellHome()
                                 ci += 1
                             } else {
                             val a: LLVMValueRef = self.entryAlloca(ty: slotTy)

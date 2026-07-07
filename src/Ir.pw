@@ -799,6 +799,11 @@ export enum ArcClass {
     // sole write point — an `inout` requirement dispatch — privatizes a shared box
     // first (copy thunk + repoint), so a sharer never observes mutation.
     AnyBox
+    // a closure value: the fat pointer { fn, env }. env = an rc'd rawbuf cell whose
+    // slot 0 is the per-closure drop thunk and slots 1.. the captures. retain = bump
+    // the env rc (null env — a non-capturing closure — is a no-op); release = drop
+    // one owner, at rc 0 call the drop thunk (destroys captures) then free the env.
+    ClosureVal
     // a registered non-extern struct value (incl. Array[T] and any grounded
     // generic instance): field-recursive walkers / witnesses
     StructVal(sidx: U64)

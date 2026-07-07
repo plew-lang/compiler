@@ -552,6 +552,7 @@ pub impl LlvmCtx {
         self.locElemTypeRef = []
         self.locOwned = []
         self.locMoved = []
+        self.locCellHome = []
         // module-level variables (spec/15): seed them as locals (pointing at the true
         // LLVM globals, not frame slots) before async params bind to frame fields.
         self.seedGlobals(c: inout c)

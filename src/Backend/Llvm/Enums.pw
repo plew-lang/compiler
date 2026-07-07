@@ -762,6 +762,9 @@ pub impl LlvmCtx {
                             // an `any P` payload: the copy CoW-SHARES the box and retains it
                             // (the inout-dispatch write gate privatizes a shared box).
                             self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, pv, fj, anon()), 0U64, anon()))
+                        } else if c.isFnType(ref: c.arcFieldTy(f: fd)) {
+                            // a closure payload: share the env cell and retain it.
+                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, pv, fj, anon()), 1U64, anon()))
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                             if fsi < c.arena.structs.count() {

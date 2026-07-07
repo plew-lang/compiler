@@ -540,6 +540,10 @@ pub impl LlvmCtx {
                 // inout-dispatch write gate privatizes a shared box, so a sharer never
                 // observes mutation (mirrors the boxed-field arm below).
                 self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, agg, fi, anon()), 0U64, anon()))
+            } else if c.isFnType(ref: c.arcFieldTy(f: fd)) {
+                // a closure field: the copy shares the env cell and retains it (captures
+                // are immutable through a closure value, so a share is never observable).
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, agg, fi, anon()), 1U64, anon()))
             } else {
                 if c.fieldIsBoxed(f: fd) {
                     // a boxed (recursive) field: the copy CoW-SHARES the cell and retains
@@ -723,6 +727,12 @@ pub impl LlvmCtx {
                 self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
                 return v
             }
+            // 1-3a (closure class): copying a fn-typed place shares the env cell and
+            // retains it — balanced by emitClosureRelease at the owner's drop.
+            if c.isFnType(ref: aref) {
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 1U64, anon()))
+                return v
+            }
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
             if sidx < c.arena.structs.count() {
                 // 1-3a (struct class): CoW-SHARE the struct place — retain its heap fields
@@ -802,16 +812,16 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
-    // Release one owner of a BOXED (recursive) field's cell: decrement its rc, and at 0
-    // destroy the pointee's owned heap (classifier-routed valueArc) then free the cell.
-    // The pointee release lands on per-instance release WITNESS calls (struct pwdrop /
-    // enum pwenumrel), so a recursive structure (linked list, tree) walks at runtime by
-    // the witness calling itself — never an unbounded inline expansion. Mirrors
-    // emitReleaseArrayValue's dec-then-cascade shape. Null-safe: a zeroed temp slot's
-    // cell is null (plew_rawbuf_release returns 0 for null), so the destroy branch is
-    // additionally gated on the cell being non-null.
-    inout fn emitBoxedFieldRelease(c: inout Comp, cell: LLVMValueRef, f: FieldDef) {
-        val g: U64 = c.arcFieldTy(f: f)
+    // Release one owner of an rc'd CELL holding a single value of type `ref`:
+    // decrement its rc, and at 0 destroy the pointee's owned heap (classifier-routed
+    // valueArc — landing on per-instance release WITNESS calls, so a recursive
+    // structure walks at runtime, never an unbounded inline expansion) then free the
+    // cell. Mirrors emitReleaseArrayValue's dec-then-cascade shape. Null-safe: a
+    // zeroed temp slot's cell is null (plew_rawbuf_release returns 0 for null), so
+    // the destroy branch is additionally gated on the cell being non-null. Shared by
+    // boxed (recursive) fields and closure-capture cell homes; `ref` 0 = a scalar
+    // pointee (nothing to destroy — the cell itself still frees).
+    inout fn emitCellRelease(c: inout Comp, cell: LLVMValueRef, ref: U64) {
         val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
         val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
         val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), cell, LLVMConstNull(self.ptrty), anon())
@@ -820,13 +830,21 @@ pub impl LlvmCtx {
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "boxrel.cont"))
         LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
         LLVMPositionBuilderAtEnd(self.b, freeBB)
-        if c.arcNeedsRelease(ref: g) {
-            val pv: LLVMValueRef = LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: g), cell, anon())
-            self.valueArc(c: inout c, v: pv, typeRef: g, retain: false)
+        if ref != 0U64 {
+            if c.arcNeedsRelease(ref: ref) {
+                val pv: LLVMValueRef = LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: ref), cell, anon())
+                self.valueArc(c: inout c, v: pv, typeRef: ref, retain: false)
+            }
         }
         self.rawbufFree(c: inout c, cell: cell)
         LLVMBuildBr(self.b, contBB)
         LLVMPositionBuilderAtEnd(self.b, contBB)
+    }
+
+    // Release one owner of a BOXED (recursive) field's cell (emitCellRelease over the
+    // field's grounded type).
+    inout fn emitBoxedFieldRelease(c: inout Comp, cell: LLVMValueRef, f: FieldDef) {
+        self.emitCellRelease(c: inout c, cell: cell, ref: c.arcFieldTy(f: f))
     }
 
     // ---- `Ref` / `WeakRef` two-counter control block (spec/03) ----
@@ -1090,6 +1108,16 @@ pub impl LlvmCtx {
                     self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
                 } else {
                     self.emitAnyRelease(c: inout c, fat: v)
+                }
+            }
+            // a closure value ({ fn, env }): retain = one more owner of the env cell
+            // (null for a non-capturing closure — no-op); release = drop one owner, at
+            // 0 destroy the captures via the env's drop thunk (slot 0) and free the env.
+            ArcClass.ClosureVal => {
+                if retain {
+                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 1U64, anon()))
+                } else {
+                    self.emitClosureRelease(c: inout c, fat: v)
                 }
             }
             // a registered struct value (`Array[I64]`, any grounded generic inst):

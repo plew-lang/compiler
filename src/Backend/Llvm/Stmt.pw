@@ -321,6 +321,17 @@ pub impl LlvmCtx {
                         }
                     }
                 }
+                // an un-annotated fn-typed binding (`val g = makeAdder(...)`): track the
+                // fn TypeRef so calls resolve AND the scope-exit drop releases the env
+                // (ClosureVal class; the annotated case is the isFnType arm above).
+                if tref == 0U64 {
+                    if tyLen == 0U64 {
+                        val fr: U64 = self.exprTypeRef(c: inout c, id: init)
+                        if c.isFnType(ref: fr) {
+                            tref = fr
+                        }
+                    }
+                }
                 // a `Promise[T]` binding (annotated or inferred from an async call):
                 // track its TypeRef so the local's scope-exit drop releases its owner
                 // count of the promise cell (PromiseCell class).
@@ -380,6 +391,7 @@ pub impl LlvmCtx {
                 // stored in a heap cell that outlives this scope; locPtr IS that cell, so
                 // reads/writes and the closure share it. Otherwise a plain stack alloca.
                 mut val slot: LLVMValueRef = LLVMConstNull(self.ptrty)
+                mut val isCellHome: Bool = false
                 if self.curAsync {
                     // inside an async fn, a (non-await) binding's storage is a frame
                     // field so its value survives later `await` suspensions.
@@ -388,6 +400,7 @@ pub impl LlvmCtx {
                 } else {
                     if localIsBoxedCapture(c: inout c, start: nameStart, len: nameLen) {
                         slot = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(lty), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+                        isCellHome = true
                     } else {
                         slot = self.entryAlloca(ty: lty)
                     }
@@ -419,6 +432,9 @@ pub impl LlvmCtx {
                 }
                 LLVMBuildStore(self.b, v, slot)
                 self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
+                if isCellHome {
+                    self.setLocalCellHome()
+                }
                 // (`val r2 = r` Ref share-retain now rides the general copyValueIfPlace path
                 // above — consumeIntoOwned's Ref class rawbufRetains a Ref place — so no
                 // bespoke retain here. Balanced by emitRefRelease at this local's drop.)

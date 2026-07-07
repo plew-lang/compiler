@@ -262,6 +262,19 @@ pub impl LlvmCtx {
         if self.locMoved[li] {
             return
         }
+        // a heap-boxed `mut val` captured by a closure: locPtr IS an rc'd cell co-owned
+        // by every capturing closure's env. Scope exit drops this binding's CELL owner
+        // count — the pointee is destroyed (and the cell freed) only when the LAST
+        // owner (binding or closure) lets go. Checked before every value class: the
+        // cell is heap regardless of the pointee's class (even a scalar frees it).
+        // Gated on li >= curBodyMark: a closure BODY binds its boxed capture to the
+        // same cell (borrow — the env owns that count).
+        if self.locCellHome[li] {
+            if li >= self.curBodyMark {
+                self.emitCellRelease(c: inout c, cell: self.locPtr[li], ref: self.locTypeRef[li])
+            }
+            return
+        }
         // an owned array BODY local (CoW): release its OWN buffer, free at 0. Gated on
         // `li >= curBodyMark` so params / seeded globals / closure captures (bound before
         // the mark) are NOT released here — they are borrows of an owner elsewhere

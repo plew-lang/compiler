@@ -42,6 +42,7 @@ pub impl LlvmCtx {
         self.locElemTypeRef = []
         self.locOwned = []
         self.locMoved = []
+        self.locCellHome = []
         mut val gi: U64 = 0
         while gi < c.arena.globals.count() {
             self.genLlvmStmt(c: inout c, id: c.arena.globals[gi].letStmt)
@@ -124,6 +125,7 @@ pub impl LlvmCtx {
         self.locElemTypeRef = []
         self.locOwned = []
         self.locMoved = []
+        self.locCellHome = []
         self.seedGlobals(c: inout c)
         // body locals (declared from here) are released at scope exit; seeded globals are not.
         self.curBodyMark = self.nLocals
