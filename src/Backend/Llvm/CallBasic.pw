@@ -48,6 +48,23 @@ pub impl LlvmCtx {
                     v = self.coerceInt(v: v, target: self.llvmTypeOfRef(c: inout c, ref: ft.args[i + 1U64]), unsigned: isUnsignedName(c: inout c, start: pt.nameStart, len: pt.nameLen))
                 }
             }
+            // same Swift-guaranteed (+0) convention as genArgValueV's by-value tail: a
+            // PLACE arg is a borrow (the closure param takes no ownership — spec/14),
+            // and a TEMPORARY (construction / call result / literal) has no home
+            // binding, so it gets an anonymous owned local and the statement-end drain
+            // releases it. A closure fn type has no move/inout params, so the by-value
+            // story is the whole story here.
+            if !(exprAliasesPlace(c: inout c, id: args[i].expr)) {
+                mut val ttr: U64 = self.argValueTypeRef(c: inout c, argExpr: args[i].expr)
+                if ttr == 0U64 {
+                    // a context-typed literal records no type of its own — classify by
+                    // the fn type's declared param (the value's contract type).
+                    if i + 1U64 < ft.args.count() {
+                        ttr = ft.args[i + 1U64]
+                    }
+                }
+                self.registerArgTemp(c: inout c, v: v, typeRef: ttr)
+            }
             av.append(v)
             i += 1
         }
