@@ -23,6 +23,12 @@ pub impl Comp {
             return <ArcClass.Scalar />
         }
         val t: TypeRef = self.arena.types[ref]
+        // an existential `any P` (spec/08): the ref carries the TRAIT's name, so it
+        // must classify here — before every name-based class below (falling through
+        // would land on Scalar and silently skip the box's release).
+        if t.isAny {
+            return <ArcClass.AnyBox />
+        }
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
             return <ArcClass.StringLike />
         }
@@ -119,6 +125,7 @@ pub impl Comp {
             ArcClass.RefCell(inst: _) => { return true }
             ArcClass.WeakCell(inst: _) => { return true }
             ArcClass.PromiseCell(inst: _) => { return true }
+            ArcClass.AnyBox => { return true }
             ArcClass.StructVal(val sidx) => {
                 mut val vk: U64 = 0
                 while vk < visited.count() {

@@ -3,13 +3,17 @@
 // ---- existential `any P` (spec/08): vtable, boxing, dynamic dispatch ----
 //
 // An `any P` value is the fat pointer st.anyTy = { ptr data, ptr vtable }. `data`
-// points at an ARC-boxed copy of the erased concrete value (a rawbuf cell, so it is
-// refcountable later); `vtable` at a static per-(concrete-struct, trait) global of
-// function pointers: slot 0 reserved for a drop thunk (null in this increment —
-// boxes leak at the same rigor as arrays/strings today), slots 1.. = a thunk per
-// trait requirement in declaration order. Each thunk has the ERASED requirement
-// signature `(ptr self_data, <req params>) -> <req ret>` and forwards to the
-// concrete witness pf<wfi> after loading the boxed self.
+// points at an ARC box (rawbuf cell, rc-managed) holding the erased concrete value;
+// `vtable` at a static per-(concrete-struct, trait) global of function pointers:
+// slot 0 = the copy thunk (value semantics / box privatization), slot 1 = the drop
+// thunk (destroys the boxed concrete's owned heap at rc 0 — emitAnyRelease), slots
+// 2.. = a thunk per trait requirement in declaration order. Each requirement thunk
+// has the ERASED signature `(ptr self_data, <req params>) -> <req ret>` and forwards
+// to the concrete witness pf<wfi> after loading the boxed self.
+//
+// Ownership (AnyBox class): copying an `any` place CoW-SHARES the box (rc++); the
+// sole write point — an `inout` requirement dispatch — privatizes a shared box first
+// (privatizeAnyBox), mirroring the CoW discipline of arrays/boxed fields.
 
 // Do two parameter lists have identical labels positionally (a conformance witness
 // reproduces the requirement's labels)?
@@ -154,10 +158,103 @@ pub impl LlvmCtx {
         return fv
     }
 
+    // Build the drop thunk for concrete struct `sidx` (vtable slot 1): `drop(ptr box)`
+    // destroys the boxed concrete value's owned heap (classifier-routed valueArc, which
+    // lands on the per-type witnesses). The caller (emitAnyRelease) frees the box itself
+    // afterwards. Rebuilt per vtable like the copy thunk (LLVM uniques duplicate names).
+    inout fn buildAnyDropThunk(c: inout Comp, sidx: U64) -> LLVMValueRef {
+        val sd: StructDef = c.arena.structs[sidx]
+        val regSlot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
+        if regSlot >= self.genStructRefs.count() {
+            return LLVMConstNull(self.ptrty)
+        }
+        val concreteTy: LLVMTypeRef = self.genStructTys[regSlot]
+        val instRef: U64 = self.genStructRefs[regSlot]
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val nm: Array[U8] = []
+        appendBytes(into: inout nm, from: "pfvtdrop".bytes())
+        appendU64Dec(into: inout nm, n: sidx)
+        nm.append(0)
+        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
+        val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        val savedFn: LLVMValueRef = self.curFn
+        val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        LLVMPositionBuilderAtEnd(self.b, entry)
+        self.curFn = fv
+        if c.arcNeedsRelease(ref: instRef) {
+            val v: LLVMValueRef = LLVMBuildLoad2(self.b, concreteTy, LLVMGetParam(fv, 0U64), anon())
+            self.valueArc(c: inout c, v: v, typeRef: instRef, retain: false)
+        }
+        LLVMBuildRetVoid(self.b)
+        self.curFn = savedFn
+        LLVMPositionBuilderAtEnd(self.b, savedBB)
+        return fv
+    }
+
+    // Release one owner of an existential's box: decrement its rc, and at 0 destroy
+    // the boxed concrete through the vtable's drop thunk (slot 1) then free the box.
+    // Null-safe (a zeroed temp home holds a null box; plew_rawbuf_release returns 0
+    // for null, and the destroy branch is additionally gated on non-null) — mirrors
+    // emitBoxedFieldRelease's dec-then-cascade shape.
+    inout fn emitAnyRelease(c: inout Comp, fat: LLVMValueRef) {
+        val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
+        val vt: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
+        val rc: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        val isZero: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntEq(), rc, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        val nonNull: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntNe(), cell, LLVMConstNull(self.ptrty), anon())
+        val doDestroy: LLVMValueRef = LLVMBuildAnd(self.b, isZero, nonNull, anon())
+        val freeBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anyrel.free"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anyrel.cont"))
+        LLVMBuildCondBr(self.b, doDestroy, freeBB, contBB)
+        LLVMPositionBuilderAtEnd(self.b, freeBB)
+        mut val gepIdx: Array[LLVMValueRef] = []
+        gepIdx.append(LLVMConstInt(self.i64ty, 1U64, 0I32))
+        val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vt, arrayCPtr(gepIdx), 1U64, anon())
+        val dropFn: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon())
+        mut val ptys: Array[LLVMTypeRef] = []
+        ptys.append(self.ptrty)
+        val dty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
+        mut val av: Array[LLVMValueRef] = []
+        av.append(cell)
+        LLVMBuildCall2(self.b, dty, dropFn, arrayCPtr(av), 1U64, anon())
+        self.rawbufFree(c: inout c, cell: cell)
+        LLVMBuildBr(self.b, contBB)
+        LLVMPositionBuilderAtEnd(self.b, contBB)
+    }
+
+    // The CoW write gate for an existential: an `inout` requirement mutates THROUGH
+    // the box, so a shared box (rc > 1) is split first — copy-thunk the boxed value
+    // into a fresh box, drop this owner's count on the old one, and repoint the
+    // receiver PLACE at the fresh fat pointer. Sharers keep the old value; the
+    // mutation lands on this owner's private box. Mirrors plew_arr_cow / the boxed
+    // field's fresh-cell repoint. Returns the (possibly privatized) fat value.
+    inout fn privatizeAnyBox(c: inout Comp, fat: LLVMValueRef, place: LLVMValueRef) -> LLVMValueRef {
+        val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
+        // rc lives in the rawbuf header at data[-1] (see plew_rawbuf_alloc).
+        mut val rcIdx: Array[LLVMValueRef] = []
+        rcIdx.append(LLVMConstInt(self.i64ty, 18446744073709551615U64, 0I32))
+        val rcPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.i64ty, cell, arrayCPtr(rcIdx), 1U64, anon())
+        val rc: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, rcPtr, anon())
+        val isShared: LLVMValueRef = LLVMBuildICmp(self.b, llvmIntSgt(), rc, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+        val splitBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anycow.split"))
+        val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "anycow.cont"))
+        LLVMBuildCondBr(self.b, isShared, splitBB, contBB)
+        LLVMPositionBuilderAtEnd(self.b, splitBB)
+        val fresh: LLVMValueRef = self.copyAnyValue(c: inout c, fat: fat)
+        val ignore: LLVMValueRef = self.rawbufRelease(c: inout c, cell: cell)
+        LLVMBuildStore(self.b, fresh, place)
+        LLVMBuildBr(self.b, contBB)
+        LLVMPositionBuilderAtEnd(self.b, contBB)
+        // reload from the place: the fresh fat on the split path, the original otherwise.
+        return LLVMBuildLoad2(self.b, self.anyTy, place, anon())
+    }
+
     // Value-semantics copy of an `any P` fat-pointer value: invoke its vtable's copy
     // thunk (slot 0) to duplicate the boxed concrete, returning a fresh `{ newdata,
-    // vtable }`. So `mut val b = a` (and other place->owner copies) yields an
-    // independent existential whose later mutation doesn't affect the source.
+    // vtable }`. Used by privatizeAnyBox (the CoW split) — plain place->owner copies
+    // CoW-share the box instead (copyAnyIfPlace).
     inout fn copyAnyValue(c: inout Comp, fat: LLVMValueRef) -> LLVMValueRef {
         val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
@@ -177,20 +274,24 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    // If `valueExpr` is an existing `any P` place being copied into a new owner, return
-    // a value-semantics copy of its already-emitted value `rv`; else `rv` unchanged.
+    // If `valueExpr` is an existing `any P` place being copied into a new owner,
+    // CoW-SHARE its box (rc++) — the write point (an `inout` requirement dispatch)
+    // privatizes a shared box, so a sharer never observes mutation. Balanced by
+    // emitAnyRelease at the owner's drop. A fresh (non-place) `any` already owns
+    // its box and passes through. Mirrors the String/Ref/array classes (1-3a).
     inout fn copyAnyIfPlace(c: inout Comp, rv: LLVMValueRef, valueExpr: U64) -> LLVMValueRef {
         if refIsAny(c: inout c, ref: self.exprTypeRef(c: inout c, id: valueExpr)) {
             if exprAliasesPlace(c: inout c, id: valueExpr) {
-                return self.copyAnyValue(c: inout c, fat: rv)
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, rv, 0U64, anon()))
             }
         }
         return rv
     }
 
     // Build (or fetch cached) the vtable global for (concrete struct `sidx`, trait
-    // `traitIdx`): an array of ptr slots — slot 0 = copy thunk (value semantics), slot
-    // 1.. = a thunk per requirement in declaration order. Returns the global pointer.
+    // `traitIdx`): an array of ptr slots — slot 0 = copy thunk (value semantics /
+    // privatization), slot 1 = drop thunk (box destruction at rc 0), slots 2.. = a
+    // thunk per requirement in declaration order. Returns the global pointer.
     inout fn ensureAnyVtable(c: inout Comp, sidx: U64, anyRef: U64, traitIdx: U64) -> LLVMValueRef {
         // distinct existential bindings (`any Add[I32,…]` vs `any Add[I64,…]`) need
         // distinct vtables; the key folds the bound concretes (0 for the no-binding case).
@@ -209,7 +310,7 @@ pub impl LlvmCtx {
         // pre-create the global (with its final array type) and CACHE it before building
         // thunks, so a `-> Self` re-erasure thunk that re-boxes into this same existential
         // resolves to this vtable instead of recursing into ensureAnyVtable forever.
-        val slotCount: U64 = 1U64 + t.reqs.count()
+        val slotCount: U64 = 2U64 + t.reqs.count()
         val arrTy: LLVMTypeRef = LLVMArrayType2(self.ptrty, slotCount)
         mut val nm: Array[U8] = []
         appendBytes(into: inout nm, from: "pfvtbl".bytes())
@@ -227,6 +328,7 @@ pub impl LlvmCtx {
         self.anyVtVal.append(g)
         mut val slots: Array[LLVMValueRef] = []
         slots.append(self.buildAnyCopyThunk(c: inout c, sidx: sidx))
+        slots.append(self.buildAnyDropThunk(c: inout c, sidx: sidx))
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
             slots.append(self.buildAnyThunk(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
@@ -311,12 +413,35 @@ pub impl LlvmCtx {
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
-        val fat: LLVMValueRef = self.genLlvmExpr(c: inout c, id: recv)
+        mut val fat: LLVMValueRef = LLVMConstNull(self.ptrty)
+        mut val gotFat: Bool = false
+        if req.selfInout {
+            // the CoW write gate: an `inout` requirement mutates through the box, so a
+            // shared box is split and the receiver PLACE repointed first (privatizeAnyBox).
+            // A non-place receiver has no storage to repoint — the front-end rejects an
+            // `inout` call on a temporary, so the fall-through below never mutates a
+            // shared box in practice.
+            val fatPlace: LLVMValueRef = self.placePtrStrict(c: inout c, id: recv)
+            if LLVMIsNull(fatPlace) == 0I32 {
+                fat = self.privatizeAnyBox(c: inout c, fat: LLVMBuildLoad2(self.b, self.anyTy, fatPlace, anon()), place: fatPlace)
+                gotFat = true
+            }
+        }
+        if !gotFat {
+            fat = self.genLlvmExpr(c: inout c, id: recv)
+            // a temporary receiver (`makeAny().m()`) owns its box: give it an anonymous
+            // owned home so the block-exit drop releases it (guaranteed(+0) discipline).
+            if !(exprAliasesPlace(c: inout c, id: recv)) {
+                self.registerArgTemp(c: inout c, v: fat, typeRef: anyRef)
+            }
+        }
         val dataPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 0U64, anon())
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
-        // &vtable[slot] via flat ptr-element GEP (element type ptr), then load the fn ptr.
+        // &vtable[slot+1] via flat ptr-element GEP (element type ptr), then load the fn
+        // ptr — requirement thunks sit after the copy (0) and drop (1) slots, and `slot`
+        // is 1-based over the requirements (anyMethodSlot).
         mut val gepIdx: Array[LLVMValueRef] = []
-        gepIdx.append(LLVMConstInt(self.i64ty, slot, 0I32))
+        gepIdx.append(LLVMConstInt(self.i64ty, slot + 1U64, 0I32))
         val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
         val fnPtr: LLVMValueRef = LLVMBuildLoad2(self.b, self.ptrty, slotPtr, anon())
         // reconstruct the erased thunk signature: (ptr self, <req params>) -> <req ret>,

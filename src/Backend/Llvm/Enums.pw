@@ -758,6 +758,10 @@ pub impl LlvmCtx {
                         } else if fieldGroundedWeakTy(c: inout c, f: fd) != 0U64 {
                             // a `WeakRef` payload is shared on copy: keep the cell, bump its weak rc.
                             self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
+                        } else if refIsAny(c: inout c, ref: c.arcFieldTy(f: fd)) {
+                            // an `any P` payload: the copy CoW-SHARES the box and retains it
+                            // (the inout-dispatch write gate privatizes a shared box).
+                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, pv, fj, anon()), 0U64, anon()))
                         } else {
                             val fsi: U64 = c.structIndexByName(start: fd.tyStart, len: fd.tyLen)
                             if fsi < c.arena.structs.count() {

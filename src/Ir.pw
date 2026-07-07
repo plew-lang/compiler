@@ -793,6 +793,12 @@ export enum ArcClass {
     // cell only (the resolved value is type-erased i64 today — a heap-typed resolved
     // value is not yet released at cell death, see provisional.md)
     PromiseCell(inst: U64)
+    // an `any P` existential value: the fat pointer { data box, vtable }. retain =
+    // bump the box rc (CoW-share); release = drop one owner, and at rc 0 destroy the
+    // boxed concrete through the vtable's drop thunk (slot 1) then free the box. The
+    // sole write point — an `inout` requirement dispatch — privatizes a shared box
+    // first (copy thunk + repoint), so a sharer never observes mutation.
+    AnyBox
     // a registered non-extern struct value (incl. Array[T] and any grounded
     // generic instance): field-recursive walkers / witnesses
     StructVal(sidx: U64)

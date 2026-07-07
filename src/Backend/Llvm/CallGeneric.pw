@@ -454,15 +454,28 @@ pub impl LlvmCtx {
                 _ => {}
             }
         }
-        // an `any P` parameter (spec/08): box a concrete conforming argument into the
-        // existential fat pointer, or value-semantics-copy an existing `any` place.
+        // an `any P` parameter (spec/08) under guaranteed(+0): boxing a concrete
+        // argument allocates a fresh box — a TEMPORARY the callee only borrows, so it
+        // gets an anonymous owned home (block-exit drop). An existing `any` PLACE is a
+        // borrow (no retain — the binding outlives the call; escapes inside the callee
+        // retain via consumeIntoOwned); an `any` temporary (an `any`-returning call)
+        // is homed like every other temp class. A `move` arg hands the callee ownership.
         mut val argBoxed: Bool = false
         val argAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
         if argBoxed {
+            if !(p.isMove) {
+                self.registerArgTemp(c: inout c, v: argAny, typeRef: p.ty)
+            }
             return argAny
         }
         if refIsAny(c: inout c, ref: p.ty) {
-            return self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: argExpr), valueExpr: argExpr)
+            val anyV: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
+            if !(p.isMove) {
+                if !(exprAliasesPlace(c: inout c, id: argExpr)) {
+                    self.registerArgTemp(c: inout c, v: anyV, typeRef: p.ty)
+                }
+            }
+            return anyV
         }
         if p.tyIsArray {
             match c.arena.exprs[argExpr] {

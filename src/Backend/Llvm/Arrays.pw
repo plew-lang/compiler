@@ -535,6 +535,11 @@ pub impl LlvmCtx {
                 // a `WeakRef` field copy SHARES the same cell and bumps the WEAK count (not
                 // strong) — balanced by weakRelease at the copy's drop.
                 self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, agg, fi, anon()))
+            } else if refIsAny(c: inout c, ref: c.arcFieldTy(f: fd)) {
+                // an `any P` field: the copy CoW-SHARES the box and retains it — the
+                // inout-dispatch write gate privatizes a shared box, so a sharer never
+                // observes mutation (mirrors the boxed-field arm below).
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, LLVMBuildExtractValue(self.b, agg, fi, anon()), 0U64, anon()))
             } else {
                 if c.fieldIsBoxed(f: fd) {
                     // a boxed (recursive) field: the copy CoW-SHARES the cell and retains
@@ -707,6 +712,17 @@ pub impl LlvmCtx {
             return self.shareArrayIfPlace(c: inout c, arrVal: v, elemTy: self.bufElemTyOf(c: inout c, id: expr), valueExpr: expr)
         }
         if exprAliasesPlace(c: inout c, id: expr) {
+            // 1-3a (any class): CoW-SHARE the existential's box (rc++) — the write point
+            // (an `inout` requirement dispatch) privatizes a shared box, so a sharer
+            // never observes mutation. Balanced by emitAnyRelease at the owner's drop.
+            mut val aref: U64 = typeRef
+            if aref == 0U64 {
+                aref = self.exprTypeRef(c: inout c, id: expr)
+            }
+            if refIsAny(c: inout c, ref: aref) {
+                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                return v
+            }
             val sidx: U64 = self.exprStructIdx(c: inout c, id: expr)
             if sidx < c.arena.structs.count() {
                 // 1-3a (struct class): CoW-SHARE the struct place — retain its heap fields
@@ -1063,6 +1079,17 @@ pub impl LlvmCtx {
                     self.rawbufRetain(c: inout c, cell: v)
                 } else {
                     self.rawbufDrop(c: inout c, cell: v)
+                }
+            }
+            // an `any P` existential ({ box, vtable }): retain = one more owner of the
+            // box (CoW-share; the inout-dispatch write gate privatizes). release = drop
+            // one owner, at 0 destroy the boxed concrete via the vtable's drop thunk
+            // (slot 1) and free the box.
+            ArcClass.AnyBox => {
+                if retain {
+                    self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, v, 0U64, anon()))
+                } else {
+                    self.emitAnyRelease(c: inout c, fat: v)
                 }
             }
             // a registered struct value (`Array[I64]`, any grounded generic inst):

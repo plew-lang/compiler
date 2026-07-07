@@ -304,12 +304,20 @@ pub impl LlvmCtx {
                         }
                     }
                 }
-                // an existential `any P` binding: track its TypeRef so a bare `v.m()`
-                // dispatches dynamically (exprTypeRef sees isAny).
+                // an existential `any P` binding (annotated or inferred from an `any`
+                // initializer): track its TypeRef so a bare `v.m()` dispatches dynamically
+                // (exprTypeRef sees isAny) and the local's scope-exit drop releases its
+                // owner count of the box (AnyBox class).
                 if tref == 0U64 {
-                    if ty != 0U64 {
-                        if refIsAny(c: inout c, ref: ty) {
-                            tref = ty
+                    mut val ar: U64 = ty
+                    if ar == 0U64 {
+                        if tyLen == 0U64 {
+                            ar = self.exprTypeRef(c: inout c, id: init)
+                        }
+                    }
+                    if ar != 0U64 {
+                        if refIsAny(c: inout c, ref: ar) {
+                            tref = ar
                         }
                     }
                 }
@@ -457,10 +465,17 @@ pub impl LlvmCtx {
                                 mut val ab: Bool = false
                                 mut val arv: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: self.locTypeRef[li], valueExpr: value, outBoxed: inout ab)
                                 if !(ab) {
-                                    // any -> any: value-semantics copy of a place.
+                                    // any -> any: CoW-share the RHS place's box (rc++).
                                     arv = self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: value), valueExpr: value)
                                 }
+                                // release the DISPLACED existential's box — after the RHS is
+                                // evaluated + retained, so a self-assign (`d = d`) stays
+                                // balanced. A moved-out local has nothing to destroy.
+                                if !(self.locMoved[li]) {
+                                    self.emitAnyRelease(c: inout c, fat: LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon()))
+                                }
                                 LLVMBuildStore(self.b, arv, self.locPtr[li])
+                                self.locMoved[li] = false
                                 return
                             }
                             // route through the single store choke point. The old-value
