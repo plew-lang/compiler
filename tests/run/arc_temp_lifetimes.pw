@@ -1,0 +1,54 @@
+// spec/03 pins for statement-temp lifetimes: a binding-initializer temp dies at
+// that statement's end (505 before the bound value prints); two temps in ONE
+// statement die in reverse creation order; at `return` the statement's temps
+// die BEFORE the frame's named locals (S2 — temps are innermost); a discarded
+// call result is a temp (dies at its statement's end); a `move` arg deinits at
+// CALLEE scope end, exactly once, before the caller resumes.
+import @Std/Io with { print }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+unique struct Loud {
+    pub val v: I32
+    deinit { print(self.v + 500I32) }
+}
+
+fn mk(v: I32) -> Cell {
+    return <Cell v=v />
+}
+
+fn mkLoud(v: I32) -> Loud {
+    return <Loud v=v />
+}
+
+fn bindingInitTemp() {
+    val n: I32 = mkLoud(v: 5I32).v
+    print(n)
+}
+
+fn siblingReverse() {
+    val s: I32 = mk(v: 1I32).v + mk(v: 2I32).v
+    print(s)
+}
+
+fn returnTempVsLocal() -> I32 {
+    val a = <Cell v=1 />
+    return mk(v: 2I32).v + a.v
+}
+
+fn consume(c: move Cell) {
+    print(c.v + 2000I32)
+}
+
+fn main() {
+    bindingInitTemp()
+    siblingReverse()
+    print(returnTempVsLocal())
+    mk(v: 9I32)
+    val a = <Cell v=4 />
+    consume(c: move a)
+    print(100I32)
+}

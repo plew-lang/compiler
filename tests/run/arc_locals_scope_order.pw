@@ -1,0 +1,28 @@
+// spec/03 pins: (S1) named locals destroy in REVERSE declaration order at scope
+// exit (locals can depend on earlier locals — the dependent side dies first);
+// (S4) a shadowed binding is NOT released early — it lives to scope exit and
+// dies in the same reverse-binding order (the redeclaration only hides its name).
+import @Std/Io with { print }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn locals() {
+    val a = <Cell v=1 />
+    val b = <Cell v=2 />
+    val c = <Cell v=3 />
+    print(100I32)
+}
+
+fn shadowed() {
+    val c = <Cell v=1 />
+    val c = <Cell v=2 />
+    print(200I32)
+}
+
+fn main() {
+    locals()
+    shadowed()
+}

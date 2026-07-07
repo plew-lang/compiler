@@ -1,0 +1,68 @@
+// spec/03 pins for destruction order: a value destroys DEPTH-FIRST — its own
+// deinit body first (fields still valid), then fields in DECLARATION order,
+// recursing; and every place overwrite (local reassign / array index / struct
+// field) evaluates the RHS BEFORE releasing the old value (storeToPlace).
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+unique struct Mid {
+    pub val c1: Cell
+    pub val c2: Cell
+    deinit { print(10I32) }
+}
+
+unique struct Outer {
+    pub val m: Mid
+    pub val c3: Cell
+    deinit { print(20I32) }
+}
+
+struct Holder {
+    pub mut val c: Ref[Cell]
+}
+
+fn mk(v: I32) -> Cell {
+    print(v + 1000I32)
+    return <Cell v=v />
+}
+
+fn mkRef(v: I32) -> Ref[Cell] {
+    print(v + 1000I32)
+    return <Ref value=<Cell v=v /> />
+}
+
+fn depthFirst() {
+    val o = <Outer m=<Mid c1=<Cell v=1 /> c2=<Cell v=2 /> /> c3=<Cell v=3 /> />
+    print(100I32)
+}
+
+fn reassign() {
+    mut val c = mk(v: 1I32)
+    c = mk(v: 2I32)
+    print(200I32)
+}
+
+fn indexAssign() {
+    mut val xs: Array[Ref[Cell]] = []
+    xs.append(mkRef(v: 3I32))
+    xs[0] = mkRef(v: 4I32)
+    print(300I32)
+}
+
+fn fieldAssign() {
+    mut val h = <Holder c=mkRef(v: 5I32) />
+    h.c = mkRef(v: 6I32)
+    print(400I32)
+}
+
+fn main() {
+    depthFirst()
+    reassign()
+    indexAssign()
+    fieldAssign()
+}

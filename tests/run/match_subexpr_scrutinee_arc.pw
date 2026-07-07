@@ -1,0 +1,28 @@
+// match as a CALL-ARG subexpression: does its owned scrutinee temp die at the match's
+// own end (BEFORE the enclosing call runs) or at the full statement's end?
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn mkOpt() -> Optional[Ref[Cell]] {
+    return <Optional.Some v=<Ref value=<Cell v=1 /> /> />
+}
+
+fn f(x: I32) -> I32 {
+    print(x + 1000I32)    // marker: enclosing call body runs
+    return x
+}
+
+fn main() {
+    val n: I32 = f(x: match mkOpt() {
+        Optional.Some(v: val r) => { give r->v }
+        Optional.None => { give 0I32 }
+    })
+    print(n)
+    print(100I32)
+}
+// scrutinee-at-match-end: 1, 1001, 1, 100 ; statement-end: 1001, 1, 1, 100

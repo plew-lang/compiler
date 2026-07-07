@@ -1,0 +1,16 @@
+// sanity: append-only Array[Ref[Cell]] releases elements at drop (baseline for p12b).
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn main() {
+    mut val xs: Array[Ref[Cell]] = []
+    xs.append(<Ref value=<Cell v=1 /> />)
+    xs.append(<Ref value=<Cell v=2 /> />)
+    print(100I32)
+}
+// expected: 100, 1, 2

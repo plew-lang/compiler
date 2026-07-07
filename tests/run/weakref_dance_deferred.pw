@@ -1,0 +1,46 @@
+// WeakRef upgrade dance: original Ref dropped while an upgraded strong lives on ->
+// deinit deferred to the LAST strong's drop; a later upgrade yields None (no double deinit).
+import @Std/Io with { print }
+import @Std/Core with { Ref, WeakRef }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn main() {
+    mut val keep: Optional[Ref[Cell]] = <Optional.None />
+    mut val wopt: Optional[WeakRef[Cell]] = <Optional.None />
+    if true {
+        val r: Ref[Cell] = <Ref value=<Cell v=7 /> />
+        wopt = <Optional.Some v=r.weak() />
+        match r.weak().upgrade() {
+            Optional.Some(v: val s) => { keep = <Optional.Some v=s /> }
+            Optional.None => { print(999I32) }
+        }
+    }
+    // r dropped above, but `keep` holds a strong -> NO deinit yet
+    print(1I32)
+    match wopt {
+        Optional.Some(v: val w) => {
+            match w.upgrade() {
+                Optional.Some(v: val s2) => { print(s2->v) }   // alive: 7
+                Optional.None => { print(888I32) }
+            }
+        }
+        Optional.None => {}
+    }
+    keep = <Optional.None />   // last strong gone -> deinit 7 HERE
+    print(2I32)
+    match wopt {
+        Optional.Some(v: val w2) => {
+            match w2.upgrade() {
+                Optional.Some(v: val s3) => { print(777I32) }
+                Optional.None => { print(3I32) }               // dead
+            }
+        }
+        Optional.None => {}
+    }
+    print(100I32)
+}
+// expected: 1, 7, 7, 2, 3, 100

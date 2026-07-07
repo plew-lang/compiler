@@ -1,0 +1,27 @@
+// Dictionary values holding Ref[Cell]: a value overwrite evaluates the RHS then
+// releases the old value at that statement (spec/03 storeToPlace order); the
+// dict's own drop releases the remaining values. NOTE: the 3,2 tail order pins
+// the current implementation's iteration order — the spec deliberately leaves
+// dict drop order unspecified (hidden cost), so a hash-layout change may
+// legitimately re-pin this golden.
+import @Std/Io with { print }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I32
+    deinit { print(self.v) }
+}
+
+fn mk(v: I32) -> Ref[Cell] {
+    print(v + 1000I32)
+    return <Ref value=<Cell v=v /> />
+}
+
+fn main() {
+    mut val d: Dictionary[U64, Ref[Cell]] = [:]
+    d[1U64] = mk(v: 1I32)
+    d[2U64] = mk(v: 2I32)
+    d[1U64] = mk(v: 3I32)   // overwrite: expect 1003 (RHS) then 1 (old value deinit)
+    print(100I32)
+}
+// expected: 1001, 1002, 1003, 1, 100, then {2,3} in some deterministic order at dict drop
