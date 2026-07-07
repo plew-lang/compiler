@@ -50,6 +50,10 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Array") {
             return 2U64
         }
+        // a function type (head `fn`) is the closure value { fn ptr, env ptr } = 2 words.
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "fn") {
+            return 2U64
+        }
         val sreg: U64 = self.structRegSlot(c: inout c, start: tyStart, len: tyLen)
         if sreg < self.genStructRefs.count() {
             val sd: StructDef = c.arena.structs[self.genStructDefs[sreg]]
@@ -135,6 +139,13 @@ pub impl LlvmCtx {
             }
             if c.isRawBufInst(ref: g) {
                 return 1U64
+            }
+            // a function-typed payload (`fn(...) -> R`, possibly via `T -> fn`) is the
+            // closure value { fn ptr, env ptr } = 2 words. The head-name fallback below
+            // would size it as 1, undersizing the payload area — a closure stored into
+            // an `Optional[fn ...]` then overflows into the adjacent words.
+            if c.isFnType(ref: g) {
+                return 2U64
             }
             if c.isGenericInst(ref: g) {
                 // Array[E] is the {ptr,i64} value type, not an inline instance.

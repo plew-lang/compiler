@@ -1,0 +1,24 @@
+// A closure value is { fn ptr, env ptr } = 2 payload words. The iterator hands
+// `Array[fn]` elements over as Optional[fn] — an undersized payload area
+// ([1 x i64]) once let the 16-byte closure store overflow into adjacent frame
+// words (stack corruption). Pins fn-typed payload sizing end to end: build,
+// iterate, call each element, and release the captured cells exactly once.
+import @Std/Io with { print, write }
+import @Std/Core with { Ref }
+
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+fn main() {
+    val a: Ref[Cell] = <Ref value=<Cell v=122 /> />
+    val b: Ref[Cell] = <Ref value=<Cell v=123 /> />
+    val fs: Array[fn() -> I64] = [fn() -> I64 { return a->v }, fn() -> I64 { return b->v }]
+    mut val total: I64 = 0
+    for f in fs {
+        total += f()
+    }
+    print(total)
+    write(s: "end\n")
+}
