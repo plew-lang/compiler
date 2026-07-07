@@ -18,6 +18,7 @@ RT="$TMP/rt.c"
 "$PLEWC" --runtime > "$RT"
 
 leaky=0; clean=0; skipped=0
+rm -f "$TMP"/leak_*.err
 : > "$TMP/summary.txt"
 for f in tests/run/*.pw; do
     name=$(basename "$f" .pw)

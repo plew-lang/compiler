@@ -66,7 +66,7 @@ pub impl LlvmCtx {
     // (`plew_write_raw` / `plew_eprint_raw` / `plew_panic_raw`). Passing scalars, not
     // the struct by value, sidesteps the C struct-by-value ABI until it is modeled.
     inout fn emitStrSink(c: inout Comp, rtName: String, rtId: U64, argExpr: U64) -> LLVMValueRef {
-        val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
+        val sv: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: argExpr)
         val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sv)
         val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sv)
         mut val ptys: Array[LLVMTypeRef] = []
@@ -84,7 +84,7 @@ pub impl LlvmCtx {
     // path is a {ptr,i64} value (String or Array[U8], same layout) passed as two args;
     // returns `retTy` (strty for the file readers, i64 for fileExists).
     inout fn emitPathStrIntrinsic(c: inout Comp, rtName: String, rtId: U64, retTy: LLVMTypeRef, pathExpr: U64) -> LLVMValueRef {
-        val pv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: pathExpr)
+        val pv: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: pathExpr)
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
@@ -135,14 +135,14 @@ pub impl LlvmCtx {
                 gmSlot = self.ensureGenMethodDeclared(c: inout c, mfi: ffi, instRef: gmInst, ownArgs: [])
             }
         }
-        val recvVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
+        val recvVal: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: argExpr)
         val emptyFmt: LLVMValueRef = self.arrValWrap(c: inout c, data: LLVMConstNull(self.ptrty), aggTy: self.stringLlvmTy(c: inout c))
         mut val cav: Array[LLVMValueRef] = []
         cav.append(recvVal)
         cav.append(emptyFmt)
         if gmSlot < self.genMethK.count() {
             val gval: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[gmSlot], self.genMethVal[gmSlot], arrayCPtr(cav), 2U64, anon())
-            return self.emitFormatPrintTail(c: inout c, sval: gval)
+            return self.emitFormatPrintTail(c: inout c, sval: gval, svalTy: c.arena.funcs[ffi].retTy)
         }
         mut val slot: U64 = self.userFnSlot(idx: ffi)
         if slot >= self.fnIdx.count() {
@@ -153,12 +153,16 @@ pub impl LlvmCtx {
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val sval: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(cav), 2U64, anon())
-        return self.emitFormatPrintTail(c: inout c, sval: sval)
+        return self.emitFormatPrintTail(c: inout c, sval: sval, svalTy: c.arena.funcs[ffi].retTy)
     }
 
     // The shared tail of emitFormatPrint: take the String the Format witness returned and
-    // write its bytes through the runtime string sink.
-    inout fn emitFormatPrintTail(c: inout Comp, sval: LLVMValueRef) -> LLVMValueRef {
+    // write its bytes through the runtime string sink. The witness String is a fresh
+    // TEMPORARY (+1 from format) — give it an anonymous owned home (svalTy = the witness's
+    // declared String return ref) so the enclosing block's exit drops it (guaranteed(+0):
+    // the sink borrows, nobody else releases).
+    inout fn emitFormatPrintTail(c: inout Comp, sval: LLVMValueRef, svalTy: U64) -> LLVMValueRef {
+        self.registerArgTemp(c: inout c, v: sval, typeRef: svalTy)
         val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sval)
         val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sval)
         mut val ptys: Array[LLVMTypeRef] = []

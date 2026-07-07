@@ -537,6 +537,19 @@ pub impl LlvmCtx {
         return out
     }
 
+    // A by-value argument for a callee WITHOUT a Plew body (runtime intrinsic sinks,
+    // Format-witness receivers) under the same guaranteed(+0) convention as genGenCallArg:
+    // a PLACE arg is a borrow (the binding outlives the call — the intrinsic only reads);
+    // a TEMPORARY (call result / concat / construction) gets an anonymous owned home so
+    // the enclosing block's exit drops it.
+    inout fn genBorrowedArg(c: inout Comp, argExpr: U64) -> LLVMValueRef {
+        val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
+        if !(exprAliasesPlace(c: inout c, id: argExpr)) {
+            self.registerArgTemp(c: inout c, v: v, typeRef: self.argValueTypeRef(c: inout c, argExpr: argExpr))
+        }
+        return v
+    }
+
     // Register a heap-carrying argument TEMPORARY as an anonymous owned local: the
     // enclosing block's scope-exit drop destroys it (classifier-routed via locTypeRef).
     // The slot is zero-initialized at fn entry (entryAllocaZeroed) because the store may
