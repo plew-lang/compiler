@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// A nested generic instance `Box[Box[T]]` and its inner instance `Box[T]` share
+// one struct def but are DIFFERENT type instances. The ARC release-need cycle
+// breaker must key on the grounded instance ref, not the def index — else the
+// inner visit reads as a false cycle and the inner String's heap is never
+// released (leak) and its deinit is skipped (review/12 regression pin).
+unique struct Cell {
+    pub val v: I64
+    deinit { print(self.v) }
+}
+
+struct Box[T] { pub val item: T }
+
+fn main() {
+    val bb: Box[Box[String]] = <Box item=<Box item=("heap" + "-payload") /> />
+    print(bb.item.item)
+    val cc: Box[Box[Ref[Cell]]] = <Box item=<Box item=<Ref value=<Cell v=5 /> /> /> />
+    print(cc.item.item->v)
+}

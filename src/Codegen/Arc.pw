@@ -118,9 +118,13 @@ pub impl Comp {
     }
 
     // The recursive kernel. `visited` terminates containment cycles (the cyclic
-    // field is auto-boxed; a re-visited def contributes false — its own answer was
-    // produced at the first visit). Struct keys are the bare sidx; enum keys are
-    // offset by 2^62 (mirrors the backend's enumArcKey split).
+    // field is auto-boxed; a re-visited type contributes false — its own answer was
+    // produced at the first visit). The key is the grounded INSTANCE ref, NOT the bare
+    // struct/enum def index: `Box[Box[String]]` and `Box[String]` share a def but are
+    // DIFFERENT instances, and keying on the def made the inner visit a false cycle
+    // (returned false, so the inner `String` never gated release -> leak + skipped
+    // deinit). A genuine same-instance cycle is either infinite-size (rejected) or
+    // boxed (terminated by `fieldIsBoxed` before recursing), so ref-keying still halts.
     inout fn arcRefNeedsRelease(ref: U64, visited: inout Array[U64]) -> Bool {
         match self.arcClassOfRef(ref: ref) {
             ArcClass.Scalar => { return false }
@@ -134,12 +138,12 @@ pub impl Comp {
             ArcClass.StructVal(val sidx) => {
                 mut val vk: U64 = 0
                 while vk < visited.count() {
-                    if visited[vk] == sidx {
+                    if visited[vk] == ref {
                         return false
                     }
                     vk += 1
                 }
-                visited.append(sidx)
+                visited.append(ref)
                 if self.structOwnDeinitFi(sidx: sidx) < self.arena.funcs.count() {
                     return true
                 }
@@ -188,12 +192,12 @@ pub impl Comp {
             ArcClass.EnumVal(val eidx) => {
                 mut val vk: U64 = 0
                 while vk < visited.count() {
-                    if visited[vk] == 4611686018427387904U64 + eidx {
+                    if visited[vk] == ref {
                         return false
                     }
                     vk += 1
                 }
-                visited.append(4611686018427387904U64 + eidx)
+                visited.append(ref)
                 val ed: EnumDef = self.arena.enums[eidx]
                 val savedP: Array[Bind] = self.cur.typeParams
                 val savedA: Array[U64] = self.cur.typeArgs
