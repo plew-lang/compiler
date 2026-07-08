@@ -292,12 +292,11 @@ pub impl Comp {
                 mut val baseIsChain: Bool = false
                 if bt.kind == 2I64 {
                     if bt.nameLen > 0U64 {
-                        val chN: Bind = self.internBytes(s: "chain")
-                        baseIsChain = self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen)
+                        baseIsChain = self.typeConformsToChain(nameStart: bt.nameStart, nameLen: bt.nameLen)
                     }
                 }
                 if !(baseIsChain) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "the left of `?.` must implement `Chain` (a `chain()` returning an `Optional`) — `Optional` and user Chain types qualify, a plain struct or scalar does not; `Result` is not Chain, use `try` for it (spec/12)")
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "the left of `?.` must fully implement `Chain`: a `chain()` returning an `Optional`, plus `fromValue(value:)` and `empty()` factories (spec/12). `Optional` and user Chain types qualify; a plain struct/scalar does not, and `Result` is not Chain (use `try`)")
                 }
             }
             Expr.ChainHole => {}

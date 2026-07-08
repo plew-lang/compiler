@@ -1,0 +1,22 @@
+// `try` must emit the `from` conversion even when the source and target error types
+// share a head but differ in a generic argument (`Dist[Meters]` -> `Dist[Feet]`).
+// The backend's convert-or-not gate compares the FULL type (like the frontend); a
+// head-name test skipped the conversion and rewrapped the raw payload into the other
+// instance (invalid IR). spec/13.
+import @Std/Io with { print }
+import @Std/Core
+struct Dist[Unit] { pub val v: I64 }
+struct Meters {}
+struct Feet {}
+pub impl Dist[Feet] { factory from(d: Dist[Meters]) { return <Dist[Feet] v=d.v * 3I64 /> } }
+fn inner() -> Result[I64, Dist[Meters]] { return <Result.Err error=<Dist[Meters] v=10I64 /> /> }
+fn outer() -> Result[I64, Dist[Feet]] {
+    val x: I64 = try inner()
+    return <Result.Ok value=x />
+}
+fn main() {
+    match outer() {
+        Result.Ok(val value) => { print(value) }
+        Result.Err(val error) => { print(error.v) }   // 30 = 10 * 3 (converted through from)
+    }
+}

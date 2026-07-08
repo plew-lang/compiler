@@ -321,6 +321,36 @@ pub impl Comp {
         return self.arena.funcs.count()
     }
 
+    // Does the type named (nameStart,nameLen) FULLY implement `Chain` (spec/12)? `?.`
+    // desugars to `match base.chain() { Some(v) => <O.fromValue value=v.… />; None =>
+    // <O.empty /> }`, so a conformer must supply ALL of: a `chain()` returning an
+    // `Optional`, plus `fromValue(value:)` and `empty()` factories. Testing only for a
+    // `chain` method (忖度) let a struct with an unrelated `chain()` — or one returning a
+    // non-Optional, or lacking the factories — desugar and then fail deep in the backend
+    // with an out-of-source line number. The Mono rewrite gate and the Verify survivor
+    // check share this predicate so they never disagree on what conforms.
+    inout fn typeConformsToChain(nameStart: U64, nameLen: U64) -> Bool {
+        val chN: Bind = self.internBytes(s: "chain")
+        if !(self.typeHasMethodNamed(recvStart: nameStart, recvLen: nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen)) {
+            return false
+        }
+        val noArgs: Array[Arg] = []
+        val mi: U64 = self.findMethod(recvStart: nameStart, recvLen: nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen, args: noArgs)
+        if mi >= self.arena.funcs.count() {
+            return false
+        }
+        if !(rangeEquals(bytes: self.arena.bytes, start: self.arena.funcs[mi].retStart, len: self.arena.funcs[mi].retLen, kw: "Optional")) {
+            return false
+        }
+        if self.findAssocByName(recvStart: nameStart, recvLen: nameLen, name: "fromValue") >= self.arena.funcs.count() {
+            return false
+        }
+        if self.findAssocByName(recvStart: nameStart, recvLen: nameLen, name: "empty") >= self.arena.funcs.count() {
+            return false
+        }
+        return true
+    }
+
     inout fn scanExprInsts(exprId: U64) {
         match self.arena.exprs[exprId] {
             Expr.Ident(val start, val len) => {
@@ -473,8 +503,7 @@ pub impl Comp {
                 // rides the match-scrutinee temp protocol, which does both.
                 val bt: TypeInfo = self.typeOf(id: base)
                 if bt.kind == 2 {
-                    val chN: Bind = self.internBytes(s: "chain")
-                    if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
+                    if self.typeConformsToChain(nameStart: bt.nameStart, nameLen: bt.nameLen) {
                         // record the stage PARAMETRICALLY with the env cleared (the first
                         // scan may run under one instance's env, but the rewritten tree is
                         // SHARED by every instantiation — each grounds the site anew via
