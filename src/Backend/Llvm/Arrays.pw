@@ -252,13 +252,23 @@ pub impl LlvmCtx {
             return self.consumeIntoOwned(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), expr: valExpr, typeRef: 0U64)
         }
         // an existential `any P` field (spec/08): box a concrete conforming initializer,
-        // or value-semantics-copy an existing `any` place.
+        // or value-semantics-copy an existing `any` place. GROUND the field type under the
+        // active instance env first, so a bare-param field (`v: T` with `T = any Shape` in
+        // `Wrapper[any Shape]`) is recognized as existential — the field slot is the fat
+        // pointer (fieldLlvmTy grounds the same way), so storing the concrete value raw
+        // here would mismatch the slot type (invalid IR).
+        mut val fldGround: U64 = fld.ty
+        if fld.ty != 0U64 {
+            if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
+                fldGround = c.groundTypeRef(ref: fld.ty)
+            }
+        }
         mut val fldBoxed: Bool = false
-        val fldAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: fld.ty, valueExpr: valExpr, outBoxed: inout fldBoxed)
+        val fldAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: fldGround, valueExpr: valExpr, outBoxed: inout fldBoxed)
         if fldBoxed {
             return fldAny
         }
-        if refIsAny(c: inout c, ref: fld.ty) {
+        if refIsAny(c: inout c, ref: fldGround) {
             return self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: valExpr), valueExpr: valExpr)
         }
         // a boxed (recursive) struct field: build the value, heap-allocate a cell, store

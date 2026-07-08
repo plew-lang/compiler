@@ -1,0 +1,32 @@
+import @Std/Core
+import @Std/Io with { print }
+
+// An existential `any P` stored as a struct field / enum payload / generic-instance
+// arg is the fat pointer (data + vtable, 2 words). Construction must BOX a concrete
+// conforming value into that slot, the match/field bind must recover the `any` type so
+// a method call dynamically dispatches, and the box's drop must run the concrete's
+// deinit. Before the fix a struct/generic payload emitted invalid IR (raw concrete into
+// the fat-pointer slot) and a non-generic enum payload SIGSEGV'd the compiler at
+// dispatch (the bind was typed i64, truncating the fat pointer to a null receiver).
+trait Shape { fn area() -> I64 }
+unique struct Sq { pub val s: I64  deinit { print(self.s) } }
+impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
+
+struct Boxed { pub val v: any Shape }
+enum Holder { Wrap(v: any Shape) }
+struct Wrapper[T] { pub val v: T }
+
+fn main() {
+    // struct field
+    val b: Boxed = <Boxed v=<Sq s=2I64 /> />
+    print(b.v.area())                                  // 4
+    // generic-instance struct field
+    val w: Wrapper[any Shape] = <Wrapper v=<Sq s=3I64 /> />
+    print(w.v.area())                                  // 9
+    // non-generic enum payload + deinit through the box
+    val h: Holder = <Holder.Wrap v=<Sq s=4I64 /> />
+    match h { Holder.Wrap(val v) => { print(v.area()) } }   // 16, then Sq deinit prints 4
+    // std generic enum payload (Optional)
+    val o: Optional[any Shape] = <Optional[any Shape].Some v=<Sq s=5I64 /> />
+    match o { Optional.Some(val v) => { print(v.area()) }  Optional.None => { print(-1I64) } }  // 25, then deinit 5
+}

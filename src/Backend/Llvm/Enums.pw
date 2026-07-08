@@ -978,14 +978,24 @@ pub impl LlvmCtx {
                             }
                         }
                         if c.isRefInst(ref: gpf) || c.isWeakRefInst(ref: gpf) || gpfIsAnyOrFn {
-                            // a `Ref[T]`/`WeakRef[T]` payload: route through consumeIntoOwned so
-                            // the constructed enum CO-OWNS it (rc++ a place; a fresh `<Ref …/>` /
-                            // `r.weak()` already owns its count and passes through). This is the
-                            // one canonical "make owned" path shared with binds/args/returns/
-                            // struct fields — Ref was the missing payload class that aliased
-                            // instead, causing the return / match-temp UAF + leak.
-                            val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), expr: valExpr, typeRef: gpf)
-                            agg = LLVMBuildInsertValue(self.b, agg, rv, fj, anon())
+                            // an existential `any P` payload initialized from a concrete
+                            // conforming value (`Wrap(v: any Shape)` <- `<Sq …/>`): box it into
+                            // the fat pointer first — the payload slot is anyTy (2 words), so
+                            // inserting the raw concrete value would mismatch the slot (invalid
+                            // IR). A value that is already `any` (or a Ref/WeakRef/closure) is
+                            // not boxed and is co-owned via consumeIntoOwned below.
+                            mut val anyBoxed: Bool = false
+                            val boxedAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: gpf, valueExpr: valExpr, outBoxed: inout anyBoxed)
+                            if anyBoxed {
+                                agg = LLVMBuildInsertValue(self.b, agg, boxedAny, fj, anon())
+                            } else {
+                                // a `Ref[T]`/`WeakRef[T]` / already-`any` / closure payload: route
+                                // through consumeIntoOwned so the constructed enum CO-OWNS it
+                                // (rc++ a place; a fresh owner passes through). The one canonical
+                                // "make owned" path shared with binds/args/returns/struct fields.
+                                val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), expr: valExpr, typeRef: gpf)
+                                agg = LLVMBuildInsertValue(self.b, agg, rv, fj, anon())
+                            }
                         } else if gpf != 0U64 && (c.isGenericInst(ref: gpf) || gpfIsRecord) {
                             self.expectedTy = gpf
                             val giv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)

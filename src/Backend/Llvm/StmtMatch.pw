@@ -220,6 +220,16 @@ pub impl LlvmCtx {
                         if c.cur.typeParams.count() > 0U64 {
                             gfp = c.groundTypeRef(ref: fd.ty)
                         }
+                        // an existential `any P` payload (`Wrap(v: any Shape)`, or a type
+                        // param bound to one): the stored value is the fat pointer (anyTy,
+                        // 2 words). Carry the `any` TypeRef as the bind's ref so a method
+                        // call on it dynamically dispatches (spec/08) — else the bind is
+                        // typed i64 (llvmScalarTy on the trait name), the fat pointer is
+                        // truncated on store, and dispatch reads a null receiver.
+                        if refIsAny(c: inout c, ref: gfp) {
+                            genFieldRef = gfp
+                            pty = self.anyTy
+                        }
                         if c.isGenericInst(ref: gfp) {
                             if !(rangeEquals(bytes: c.arena.bytes, start: c.arena.types[gfp].nameStart, len: c.arena.types[gfp].nameLen, kw: "Array")) {
                                 genFieldRef = gfp
