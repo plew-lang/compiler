@@ -462,19 +462,34 @@ pub impl LlvmCtx {
         // borrow (no retain — the binding outlives the call; escapes inside the callee
         // retain via consumeIntoOwned); an `any` temporary (an `any`-returning call)
         // is homed like every other temp class. A `move` arg hands the callee ownership.
+        // Ground a generic type-param param first: `value: V` on `Buffer[any P].append`
+        // (V bound to `any P` via the receiver instance env) is a bare `V` on p.ty, not
+        // `any` — without grounding, a concrete arg was stored raw into the fat-pointer
+        // slot (SEGV / invalid IR). Mirrors paramLlvmTy / bindOneParam.
+        mut val pAnyRef: U64 = p.ty
+        if p.ty != 0U64 {
+            if !(refIsAny(c: inout c, ref: p.ty)) {
+                if c.cur.typeParams.count() > 0U64 {
+                    val pg: U64 = c.groundTypeRef(ref: p.ty)
+                    if refIsAny(c: inout c, ref: pg) {
+                        pAnyRef = pg
+                    }
+                }
+            }
+        }
         mut val argBoxed: Bool = false
-        val argAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: p.ty, valueExpr: argExpr, outBoxed: inout argBoxed)
+        val argAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: pAnyRef, valueExpr: argExpr, outBoxed: inout argBoxed)
         if argBoxed {
             if !(p.isMove) {
-                self.registerArgTemp(c: inout c, v: argAny, typeRef: p.ty)
+                self.registerArgTemp(c: inout c, v: argAny, typeRef: pAnyRef)
             }
             return argAny
         }
-        if refIsAny(c: inout c, ref: p.ty) {
+        if refIsAny(c: inout c, ref: pAnyRef) {
             val anyV: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
             if !(p.isMove) {
                 if !(exprAliasesPlace(c: inout c, id: argExpr)) {
-                    self.registerArgTemp(c: inout c, v: anyV, typeRef: p.ty)
+                    self.registerArgTemp(c: inout c, v: anyV, typeRef: pAnyRef)
                 }
             }
             return anyV

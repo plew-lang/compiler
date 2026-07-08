@@ -113,6 +113,15 @@ pub impl Comp {
                 return self.typeInfoOfRef(ref: f.retTy)
             }
         }
+        // an existential `any P` return: the isAny ref IS the type identity, so a
+        // name-only recovery would degrade it to the plain trait name — a `f().m()`
+        // inline dispatch on the result would then misroute to the free-fn inference
+        // path instead of dynamic dispatch (spec/08).
+        if f.retTy != 0U64 && f.retTy < self.arena.types.count() {
+            if self.arena.types[f.retTy].isAny {
+                return self.typeInfoOfRef(ref: f.retTy)
+            }
+        }
         return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
     }
 

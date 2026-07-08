@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// A plain method returning `any P` used as an inline dispatch receiver
+// (`h.get().m()`, spec/08): the method-call result's recovered type must carry the
+// isAny ref so the bare `.area()` resolves to dynamic dispatch — declaredRetInfo's
+// name-only recovery degraded it to the plain trait name and misrouted the call to
+// the free-fn inference path.
+trait Shape { fn area() -> I64 }
+struct Sq { val s: I64 }
+pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
+struct Holder { pub val item: any Shape }
+pub impl Holder { fn get() -> any Shape { return self.item } }
+
+fn main() {
+    val sh: any Shape = <Sq s=4 />
+    val h: Holder = <Holder item=sh />
+    print(h.get().area())            // 16   (inline: method-return any -> dispatch)
+}
