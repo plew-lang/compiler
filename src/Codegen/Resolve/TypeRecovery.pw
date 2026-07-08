@@ -41,6 +41,28 @@ pub impl Comp {
         return true
     }
 
+    // Whether two type refs may be compared by FULL structural identity for overload
+    // discrimination (`Box[I64]` vs `Box[String]`): both must be generic instances (carry
+    // type args) that are NOT function types or existentials — a closure literal's inferred
+    // fn ref and an `any P` ref do not structurally match a declared param ref, so those
+    // keep the head-name match (spec/07 discriminates on concrete generic args, not on
+    // closure signatures / erased existentials).
+    inout fn refsGenericArgComparable(a: U64, b: U64) -> Bool {
+        if a == 0U64 || b == 0U64 {
+            return false
+        }
+        if a >= self.arena.types.count() || b >= self.arena.types.count() {
+            return false
+        }
+        if self.arena.types[a].isAny || self.arena.types[b].isAny {
+            return false
+        }
+        if self.isFnType(ref: a) || self.isFnType(ref: b) {
+            return false
+        }
+        return self.arena.types[a].args.count() > 0U64 && self.arena.types[b].args.count() > 0U64
+    }
+
     // An argument's recovered type for overload discrimination. Prefer the parametric
     // store (recorded by recordParametricTypes with cur.locals populated): plain
     // exprType returns a NAMELESS scalar for a variable/field argument because
@@ -76,6 +98,14 @@ pub impl Comp {
             return false
         }
         if ti.kind == 2 {
+            // generic-instance discrimination (spec/07: distinguish at concrete argument
+            // positions): `f(b: Box[I64])` vs `f(b: Box[String])` share a head name but
+            // differ in type args. Compare the FULL grounded refs when both sides are
+            // comparable generic instances — head-name-only would mis-merge them (the
+            // parametric store now hands us the ground `Box[String]` ref).
+            if self.refsGenericArgComparable(a: ti.ref, b: p.ty) {
+                return self.typeRefEq(a: ti.ref, b: p.ty)
+            }
             return intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
         }
         // ti.kind == 0: a scalar / integer. A suffixed/typed value carries its name;

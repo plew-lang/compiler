@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Overloads that differ only in a generic argument's type args (`Box[I64]` vs
+// `Box[String]`) are distinct (spec/07: discriminate at concrete positions). Both the
+// duplicate-declaration check and overload selection must compare the FULL type refs,
+// not just the head name "Box" — head-name-only reported a false "duplicate function"
+// and, when it slipped past, dispatched every call to the first-declared overload.
+struct Box[T] { pub val v: T }
+
+fn f(b: Box[String]) -> I64 { return 222I64 }
+fn f(b: Box[I64]) -> I64 { return 111I64 }
+
+fn main() {
+    val bs: Box[String] = <Box[String] v="hi" />
+    val bi: Box[I64] = <Box[I64] v=7I64 />
+    print(f(b: bs))    // String overload -> 222
+    print(f(b: bi))    // I64 overload    -> 111
+}

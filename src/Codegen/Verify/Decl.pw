@@ -296,6 +296,16 @@ pub impl Comp {
             if pa.tyNameId != pb.tyNameId {
                 return false
             }
+            // two generic-instance params with the same head but different type args are
+            // NOT duplicates (spec/07): `f(Box[I64])` and `f(Box[String])` are distinct
+            // overloads. Head-name equality alone would mis-report them as a duplicate.
+            // (fn-typed / existential params keep head-name identity — see
+            // refsGenericArgComparable.)
+            if self.refsGenericArgComparable(a: pa.ty, b: pb.ty) {
+                if !(self.typeRefEq(a: pa.ty, b: pb.ty)) {
+                    return false
+                }
+            }
             if pa.tyIsArray != pb.tyIsArray {
                 return false
             }
