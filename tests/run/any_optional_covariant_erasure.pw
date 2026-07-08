@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// Covariant container erasure through a generic ENUM (spec/08, SE-0309): assigning an
+// `Optional[Concrete]` to an `Optional[any P]` tag-dispatches and boxes the Some-payload
+// into the existential (None stays None). The heap-carrying payload is retained so the
+// erased value co-owns it — the source Optional stays an independent, still-usable value.
+trait Named { fn label() -> String }
+struct Person { val name: String }
+pub impl Person as Named { fn label() -> String { return self.name } }
+fn describe(o: Optional[any Named]) {
+    match o {
+        Optional.Some(v: val x) => { print(x.label()) }
+        Optional.None => { print("none") }
+    }
+}
+fn main() {
+    val some: Optional[Person] = <Optional[Person].Some v=<Person name="Ada" /> />
+    val es: Optional[any Named] = some
+    describe(o: es)                  // Ada
+    val no: Optional[Person] = <Optional[Person].None />
+    val en: Optional[any Named] = no
+    describe(o: en)                  // none
+    match some {
+        Optional.Some(v: val p) => { print(p.label()) }   // Ada — source independent
+        Optional.None => { print("?") }
+    }
+}

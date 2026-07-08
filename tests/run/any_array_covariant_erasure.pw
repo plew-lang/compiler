@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// Covariant container erasure (spec/08, SE-0309): assigning an `Array[Concrete]` to an
+// `Array[any P]` is a genuine per-element REPACK, not an identity cast — the element layout
+// widens from an 8-byte concrete to a 16-byte existential fat pointer, so codegen boxes each
+// element into the existential. The source array stays independent (value semantics).
+trait Shape { fn area() -> I64 }
+struct Sq { val s: I64 }
+pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
+
+fn main() {
+    val squares: Array[Sq] = [<Sq s=2 />, <Sq s=3 />, <Sq s=4 />]
+    val shapes: Array[any Shape] = squares    // covariant erasure: box each element
+    print(shapes[0U64].area())                // 4
+    print(shapes[1U64].area())                // 9
+    print(shapes[2U64].area())                // 16
+    print(squares[0U64].area())               // 4 — the source is an independent value
+}

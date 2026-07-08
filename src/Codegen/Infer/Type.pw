@@ -195,6 +195,12 @@ pub impl Comp {
             if !(spansEqual(c: inout self, aStart: esd.fields[i].nameStart, aLen: esd.fields[i].nameLen, bStart: isd.fields[i].nameStart, bLen: isd.fields[i].nameLen)) {
                 return false
             }
+            // a record/tuple field widening concrete->`any P` has no backend repack (records are
+            // not a covariant container the erasure handles), so reject it rather than silently
+            // miscompile the differing field layout (spec/08; mirrors compatNamed's gate).
+            if self.argWidensToAny(expectedArg: esd.fields[i].ty, inferredArg: isd.fields[i].ty) {
+                return false
+            }
             if !(self.typesCompatible(expected: esd.fields[i].ty, inferred: isd.fields[i].ty)) {
                 return false
             }
@@ -227,8 +233,19 @@ pub impl Comp {
         }
         // same head: a generic head must agree on its type arguments.
         if te.args.count() == tin.args.count() {
+            // covariant container erasure (spec/08, SE-0309): an arg widening concrete->`any P`
+            // (`Dictionary[K, S]` -> `Dictionary[K, any P]`) is a genuine per-position REPACK,
+            // which the backend performs only for `Array` and generic enums (Optional/Result/…).
+            // For any OTHER head (Dictionary, a user struct, a tuple/record) the layouts differ
+            // but no repack exists, so accepting it would silently miscompile — reject it here.
+            val headErasable: Bool = rangeEquals(bytes: self.arena.bytes, start: te.nameStart, len: te.nameLen, kw: "Array") || self.genericEnumIndex(nameStart: te.nameStart, nameLen: te.nameLen) < self.arena.enums.count()
             mut val i: U64 = 0
             while i < te.args.count() {
+                if !(headErasable) {
+                    if self.argWidensToAny(expectedArg: te.args[i], inferredArg: tin.args[i]) {
+                        return false
+                    }
+                }
                 if !(self.typesCompatible(expected: te.args[i], inferred: tin.args[i])) {
                     return false
                 }
@@ -236,6 +253,21 @@ pub impl Comp {
             }
         }
         return true
+    }
+
+    // Whether `inferredArg` (a concrete named type) widens to `expectedArg` (`any P`) — the
+    // covariant concrete->existential position. Used to gate that widening to the container
+    // heads whose backend actually repacks it (compatNamed).
+    inout fn argWidensToAny(expectedArg: U64, inferredArg: U64) -> Bool {
+        if expectedArg >= self.arena.types.count() || inferredArg >= self.arena.types.count() {
+            return false
+        }
+        val ea: TypeRef = self.arena.types[expectedArg]
+        val ia: TypeRef = self.arena.types[inferredArg]
+        if !(ea.isAny) || ia.isAny {
+            return false
+        }
+        return self.knownNamedTypeId(start: ia.nameStart, len: ia.nameLen) != 0U64
     }
 
     // The interned name id of a GENERIC struct def head (`Box` of `struct Box[T]`),

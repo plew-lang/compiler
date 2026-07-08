@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// A single-letter trait name (`P`) used through `any P` must NOT be misread as a type
+// parameter: `tyRefIsGround` treats an existential node as ground, so `Array[any P]`
+// registers and its elements dispatch. (A type-param-shaped trait name previously
+// poisoned registration and crashed the backend.)
+trait P { fn v() -> I64 }
+struct S { val n: I64 }
+pub impl S as P { fn v() -> I64 { return self.n } }
+
+fn main() {
+    val xs: Array[any P] = [<S n=7 />]
+    print(xs[0U64].v())   // 7
+}

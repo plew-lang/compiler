@@ -197,6 +197,20 @@ pub impl LlvmCtx {
                         }
                     }
                 }
+                // covariant container erasure (`val aa: Array[any P] = arr`,
+                // `val oa: Optional[any P] = o`): a value whose element/payload widens
+                // concrete->`any P` is a genuine per-position REPACK (the layouts differ), not
+                // an identity — box each widened position rather than share the value (spec/08).
+                if !(builtArr) {
+                    if gty != 0U64 {
+                        mut val ceb: Bool = false
+                        val cev: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: gty, valueExpr: init, outBoxed: inout ceb)
+                        if ceb {
+                            v = cev
+                            builtArr = true
+                        }
+                    }
+                }
                 if !(builtArr) {
                     // a let annotation provides the expected type so an un-suffixed JSX
                     // generic construction (`val o: Optional[I64] = <Optional.Some … />`)

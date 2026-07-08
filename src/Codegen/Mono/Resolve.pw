@@ -206,6 +206,12 @@ pub impl Comp {
             return true
         }
         val t: TypeRef = self.arena.types[ref]
+        // an existential `any P` is a concrete ground type — its `P` names a TRAIT, never a
+        // type parameter (a single-letter trait name like `P` would otherwise be misread as a
+        // type-param name by the check below, poisoning `Array[any P]` registration).
+        if t.isAny {
+            return true
+        }
         if self.isTypeParamName(start: t.nameStart, len: t.nameLen) {
             return false
         }

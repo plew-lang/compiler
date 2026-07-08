@@ -1,0 +1,14 @@
+// spec/08 (SE-0309): covariant container erasure repacks concrete->`any P` positions, but the
+// backend does so only for `Array` and generic enums (Optional/Result/…). A `Dictionary`
+// value position widening `Dictionary[K, Concrete]` -> `Dictionary[K, any P]` has no repack —
+// the layouts differ (an 8-byte concrete value vs a 16-byte existential fat pointer) — so it
+// is rejected rather than silently miscompiled. (Direct `Dictionary[K, any P]` with per-insert
+// boxing is fine; only the whole-container covariant CONVERSION is gated.)
+trait Shape { fn area() -> I64 }
+struct Sq { val s: I64 }
+pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
+fn main() {
+    mut val d: Dictionary[String, Sq] = [:]
+    d["a"] = <Sq s=4 />
+    val e: Dictionary[String, any Shape] = d
+}
