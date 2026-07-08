@@ -305,16 +305,17 @@ pub impl LlvmCtx {
         val fnErrRef: U64 = c.resultErrArgRef(ref: self.curRetRef)
         if opErrRef != 0U64 {
             if fnErrRef != 0U64 {
-                if !(c.typesCompatible(expected: fnErrRef, inferred: opErrRef)) {
+                if !(c.typeRefEq(a: fnErrRef, b: opErrRef)) {
                     // the conversion is REQUIRED once the types differ: falling through
                     // with the unconverted payload would rewrap an E' bit-pattern as E
                     // (silent type confusion). This MUST use the SAME predicate as the
-                    // frontend gate (Verify/Expr.pw: `!typesCompatible(E, F)`) — a head-name
-                    // (`nameId`) test disagreed on same-head/different-arg errors like
-                    // `Box[I64]` vs `Box[String]`: Verify required a `from` and accepted,
-                    // but the backend saw "same name" and rewrapped the raw payload into the
-                    // other instance (invalid IR). The frontend already rejects a missing
-                    // `from`, so the error below is a defensive backstop.
+                    // frontend gate (Verify/Expr.pw: `!typeRefEq(E, F)`) — a structural
+                    // IDENTITY test, not assignment-compatibility. A head-name (`nameId`)
+                    // test disagreed on same-head/different-arg errors (`Box[I64]` vs
+                    // `Box[String]`), and `typesCompatible` was too loose the other way
+                    // (`C` "compatible with" `any P`), skipping a required conversion. The
+                    // frontend already rejects a missing `from`, so the error below is a
+                    // defensive backstop.
                     val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef, srcRef: opErrRef)
                     if ffi >= c.arena.funcs.count() {
                         c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` cannot convert the operand's error type to the function's error type — define a `from` factory on the function's error type that takes the operand's error (spec/13)")

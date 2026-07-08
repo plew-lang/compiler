@@ -1,0 +1,15 @@
+// `try` propagates an error unchanged only when the source and target error types are
+// the SAME type (structural identity), else it needs `E.from(F)` (spec/13). A concrete
+// `CErr` is NOT the same type as `any HasCode` even though `CErr: HasCode` — `try`
+// must not silently treat "assignment-compatible" as "same type" (that skipped both the
+// `from` and the existential boxing, rewrapping the raw payload = invalid IR). With no
+// `from` on the existential, reject.
+import @Std/Core
+trait HasCode { fn code() -> I32 }
+struct CErr { pub val c: I32 }
+impl CErr as HasCode { fn code() -> I32 { return self.c } }
+fn inner() -> Result[I32, CErr] { return <Result.Err error=<CErr c=1I32 /> /> }
+fn outer() -> Result[I32, any HasCode] {
+    val x: I32 = try inner()
+    return <Result.Ok value=x />
+}

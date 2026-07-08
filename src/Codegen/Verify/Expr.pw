@@ -347,12 +347,20 @@ pub impl Comp {
                                         val fnR: TypeRef = self.arena.types[self.cur.retTy]
                                         if opR.args.count() >= 2U64 {
                                             if fnR.args.count() >= 2U64 {
-                                                if !(self.typesCompatible(expected: fnR.args[1], inferred: opR.args[1])) {
-                                                    // E != E' is allowed when E owns a `from` factory
-                                                    // that ACCEPTS E' (the source error): `try` then
-                                                    // converts E' -> E via E.from (spec/13). Resolving the
-                                                    // overload by the source type is essential — a `from`
-                                                    // taking some other type would reinterpret E' bits.
+                                                if !(self.typeRefEq(a: fnR.args[1], b: opR.args[1])) {
+                                                    // The "no conversion" branch requires E and E' to be
+                                                    // the SAME type — structural identity (`typeRefEq`),
+                                                    // NOT assignment-compatibility. `typesCompatible` is too
+                                                    // loose here: it treats a concrete `C` as compatible with
+                                                    // `any P` when `C: P`, so `try` a `Result[_, C]` into a
+                                                    // `-> Result[_, any P]` looked "same-typed", skipped both
+                                                    // the `from` AND the existential boxing, and rewrapped the
+                                                    // raw `C` into an `{ptr,ptr}` slot (invalid IR / SEGV).
+                                                    // E != E' is allowed only when E owns a `from` factory
+                                                    // that ACCEPTS E' (the source error): `try` then converts
+                                                    // E' -> E via E.from (spec/13). Resolving that overload by
+                                                    // the source type is essential — a `from` taking some
+                                                    // other type would reinterpret E' bits.
                                                     if !(self.typeRefHasFromFactory(errRef: fnR.args[1], srcRef: opR.args[1])) {
                                                         self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory that accepts it (spec/13)")
                                                     }

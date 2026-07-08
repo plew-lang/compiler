@@ -339,13 +339,28 @@ pub impl Comp {
         if mi >= self.arena.funcs.count() {
             return false
         }
+        // `chain()` takes no argument and returns an `Optional` (spec/12).
+        if self.arena.funcs[mi].params.count() != 0U64 {
+            return false
+        }
         if !(rangeEquals(bytes: self.arena.bytes, start: self.arena.funcs[mi].retStart, len: self.arena.funcs[mi].retLen, kw: "Optional")) {
             return false
         }
-        if self.findAssocByName(recvStart: nameStart, recvLen: nameLen, name: "fromValue") >= self.arena.funcs.count() {
+        // `fromValue(value:)` takes exactly one argument, `empty()` none — a wrong arity
+        // means the desugar's `<O.fromValue value=…/>` / `<O.empty/>` would fail to
+        // resolve deep in the backend (an out-of-source line number). Check them here.
+        val fvIdx: U64 = self.findAssocByName(recvStart: nameStart, recvLen: nameLen, name: "fromValue")
+        if fvIdx >= self.arena.funcs.count() {
             return false
         }
-        if self.findAssocByName(recvStart: nameStart, recvLen: nameLen, name: "empty") >= self.arena.funcs.count() {
+        if self.arena.funcs[fvIdx].params.count() != 1U64 {
+            return false
+        }
+        val emIdx: U64 = self.findAssocByName(recvStart: nameStart, recvLen: nameLen, name: "empty")
+        if emIdx >= self.arena.funcs.count() {
+            return false
+        }
+        if self.arena.funcs[emIdx].params.count() != 0U64 {
             return false
         }
         return true
