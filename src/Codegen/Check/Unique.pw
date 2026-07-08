@@ -373,6 +373,16 @@ pub impl Comp {
         while i < self.arena.types.count() {
             val t: TypeRef = self.arena.types[i]
             if t.args.count() != 0 {
+                // Array is handled by checkArrayElemsNotUnique, which scans the RECORDED
+                // element list (real `Array[E]` annotations from lowerType), not the whole
+                // arena. An `Array[any P]` literal of unique concretes mints a PHANTOM
+                // `Array[unique]` ref during bottom-up element recovery (the concretes are
+                // boxed into the existential — never stored raw), so a whole-arena scan here
+                // would reject a valid `Array[any P] = [<UniqueConcrete/>, …]` (spec/08).
+                if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
+                    i += 1
+                    continue
+                }
                 if !(self.isRefInst(ref: i)) && !(self.isWeakRefInst(ref: i)) {
                     mut val j: U64 = 0
                     while j < t.args.count() {

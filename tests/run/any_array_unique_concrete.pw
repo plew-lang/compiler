@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+// An `Array[any P]` literal whose CONCRETE elements are a unique type (spec/03,08):
+// the concretes are boxed into the existential (never stored raw as Array elements),
+// so the array is `Array[any P]`, not `Array[unique]`. Bottom-up element recovery
+// mints a PHANTOM `Array[Sq]` ref in the arena; checkGenericUniqueArgs must not fire
+// on it (Array's real-storage rule is checkArrayElemsNotUnique over recorded element
+// annotations). The box's drop still runs the unique concrete's deinit.
+trait Shape { fn area() -> I64 }
+unique struct Sq { val s: I64  deinit { print(self.s) } }
+impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
+
+fn main() {
+    val xs: Array[any Shape] = [<Sq s=4 />, <Sq s=3 />]
+    print(xs[0].area())          // 16
+    print(xs[1].area())          // 9
+}                                // then Sq deinits: 4, 3 (buffer release order)
