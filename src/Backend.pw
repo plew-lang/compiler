@@ -517,15 +517,65 @@ fn findWitnessFor(c: inout Comp, sidx: U64, req: Func) -> U64 {
 // Does requirement `req` mention `Self` in a non-receiver INPUT position (a param)?
 // Such a member is NOT callable through `any` (spec/08: two `any P` values need not
 // share a concrete type, so a `Self` argument cannot be supplied).
-fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
+// Whether TypeRef `ref` mentions `Self` ANYWHERE in its type tree — a bare `Self`, or
+// nested inside a container / generic (`Optional[Self]`, `Array[Ref[Self]]`, a user
+// `Box[Self]`). The `any P` member-availability rule (spec/08, Swift SE-0309) keys off
+// this: `Self` in a contravariant position (any parameter) blocks the member entirely,
+// and `Self` in the result is callable only where it can be covariantly erased.
+fn typeRefMentionsSelf(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.arena.types.count() {
+        return false
+    }
+    val t: TypeRef = c.arena.types[ref]
+    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+        return true
+    }
     mut val i: U64 = 0
-    while i < req.params.count() {
-        if rangeEquals(bytes: c.arena.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
+    while i < t.args.count() {
+        if typeRefMentionsSelf(c: inout c, ref: t.args[i]) {
             return true
         }
         i += 1
     }
     return false
+}
+
+// Does requirement `req` reference `Self` in any PARAMETER (a non-receiver input)?
+// Such a member is not callable through `any P`: the parameter position is
+// contravariant, so a type-erased value cannot be supplied where the concrete `Self`
+// is required (two `any P` values need not share a concrete type). Walks the whole
+// parameter type tree so a NESTED `Self` (`other: Optional[Self]`, `xs: Array[Self]`)
+// is caught, not just a bare `Self` param — spec/08.
+fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
+    mut val i: U64 = 0
+    while i < req.params.count() {
+        if req.params[i].ty != 0U64 {
+            if typeRefMentionsSelf(c: inout c, ref: req.params[i].ty) {
+                return true
+            }
+        } else {
+            if rangeEquals(bytes: c.arena.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
+                return true
+            }
+        }
+        i += 1
+    }
+    return false
+}
+
+// Whether `req`'s RETURN mentions `Self` in a position the thunk can covariantly erase.
+// A bare `-> Self` re-boxes its single concrete result (buildAnyThunk). `Self` nested in
+// a covariant container (`Optional[Self]`, `Array[Self]`) needs per-container repacking
+// — until eraseSelfCovariant lands (spec/08, SE-0309), such a member is conservatively
+// NOT callable through `any P` (sound: no un-erased concrete escapes as an existential).
+fn reqRetSelfErasable(c: inout Comp, req: Func) -> Bool {
+    if !(req.hasRet) || req.retTy == 0U64 {
+        return true
+    }
+    if !(typeRefMentionsSelf(c: inout c, ref: req.retTy)) {
+        return true
+    }
+    return reqReturnsSelf(c: inout c, req: req)
 }
 
 // Does requirement `req` return bare `Self`? Such a member IS callable through `any`

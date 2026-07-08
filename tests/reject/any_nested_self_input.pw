@@ -1,0 +1,14 @@
+// spec/08: `Self` in a non-receiver input is not callable through `any P` — this holds
+// even when `Self` is NESTED in a container (`Optional[Self]`), since two `any P` values
+// need not share a concrete type. Rejecting the nested case closes a soundness hole
+// (an un-erased concrete could otherwise be passed where the witness expects its own type).
+trait Merge { fn merge(other: Optional[Self]) -> I64 }
+struct S { pub val a: I64 }
+pub impl S as Merge {
+    fn merge(other: Optional[Self]) -> I64 { return self.a }
+}
+fn main() {
+    val x: any Merge = <S a=1I64 />
+    val o: Optional[S] = <Optional[S].None />
+    val n: I64 = x.merge(other: o)
+}
