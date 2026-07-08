@@ -1,0 +1,8 @@
+// `?.` desugars over the `Chain` trait (spec/12) — its left must implement Chain
+// (`chain()` returning an `Optional`). A plain struct does not; reject at the base
+// rather than sliding an undesugared node to the backend's "internal:" error.
+struct P { pub val n: I32 }
+fn main() {
+    val p: P = <P n=1 />
+    val x = p?.n
+}

@@ -312,7 +312,7 @@ pub impl LlvmCtx {
                     // `from` factory here (Verify: "no `from` factory to convert it"), so
                     // this is a defensive backstop — a loud error if the two ever disagree,
                     // never the silent fallthrough the old `if ffi < count` guard allowed.
-                    val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef)
+                    val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef, srcRef: opErrRef)
                     if ffi >= c.arena.funcs.count() {
                         c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` cannot convert the operand's error type to the function's error type — define a `from` factory on the function's error type that takes the operand's error (spec/13)")
                     }

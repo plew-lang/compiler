@@ -1,0 +1,8 @@
+// An enum value has no fields (spec/07): `e.field` is always invalid — reach a
+// payload with `match`. Previously slid to the backend's "field access only on a
+// registered struct value (so far)" message, which read like a compiler limit.
+enum E { A  B }
+fn main() {
+    val e: E = <E.A />
+    val bad = e.foo
+}

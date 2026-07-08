@@ -1,0 +1,10 @@
+// `try` across differing error types needs an `E.from` accepting the SOURCE error
+// (spec/13). `MyErr.from` takes only `I32`, so converting a `String` error has no
+// matching overload — reject (accepting it emitted a String-as-i32 type confusion).
+struct MyErr { pub val code: I32 }
+pub impl MyErr { factory from(n: I32) { return <MyErr code=n /> } }
+fn inner() -> Result[I32, String] { return <Result.Err error="boom" /> }
+fn outer() -> Result[I32, MyErr] {
+    val x: I32 = try inner()
+    return <Result.Ok value=x />
+}

@@ -322,6 +322,18 @@ pub impl Comp {
     inout fn verifyFieldReadVis(base: U64, nameStart: U64, nameLen: U64) {
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.kind == 2 {
+            // an enum value has no fields — `opt.x` / `e.field` is always invalid (reach a
+            // payload with `match`, an Optional with `?.` / `unwrapOr`). Without this the
+            // access slid to the backend's "field access only on a registered struct value
+            // (so far)" message, which reads like a compiler limitation, not a user error.
+            mut val fei: U64 = self.enumIdxByName(start: bt.nameStart, len: bt.nameLen)
+            if fei >= self.arena.enums.count() {
+                fei = self.genericEnumIndex(nameStart: bt.nameStart, nameLen: bt.nameLen)
+            }
+            if fei < self.arena.enums.count() {
+                self.errorAt(offset: nameStart, msg: "an enum value has no fields; `match` on its variants to reach a payload (for an `Optional` use `?.` / `unwrapOr` / `match`) (spec/07)")
+                return
+            }
             if self.fieldVis(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen) == 3U64 {
                 if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: nameStart, nameLen: nameLen) {
                     self.errorAt(offset: nameStart, msg: "a method cannot be used as a value; call it, or wrap it in a closure (e.g. `fn() { obj.method() }`)")

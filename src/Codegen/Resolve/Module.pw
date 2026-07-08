@@ -734,35 +734,29 @@ pub impl Comp {
         return false
     }
 
-    inout fn typeRefHasFromFactory(errRef: U64) -> Bool {
-        if errRef >= self.arena.types.count() {
-            return false
-        }
-        val eNameId: U64 = self.arena.types[errRef].nameId
-        if eNameId == 0U64 {
-            return false
-        }
-        val fromN: Bind = self.internBytes(s: "from")
-        mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            if self.arena.funcs[i].isAssoc {
-                if self.arena.funcs[i].recvId == eNameId {
-                    if self.arena.funcs[i].nameId == fromN.nameId {
-                        return true
-                    }
-                }
-            }
-            i += 1
-        }
-        return false
+    inout fn typeRefHasFromFactory(errRef: U64, srcRef: U64) -> Bool {
+        return self.typeRefFromFactoryIdx(errRef: errRef, srcRef: srcRef) < self.arena.funcs.count()
     }
 
-    inout fn typeRefFromFactoryIdx(errRef: U64) -> U64 {
+    // spec/13: `try` converts the operand's error `F` to the function's error `E`
+    // through `E`'s `from` factory, resolving the overload BY THE SOURCE TYPE `F`.
+    // We must match the `from` whose sole parameter's type is `F` — matching by name
+    // alone would pick an unrelated `from(I32)` and reinterpret an `F` bit-pattern as
+    // `I32` (silent type-confusion IR). Returns `funcs.count()` (= no match) when no
+    // `from` on `E` accepts `F`.
+    inout fn typeRefFromFactoryIdx(errRef: U64, srcRef: U64) -> U64 {
         if errRef >= self.arena.types.count() {
             return self.arena.funcs.count()
         }
         val eNameId: U64 = self.arena.types[errRef].nameId
         if eNameId == 0U64 {
+            return self.arena.funcs.count()
+        }
+        if srcRef >= self.arena.types.count() {
+            return self.arena.funcs.count()
+        }
+        val srcNameId: U64 = self.arena.types[srcRef].nameId
+        if srcNameId == 0U64 {
             return self.arena.funcs.count()
         }
         val fromN: Bind = self.internBytes(s: "from")
@@ -771,7 +765,13 @@ pub impl Comp {
             if self.arena.funcs[i].isAssoc {
                 if self.arena.funcs[i].recvId == eNameId {
                     if self.arena.funcs[i].nameId == fromN.nameId {
-                        return i
+                        // a From factory takes exactly the source error value; select the
+                        // overload whose parameter type head matches `F`.
+                        if self.arena.funcs[i].params.count() == 1U64 {
+                            if self.arena.funcs[i].params[0].tyNameId == srcNameId {
+                                return i
+                            }
+                        }
                     }
                 }
             }

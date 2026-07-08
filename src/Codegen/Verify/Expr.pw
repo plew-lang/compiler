@@ -280,6 +280,25 @@ pub impl Comp {
             }
             Expr.OptChain(val base, cont: _) => {
                 self.verifyExpr(id: base)
+                // `?.` desugars (spec/12) to a match over `base.chain()` — the Chain
+                // trait. The rewrite runs in Mono BEFORE Verify, replacing this node with
+                // the match whenever `base` IS a Chain type. So an OptChain that SURVIVES
+                // to here means Mono declined: `base` has no conforming `chain()`. Report
+                // that at the base, rather than letting the undesugared node reach the
+                // backend as an "internal:" error. `Optional` and any user type that
+                // implements `Chain` qualify; a plain struct or scalar does not — and
+                // `Result` is deliberately NOT Chain (propagate its error with `try`).
+                val bt: TypeInfo = self.typeOf(id: base)
+                mut val baseIsChain: Bool = false
+                if bt.kind == 2I64 {
+                    if bt.nameLen > 0U64 {
+                        val chN: Bind = self.internBytes(s: "chain")
+                        baseIsChain = self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen)
+                    }
+                }
+                if !(baseIsChain) {
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "the left of `?.` must implement `Chain` (a `chain()` returning an `Optional`) — `Optional` and user Chain types qualify, a plain struct or scalar does not; `Result` is not Chain, use `try` for it (spec/12)")
+                }
             }
             Expr.ChainHole => {}
             Expr.Try(val expr) => {
@@ -314,11 +333,12 @@ pub impl Comp {
                             self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` works only on a Result; for an Optional use `unwrapOr` / `?.` / `match` (spec/13)")
                         }
                     }
-                    // the operand's error type E' must match the enclosing function's
-                    // error type E (spec/13): `try` propagates the Err unchanged — From
-                    // error-conversion is not yet implemented, so E == E' is required.
-                    // `try g()` (Result[_, String]) inside `-> Result[_, I64]` would
-                    // reinterpret the String error as an I64. Compare the Err args (index 1).
+                    // the operand's error type E' must either match the enclosing
+                    // function's error type E, or E must own a `from` factory accepting
+                    // E' (spec/13): `try` then propagates the Err either unchanged or
+                    // through `E.from(E')`. Without one of those, `try g()`
+                    // (Result[_, String]) inside `-> Result[_, I64]` would reinterpret
+                    // the String error as an I64. Compare the Err args (index 1).
                     if retIsResult {
                         if tti.ref != 0U64 {
                             if tti.ref < self.arena.types.count() {
@@ -329,10 +349,13 @@ pub impl Comp {
                                         if opR.args.count() >= 2U64 {
                                             if fnR.args.count() >= 2U64 {
                                                 if !(self.typesCompatible(expected: fnR.args[1], inferred: opR.args[1])) {
-                                                    // E != E' is allowed when E owns a `from` factory:
-                                                    // `try` then converts E' -> E via E.from (spec/13).
-                                                    if !(self.typeRefHasFromFactory(errRef: fnR.args[1])) {
-                                                        self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory to convert it (spec/13)")
+                                                    // E != E' is allowed when E owns a `from` factory
+                                                    // that ACCEPTS E' (the source error): `try` then
+                                                    // converts E' -> E via E.from (spec/13). Resolving the
+                                                    // overload by the source type is essential — a `from`
+                                                    // taking some other type would reinterpret E' bits.
+                                                    if !(self.typeRefHasFromFactory(errRef: fnR.args[1], srcRef: opR.args[1])) {
+                                                        self.errorAt(offset: self.exprOffset(id: expr), msg: "`try` error type does not match the function's Result error type, and the function's error type has no `from` factory that accepts it (spec/13)")
                                                     }
                                                 }
                                             }

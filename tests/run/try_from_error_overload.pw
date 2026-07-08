@@ -1,0 +1,22 @@
+// `try` error conversion (spec/13) resolves `E.from` BY THE SOURCE error type:
+// with both `from(I32)` and `from(String)` present, converting a `String` error
+// must pick `from(String)`. Selecting by name alone picked the first overload and
+// passed a String bit-pattern to an `i32` parameter (type-confusion IR).
+import @Std/Io with { print }
+import @Std/Core
+struct MyErr { pub val code: I32 }
+pub impl MyErr {
+    factory from(n: I32) { return <MyErr code=100I32 /> }
+    factory from(s: String) { return <MyErr code=200I32 /> }
+}
+fn inner() -> Result[I32, String] { return <Result.Err error="boom" /> }
+fn outer() -> Result[I32, MyErr] {
+    val x: I32 = try inner()
+    return <Result.Ok value=x />
+}
+fn main() {
+    match outer() {
+        Result.Ok(val value) => { print(value) }
+        Result.Err(val error) => { print(error.code) }   // 200: from(String) chosen
+    }
+}

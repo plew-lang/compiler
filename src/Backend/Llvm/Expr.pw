@@ -212,10 +212,12 @@ pub impl LlvmCtx {
                     if fidx >= c.arena.structs[sidx].fields.count() {
                         // distinct from the unregistered-base error below: the base's struct
                         // IS known, the field name just doesn't exist on it. nameStart points
-                        // at the source field name for BOTH parsed fields and destructure-
-                        // synthesized ones (Lower points those at the bind's source token),
-                        // so the offset is precise either way.
-                        c.errorAt(offset: nameStart, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)")
+                        // at the source field name (parsed fields and Lower-synthesized ones
+                        // alike), so the offset is precise. This is the PLAIN field-read path:
+                        // a destructure bind with a bad field name is caught earlier by Verify
+                        // (Verify/Expr.pw, "record-destructure shorthand" site check), so its
+                        // tailored advice lives there — here we stay a plain field diagnostic.
+                        c.errorAt(offset: nameStart, msg: "no such field on this value's type")
                         return LLVMConstInt(self.i64ty, 0U64, 0I32)
                     }
                     if fidx < c.arena.structs[sidx].fields.count() {

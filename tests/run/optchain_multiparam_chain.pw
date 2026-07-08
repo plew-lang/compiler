@@ -1,0 +1,35 @@
+// A `Chain` conformer whose `Value` is NOT its sole/first type parameter
+// (`enum Slot[Meta, T]` binds `type Value = T`). `?.` must ground the RIGHT
+// argument as the chain Value and carry the sibling `Meta` through the result —
+// a fixed `args[0]` assumption both crashed (index out of range) and dropped
+// `Meta`. spec/12 + spec/08 (associated types).
+import @Std/Io with { print }
+import @Std/Core
+struct Inner { pub val n: I64 }
+enum Slot[Meta, T] {
+    Full(v: T)
+    Empty
+}
+pub impl[Meta, T] Slot[Meta, T] as Chain {
+    type Value = T
+    fn chain() -> Optional[T] {
+        match self {
+            Slot.Full(val v) => { return <Optional[T].Some v=v /> }
+            Slot.Empty => { return <Optional[T].None /> }
+        }
+    }
+    factory fromValue(value: T) { return <Slot[Meta, T].Full v=value /> }
+    factory empty() { return <Slot[Meta, T].Empty /> }
+}
+fn show(r: Slot[Bool, I64]) {
+    match r {
+        Slot.Full(val v) => { print(v) }
+        Slot.Empty => { print(-1I64) }
+    }
+}
+fn main() {
+    val s: Slot[Bool, Inner] = <Slot[Bool, Inner].Full v=<Inner n=7 /> />
+    val none: Slot[Bool, Inner] = <Slot[Bool, Inner].Empty />
+    show(r: s?.n)      // 7  (Value = second param, Meta=Bool preserved)
+    show(r: none?.n)   // -1 (short-circuit)
+}

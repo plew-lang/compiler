@@ -140,13 +140,47 @@ pub impl Comp {
         self.arena.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=arms />
     }
 
-    // The result `Head[U]` of one desugared `?.` stage under the ACTIVE env: ground the
-    // receiver `Head[V]`, extract its chain Value V (the first type arg, by the v1
-    // assumption that `type Value` is the first type parameter), type the trailing chain
-    // `cont` with the ChainHole bound to V (so `a?.b.c` yields U = typeof(V.b.c)), and
-    // rebuild `Head[U]`. Shared by the mono registration and the read path
-    // (chainResultRef) so the two can never disagree. Returns 0 when the receiver
-    // doesn't ground to an instance. Must run BEFORE the rewrite substitutes the hole.
+    // Which type-argument position of a `Chain` conformer named (headStart,headLen) is
+    // its `Value` (spec/08 `type Value = <param>`)? An Optional-shaped conformer binds
+    // Value to its sole type parameter (index 0); a multi-parameter conformer
+    // (`enum Slot[Meta, T] as Chain { type Value = T }`) binds it elsewhere. Resolve the
+    // associated binding to the parameter name and find its declared position, so the
+    // desugar substitutes the RIGHT arg and preserves the others (a fixed args[0] both
+    // crashed — index out of range — and dropped the sibling parameters). Falls back to 0
+    // when the head is unregistered or the binding is not one of its type params.
+    inout fn chainValueArgIndex(headStart: U64, headLen: U64) -> U64 {
+        val valN: Bind = self.internBytes(s: "Value")
+        val vb: Bind = self.assocBindingSpan(recvStart: headStart, recvLen: headLen, nameStart: valN.nameStart, nameLen: valN.nameLen)
+        val si: U64 = self.structDefByNameAny(start: headStart, len: headLen)
+        if si < self.arena.structs.count() {
+            return self.paramPos(tps: self.arena.structs[si].typeParams, nameId: vb.nameId)
+        }
+        val ei: U64 = self.enumIdxByName(start: headStart, len: headLen)
+        if ei < self.arena.enums.count() {
+            return self.paramPos(tps: self.arena.enums[ei].typeParams, nameId: vb.nameId)
+        }
+        return 0U64
+    }
+
+    fn paramPos(tps: Array[Bind], nameId: U64) -> U64 {
+        mut val k: U64 = 0
+        while k < tps.count() {
+            if tps[k].nameId == nameId {
+                return k
+            }
+            k += 1
+        }
+        return 0U64
+    }
+
+    // The result `Head[…U…]` of one desugared `?.` stage under the ACTIVE env: ground the
+    // receiver `Head[…V…]`, extract its chain Value V (the arg at the conformer's Value
+    // position — see chainValueArgIndex), type the trailing chain `cont` with the
+    // ChainHole bound to V (so `a?.b.c` yields U = typeof(V.b.c)), and rebuild the head
+    // with the Value position replaced by U and every other argument preserved. Shared by
+    // the mono registration and the read path (chainResultRef) so the two can never
+    // disagree. Returns 0 when the receiver doesn't ground to an instance. Must run BEFORE
+    // the rewrite substitutes the hole.
     inout fn chainStageResultRef(baseRef: U64, cont: U64) -> U64 {
         if baseRef == 0 || baseRef >= self.arena.types.count() {
             return 0
@@ -159,7 +193,11 @@ pub impl Comp {
         if gt.args.count() < 1 {
             return 0
         }
-        val vRef: U64 = gt.args[0]
+        val vi: U64 = self.chainValueArgIndex(headStart: gt.nameStart, headLen: gt.nameLen)
+        if vi >= gt.args.count() {
+            return 0
+        }
+        val vRef: U64 = gt.args[vi]
         // type `cont` under ChainHole = V. exprType's Field/Method arms ground member
         // types through V's instance (genericFieldTypeInfo for a generic chain Value),
         // so U comes back concrete — no separate groundUnderInst needed.
@@ -172,8 +210,17 @@ pub impl Comp {
             val noTArgs: Array[U64] = []
             uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noTArgs />)
         }
+        // rebuild the head preserving every type argument, with the Value position -> U.
         mut val oArgs: Array[U64] = []
-        oArgs.append(uRef)
+        mut val ai: U64 = 0
+        while ai < gt.args.count() {
+            if ai == vi {
+                oArgs.append(uRef)
+            } else {
+                oArgs.append(gt.args[ai])
+            }
+            ai += 1
+        }
         return self.pushType(t: <TypeRef nameStart=gt.nameStart nameLen=gt.nameLen args=oArgs />)
     }
 
@@ -197,7 +244,11 @@ pub impl Comp {
         }
         val headStart: U64 = ot.nameStart
         val headLen: U64 = ot.nameLen
-        val uRef: U64 = ot.args[0]
+        val vi: U64 = self.chainValueArgIndex(headStart: headStart, headLen: headLen)
+        if vi >= ot.args.count() {
+            return
+        }
+        val uRef: U64 = ot.args[vi]
         val vRef: U64 = self.groundTypeRef(ref: site.valueRef)
         self.scanType(ref: oRef)
         // the chain() result `Optional[V]` (V = the receiver's chain Value = its first
@@ -216,12 +267,13 @@ pub impl Comp {
         optUArgs.append(uRef)
         val optURef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs />)
         self.scanType(ref: optURef)
-        // both factories monomorphize to `Head[U]`: `empty()` has no argument, and the
+        // both factories monomorphize to `Head[…U…]`: `empty()` has no argument, and the
         // `fromValue(value:)` argument is the synthesized `__chainVal.member` whose type
         // the argument-inference path can't recover (a fresh match-bound place), so
-        // register both instances explicitly keyed by [U].
-        self.registerChainFactoryInst(headStart: headStart, headLen: headLen, name: "empty", uRef: uRef)
-        self.registerChainFactoryInst(headStart: headStart, headLen: headLen, name: "fromValue", uRef: uRef)
+        // register both instances explicitly keyed by the head's full type args (the Value
+        // position is U, sibling parameters carried through — see chainStageResultRef).
+        self.registerChainFactoryInst(headStart: headStart, headLen: headLen, name: "empty", args: ot.args)
+        self.registerChainFactoryInst(headStart: headStart, headLen: headLen, name: "fromValue", args: ot.args)
     }
 
     // The recorded `?.` site of a chain-rewritten match at `exprId`
@@ -237,7 +289,7 @@ pub impl Comp {
         return <ChainSite exprId=0 stageRef=0 valueRef=0 />
     }
 
-    inout fn registerChainFactoryInst(headStart: U64, headLen: U64, name: String, uRef: U64) {
+    inout fn registerChainFactoryInst(headStart: U64, headLen: U64, name: String, args: Array[U64]) {
         val fi: U64 = self.findAssocByName(recvStart: headStart, recvLen: headLen, name: name)
         if fi >= self.arena.funcs.count() {
             return
@@ -245,10 +297,8 @@ pub impl Comp {
         if !(self.isGenericFreeFn(fi: fi)) {
             return
         }
-        mut val fArgs: Array[U64] = []
-        fArgs.append(uRef)
-        if !(self.fnInstExists(fnIdx: fi, args: fArgs)) {
-            self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=fArgs />)
+        if !(self.fnInstExists(fnIdx: fi, args: args)) {
+            self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=args />)
         }
     }
 
@@ -440,8 +490,12 @@ pub impl Comp {
                         val btP: TypeInfo = self.typeOf(id: base)
                         val stageRef: U64 = self.chainStageResultRef(baseRef: btP.ref, cont: cont)
                         if stageRef != 0 {
-                            if btP.ref < self.arena.types.count() && self.arena.types[btP.ref].args.count() >= 1 {
-                                self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=self.arena.types[btP.ref].args[0] />)
+                            if btP.ref < self.arena.types.count() {
+                                val bref: TypeRef = self.arena.types[btP.ref]
+                                val vIdx: U64 = self.chainValueArgIndex(headStart: bref.nameStart, headLen: bref.nameLen)
+                                if vIdx < bref.args.count() {
+                                    self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=bref.args[vIdx] />)
+                                }
                             }
                         }
                         self.cur.typeParams = savedCP
