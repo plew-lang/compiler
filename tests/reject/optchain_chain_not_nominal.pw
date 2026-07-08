@@ -1,0 +1,21 @@
+import @Std/Core
+import @Std/Io with { print }
+
+// A type that structurally exposes `chain()`/`fromValue`/`empty` with the right arities
+// but does NOT declare `impl … as Chain`. Plew traits are nominal, so `?.` must reject
+// it — duck typing here would be a hidden-meaning accept (spec/12).
+struct Cell { pub val n: I64 }
+enum MyOpt[T] { Has(v: T)  Empty }
+pub impl[T] MyOpt[T] {
+    fn chain() -> Optional[T] {
+        match self { MyOpt.Has(val v) => { return <Optional[T].Some v=v /> }
+                     MyOpt.Empty      => { return <Optional[T].None /> } }
+    }
+    factory fromValue(value: T) { return <MyOpt[T].Has v=value /> }
+    factory empty() { return <MyOpt[T].Empty /> }
+}
+fn main() {
+    val m: MyOpt[Cell] = <MyOpt[Cell].Has v=<Cell n=5I64 /> />
+    val r: MyOpt[I64] = m?.n
+    match r { MyOpt.Has(val v) => { print(v) }  MyOpt.Empty => { print(-1I64) } }
+}

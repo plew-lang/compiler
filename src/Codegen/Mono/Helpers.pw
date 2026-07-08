@@ -157,15 +157,35 @@ pub impl Comp {
                 return false
             }
             visited.append(key)
-            val fields: Array[FieldDef] = self.arena.structs[si].fields
+            val def: StructDef = self.arena.structs[si]
+            // bind this level's type params to the instance args so bare-param fields
+            // (`v: T` in `Box[List]`) ground to their actual type; an arity mismatch
+            // (bare generic head, no args) clears the env so no ambient T leaks in.
+            val savedP: Array[Bind] = self.cur.typeParams
+            val savedA: Array[U64] = self.cur.typeArgs
+            if def.typeParams.count() > 0U64 {
+                if args.count() == def.typeParams.count() {
+                    self.cur.typeParams = def.typeParams
+                    self.cur.typeArgs = args
+                } else {
+                    self.cur.typeParams = []
+                    self.cur.typeArgs = []
+                }
+            }
+            val fields: Array[FieldDef] = def.fields
             mut val fi: U64 = 0
+            mut val reached: Bool = false
             while fi < fields.count() {
-                if self.fieldReachesOwner(f: fields[fi], tStart: tStart, tLen: tLen, visited: inout visited) {
-                    return true
+                if !reached {
+                    if self.fieldReachesOwner(f: fields[fi], tStart: tStart, tLen: tLen, visited: inout visited) {
+                        reached = true
+                    }
                 }
                 fi += 1
             }
-            return false
+            self.cur.typeParams = savedP
+            self.cur.typeArgs = savedA
+            return reached
         }
         // an enum head, generic OR not (genericEnumIndex too — concreteEnumIndex skips
         // generics — so a mutually recursive generic ENUM `E1[T]` ↔ `E2[T]` boxes its
@@ -180,20 +200,39 @@ pub impl Comp {
                 return false
             }
             visited.append(key)
-            val vars: Array[Variant] = self.arena.enums[ei].variants
+            val edef: EnumDef = self.arena.enums[ei]
+            // bind this level's type params to the instance args (mirrors the struct
+            // arm) so a bare-param variant payload grounds to its actual type.
+            val savedP: Array[Bind] = self.cur.typeParams
+            val savedA: Array[U64] = self.cur.typeArgs
+            if edef.typeParams.count() > 0U64 {
+                if args.count() == edef.typeParams.count() {
+                    self.cur.typeParams = edef.typeParams
+                    self.cur.typeArgs = args
+                } else {
+                    self.cur.typeParams = []
+                    self.cur.typeArgs = []
+                }
+            }
+            val vars: Array[Variant] = edef.variants
             mut val vi: U64 = 0
+            mut val reached: Bool = false
             while vi < vars.count() {
                 val vf: Array[FieldDef] = vars[vi].fields
                 mut val fj: U64 = 0
                 while fj < vf.count() {
-                    if self.fieldReachesOwner(f: vf[fj], tStart: tStart, tLen: tLen, visited: inout visited) {
-                        return true
+                    if !reached {
+                        if self.fieldReachesOwner(f: vf[fj], tStart: tStart, tLen: tLen, visited: inout visited) {
+                            reached = true
+                        }
                     }
                     fj += 1
                 }
                 vi += 1
             }
-            return false
+            self.cur.typeParams = savedP
+            self.cur.typeArgs = savedA
+            return reached
         }
         // unknown/generic head: conservatively descend into its type arguments.
         mut val gi: U64 = 0
@@ -218,17 +257,22 @@ pub impl Comp {
     }
 
     // Does field `f`'s declared type by-value reach the owner type `tStart/tLen`? An
-    // array field is pointer-backed (cut). A field with a parsed TypeRef uses it
-    // (carries generic args); otherwise the bare name span with no args.
+    // array field is pointer-backed (cut). The field type is grounded under the ACTIVE
+    // instance env (`arcFieldTy`), so when we have descended into a generic wrapper
+    // `Box[List]` its bare-param field `v: T` resolves to `List` and the cycle is seen
+    // — without grounding, `v: T` looks unrelated to the owner, the recursive field is
+    // never boxed, and monomorphizing the infinite layout overflows the compiler stack
+    // (review/12). At the top level the env is empty and `arcFieldTy` returns the
+    // declared type verbatim (carrying its own generic args), so nothing changes there.
     inout fn fieldReachesOwner(f: FieldDef, tStart: U64, tLen: U64, visited: inout Array[U64]) -> Bool {
         if f.tyIsArray {
             return false
         }
-        if f.ty != 0 {
-            return self.typeRefReachesOwner(ref: f.ty, tStart: tStart, tLen: tLen, visited: inout visited)
+        val g: U64 = self.arcFieldTy(f: f)
+        if g == 0 {
+            return false
         }
-        val noArgs: Array[U64] = []
-        return self.nameReachesOwner(nStart: f.tyStart, nLen: f.tyLen, args: noArgs, tStart: tStart, tLen: tLen, visited: inout visited)
+        return self.typeRefReachesOwner(ref: g, tStart: tStart, tLen: tLen, visited: inout visited)
     }
 
     // Codegen query: is field `f` stored boxed (behind a heap pointer)?
@@ -288,6 +332,14 @@ pub impl Comp {
     // generic type's recursion is broken at the concrete user field that points into
     // it (so Optional/Result instantiations stay inline and keep their fixed layout).
     inout fn markBoxedFields() {
+        // scan owners with an EMPTY instance env: an owner's own fields are declared
+        // concretely, and the per-generic env is set only as `nameReachesOwner` descends
+        // into a generic wrapper. Save/restore so a stale env from an earlier phase can
+        // not mis-ground a top-level field.
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        self.cur.typeParams = []
+        self.cur.typeArgs = []
         // GENERIC templates are included (no `typeParams.count() == 0` guard): a recursive
         // GENERIC value type (`struct N[T] { next: Optional[N[T]] }`) must box its cyclic
         // field too, else monomorphizing `N[I64]` builds an infinite struct layout and the
@@ -331,5 +383,7 @@ pub impl Comp {
             }
             ei += 1
         }
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
     }
 }

@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+
+// A value type whose recursion closes through a USER generic wrapper (`Box[List]`,
+// not the blessed Optional/Result). The boxing reachability walk must substitute the
+// wrapper's type arg (`Box`'s `v: T` becomes `List`) to see the cycle — else the field
+// is never boxed, the layout is infinite, and monomorphizing overflows the compiler
+// stack (review/12 SIGSEGV pin).
+struct Box[T] { pub val v: T }
+enum List { Cons(head: I64, tail: Box[List])  Nil }
+
+fn sum(l: List) -> I64 {
+    match l {
+        List.Cons(val head, val tail) => { return head + sum(l: tail.v) }
+        List.Nil => { return 0I64 }
+    }
+}
+
+fn main() {
+    val l: List = <List.Cons head=1I64 tail=<Box v=<List.Cons head=2I64 tail=<Box v=<List.Cons head=3I64 tail=<Box v=<List.Nil /> /> /> /> /> /> />
+    print(sum(l: l))
+}

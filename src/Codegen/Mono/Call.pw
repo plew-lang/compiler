@@ -330,6 +330,16 @@ pub impl Comp {
     // with an out-of-source line number. The Mono rewrite gate and the Verify survivor
     // check share this predicate so they never disagree on what conforms.
     inout fn typeConformsToChain(nameStart: U64, nameLen: U64) -> Bool {
+        // `?.` is the `Chain` trait's desugar (spec/12), and Plew traits are NOMINAL:
+        // a type is a `Chain` only if it declares `impl … as Chain`. Check that first —
+        // else a type that merely happens to expose `chain()`/`fromValue`/`empty` with
+        // the right arities would be duck-typed into `?.` (a hidden-meaning accept that
+        // contradicts "忖度はしない"). Only `Optional` conforms in std/Core.pw.
+        val recvId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val chainTrait: Bind = self.internBytes(s: "Chain")
+        if !(self.conformExists(typeId: recvId, traitId: chainTrait.nameId)) {
+            return false
+        }
         val chN: Bind = self.internBytes(s: "chain")
         if !(self.typeHasMethodNamed(recvStart: nameStart, recvLen: nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen)) {
             return false
