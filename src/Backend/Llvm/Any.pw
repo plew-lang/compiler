@@ -40,9 +40,10 @@ pub impl LlvmCtx {
         if !(reqRetSelfErasable(c: inout c, req: req)) {
             return LLVMConstNull(self.ptrty)
         }
-        // a `-> Self` requirement: the thunk re-erases the witness's concrete result back
-        // into the existential (the slot's signature returns the fat pointer).
+        // a `-> Self` requirement re-boxes its single concrete result; a covariant CONTAINER
+        // of `Self` (`-> Optional[Self]`, `-> Array[Self]`) is repacked (eraseCovariantToAny).
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
+        val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && typeRefMentionsSelf(c: inout c, ref: req.retTy)
         val wfi: U64 = findWitnessFor(c: inout c, sidx: sidx, req: req)
         if wfi >= c.arena.funcs.count() {
             return LLVMConstNull(self.ptrty)
@@ -81,13 +82,31 @@ pub impl LlvmCtx {
             pi += 1
         }
         mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
+        // a covariant-`Self` container return: ground the requirement's result under `Self` =
+        // the existential (dst, the thunk's return type) and under `Self` = the concrete
+        // (src, the witness's result type) — the two ends of the repack. Grounded here while
+        // the trait-binding env is still active so `Rhs`/`Item` in the result resolve too.
+        mut val dstRetRef: U64 = 0
+        mut val srcRetRef: U64 = 0
+        if retContainerSelf {
+            val savedSelf: U64 = c.cur.selfRef
+            c.cur.selfRef = anyRef
+            dstRetRef = c.groundTypeRef(ref: req.retTy)
+            c.cur.selfRef = wInstRef
+            srcRetRef = c.groundTypeRef(ref: req.retTy)
+            c.cur.selfRef = savedSelf
+        }
         if haveEnv {
             c.cur.typeParams = savedEP
             c.cur.typeArgs = savedEA
         }
-        // a `-> Self` thunk returns the existential fat pointer (the re-erased result).
+        // a `-> Self` thunk returns the existential fat pointer (the re-erased result); a
+        // covariant container returns the erased container type (`Optional[any P]`, …).
         if retsSelf {
             rty = self.anyTy
+        }
+        if retContainerSelf {
+            rty = self.llvmTypeOfRef(c: inout c, ref: dstRetRef)
         }
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
         mut val nm: Array[U8] = []
@@ -100,8 +119,18 @@ pub impl LlvmCtx {
         nm.append(0)
         val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
         val savedBB: LLVMBasicBlockRef = LLVMGetInsertBlock(self.b)
+        // a covariant-container return repack (eraseCovariantToAny) appends basic blocks to
+        // `self.curFn`; retarget it to the thunk so those blocks land here, not in the
+        // function that triggered demand-registration of this thunk.
+        val savedFn: LLVMValueRef = self.curFn
+        self.curFn = fv
+        // split entry -> body0 (as in beginFnBody) so `entryAlloca` — used by the covariant
+        // repack for its scratch slots — has a terminated entry block to insert before.
         val entry: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "entry"))
+        val body0: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, fv, cstr(s: "body0"))
         LLVMPositionBuilderAtEnd(self.b, entry)
+        LLVMBuildBr(self.b, body0)
+        LLVMPositionBuilderAtEnd(self.b, body0)
         // self: an `inout fn` witness takes self by pointer (mutates the boxed value in
         // place — the box is shared via the fat pointer's data field, so the mutation
         // persists); a by-value self is loaded from the box.
@@ -123,11 +152,22 @@ pub impl LlvmCtx {
                 // the boxed self) back into `any P` with this existential's vtable.
                 LLVMBuildRet(self.b, self.boxIntoAny(c: inout c, v: r, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx))
             } else {
-                LLVMBuildRet(self.b, r)
+                if retContainerSelf {
+                    // repack the concrete container into the erased one (each `Self` boxed),
+                    // then release the witness's owned result: eraseCovariantToAny retained the
+                    // payload into the fresh boxes, so this drop balances it (the erased value
+                    // now solely owns the heap — value semantics).
+                    val erased: LLVMValueRef = self.eraseCovariantToAny(c: inout c, v: r, srcRef: srcRetRef, dstRef: dstRetRef)
+                    self.valueArc(c: inout c, v: r, typeRef: srcRetRef, retain: false)
+                    LLVMBuildRet(self.b, erased)
+                } else {
+                    LLVMBuildRet(self.b, r)
+                }
             }
         } else {
             LLVMBuildRetVoid(self.b)
         }
+        self.curFn = savedFn
         LLVMPositionBuilderAtEnd(self.b, savedBB)
         return fv
     }
@@ -630,13 +670,14 @@ pub impl LlvmCtx {
             c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        // `Self` in the result reachable only through a container we cannot yet covariantly
-        // erase (`Optional[Self]`/`Array[Self]`): not callable through `any P` (spec/08).
+        // `Self` in the result nested under a head we cannot repack (`Dictionary`, tuple):
+        // not callable through `any P` (spec/08). `Optional[Self]`/`Array[Self]` ARE erasable.
         if !(reqRetSelfErasable(c: inout c, req: req)) {
-            c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot yet be covariantly erased (spec/08)")
+            c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot be covariantly erased (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
+        val retContainerSelf: Bool = req.hasRet && req.retTy != 0U64 && !(retsSelf) && typeRefMentionsSelf(c: inout c, ref: req.retTy)
         mut val fat: LLVMValueRef = LLVMConstNull(self.ptrty)
         mut val gotFat: Bool = false
         if req.selfInout {
@@ -688,6 +729,15 @@ pub impl LlvmCtx {
             pi += 1
         }
         mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
+        // a covariant-`Self` container return: the thunk returns the erased container type
+        // (`Self` = the existential), so reconstruct the same signature here to call it.
+        mut val dstRetRef: U64 = 0
+        if retContainerSelf {
+            val savedSelf: U64 = c.cur.selfRef
+            c.cur.selfRef = anyRef
+            dstRetRef = c.groundTypeRef(ref: req.retTy)
+            c.cur.selfRef = savedSelf
+        }
         if haveEnv {
             c.cur.typeParams = savedEP
             c.cur.typeArgs = savedEA
@@ -695,6 +745,9 @@ pub impl LlvmCtx {
         // a `-> Self` requirement's thunk returns the re-erased existential fat pointer.
         if retsSelf {
             rty = self.anyTy
+        }
+        if retContainerSelf {
+            rty = self.llvmTypeOfRef(c: inout c, ref: dstRetRef)
         }
         val fty: LLVMTypeRef = LLVMFunctionType(rty, arrayCPtr(ptys), ptys.count(), 0I32)
         val pinMark: U64 = self.pinCells.count()

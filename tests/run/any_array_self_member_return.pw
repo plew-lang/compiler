@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// A trait member returning `Array[Self]` IS callable through `any P` (spec/08, SE-0309):
+// the dispatch thunk covariantly repacks the witness's `Array[Concrete]` result into
+// `Array[any P]`, boxing each element into the existential. Each source element is retained
+// into the fresh buffer and the witness's owned array released, so the erased array solely
+// owns its elements (value semantics, leak-free). An empty array erases to an empty array.
+trait Bag { fn items() -> Array[Self]  fn tag() -> I64 }
+struct A { val n: I64 }
+pub impl A as Bag {
+    fn items() -> Array[Self] {
+        if self.n < 0I64 { return [] }
+        return [self, <A n=self.n + 1I64 />]
+    }
+    fn tag() -> I64 { return self.n }
+}
+fn main() {
+    val a: any Bag = <A n=10 />
+    val xs: Array[any Bag] = a.items()   // [10, 11] erased through the thunk
+    print(xs[0].tag())                   // 10
+    print(xs[1].tag())                   // 11
+    for x in xs { print(x.tag()) }       // 10, 11 — dynamic dispatch on each boxed element
+    val b: any Bag = <A n=-1 />
+    val ys: Array[any Bag] = b.items()   // [] erases to []
+    for y in ys { print(y.tag()) }       // (nothing)
+    print(0I64)                          // 0 — reached
+}

@@ -563,11 +563,46 @@ fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
     return false
 }
 
-// Whether `req`'s RETURN mentions `Self` in a position the thunk can covariantly erase.
-// A bare `-> Self` re-boxes its single concrete result (buildAnyThunk). `Self` nested in
-// a covariant container (`Optional[Self]`, `Array[Self]`) needs per-container repacking
-// — until eraseSelfCovariant lands (spec/08, SE-0309), such a member is conservatively
-// NOT callable through `any P` (sound: no un-erased concrete escapes as an existential).
+// Whether every `Self` in `ref` sits under a covariant container head the thunk can
+// repack — a bare `Self`, or `Self` nested only through `Array[·]` / a generic enum
+// (`Optional[Self]`, `Result[Self, E]`), recursively (spec/08, SE-0309). `Self` under any
+// other head (`Dictionary`, a tuple/record, a user struct) is NOT erasable.
+fn retTySelfErasable(c: inout Comp, ref: U64) -> Bool {
+    if ref >= c.arena.types.count() {
+        return true
+    }
+    val t: TypeRef = c.arena.types[ref]
+    // a bare `Self` here: the leaf boxes into the existential.
+    if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+        return true
+    }
+    if !(typeRefMentionsSelf(c: inout c, ref: ref)) {
+        return true
+    }
+    // `Self` is nested: the head must be one eraseCovariantToAny rebuilds — `Array` or a
+    // generic enum. Every arg that itself mentions `Self` must be erasable too.
+    val isArr: Bool = rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array")
+    val isEnum: Bool = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < c.arena.enums.count()
+    if !(isArr) && !(isEnum) {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < t.args.count() {
+        if typeRefMentionsSelf(c: inout c, ref: t.args[i]) {
+            if !(retTySelfErasable(c: inout c, ref: t.args[i])) {
+                return false
+            }
+        }
+        i += 1
+    }
+    return true
+}
+
+// Whether `req`'s RETURN mentions `Self` only in positions the thunk can covariantly erase.
+// A bare `-> Self` re-boxes its single concrete result; `Self` nested in a covariant
+// container (`Optional[Self]`, `Array[Self]`) is repacked by eraseCovariantToAny. `Self`
+// under a non-repackable head (`Dictionary`, tuple) makes the member non-callable through
+// `any P` (sound: no un-erased concrete escapes as an existential — spec/08, SE-0309).
 fn reqRetSelfErasable(c: inout Comp, req: Func) -> Bool {
     if !(req.hasRet) || req.retTy == 0U64 {
         return true
@@ -575,7 +610,7 @@ fn reqRetSelfErasable(c: inout Comp, req: Func) -> Bool {
     if !(typeRefMentionsSelf(c: inout c, ref: req.retTy)) {
         return true
     }
-    return reqReturnsSelf(c: inout c, req: req)
+    return retTySelfErasable(c: inout c, ref: req.retTy)
 }
 
 // Does requirement `req` return bare `Self`? Such a member IS callable through `any`
@@ -584,6 +619,13 @@ fn reqRetSelfErasable(c: inout Comp, req: Func) -> Bool {
 // return like `Optional[Self]` is not handled yet.)
 fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
     if req.hasRet {
+        // a bare `-> Self` only: `-> Array[Self]` shares the legacy `retStart` span "Self"
+        // (the element head view) with retIsArray=true — it is a covariant container, not a
+        // bare Self, and is repacked by the retContainerSelf path (eraseCovariantToAny), not
+        // re-boxed here.
+        if req.retIsArray {
+            return false
+        }
         return rangeEquals(bytes: c.arena.bytes, start: req.retStart, len: req.retLen, kw: "Self")
     }
     return false
@@ -1429,16 +1471,21 @@ fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, na
     if req.retTy == 0U64 {
         return 0U64
     }
+    // ground the result under `Self` = the existential (a covariant `Optional[Self]` recovers
+    // as `Optional[any P]`) and the trait's bindings (`Output`/`Item` -> the bound concrete).
     mut val params: Array[Bind] = []
     mut val argz: Array[U64] = []
-    if !(anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz)) {
-        return req.retTy
-    }
+    val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz)
     val savedP: Array[Bind] = c.cur.typeParams
     val savedA: Array[U64] = c.cur.typeArgs
-    c.cur.typeParams = params
-    c.cur.typeArgs = argz
+    val savedS: U64 = c.cur.selfRef
+    if haveEnv {
+        c.cur.typeParams = params
+        c.cur.typeArgs = argz
+    }
+    c.cur.selfRef = anyRef
     val g: U64 = c.groundTypeRef(ref: req.retTy)
+    c.cur.selfRef = savedS
     c.cur.typeParams = savedP
     c.cur.typeArgs = savedA
     return g

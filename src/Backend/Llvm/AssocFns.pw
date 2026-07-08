@@ -59,11 +59,17 @@ pub impl LlvmCtx {
     // The LLVM return type of a function (and whether it is void = Plew `()`).
     inout fn llvmFnRetTy(c: inout Comp, f: Func) -> LLVMTypeRef {
         if f.hasRet {
-            // a `-> Self` return resolves to the receiver type (the Self env is set while
-            // emitting a method): `fn dup() -> Self` on N returns N.
+            // a BARE `-> Self` return resolves to the receiver type (the Self env is set while
+            // emitting a method): `fn dup() -> Self` on N returns N. Gate on `!retIsArray`: a
+            // `-> Array[Self]` shares the legacy `retStart` span "Self" (the element head view)
+            // with retIsArray=true — the shortcut would wrongly drop the Array wrapper and
+            // return the bare element type. Let those fall through to the structured-ref
+            // grounding path below (`retTy` carries the full `Array[Self]`).
             if c.cur.selfRef != 0U64 {
-                if rangeEquals(bytes: c.arena.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
-                    return self.llvmTypeOfRef(c: inout c, ref: c.cur.selfRef)
+                if !(f.retIsArray) {
+                    if rangeEquals(bytes: c.arena.bytes, start: f.retStart, len: f.retLen, kw: "Self") {
+                        return self.llvmTypeOfRef(c: inout c, ref: c.cur.selfRef)
+                    }
                 }
             }
             // an existential `any P` return: the fat pointer (spec/08).

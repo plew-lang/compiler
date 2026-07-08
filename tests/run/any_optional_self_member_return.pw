@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// A trait member returning `Optional[Self]` IS callable through `any P` (spec/08, SE-0309):
+// the dispatch thunk covariantly repacks the witness's `Optional[Concrete]` result into
+// `Optional[any P]`, boxing the Some-payload into the existential (None stays None). The
+// heap payload is retained into the fresh box and the witness's owned result released, so
+// the erased Optional solely owns its box (value semantics, leak-free).
+trait Peek { fn peek() -> Optional[Self]  fn tag() -> I64 }
+struct A { val n: I64 }
+pub impl A as Peek {
+    fn peek() -> Optional[Self] {
+        if self.n < 0I64 { return <Optional[Self].None /> }
+        return <Optional[Self].Some v=self />
+    }
+    fn tag() -> I64 { return self.n }
+}
+fn describe(o: Optional[any Peek]) {
+    match o {
+        Optional.Some(v: val x) => { print(x.tag()) }
+        Optional.None => { print(-1I64) }
+    }
+}
+fn main() {
+    val a: any Peek = <A n=7 />
+    describe(o: a.peek())            // 7  — Some payload erased through the thunk
+    val b: any Peek = <A n=-5 />
+    describe(o: b.peek())            // -1 — None survives
+}
