@@ -1,0 +1,12 @@
+// `try` From resolution compares the `from` parameter's FULL type, including generic
+// arguments (spec/13). `DstErr.from` takes `Box[String]`, so a `Box[I64]` source has
+// no matching overload — reject. A head-name-only match read the I64 payload as a
+// String pointer and dereferenced it (SEGV).
+struct Box[T] { pub val v: T }
+struct DstErr { pub val msg: String }
+pub impl DstErr { factory from(b: Box[String]) { return <DstErr msg=b.v /> } }
+fn inner() -> Result[I32, Box[I64]] { return <Result.Err error=<Box[I64] v=777I64 /> /> }
+fn outer() -> Result[I32, DstErr] {
+    val x: I32 = try inner()
+    return <Result.Ok value=x />
+}

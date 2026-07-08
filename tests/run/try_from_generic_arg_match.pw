@@ -1,0 +1,19 @@
+// The mirror of try_from_generic_arg_mismatch: when the source's generic argument
+// DOES match the `from` parameter (`Box[String]` -> `from(Box[String])`), `try`
+// converts through it (spec/13).
+import @Std/Io with { print }
+import @Std/Core
+struct Box[T] { pub val v: T }
+struct DstErr { pub val code: I32 }
+pub impl DstErr { factory from(b: Box[String]) { return <DstErr code=55I32 /> } }
+fn inner() -> Result[I32, Box[String]] { return <Result.Err error=<Box[String] v="oops" /> /> }
+fn outer() -> Result[I32, DstErr] {
+    val x: I32 = try inner()
+    return <Result.Ok value=x />
+}
+fn main() {
+    match outer() {
+        Result.Ok(val value) => { print(value) }
+        Result.Err(val error) => { print(error.code) }   // 55
+    }
+}

@@ -742,8 +742,13 @@ pub impl Comp {
     // through `E`'s `from` factory, resolving the overload BY THE SOURCE TYPE `F`.
     // We must match the `from` whose sole parameter's type is `F` — matching by name
     // alone would pick an unrelated `from(I32)` and reinterpret an `F` bit-pattern as
-    // `I32` (silent type-confusion IR). Returns `funcs.count()` (= no match) when no
-    // `from` on `E` accepts `F`.
+    // `I32` (silent type-confusion IR). The parameter type is compared STRUCTURALLY
+    // (head + every generic argument) via `typesCompatible`, so `from(Box[String])`
+    // does NOT match a `Box[I64]` source (a head-name-only test read the I64 payload as
+    // a String pointer -> SEGV). The head-id prefilter keeps the pre-`typesCompatible`
+    // safety floor for the degenerate case where the parameter's full type is unresolved
+    // (`ty == 0`, which `typesCompatible` treats permissively). Returns `funcs.count()`
+    // (= no match) when no `from` on `E` accepts `F`.
     inout fn typeRefFromFactoryIdx(errRef: U64, srcRef: U64) -> U64 {
         if errRef >= self.arena.types.count() {
             return self.arena.funcs.count()
@@ -766,10 +771,13 @@ pub impl Comp {
                 if self.arena.funcs[i].recvId == eNameId {
                     if self.arena.funcs[i].nameId == fromN.nameId {
                         // a From factory takes exactly the source error value; select the
-                        // overload whose parameter type head matches `F`.
+                        // overload whose parameter type is `F` — head-id prefilter (the
+                        // `ty == 0` floor) AND a full structural match on the generic args.
                         if self.arena.funcs[i].params.count() == 1U64 {
                             if self.arena.funcs[i].params[0].tyNameId == srcNameId {
-                                return i
+                                if self.typesCompatible(expected: self.arena.funcs[i].params[0].ty, inferred: srcRef) {
+                                    return i
+                                }
                             }
                         }
                     }
