@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// A covariant-Self member return whose Self carries HEAP (a String field) exercises the
+// ARC balance of the repack: eraseCovariantToAny retains each erased payload into its fresh
+// box and the thunk releases the witness's owned result, so the erased Optional/Array solely
+// owns its boxes while the receiver stays independently usable — no leak, no double-free
+// (verified under ASan + LeakSanitizer by the gate).
+trait Named { fn dup() -> Optional[Self]  fn copies() -> Array[Self]  fn label() -> String }
+struct Person { val name: String }
+pub impl Person as Named {
+    fn dup() -> Optional[Self] { return <Optional[Self].Some v=self /> }
+    fn copies() -> Array[Self] { return [self, self] }
+    fn label() -> String { return self.name }
+}
+fn main() {
+    val p: any Named = <Person name="Ada" />
+    match p.dup() {
+        Optional.Some(v: val x) => { print(x.label()) }   // Ada
+        Optional.None => { print("none") }
+    }
+    val xs: Array[any Named] = p.copies()
+    for x in xs { print(x.label()) }                       // Ada, Ada
+    print(p.label())                                       // Ada — receiver independent
+}
