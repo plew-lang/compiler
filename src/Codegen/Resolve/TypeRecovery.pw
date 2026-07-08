@@ -41,11 +41,34 @@ pub impl Comp {
         return true
     }
 
+    // An argument's recovered type for overload discrimination. Prefer the parametric
+    // store (recorded by recordParametricTypes with cur.locals populated): plain
+    // exprType returns a NAMELESS scalar for a variable/field argument because
+    // cur.locals is not populated during overload resolution / emission, which would
+    // let a typed variable adapt to any int parameter and silently select the
+    // first-declared overload (spec/06 misdispatch — a wrong-typed call, at worst a
+    // memory-unsafe type pun). Only a GROUND recorded type overrides: a still-parametric
+    // `T` argument does not discriminate overloads (spec/06), so it is left to the
+    // exprType path unchanged.
+    inout fn argResolvedTypeInfo(argExpr: U64) -> TypeInfo {
+        if argExpr < self.parametricRef.count() {
+            val sref: U64 = self.parametricRef[argExpr]
+            if sref != 0U64 {
+                if sref < self.arena.types.count() {
+                    if self.tyRefIsGround(ref: sref) {
+                        return self.typeInfoOfRef(ref: sref)
+                    }
+                }
+            }
+        }
+        return self.exprType(id: argExpr)
+    }
+
     // Whether an argument's recovered type matches a parameter's declared type head
     // (used to discriminate same-label overloads — spec: overload by argument type).
     // An untyped integer literal (no suffix) matches any integer-typed parameter.
     inout fn argMatchesParam(argExpr: U64, p: Param) -> Bool {
-        val ti: TypeInfo = self.exprType(id: argExpr)
+        val ti: TypeInfo = self.argResolvedTypeInfo(argExpr: argExpr)
         if p.tyIsArray {
             if ti.kind == 3 {
                 return intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
@@ -83,7 +106,7 @@ pub impl Comp {
     // argument is the only source of "one call matches two overloads": a typed value
     // matches exactly one parameter type.
     inout fn argIsUntypedIntLit(argExpr: U64) -> Bool {
-        val ti: TypeInfo = self.exprType(id: argExpr)
+        val ti: TypeInfo = self.argResolvedTypeInfo(argExpr: argExpr)
         if ti.kind == 0 {
             return ti.nameLen == 0
         }
