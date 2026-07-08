@@ -262,10 +262,19 @@ pub impl LlvmCtx {
         }
         // an existential `any P` param (spec/08): its LLVM type is the fat pointer and
         // its TypeRef is tracked so a bare `x.m()` in the body dispatches dynamically.
+        // A generic type param bound to an existential (`T = any P`) is caught by the
+        // grounded effRef re-check: the raw p.ty (a bare `T`) is not `any`, so without
+        // it the signature bound the fat pointer (paramLlvmTy grounds the same way) while
+        // the body alloca stayed a scalar — the ABI split SIGSEGV'd on any use of the param.
         if p.ty != 0U64 {
             if refIsAny(c: inout c, ref: p.ty) {
                 pty = self.anyTy
                 pRef = p.ty
+            } else {
+                if refIsAny(c: inout c, ref: effRef) {
+                    pty = self.anyTy
+                    pRef = effRef
+                }
             }
         }
         if effIsArray {

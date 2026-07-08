@@ -21,7 +21,12 @@ pub impl LlvmCtx {
                 mut val eb: Bool = false
                 ev = self.coerceToAnyIfNeeded(c: inout c, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
                 if !(eb) {
-                    ev = self.genLlvmExpr(c: inout c, id: elems[i])
+                    // the element is ALREADY an `any P` value (`[a, b]` where a/b are any
+                    // locals): value semantics copies the existential PLACE by retaining its
+                    // boxed data cell, so the literal owns an independent box (mirrors the
+                    // return path Stmt.pw). A raw load stored a borrowed box → the source
+                    // binding and the buffer both released it = a double free (UAF).
+                    ev = self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: elems[i]), valueExpr: elems[i])
                 }
             } else {
                 // flow the element's expected instance to the expression (same protocol

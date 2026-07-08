@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+// Inline `xs[i].m()` on an `Array[any P]` (spec/08): indexing an existential-element
+// array directly as a dispatch receiver. The index expression's recovered type must
+// carry the isAny ref so the bare `.area()` resolves to dynamic dispatch — name-only
+// recovery would degrade it to the plain trait name and misroute the call.
+trait Shape { fn area() -> I64 }
+struct Sq { val s: I64 }
+pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
+
+fn main() {
+    val a: any Shape = <Sq s=4 />
+    val b: any Shape = <Sq s=3 />
+    val xs: Array[any Shape] = [a, b]
+    print(xs[0].area())          // 16
+    print(xs[1].area())          // 9
+}

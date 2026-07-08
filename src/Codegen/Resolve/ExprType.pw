@@ -572,6 +572,13 @@ pub impl Comp {
                     if er != 0 {
                         val rr: U64 = self.resolveTy(tyRef: er)
                         if rr < self.arena.types.count() {
+                            // an `Array[any P]` element (`xs[i]` where the element is the
+                            // existential): carry the isAny ref so a bare `xs[i].m()`
+                            // dispatches dynamically — name-only recovery below would
+                            // degrade it to the plain trait name and misroute the call.
+                            if self.arena.types[rr].isAny {
+                                return self.typeInfoOfRef(ref: rr)
+                            }
                             val rt: TypeRef = self.arena.types[rr]
                             if rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Array") {
                                 if rt.args.count() > 0 {

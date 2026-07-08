@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// `any P` bound to a generic type parameter (spec/08): an existential value flows
+// through an UNBOUNDED generic function (`identity[T]`, T = any Shape) and a generic
+// struct field (`Wrapper[T]`, T = any Shape). No self-conformance is needed — T is
+// unbounded, so the existential is just an opaque 2-word value carried through. The
+// signature and the body binding must agree on the fat-pointer representation (a bare
+// `T` is not `any`, so the body binding grounds T -> any P to match paramLlvmTy).
+trait Shape { fn area() -> I64 }
+struct Sq { val s: I64 }
+pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
+
+fn identity[T](x: T) -> T { return x }
+
+struct Wrapper[T] { val item: T }
+pub impl[T] Wrapper[T] { fn get() -> T { return self.item } }
+
+fn main() {
+    val sh: any Shape = <Sq s=4 />
+    val r: any Shape = identity(x: sh)
+    print(r.area())                         // 16   (T = any Shape, return path)
+    val w: Wrapper[any Shape] = <Wrapper item=sh />
+    print(w.get().area())                   // 16   (generic struct field, -> T = any)
+}
