@@ -1086,13 +1086,28 @@ pub impl Comp {
                 }
                 return scalarInfo()
             }
-            Expr.OptChain(val base, val memberStart, val memberLen) => {
-                // `base?.member` : Optional[U] where U is `member`'s type on the element.
-                val rr: U64 = self.optChainResultRef(base: base, memberStart: memberStart, memberLen: memberLen)
+            Expr.OptChain(val base, val cont) => {
+                // once the mono scan records the ChainSite, its stage result `Head[U]` is
+                // authoritative (the desugar's give value references a bound `__chainVal`
+                // not in scope from here, so re-deriving through the tree fails).
+                val cr: U64 = self.chainResultRef(exprId: id)
+                if cr != 0 {
+                    return self.typeInfoOfRef(ref: cr)
+                }
+                // pre-rewrite / Optional fallback: `base?.<cont>` : Optional[U] where U is
+                // the type of `cont` with the ChainHole bound to the base's payload.
+                val rr: U64 = self.optChainResultRef(base: base, cont: cont)
                 if rr == 0 {
                     return scalarInfo()
                 }
                 return self.typeInfoOfRef(ref: rr)
+            }
+            Expr.ChainHole => {
+                // the unwrapped chain Value, set by chainStageResultRef while typing `cont`.
+                if self.cur.chainHoleRef != 0U64 {
+                    return self.typeInfoOfRef(ref: self.cur.chainHoleRef)
+                }
+                return scalarInfo()
             }
             Expr.Try(val expr) => {
                 // result type = the Result's Ok payload T (args[0] of Result[T, E]).

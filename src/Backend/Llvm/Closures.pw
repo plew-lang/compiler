@@ -251,7 +251,11 @@ pub impl LlvmCtx {
                 self.scanBlockClosures(c: inout c, id: thenBlk)
                 self.scanBlockClosures(c: inout c, id: elseBlk)
             }
-            Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.scanExprClosures(c: inout c, id: base) }
+            Expr.OptChain(val base, val cont) => {
+                self.scanExprClosures(c: inout c, id: base)
+                self.scanExprClosures(c: inout c, id: cont)
+            }
+            Expr.ChainHole => {}
             Expr.Try(val expr) => { self.scanExprClosures(c: inout c, id: expr) }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }
             Expr.Deref(val base) => { self.scanExprClosures(c: inout c, id: base) }

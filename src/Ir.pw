@@ -225,10 +225,15 @@ export enum Expr {
     // a block ending in `give`. Lowers to a C statement-expression (like
     // MatchExpr). `else` is mandatory in value position (it must always yield).
     IfExpr(cond: U64, thenBlk: U64, elseBlk: U64)
-    // `base?.member` (optional chaining, spec/12): if `base` (an Optional) is
-    // `Some(v)`, the result is `Some(v.member)`, else `None` — short-circuit member
-    // access. Couples to @Std/Core Optional (Some = tag 0, field `v`).
-    OptChain(base: U64, memberStart: U64, memberLen: U64)
+    // `base?.<cont>` (optional chaining, spec/12): if `base` (a Chain type) yields a
+    // value, the result wraps `cont` applied to that value, else empty — Swift-style
+    // propagation over the WHOLE trailing chain. `cont` is a member-access expr tree
+    // rooted at a `ChainHole` (the unwrapped base); the mono desugar substitutes the
+    // bound value for the hole and rewrites this node to the `Chain`-trait match.
+    OptChain(base: U64, cont: U64)
+    // The unwrapped-base placeholder at the root of an OptChain's `cont`. Types as the
+    // receiver's chain Value; the desugar replaces it with the match-bound value.
+    ChainHole
     // `try expr` (Result early return): if `expr` is `Err`, return it from the
     // enclosing function (rebuilt as the function's own Result error variant);
     // otherwise the `Ok` value. Couples to @Std/Core's Result shape (Ok = tag 0
@@ -1051,6 +1056,9 @@ export struct Cursor {
     pub mut val recvInstRef: U64 = 0
     pub mut val selfRef: U64 = 0
     pub mut val itemRef: U64 = 0
+    // the type of an OptChain's ChainHole (the unwrapped chain Value) while typing a
+    // `?.`'s trailing `cont`; 0 outside a chain-stage type computation.
+    pub mut val chainHoleRef: U64 = 0
     pub mut val typeParams: Array[Bind] = []
     pub mut val typeArgs: Array[U64] = []
     // the BODY-scoped instance env (typed-IR read path): a snapshot of

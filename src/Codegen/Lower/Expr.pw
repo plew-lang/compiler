@@ -262,11 +262,18 @@ pub impl Comp {
                 val eb: U64 = self.lowerBlock(b: elseBlk)
                 result = self.pushExpr(e: <Expr.IfExpr cond=cnd thenBlk=tb elseBlk=eb />)
             }
-            ExprAst.OptChain(val base, val member, val memberSpan, val span) => {
-                // SOURCE span for the member (see ExprAst.Field): the chain desugar's
-                // synthesized stage reads then point at the real `?.member` token.
+            ExprAst.OptChain(val base, val cont, val memberSpan, val span) => {
+                // the trailing chain `cont` is lowered with its ChainHole root intact; the
+                // mono desugar substitutes the match-bound value for the hole. Anchor the
+                // OptChain node at the `?.member` source token (diagnostics).
                 val b: U64 = self.lowerExpr(e: base)
-                result = self.pushExpr(e: <Expr.OptChain base=b memberStart=memberSpan.start memberLen=member.bytes().count() />)
+                val c: U64 = self.lowerExpr(e: cont)
+                result = self.pushExpr(e: <Expr.OptChain base=b cont=c />)
+                self.arena.exprSpanStart[result] = memberSpan.start
+            }
+            ExprAst.ChainHole(val span) => {
+                result = self.pushExpr(e: <Expr.ChainHole />)
+                self.arena.exprSpanStart[result] = span.start
             }
             ExprAst.Try(val operand, val span) => {
                 val o: U64 = self.lowerExpr(e: operand)

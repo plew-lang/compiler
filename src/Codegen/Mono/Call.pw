@@ -72,7 +72,25 @@ pub impl Comp {
         self.monoWork.captures.append(<CaptureEntry closureId=closureId nameStart=lo.nameStart nameLen=lo.nameLen tyStart=lo.tyStart tyLen=lo.tyLen isArray=lo.isArray ty=lo.ty boxed=boxed />)
     }
 
-    inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, memberStart: U64, memberLen: U64, headStart: U64, headLen: U64) {
+    // Replace the ChainHole at the root of an OptChain's `cont` (the leftmost base
+    // spine) with a reference to the match-bound value `__chainVal`, anchored at the
+    // `?.member` source token. `cont` is `hole.b.c` -> `__chainVal.b.c`.
+    inout fn retargetChainHole(exprId: U64, cvStart: U64, cvLen: U64, anchor: U64) {
+        match self.arena.exprs[exprId] {
+            Expr.ChainHole => {
+                self.arena.exprs[exprId] = <Expr.Ident start=cvStart len=cvLen />
+                self.arena.exprSpanStart[exprId] = anchor
+            }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
+            Expr.Method(val recv, nameStart: _, nameLen: _, args: _) => { self.retargetChainHole(exprId: recv, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
+            Expr.Index(val base, index: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
+            Expr.Deref(val base) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
+            _ => {}
+        }
+    }
+
+    inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, cont: U64, memberStart: U64, headStart: U64, headLen: U64) {
         val chainN: Bind = self.internBytes(s: "chain")
         val fromValueN: Bind = self.internBytes(s: "fromValue")
         val emptyN: Bind = self.internBytes(s: "empty")
@@ -85,20 +103,17 @@ pub impl Comp {
         // scrutinee: base.chain()
         val noArgs: Array[Arg] = []
         val scrut: U64 = self.pushExpr(e: <Expr.Method recv=base nameStart=chainN.nameStart nameLen=chainN.nameLen args=noArgs />)
-        // Some(v: val __chainVal) => <Head.fromValue value=__chainVal.member />
+        // Some(v: val __chainVal) => <Head.fromValue value=(cont with hole -> __chainVal) />
         val fromRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
-        val cvRef: U64 = self.pushExpr(e: <Expr.Ident start=cvN.nameStart len=cvN.nameLen />)
-        val memberField: U64 = self.pushExpr(e: <Expr.Field base=cvRef nameStart=memberStart nameLen=memberLen />)
-        // every synthesized node anchors at the `?.member` source token: their own
-        // name spans are interned (`chain`/`fromValue`/`__chainVal`), so a diagnostic
-        // on the desugar (e.g. `m?.n` where `.n` is not the conformer's Value type)
-        // would otherwise point at a garbage line outside the source.
+        self.retargetChainHole(exprId: cont, cvStart: cvN.nameStart, cvLen: cvN.nameLen, anchor: memberStart)
+        // the synthesized nodes anchor at the `?.member` source token: their own name
+        // spans are interned (`chain`/`fromValue`/`__chainVal`), so a diagnostic on the
+        // desugar would otherwise point at a garbage line outside the source. `cont`'s
+        // own nodes keep their real source spans (set at lowering).
         self.arena.exprSpanStart[scrut] = memberStart
         self.arena.exprSpanStart[fromRecv] = memberStart
-        self.arena.exprSpanStart[cvRef] = memberStart
-        self.arena.exprSpanStart[memberField] = memberStart
         mut val fromArgs: Array[Arg] = []
-        fromArgs.append(<Arg expr=memberField isInout=false labelStart=valueN.nameStart labelLen=valueN.nameLen hasLabel=true />)
+        fromArgs.append(<Arg expr=cont isInout=false labelStart=valueN.nameStart labelLen=valueN.nameLen hasLabel=true />)
         val fromCall: U64 = self.pushExpr(e: <Expr.Method recv=fromRecv nameStart=fromValueN.nameStart nameLen=fromValueN.nameLen args=fromArgs />)
         self.arena.exprSpanStart[fromCall] = memberStart
         mut val someStmts: Array[U64] = []
@@ -125,13 +140,14 @@ pub impl Comp {
         self.arena.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=arms />
     }
 
-    // The result `Head[U]` of one desugared `?.` stage under the ACTIVE env:
-    // ground the receiver, project `member` off its chain Value (the first type
-    // arg, by the v1 assumption that `type Value` is the first type parameter),
-    // ground THAT under the Value's instance, and rebuild `Head[U]`. Shared by
-    // the mono registration and the read path (chainResultRef) so the two can
-    // never disagree. Returns 0 when the receiver doesn't ground to an instance.
-    inout fn chainStageResultRef(baseRef: U64, memberStart: U64, memberLen: U64) -> U64 {
+    // The result `Head[U]` of one desugared `?.` stage under the ACTIVE env: ground the
+    // receiver `Head[V]`, extract its chain Value V (the first type arg, by the v1
+    // assumption that `type Value` is the first type parameter), type the trailing chain
+    // `cont` with the ChainHole bound to V (so `a?.b.c` yields U = typeof(V.b.c)), and
+    // rebuild `Head[U]`. Shared by the mono registration and the read path
+    // (chainResultRef) so the two can never disagree. Returns 0 when the receiver
+    // doesn't ground to an instance. Must run BEFORE the rewrite substitutes the hole.
+    inout fn chainStageResultRef(baseRef: U64, cont: U64) -> U64 {
         if baseRef == 0 || baseRef >= self.arena.types.count() {
             return 0
         }
@@ -144,19 +160,18 @@ pub impl Comp {
             return 0
         }
         val vRef: U64 = gt.args[0]
-        val vInfo: TypeInfo = self.typeInfoOfRef(ref: vRef)
-        val uInfo: TypeInfo = self.fieldType(structStart: vInfo.nameStart, structLen: vInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
+        // type `cont` under ChainHole = V. exprType's Field/Method arms ground member
+        // types through V's instance (genericFieldTypeInfo for a generic chain Value),
+        // so U comes back concrete — no separate groundUnderInst needed.
+        val savedHole: U64 = self.cur.chainHoleRef
+        self.cur.chainHoleRef = vRef
+        val uInfo: TypeInfo = self.exprType(id: cont)
+        self.cur.chainHoleRef = savedHole
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
             val noTArgs: Array[U64] = []
             uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noTArgs />)
         }
-        // fieldType reads the DECLARED field type, so on a generic chain Value
-        // (`BoxG[I64].value: T`) `uRef` is the bare param name — ground it under
-        // the Value's instance (T -> I64). Ungrounded, the param name flowed into
-        // the factory-instance registrations as if it were a concrete type (a
-        // self-referential env that overflowed the stack).
-        uRef = self.groundUnderInst(instRef: vRef, tyRef: uRef)
         mut val oArgs: Array[U64] = []
         oArgs.append(uRef)
         return self.pushType(t: <TypeRef nameStart=gt.nameStart nameLen=gt.nameLen args=oArgs />)
@@ -396,7 +411,7 @@ pub impl Comp {
                 }
             }
             Expr.Cast(val operand, val tyStart, val tyLen, val ty) => { self.scanExprInsts(exprId: operand) }
-            Expr.OptChain(val base, val memberStart, val memberLen) => {
+            Expr.OptChain(val base, val cont) => {
                 self.scanExprInsts(exprId: base)
                 // EVERY `Chain` receiver — Optional included — rewrites to the trait
                 // desugar (a match over `base.chain()` with `fromValue`/`empty`, spec/12)
@@ -410,24 +425,20 @@ pub impl Comp {
                 if bt.kind == 2 {
                     val chN: Bind = self.internBytes(s: "chain")
                     if self.typeHasMethodNamed(recvStart: bt.nameStart, recvLen: bt.nameLen, nameStart: chN.nameStart, nameLen: chN.nameLen) {
-                        self.rewriteOptChainToChainMatch(exprId: exprId, base: base, memberStart: memberStart, memberLen: memberLen, headStart: bt.nameStart, headLen: bt.nameLen)
-                        // record the stage PARAMETRICALLY: compute its result `Head[U]`
-                        // and Value V with the substitution env cleared (this first scan
-                        // may run under one instance's env, but the rewritten tree is
+                        // record the stage PARAMETRICALLY with the env cleared (the first
+                        // scan may run under one instance's env, but the rewritten tree is
                         // SHARED by every instantiation — each grounds the site anew via
-                        // registerChainSiteInsts / chainResultRef).
+                        // registerChainSiteInsts / chainResultRef). Compute the stage
+                        // result BEFORE the rewrite substitutes the ChainHole, since
+                        // chainStageResultRef types `cont` with the hole still in place.
                         val savedCP: Array[Bind] = self.cur.typeParams
                         val savedCA: Array[U64] = self.cur.typeArgs
                         val noCP: Array[Bind] = []
                         val noCA: Array[U64] = []
                         self.cur.typeParams = noCP
                         self.cur.typeArgs = noCA
-                        // re-derive the base's type inside the cleared-env window: for a
-                        // nested chain the base is itself a rewritten stage, and its
-                        // chainResultRef must come back parametric here, not grounded to
-                        // whichever instance happens to be scanning first.
                         val btP: TypeInfo = self.typeOf(id: base)
-                        val stageRef: U64 = self.chainStageResultRef(baseRef: btP.ref, memberStart: memberStart, memberLen: memberLen)
+                        val stageRef: U64 = self.chainStageResultRef(baseRef: btP.ref, cont: cont)
                         if stageRef != 0 {
                             if btP.ref < self.arena.types.count() && self.arena.types[btP.ref].args.count() >= 1 {
                                 self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=self.arena.types[btP.ref].args[0] />)
@@ -435,12 +446,13 @@ pub impl Comp {
                         }
                         self.cur.typeParams = savedCP
                         self.cur.typeArgs = savedCA
+                        self.rewriteOptChainToChainMatch(exprId: exprId, base: base, cont: cont, memberStart: self.exprOffset(id: exprId), headStart: bt.nameStart, headLen: bt.nameLen)
                         self.scanExprInsts(exprId: exprId)
                         return
                     }
                 }
                 // register the Optional[U] result so its C struct is emitted.
-                val rr: U64 = self.optChainResultRef(base: base, memberStart: memberStart, memberLen: memberLen)
+                val rr: U64 = self.optChainResultRef(base: base, cont: cont)
                 if rr != 0 {
                     self.scanType(ref: rr)
                 }

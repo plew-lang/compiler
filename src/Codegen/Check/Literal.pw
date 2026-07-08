@@ -269,9 +269,10 @@ pub impl Comp {
                     i += 1
                 }
             }
-            Expr.OptChain(val base, memberStart: _, memberLen: _) => {
+            Expr.OptChain(val base, cont: _) => {
                 self.checkLitCtx(id: base, eKind: 0, eBits: 0, eSgn: false)
             }
+            Expr.ChainHole => {}
             Expr.Try(val expr) => {
                 self.checkLitCtx(id: expr, eKind: 0, eBits: 0, eSgn: false)
             }

@@ -259,7 +259,8 @@ pub impl Comp {
                 self.recordBlock(blkId: thenBlk)
                 self.recordBlock(blkId: elseBlk)
             }
-            Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.recordExpr(exprId: base) }
+            Expr.OptChain(val base, cont: _) => { self.recordExpr(exprId: base) }
+            Expr.ChainHole => {}
             Expr.Try(val expr) => { self.recordExpr(exprId: expr) }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.recordExpr(exprId: base) }
             Expr.Deref(val base) => { self.recordExpr(exprId: base) }

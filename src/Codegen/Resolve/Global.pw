@@ -68,7 +68,11 @@ pub impl Comp {
                 while i < elems.count() { self.collectGlobalDeps(id: elems[i], into: inout into) i += 1 }
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.collectGlobalDeps(id: operand, into: inout into) }
-            Expr.OptChain(val base, memberStart: _, memberLen: _) => { self.collectGlobalDeps(id: base, into: inout into) }
+            Expr.OptChain(val base, val cont) => {
+                self.collectGlobalDeps(id: base, into: inout into)
+                self.collectGlobalDeps(id: cont, into: inout into)
+            }
+            Expr.ChainHole => {}
             Expr.Try(val expr) => { self.collectGlobalDeps(id: expr, into: inout into) }
             Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.collectGlobalDeps(id: base, into: inout into) }
             Expr.Deref(val base) => { self.collectGlobalDeps(id: base, into: inout into) }

@@ -171,7 +171,10 @@ pub impl Comp {
         return self.cur.locals.count()
     }
 
-    inout fn optChainResultRef(base: U64, memberStart: U64, memberLen: U64) -> U64 {
+    // Result `Optional[U]` of a NON-rewritten `?.` on an Optional base (the fallback
+    // path — a Chain base goes through chainResultRef). U = the type of the trailing
+    // chain `cont` with the ChainHole bound to the Optional's payload T.
+    inout fn optChainResultRef(base: U64, cont: U64) -> U64 {
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.kind != 2 {
             return 0
@@ -186,8 +189,10 @@ pub impl Comp {
         if ot.args.count() < 1 {
             return 0
         }
-        val tInfo: TypeInfo = self.typeInfoOfRef(ref: ot.args[0])
-        val uInfo: TypeInfo = self.fieldType(structStart: tInfo.nameStart, structLen: tInfo.nameLen, fieldStart: memberStart, fieldLen: memberLen)
+        val savedHole: U64 = self.cur.chainHoleRef
+        self.cur.chainHoleRef = ot.args[0]
+        val uInfo: TypeInfo = self.exprType(id: cont)
+        self.cur.chainHoleRef = savedHole
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
             val noArgs: Array[U64] = []

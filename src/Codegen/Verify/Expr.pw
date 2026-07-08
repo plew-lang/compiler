@@ -278,9 +278,10 @@ pub impl Comp {
                     self.errorAt(offset: self.exprOffset(id: base), msg: "`->` requires a `Ref[T]` on the left (it dereferences a Ref's pointee)")
                 }
             }
-            Expr.OptChain(val base, memberStart: _, memberLen: _) => {
+            Expr.OptChain(val base, cont: _) => {
                 self.verifyExpr(id: base)
             }
+            Expr.ChainHole => {}
             Expr.Try(val expr) => {
                 self.verifyExpr(id: expr)
                 // `try` is only valid in a function that RETURNS a Result (spec/13): it

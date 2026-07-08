@@ -1,0 +1,21 @@
+// `?.b.c` propagation through non-optional intermediate fields to a Ref[Cell]:
+// the whole trailing `.inner.c` rides the chain desugar's match-temp ARC (the
+// unwrapped Outer is a temp; its Ref field is projected and retained correctly).
+import @Std/Io with { print, write }
+import @Std/Core
+import @Std/Core with { Ref }
+struct Cell { pub val v: I64 }
+struct RBox { pub val c: Ref[Cell] }
+struct Outer { pub val inner: RBox }
+fn mkO(v: I64) -> Optional[Outer] {
+    return <Optional.Some v=<Outer inner=<RBox c=<Ref value=<Cell v=v /> /> /> /> />
+}
+fn main() {
+    val c: Optional[Ref[Cell]] = mkO(v: 33)?.inner.c
+    write(s: "bound\n")
+    match c {
+        Optional.Some(v: val r) => { print(r->v) }
+        Optional.None => { print(0I64) }
+    }
+    write(s: "exit\n")
+}

@@ -1235,7 +1235,8 @@ fn exprFormName2(c: inout Comp, id: U64) -> String {
         Expr.Cast(operand: _, tyStart: _, tyLen: _, ty: _) => { return "Cast" }
         Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
         Expr.IfExpr(cond: _, thenBlk: _, elseBlk: _) => { return "IfExpr" }
-        Expr.OptChain(base: _, memberStart: _, memberLen: _) => { return "OptChain" }
+        Expr.OptChain(base: _, cont: _) => { return "OptChain" }
+        Expr.ChainHole => { return "ChainHole" }
         Expr.Try(expr: _) => { return "Try" }
         Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return "Arrow" }
         Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => { return "Closure" }

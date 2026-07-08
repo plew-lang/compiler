@@ -210,8 +210,14 @@ pub impl Comp {
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
                 return self.exprMentionsAny(exprId: operand, forbidden: forbidden)
             }
-            Expr.OptChain(val base, memberStart: _, memberLen: _) => {
-                return self.exprMentionsAny(exprId: base, forbidden: forbidden)
+            Expr.OptChain(val base, val cont) => {
+                if self.exprMentionsAny(exprId: base, forbidden: forbidden) {
+                    return true
+                }
+                return self.exprMentionsAny(exprId: cont, forbidden: forbidden)
+            }
+            Expr.ChainHole => {
+                return false
             }
             Expr.Try(val expr) => {
                 return self.exprMentionsAny(exprId: expr, forbidden: forbidden)
