@@ -537,6 +537,31 @@ fn typeRefMentionsSelf(c: inout Comp, ref: U64) -> Bool {
         }
         i += 1
     }
+    // an anonymous record type (`(a: Self)`, name starting with '(') lowers to a synthesized
+    // struct whose TypeRef carries NO args — its field types (where a captured `Self` hides)
+    // live in the struct's FieldDefs. Descend into them so `Self` in a record position is seen
+    // by the `any P` callability gates (reqUsesSelfInInput / retTySelfErasable). Records are
+    // structurally acyclic (no anonymous self-reference), so this recursion terminates without a
+    // visited set; user structs never carry a captured `Self` in a field (that would be an
+    // infinitely-sized type), so restricting the descent to records also avoids their cycles.
+    if c.arena.bytes[t.nameStart] == 40U8 {
+        val sidx: U64 = c.structIndexByName(start: t.nameStart, len: t.nameLen)
+        if sidx < c.arena.structs.count() {
+            mut val fi: U64 = 0
+            while fi < c.arena.structs[sidx].fields.count() {
+                val fd: FieldDef = c.arena.structs[sidx].fields[fi]
+                if rangeEquals(bytes: c.arena.bytes, start: fd.tyStart, len: fd.tyLen, kw: "Self") {
+                    return true
+                }
+                if fd.ty != 0U64 {
+                    if typeRefMentionsSelf(c: inout c, ref: fd.ty) {
+                        return true
+                    }
+                }
+                fi += 1
+            }
+        }
+    }
     return false
 }
 

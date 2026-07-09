@@ -513,14 +513,25 @@ pub impl LlvmCtx {
 
     // Covariantly erase value `v` of `srcRef` to `dstRef`, boxing every concrete `Self`/element
     // position into the existential (spec/08, SE-0309). Recurses through covariant containers;
-    // a bare concrete->any at the leaf boxes into the fat pointer. `v` is owned (+1) on entry.
+    // a bare concrete->any at the leaf boxes into the fat pointer.
+    //
+    // OWNERSHIP CONTRACT: `v` is BORROWED — its refcount is left unchanged. The returned value
+    // is a FRESH, fully-owned repack (its own boxes/buffers). The caller keeps ownership of `v`
+    // and, if `v` was an owned temp, must release it separately (buildAnyThunk does; the
+    // value-conversion place path leaves the source place alive). Retains happen only at the
+    // positions that actually take ownership of heap — the leaf box (below) and an enum's
+    // verbatim-copied (non-erasable) fields — never as a blanket pre-retain, so a NESTED
+    // container (`Optional[Array[Self]]`) does not double-count and leak its inner buffer.
     inout fn eraseCovariantToAny(c: inout Comp, v: LLVMValueRef, srcRef: U64, dstRef: U64) -> LLVMValueRef {
         val td: TypeRef = c.arena.types[dstRef]
-        // leaf: a concrete struct value widening into `any P`.
+        // leaf: a concrete struct value widening into `any P`. The box co-owns the concrete's
+        // heap, so retain it (borrow contract: `v` stays alive for the caller); boxIntoAny then
+        // adopts that +1 into the fresh cell.
         if td.isAny {
             val ts: TypeRef = c.arena.types[srcRef]
             val sidx: U64 = c.structIndexByName(start: ts.nameStart, len: ts.nameLen)
             val traitIdx: U64 = c.findTraitIdxByName(start: td.nameStart, len: td.nameLen)
+            self.valueArc(c: inout c, v: v, typeRef: srcRef, retain: true)
             return self.boxIntoAny(c: inout c, v: v, sidx: sidx, anyRef: dstRef, traitIdx: traitIdx)
         }
         // `Array[src] -> Array[dst]`: rebuild a fresh buffer, erasing each element.
@@ -537,9 +548,10 @@ pub impl LlvmCtx {
 
     // Erase a generic enum value `srcEnum` of `srcRef` to `dstRef` (same enum head, an arg
     // widened to `any P`): tag-dispatch to the active variant, extract its payload fields, and
-    // for each field either covariantly erase it (a concrete->any widening) or copy it (value
-    // semantics: retain its heap so the rebuilt enum co-owns it), then rebuild the variant of
-    // the destination enum from those values (spec/08, SE-0309). `srcEnum` is owned (+1).
+    // for each field either covariantly erase it (a concrete->any widening — a fresh independently
+    // owned value that borrows the field) or retain-and-copy it verbatim (value semantics: the
+    // rebuilt enum co-owns a non-erasable heap field), then rebuild the variant of the destination
+    // enum from those values (spec/08, SE-0309). BORROWS `srcEnum` — its refcount is unchanged.
     inout fn eraseEnumToAny(c: inout Comp, srcEnum: LLVMValueRef, srcRef: U64, dstRef: U64) -> LLVMValueRef {
         val srcGe: U64 = self.genEnumSlot(c: inout c, ref: srcRef)
         val dstGe: U64 = self.genEnumSlot(c: inout c, ref: dstRef)
@@ -585,12 +597,17 @@ pub impl LlvmCtx {
                     val dFieldRef: U64 = c.groundTypeRef(ref: fs[fj].ty)
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
-                    // value semantics: the rebuilt enum co-owns the field's heap (the source
-                    // enum's own drop still releases its copy — balanced).
-                    self.valueArc(c: inout c, v: fieldVal, typeRef: sFieldRef, retain: true)
                     mut val ev: LLVMValueRef = fieldVal
                     if self.refElemErasable(c: inout c, dstElem: dFieldRef, srcElem: sFieldRef) {
+                        // an erasable field: the repack produces a fresh, independently-owned
+                        // value (leaf box / nested container) that BORROWS `fieldVal` — no
+                        // pre-retain here (a blanket retain would leak a nested container's
+                        // inner buffer, since the recursion borrows rather than adopts it).
                         ev = self.eraseCovariantToAny(c: inout c, v: fieldVal, srcRef: sFieldRef, dstRef: dFieldRef)
+                    } else {
+                        // a verbatim-copied field: the rebuilt enum co-owns its heap, so retain
+                        // it (the source enum's own drop still releases its copy — balanced).
+                        self.valueArc(c: inout c, v: fieldVal, typeRef: sFieldRef, retain: true)
                     }
                     payloadVals.append(ev)
                     fj += 1
@@ -616,8 +633,9 @@ pub impl LlvmCtx {
 
     // Erase `Array[srcElem] -> Array[dstElem]` (srcElem a concrete conforming to the trait
     // dstElem erases to, or a deeper container): allocate a fresh buffer sized for the erased
-    // element, then for each source element retain its heap (value semantics — the source
-    // keeps its own owner) and box/erase it into the new buffer. Returns the new array value.
+    // element, then erase each source element into it (eraseCovariantToAny, which retains at the
+    // leaf so the fresh element is independently owned). BORROWS `srcArr` — the source array is
+    // left untouched (the caller still owns it). Returns the new array value.
     inout fn eraseArrayToAny(c: inout Comp, srcArr: LLVMValueRef, srcElemRef: U64, dstElemRef: U64) -> LLVMValueRef {
         val srcElemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: srcElemRef)
         val dstElemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: dstElemRef)
@@ -635,9 +653,10 @@ pub impl LlvmCtx {
         LLVMBuildCondBr(self.b, LLVMBuildICmp(self.b, llvmIntUlt(), iv, count, anon()), bodyBB, endBB)
         LLVMPositionBuilderAtEnd(self.b, bodyBB)
         mut val srcElem: LLVMValueRef = LLVMBuildLoad2(self.b, srcElemTy, self.arrElemPtr(elemTy: srcElemTy, data: srcData, idx: iv), anon())
-        // value semantics: the fresh box co-owns the element's heap, so retain it (the source
-        // array's own drop still releases its copy — balanced), mirroring a CoW element copy.
-        self.valueArc(c: inout c, v: srcElem, typeRef: srcElemRef, retain: true)
+        // borrow contract: the repack produces a fresh, independently-owned element (leaf box /
+        // nested container) that BORROWS `srcElem` — retain happens at the actual leaf (or an
+        // enum's verbatim field), never here, so a nested container does not double-count and
+        // leak. The source array is left untouched (the caller still owns it).
         val erased: LLVMValueRef = self.eraseCovariantToAny(c: inout c, v: srcElem, srcRef: srcElemRef, dstRef: dstElemRef)
         LLVMBuildStore(self.b, erased, self.arrElemPtr(elemTy: dstElemTy, data: newData, idx: iv))
         LLVMBuildStore(self.b, LLVMBuildAdd(self.b, iv, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), iSlot)
