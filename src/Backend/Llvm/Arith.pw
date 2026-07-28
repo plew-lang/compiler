@@ -255,6 +255,12 @@ pub impl LlvmCtx {
         if c.cur.typeParams.count() > 0U64 || c.cur.itemRef != 0U64 || c.cur.selfRef != 0U64 {
             gty = c.groundTypeRef(ref: ty)
         }
+        if self.curRecvInstRef != 0U64 {
+            val rgty: U64 = c.groundUnderInst(instRef: self.curRecvInstRef, tyRef: gty)
+            if rgty != gty {
+                gty = rgty
+            }
+        }
         // a context-less record literal `(a:1, b:2)` lowers to a Make with NO type name
         // (Lower.pw): resolve its record struct from the construction context — the
         // enclosing field/payload builder sets `self.expectedTy` to the field's declared
@@ -287,17 +293,16 @@ pub impl LlvmCtx {
         if isEnum {
             return self.genLlvmMakeEnum(c: inout c, typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, ty: gty, fields: fields)
         }
-        // an un-suffixed generic-struct construction (`inner=<Box value=e />`) has an
-        // ungrounded head `gty`; fall back to the expected type from context (the field's
-        // declared instance type set by genFieldValue) when it names this same generic
-        // struct. Consume it so it can't leak into the field sub-expressions.
-        if !(c.isGenericInst(ref: gty)) {
-            if self.expectedTy != 0U64 {
-                if c.isGenericInst(ref: self.expectedTy) {
-                    val et: TypeRef = c.arena.types[self.expectedTy]
-                    if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
-                        gty = self.expectedTy
-                    }
+        // Context may carry the canonical grounded instance for this construction. Use it
+        // for both un-suffixed generic structs (`<Box value=e/>`) and explicit constructions
+        // whose args still mention an enclosing generic parameter (`<Ref[T] .../>` inside
+        // `WeakRef[Cell].upgrade`): otherwise LLVM sees two named `{ptr}` structs for the
+        // same logical instance and rejects aggregate insertion.
+        if self.expectedTy != 0U64 {
+            if c.isGenericInst(ref: self.expectedTy) {
+                val et: TypeRef = c.arena.types[self.expectedTy]
+                if spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: typeStart, bLen: typeLen) {
+                    gty = self.expectedTy
                 }
             }
         }
@@ -376,6 +381,17 @@ pub impl LlvmCtx {
         return 0U64
     }
 
+    // Public Ref-family values are ordinary `{ cell }` wrappers. Runtime ARC and `->`
+    // operations work on the intrinsic cell pointer, so unwrap the single field at the
+    // backend boundary. During bootstrap an older std may still present Ref as a direct
+    // opaque pointer; the type-kind guard keeps that representation valid too.
+    inout fn refCellFromValue(v: LLVMValueRef) -> LLVMValueRef {
+        if LLVMGetTypeKind(LLVMTypeOf(v)) == 10U32 {
+            return LLVMBuildExtractValue(self.b, v, 0U64, anon())
+        }
+        return v
+    }
+
     // The struct index of a strong-ref base's pointee T (for `->field` resolution), or
     // c.arena.structs.count() if the base isn't a strong ref to a registered struct.
     inout fn refPointeeStructIdx(c: inout Comp, base: U64) -> U64 {
@@ -397,7 +413,7 @@ pub impl LlvmCtx {
     inout fn loadRefPointee(c: inout Comp, base: U64) -> LLVMValueRef {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: r)
-        val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
+        val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
         return LLVMBuildLoad2(self.b, pty, cellPtr, anon())
     }
 

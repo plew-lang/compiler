@@ -196,7 +196,7 @@ pub impl LlvmCtx {
                     }
                     // genBorrowedArg: a non-place base (element read / call result) is an
                     // owned (+1) temporary — home it so the count releases at statement end.
-                    val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
+                    val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                     self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                     return cellPtr
                 }
@@ -216,7 +216,7 @@ pub impl LlvmCtx {
                             c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: cannot use read-only Ref as an inout place; expected MutableRef")
                         }
                         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
-                        val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
+                        val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                         self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
                         return LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
                     }

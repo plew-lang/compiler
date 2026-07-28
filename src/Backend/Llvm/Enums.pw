@@ -124,16 +124,14 @@ pub impl LlvmCtx {
             if refIsAny(c: inout c, ref: g) {
                 return 2U64
             }
-            // a reference-cell / `Buffer[T]` payload (possibly reached via a type param `Some(v: T)`,
-            // T -> Ref[Cell]) is a single opaque pointer (1 word). Checked before isGenericInst:
-            // Ref/Buffer carry type args (so isGenericInst is true) but are extern intrinsics,
-            // not registered generic structs, so genInstWords would size them as 0 — collapsing
-            // the enum's payload area to [0 x i64] and dropping the pointer on copy.
+            // a public Ref wrapper or `Buffer[T]` payload (possibly reached via a type param
+            // `Some(v: T)`, T -> Ref[Cell]) is a single pointer-sized word. Buffer and internal
+            // ref cells are extern intrinsics; public Ref-family wrappers are normal one-field
+            // structs, but keeping this fast path preserves the enum payload's compact word form.
             if c.isStrongRefInst(ref: g) {
                 return 1U64
             }
-            // a `WeakRef[T]` payload is likewise a single opaque pointer (1 word) — same extern-
-            // intrinsic-carrying-type-args trap as Ref, so checked here before isGenericInst.
+            // a `WeakRef[T]` payload is likewise a single pointer-sized word.
             if c.isWeakRefLikeInst(ref: g) {
                 return 1U64
             }
@@ -765,10 +763,10 @@ pub impl LlvmCtx {
                             pv = LLVMBuildInsertValue(self.b, pv, nf, fj, anon())
                         } else if fieldGroundedRefTy(c: inout c, f: fd) != 0U64 {
                             // a `Ref` payload is shared on copy: keep the cell, retain its rc.
-                            self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
+                            self.rawbufRetain(c: inout c, cell: self.refCellFromValue(v: LLVMBuildExtractValue(self.b, pv, fj, anon())))
                         } else if fieldGroundedWeakTy(c: inout c, f: fd) != 0U64 {
                             // a `WeakRef` payload is shared on copy: keep the cell, bump its weak rc.
-                            self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, pv, fj, anon()))
+                            self.refWeakDowngrade(c: inout c, cell: self.refCellFromValue(v: LLVMBuildExtractValue(self.b, pv, fj, anon())))
                         } else if refIsAny(c: inout c, ref: c.arcFieldTy(f: fd)) {
                             // an `any P` payload: the copy CoW-SHARES the box and retains it
                             // (the inout-dispatch write gate privatizes a shared box).
@@ -993,6 +991,7 @@ pub impl LlvmCtx {
                                 // through consumeIntoOwned so the constructed enum CO-OWNS it
                                 // (rc++ a place; a fresh owner passes through). The one canonical
                                 // "make owned" path shared with binds/args/returns/struct fields.
+                                self.expectedTy = gpf
                                 val rv: LLVMValueRef = self.consumeIntoOwned(c: inout c, v: self.genLlvmExpr(c: inout c, id: valExpr), expr: valExpr, typeRef: gpf)
                                 agg = LLVMBuildInsertValue(self.b, agg, rv, fj, anon())
                             }

@@ -561,11 +561,11 @@ pub impl LlvmCtx {
                 // cell (the pointee is NOT deep-copied — `val b = a` aliases a's referent) and
                 // retains its strong rc. Keeps the field pointer, bumps the count. Balanced by
                 // emitRefRelease at the copy's drop.
-                self.rawbufRetain(c: inout c, cell: LLVMBuildExtractValue(self.b, agg, fi, anon()))
+                self.rawbufRetain(c: inout c, cell: self.refCellFromValue(v: LLVMBuildExtractValue(self.b, agg, fi, anon())))
             } else if fieldIsWeakRefType(c: inout c, f: fd) {
                 // a `WeakRef` field copy SHARES the same cell and bumps the WEAK count (not
                 // strong) — balanced by weakRelease at the copy's drop.
-                self.refWeakDowngrade(c: inout c, cell: LLVMBuildExtractValue(self.b, agg, fi, anon()))
+                self.refWeakDowngrade(c: inout c, cell: self.refCellFromValue(v: LLVMBuildExtractValue(self.b, agg, fi, anon())))
             } else if refIsAny(c: inout c, ref: c.arcFieldTy(f: fd)) {
                 // an `any P` field: the copy CoW-SHARES the box and retains it — the
                 // inout-dispatch write gate privatizes a shared box, so a sharer never
@@ -712,7 +712,7 @@ pub impl LlvmCtx {
         }
         if c.isStrongRefInst(ref: rr) {
             if exprAliasesPlace(c: inout c, id: expr) {
-                self.rawbufRetain(c: inout c, cell: v)
+                self.rawbufRetain(c: inout c, cell: self.refCellFromValue(v: v))
             }
             return v
         }
@@ -725,7 +725,7 @@ pub impl LlvmCtx {
         }
         if c.isWeakRefLikeInst(ref: wr) {
             if exprAliasesPlace(c: inout c, id: expr) {
-                self.refWeakDowngrade(c: inout c, cell: v)
+                self.refWeakDowngrade(c: inout c, cell: self.refCellFromValue(v: v))
             }
             return v
         }
@@ -1105,9 +1105,9 @@ pub impl LlvmCtx {
             // observers).
             ArcClass.RefCell(val inst) => {
                 if retain {
-                    self.rawbufRetain(c: inout c, cell: v)
+                    self.rawbufRetain(c: inout c, cell: self.refCellFromValue(v: v))
                 } else {
-                    self.emitRefRelease(c: inout c, cell: v, refTy: inst)
+                    self.emitRefRelease(c: inout c, cell: self.refCellFromValue(v: v), refTy: inst)
                 }
             }
             // a `WeakRef[T]` value: the cell pointer with a WEAK rc. retain = bump
@@ -1115,9 +1115,9 @@ pub impl LlvmCtx {
             // decrement weak, and free the cell only when BOTH counts are 0.
             ArcClass.WeakCell(inst: _) => {
                 if retain {
-                    self.refWeakDowngrade(c: inout c, cell: v)
+                    self.refWeakDowngrade(c: inout c, cell: self.refCellFromValue(v: v))
                 } else {
-                    self.weakRelease(c: inout c, cell: v)
+                    self.weakRelease(c: inout c, cell: self.refCellFromValue(v: v))
                 }
             }
             // a `Promise[T]` value: the rc'd promise cell pointer. retain = one more

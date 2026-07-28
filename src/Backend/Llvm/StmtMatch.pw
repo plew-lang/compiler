@@ -241,7 +241,7 @@ pub impl LlvmCtx {
                         // deref / `s.weak()` dispatch resolve (Ref/WeakRef aren't generic insts).
                         if c.isStrongRefInst(ref: gfp) || c.isWeakRefLikeInst(ref: gfp) {
                             genFieldRef = gfp
-                            pty = self.ptrty
+                            pty = self.llvmTypeOfRef(c: inout c, ref: gfp)
                         }
                     }
                 }

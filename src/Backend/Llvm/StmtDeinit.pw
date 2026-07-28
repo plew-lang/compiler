@@ -332,7 +332,8 @@ pub impl LlvmCtx {
             // passed without a retain (genArgValue), so releasing it here would
             // under-count the strong rc and free a cell the caller still owns. A `move`
             // Ref param IS owned and releases here.
-            self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
+            val lv: LLVMValueRef = LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: self.locTypeRef[li]), self.locPtr[li], anon())
+            self.emitRefRelease(c: inout c, cell: self.refCellFromValue(v: lv), refTy: self.locTypeRef[li])
             return
         }
         // a weak reference-cell local: drop one weak observer — decrement the weak count and free the
@@ -340,7 +341,8 @@ pub impl LlvmCtx {
         // owned-flag gate as Ref (un-owned bindings were skipped at the top). Balances the weak
         // retain at each WeakRef place-copy.
         if c.isWeakRefLikeInst(ref: self.locTypeRef[li]) {
-            self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
+            val lv: LLVMValueRef = LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: self.locTypeRef[li]), self.locPtr[li], anon())
+            self.weakRelease(c: inout c, cell: self.refCellFromValue(v: lv))
             return
         }
         val sidx: U64 = self.locStructIdx[li]

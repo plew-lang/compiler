@@ -311,7 +311,7 @@ pub impl LlvmCtx {
                 }
             }
             if c.isStrongRefInst(ref: effRef) || c.isWeakRefLikeInst(ref: effRef) {
-                pty = self.ptrty
+                pty = self.llvmTypeOfRef(c: inout c, ref: effRef)
                 pRef = effRef
             }
             // a function-value param (`f: fn(n: I32) -> I32`): track the fn TypeRef so a

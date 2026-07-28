@@ -704,7 +704,7 @@ pub impl LlvmCtx {
                                 // as an owned (+1) temporary from the index witness — home
                                 // it so the count releases at statement end (mirrors the
                                 // placePtrStrict Deref/Arrow arms).
-                                val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: abase)
+                                val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: abase))
                                 val gep: LLVMValueRef = LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
                                 // route through the single store choke point: the shared
                                 // pointee field's old occupant is destroyed (one owner

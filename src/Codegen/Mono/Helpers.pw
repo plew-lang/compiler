@@ -55,12 +55,24 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef")
     }
 
-    // Is `ref` either strong reference-cell capability (`Ref[T]` or `MutableRef[T]`)?
+    // Is `ref` either strong reference capability (`Ref[T]` or `MutableRef[T]`)?
     inout fn isStrongRefInst(ref: U64) -> Bool {
         if self.isRefInst(ref: ref) {
             return true
         }
         return self.isMutableRefInst(ref: ref)
+    }
+
+    // Is `ref` a compiler-supplied strong reference cell (`StrongRefCell[T]`)?
+    inout fn isStrongRefCellInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count() {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count() != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "StrongRefCell")
     }
 
     // Is `ref` a `WeakRef[T]` instantiation? A WeakRef is the same control-block cell as
@@ -96,6 +108,18 @@ pub impl Comp {
             return true
         }
         return self.isWeakMutableRefInst(ref: ref)
+    }
+
+    // Is `ref` a compiler-supplied weak reference cell (`WeakRefCell[T]`)?
+    inout fn isWeakRefCellInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count() {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count() != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRefCell")
     }
 
     // Is `ref` a `Buffer[T]` instantiation? `Buffer` is the blessed safe storage
@@ -139,7 +163,13 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakRef") {
             return true
         }
-        return rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakMutableRef")
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakMutableRef") {
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "StrongRefCell") {
+            return true
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakRefCell")
     }
 
     // A transparent generic container whose type arguments are held by value

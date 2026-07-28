@@ -396,7 +396,7 @@ pub impl Comp {
                     i += 1
                     continue
                 }
-                if !(self.isStrongRefInst(ref: i)) && !(self.isWeakRefLikeInst(ref: i)) {
+                if !(self.isStrongRefInst(ref: i)) && !(self.isWeakRefLikeInst(ref: i)) && !(self.isStrongRefCellInst(ref: i)) && !(self.isWeakRefCellInst(ref: i)) {
                     mut val j: U64 = 0
                     while j < t.args.count() {
                         val ai: TypeInfo = self.typeInfoOfRef(ref: t.args[j])

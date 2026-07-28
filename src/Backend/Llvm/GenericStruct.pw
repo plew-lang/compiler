@@ -176,7 +176,8 @@ pub impl LlvmCtx {
         val defIdx: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
         if defIdx < c.arena.structs.count() {
             val sd: StructDef = c.arena.structs[defIdx]
-            // an extern generic (`Buffer[T]` / `Ref[T]`) is an opaque pointer — no `%gs`.
+            // an extern generic (`Buffer[T]` / `StrongRefCell[T]` / `WeakRefCell[T]`) is an
+            // opaque pointer — no `%gs`. Public Ref-family wrappers are normal generic structs.
             if sd.isExtern {
                 return false
             }
@@ -353,7 +354,7 @@ pub impl LlvmCtx {
     }
 
     // Set the substitution env from ANY generic instance `ref` — struct, enum, or the opaque
-    // Ref/WeakRef externs — to its concrete args. The single env-setup so callers that ground a
+    // Ref/WeakRef wrappers — to their concrete args. The single env-setup so callers that ground a
     // method/field result under "the receiver's instance" don't each re-implement the kind
     // cascade and drift (the lesson from the retired per-form resolvers). Returns whether
     // it set the env (caller restores).
