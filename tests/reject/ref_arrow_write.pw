@@ -1,0 +1,8 @@
+import @Std/Core with { Ref }
+
+struct Cell { pub mut val n: I32 }
+
+fn main() {
+    val r: Ref[Cell] = <Ref[Cell] value=<Cell n=1 /> />
+    r->n = 2I32
+}

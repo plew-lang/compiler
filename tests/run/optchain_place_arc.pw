@@ -1,5 +1,5 @@
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
@@ -7,12 +7,12 @@ unique struct Cell {
 }
 
 struct Holder {
-    pub val cell: Ref[Cell]
+    pub val cell: MutableRef[Cell]
 }
 
 fn main() {
-    val o: Optional[Holder] = <Optional.Some v=<Holder cell=<Ref value=<Cell v=55 /> /> /> />
-    val r: Optional[Ref[Cell]] = o?.cell
+    val o: Optional[Holder] = <Optional.Some v=<Holder cell=<MutableRef value=<Cell v=55 /> /> /> />
+    val r: Optional[MutableRef[Cell]] = o?.cell
     write(s: "bound\n")
     write(s: "end\n")
 }

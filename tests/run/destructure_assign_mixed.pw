@@ -4,7 +4,7 @@
 // target is released at the reassign (the Cell 1 deinit fires mid-function),
 // and the new owner releases at scope exit as usual.
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
@@ -17,8 +17,8 @@ fn main() {
     (x, val y) = point
     print(x)
     print(y)
-    mut val r: Ref[Cell] = <Ref value=<Cell v=1 /> />
-    val pair = (r: <Ref value=<Cell v=2 /> />, n: 5I64)
+    mut val r: MutableRef[Cell] = <MutableRef value=<Cell v=1 /> />
+    val pair = (r: <MutableRef value=<Cell v=2 /> />, n: 5I64)
     (r, n: val n) = pair
     print(n)
     print(r->v)

@@ -4,7 +4,7 @@
 // words (stack corruption). Pins fn-typed payload sizing end to end: build,
 // iterate, call each element, and release the captured cells exactly once.
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
@@ -12,8 +12,8 @@ unique struct Cell {
 }
 
 fn main() {
-    val a: Ref[Cell] = <Ref value=<Cell v=122 /> />
-    val b: Ref[Cell] = <Ref value=<Cell v=123 /> />
+    val a: MutableRef[Cell] = <MutableRef value=<Cell v=122 /> />
+    val b: MutableRef[Cell] = <MutableRef value=<Cell v=123 /> />
     val fs: Array[fn() -> I64] = [fn() -> I64 { return a->v }, fn() -> I64 { return b->v }]
     mut val total: I64 = 0
     for f in fs {

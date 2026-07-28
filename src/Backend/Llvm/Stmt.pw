@@ -269,20 +269,15 @@ pub impl LlvmCtx {
                         }
                     }
                 }
-                // a `Ref[T]` local: track the instance so `->` resolves the pointee
-                // struct (Ref isn't a registered generic struct/enum, so isGenericInst
-                // is false for it). These class checks use `clsRef` — the env-GROUNDED
+                // a reference-cell local: track the instance so `->` / weak methods resolve
+                // the pointee and ownership class (reference cells aren't registered generic
+                // structs/enums, so isGenericInst is false for them). These class checks use `clsRef` — the env-GROUNDED
                 // annotation, else the initializer's TypeRef: a bare-`T` annotation in a
                 // generic body (`val v: T` with T = Ref[Cell]) and an un-annotated
-                // Ref-valued binding (`val cell = tmp.cell`, `val r2 = r`) must both
+                // reference-valued binding (`val cell = tmp.cell`, `val r2 = r`) must both
                 // classify as their concrete class — a ref-less local's scope-exit
                 // release never fires (a leaked count per binding).
-                if c.isRefInst(ref: clsRef) {
-                    tref = clsRef
-                }
-                // a `WeakRef[T]` local: track the instance so `w.upgrade()` dispatches its
-                // opaque-intrinsic method and the weak-count drop fires at scope exit.
-                if c.isWeakRefInst(ref: clsRef) {
+                if c.isStrongRefInst(ref: clsRef) || c.isWeakRefLikeInst(ref: clsRef) {
                     tref = clsRef
                 }
                 // a `Buffer[T]` local: track its type so the floor intrinsics recover
@@ -691,15 +686,19 @@ pub impl LlvmCtx {
                         }
                     }
                     Expr.Arrow(base: val abase, nameStart: val ans, nameLen: val anl) => {
-                        // `r->field = v`: GEP into the Ref's cell (the pointee struct) and
+                        // `r->field = v`: GEP into the MutableRef's cell (the pointee struct) and
                         // store. The cell is shared, so the write is visible through any
-                        // alias of the Ref.
+                        // alias of the MutableRef. Frontend verify rejects writes through Ref;
+                        // keep the backend gate as a final invariant check.
                         val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: abase)
                         if psidx < c.arena.structs.count() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: ans, len: anl)
                             if fidx < c.arena.structs[psidx].fields.count() {
                                 val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
                                 val refTy: U64 = self.exprRefTypeRef(c: inout c, id: abase)
+                                if !(c.isMutableRefInst(ref: refTy)) {
+                                    c.errorAt(offset: c.exprOffset(id: abase), msg: "LLVM backend: cannot assign through read-only Ref; expected MutableRef")
+                                }
                                 val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                                 // genBorrowedArg: a non-place base (`ys[0]->v = …`) arrives
                                 // as an owned (+1) temporary from the index witness — home
@@ -713,7 +712,7 @@ pub impl LlvmCtx {
                                 // co-owner) — the write is visible through every alias of
                                 // the Ref, but the assigned VALUE keeps value semantics.
                                 mut val pref: U64 = 0
-                                if c.isRefInst(ref: refTy) {
+                                if c.isStrongRefInst(ref: refTy) {
                                     pref = c.arena.types[refTy].args[0]
                                 }
                                 val g3: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)

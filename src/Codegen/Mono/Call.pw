@@ -5,7 +5,7 @@
 // (args before self, so a nested generic call is registered before the outer one
 // whose argument type may depend on it).
 // Can an enclosing local of this shape be value-captured? Scalars, String,
-// arrays, Ref, and plain (non-unique, non-generic) structs can: an immutable
+// arrays, reference cells, and plain (non-unique, non-generic) structs can: an immutable
 // `val` value-captured is observationally identical to a reference capture, and
 // heap-owning captures are retained into the env (then leaked). A `unique` type
 // (no copy), a generic instantiation (per-inst share machinery), an enum, or a
@@ -22,7 +22,7 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: lo.tyStart, len: lo.tyLen, kw: "String") {
             return true
         }
-        if rangeEquals(bytes: self.arena.bytes, start: lo.tyStart, len: lo.tyLen, kw: "Ref") {
+        if self.isStrongRefInst(ref: lo.ty) || self.isWeakRefLikeInst(ref: lo.ty) {
             return true
         }
         val si: U64 = self.structIndexByName(start: lo.tyStart, len: lo.tyLen)

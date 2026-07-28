@@ -1,8 +1,8 @@
 // F11 (c, structs): a generic struct with an `Array[T]` field is monomorphized
-// per instantiation — `Holder[I32]` -> `PlewArray_I32`, `Holder[Ref[Cell]]` ->
+// per instantiation — `Holder[I32]` -> `PlewArray_I32`, `Holder[MutableRef[Cell]]` ->
 // `PlewArray_Ref_Cell` — instead of emitting the broken `PlewArray_T` template.
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 struct Cell {
     pub mut val v: I32
@@ -19,8 +19,8 @@ fn main() {
     val hi: Holder[I32] = <Holder[I32] items=ints />
     print(hi.items[0] + hi.items[1])
 
-    mut val cells: Array[Ref[Cell]] = []
-    cells.append(<Ref[Cell] value=<Cell v=7 /> />)
-    val hc: Holder[Ref[Cell]] = <Holder[Ref[Cell]] items=cells />
+    mut val cells: Array[MutableRef[Cell]] = []
+    cells.append(<MutableRef[Cell] value=<Cell v=7 /> />)
+    val hc: Holder[MutableRef[Cell]] = <Holder[MutableRef[Cell]] items=cells />
     print(hc.items[0]->v)
 }

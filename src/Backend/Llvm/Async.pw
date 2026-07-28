@@ -34,7 +34,7 @@ pub impl LlvmCtx {
         if c.isGenericInst(ref: ty) {
             return self.llvmTypeOfRef(c: inout c, ref: ty)
         }
-        if c.isRefInst(ref: ty) {
+        if c.isStrongRefInst(ref: ty) || c.isWeakRefLikeInst(ref: ty) {
             return self.ptrty
         }
         return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)

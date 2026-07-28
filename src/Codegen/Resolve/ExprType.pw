@@ -301,7 +301,7 @@ pub impl Comp {
                         val ce: CaptureEntry = self.monoWork.captures[ci]
                         if ce.closureId == self.cur.closureId {
                             if spansEqual(c: inout self, aStart: ce.nameStart, aLen: ce.nameLen, bStart: start, bLen: len) {
-                                if self.isRefInst(ref: ce.ty) {
+                                if self.isStrongRefInst(ref: ce.ty) || self.isWeakRefLikeInst(ref: ce.ty) {
                                     val rt2: TypeRef = self.arena.types[ce.ty]
                                     return <TypeInfo kind=2 nameStart=rt2.nameStart nameLen=rt2.nameLen ref=ce.ty />
                                 }
@@ -334,7 +334,7 @@ pub impl Comp {
                             val lt: TypeRef = self.arena.types[lo.ty]
                             return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
                         }
-                        if self.isRefInst(ref: lo.ty) {
+                        if self.isStrongRefInst(ref: lo.ty) || self.isWeakRefLikeInst(ref: lo.ty) {
                             val lt2: TypeRef = self.arena.types[lo.ty]
                             return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
                         }
@@ -1137,9 +1137,9 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                // pointee field type: base is Ref[T]; resolve T then T's field.
+                // pointee field type: base is Ref[T] / MutableRef[T]; resolve T then T's field.
                 val bt: TypeInfo = self.exprType(id: base)
-                if self.isRefInst(ref: bt.ref) {
+                if self.isStrongRefInst(ref: bt.ref) {
                     val inst: TypeRef = self.arena.types[bt.ref]
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
                     if pt.kind == 2 {
@@ -1149,10 +1149,11 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Deref(val base) => {
-                // `*ref` (the receiver of `ref->method()`): the pointee type T of base: Ref[T],
-                // so method resolution / arg inference runs against T like a normal receiver.
+                // `*ref` (the receiver of `ref->method()`): the pointee type T of base:
+                // Ref[T] / MutableRef[T], so method resolution / arg inference runs against T
+                // like a normal receiver.
                 val bt: TypeInfo = self.exprType(id: base)
-                if self.isRefInst(ref: bt.ref) {
+                if self.isStrongRefInst(ref: bt.ref) {
                     val inst: TypeRef = self.arena.types[bt.ref]
                     if inst.args.count() > 0 {
                         return self.typeInfoOfRef(ref: inst.args[0])

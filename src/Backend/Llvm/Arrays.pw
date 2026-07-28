@@ -697,7 +697,8 @@ pub impl LlvmCtx {
         // 1-3a (Ref class): copying a `Ref` PLACE into a new owner (`val r2 = r`, a field
         // init `<Box r=r />`, an `append(r)`, a by-value arg, `return r`) shares the cell and
         // RETAINS its strong rc (rc++). Balanced by the owner's emitRefRelease at drop /
-        // element-release / field-deinit / set-overwrite. A fresh `<Ref value=… />` is a
+        // element-release / field-deinit / set-overwrite. A fresh `<Ref value=… />` /
+        // `<MutableRef value=… />` is a
         // non-place (owns its rc=1) and passes through. Mirrors the String class above.
         // Prefer the caller's grounded element ref (`er` from append/set) — the value
         // EXPR is often a generic intrinsic param (`bufferAppend`'s `value: T`) whose
@@ -706,23 +707,23 @@ pub impl LlvmCtx {
         // appended place's binding later drops). Fall back to the expr type when no
         // typeRef was passed (direct binds / args / returns).
         mut val rr: U64 = typeRef
-        if !(c.isRefInst(ref: rr)) {
+        if !(c.isStrongRefInst(ref: rr)) {
             rr = self.exprRefTypeRef(c: inout c, id: expr)
         }
-        if c.isRefInst(ref: rr) {
+        if c.isStrongRefInst(ref: rr) {
             if exprAliasesPlace(c: inout c, id: expr) {
                 self.rawbufRetain(c: inout c, cell: v)
             }
             return v
         }
-        // 1-3a (WeakRef class): copying a `WeakRef` PLACE into a new owner shares the cell and
+        // 1-3a (weak reference-cell class): copying a weak reference PLACE into a new owner shares the cell and
         // bumps the WEAK count (not strong) — balanced by the owner's weakRelease at drop. A
         // fresh `r.weak()` result is a non-place (already owns one weak) and passes through.
         mut val wr: U64 = typeRef
-        if !(c.isWeakRefInst(ref: wr)) {
+        if !(c.isWeakRefLikeInst(ref: wr)) {
             wr = self.exprTypeRef(c: inout c, id: expr)
         }
-        if c.isWeakRefInst(ref: wr) {
+        if c.isWeakRefLikeInst(ref: wr) {
             if exprAliasesPlace(c: inout c, id: expr) {
                 self.refWeakDowngrade(c: inout c, cell: v)
             }
@@ -963,7 +964,7 @@ pub impl LlvmCtx {
         // action) — the old sidx-keyed gate (refDeinitPointeeSidx) resolved the pointee
         // by NAME only, so a generic-instance pointee (Ref[Box[String]]) and any
         // non-struct pointee (enum / String / nested Ref) were silently never destroyed.
-        if c.isRefInst(ref: refTy) {
+        if c.isStrongRefInst(ref: refTy) {
             val pr: U64 = c.arena.types[refTy].args[0]
             if c.arcNeedsRelease(ref: pr) {
                 val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)

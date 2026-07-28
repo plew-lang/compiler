@@ -1,9 +1,9 @@
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 struct Bag { pub mut val items: Array[I32] }
 fn main() {
-    val r: Ref[Bag] = <Ref[Bag] value=<Bag items=[1, 2, 3] /> />
-    val s: Ref[Bag] = r
+    val r: MutableRef[Bag] = <MutableRef[Bag] value=<Bag items=[1, 2, 3] /> />
+    val s: MutableRef[Bag] = r
     r->items[0] = 99
     print(r->items[0])
     print(s->items[0])

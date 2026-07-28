@@ -371,8 +371,8 @@ pub impl Comp {
 
     // Reject a unique type as a generic type argument (spec/03): v1 generics are
     // copyable-only, so `Box[File]`/`Optional[File]`/`Result[File, E]` would copy (and
-    // silently fail to deinit) the unique value. The sanctioned containers are `Ref[T]` and
-    // `WeakRef[T]` (which reference the unique cell, never copying it), so both are exempt. Scans the
+    // silently fail to deinit) the unique value. The sanctioned containers are reference
+    // cells (which reference the unique cell, never copying it), so they are exempt. Scans the
     // whole TypeRef arena (not just genInsts) so lang-item enums like Optional/Result
     // are covered too; generic templates carry type-param args (not unique) and pass.
     inout fn checkGenericUniqueArgs() {
@@ -390,7 +390,7 @@ pub impl Comp {
                     i += 1
                     continue
                 }
-                if !(self.isRefInst(ref: i)) && !(self.isWeakRefInst(ref: i)) {
+                if !(self.isStrongRefInst(ref: i)) && !(self.isWeakRefLikeInst(ref: i)) {
                     mut val j: U64 = 0
                     while j < t.args.count() {
                         val ai: TypeInfo = self.typeInfoOfRef(ref: t.args[j])

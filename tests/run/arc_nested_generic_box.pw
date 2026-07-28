@@ -15,6 +15,6 @@ struct Box[T] { pub val item: T }
 fn main() {
     val bb: Box[Box[String]] = <Box item=<Box item=("heap" + "-payload") /> />
     print(bb.item.item)
-    val cc: Box[Box[Ref[Cell]]] = <Box item=<Box item=<Ref value=<Cell v=5 /> /> /> />
+    val cc: Box[Box[MutableRef[Cell]]] = <Box item=<Box item=<MutableRef value=<Cell v=5 /> /> /> />
     print(cc.item.item->v)
 }

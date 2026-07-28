@@ -6,14 +6,14 @@
 // release would crash or print it twice).
 import @Std/Io with { print }
 import @Std/Async with { sleep }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
 enum Msg {
-    Boxed(r: Ref[Cell])
+    Boxed(r: MutableRef[Cell])
     Quit
 }
 
@@ -27,7 +27,7 @@ async fn taker(m: Msg) -> Promise[I64] {
 }
 
 async fn main() {
-    val n: I64 = await taker(m: <Msg.Boxed r=<Ref value=<Cell v=42 /> /> />)
+    val n: I64 = await taker(m: <Msg.Boxed r=<MutableRef value=<Cell v=42 /> /> />)
     print(n)
     print("end")
 }

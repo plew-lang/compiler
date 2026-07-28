@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I32
@@ -7,7 +7,7 @@ unique struct Cell {
 }
 
 struct Holder {
-    pub val r: Ref[Cell]
+    pub val r: MutableRef[Cell]
 }
 
 pub impl Holder {
@@ -15,7 +15,7 @@ pub impl Holder {
 }
 
 fn makeHolder() -> Holder {
-    val h: Holder = <Holder r=<Ref value=<Cell v=21I32 /> /> />
+    val h: Holder = <Holder r=<MutableRef value=<Cell v=21I32 /> /> />
     return h
 }
 

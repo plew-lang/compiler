@@ -1,14 +1,14 @@
 // Overlapping `inout` runtime tier (spec/03), mixed depths: a whole array field behind
-// one Ref vs an ELEMENT of that array behind another Ref to the same cell. The places
+// one MutableRef vs an ELEMENT of that array behind another MutableRef to the same cell. The places
 // have different depths, so the check compares at the common depth (&cell.xs) — the
 // deeper place's ancestor is re-derived from its simple-value components.
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 struct Holder { pub mut val xs: Array[I64] }
 fn touch(a: inout Array[I64], b: inout I64) { b = 42  a.append(9) }
 fn main() {
-    val r1: Ref[Holder] = <Ref[Holder] value=<Holder xs=[1,2,3] /> />
-    val r2: Ref[Holder] = r1
+    val r1: MutableRef[Holder] = <MutableRef[Holder] value=<Holder xs=[1,2,3] /> />
+    val r2: MutableRef[Holder] = r1
     val k: U64 = 0
     print(0I32)
     touch(a: inout r1->xs, b: inout r2->xs[k])   // same cell -> the array contains its element -> panic

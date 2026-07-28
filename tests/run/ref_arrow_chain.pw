@@ -1,11 +1,11 @@
 // `->` reaching through more expression forms, after unifying the backend's field/type
 // resolution (Field and Arrow share one `resolveField`; the free-call return type is resolved
 // generally, not Array-only):
-//   - a free function CALL returning `Ref[T]` as the `->` base: `mk()->get()`.
+//   - a free function CALL returning `MutableRef[T]` as the `->` base: `mk()->get()`.
 //   - a `->`field result as a method receiver: `r->inner.dbl()` (`exprStructIdx` now resolves
 //     Arrow via the shared helper, like `.`-field).
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 struct Cell { pub mut val n: I32 }
 pub impl Cell { fn get() -> I32 { return self.n } }
@@ -14,10 +14,10 @@ struct Inner { pub val v: I32 }
 pub impl Inner { fn dbl() -> I32 { return self.v + self.v } }
 struct Outer { pub val inner: Inner }
 
-fn mk() -> Ref[Cell] { return <Ref[Cell] value=<Cell n=7 /> /> }
+fn mk() -> MutableRef[Cell] { return <MutableRef[Cell] value=<Cell n=7 /> /> }
 
 fn main() {
     print(mk()->get())          // 7  — free-fn Call as `->` base (gap 4)
-    val r: Ref[Outer] = <Ref[Outer] value=<Outer inner=<Inner v=21 /> /> />
+    val r: MutableRef[Outer] = <MutableRef[Outer] value=<Outer inner=<Inner v=21 /> /> />
     print(r->inner.dbl())       // 42 — `->`field result as method receiver (gap 5)
 }

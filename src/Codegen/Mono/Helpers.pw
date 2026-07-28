@@ -29,7 +29,8 @@ pub impl Comp {
     }
 
     // Is `ref` a `Ref[T]` instantiation? `Ref` is a blessed primitive (a shared
-    // mutable heap box), lowered to a C `T*` — not a user struct/enum.
+    // read-only capability to a heap cell), lowered to an opaque pointer — not a user
+    // struct/enum.
     inout fn isRefInst(ref: U64) -> Bool {
         if ref >= self.arena.types.count() {
             return false
@@ -41,10 +42,31 @@ pub impl Comp {
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref")
     }
 
+    // Is `ref` a `MutableRef[T]` instantiation? Same cell representation as Ref, with
+    // write capability through `->`.
+    inout fn isMutableRefInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count() {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count() != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef")
+    }
+
+    // Is `ref` either strong reference-cell capability (`Ref[T]` or `MutableRef[T]`)?
+    inout fn isStrongRefInst(ref: U64) -> Bool {
+        if self.isRefInst(ref: ref) {
+            return true
+        }
+        return self.isMutableRefInst(ref: ref)
+    }
+
     // Is `ref` a `WeakRef[T]` instantiation? A WeakRef is the same control-block cell as
-    // its Ref (a single opaque pointer) but owns a WEAK count, not a strong one — the
+    // its strong ref (a single opaque pointer) but owns a WEAK count, not a strong one — the
     // pointee deinit fires at strong 0 regardless of live weaks, and the cell is freed only
-    // when both counters reach 0. Lowered like Ref to an opaque pointer.
+    // when both counters reach 0. Lowered like Ref/MutableRef to an opaque pointer.
     inout fn isWeakRefInst(ref: U64) -> Bool {
         if ref >= self.arena.types.count() {
             return false
@@ -54,6 +76,26 @@ pub impl Comp {
             return false
         }
         return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRef")
+    }
+
+    // Is `ref` a `WeakMutableRef[T]` instantiation?
+    inout fn isWeakMutableRefInst(ref: U64) -> Bool {
+        if ref >= self.arena.types.count() {
+            return false
+        }
+        val t: TypeRef = self.arena.types[ref]
+        if t.args.count() != 1 {
+            return false
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakMutableRef")
+    }
+
+    // Is `ref` either weak reference-cell capability (`WeakRef[T]` or `WeakMutableRef[T]`)?
+    inout fn isWeakRefLikeInst(ref: U64) -> Bool {
+        if self.isWeakRefInst(ref: ref) {
+            return true
+        }
+        return self.isWeakMutableRefInst(ref: ref)
     }
 
     // Is `ref` a `Buffer[T]` instantiation? `Buffer` is the blessed safe storage
@@ -76,11 +118,11 @@ pub impl Comp {
     // containment cycle; emitted inline it would be an infinite C struct. We break
     // the cycle by storing such a field behind a heap pointer (`T*`). Detection is a
     // reachability walk over the *concrete* (non-generic) struct/enum graph, treating
-    // `Array`/`Buffer`/`Ref`/`WeakRef` as cycle-breaking (already pointer-backed)
+    // `Array`/`Buffer`/reference cells as cycle-breaking (already pointer-backed)
     // and `Optional`/`Result` as transparent (their payload holds the arg by value).
 
     // Does this type head name an already-indirect container (pointer-backed), so it
-    // cannot transmit a by-value cycle? (Array/Buffer/Ref/WeakRef.)
+    // cannot transmit a by-value cycle?
     inout fn isIndirectContainer(nStart: U64, nLen: U64) -> Bool {
         if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Array") {
             return true
@@ -91,7 +133,13 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "Ref") {
             return true
         }
-        return rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakRef")
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "MutableRef") {
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakRef") {
+            return true
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: nStart, len: nLen, kw: "WeakMutableRef")
     }
 
     // A transparent generic container whose type arguments are held by value

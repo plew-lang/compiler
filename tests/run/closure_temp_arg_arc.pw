@@ -2,9 +2,9 @@
 // Swift-guaranteed (+0) story as a regular fn call: the callee borrows, so the
 // CALLER owns the temp and releases it at statement end. The closure-call
 // emitter once skipped the anonymous-owned-home registration, leaking every
-// temp argument (Ref, String, record literal alike). Place args stay borrows.
+// temp argument (MutableRef, String, record literal alike). Place args stay borrows.
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
@@ -12,15 +12,15 @@ unique struct Cell {
 }
 
 fn main() {
-    // temp Ref arg: deinit fires at statement end, before the next line.
-    val g: fn(c: Ref[Cell]) -> I64 = fn(c: Ref[Cell]) -> I64 { return c->v }
-    print(g(c: <Ref value=<Cell v=2 /> />))
+    // temp MutableRef arg: deinit fires at statement end, before the next line.
+    val g: fn(c: MutableRef[Cell]) -> I64 = fn(c: MutableRef[Cell]) -> I64 { return c->v }
+    print(g(c: <MutableRef value=<Cell v=2 /> />))
     write(s: "after-temp\n")
     // temp String arg (call-result payload class).
     val h: fn(s: String) -> I64 = fn(s: String) -> I64 { return 7 }
     print(h(s: "a" + "b"))
     // place arg: a borrow — the binding outlives the call, deinit only at scope end.
-    val keep: Ref[Cell] = <Ref value=<Cell v=9 /> />
+    val keep: MutableRef[Cell] = <MutableRef value=<Cell v=9 /> />
     print(g(c: keep))
     write(s: "end\n")
 }

@@ -3,7 +3,7 @@
 // recursing; and every place overwrite (local reassign / array index / struct
 // field) evaluates the RHS BEFORE releasing the old value (storeToPlace).
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I32
@@ -23,7 +23,7 @@ unique struct Outer {
 }
 
 struct Holder {
-    pub mut val c: Ref[Cell]
+    pub mut val c: MutableRef[Cell]
 }
 
 fn mk(v: I32) -> Cell {
@@ -31,9 +31,9 @@ fn mk(v: I32) -> Cell {
     return <Cell v=v />
 }
 
-fn mkRef(v: I32) -> Ref[Cell] {
+fn mkRef(v: I32) -> MutableRef[Cell] {
     print(v + 1000I32)
-    return <Ref value=<Cell v=v /> />
+    return <MutableRef value=<Cell v=v /> />
 }
 
 fn depthFirst() {
@@ -48,7 +48,7 @@ fn reassign() {
 }
 
 fn indexAssign() {
-    mut val xs: Array[Ref[Cell]] = []
+    mut val xs: Array[MutableRef[Cell]] = []
     xs.append(mkRef(v: 3I32))
     xs[0] = mkRef(v: 4I32)
     print(300I32)

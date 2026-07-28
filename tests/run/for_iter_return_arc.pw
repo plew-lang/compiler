@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Res {
     pub val name: String
@@ -10,11 +10,11 @@ unique struct Res {
 
 struct Thing {
     pub val name: String
-    pub val r: Ref[Res]
+    pub val r: MutableRef[Res]
 }
 
 fn mk(name: String) -> Thing {
-    return <Thing name=name r=<Ref value=<Res name=name /> /> />
+    return <Thing name=name r=<MutableRef value=<Res name=name /> /> />
 }
 
 fn firstMatch(things: Array[Thing], needle: String) -> String {

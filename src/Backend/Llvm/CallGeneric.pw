@@ -188,9 +188,12 @@ pub impl LlvmCtx {
                 // `*ref` as a WRITE place (an `inout`/mutating pointee method's self): the
                 // pointee struct lives AT the cell pointer, so the cell pointer IS the place.
                 // The cell is intentionally SHARED (no CoW privatize — that is the point of a
-                // `Ref`), so mutation is visible through every alias of the Ref.
+                // `MutableRef`), so mutation is visible through every alias of the MutableRef.
                 val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
                 if refTy != 0U64 {
+                    if !(c.isMutableRefInst(ref: refTy)) {
+                        c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: cannot use read-only Ref as an inout place; expected MutableRef")
+                    }
                     // genBorrowedArg: a non-place base (element read / call result) is an
                     // owned (+1) temporary — home it so the count releases at statement end.
                     val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
@@ -199,16 +202,19 @@ pub impl LlvmCtx {
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                // `r->field` as a place: GEP into the Ref's cell (the same recipe as the
+                // `r->field` as a place: GEP into the MutableRef's cell (the same recipe as the
                 // `r->field = v` assignment path in Stmt.pw). The cell is intentionally
                 // SHARED (no CoW), so an `inout r->field` argument mutates through every
-                // alias of the Ref — without this arm the place fell back to a temp copy
+                // alias of the MutableRef — without this arm the place fell back to a temp copy
                 // and the callee's write was silently lost.
                 val psidx: U64 = self.refPointeeStructIdx(c: inout c, base: base)
                 if psidx < c.arena.structs.count() {
                     val fidx: U64 = structFieldIndex(c: inout c, sidx: psidx, start: nameStart, len: nameLen)
                     if fidx < c.arena.structs[psidx].fields.count() {
                         val refTy: U64 = self.exprRefTypeRef(c: inout c, id: base)
+                        if !(c.isMutableRefInst(ref: refTy)) {
+                            c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: cannot use read-only Ref as an inout place; expected MutableRef")
+                        }
                         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                         val cellPtr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
                         self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)

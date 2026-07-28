@@ -1,12 +1,12 @@
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 struct Counter { pub mut val n: I32 }
-fn bump(c: Ref[Counter]) {
+fn bump(c: MutableRef[Counter]) {
     c->n = c->n + 1
 }
 fn main() {
-    val r: Ref[Counter] = <Ref[Counter] value=<Counter n=10 /> />
-    val s: Ref[Counter] = r
+    val r: MutableRef[Counter] = <MutableRef[Counter] value=<Counter n=10 /> />
+    val s: MutableRef[Counter] = r
     r->n = 20
     print(s->n)
     bump(c: r)

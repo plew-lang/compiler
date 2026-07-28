@@ -619,8 +619,9 @@ export trait Ord: Eq { assoc fn compare(lhs~: Self, rhs~: Self) -> Ordering }
 // lives here next to `Ord`, the trait that produces it.
 export enum Ordering { Less  Equal  Greater }
 
-// `Ref[T]` / `WeakRef[T]` — opt-in shared mutable / weak references (spec/03,14). NOT
-// lang items: they are named via the generic `<Ref value=…/>` factory and `Ref[T]`
+// `Ref[T]` / `MutableRef[T]` / `WeakRef[T]` / `WeakMutableRef[T]` — opt-in shared
+// reference cells (spec/03,14). `Ref` is read-only capability; `MutableRef` permits
+// mutation through `->`. NOT lang items: they are named via generic factories and
 // annotations, with no dedicated literal/operator that produces them (unlike `Array`'s
 // `[…]`), so by the spec/15 criterion they are import-required, like any library type.
 // The representation is compiler-supplied (a "blessed primitive" — refcounted heap
@@ -634,21 +635,31 @@ export enum Ordering { Less  Equal  Greater }
 // other floor primitives.
 export extern "plew-intrinsic" {
     struct Ref[T]
+    struct MutableRef[T]
     struct WeakRef[T]
+    struct WeakMutableRef[T]
     struct Buffer[T]
 }
 
-// `Ref`/`WeakRef` control-block intrinsics (spec/03): the weak downgrade + the alive-test
-// and strong-lock that `upgrade` composes. Lowered by the compiler to the two-counter cell
-// ops (strong = the header rc, weak = the unused count slot); the wrapper methods below are
-// intercepted at the call site, so these bodies are never emitted.
+// Reference control-block intrinsics (spec/03): weak downgrade, mutable->read-only
+// capability narrowing, alive-test, and strong-lock. Lowered by the compiler to the
+// two-counter cell ops (strong = the header rc, weak = the unused count slot); the wrapper
+// methods below are intercepted at the call site, so these bodies are never emitted.
 export extern "plew-intrinsic" {
     // bump the weak count, yield the same cell as a non-owning WeakRef handle.
     fn refWeak[T](r: Ref[T]) -> WeakRef[T]
+    // bump the strong count, yield the same cell with read-only capability.
+    fn mutableRefAsRef[T](r: MutableRef[T]) -> Ref[T]
+    // bump the weak count, yield the same cell as a non-owning WeakMutableRef handle.
+    fn mutableRefWeak[T](r: MutableRef[T]) -> WeakMutableRef[T]
     // is the pointee still alive (some strong owner remains)?
     fn weakAlive[T](w: WeakRef[T]) -> Bool
     // take a new strong owner of a (known-alive) cell and yield it as a Ref.
     fn weakLock[T](w: WeakRef[T]) -> Ref[T]
+    // is the pointee still alive (some strong owner remains)?
+    fn weakMutableAlive[T](w: WeakMutableRef[T]) -> Bool
+    // take a new strong owner of a (known-alive) cell and yield it as a MutableRef.
+    fn weakMutableLock[T](w: WeakMutableRef[T]) -> MutableRef[T]
 }
 
 // `r.weak()` — a non-owning weak handle to the same cell (spec/03). The pointee's `deinit`
@@ -660,6 +671,18 @@ pub impl[T] Ref[T] {
     }
 }
 
+// `r.asRef()` — explicitly narrow a mutable handle to a read-only handle. This never
+// grants write permission back; the result can only be observed or downgraded to WeakRef.
+pub impl[T] MutableRef[T] {
+    fn asRef() -> Ref[T] {
+        return mutableRefAsRef(r: self)
+    }
+
+    fn weak() -> WeakMutableRef[T] {
+        return mutableRefWeak(r: self)
+    }
+}
+
 // `w.upgrade()` — `Some` of a fresh strong `Ref` while the pointee is alive, else `None`
 // (the pointee was destroyed when the last strong owner dropped). A `WeakRef` has no direct
 // deref (`w->x` does not exist): observing the pointee requires upgrading first.
@@ -667,6 +690,16 @@ pub impl[T] WeakRef[T] {
     fn upgrade() -> Optional[Ref[T]] {
         if weakAlive(w: self) {
             return <Optional.Some v=weakLock(w: self) />
+        }
+        return <Optional.None />
+    }
+}
+
+// `w.upgrade()` for weak mutable handles yields a fresh `MutableRef` while alive.
+pub impl[T] WeakMutableRef[T] {
+    fn upgrade() -> Optional[MutableRef[T]] {
+        if weakMutableAlive(w: self) {
+            return <Optional.Some v=weakMutableLock(w: self) />
         }
         return <Optional.None />
     }

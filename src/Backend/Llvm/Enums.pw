@@ -124,17 +124,17 @@ pub impl LlvmCtx {
             if refIsAny(c: inout c, ref: g) {
                 return 2U64
             }
-            // a `Ref[T]` / `Buffer[T]` payload (possibly reached via a type param `Some(v: T)`,
+            // a reference-cell / `Buffer[T]` payload (possibly reached via a type param `Some(v: T)`,
             // T -> Ref[Cell]) is a single opaque pointer (1 word). Checked before isGenericInst:
             // Ref/Buffer carry type args (so isGenericInst is true) but are extern intrinsics,
             // not registered generic structs, so genInstWords would size them as 0 — collapsing
             // the enum's payload area to [0 x i64] and dropping the pointer on copy.
-            if c.isRefInst(ref: g) {
+            if c.isStrongRefInst(ref: g) {
                 return 1U64
             }
             // a `WeakRef[T]` payload is likewise a single opaque pointer (1 word) — same extern-
             // intrinsic-carrying-type-args trap as Ref, so checked here before isGenericInst.
-            if c.isWeakRefInst(ref: g) {
+            if c.isWeakRefLikeInst(ref: g) {
                 return 1U64
             }
             if c.isRawBufInst(ref: g) {
@@ -977,7 +977,7 @@ pub impl LlvmCtx {
                                 gpfIsAnyOrFn = c.arena.types[gpf].isAny || c.isFnType(ref: gpf)
                             }
                         }
-                        if c.isRefInst(ref: gpf) || c.isWeakRefInst(ref: gpf) || gpfIsAnyOrFn {
+                        if c.isStrongRefInst(ref: gpf) || c.isWeakRefLikeInst(ref: gpf) || gpfIsAnyOrFn {
                             // an existential `any P` payload initialized from a concrete
                             // conforming value (`Wrap(v: any Shape)` <- `<Sq …/>`): box it into
                             // the fat pointer first — the payload slot is anyTy (2 words), so

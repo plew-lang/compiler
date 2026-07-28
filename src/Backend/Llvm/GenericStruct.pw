@@ -331,16 +331,16 @@ pub impl LlvmCtx {
         return false
     }
 
-    // If `ref` is a `Ref[T]` / `WeakRef[T]` instance, set the substitution env from the
+    // If `ref` is a reference-cell instance, set the substitution env from the
     // (opaque extern) def's type param to the instance's concrete arg — so a method's
-    // `Optional[Ref[T]]` return (`WeakRef.upgrade`) grounds T to the pointee. Ref/WeakRef
+    // `Optional[Ref[T]]` return (`WeakRef.upgrade`) grounds T to the pointee. Ref cells
     // are opaque externs, so they have no genStruct/genEnum slot and setStructEnv/setEnumEnv
     // miss them; the def (with its typeParams) is still in arena.structs.
     inout fn setRefLikeEnv(c: inout Comp, ref: U64) -> Bool {
         if ref == 0U64 {
             return false
         }
-        if c.isRefInst(ref: ref) || c.isWeakRefInst(ref: ref) {
+        if c.isStrongRefInst(ref: ref) || c.isWeakRefLikeInst(ref: ref) {
             val t: TypeRef = c.arena.types[ref]
             val di: U64 = c.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
             if di < c.arena.structs.count() {

@@ -1,24 +1,24 @@
-// F11 (b): element ARC for `Array[Ref[T]]`. The array retains its Ref elements
+// F11 (b): element ARC for `Array[MutableRef[T]]`. The array retains its MutableRef elements
 // (on push/set/copy) and releases them at scope exit, so an element survives the
 // dropping of the binding that was appended (no use-after-free), and a CoW copy
 // of the array shares the boxes safely (no double-free). Verified ASan-clean.
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 struct Cell {
     pub val v: I32
 }
 
 fn main() {
-    mut val xs: Array[Ref[Cell]] = []
+    mut val xs: Array[MutableRef[Cell]] = []
     if true {
         // r is dropped at the end of this block; the array kept a retained ref.
-        val r: Ref[Cell] = <Ref[Cell] value=<Cell v=5 /> />
+        val r: MutableRef[Cell] = <MutableRef[Cell] value=<Cell v=5 /> />
         xs.append(r)
     }
     print(xs[0]->v)
     // a CoW copy shares the same boxes (retained), released once when both drop.
-    val ys: Array[Ref[Cell]] = xs
+    val ys: Array[MutableRef[Cell]] = xs
     print(ys[0]->v)
     print(xs[0]->v)
 }

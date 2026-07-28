@@ -246,14 +246,14 @@ pub impl Comp {
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 self.verifyExpr(id: base)
-                // `r->field` is `Ref`-only too: a `WeakRef` field read/write must go through
+                // `r->field` is strong-ref-only: a weak ref field read/write must go through
                 // `upgrade()` (spec/03). Same pointed diagnostic as the `->method()` case.
                 // (typeOf, not exprType: cached; only `.ref` is read here and an int context's
                 // ref is 0 like a scalar's, so the isRefInst branches are unaffected.)
                 val abt: TypeInfo = self.typeOf(id: base)
-                if self.isWeakRefInst(ref: abt.ref) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
-                } else if self.isRefInst(ref: abt.ref) {
+                if self.isWeakRefLikeInst(ref: abt.ref) {
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)")
+                } else if self.isStrongRefInst(ref: abt.ref) {
                     // `->` touches the POINTEE's field, so it obeys the pointee type's field
                     // visibility exactly like `.` does (spec/05) — `->` must not be a privacy
                     // escape hatch.
@@ -266,16 +266,16 @@ pub impl Comp {
             }
             Expr.Deref(val base) => {
                 self.verifyExpr(id: base)
-                // `->` is the POINTEE operator and is `Ref`-only (spec/03). A `WeakRef` has no
+                // `->` is the POINTEE operator and is strong-ref-only (spec/03). A weak ref has no
                 // direct deref — its referent may be dead — so it must be `upgrade()`d to an
-                // `Optional[Ref[T]]` first. Reject `w->…` with a pointed message rather than the
+                // `Optional` strong reference first. Reject `w->…` with a pointed message rather than the
                 // opaque backend "not a registered struct" error.
                 // (typeOf: cached; only `.ref` read — int context ref is 0, branches unaffected.)
                 val bt: TypeInfo = self.typeOf(id: base)
-                if self.isWeakRefInst(ref: bt.ref) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
-                } else if !(self.isRefInst(ref: bt.ref)) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "`->` requires a `Ref[T]` on the left (it dereferences a Ref's pointee)")
+                if self.isWeakRefLikeInst(ref: bt.ref) {
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)")
+                } else if !(self.isStrongRefInst(ref: bt.ref)) {
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "`->` requires a `Ref[T]` or `MutableRef[T]` on the left (it dereferences a reference cell's pointee)")
                 }
             }
             Expr.OptChain(val base, cont: _) => {

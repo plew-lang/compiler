@@ -1,16 +1,16 @@
 // Two record destructures of the same record type in one function: unique lowered
-// temps (__dtN), renamed binds via explicit field labels, and both Ref binds'
+// temps (__dtN), renamed binds via explicit field labels, and both MutableRef binds'
 // pointees deinit at scope exit (each exactly once).
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
 
-fn makePair(a: I64, b: I64) -> (x: Ref[Cell], y: Ref[Cell]) {
-    return (x: <Ref value=<Cell v=a /> />, y: <Ref value=<Cell v=b /> />)
+fn makePair(a: I64, b: I64) -> (x: MutableRef[Cell], y: MutableRef[Cell]) {
+    return (x: <MutableRef value=<Cell v=a /> />, y: <MutableRef value=<Cell v=b /> />)
 }
 
 fn two() {

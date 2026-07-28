@@ -36,7 +36,7 @@ pub impl Comp {
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String") {
             return <ArcClass.StringLike />
         }
-        // Buffer/Ref/WeakRef are blessed EXTERN structs (single opaque pointer), so
+        // Buffer/reference cells are blessed EXTERN structs (single opaque pointer), so
         // they must classify BEFORE the registered-struct lookup (which skips externs)
         // — and before any arity-generic paths (an extern with type args is not a
         // user generic instance).
@@ -47,7 +47,13 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Ref") {
                 return <ArcClass.RefCell inst=ref />
             }
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MutableRef") {
+                return <ArcClass.RefCell inst=ref />
+            }
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakRef") {
+                return <ArcClass.WeakCell inst=ref />
+            }
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "WeakMutableRef") {
                 return <ArcClass.WeakCell inst=ref />
             }
             if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise") {

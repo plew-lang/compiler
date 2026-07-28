@@ -1,11 +1,11 @@
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
-fn mkArr() -> Array[Ref[Cell]] {
-    return [<Ref value=<Cell v=1 /> />, <Ref value=<Cell v=2 /> />]
+fn mkArr() -> Array[MutableRef[Cell]] {
+    return [<MutableRef value=<Cell v=1 /> />, <MutableRef value=<Cell v=2 /> />]
 }
 fn main() {
     for c in mkArr() {

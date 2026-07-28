@@ -1,12 +1,13 @@
-// spec/03: a `Ref` shares mutation through a `val` handle, but the Ref exception waives only
+// spec/03: a `MutableRef` shares mutation through a `val` handle, but the MutableRef exception waives only
 // the BINDING's mutability — the pointee FIELD's own `val`/`mut val` still applies. A `val`
-// (immutable) field must NOT be writable through a `Ref`, or value-semantics' val-immutability
-// would leak away for any Ref-shared type. (`mut val` fields ARE writable via `->`, even
-// through a `val` Ref binding — that case is exercised by tests/run/unique_ref.pw.)
+// (immutable) field must NOT be writable through a `MutableRef`, or value-semantics'
+// val-immutability would leak away for any reference-shared type. (`mut val` fields ARE
+// writable via `->`, even through a `val` MutableRef binding — that case is exercised by
+// tests/run/unique_ref.pw.)
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 struct C { pub val n: I32 }   // pub but NOT mut: readable everywhere, never reassignable
 fn main() {
-    val r: Ref[C] = <Ref[C] value=<C n=5 /> />
+    val r: MutableRef[C] = <MutableRef[C] value=<C n=5 /> />
     r->n = 9I32
 }

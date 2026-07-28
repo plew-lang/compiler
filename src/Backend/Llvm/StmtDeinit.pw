@@ -320,12 +320,12 @@ pub impl LlvmCtx {
                 return
             }
         }
-        // a `Ref[T]` local: release one strong owner — decrement the cell's strong rc, and at
+        // a strong reference-cell local: release one strong owner — decrement the cell's strong rc, and at
         // 0 run the pointee deinit (if its type needs one) then free the cell (spec/03: the
         // pointee deinit runs when the LAST owner drops). Covers EVERY Ref local (whether or
         // not the pointee needs a deinit — the cell heap must be freed regardless), balancing
         // the rawbufRetain consumeIntoOwned emits at each Ref place-copy (escape).
-        if c.isRefInst(ref: self.locTypeRef[li]) {
+        if c.isStrongRefInst(ref: self.locTypeRef[li]) {
             // un-owned bindings were skipped at the top: a by-value Ref param / borrow
             // capture / seeded global is a BORROW (the owner lives in the caller /
             // enclosing scope) and is flagged un-owned at bind — a by-value Ref arg is
@@ -335,11 +335,11 @@ pub impl LlvmCtx {
             self.emitRefRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()), refTy: self.locTypeRef[li])
             return
         }
-        // a `WeakRef[T]` local: drop one weak observer — decrement the weak count and free the
+        // a weak reference-cell local: drop one weak observer — decrement the weak count and free the
         // cell only when BOTH counters are 0 (the pointee deinit already ran at strong 0). Same
         // owned-flag gate as Ref (un-owned bindings were skipped at the top). Balances the weak
         // retain at each WeakRef place-copy.
-        if c.isWeakRefInst(ref: self.locTypeRef[li]) {
+        if c.isWeakRefLikeInst(ref: self.locTypeRef[li]) {
             self.weakRelease(c: inout c, cell: LLVMBuildLoad2(self.b, self.ptrty, self.locPtr[li], anon()))
             return
         }

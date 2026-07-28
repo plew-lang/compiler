@@ -1,34 +1,34 @@
 // Cell pin for deref-crossing `inout` places (spec/03, Swift-equivalent semantics):
-// lending a place that crosses a Ref deref retains the cell for the call's duration, so
-// rebinding the Ref variable mid-call cannot free the lent pointee — the write lands in
-// the OLD cell and its deinit runs AFTER the call returns. Covers (E) the Ref variable
+// lending a place that crosses a MutableRef deref retains the cell for the call's duration, so
+// rebinding the MutableRef variable mid-call cannot free the lent pointee — the write lands in
+// the OLD cell and its deinit runs AFTER the call returns. Covers (E) the MutableRef variable
 // and its own pointee field lent together (legal: the variable and the pointee are
 // different places), and (G) a sole-owner GLOBAL rebound while `inout g->n` is lent.
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct R {
     pub mut val n: I32
     deinit { print(90I32 + self.n) }
 }
 
-mut val g: Ref[R] = <Ref[R] value=<R n=1I32 /> />
+mut val g: MutableRef[R] = <MutableRef[R] value=<R n=1I32 /> />
 
-fn swapRef(r: inout Ref[R], x: inout I32) {
-    r = <Ref[R] value=<R n=7I32 /> />   // old cell now held only by the pin
+fn swapRef(r: inout MutableRef[R], x: inout I32) {
+    r = <MutableRef[R] value=<R n=7I32 /> />   // old cell now held only by the pin
     x = x + 100I32                      // writes the OLD pointee: n = 105
     print(10I32)                        // no deinit before this line
 }
 
 fn rebindGlobal(x: inout I32) {
-    g = <Ref[R] value=<R n=5I32 /> />   // sole-owner rebind while the pointee field is lent
+    g = <MutableRef[R] value=<R n=5I32 /> />   // sole-owner rebind while the pointee field is lent
     print(20I32)                        // no deinit yet: the lent cell is pinned
     x = x + 100I32                      // n = 101 in the old (pinned) cell
     print(21I32)
 }
 
 fn main() {
-    mut val r1: Ref[R] = <Ref[R] value=<R n=5I32 /> />
+    mut val r1: MutableRef[R] = <MutableRef[R] value=<R n=5I32 /> />
     swapRef(r: inout r1, x: inout r1->n)
     // pin released after the call: old cell (n=105) deinit -> 195
     print(r1->n)                        // the new cell: 7

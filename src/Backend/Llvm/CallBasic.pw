@@ -274,10 +274,19 @@ pub impl LlvmCtx {
             if k == 8U32 { bytewise = 1U64 }
             return LLVMConstInt(self.i1ty, bytewise, 0I32)
         }
-        // `Ref`/`WeakRef` control-block intrinsics (spec/03), backing weak()/upgrade(). The
+        // Reference-cell control-block intrinsics (spec/03), backing weak()/upgrade()/asRef().
+        // The
         // cell value IS the argument's value (an opaque pointer); each op touches a counter.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "refWeak") {
             // r.weak(): bump the weak count, yield the same cell as a WeakRef handle.
+            return self.refWeakDowngrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefAsRef") {
+            // r.asRef(): bump strong, yield the same cell with read-only capability.
+            return self.refUpgrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefWeak") {
+            // r.weak(): bump the weak count, yield the same cell as a WeakMutableRef handle.
             return self.refWeakDowngrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
         }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "weakAlive") {
@@ -287,6 +296,14 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "weakLock") {
             // take a new strong owner of the (wrapper-guaranteed-alive) cell, yield it as a
             // Ref (refUpgrade re-checks strong>0 then bumps; returns the cell).
+            return self.refUpgrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "weakMutableAlive") {
+            // strong > 0 — the pointee is still alive (i1).
+            return LLVMBuildICmp(self.b, llvmIntNe(), self.refStrongCount(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr)), LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "weakMutableLock") {
+            // take a new strong mutable owner of the (wrapper-guaranteed-alive) cell.
             return self.refUpgrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
         }
         // `pow(base: x, exp: n)` (spec/12): the named exponentiation operation dispatches on

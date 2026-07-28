@@ -73,8 +73,8 @@ pub impl Comp {
             // place (which would double-deinit: the source and the new owner).
             self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
             mut val ft: TypeInfo = scalarInfo()
-            if self.isRefInst(ref: ty) {
-                // `<Ref[T] value=… />`: the `value` field has the pointee type T, so
+            if self.isStrongRefInst(ref: ty) {
+                // `<Ref[T] value=… />` / `<MutableRef[T] value=… />`: the `value` field has the pointee type T, so
                 // a literal (`value=7`) types from T (else "no type from context").
                 val rt: TypeRef = self.arena.types[ty]
                 ft = self.typeInfoOfRef(ref: rt.args[0])

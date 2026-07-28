@@ -1,15 +1,15 @@
 // match as a CALL-ARG subexpression: does its owned scrutinee temp die at the match's
 // own end (BEFORE the enclosing call runs) or at the full statement's end?
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
 
-fn mkOpt() -> Optional[Ref[Cell]] {
-    return <Optional.Some v=<Ref value=<Cell v=1 /> /> />
+fn mkOpt() -> Optional[MutableRef[Cell]] {
+    return <Optional.Some v=<MutableRef value=<Cell v=1 /> /> />
 }
 
 fn f(x: I32) -> I32 {

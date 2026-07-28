@@ -302,11 +302,13 @@ pub impl LlvmCtx {
             }
         }
         self.expectedTy = 0U64
-        // `<Ref[T] value=e />`: allocate a heap cell holding the pointee, store e, and
-        // yield the cell pointer (the Ref value). Refcount/release is hidden cost,
-        // deferred (no deinit in these cases yet) — the pointer aliases on copy so
-        // shared mutation through `->` is visible.
+        // `<Ref[T] value=e />` / `<MutableRef[T] value=e />`: allocate a heap cell holding
+        // the pointee, store e, and yield the cell pointer. Refcount/release is hidden cost;
+        // copies alias the cell, but only MutableRef grants write capability through `->`.
         if rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "Ref") {
+            return self.genLlvmMakeRef(c: inout c, ty: gty, fields: fields)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "MutableRef") {
             return self.genLlvmMakeRef(c: inout c, ty: gty, fields: fields)
         }
         // a generic struct instance (Box[I32]): build under its substitution env.
@@ -365,26 +367,26 @@ pub impl LlvmCtx {
         return self.buildStructValue(c: inout c, sd: c.arena.structs[self.genStructDefs[reg]], sty: self.genStructTys[reg], fields: fields, errOffset: typeStart)
     }
 
-    // The LLVM type of a `Ref[T]`'s pointee T (from the instance's first type arg).
+    // The LLVM type of a strong reference-cell pointee T (from the instance's first type arg).
     inout fn refPointeeTy(c: inout Comp, refTy: U64) -> LLVMTypeRef {
-        if c.isRefInst(ref: refTy) {
+        if c.isStrongRefInst(ref: refTy) {
             return self.llvmTypeOfRef(c: inout c, ref: c.arena.types[refTy].args[0])
         }
         return self.i64ty
     }
 
-    // The Ref instance TypeRef of an expression that evaluates to a `Ref[T]` (a local
-    // carries it on locTypeRef), or 0 if it is not a Ref-typed expression.
+    // The strong reference-cell instance TypeRef of an expression that evaluates to
+    // `Ref[T]` / `MutableRef[T]`, or 0 if it is not a strong ref-typed expression.
     inout fn exprRefTypeRef(c: inout Comp, id: U64) -> U64 {
         val r: U64 = self.exprTypeRef(c: inout c, id: id)
-        if c.isRefInst(ref: r) {
+        if c.isStrongRefInst(ref: r) {
             return r
         }
         return 0U64
     }
 
-    // The struct index of a `Ref[T]` base's pointee T (for `->field` resolution), or
-    // c.arena.structs.count() if the base isn't a Ref to a registered struct.
+    // The struct index of a strong-ref base's pointee T (for `->field` resolution), or
+    // c.arena.structs.count() if the base isn't a strong ref to a registered struct.
     inout fn refPointeeStructIdx(c: inout Comp, base: U64) -> U64 {
         val r: U64 = self.exprRefTypeRef(c: inout c, id: base)
         if r != 0U64 {
@@ -397,7 +399,7 @@ pub impl LlvmCtx {
         return c.arena.structs.count()
     }
 
-    // Load a `Ref[T]` base's pointee struct VALUE (`*cell`) — the basis for `->field`.
+    // Load a strong ref base's pointee struct VALUE (`*cell`) — the basis for `->field`.
     // The base rides genBorrowedArg: a non-place base (an element read `xs[i]`, a
     // Ref-returning call) arrives as an OWNED (+1) temporary and gets an anonymous
     // owned home (statement-end release) — reading through it must not strand that count.
@@ -408,7 +410,7 @@ pub impl LlvmCtx {
         return LLVMBuildLoad2(self.b, pty, cellPtr, anon())
     }
 
-    // Build a `Ref[T]` value: malloc a cell of sizeof(T), store the `value` field's
+    // Build a strong reference-cell value: malloc a cell of sizeof(T), store the `value` field's
     // pointee into it, and return the cell pointer.
     inout fn genLlvmMakeRef(c: inout Comp, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: ty)
@@ -433,7 +435,7 @@ pub impl LlvmCtx {
         // the cell, and the strong-0 pointee destroy would then double-free (#7). A
         // place pointee is CoW-shared/retained into the cell; a fresh value moves in.
         mut val pr: U64 = 0
-        if c.isRefInst(ref: ty) {
+        if c.isStrongRefInst(ref: ty) {
             pr = c.arena.types[ty].args[0]
         }
         v = self.consumeIntoOwned(c: inout c, v: v, expr: valExpr, typeRef: pr)

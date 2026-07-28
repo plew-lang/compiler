@@ -453,14 +453,14 @@ pub impl LlvmCtx {
                             // that balances a call site's shallow-retained struct arg).
                             // The env holds only ONE count, so each activation must take
                             // its own +1 here, or every call nets -1 on the captured heap
-                            // (second call = UAF). Array/Ref/WeakRef/Buffer captures are
+                            // (second call = UAF). Array/reference-cell/Buffer captures are
                             // true borrows of the env's value — no retain, and the binding
                             // is flagged un-owned so the scope-exit drop skips it (the
                             // ownership flag is the single truth; there is no position gate).
                             mut val capOwned: Bool = false
                             if !(cap.isArray) {
                                 if cRef != 0U64 && capSidx < c.arena.structs.count() {
-                                    if !(c.isRefInst(ref: cRef)) && !(c.isWeakRefInst(ref: cRef)) {
+                                    if !(c.isStrongRefInst(ref: cRef)) && !(c.isWeakRefLikeInst(ref: cRef)) {
                                         if !(rangeEquals(bytes: c.arena.bytes, start: cap.tyStart, len: cap.tyLen, kw: "Buffer")) {
                                             if c.arcNeedsRelease(ref: cRef) {
                                                 self.valueArc(c: inout c, v: cv, typeRef: cRef, retain: true)

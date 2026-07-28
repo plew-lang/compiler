@@ -1,15 +1,15 @@
-// A `Ref[T]` to a scalar with a literal value `<Ref[I32] value=7 />`: the
+// A `MutableRef[T]` to a scalar with a literal value `<MutableRef[I32] value=7 />`: the
 // `value` field types from the pointee T, so the literal `7` is I32 (it
 // previously errored "no type from context" even with the annotation).
 // (Reading a scalar pointee via `->` is a separate, unsupported thing; this
 // exercises construction, copy/retain and scope-drop.)
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 fn main() {
-    val r: Ref[I32] = <Ref[I32] value=7 />
-    val s: Ref[I32] = r
+    val r: MutableRef[I32] = <MutableRef[I32] value=7 />
+    val s: MutableRef[I32] = r
     print(1I64)
-    val u: Ref[U8] = <Ref[U8] value=200 />
+    val u: MutableRef[U8] = <MutableRef[U8] value=200 />
     print(2I64)
 }

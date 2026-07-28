@@ -1,15 +1,15 @@
-// WeakRef ARC: a `WeakRef[T]` is a non-owning observer with its own weak count on the
+// WeakMutableRef ARC: a `WeakMutableRef[T]` is a non-owning observer with its own weak count on the
 // shared cell. It never keeps the pointee alive (the pointee `deinit` fires at the last
 // STRONG owner's drop, with live weak observers still present), and the cell heap is freed
 // only when BOTH the strong and weak counts reach 0 — so a weak observer neither leaks the
 // cell nor lets it be double-freed. `upgrade()` reports liveness: a live cell yields
-// `Some(Ref)` (read through the upgraded strong handle), a dead one `None`. This exercises
+// `Some(MutableRef)` (read through the upgraded strong handle), a dead one `None`. This exercises
 // the weak retain/release across every owning position (struct field, array element,
 // `Optional` payload) plus the canonical strong-down / weak-up cycle, none of which leak.
 // Each pointee `deinit` prints its tag, so the count + order of markers verifies single
 // release (no missing = no leak, no extra = no double-free) and no use-after-free. ASan-clean.
 import @Std/Io with { print }
-import @Std/Core with { Ref, WeakRef }
+import @Std/Core with { MutableRef, WeakMutableRef }
 
 unique struct Cell {
     pub val v: I32
@@ -18,11 +18,11 @@ unique struct Cell {
 
 // holds a weak observer; `peek` upgrades and reads the pointee (999 when the cell is dead).
 struct Watcher {
-    val w: WeakRef[Cell]
+    val w: WeakMutableRef[Cell]
 }
 pub impl Watcher {
     fn peek() -> I32 {
-        val o: Optional[Ref[Cell]] = self.w.upgrade()
+        val o: Optional[MutableRef[Cell]] = self.w.upgrade()
         match o {
             Optional.Some(v: val r) => { return r->v }
             Optional.None => { return 999I32 }
@@ -30,10 +30,10 @@ pub impl Watcher {
     }
 }
 
-// returns a Watcher whose strong Ref has already dropped — the weak left dangling. The
+// returns a Watcher whose strong MutableRef has already dropped — the weak left dangling. The
 // pointee `deinit` (1) fires HERE, at the strong owner's scope exit, with the weak still held.
 fn danglingWatcher() -> Watcher {
-    val r: Ref[Cell] = <Ref[Cell] value=<Cell v=1 /> />
+    val r: MutableRef[Cell] = <MutableRef[Cell] value=<Cell v=1 /> />
     return <Watcher w=r.weak() />
 }
 
@@ -41,17 +41,17 @@ fn danglingWatcher() -> Watcher {
 // Child weakly observes Parent (up). Without the weak the strong cycle would leak both cells;
 // with it, dropping `p`/`c` frees both (Child deinit, then Parent deinit).
 unique struct Parent {
-    pub mut val child: Optional[Ref[Child]]
+    pub mut val child: Optional[MutableRef[Child]]
     deinit { print(70I32) }
 }
 unique struct Child {
-    val up: WeakRef[Parent]
+    val up: WeakMutableRef[Parent]
     deinit { print(80I32) }
 }
 
 fn main() {
     // 1) alive: a live cell -> upgrade Some, reads 7.
-    val r: Ref[Cell] = <Ref[Cell] value=<Cell v=7 /> />
+    val r: MutableRef[Cell] = <MutableRef[Cell] value=<Cell v=7 /> />
     val live: Watcher = <Watcher w=r.weak() />
     print(live.peek())
 
@@ -62,14 +62,14 @@ fn main() {
 
     // 3) weak observers in an Array and an Optional payload: extra weak counts on r's still-live
     // cell, released at their drops (no leak, no effect on the live pointee held by r).
-    val ws: Array[WeakRef[Cell]] = [r.weak(), r.weak()]
-    val ow: Optional[WeakRef[Cell]] = <Optional.Some v=r.weak() />
+    val ws: Array[WeakMutableRef[Cell]] = [r.weak(), r.weak()]
+    val ow: Optional[WeakMutableRef[Cell]] = <Optional.Some v=r.weak() />
     print(100I32)
 
     // 4) cycle: link parent <-strong- child, child -weak-> parent. Both freed at scope exit.
-    val p: Ref[Parent] = <Ref[Parent] value=<Parent child=<Optional.None /> /> />
-    val c: Ref[Child] = <Ref[Child] value=<Child up=p.weak() /> />
-    val some: Optional[Ref[Child]] = <Optional.Some v=c />
+    val p: MutableRef[Parent] = <MutableRef[Parent] value=<Parent child=<Optional.None /> /> />
+    val c: MutableRef[Child] = <MutableRef[Child] value=<Child up=p.weak() /> />
+    val some: Optional[MutableRef[Child]] = <Optional.Some v=c />
     p->child = some
     print(200I32)
     // scope exit drops every owner exactly once (ASan-clean, no leak). `p` is the last strong
@@ -81,6 +81,6 @@ fn main() {
     // weak observers (ws/ow + Child.up) release without double-freeing. Running the deinit
     // before the strong-decrement is what keeps Child.up's weakRelease (which closes the
     // cycle) from freeing the Parent cell mid-deinit, which would otherwise double-free it.
-    // The `p->child = some` store retains the Ref it now co-owns — without that the Child cell
+    // The `p->child = some` store retains the MutableRef it now co-owns — without that the Child cell
     // would be freed by the source bindings AND the Parent field (UAF).
 }

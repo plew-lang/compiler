@@ -1185,10 +1185,10 @@ fn fieldIsBufferType(c: inout Comp, f: FieldDef) -> Bool {
     return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Buffer")
 }
 
-// A `Ref[T]` field: declared `Ref[...]` directly (name "Ref"). Its cell carries a strong
+// A strong reference-cell field: declared `Ref[...]` or `MutableRef[...]` directly. Its cell carries a strong
 // rc that must be released at the owning struct's drop (the cell is an extern opaque
 // pointer, so the struct field-recursion in structNeedsDeinit / the drop witness can't
-// descend into it — Ref is handled explicitly, like Buffer). Name check on the DECLARED
+// descend into it — reference cells are handled explicitly, like Buffer). Name check on the DECLARED
 // type (no grounding) to stay safe inside the recursive structNeedsDeinit.
 fn fieldIsRefType(c: inout Comp, f: FieldDef) -> Bool {
     if f.tyIsArray {
@@ -1197,10 +1197,13 @@ fn fieldIsRefType(c: inout Comp, f: FieldDef) -> Bool {
     if f.ty == 0U64 {
         return false
     }
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Ref")
+    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "Ref") {
+        return true
+    }
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "MutableRef")
 }
 
-// A `WeakRef[T]` field: declared `WeakRef[...]` directly (name "WeakRef"). It owns one WEAK
+// A weak reference-cell field: declared `WeakRef[...]` or `WeakMutableRef[...]` directly. It owns one WEAK
 // count on its shared cell, released (weak--; free iff strong also 0) at the owning struct's
 // drop. Like Ref, the cell is an extern opaque pointer the struct field-recursion can't
 // descend into, so it is handled explicitly. A name check (no grounding) keeps it safe inside
@@ -1212,7 +1215,10 @@ fn fieldIsWeakRefType(c: inout Comp, f: FieldDef) -> Bool {
     if f.ty == 0U64 {
         return false
     }
-    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "WeakRef")
+    if rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "WeakRef") {
+        return true
+    }
+    return rangeEquals(bytes: c.arena.bytes, start: c.arena.types[f.ty].nameStart, len: c.arena.types[f.ty].nameLen, kw: "WeakMutableRef")
 }
 
 // The (grounded) `Ref[T]` instance TypeRef of a Ref field — for emitRefRelease's pointee
@@ -1244,7 +1250,7 @@ fn fieldGroundedRefTy(c: inout Comp, f: FieldDef) -> U64 {
     if c.cur.typeParams.count() > 0U64 {
         g = c.groundTypeRef(ref: f.ty)
     }
-    if c.isRefInst(ref: g) {
+    if c.isStrongRefInst(ref: g) {
         return g
     }
     return 0U64
@@ -1264,7 +1270,7 @@ fn fieldGroundedWeakTy(c: inout Comp, f: FieldDef) -> U64 {
     if c.cur.typeParams.count() > 0U64 {
         g = c.groundTypeRef(ref: f.ty)
     }
-    if c.isWeakRefInst(ref: g) {
+    if c.isWeakRefLikeInst(ref: g) {
         return g
     }
     return 0U64

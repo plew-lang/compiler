@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I32
@@ -11,21 +11,21 @@ struct Box[T] {
 }
 
 struct Outer {
-    pub val b: Box[Ref[Cell]]
+    pub val b: Box[MutableRef[Cell]]
 }
 
 enum Wrap {
-    Hold(b: Box[Ref[Cell]])
+    Hold(b: Box[MutableRef[Cell]])
     Empty
 }
 
 fn holdStruct() {
-    val o: Outer = <Outer b=<Box[Ref[Cell]] v=<Ref value=<Cell v=1I32 /> /> /> />
+    val o: Outer = <Outer b=<Box[MutableRef[Cell]] v=<MutableRef value=<Cell v=1I32 /> /> /> />
     print("struct-scope-end")
 }
 
 fn holdEnum() {
-    val w: Wrap = <Wrap.Hold b=<Box[Ref[Cell]] v=<Ref value=<Cell v=2I32 /> /> /> />
+    val w: Wrap = <Wrap.Hold b=<Box[MutableRef[Cell]] v=<MutableRef value=<Cell v=2I32 /> /> /> />
     print("enum-scope-end")
 }
 

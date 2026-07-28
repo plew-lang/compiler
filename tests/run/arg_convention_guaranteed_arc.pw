@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I32
@@ -10,21 +10,21 @@ struct Box[T] {
     pub val v: T
 }
 
-fn peek(box: Box[Ref[Cell]]) {
+fn peek(box: Box[MutableRef[Cell]]) {
     print("peek")
 }
 
-fn makeBox(n: I32) -> Box[Ref[Cell]] {
-    val b: Box[Ref[Cell]] = <Box[Ref[Cell]] v=<Ref value=<Cell v=n /> /> />
+fn makeBox(n: I32) -> Box[MutableRef[Cell]] {
+    val b: Box[MutableRef[Cell]] = <Box[MutableRef[Cell]] v=<MutableRef value=<Cell v=n /> /> />
     return b
 }
 
-fn keepInto(box: Box[Ref[Cell]], sink: inout Array[Box[Ref[Cell]]]) {
+fn keepInto(box: Box[MutableRef[Cell]], sink: inout Array[Box[MutableRef[Cell]]]) {
     sink.append(box)
 }
 
 fn placeArg() {
-    val b: Box[Ref[Cell]] = makeBox(n: 41I32)
+    val b: Box[MutableRef[Cell]] = makeBox(n: 41I32)
     peek(box: b)
     print("place-scope-end")
 }
@@ -35,8 +35,8 @@ fn tempArg() {
 }
 
 fn escapeArg() {
-    mut val sink: Array[Box[Ref[Cell]]] = []
-    val b: Box[Ref[Cell]] = makeBox(n: 43I32)
+    mut val sink: Array[Box[MutableRef[Cell]]] = []
+    val b: Box[MutableRef[Cell]] = makeBox(n: 43I32)
     keepInto(box: b, sink: inout sink)
     print("escape-scope-end")
 }

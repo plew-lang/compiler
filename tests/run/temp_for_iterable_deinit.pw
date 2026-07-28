@@ -1,5 +1,5 @@
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
@@ -7,13 +7,13 @@ unique struct Cell {
 }
 
 struct Box {
-    pub val r: Ref[Cell]
+    pub val r: MutableRef[Cell]
 }
 
 fn makeArr() -> Array[Box] {
     mut val xs: Array[Box] = []
-    xs.append(<Box r=<Ref value=<Cell v=5 /> /> />)
-    xs.append(<Box r=<Ref value=<Cell v=6 /> /> />)
+    xs.append(<Box r=<MutableRef value=<Cell v=5 /> /> />)
+    xs.append(<Box r=<MutableRef value=<Cell v=6 /> /> />)
     return xs
 }
 

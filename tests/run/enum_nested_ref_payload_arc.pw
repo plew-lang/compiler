@@ -1,5 +1,5 @@
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I32
@@ -7,7 +7,7 @@ unique struct Cell {
 }
 
 enum Inner {
-    Keep(r: Ref[Cell])
+    Keep(r: MutableRef[Cell])
     Nothing
 }
 
@@ -17,7 +17,7 @@ enum Outer {
 }
 
 fn hold() {
-    val o: Outer = <Outer.Hold inner=<Inner.Keep r=<Ref value=<Cell v=7I32 /> /> /> />
+    val o: Outer = <Outer.Hold inner=<Inner.Keep r=<MutableRef value=<Cell v=7I32 /> /> /> />
     print("scope-end")
 }
 

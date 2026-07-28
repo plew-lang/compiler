@@ -1,17 +1,17 @@
-// Overlapping `inout` runtime tier (spec/03): two Ref VARIABLES can alias one cell —
+// Overlapping `inout` runtime tier (spec/03): two MutableRef VARIABLES can alias one cell —
 // syntactically distinct, so the pre-call place-identity check catches it at runtime
 // (the shared cell is never CoW-privatized, so the two field pointers compare equal).
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 struct Counter { pub mut val n: I32 }
 fn bump2(x: inout I32, y: inout I32) { x = x + 1I32  y = y + 10I32 }
 fn main() {
-    val r1: Ref[Counter] = <Ref[Counter] value=<Counter n=5 /> />
-    val other: Ref[Counter] = <Ref[Counter] value=<Counter n=7 /> />
+    val r1: MutableRef[Counter] = <MutableRef[Counter] value=<Counter n=5 /> />
+    val other: MutableRef[Counter] = <MutableRef[Counter] value=<Counter n=7 /> />
     bump2(x: inout r1->n, y: inout other->n)   // distinct cells -> proceeds
     print(r1->n)                               // 6
     print(other->n)                            // 17
-    val r2: Ref[Counter] = r1
+    val r2: MutableRef[Counter] = r1
     bump2(x: inout r1->n, y: inout r2->n)      // same cell -> panic
     print(999I32)                              // must not print
 }

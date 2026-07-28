@@ -1,12 +1,12 @@
 // A `match` whose scrutinee is an OWNED TEMPORARY (a call/construction result, not a place)
 // is the temp's only owner, so the match must release it on every exit path — otherwise the
-// temp's payload heap leaks. Here `w.upgrade()` is matched directly: the `Optional[Ref[Cell]]`
+// temp's payload heap leaks. Here `w.upgrade()` is matched directly: the `Optional[MutableRef[Cell]]`
 // temp holds a STRONG owner on the cell. If the match leaked it, the cell's strong would stay
 // > 0 and r's drop would never run the pointee `deinit`. Each `deinit` prints its tag, so the
 // final marker fires iff the upgrade temp was released exactly once (no leak, no double-free).
 // Guards the owned-scrutinee-temp release for BOTH a returning arm and a fall-through arm.
 import @Std/Io with { print }
-import @Std/Core with { Ref, WeakRef }
+import @Std/Core with { MutableRef, WeakMutableRef }
 
 unique struct Cell {
     pub mut val v: I32
@@ -14,7 +14,7 @@ unique struct Cell {
 }
 
 // returning arm: the matched temp must be dropped on the `return` path (via dropScope).
-fn readVia(w: WeakRef[Cell]) -> I32 {
+fn readVia(w: WeakMutableRef[Cell]) -> I32 {
     match w.upgrade() {
         Optional.Some(v: val r) => { return r->v }
         Optional.None => { return 999I32 }
@@ -22,8 +22,8 @@ fn readVia(w: WeakRef[Cell]) -> I32 {
 }
 
 fn main() {
-    val r: Ref[Cell] = <Ref[Cell] value=<Cell v=5 /> />
-    val w: WeakRef[Cell] = r.weak()
+    val r: MutableRef[Cell] = <MutableRef[Cell] value=<Cell v=5 /> />
+    val w: WeakMutableRef[Cell] = r.weak()
     print(readVia(w: w))      // 5 (read through the upgraded temp; temp released on return)
 
     // fall-through arm: a directly-matched temp with no `return`/`break`, so the match must

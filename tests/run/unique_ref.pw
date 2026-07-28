@@ -1,8 +1,8 @@
 import @Std/Io with { write, print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
-// The spec-blessed way to share/store a unique value is to wrap it in Ref[T]
-// (unique values cannot go in generics/arrays directly). The last Ref to drop
+// The spec-blessed way to share/store a unique value is to wrap it in MutableRef[T]
+// (unique values cannot go in generics/arrays directly). The last MutableRef to drop
 // runs the pointee's deinit exactly once (spec/03).
 unique struct File {
     pub mut val fd: I64
@@ -10,9 +10,9 @@ unique struct File {
 }
 
 fn main() {
-    val r: Ref[File] = <Ref[File] value=<File fd=5 /> />
-    val r2: Ref[File] = r          // shares the box (refcount 2)
+    val r: MutableRef[File] = <MutableRef[File] value=<File fd=5 /> />
+    val r2: MutableRef[File] = r          // shares the box (refcount 2)
     write(s: "made\n")
     r->fd = 8                       // mutate through the shared box
     print(r2->fd)                   // 8 — visible to both handles
-}                                   // last Ref drops here: deinit prints 8 once
+}                                   // last MutableRef drops here: deinit prints 8 once

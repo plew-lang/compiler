@@ -310,7 +310,7 @@ pub impl LlvmCtx {
                     pSidx = self.genStructDefs[pgs]
                 }
             }
-            if c.isRefInst(ref: effRef) {
+            if c.isStrongRefInst(ref: effRef) || c.isWeakRefLikeInst(ref: effRef) {
                 pty = self.ptrty
                 pRef = effRef
             }

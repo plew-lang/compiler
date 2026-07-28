@@ -1,13 +1,13 @@
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
 
-fn makeOpt() -> Optional[Ref[Cell]] {
-    return <Optional.Some v=<Ref value=<Cell v=8 /> /> />
+fn makeOpt() -> Optional[MutableRef[Cell]] {
+    return <Optional.Some v=<MutableRef value=<Cell v=8 /> /> />
 }
 
 fn main() {

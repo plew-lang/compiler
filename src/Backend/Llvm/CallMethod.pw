@@ -323,11 +323,11 @@ pub impl LlvmCtx {
         // path below like any generic-instance receiver (collections.md E3: no Array
         // type-name synthesis of the receiver ref here any more).
         if recvRef != 0U64 {
-            // `Ref[T]` / `WeakRef[T]` are opaque intrinsics (not registered generic structs),
+            // Reference cells are opaque intrinsics (not registered generic structs),
             // but their std `impl[T]` methods (weak / upgrade) are ordinary generic methods —
             // route them through the same monomorphized-method path (the bodies bottom out in
-            // the refWeak / weakAlive / weakLock intrinsics, lowered by name in genLlvmCall).
-            if c.isGenericInst(ref: recvRef) || c.isRefInst(ref: recvRef) || c.isWeakRefInst(ref: recvRef) {
+            // the reference-cell intrinsics, lowered by name in genLlvmCall).
+            if c.isGenericInst(ref: recvRef) || c.isStrongRefInst(ref: recvRef) || c.isWeakRefLikeInst(ref: recvRef) {
                 val grt: TypeRef = c.arena.types[recvRef]
                 val gmfi: U64 = c.findMethod(recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if gmfi < c.arena.funcs.count() {

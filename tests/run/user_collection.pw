@@ -11,9 +11,9 @@
 // ASan-clean on self-compile + run: every String element is freed exactly once (no
 // leak, no UAF, no double-free).
 //
-// Scope note: a `Ref[unique T]` element's pointee deinit on container drop is NOT
+// Scope note: a `MutableRef[unique T]` element's pointee deinit on container drop is NOT
 // exercised — a documented v1 leaked-but-safe limitation (design-decisions.md CoW-share
-// channel-A note + provisional.md "deep release of heap-owning Ref pointees"); no UAF.
+// channel-A note + provisional.md "deep release of heap-owning MutableRef pointees"); no UAF.
 import @Std/Io with { print }
 import @Std/Core with { Buffer }
 

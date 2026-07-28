@@ -360,18 +360,19 @@ pub impl Comp {
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                // a Ref pointee is always mutable through `->`. But a `WeakRef` has no direct
-                // deref (its referent may be gone — spec/03), and `->` must obey the pointee
-                // type's field WRITE visibility just like `.` (spec/05) rather than slipping
-                // past it into the opaque backend "not a registered struct" error.
+                // Only `MutableRef[T]` grants write capability through `->`. `Ref[T]` is
+                // read-only, and weak refs must be upgraded first (spec/03). `->` also obeys
+                // the pointee type's field WRITE visibility just like `.` (spec/05).
                 val abt: TypeInfo = self.typeOf(id: base)
-                if self.isWeakRefInst(ref: abt.ref) {
-                    self.errorAt(offset: self.exprOffset(id: base), msg: "a `WeakRef` cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional[Ref[T]]`, then `->` the unwrapped `Ref` (spec/03)")
+                if self.isWeakRefLikeInst(ref: abt.ref) {
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "a weak reference cannot be dereferenced with `->` (its referent may be gone); call `upgrade()` to get an `Optional` strong reference, then `->` the unwrapped value (spec/03)")
                 } else if self.isRefInst(ref: abt.ref) {
-                    // the pointee FIELD must be `mut val` — the Ref exception waives only the
+                    self.errorAt(offset: self.exprOffset(id: base), msg: "cannot assign through `Ref[T]`; use `MutableRef[T]` for shared mutation or call a mutable handle before narrowing with `asRef()` (spec/03)")
+                } else if self.isMutableRefInst(ref: abt.ref) {
+                    // the pointee FIELD must be `mut val` — the MutableRef exception waives only the
                     // binding's mutability, not the field's (spec/03 `val` immutability).
                     if !(self.placeIsMutable(id: target)) {
-                        self.errorAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `Ref` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)")
+                        self.errorAt(offset: self.exprOffset(id: target), msg: "cannot assign to an immutable pointee field; declare the field `mut val` (a `MutableRef` shares mutation through a `val` handle but does not make a `val` field writable — spec/03)")
                     }
                     val inst: TypeRef = self.arena.types[abt.ref]
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])

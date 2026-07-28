@@ -1,0 +1,14 @@
+import @Std/Core with { Ref }
+
+struct Cell { pub mut val n: I32 }
+
+pub impl Cell {
+    inout fn bump() {
+        self.n = self.n + 1I32
+    }
+}
+
+fn main() {
+    val r: Ref[Cell] = <Ref[Cell] value=<Cell n=1 /> />
+    r->bump()
+}

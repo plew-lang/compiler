@@ -3,7 +3,7 @@
 // owned by the destructure temp and is released at scope end (deinit fires
 // exactly once). Works in the statement and the loop-pattern forms.
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
@@ -11,7 +11,7 @@ unique struct Cell {
 }
 
 fn main() {
-    (val name, n: _) = (name: "s", n: <Ref value=<Cell v=7 /> />)
+    (val name, n: _) = (name: "s", n: <MutableRef value=<Cell v=7 /> />)
     print(name)
     val xs = [(a: 10I64, b: 20I64), (a: 30I64, b: 40I64)]
     for (val a, b: _) in xs {

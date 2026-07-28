@@ -1,15 +1,15 @@
-// ATTACK: record destructure of a call result — does the Ref-typed bind's
+// ATTACK: record destructure of a call result — does the MutableRef-typed bind's
 // pointee deinit ever run?
 import @Std/Io with { print, write }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
 
-fn makeRec() -> (tag: String, cell: Ref[Cell]) {
-    return (tag: "re" + "c", cell: <Ref value=<Cell v=3 /> />)
+fn makeRec() -> (tag: String, cell: MutableRef[Cell]) {
+    return (tag: "re" + "c", cell: <MutableRef value=<Cell v=3 /> />)
 }
 
 fn helper() {
@@ -24,7 +24,7 @@ fn main() {
     helper()
     write(s: "post\n")
     // named-local control: identical shape without destructure
-    val direct: Ref[Cell] = <Ref value=<Cell v=4 /> />
+    val direct: MutableRef[Cell] = <MutableRef value=<Cell v=4 /> />
     print(direct->v)
     write(s: "end\n")
 }

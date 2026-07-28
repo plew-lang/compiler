@@ -58,13 +58,19 @@ pub impl LlvmCtx {
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "F32") {
             return self.f64ty
         }
-        // a `Ref[T]` is a pointer to a heap cell holding the pointee (opaque ptr).
+        // a strong reference cell is a pointer to a heap cell holding the pointee (opaque ptr).
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "Ref") {
             return self.ptrty
         }
-        // a `WeakRef[T]` is the same cell pointer as its Ref (opaque ptr) — owns a weak count
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "MutableRef") {
+            return self.ptrty
+        }
+        // a weak reference cell is the same cell pointer as its strong ref (opaque ptr) — owns a weak count
         // rather than a strong one, but the value representation is identical.
         if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "WeakRef") {
+            return self.ptrty
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: tyStart, len: tyLen, kw: "WeakMutableRef") {
             return self.ptrty
         }
         // a `Buffer[T]` is the raw data pointer (the storage floor; opaque ptr).

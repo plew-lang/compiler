@@ -1,0 +1,9 @@
+import @Std/Core with { MutableRef, WeakMutableRef }
+
+struct Cell { pub mut val n: I32 }
+
+fn main() {
+    val r: MutableRef[Cell] = <MutableRef[Cell] value=<Cell n=1 /> />
+    val w: WeakMutableRef[Cell] = r.weak()
+    val n = w->n
+}

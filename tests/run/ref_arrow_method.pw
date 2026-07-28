@@ -1,12 +1,12 @@
-// `Ref` pointee access through `->` (spec/03): method calls (by-value and `inout` self) and
+// `MutableRef` pointee access through `->` (spec/03): method calls (by-value and `inout` self) and
 // property read/write, dispatched on the POINTEE with the shared cell as the receiver — so an
-// `inout` method mutates through every alias of the Ref, exactly like `r->field = v`. Generic
-// pointees (`Ref[Box[I32]]`) and chaining a `.` method onto a `->` method result both work.
-// `->` is Ref-only: a `WeakRef` must be `upgrade()`d first (rejected at compile time; covered
+// `inout` method mutates through every alias of the MutableRef, exactly like `r->field = v`. Generic
+// pointees (`MutableRef[Box[I32]]`) and chaining a `.` method onto a `->` method result both work.
+// `->` is MutableRef-only: a `WeakMutableRef` must be `upgrade()`d first (rejected at compile time; covered
 // by tests/reject). The pointee `deinit` fires once for the shared cell — no leak from the new
 // dispatch path (ASan-clean).
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 unique struct Counter {
     pub mut val n: I32          // pub so `r->n` R/W is reachable from `main` (spec/05: `->` obeys field visibility)
@@ -22,8 +22,8 @@ pub impl[T] Box[T] { fn get() -> T { return self.v } }
 
 fn main() {
     // `inout` method through two aliases of one cell: the mutation is shared (like `->field=`).
-    val r: Ref[Counter] = <Ref[Counter] value=<Counter n=10 /> />
-    val s: Ref[Counter] = r
+    val r: MutableRef[Counter] = <MutableRef[Counter] value=<Counter n=10 /> />
+    val s: MutableRef[Counter] = r
     r->add(by: 5I32)
     s->add(by: 100I32)
     print(r->total())            // 115 — both adds hit the shared pointee
@@ -33,7 +33,7 @@ fn main() {
     print(r->n)                  // 7
 
     // generic pointee method.
-    val b: Ref[Box[I32]] = <Ref[Box[I32]] value=<Box[I32] v=42 /> />
+    val b: MutableRef[Box[I32]] = <MutableRef[Box[I32]] value=<Box[I32] v=42 /> />
     print(b->get())              // 42
 
     print(0I32)

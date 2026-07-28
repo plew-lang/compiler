@@ -1,11 +1,11 @@
 // Overlapping-`inout` NEGATIVE cases (spec/03): distinct places must proceed
 // untouched. Covers (1) CoW-shared DISTINCT variables — statically distinct roots, so
 // buffer sharing (a hidden cost) never rejects or panics (a hidden meaning);
-// (2) distinct Ref cells — the runtime place-identity check passes; (3) an
+// (2) distinct MutableRef cells — the runtime place-identity check passes; (3) an
 // `inout r->field` argument passing a REAL cell pointer (the write lands through the
-// Ref — the old temp-copy fallback silently dropped it).
+// MutableRef — the old temp-copy fallback silently dropped it).
 import @Std/Io with { print }
-import @Std/Core with { Ref }
+import @Std/Core with { MutableRef }
 
 struct Counter { pub mut val n: I32 }
 
@@ -22,9 +22,9 @@ fn main() {
     print(b[0])      // 110
     print(a[1])      // 200
 
-    // (2) distinct Ref cells: distinct pointees, no panic.
-    val r1: Ref[Counter] = <Ref[Counter] value=<Counter n=5 /> />
-    val r2: Ref[Counter] = <Ref[Counter] value=<Counter n=7 /> />
+    // (2) distinct MutableRef cells: distinct pointees, no panic.
+    val r1: MutableRef[Counter] = <MutableRef[Counter] value=<Counter n=5 /> />
+    val r2: MutableRef[Counter] = <MutableRef[Counter] value=<Counter n=7 /> />
     bump2i(x: inout r1->n, y: inout r2->n)
     print(r1->n)     // 6
     print(r2->n)     // 17
