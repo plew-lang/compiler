@@ -646,6 +646,10 @@ export extern "plew-intrinsic" {
 // two-counter cell ops (strong = the header rc, weak = the unused count slot); the wrapper
 // methods below are intercepted at the call site, so these bodies are never emitted.
 export extern "plew-intrinsic" {
+    // allocate a fresh strong read-only reference cell whose pointee owns `value`.
+    fn refNew[T](value: move T) -> Ref[T]
+    // allocate a fresh strong mutable reference cell whose pointee owns `value`.
+    fn mutableRefNew[T](value: move T) -> MutableRef[T]
     // bump the weak count, yield the same cell as a non-owning WeakRef handle.
     fn refWeak[T](r: Ref[T]) -> WeakRef[T]
     // bump the strong count, yield the same cell with read-only capability.
@@ -666,6 +670,10 @@ export extern "plew-intrinsic" {
 // still runs when the last STRONG owner drops; the cell's memory is reclaimed only once no
 // weak handles remain either.
 pub impl[T] Ref[T] {
+    factory(value: move T) {
+        return refNew(value: move value)
+    }
+
     fn weak() -> WeakRef[T] {
         return refWeak(r: self)
     }
@@ -674,6 +682,10 @@ pub impl[T] Ref[T] {
 // `r.asRef()` — explicitly narrow a mutable handle to a read-only handle. This never
 // grants write permission back; the result can only be observed or downgraded to WeakRef.
 pub impl[T] MutableRef[T] {
+    factory(value: move T) {
+        return mutableRefNew(value: move value)
+    }
+
     fn asRef() -> Ref[T] {
         return mutableRefAsRef(r: self)
     }

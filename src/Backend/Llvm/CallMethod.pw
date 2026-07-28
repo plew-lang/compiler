@@ -216,7 +216,7 @@ pub impl LlvmCtx {
                     // type: a factory returns `Self = Head[typeParams]`, so when the context
                     // wants a same-head generic instance, its type args ARE the params.
                     self.groundAssocFromExpected(c: inout c, recvStart: arn.nameStart, recvLen: arn.nameLen, fi: afi, inferred: inout ginf)
-                    val agslot: U64 = genFnSlotFor(c: inout c, fnIdx: afi, args: ginf, st: inout self)
+                    val agslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: ginf, recvInstRef: 0U64)
                     if agslot < self.genFnK.count() {
                         val gaf: Func = c.arena.funcs[afi]
                         val gsavedP: Array[Bind] = c.cur.typeParams

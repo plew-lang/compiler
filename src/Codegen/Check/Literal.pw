@@ -444,6 +444,73 @@ pub impl Comp {
         self.checkLitCtx(id: id, eKind: 0, eBits: 0, eSgn: false)
     }
 
+    // A generic factory call rewritten from construction (`<Head[T] value=7 />` ->
+    // `Head.value(value: 7)`) still needs the original expected result type to ground
+    // factory params. Do it generally for assoc fns whose receiver head matches ctxRef,
+    // so the special case remains at the intrinsic floor, not at Ref syntax.
+    inout fn checkAssocArgsLitCtxFromExpected(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg], ctxRef: U64) -> Bool {
+        val arn: Bind = self.assocRecvName(recv: recv)
+        if arn.nameLen == 0U64 {
+            return false
+        }
+        val ai: U64 = self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        if ai >= self.arena.funcs.count() {
+            return false
+        }
+        val f: Func = self.arena.funcs[ai]
+        if f.typeParams.count() == 0U64 {
+            return false
+        }
+        if ctxRef == 0U64 || !(self.isGenericInst(ref: ctxRef)) {
+            return false
+        }
+        val ct: TypeRef = self.arena.types[ctxRef]
+        if !(spansEqual(c: inout self, aStart: ct.nameStart, aLen: ct.nameLen, bStart: arn.nameStart, bLen: arn.nameLen)) {
+            return false
+        }
+        if ct.args.count() != f.typeParams.count() {
+            return false
+        }
+        mut val ginf: Array[U64] = self.inferFnArgs(f: f, args: args)
+        mut val gi: U64 = 0
+        while gi < ginf.count() {
+            mut val needsGround: Bool = ginf[gi] == 0U64
+            if !(needsGround) {
+                if self.arena.types[ginf[gi]].nameLen == 0U64 {
+                    needsGround = true
+                }
+            }
+            if needsGround {
+                ginf.set(i: gi, value: ct.args[gi])
+            }
+            gi += 1
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        self.cur.typeParams = f.typeParams
+        self.cur.typeArgs = ginf
+        mut val k: U64 = 0
+        while k < args.count() {
+            if k < f.params.count() {
+                val p: Param = f.params[k]
+                mut val pref: U64 = 0
+                if p.ty != 0U64 {
+                    pref = self.groundTypeRef(ref: p.ty)
+                }
+                if pref != 0U64 && self.tyRefIsGround(ref: pref) {
+                    self.checkLitTi(id: args[k].expr, ti: self.typeInfoOfRef(ref: pref))
+                    self.tcCheckValue(expectedRef: pref, valueExpr: args[k].expr, pos: "arg")
+                } else {
+                    self.checkLitSpan(id: args[k].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                }
+            }
+            k += 1
+        }
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        return true
+    }
+
     // Like checkLitSpan, but when the expected type is a generic enum/struct INSTANCE
     // (ref carries its type args) and the value is a construction, ground the make
     // fields from that instance's args — so `<Optional.Some v=5 />` at `Optional[I64]`
@@ -455,6 +522,14 @@ pub impl Comp {
                     Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
                         if self.isGenericEnumInst(ref: ctxRef) || self.isGenericInst(ref: ctxRef) {
                             self.checkMakeFields(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, ty: ctxRef, fields: fields)
+                            return
+                        }
+                    }
+                    _ => {}
+                }
+                match self.arena.exprs[id] {
+                    Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                        if self.checkAssocArgsLitCtxFromExpected(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, ctxRef: ctxRef) {
                             return
                         }
                     }

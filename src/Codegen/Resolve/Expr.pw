@@ -299,25 +299,7 @@ pub impl Comp {
         if sd.typeParams.count() == 0U64 {
             return 0U64
         }
-        // the opaque `Ref[T]` / `MutableRef[T]` externs are FIELD-LESS (their `value`
-        // factories are
-        // intercepted lang form, spec/03), so the declared-field loop below can't pin T
-        // — pin it from the factory's `value` argument directly. Without this a bare
-        // `<Ref value=…/>` in a context-less position (an append argument) stayed
-        // un-grounded: the pointee cell was allocated at the i64-default size and the
-        // value was never ARC-classified (leak).
         if sd.fields.count() == 0U64 {
-            if rangeEquals(bytes: self.arena.bytes, start: typeStart, len: typeLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: typeStart, len: typeLen, kw: "MutableRef") {
-                if sd.typeParams.count() == 1U64 {
-                    val vkw: Bind = self.kwSpan(kw: "value", kwLen: 5U64)
-                    val vref: U64 = self.makeFieldArgRef(fieldNameId: intern(c: inout self, start: vkw.nameStart, len: vkw.nameLen), fields: fields)
-                    if vref != 0U64 {
-                        mut val rargs: Array[U64] = []
-                        rargs.append(vref)
-                        return self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen args=rargs />)
-                    }
-                }
-            }
             return 0U64
         }
         mut val args: Array[U64] = []

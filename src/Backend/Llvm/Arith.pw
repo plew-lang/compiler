@@ -302,15 +302,6 @@ pub impl LlvmCtx {
             }
         }
         self.expectedTy = 0U64
-        // `<Ref[T] value=e />` / `<MutableRef[T] value=e />`: allocate a heap cell holding
-        // the pointee, store e, and yield the cell pointer. Refcount/release is hidden cost;
-        // copies alias the cell, but only MutableRef grants write capability through `->`.
-        if rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "Ref") {
-            return self.genLlvmMakeRef(c: inout c, ty: gty, fields: fields)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: typeStart, len: typeLen, kw: "MutableRef") {
-            return self.genLlvmMakeRef(c: inout c, ty: gty, fields: fields)
-        }
         // a generic struct instance (Box[I32]): build under its substitution env.
         if c.isGenericInst(ref: gty) {
             val gslot: U64 = self.genStructSlot(c: inout c, ref: gty)
@@ -410,35 +401,24 @@ pub impl LlvmCtx {
         return LLVMBuildLoad2(self.b, pty, cellPtr, anon())
     }
 
-    // Build a strong reference-cell value: malloc a cell of sizeof(T), store the `value` field's
-    // pointee into it, and return the cell pointer.
-    inout fn genLlvmMakeRef(c: inout Comp, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
-        val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: ty)
-        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
-        // the pointee value (the `value` field).
-        mut val valExpr: U64 = 0
-        mut val mi: U64 = 0
-        while mi < fields.count() {
-            if rangeEquals(bytes: c.arena.bytes, start: fields[mi].nameStart, len: fields[mi].nameLen, kw: "value") {
-                valExpr = fields[mi].value
-                mi = fields.count()
-            } else {
-                mi += 1
-            }
+    // Build a strong reference-cell value for the `refNew` / `mutableRefNew` intrinsic:
+    // malloc a cell of sizeof(T), store the value into it, and return the cell pointer.
+    inout fn genLlvmRefNew(c: inout Comp, valueExpr: U64) -> LLVMValueRef {
+        val pr: U64 = self.exprTypeRef(c: inout c, id: valueExpr)
+        mut val pty: LLVMTypeRef = self.exprLlvmType(c: inout c, id: valueExpr)
+        if pr != 0U64 {
+            pty = self.llvmTypeOfRef(c: inout c, ref: pr)
         }
-        mut val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valExpr)
+        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(pty), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        mut val v: LLVMValueRef = self.genLlvmExpr(c: inout c, id: valueExpr)
         if LLVMGetTypeKind(LLVMTypeOf(v)) == 8U32 {
             v = self.coerceInt(v: v, target: pty, unsigned: false)
         }
-        // the cell OWNS its pointee (spec/03 value semantics): `<Ref value=place />`
+        // the cell OWNS its pointee (spec/03 value semantics): `refNew(value: place)`
         // must not alias the place's heap — the place's own drop would free it under
         // the cell, and the strong-0 pointee destroy would then double-free (#7). A
         // place pointee is CoW-shared/retained into the cell; a fresh value moves in.
-        mut val pr: U64 = 0
-        if c.isStrongRefInst(ref: ty) {
-            pr = c.arena.types[ty].args[0]
-        }
-        v = self.consumeIntoOwned(c: inout c, v: v, expr: valExpr, typeRef: pr)
+        v = self.consumeIntoOwned(c: inout c, v: v, expr: valueExpr, typeRef: pr)
         LLVMBuildStore(self.b, v, cell)
         return cell
     }

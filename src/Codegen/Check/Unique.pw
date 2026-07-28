@@ -324,11 +324,17 @@ pub impl Comp {
                         self.errorAt(offset: anchor, msg: "a unique-type parameter requires a mode (`move`, `borrow`, or `inout`)")
                     }
                 } else {
-                    if p.isMove {
-                        self.errorAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
-                    }
-                    if p.isBorrow {
-                        self.errorAt(offset: anchor, msg: "`borrow` is redundant on a copyable type; pass by value")
+                    // A bare type parameter is not known-copyable at declaration time in
+                    // lang-item generic surfaces such as `Ref.factory(value: move T)`;
+                    // allow an explicit ownership mode there and let each call/instance
+                    // decide whether it is meaningful.
+                    if !(self.isTypeParamName(start: p.tyStart, len: p.tyLen)) {
+                        if p.isMove {
+                            self.errorAt(offset: anchor, msg: "`move` is not allowed on a copyable type; pass by value or use `inout`")
+                        }
+                        if p.isBorrow {
+                            self.errorAt(offset: anchor, msg: "`borrow` is redundant on a copyable type; pass by value")
+                        }
                     }
                 }
             }

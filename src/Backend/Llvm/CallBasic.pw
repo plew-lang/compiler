@@ -277,6 +277,14 @@ pub impl LlvmCtx {
         // Reference-cell control-block intrinsics (spec/03), backing weak()/upgrade()/asRef().
         // The
         // cell value IS the argument's value (an opaque pointer); each op touches a counter.
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "refNew") {
+            // Ref.factory(value:) bottoms out here: allocate a fresh strong cell.
+            return self.genLlvmRefNew(c: inout c, valueExpr: args[0].expr)
+        }
+        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "mutableRefNew") {
+            // MutableRef.factory(value:) bottoms out here: same cell representation, different capability type.
+            return self.genLlvmRefNew(c: inout c, valueExpr: args[0].expr)
+        }
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "refWeak") {
             // r.weak(): bump the weak count, yield the same cell as a WeakRef handle.
             return self.refWeakDowngrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))

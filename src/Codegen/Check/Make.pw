@@ -73,20 +73,13 @@ pub impl Comp {
             // place (which would double-deinit: the source and the new owner).
             self.checkUniquePlaceCopy(exprId: mf.value, inoutOk: false)
             mut val ft: TypeInfo = scalarInfo()
-            if self.isStrongRefInst(ref: ty) {
-                // `<Ref[T] value=… />` / `<MutableRef[T] value=… />`: the `value` field has the pointee type T, so
-                // a literal (`value=7`) types from T (else "no type from context").
-                val rt: TypeRef = self.arena.types[ty]
-                ft = self.typeInfoOfRef(ref: rt.args[0])
+            if self.isGenericEnumInst(ref: ty) {
+                ft = self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
             } else {
-                if self.isGenericEnumInst(ref: ty) {
-                    ft = self.genericEnumFieldTypeInfo(instRef: ty, variantStart: variantStart, variantLen: variantLen, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
+                if self.isGenericInst(ref: ty) {
+                    ft = self.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                 } else {
-                    if self.isGenericInst(ref: ty) {
-                        ft = self.genericFieldTypeInfo(instRef: ty, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
-                    } else {
-                        ft = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
-                    }
+                    ft = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: mf.nameStart, fieldLen: mf.nameLen)
                 }
             }
             if ft.kind == 3 {
