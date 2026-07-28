@@ -450,7 +450,7 @@ pub impl Comp {
     }
 
     // Build a fresh empty
-    // `<Dictionary keys=Buffer.new() vals=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() count=0 />`
+    // `<Dictionary keys=Buffer.new() vals=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() entryCount=0U64 />`
     // Make node typed as `ctxRef` (a `Dictionary[K, V]` TypeRef). The dict's columns are
     // `Buffer[K]`/`Buffer[V]`/`Buffer[U64]` (the storage floor) — built via `Buffer.new()`,
     // whose element type is inferred from the field type at codegen.
@@ -460,12 +460,13 @@ pub impl Comp {
         val vN: Bind = self.internBytes(s: "vals")
         val hN: Bind = self.internBytes(s: "hashes")
         val bN: Bind = self.internBytes(s: "buckets")
-        val cN: Bind = self.internBytes(s: "count")
+        val cN: Bind = self.internBytes(s: "entryCount")
         val emptyKeys: U64 = self.synthBufferNew()
         val emptyVals: U64 = self.synthBufferNew()
         val emptyHashes: U64 = self.synthBufferNew()
         val emptyBuckets: U64 = self.synthBufferNew()
-        val zero: U64 = self.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=0 tyLen=0 isNeg=false />)
+        val u64N: Bind = self.internBytes(s: "U64")
+        val zero: U64 = self.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=u64N.nameStart tyLen=u64N.nameLen isNeg=false />)
         mut val fields: Array[MakeField] = []
         // offset = the interned (unloaded) name span: marks these as synthesized so the
         // construction-visibility gate skips them (a dict's fields are module-private).

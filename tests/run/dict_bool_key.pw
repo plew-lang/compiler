@@ -10,7 +10,7 @@ fn main() {
     print(d[false])             // 20
     d[true] = 11I64             // update
     print(d[true])              // 11
-    print(d.count)              // 2
+    print(d.count())              // 2
     // safe lookup via `get` -> Optional.
     val g: Optional[I64] = d.get(key: false)
     print(g.unwrapOr(fallback: -1I64))   // 20

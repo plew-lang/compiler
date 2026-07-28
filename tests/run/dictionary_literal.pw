@@ -12,19 +12,19 @@ fn build() -> Dictionary[U64, U64] {
 fn main() {
     // string keys, with a duplicate key (last write wins -> count stays 2)
     val d: Dictionary[String, U64] = ["alpha": 1U64, "beta": 2U64, "alpha": 10U64]
-    print(d.count)
+    print(d.count())
     print(d["alpha"])
     print(d["beta"])
     print(d.getOr(key: "gamma", fallback: 99U64))
 
     // empty literal
     val e: Dictionary[String, U64] = [:]
-    print(e.count)
+    print(e.count())
 
     // return-position literal + post-construction mutation
     mut val f: Dictionary[U64, U64] = build()
     f[3U64] = 300U64
-    print(f.count)
+    print(f.count())
     print(f[1U64])
     print(f[3U64])
 
@@ -32,6 +32,6 @@ fn main() {
     val g: Dictionary[String, U64] = ["x": 1U64]
     mut val h: Dictionary[String, U64] = g
     h["y"] = 2U64
-    print(g.count)
-    print(h.count)
+    print(g.count())
+    print(h.count())
 }

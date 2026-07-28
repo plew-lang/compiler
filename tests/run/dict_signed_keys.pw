@@ -11,11 +11,11 @@ fn main() {
     print(d[-5I64])    // neg
     print(d[0I64])     // zero
     print(d[42I64])    // pos
-    print(d.count)     // 3
+    print(d.count())     // 3
     // update through a negative key
     d[-5I64] = "neg2"
     print(d[-5I64])    // neg2
-    print(d.count)     // 3 (update, not insert)
+    print(d.count())     // 3 (update, not insert)
     // I32 keys (sign-extended before the bit reinterpret)
     mut val e: Dictionary[I32, I64] = [:]
     e[-1I32] = 100I64

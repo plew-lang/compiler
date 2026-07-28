@@ -13,22 +13,34 @@ export struct Set[E] {
     mut val items: Buffer[E]
     mut val hashes: Buffer[U64]
     mut val buckets: Buffer[U64]
-    pub(get) mut val count: U64
+    mut val entryCount: U64
 }
 pub impl[E] Set[E] {
     // An empty set.
     assoc fn new() -> Set[E] {
-        return <Set items=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() count=0U64 />
+        return <Set items=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() entryCount=0U64 />
     }
     // A set of every element in `source` (duplicates collapse to one).
     assoc fn from(source: Array[E]) -> Set[E] where E: Hash, E: Eq {
-        mut val s: Set[E] = <Set items=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() count=0U64 />
+        mut val s: Set[E] = <Set items=Buffer.new() hashes=Buffer.new() buckets=Buffer.new() entryCount=0U64 />
         mut val i: U64 = 0
         while i < source.count() {
             s.insert(source[i])
             i = i + 1U64
         }
         return s
+    }
+    // The number of unique elements.
+    fn count() -> U64 {
+        return self.entryCount
+    }
+    // Whether the set has no elements.
+    fn isEmpty() -> Bool {
+        return self.entryCount == 0U64
+    }
+    // The current bucket-table capacity.
+    fn capacity() -> U64 {
+        return self.buckets.count()
     }
     // SipHash digest of an element (per-process random seed — see @Std/Hash).
     fn hashOf(value: E) -> U64 where E: Hash {
@@ -66,7 +78,7 @@ pub impl[E] Set[E] {
         if self.buckets.count() == 0U64 {
             self.grow()
         } else {
-            if (self.count + 1U64) * 4U64 > self.buckets.count() * 3U64 {
+            if (self.entryCount + 1U64) * 4U64 > self.buckets.count() * 3U64 {
                 self.grow()
             }
         }
@@ -79,7 +91,7 @@ pub impl[E] Set[E] {
                 self.items.append(value)
                 self.hashes.append(code)
                 self.buckets.set(index: slot, self.items.count())
-                self.count = self.count + 1U64
+                self.entryCount = self.entryCount + 1U64
                 return
             }
             val idx: U64 = b - 1U64
@@ -172,7 +184,7 @@ pub impl[E] Set[E] {
             }
         }
         // (2) compact the dense arrays.
-        val lastIdx: U64 = self.count - 1U64
+        val lastIdx: U64 = self.entryCount - 1U64
         if r != lastIdx {
             val movedHash: U64 = self.hashes[lastIdx]
             self.items.set(index: r, self.items[lastIdx])
@@ -188,6 +200,6 @@ pub impl[E] Set[E] {
         // the removed element (case r == lastIdx) is released at scope end.
         val droppedItem: E = self.items.removeLast()
         val droppedHash: U64 = self.hashes.removeLast()
-        self.count = self.count - 1U64
+        self.entryCount = self.entryCount - 1U64
     }
 }

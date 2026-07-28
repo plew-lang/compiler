@@ -16,5 +16,5 @@ fn main() {
     d[5U64] += 4I64
     print(d[5U64])     // 5
     print(d[3U64])     // 210 (unchanged)
-    print(d.count)     // 2
+    print(d.count())     // 2
 }

@@ -5,16 +5,16 @@ import @Std/Set with { Set }
 // No literal — constructed via Set.from / Set.new. Membership, dedup, removal.
 fn main() {
     mut val s: Set[I64] = Set.from(source: [1I64, 2I64, 2I64, 3I64, 3I64, 3I64])
-    print(s.count)                  // 3 — duplicates collapse
+    print(s.count())                  // 3 — duplicates collapse
     print(s.contains(4I64))         // 0
     print(s.contains(2I64))         // 1
     s.insert(4I64)
     s.insert(2I64)                  // already present — no-op
-    print(s.count)                  // 4
+    print(s.count())                  // 4
     print(s.contains(4I64))         // 1
     s.remove(4I64)
     s.remove(99I64)                 // absent — no-op
-    print(s.count)                  // 3
+    print(s.count())                  // 3
     print(s.contains(4I64))         // 0
     print(s.contains(1I64))         // 1
 
@@ -22,9 +22,9 @@ fn main() {
     e.insert("x")
     e.insert("y")
     e.insert("x")                   // dup
-    print(e.count)                  // 2
+    print(e.count())                  // 2
     print(e.contains("y"))          // 1
     e.remove("y")
     print(e.contains("y"))          // 0
-    print(e.count)                  // 1
+    print(e.count())                  // 1
 }

@@ -11,7 +11,7 @@ fn main() {
     d["alpha"] = 1U64
     d["beta"] = 2U64
     d["alpha"] = 10U64
-    print(d.count)
+    print(d.count())
     print(d["alpha"])
     print(d["beta"])
     print(d.getOr(key: "gamma", fallback: 99U64))

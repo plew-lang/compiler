@@ -10,7 +10,7 @@ fn main() {
     m.insert(key: "c", value: "charlie")
     m.insert(key: "d", value: "delta")
     m.remove(key: "b")
-    print(m.count)                              // 3
+    print(m.count())                              // 3
     print(m.contains(key: "b"))                 // 0
     print(m.getOr(key: "a", fallback: "?"))     // alpha
     print(m.getOr(key: "c", fallback: "?"))     // charlie
@@ -18,6 +18,6 @@ fn main() {
     m.remove(key: "a")
     m.remove(key: "c")
     m.remove(key: "d")
-    print(m.count)                              // 0
+    print(m.count())                              // 0
     print(m.contains(key: "a"))                 // 0
 }

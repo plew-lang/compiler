@@ -17,7 +17,7 @@ fn main() {
     mut val b: Bag = <Bag m=[:] />
     b.m[7U64] = true
     b.m[8U64] = true
-    print(b.m.count)       // 2
+    print(b.m.count())     // 2
     // a record literal as an enum variant payload
     val sh: Shape = <Shape.Point at=(x: 5, y: 6) />
     match sh {

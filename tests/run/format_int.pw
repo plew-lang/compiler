@@ -1,6 +1,6 @@
 // Format trait implemented in pure Plew for the primitive integer types (Core
 // owns I64/U64 via `extern struct`, so it may coherently `impl I64 as Format`).
-// Integer -> decimal String via the stringFromBytesUnchecked intrinsic + digit logic.
+// Integer -> decimal String via digit bytes routed through `<String.checked source=bytes />`.
 import @Std/Core with { Format }
 import @Std/Io with { write }
 

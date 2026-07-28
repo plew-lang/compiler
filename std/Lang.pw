@@ -180,6 +180,10 @@ pub impl[T] Array[T] {
     fn isEmpty() -> Bool {
         return self.data.isEmpty()
     }
+    // The current backing capacity.
+    fn capacity() -> U64 {
+        return self.data.capacity()
+    }
     // Append `value` to the end (growing the storage as needed).
     inout fn append(value~: T) {
         self.data.append(value)
@@ -285,9 +289,21 @@ struct Dictionary[K, V] {
     mut val vals: Buffer[V]
     mut val hashes: Buffer[U64]
     mut val buckets: Buffer[U64]
-    pub(get) mut val count: U64
+    mut val entryCount: U64
 }
 pub impl[K, V] Dictionary[K, V] {
+    // The number of key/value entries.
+    fn count() -> U64 {
+        return self.entryCount
+    }
+    // Whether the dictionary has no entries.
+    fn isEmpty() -> Bool {
+        return self.entryCount == 0U64
+    }
+    // The current bucket-table capacity.
+    fn capacity() -> U64 {
+        return self.buckets.count()
+    }
     // SipHash digest of a key (fixed seed for now — see worklog RNG TODO).
     fn hashOf(key: K) -> U64 where K: Hash {
         mut val h: SipHasher = SipHasher.new()
@@ -324,7 +340,7 @@ pub impl[K, V] Dictionary[K, V] {
         if self.buckets.count() == 0U64 {
             self.grow()
         } else {
-            if (self.count + 1U64) * 4U64 > self.buckets.count() * 3U64 {
+            if (self.entryCount + 1U64) * 4U64 > self.buckets.count() * 3U64 {
                 self.grow()
             }
         }
@@ -338,7 +354,7 @@ pub impl[K, V] Dictionary[K, V] {
                 self.vals.append(value)
                 self.hashes.append(code)
                 self.buckets.set(index: slot, self.keys.count())
-                self.count = self.count + 1U64
+                self.entryCount = self.entryCount + 1U64
                 return
             }
             val idx: U64 = b - 1U64
@@ -462,7 +478,7 @@ pub impl[K, V] Dictionary[K, V] {
         }
         // (2) compact the dense arrays: move the last entry into freed slot `r` (unless
         // `r` is already the last), repoint its bucket pointer, then drop the tail.
-        val lastIdx: U64 = self.count - 1U64
+        val lastIdx: U64 = self.entryCount - 1U64
         if r != lastIdx {
             val movedHash: U64 = self.hashes[lastIdx]
             self.keys.set(index: r, self.keys[lastIdx])
@@ -480,6 +496,6 @@ pub impl[K, V] Dictionary[K, V] {
         val droppedKey: K = self.keys.removeLast()
         val droppedVal: V = self.vals.removeLast()
         val droppedHash: U64 = self.hashes.removeLast()
-        self.count = self.count - 1U64
+        self.entryCount = self.entryCount - 1U64
     }
 }

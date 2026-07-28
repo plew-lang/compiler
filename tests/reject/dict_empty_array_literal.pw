@@ -2,7 +2,7 @@
 // `[]` in a Dictionary-typed position used to read count 0 in a let binding by accident
 // yet reinterpret to garbage as an argument — now a clear error pointing at `[:]`.
 import @Std/Io with { print }
-fn take(d: Dictionary[String, I64]) -> U64 { return d.count }
+fn take(d: Dictionary[String, I64]) -> U64 { return d.count() }
 fn main() {
     print(take(d: []))
 }

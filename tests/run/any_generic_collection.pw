@@ -25,7 +25,7 @@ fn main() {
     mut val d: Dictionary[String, any Shape] = [:]
     d["a"] = <Sq s=3 />
     d["b"] = r
-    print(d.count)                   // 2
+    print(d.count())                   // 2
     print(d["a"].area())             // 9
     print(d["b"].area())             // 10
     d["a"] = <Rect w=3 h=3 />

@@ -10,11 +10,11 @@ fn main() {
         m.insert(key: i, value: i * 10I64)
         i = i + 1I64
     }
-    print(m.count)                       // 10
+    print(m.count())                       // 10
     m.remove(key: 3I64)
     m.remove(key: 7I64)
     m.remove(key: 100I64)                // absent — no-op
-    print(m.count)                       // 8
+    print(m.count())                       // 8
     print(m.contains(key: 3I64))         // 0
     print(m.contains(key: 7I64))         // 0
     // every surviving key still maps correctly (probe chains intact).
@@ -33,5 +33,5 @@ fn main() {
     print(ok)                            // 1
     m.insert(key: 3I64, value: 333I64)   // re-insert a removed key
     print(m.getOr(key: 3I64, fallback: -1I64))  // 333
-    print(m.count)                       // 9
+    print(m.count())                       // 9
 }
