@@ -248,21 +248,28 @@ pub impl Comp {
         }
     }
 
-    // `deinit` is only valid on a `unique` type (spec/03: a copyable type would run
-    // deinit on every CoW copy = double-free, like Swift structs having no deinit).
-    // Each user `deinit { }` registers a c.decls.deinits entry (the type name); reject any
-    // whose type is not a unique struct. Reported at the struct's declaration.
+    // `deinit` is only valid on a `unique struct` (spec/03,05): a copyable type would
+    // run deinit on every CoW copy = double-free, and v1 deliberately rejects explicit
+    // enum deinit bodies even for `unique enum`. Enum payloads are still destroyed by
+    // the synthesized enum payload walker.
+    // Each user `deinit { }` registers a c.decls.deinits entry (the type name); reject
+    // any whose target is an enum or is not a unique struct. Reported at the type decl.
     inout fn checkDeinitOnlyOnUnique() {
         mut val i: U64 = 0
         while i < self.decls.deinits.count() {
             val d: Bind = self.decls.deinits[i]
-            if !(self.typeIsUnique(start: d.nameStart, len: d.nameLen)) {
-                val si: U64 = self.structIndexByName(start: d.nameStart, len: d.nameLen)
-                mut val off: U64 = d.nameStart
-                if si < self.arena.structs.count() {
-                    off = self.arena.structs[si].defOffset
+            val ei: U64 = self.enumIdxByName(start: d.nameStart, len: d.nameLen)
+            if ei < self.arena.enums.count() {
+                self.errorAt(offset: self.arena.enums[ei].defOffset, msg: "explicit `deinit` on an enum is not supported in v1; enum payloads are still destroyed normally")
+            } else {
+                if !(self.typeIsUnique(start: d.nameStart, len: d.nameLen)) {
+                    val si: U64 = self.structIndexByName(start: d.nameStart, len: d.nameLen)
+                    mut val off: U64 = d.nameStart
+                    if si < self.arena.structs.count() {
+                        off = self.arena.structs[si].defOffset
+                    }
+                    self.errorAt(offset: off, msg: "`deinit` is only allowed on a `unique struct` (a copyable type would run it on every copy — spec/03)")
                 }
-                self.errorAt(offset: off, msg: "`deinit` is only allowed on a `unique` type (a copyable type would run it on every copy — spec/03)")
             }
             i += 1
         }

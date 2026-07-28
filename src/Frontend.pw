@@ -761,8 +761,10 @@ export fn runFrontend() -> Comp {
     // ownership validity (spec/03): a struct owning a unique value must be
     // `unique`; parameter access modes must match copyability. Both exit on error.
     c.checkFieldContagion()
-    // `deinit` only on a unique type (spec/03). (Distinct generic type-param names are
-    // checked per-bracket in lowerTypeParamNames, before impl++method lists merge.)
+    // `deinit` only on a unique struct (spec/03,05). `unique enum` is legal, but an
+    // enum's own explicit deinit body is v1-rejected; active payloads still drop.
+    // (Distinct generic type-param names are checked per-bracket in lowerTypeParamNames,
+    // before impl++method lists merge.)
     c.checkDeinitOnlyOnUnique()
     c.checkFieldDefaults()
     c.checkParamDefaults()

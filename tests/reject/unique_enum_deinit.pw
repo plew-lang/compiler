@@ -1,0 +1,19 @@
+// v1 allows `unique enum` values, but the enum type itself cannot define an
+// explicit `deinit` body. Active payloads still run their own deinits normally.
+unique struct Cell {
+    val v: I64
+    deinit { }
+}
+
+unique enum Holder {
+    Full(c: Cell)
+    Empty
+}
+
+impl Holder {
+    deinit { }
+}
+
+fn main() {
+    val h: Holder = <Holder.Empty />
+}
