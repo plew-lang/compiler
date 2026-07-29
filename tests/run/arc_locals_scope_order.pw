@@ -1,7 +1,7 @@
 // spec/03 pins: (S1) named locals destroy in REVERSE declaration order at scope
 // exit (locals can depend on earlier locals — the dependent side dies first);
-// (S4) a shadowed binding is NOT released early — it lives to scope exit and
-// dies in the same reverse-binding order (the redeclaration only hides its name).
+// (S4) a shadowed `unique` binding is released at the redeclaration commit
+// point — the old owner becomes inaccessible before the next statement.
 import @Std/Io with { print }
 
 unique struct Cell {

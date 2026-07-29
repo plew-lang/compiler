@@ -145,6 +145,46 @@ pub impl LlvmCtx {
             self.locMoved[li] = true
         }
     }
+
+    inout fn localIsUnique(c: inout Comp, li: U64) -> Bool {
+        if li >= self.nLocals {
+            return false
+        }
+        if self.locTypeRef[li] != 0U64 {
+            if self.locTypeRef[li] < c.arena.types.count() {
+                val tr: TypeRef = c.arena.types[self.locTypeRef[li]]
+                if c.typeIsUnique(start: tr.nameStart, len: tr.nameLen) {
+                    return true
+                }
+            }
+        }
+        if self.locStructIdx[li] < c.arena.structs.count() {
+            return c.arena.structs[self.locStructIdx[li]].isUnique
+        }
+        return false
+    }
+
+    // Shadowing cliff (spec/03): after a let initializer has been evaluated but before
+    // the new binding is pushed, the previous owned `unique` binding with this name
+    // loses its last accessible owner. Drop it now and mark it moved so scope exit does
+    // not release it again. Copyable shadows intentionally keep their old scope-exit
+    // lifetime.
+    inout fn dropShadowedUnique(c: inout Comp, nameStart: U64, nameLen: U64) {
+        val li: U64 = self.findLocal(c: inout c, start: nameStart, len: nameLen)
+        if li >= self.nLocals {
+            return
+        }
+        if !(self.locOwned[li]) {
+            return
+        }
+        if self.locMoved[li] {
+            return
+        }
+        if self.localIsUnique(c: inout c, li: li) {
+            self.emitDeinitCall(c: inout c, li: li)
+            self.locMoved[li] = true
+        }
+    }
 }
 
 pub impl LlvmCtx {

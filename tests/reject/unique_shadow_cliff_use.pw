@@ -1,0 +1,14 @@
+// Shadowing an owned `unique` binding drops the old owner at the redeclaration
+// commit point; an outer binding does not revive after the inner shadow ends.
+import @Std/Io with { print }
+
+unique struct File { val fd: I64 }
+
+fn main() {
+    val f: File = <File fd=1 />
+    {
+        val f: File = <File fd=2 />
+        print(f.fd)
+    }
+    print(f.fd)
+}

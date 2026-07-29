@@ -171,6 +171,28 @@ pub impl Comp {
         return self.cur.locals.count()
     }
 
+    // Shadowing cliff (spec/03): a new binding's initializer is checked in the old
+    // environment, but at commit the previous owned `unique` binding with the same
+    // name stops being an accessible owner. Mark only such locals moved; copyable
+    // shadows remain ordinary locals until scope exit, and seeded globals / borrow
+    // params are not owned by this scope.
+    inout fn markShadowedUniqueMoved(nameStart: U64, nameLen: U64) {
+        val idx: U64 = self.localIndexByName(start: nameStart, len: nameLen)
+        if idx >= self.cur.locals.count() {
+            return
+        }
+        val lo: Local = self.cur.locals[idx]
+        if !(lo.owned) {
+            return
+        }
+        if lo.moved {
+            return
+        }
+        if self.typeIsUnique(start: lo.tyStart, len: lo.tyLen) {
+            self.verifyMarkMoved(idx: idx)
+        }
+    }
+
     // Result `Optional[U]` of a NON-rewritten `?.` on an Optional base (the fallback
     // path — a Chain base goes through chainResultRef). U = the type of the trailing
     // chain `cont` with the ChainHole bound to the Optional's payload T.

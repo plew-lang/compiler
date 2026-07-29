@@ -471,6 +471,7 @@ pub impl LlvmCtx {
                         sidx = asi
                     }
                 }
+                self.dropShadowedUnique(c: inout c, nameStart: nameStart, nameLen: nameLen)
                 LLVMBuildStore(self.b, v, slot)
                 self.pushLocalR(nameStart: nameStart, nameLen: nameLen, ptr: slot, ty: lty, kind: kind, structIdx: sidx, isArr: isArr, elemTy: elemTy, elemKind: elemKind, typeRef: tref)
                 if isCellHome {
