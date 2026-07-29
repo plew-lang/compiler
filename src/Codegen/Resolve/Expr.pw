@@ -277,7 +277,7 @@ pub impl Comp {
                 nb.append(self.arena.bytes[mf.nameStart + k])
                 k += 1
             }
-            names.append(stringFromBytesUnchecked(b: nb))
+            names.append(stringFromBytesUnchecked(nb))
             tys.append(<PType start=ti.nameStart len=ti.nameLen isArray=false ref=fref />)
             i += 1
         }

@@ -397,7 +397,7 @@ pub impl Comp {
             bs.append(self.arena.bytes[nameStart + i])
             i += 1
         }
-        return stringFromBytesUnchecked(b: bs)
+        return stringFromBytesUnchecked(bs)
     }
 
     inout fn tcExprKind(id: U64) -> String {
@@ -412,7 +412,7 @@ pub impl Comp {
                     bs.append(self.arena.bytes[nameStart + i])
                     i += 1
                 }
-                return stringFromBytesUnchecked(b: bs)
+                return stringFromBytesUnchecked(bs)
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return "Make" }
             Expr.MatchExpr(scrut: _, arms: _) => { return "MatchExpr" }
@@ -424,7 +424,7 @@ pub impl Comp {
                     bs.append(self.arena.bytes[start + i])
                     i += 1
                 }
-                return stringFromBytesUnchecked(b: bs)
+                return stringFromBytesUnchecked(bs)
             }
             Expr.Index(base: _, index: _) => { return "Index" }
             Expr.Binary(op: _, lhs: _, rhs: _) => { return "Binary" }
@@ -437,7 +437,7 @@ pub impl Comp {
                     bs.append(self.arena.bytes[tyStart + i])
                     i += 1
                 }
-                return stringFromBytesUnchecked(b: bs)
+                return stringFromBytesUnchecked(bs)
             }
             Expr.Unary(op: _, operand: _) => { return "Unary" }
             _ => { return "other" }
@@ -455,6 +455,6 @@ pub impl Comp {
             bs.append(self.arena.bytes[t.nameStart + i])
             i += 1
         }
-        return stringFromBytesUnchecked(b: bs)
+        return stringFromBytesUnchecked(bs)
     }
 }

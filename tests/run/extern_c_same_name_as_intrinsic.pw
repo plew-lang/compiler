@@ -1,0 +1,12 @@
+// A same-named extern(c) declaration is a foreign C function, not a Plew intrinsic.
+// Intrinsic lowering must dispatch on the resolved extern ABI/identity, never on
+// name text alone.
+import @Std/Io with { print }
+
+extern(c) {
+    fn refNew(x~: I64) -> I64
+}
+
+fn main() {
+    print(refNew(41I64))
+}

@@ -202,6 +202,12 @@ pub impl LlvmCtx {
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
+        mut val resolvedPlewIntrinsic: Bool = false
+        if cfi < c.arena.funcs.count() {
+            val cfIntrinsic: Func = c.arena.funcs[cfi]
+            resolvedPlewIntrinsic = cfIntrinsic.isExtern && !(cfIntrinsic.isCExtern)
+        }
+        if resolvedPlewIntrinsic {
         // numeric intrinsic floor (`i8Add`, `u32Lt`, `i64Neg`, …): the primitive op the
         // std operator-trait witness bodies bottom out in. Lowered by intrinsic-function
         // IDENTITY (like the Buffer floor below) — this is the ONE place a primitive op is
@@ -314,11 +320,12 @@ pub impl LlvmCtx {
             // take a new strong mutable owner of the (wrapper-guaranteed-alive) cell.
             return self.refUpgrade(c: inout c, cell: self.genLlvmExpr(c: inout c, id: args[0].expr))
         }
+        }
         // `pow(base: x, exp: n)` (spec/12): the named exponentiation operation dispatches on
         // the base argument's `Pow[Exp]` conformance (no `**` operator). Route the bare call
         // to the base type's `pow` assoc fn; fall through if it does not resolve (so a
         // user-defined free `pow` with other labels still works).
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
+        if cfi >= c.arena.funcs.count() && rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
             if args.count() == 2U64 {
                 val pv: LLVMValueRef = self.genPowCall(c: inout c, base: args[0].expr, args: args)
                 if LLVMIsNull(pv) == 0I32 {
@@ -326,6 +333,7 @@ pub impl LlvmCtx {
                 }
             }
         }
+        if resolvedPlewIntrinsic {
         // `sleep(ms: I64) -> Promise[I64]` (@Std/Async intrinsic): a timer promise,
         // `plew_sleep(i64) -> PlewPromise*` (await suspends until it fires).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "sleep") {
@@ -584,6 +592,7 @@ pub impl LlvmCtx {
             mut val av: Array[LLVMValueRef] = []
             av.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: args[0].expr), unsigned: self.valueKind(c: inout c, id: args[0].expr) == 3U64))
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
+        }
         }
         // A resolved non-extern Plew fn (user or std) was already emitted by identity at the
         // top of this function; only an extern(c) foreign function or a genuinely unresolved

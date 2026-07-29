@@ -241,7 +241,7 @@ pub impl Comp {
             retRef = pt.ref
         }
         self.cur.typeParams = savedTP
-        return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern />
+        return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern defOffset=nameStart />
     }
 
     inout fn lowerTrait(t: TraitAst) {

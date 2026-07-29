@@ -85,7 +85,7 @@ export fn loadManifestDeps(pkgDir: Array[U8]) -> Array[Dep] {
     if !(fileExists(path: maniPath)) {
         return deps
     }
-    val src: String = readFileBytes(path: maniPath)
+    val src: String = readFileBytes(maniPath)
     val mani: Manifest = parseManifest(bytes: src.bytes())
     return mani.deps
 }
@@ -192,7 +192,7 @@ export fn loadLock(pkgDir: Array[U8]) -> Lock {
         appendBytes(into: inout lockPath, from: pkgDir)
         appendBytes(into: inout lockPath, from: "Plew.lock".bytes())
         if fileExists(path: lockPath) {
-            val src: String = readFileBytes(path: lockPath)
+            val src: String = readFileBytes(lockPath)
             return parseLock(bytes: src.bytes())
         }
     }

@@ -109,7 +109,7 @@ pub impl Comp {
             j += 1
         }
         appendBytes(into: inout cn, from: ")".bytes())
-        val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(b: cn))
+        val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(cn))
         val nid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
         // already registered?
         mut val si: U64 = 0

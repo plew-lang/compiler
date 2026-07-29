@@ -180,8 +180,8 @@ pub impl Comp {
     // which have no global declaration.)
     inout fn typeDeclExistsGlobally(start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
-        if self.structIndexByName(start: start, len: len) < self.arena.structs.count() { return true }
-        if self.enumIndexByName(start: start, len: len) < self.arena.enums.count() { return true }
+        if self.anyStructIndex(nameStart: start, nameLen: len) < self.arena.structs.count() { return true }
+        if self.anyEnumIndex(nameStart: start, nameLen: len) < self.arena.enums.count() { return true }
         mut val i: U64 = 0
         while i < self.decls.traits.count() {
             val td: TraitDef = self.decls.traits[i]

@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { MutableRef }
 
 // A nested generic instance `Box[Box[T]]` and its inner instance `Box[T]` share
 // one struct def but are DIFFERENT type instances. The ARC release-need cycle

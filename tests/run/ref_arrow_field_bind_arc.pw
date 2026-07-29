@@ -3,6 +3,7 @@
 // Arrow arm (review/12 §1: binding through `->` was an unretained alias; the
 // pointee's release then freed the buffer under the binding = use-after-free).
 import @Std/Io with { print }
+import @Std/Core with { MutableRef }
 
 struct Inner { pub val xs: Array[I64]  pub val name: String }
 

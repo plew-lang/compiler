@@ -1,0 +1,8 @@
+// A private `extern(plewIntrinsic)` generic type in @Std/Core is loaded for the
+// compiler's own Ref floor, but loading is not import and not ambient visibility.
+// Naming StrongRefCell directly from user code must be rejected.
+fn takes(c: StrongRefCell[I64]) {
+}
+
+fn main() {
+}
