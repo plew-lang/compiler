@@ -1,0 +1,29 @@
+// A consuming wildcard arm discards the whole active enum payload at pattern commit.
+
+import @Std/Io with { print }
+
+unique struct File {
+    val fd: I64
+    deinit {
+        print(self.fd)
+    }
+}
+
+unique enum ResultFile {
+    Ok(file: File)
+    Err(code: I64)
+}
+
+fn main() {
+    val r: ResultFile = <ResultFile.Ok file=<File fd=7 /> />
+    print(100I64)
+    match move r {
+        ResultFile.Err(val code) => {
+            print(code)
+        }
+        _ => {
+            print(200I64)
+        }
+    }
+    print(300I64)
+}

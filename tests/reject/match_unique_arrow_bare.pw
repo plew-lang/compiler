@@ -1,0 +1,30 @@
+// A MutableRef pointee field is still a storage place; bare match must not copy it.
+
+import @Std/Core with { MutableRef }
+import @Std/Io with { print }
+
+unique struct File {
+    val fd: I64
+    deinit {
+        print(self.fd)
+    }
+}
+
+unique enum State {
+    Open(file: File)
+    Closed
+}
+
+unique struct Box {
+    pub val state: State
+}
+
+fn main() {
+    val b: MutableRef[Box] = <MutableRef value=<Box state=<State.Open file=<File fd=7 /> /> /> />
+    match b->state {
+        State.Open(val file) => {
+            print(file.fd)
+        }
+        State.Closed => {}
+    }
+}

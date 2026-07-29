@@ -27,24 +27,33 @@ pub impl Comp {
     inout fn matchScrutIsMove(scrut: U64) -> Bool {
         match self.arena.exprs[scrut] {
             Expr.Move(operand: _, val isBorrow) => { return !(isBorrow) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.matchScrutIsMove(scrut: operand) }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.matchScrutIsMove(scrut: recv) }
+            _ => { return false }
+        }
+    }
+
+    inout fn matchScrutIsBorrow(scrut: U64) -> Bool {
+        match self.arena.exprs[scrut] {
+            Expr.Move(operand: _, val isBorrow) => { return isBorrow }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.matchScrutIsBorrow(scrut: operand) }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.matchScrutIsBorrow(scrut: recv) }
             _ => { return false }
         }
     }
 
     inout fn checkMatchAccessMode(scrut: U64, arms: Array[MatchArm]) {
-        match self.arena.exprs[scrut] {
-            Expr.Move(operand: _, val isBorrow) => {
-                if isBorrow {
-                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match borrow` is not part of v1; match a copyable value directly, or use `match move` to consume a unique enum (spec/11)")
+        if self.matchScrutIsBorrow(scrut: scrut) {
+            self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match borrow` is not part of v1; match a copyable value directly, or use `match move` to consume a unique enum (spec/11)")
+            return
+        }
+        if self.matchScrutIsMove(scrut: scrut) {
+            if arms.count() > 0U64 {
+                if arms[0].isStruct {
+                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match move` is consuming enum match; struct destructuring by move would be aggregate partial move, which v1 rejects (spec/11)")
                 }
-                if arms.count() > 0U64 {
-                    if arms[0].isStruct {
-                        self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match move` is consuming enum match; struct destructuring by move would be aggregate partial move, which v1 rejects (spec/11)")
-                    }
-                }
-                return
             }
-            _ => {}
+            return
         }
         if self.isPlaceExpr(id: scrut) {
             val ti: TypeInfo = self.typeOf(id: scrut)

@@ -127,7 +127,11 @@ pub impl LlvmCtx {
             val savedBB: U64 = self.nLocals
             LLVMPositionBuilderAtEnd(self.b, armBB)
             self.terminated = false
-            if !(arm.isWildcard) {
+            if arm.isWildcard {
+                if consuming {
+                    self.emitEnumRelease(c: inout c, v: LLVMBuildLoad2(self.b, sty, sslot, anon()), eid: eid, ety: sty)
+                }
+            } else {
                 // bind the payload under the enum env, then restore the outer env so the
                 // arm body grounds against the enclosing method/function, not the enum.
                 val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
