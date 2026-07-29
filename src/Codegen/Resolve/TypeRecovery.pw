@@ -1,44 +1,78 @@
 // Part of name/type resolution (root: _.pw): overload matching, match
 // exhaustiveness, scalar info, and the keyword-span cache.
 
-// Check call args against a parameter list: arg count matches and every arg
-// carries its parameter's label in declaration order (spec: labels required).
+// Check call args against a parameter list: provided args must appear in parameter
+// declaration order, but any defaulted parameter may be omitted (not only trailing
+// ones). This is also the shared mapping used by type-checking and emission.
 
 pub impl Comp {
+    inout fn argMatchesParamLabel(param: Param, arg: Arg) -> Bool {
+        if param.noLabel {
+            return !(arg.hasLabel)
+        }
+        if !(arg.hasLabel) {
+            return false
+        }
+        return intern(c: inout self, start: arg.labelStart, len: arg.labelLen) == param.nameId
+    }
+
+    inout fn paramIndexForArg(params: Array[Param], args: Array[Arg], argIdx: U64) -> U64 {
+        mut val ai: U64 = 0
+        mut val pi: U64 = 0
+        while pi < params.count() {
+            if ai < args.count() {
+                if self.argMatchesParamLabel(param: params[pi], arg: args[ai]) {
+                    if ai == argIdx {
+                        return pi
+                    }
+                    ai += 1U64
+                }
+            }
+            pi += 1U64
+        }
+        return params.count()
+    }
+
+    inout fn argIndexForParam(params: Array[Param], args: Array[Arg], paramIdx: U64) -> U64 {
+        mut val ai: U64 = 0
+        mut val pi: U64 = 0
+        while pi < params.count() {
+            if ai < args.count() {
+                if self.argMatchesParamLabel(param: params[pi], arg: args[ai]) {
+                    if pi == paramIdx {
+                        return ai
+                    }
+                    ai += 1U64
+                }
+            }
+            pi += 1U64
+        }
+        return args.count()
+    }
+
     inout fn paramsLabelsOk(params: Array[Param], args: Array[Arg]) -> Bool {
         if args.count() > params.count() {
             return false
         }
-        // any params beyond the provided args must have a default (trailing-default
-        // omission). Without that, the arity mismatch is an error.
-        mut val r: U64 = args.count()
-        while r < params.count() {
-            if !(params[r].hasDefault) {
-                return false
-            }
-            r += 1
-        }
-        mut val i: U64 = 0
-        while i < args.count() {
-            val a: Arg = args[i]
-            val p: Param = params[i]
-            if p.noLabel {
-                // label-suppressed param: the argument must be positional (no label).
-                if a.hasLabel {
-                    return false
-                }
-            } else {
-                if a.hasLabel {
-                    if intern(c: inout self, start: a.labelStart, len: a.labelLen) != p.nameId {
+        mut val ai: U64 = 0
+        mut val pi: U64 = 0
+        while pi < params.count() {
+            if ai < args.count() {
+                if self.argMatchesParamLabel(param: params[pi], arg: args[ai]) {
+                    ai += 1U64
+                } else {
+                    if !(params[pi].hasDefault) {
                         return false
                     }
-                } else {
+                }
+            } else {
+                if !(params[pi].hasDefault) {
                     return false
                 }
             }
-            i += 1
+            pi += 1U64
         }
-        return true
+        return ai == args.count()
     }
 
     // Whether two type refs may be compared by FULL structural identity for overload
@@ -116,17 +150,20 @@ pub impl Comp {
         return self.isIntType(start: p.tyStart, len: p.tyLen)
     }
 
-    // Whether every argument's type matches its parameter's declared type. Provided
-    // (non-defaulted) args only; trailing defaulted params are not type-checked here.
+    // Whether every provided argument's type matches its parameter's declared type.
+    // Defaulted positions have already been checked at the declaration.
     inout fn paramsTypesMatch(params: Array[Param], args: Array[Arg]) -> Bool {
-        mut val i: U64 = 0
-        while i < args.count() {
-            if i < params.count() {
-                if !(self.argMatchesParam(argExpr: args[i].expr, p: params[i])) {
+        mut val ai: U64 = 0
+        while ai < args.count() {
+            val pi: U64 = self.paramIndexForArg(params: params, args: args, argIdx: ai)
+            if pi < params.count() {
+                if !(self.argMatchesParam(argExpr: args[ai].expr, p: params[pi])) {
                     return false
                 }
+            } else {
+                return false
             }
-            i += 1
+            ai += 1
         }
         return true
     }
@@ -151,9 +188,11 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < args.count() {
             if self.argIsUntypedIntLit(argExpr: args[i].expr) {
-                if i < fa.params.count() {
-                    if i < fb.params.count() {
-                        if fa.params[i].tyNameId != fb.params[i].tyNameId {
+                val pa: U64 = self.paramIndexForArg(params: fa.params, args: args, argIdx: i)
+                val pb: U64 = self.paramIndexForArg(params: fb.params, args: args, argIdx: i)
+                if pa < fa.params.count() {
+                    if pb < fb.params.count() {
+                        if fa.params[pa].tyNameId != fb.params[pb].tyNameId {
                             return true
                         }
                     }

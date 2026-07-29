@@ -146,17 +146,19 @@ pub impl Comp {
                 if p.tyIsArray {
                     // `Array[T]` param: infer T from the argument array's element.
                     if p.tyNameId == tp.nameId {
-                        if pi < args.count() {
-                            cand = self.argArrayElemRef(argExpr: args[pi].expr)
+                        val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                        if ai < args.count() {
+                            cand = self.argArrayElemRef(argExpr: args[ai].expr)
                         }
                     }
                 } else {
                     // structurally unify the parameter's type against the argument's, so
                     // `T` is found whether it is the whole parameter type (`x: T`) or
                     // nested in it (`f: fn(x: Item) -> T`).
-                    if pi < args.count() {
-                        val at: TypeInfo = self.typeOf(id: args[pi].expr)
-                        val argRef: U64 = self.argViewRef(argExpr: args[pi].expr, baseRef: self.tyRefOfInfo(ti: at))
+                    val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                    if ai < args.count() {
+                        val at: TypeInfo = self.typeOf(id: args[ai].expr)
+                        val argRef: U64 = self.argViewRef(argExpr: args[ai].expr, baseRef: self.tyRefOfInfo(ti: at))
                         cand = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                     }
                 }
@@ -172,7 +174,12 @@ pub impl Comp {
                         // parametric candidate in a template body is not evidence).
                         if self.tyRefIsGround(ref: found) && self.tyRefIsGround(ref: cand) {
                             if !(self.sameMangle(refA: found, refB: cand)) {
-                                self.errorAt(offset: self.exprOffset(id: args[pi].expr), msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
+                                val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                                mut val off: U64 = f.nameStart
+                                if ai < args.count() {
+                                    off = self.exprOffset(id: args[ai].expr)
+                                }
+                                self.errorAt(offset: off, msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
                             }
                         }
                     }

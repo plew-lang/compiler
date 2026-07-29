@@ -162,16 +162,7 @@ pub impl LlvmCtx {
             // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
             av.append(self.genBorrowedArg(c: inout c, argExpr: recv))
         }
-        mut val ai: U64 = 0
-        while ai < args.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
-            ai += 1
-        }
-        mut val di: U64 = args.count()
-        while di < mf.params.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
-            di += 1
-        }
+        self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args)
         self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
         val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count(), anon())
         self.releaseInoutPins(c: inout c, mark: pinMark)
@@ -225,16 +216,7 @@ pub impl LlvmCtx {
                         c.cur.typeArgs = ginf
                         val gPinMark: U64 = self.pinCells.count()
                         mut val gav: Array[LLVMValueRef] = []
-                        mut val gai: U64 = 0
-                        while gai < args.count() {
-                            gav.append(self.genArgValue(c: inout c, argExpr: args[gai].expr, p: gaf.params[gai]))
-                            gai += 1
-                        }
-                        mut val gdi: U64 = args.count()
-                        while gdi < gaf.params.count() {
-                            gav.append(self.genArgValue(c: inout c, argExpr: gaf.params[gdi].defaultExpr, p: gaf.params[gdi]))
-                            gdi += 1
-                        }
+                        self.appendCallArgValues(c: inout c, av: inout gav, f: gaf, args: args)
                         c.cur.typeParams = gsavedP
                         c.cur.typeArgs = gsavedA
                         self.emitInoutOverlapChecks(c: inout c, f: gaf, av: gav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: gPinMark)
@@ -246,16 +228,7 @@ pub impl LlvmCtx {
                 val af: Func = c.arena.funcs[afi]
                 val aPinMark: U64 = self.pinCells.count()
                 mut val aav: Array[LLVMValueRef] = []
-                mut val aai: U64 = 0
-                while aai < args.count() {
-                    aav.append(self.genArgValue(c: inout c, argExpr: args[aai].expr, p: af.params[aai]))
-                    aai += 1
-                }
-                mut val adi: U64 = args.count()
-                while adi < af.params.count() {
-                    aav.append(self.genArgValue(c: inout c, argExpr: af.params[adi].defaultExpr, p: af.params[adi]))
-                    adi += 1
-                }
+                self.appendCallArgValues(c: inout c, av: inout aav, f: af, args: args)
                 // an assoc fn (`Greeter.banner()`, `tryFrom`, a free conformance fn) has no
                 // self, so it is its own 0-type-arg `gf` instance (B4-1).
                 val agslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [], recvInstRef: 0U64)
@@ -301,11 +274,7 @@ pub impl LlvmCtx {
                         // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
                         sav.append(self.genBorrowedArg(c: inout c, argExpr: recv))
                     }
-                    mut val sai: U64 = 0
-                    while sai < args.count() {
-                        sav.append(self.genArgValue(c: inout c, argExpr: args[sai].expr, p: smf.params[sai]))
-                        sai += 1
-                    }
+                    self.appendCallArgValues(c: inout c, av: inout sav, f: smf, args: args)
                     self.emitInoutOverlapChecks(c: inout c, f: smf, av: sav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: sPinMark)
                     val srv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[sslot], self.fnVal[sslot], arrayCPtr(sav), sav.count(), anon())
                     self.releaseInoutPins(c: inout c, mark: sPinMark)
@@ -387,16 +356,7 @@ pub impl LlvmCtx {
                                 // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
                                 eav.append(self.genBorrowedArg(c: inout c, argExpr: recv))
                             }
-                            mut val eai: U64 = 0
-                            while eai < args.count() {
-                                eav.append(self.genArgValue(c: inout c, argExpr: args[eai].expr, p: emf.params[eai]))
-                                eai += 1
-                            }
-                            mut val edi: U64 = args.count()
-                            while edi < emf.params.count() {
-                                eav.append(self.genArgValue(c: inout c, argExpr: emf.params[edi].defaultExpr, p: emf.params[edi]))
-                                edi += 1
-                            }
+                            self.appendCallArgValues(c: inout c, av: inout eav, f: emf, args: args)
                             self.emitInoutOverlapChecks(c: inout c, f: emf, av: eav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: ePinMark)
                             val erv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[eslot], self.fnVal[eslot], arrayCPtr(eav), eav.count(), anon())
                             self.releaseInoutPins(c: inout c, mark: ePinMark)
@@ -499,16 +459,7 @@ pub impl LlvmCtx {
             // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
             av.append(self.genBorrowedArg(c: inout c, argExpr: recv))
         }
-        mut val ai: U64 = 0
-        while ai < args.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
-            ai += 1
-        }
-        mut val di: U64 = args.count()
-        while di < mf.params.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
-            di += 1
-        }
+        self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args)
         self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
         val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count(), anon())
         self.releaseInoutPins(c: inout c, mark: pinMark)

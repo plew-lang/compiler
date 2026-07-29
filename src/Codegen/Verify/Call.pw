@@ -75,29 +75,12 @@ pub impl Comp {
             return
         }
         val cf: Func = self.arena.funcs[theFi]
-        if args.count() != cf.params.count() {
+        if !(self.paramsLabelsOk(params: cf.params, args: args)) {
             return
         }
         mut val ai: U64 = 0
         while ai < args.count() {
-            mut val pIdx: U64 = ai
-            if args[ai].hasLabel {
-                val lq: U64 = intern(c: inout self, start: args[ai].labelStart, len: args[ai].labelLen)
-                mut val pj: U64 = 0
-                mut val found: Bool = false
-                while pj < cf.params.count() {
-                    if cf.params[pj].nameId == lq {
-                        pIdx = pj
-                        found = true
-                        pj = cf.params.count()
-                    } else {
-                        pj += 1
-                    }
-                }
-                if !(found) {
-                    pIdx = cf.params.count()
-                }
-            }
+            val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
                 self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
             }
@@ -127,30 +110,12 @@ pub impl Comp {
             return
         }
         val cf: Func = self.arena.funcs[theFi]
-        if args.count() != cf.params.count() {
+        if !(self.paramsLabelsOk(params: cf.params, args: args)) {
             return
         }
         mut val ai: U64 = 0
         while ai < args.count() {
-            // resolve the parameter this argument fills: by label if given, else position.
-            mut val pIdx: U64 = ai
-            if args[ai].hasLabel {
-                val lq: U64 = intern(c: inout self, start: args[ai].labelStart, len: args[ai].labelLen)
-                mut val pj: U64 = 0
-                mut val found: Bool = false
-                while pj < cf.params.count() {
-                    if cf.params[pj].nameId == lq {
-                        pIdx = pj
-                        found = true
-                        pj = cf.params.count()
-                    } else {
-                        pj += 1
-                    }
-                }
-                if !(found) {
-                    pIdx = cf.params.count()
-                }
-            }
+            val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
                 self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
             }

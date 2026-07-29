@@ -491,8 +491,9 @@ pub impl Comp {
         self.cur.typeArgs = ginf
         mut val k: U64 = 0
         while k < args.count() {
-            if k < f.params.count() {
-                val p: Param = f.params[k]
+            val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: k)
+            if pi < f.params.count() {
+                val p: Param = f.params[pi]
                 mut val pref: U64 = 0
                 if p.ty != 0U64 {
                     pref = self.groundTypeRef(ref: p.ty)

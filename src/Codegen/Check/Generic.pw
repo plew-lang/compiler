@@ -298,9 +298,10 @@ pub impl Comp {
                     val ps: Array[Param] = self.arena.funcs[fi].params
                     mut val k: U64 = 0
                     while k < args.count() {
-                        if k < ps.count() {
-                            if !(ps[k].tyIsArray) {
-                                self.checkGenericTypeMatch(expectedRef: ps[k].ty, valueExpr: args[k].expr)
+                        val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: k)
+                        if pi < ps.count() {
+                            if !(ps[pi].tyIsArray) {
+                                self.checkGenericTypeMatch(expectedRef: ps[pi].ty, valueExpr: args[k].expr)
                             }
                         }
                         k += 1
@@ -352,9 +353,10 @@ pub impl Comp {
                                 val mps: Array[Param] = self.arena.funcs[mi].params
                                 mut val mk: U64 = 0
                                 while mk < args.count() {
-                                    if mk < mps.count() {
-                                        if !(mps[mk].tyIsArray) {
-                                            self.checkGenericTypeMatch(expectedRef: mps[mk].ty, valueExpr: args[mk].expr)
+                                    val mpi: U64 = self.paramIndexForArg(params: mps, args: args, argIdx: mk)
+                                    if mpi < mps.count() {
+                                        if !(mps[mpi].tyIsArray) {
+                                            self.checkGenericTypeMatch(expectedRef: mps[mpi].ty, valueExpr: args[mk].expr)
                                         }
                                     }
                                     mk += 1

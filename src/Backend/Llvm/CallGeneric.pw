@@ -66,16 +66,7 @@ pub impl LlvmCtx {
         if mf.isProvided {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
-        mut val ai: U64 = 0
-        while ai < args.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: mf.params[ai]))
-            ai += 1
-        }
-        mut val di: U64 = args.count()
-        while di < mf.params.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: mf.params[di].defaultExpr, p: mf.params[di]))
-            di += 1
-        }
+        self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args)
         c.cur.selfRef = sGs
         c.cur.itemRef = sGi
         c.cur.typeParams = savedP
@@ -342,9 +333,9 @@ pub impl LlvmCtx {
     // two deref-crossing places that do not provably diverge at distinct pointee fields,
     // so overlap reduces to cell identity: compare the cells captured (and pinned) while
     // the argument pointers themselves were computed. Nothing is re-evaluated. `av`
-    // holds the receiver (when `hasRecv`) followed by the provided args starting at
-    // `avArgStart`; omitted-default positions carry callee-side temps and never overlap
-    // a caller place, so only provided args are paired.
+    // holds the receiver (when `hasRecv`) followed by ALL parameters in declaration order
+    // starting at `avArgStart`; omitted-default positions carry callee-side temps and never
+    // overlap a caller place, so only provided args are paired.
     inout fn emitInoutOverlapChecks(c: inout Comp, f: Func, av: Array[LLVMValueRef], args: Array[Arg], hasRecv: Bool, recvExpr: U64, avArgStart: U64, pinMark: U64) {
         mut val ioExpr: Array[U64] = []
         mut val ioPtr: Array[LLVMValueRef] = []
@@ -356,10 +347,11 @@ pub impl LlvmCtx {
         }
         mut val ai: U64 = 0
         while ai < args.count() {
-            if ai < f.params.count() {
-                if f.params[ai].isInout {
+            val pi: U64 = c.paramIndexForArg(params: f.params, args: args, argIdx: ai)
+            if pi < f.params.count() {
+                if f.params[pi].isInout {
                     ioExpr.append(args[ai].expr)
-                    ioPtr.append(av[avArgStart + ai])
+                    ioPtr.append(av[avArgStart + pi])
                 }
             }
             ai += 1
@@ -417,6 +409,18 @@ pub impl LlvmCtx {
 }
 
 pub impl LlvmCtx {
+    inout fn appendCallArgValues(c: inout Comp, av: inout Array[LLVMValueRef], f: Func, args: Array[Arg]) {
+        mut val pi: U64 = 0
+        while pi < f.params.count() {
+            val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+            if ai < args.count() {
+                av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: f.params[pi]))
+            } else {
+                av.append(self.genArgValue(c: inout c, argExpr: f.params[pi].defaultExpr, p: f.params[pi]))
+            }
+            pi += 1U64
+        }
+    }
 
     inout fn genArgValue(c: inout Comp, argExpr: U64, p: Param) -> LLVMValueRef {
         return self.genArgValueV(c: inout c, argExpr: argExpr, p: p, checkView: true)

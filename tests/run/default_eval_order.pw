@@ -1,0 +1,24 @@
+// Default arguments may be omitted in the middle. Provided/default values are
+// evaluated in parameter declaration order, not call-site attribute order.
+import @Std/Io with { print }
+
+fn mark(n: I64) -> I64 {
+    print(n)
+    return n
+}
+
+fn sum(a: I64 = mark(n: 1), b: I64 = mark(n: 2), c: I64 = mark(n: 3)) -> I64 {
+    return a + b + c
+}
+
+struct Config {
+    pub val a: I64 = mark(n: 101)
+    pub val b: I64 = mark(n: 102)
+    pub val c: I64 = mark(n: 103)
+}
+
+fn main() {
+    print(sum(a: mark(n: 10), c: mark(n: 30)))
+    val cfg: Config = <Config c=mark(n: 300) a=mark(n: 100) />
+    print(cfg.a + cfg.b + cfg.c)
+}

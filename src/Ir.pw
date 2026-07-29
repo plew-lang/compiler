@@ -178,8 +178,9 @@ export struct Bind {
 export struct Arg {
     pub val expr: U64
     pub val isInout: Bool
-    // the argument label `name:` (spec: required, in declaration order). Empty
-    // when the call site omitted it (then a user-function call is rejected).
+    // the argument label `name:`. Empty for a label-suppressed positional arg.
+    // Provided arguments keep source order; resolution maps them to parameters in
+    // declaration order while allowing defaulted parameters to be skipped.
     pub val labelStart: U64
     pub val labelLen: U64
     pub val hasLabel: Bool
@@ -375,8 +376,9 @@ export struct Param {
     // label (positional). Default false = labelled (the normal case).
     pub val noLabel: Bool
     // default argument `name: T = expr` (spec/04): when the call omits this
-    // param, `defaultExpr` is emitted in its place. v1 supports omitting trailing
-    // defaulted params. `hasDefault` false = required.
+    // param, `defaultExpr` is emitted in its place. Omitted defaults need not be
+    // trailing; calls evaluate parameters in declaration order. `hasDefault`
+    // false = required.
     pub val hasDefault: Bool
     pub val defaultExpr: U64
 }

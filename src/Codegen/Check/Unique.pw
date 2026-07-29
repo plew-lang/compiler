@@ -248,6 +248,145 @@ pub impl Comp {
         }
     }
 
+    inout fn exprContainsAwait(exprId: U64) -> Bool {
+        match self.arena.exprs[exprId] {
+            Expr.Await(operand: _) => { return true }
+            Expr.Unary(op: _, val operand) => { return self.exprContainsAwait(exprId: operand) }
+            Expr.Binary(op: _, val lhs, val rhs) => {
+                if self.exprContainsAwait(exprId: lhs) { return true }
+                return self.exprContainsAwait(exprId: rhs)
+            }
+            Expr.Call(nameStart: _, nameLen: _, val args) => { return self.argsContainAwait(args: args) }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprContainsAwait(exprId: base) }
+            Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                mut val i: U64 = 0
+                while i < fields.count() {
+                    if self.exprContainsAwait(exprId: fields[i].value) { return true }
+                    i += 1U64
+                }
+                return false
+            }
+            Expr.Array(val elems) => {
+                mut val i: U64 = 0
+                while i < elems.count() {
+                    if self.exprContainsAwait(exprId: elems[i]) { return true }
+                    i += 1U64
+                }
+                return false
+            }
+            Expr.Index(val base, val index) => {
+                if self.exprContainsAwait(exprId: base) { return true }
+                return self.exprContainsAwait(exprId: index)
+            }
+            Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+                if self.exprContainsAwait(exprId: recv) { return true }
+                return self.argsContainAwait(args: args)
+            }
+            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+                if self.exprContainsAwait(exprId: recv) { return true }
+                return self.argsContainAwait(args: args)
+            }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.exprContainsAwait(exprId: recv) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.exprContainsAwait(exprId: operand) }
+            Expr.MatchExpr(val scrut, val arms) => {
+                if self.exprContainsAwait(exprId: scrut) { return true }
+                mut val i: U64 = 0
+                while i < arms.count() {
+                    if self.exprContainsAwait(exprId: arms[i].body) { return true }
+                    i += 1U64
+                }
+                return false
+            }
+            Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
+                if self.exprContainsAwait(exprId: cond) { return true }
+                if self.blockContainsAwait(blockId: thenBlk) { return true }
+                return self.blockContainsAwait(blockId: elseBlk)
+            }
+            Expr.OptChain(val base, val cont) => {
+                if self.exprContainsAwait(exprId: base) { return true }
+                return self.exprContainsAwait(exprId: cont)
+            }
+            Expr.Try(val expr) => { return self.exprContainsAwait(exprId: expr) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.exprContainsAwait(exprId: base) }
+            Expr.Deref(val base) => { return self.exprContainsAwait(exprId: base) }
+            Expr.Closure(params: _, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, body: _) => {
+                return false
+            }
+            Expr.Move(val operand, isBorrow: _) => { return self.exprContainsAwait(exprId: operand) }
+            _ => { return false }
+        }
+    }
+
+    inout fn argsContainAwait(args: Array[Arg]) -> Bool {
+        mut val i: U64 = 0
+        while i < args.count() {
+            if self.exprContainsAwait(exprId: args[i].expr) { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn blockContainsAwait(blockId: U64) -> Bool {
+        if blockId >= self.arena.blocks.count() {
+            return false
+        }
+        val b: Block = self.arena.blocks[blockId]
+        mut val i: U64 = 0
+        while i < b.stmts.count() {
+            if self.stmtContainsAwait(stmtId: b.stmts[i]) { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn stmtContainsAwait(stmtId: U64) -> Bool {
+        match self.arena.stmts[stmtId] {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, val init) => { return self.exprContainsAwait(exprId: init) }
+            Stmt.Assign(val target, val value) => {
+                if self.exprContainsAwait(exprId: target) { return true }
+                return self.exprContainsAwait(exprId: value)
+            }
+            Stmt.ExprStmt(val expr) => { return self.exprContainsAwait(exprId: expr) }
+            Stmt.Return(val value, val hasValue, offset: _) => {
+                if hasValue { return self.exprContainsAwait(exprId: value) }
+                return false
+            }
+            Stmt.If(val cond, val thenBlk, val elseBlk, val hasElse) => {
+                if self.exprContainsAwait(exprId: cond) { return true }
+                if self.blockContainsAwait(blockId: thenBlk) { return true }
+                if hasElse { return self.blockContainsAwait(blockId: elseBlk) }
+                return false
+            }
+            Stmt.While(val cond, val body) => {
+                if self.exprContainsAwait(exprId: cond) { return true }
+                return self.blockContainsAwait(blockId: body)
+            }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, val rangeHi, val body, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                if self.exprContainsAwait(exprId: iter) { return true }
+                if self.exprContainsAwait(exprId: rangeHi) { return true }
+                return self.blockContainsAwait(blockId: body)
+            }
+            Stmt.Match(val scrut, val arms) => {
+                if self.exprContainsAwait(exprId: scrut) { return true }
+                mut val i: U64 = 0
+                while i < arms.count() {
+                    if self.blockContainsAwait(blockId: arms[i].body) { return true }
+                    i += 1U64
+                }
+                return false
+            }
+            Stmt.Panic(val msg, offset: _) => { return self.exprContainsAwait(exprId: msg) }
+            Stmt.Give(val value) => { return self.exprContainsAwait(exprId: value) }
+            _ => { return false }
+        }
+    }
+
+    inout fn checkDefaultDoesNotSuspend(exprId: U64, offset: U64, what: String) {
+        if self.exprContainsAwait(exprId: exprId) {
+            self.errorAt(offset: offset, msg: what)
+        }
+    }
+
     // `deinit` is only valid on a `unique struct` (spec/03,05): a copyable type would
     // run deinit on every CoW copy = double-free, and v1 deliberately rejects explicit
     // enum deinit bodies even for `unique enum`. Enum payloads are still destroyed by
@@ -293,6 +432,7 @@ pub impl Comp {
                 val f: FieldDef = s.fields[j]
                 if f.hasDefault {
                     self.checkDefaultSelfContained(exprId: f.defaultVal, forbidden: forbidden, offset: f.nameStart, what: "a field default cannot reference another field or `self`; it is evaluated without the instance (spec/05)")
+                    self.checkDefaultDoesNotSuspend(exprId: f.defaultVal, offset: f.nameStart, what: "a field default cannot suspend; `await` is not allowed in a field default (spec/05)")
                     self.checkLitSpan(id: f.defaultVal, tyStart: f.tyStart, tyLen: f.tyLen, isArray: f.tyIsArray)
                     // checkLitSpan accepts a `true`/`false` (and other category-mismatched
                     // values) regardless of the field type, so a default of the wrong type
@@ -447,6 +587,7 @@ pub impl Comp {
                 val p: Param = ps[j]
                 if p.hasDefault {
                     self.checkDefaultSelfContained(exprId: p.defaultExpr, forbidden: forbidden, offset: p.nameStart, what: "a parameter default cannot reference another parameter or `self`; it is evaluated without them (spec/04)")
+                    self.checkDefaultDoesNotSuspend(exprId: p.defaultExpr, offset: p.nameStart, what: "a parameter default cannot suspend; `await` is not allowed in a default argument (spec/04)")
                     self.checkLitSpan(id: p.defaultExpr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                     if !(p.tyIsArray) {
                         self.tcCheckValue(expectedRef: p.ty, valueExpr: p.defaultExpr, pos: "default arg")

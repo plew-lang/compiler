@@ -143,17 +143,17 @@ pub impl LlvmCtx {
         return out
     }
 
-    // Whether function `fi`'s parameter views match the call's argument views — each
-    // param's declared viewExtId equals the corresponding argument's actual view
-    // (spec/09). Used to pick the right overload among `f(a:P)` / `f(a:P#Ext)`.
+    // Whether function `fi`'s parameter views match the call's provided argument
+    // views — mapped through default-argument omission (spec/09).
     inout fn funcViewsMatch(c: inout Comp, fi: U64, args: Array[Arg]) -> Bool {
         val f: Func = c.arena.funcs[fi]
         mut val i: U64 = 0
         while i < args.count() {
-            if i < f.params.count() {
+            val pi: U64 = c.paramIndexForArg(params: f.params, args: args, argIdx: i)
+            if pi < f.params.count() {
                 mut val pv: U64 = 0
-                if f.params[i].ty != 0U64 {
-                    pv = c.arena.types[f.params[i].ty].viewExtId
+                if f.params[pi].ty != 0U64 {
+                    pv = c.arena.types[f.params[pi].ty].viewExtId
                 }
                 if pv != self.exprViewExtId(c: inout c, id: args[i].expr) {
                     return false

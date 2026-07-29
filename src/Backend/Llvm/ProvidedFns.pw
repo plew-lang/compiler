@@ -164,16 +164,18 @@ pub impl LlvmCtx {
                 val p: Param = f.params[pi]
                 if p.tyIsArray {
                     if p.tyNameId == tp.nameId {
-                        if pi < args.count() {
+                        val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                        if ai < args.count() {
                             if found == 0U64 {
-                                found = self.arrayExprElemRef(c: inout c, arrayExpr: args[pi].expr)
+                                found = self.arrayExprElemRef(c: inout c, arrayExpr: args[ai].expr)
                             }
                         }
                     }
                 } else {
-                    if pi < args.count() {
+                    val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                    if ai < args.count() {
                         if found == 0U64 {
-                            val argRef: U64 = self.exprTypeRef(c: inout c, id: args[pi].expr)
+                            val argRef: U64 = self.exprTypeRef(c: inout c, id: args[ai].expr)
                             found = c.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                         }
                     }

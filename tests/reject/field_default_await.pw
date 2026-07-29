@@ -1,0 +1,11 @@
+// spec/05: a field default is memberwise-factory default-arg sugar; it cannot
+// suspend.
+import @Std/Async with { sleep }
+
+async fn later() -> Promise[I64] {
+    return await sleep(ms: 1)
+}
+
+struct S {
+    val x: I64 = await later()
+}

@@ -93,11 +93,7 @@ pub impl LlvmCtx {
         }
         val af: Func = c.arena.funcs[afi]
         mut val av: Array[LLVMValueRef] = []
-        mut val ai: U64 = 0
-        while ai < args.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: af.params[ai]))
-            ai += 1
-        }
+        self.appendCallArgValues(c: inout c, av: inout av, f: af, args: args)
         // the `pow` conformance fn (free or assoc) is its own 0-type-arg `gf` instance.
         val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [], recvInstRef: 0U64)
         if gslot < self.genFnK.count() {
@@ -134,18 +130,7 @@ pub impl LlvmCtx {
             c.cur.typeArgs = inferred
             val pinMark: U64 = self.pinCells.count()
             mut val av2: Array[LLVMValueRef] = []
-            mut val ai: U64 = 0
-            while ai < args.count() {
-                // coerce each argument to the parameter's type (width / env-grounded).
-                av2.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: cf.params[ai]))
-                ai += 1
-            }
-            // fill omitted trailing params with their default expressions (spec/04).
-            mut val di: U64 = args.count()
-            while di < cf.params.count() {
-                av2.append(self.genArgValue(c: inout c, argExpr: cf.params[di].defaultExpr, p: cf.params[di]))
-                di += 1
-            }
+            self.appendCallArgValues(c: inout c, av: inout av2, f: cf, args: args)
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
             self.emitInoutOverlapChecks(c: inout c, f: cf, av: av2, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: pinMark)
@@ -155,22 +140,13 @@ pub impl LlvmCtx {
         }
         // ensureFnInst declined: an `async fn` whose promise-returning entry is declared by
         // declareAsyncFns into the dedicated async-entry table. Resolve it.
-        val pslot: U64 = self.asyncEntrySlot(fi: cfi)
-        if pslot < self.asyncEntryIdx.count() {
-            val cf: Func = c.arena.funcs[cfi]
-            mut val pav: Array[LLVMValueRef] = []
-            mut val pai: U64 = 0
-            while pai < args.count() {
-                pav.append(self.genArgValue(c: inout c, argExpr: args[pai].expr, p: cf.params[pai]))
-                pai += 1
+            val pslot: U64 = self.asyncEntrySlot(fi: cfi)
+            if pslot < self.asyncEntryIdx.count() {
+                val cf: Func = c.arena.funcs[cfi]
+                mut val pav: Array[LLVMValueRef] = []
+                self.appendCallArgValues(c: inout c, av: inout pav, f: cf, args: args)
+                return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
             }
-            mut val pdi: U64 = args.count()
-            while pdi < cf.params.count() {
-                pav.append(self.genArgValue(c: inout c, argExpr: cf.params[pdi].defaultExpr, p: cf.params[pdi]))
-                pdi += 1
-            }
-            return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
-        }
         return LLVMConstNull(self.ptrty)
     }
 

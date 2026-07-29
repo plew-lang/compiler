@@ -772,11 +772,7 @@ pub impl LlvmCtx {
         val pinMark: U64 = self.pinCells.count()
         mut val av: Array[LLVMValueRef] = []
         av.append(dataPtr)
-        mut val ai: U64 = 0
-        while ai < args.count() {
-            av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: req.params[ai]))
-            ai += 1
-        }
+        self.appendCallArgValues(c: inout c, av: inout av, f: req, args: args)
         // overlapping-inout runtime tier: the `any` receiver is a boxed copy (not a caller
         // place), so only the argument pairs need the pre-call place-identity check.
         self.emitInoutOverlapChecks(c: inout c, f: req, av: av, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 1U64, pinMark: pinMark)

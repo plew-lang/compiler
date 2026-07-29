@@ -1,0 +1,11 @@
+// spec/04: a default argument is evaluated synchronously at the call site; it
+// cannot suspend.
+import @Std/Async with { sleep }
+
+async fn later() -> Promise[I64] {
+    return await sleep(ms: 1)
+}
+
+fn f(x: I64 = await later()) -> I64 {
+    return x
+}

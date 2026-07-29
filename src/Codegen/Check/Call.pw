@@ -83,8 +83,9 @@ pub impl Comp {
             mut val firstRef: U64 = 0
             mut val ai: U64 = 0
             while ai < args.count() {
-                if ai < f.params.count() {
-                    val p: Param = f.params[ai]
+                val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
+                if pi < f.params.count() {
+                    val p: Param = f.params[pi]
                     if p.tyLen > 0U64 {
                         if intern(c: inout self, start: p.tyStart, len: p.tyLen) == tpId {
                             val ar: U64 = self.inferType(id: args[ai].expr)
@@ -214,8 +215,9 @@ pub impl Comp {
         val ps: Array[Param] = f.params
         mut val i: U64 = 0
         while i < args.count() {
-            if i < ps.count() {
-                val p: Param = ps[i]
+            val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: i)
+            if pi < ps.count() {
+                val p: Param = ps[pi]
                 self.checkArgInoutMode(p: p, arg: args[i])
                 self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                 self.checkClosureArgArity(argExpr: args[i].expr, p: p)
@@ -344,8 +346,9 @@ pub impl Comp {
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
                 mut val i: U64 = 0
                 while i < args.count() {
-                    if i < ps.count() {
-                        val p: Param = ps[i]
+                    val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: i)
+                    if pi < ps.count() {
+                        val p: Param = ps[pi]
                         self.checkArgInoutMode(p: p, arg: args[i])
                         if genericRecv {
                             // a CONCRETE primitive param (`n: I64`) on a generic receiver
@@ -466,8 +469,9 @@ pub impl Comp {
                     }
                     mut val k: U64 = 0
                     while k < args.count() {
-                        if k < aps.count() {
-                            val ap: Param = aps[k]
+                        val pi: U64 = self.paramIndexForArg(params: aps, args: args, argIdx: k)
+                        if pi < aps.count() {
+                            val ap: Param = aps[pi]
                             self.checkArgInoutMode(p: ap, arg: args[k])
                             mut val checkedGround: Bool = false
                             if ap.ty != 0U64 {
