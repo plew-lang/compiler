@@ -1,0 +1,13 @@
+// Aggregate partial move is rejected even when the field itself is copyable.
+import @Std/Io with { print }
+
+struct Pair {
+    val left: I64
+    val right: I64
+}
+
+fn main() {
+    val p: Pair = <Pair left=1I64 right=2I64 />
+    val x: I64 = move p.left
+    print(x)
+}

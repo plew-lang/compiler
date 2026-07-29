@@ -9,6 +9,18 @@
 // only the checks checkLitCtx does not perform.
 
 pub impl Comp {
+    inout fn moveOperandIsAggregatePartial(id: U64) -> Bool {
+        match self.arena.exprs[id] {
+            Expr.Field(base: _, nameStart: _, nameLen: _) => { return true }
+            Expr.Index(base: _, index: _) => { return true }
+            Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
+            Expr.Deref(base: _) => { return true }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.moveOperandIsAggregatePartial(id: operand) }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.moveOperandIsAggregatePartial(id: recv) }
+            _ => { return false }
+        }
+    }
+
     inout fn verifyExpr(id: U64) {
         match self.arena.exprs[id] {
             Expr.Closure(val params, val hasRet, val retStart, val retLen, val retIsArray, val retTy, val body) => {
@@ -423,22 +435,27 @@ pub impl Comp {
                 }
             }
             Expr.Move(val operand, val isBorrow) => {
-                // `move`/`borrow` of a place (mirrors genExpr's Move arm). `move` is
-                // restricted to a bare local (field/element partial moves aren't tracked
-                // yet) that is not `self` and not declared outside the enclosing branch
-                // (a conditional move would skip the source's deinit on other paths).
+                // `move`/`borrow` of a place (mirrors genExpr's Move arm). v1 `move`
+                // consumes only a whole named local. Moving out of a field/element/pointee
+                // would leave the aggregate partially initialized, which the v1 drop model
+                // deliberately rejects (spec/11). Conditional moves remain rejected until
+                // drop-elaboration dataflow lands.
                 if !(isBorrow) {
-                    match self.arena.exprs[operand] {
-                        Expr.Ident(val start, val len) => {
-                            if self.isSelfRef(start: start, len: len) {
-                                self.errorAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported")
+                    if self.moveOperandIsAggregatePartial(id: operand) {
+                        self.errorAt(offset: self.exprOffset(id: operand), msg: "aggregate partial move is not part of v1; move the whole value, or use a replace/take-style API that leaves the aggregate valid (spec/11)")
+                    } else {
+                        match self.arena.exprs[operand] {
+                            Expr.Ident(val start, val len) => {
+                                if self.isSelfRef(start: start, len: len) {
+                                    self.errorAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported")
+                                }
+                                if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
+                                    self.errorAt(offset: self.exprOffset(id: operand), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                                }
                             }
-                            if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
-                                self.errorAt(offset: self.exprOffset(id: operand), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                            _ => {
+                                self.errorAt(offset: self.exprOffset(id: operand), msg: "`move` is only supported from a whole local variable in v1")
                             }
-                        }
-                        _ => {
-                            self.errorAt(offset: self.exprOffset(id: operand), msg: "`move` is only supported from a local variable (field/element moves are not yet supported)")
                         }
                     }
                 }

@@ -1,0 +1,14 @@
+// Moving out through a MutableRef pointee field is also aggregate partial move.
+import @Std/Core with { MutableRef }
+import @Std/Io with { print }
+
+struct Pair {
+    pub val left: I64
+    pub val right: I64
+}
+
+fn main() {
+    val p: MutableRef[Pair] = <MutableRef value=<Pair left=1I64 right=2I64 /> />
+    val x: I64 = move p->left
+    print(x)
+}

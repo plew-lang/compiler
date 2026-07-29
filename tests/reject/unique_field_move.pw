@@ -1,5 +1,5 @@
-// Partial moves (out of a field/element) aren't tracked yet, so `move h.f` would
-// leave `h.f` live and double-release. Reject until field moves are supported.
+// Aggregate partial moves are not part of v1: `move h.f` would leave `h`
+// partially initialized and collide with deterministic drop/deinit.
 import @Std/Io with { write }
 unique struct File { val fd: I64 }
 unique struct Holder { val f: File }

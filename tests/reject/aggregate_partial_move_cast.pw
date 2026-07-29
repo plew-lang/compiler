@@ -1,0 +1,13 @@
+// A no-op wrapper around a field must not hide aggregate partial move.
+import @Std/Io with { print }
+
+struct Pair {
+    val left: I64
+    val right: I64
+}
+
+fn main() {
+    val p: Pair = <Pair left=1I64 right=2I64 />
+    val x: I64 = move (p.left as I64)
+    print(x)
+}
