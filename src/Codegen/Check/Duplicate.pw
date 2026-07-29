@@ -140,49 +140,4 @@ pub impl Comp {
         return true
     }
 
-    inout fn checkDefaultExtCollisions() {
-        mut val di: U64 = 0
-        while di < self.decls.defaultExts.count() {
-            val de: DefaultExt = self.decls.defaultExts[di]
-            mut val fi: U64 = 0
-            while fi < self.arena.funcs.count() {
-                val f: Func = self.arena.funcs[fi]
-                if f.hasRecv {
-                    if f.recvId == de.typeId {
-                        if f.extId == de.extId {
-                            // this is a default-ext method on the type; check against
-                            // every other bare-callable method on the same type (own,
-                            // provided, or another default extension).
-                            mut val gi: U64 = 0
-                            while gi < self.arena.funcs.count() {
-                                if gi != fi {
-                                    val g: Func = self.arena.funcs[gi]
-                                    if g.hasRecv {
-                                        if g.recvId == de.typeId {
-                                            mut val gBare: Bool = false
-                                            if g.extId == 0U64 {
-                                                gBare = true
-                                            } else {
-                                                if self.isDefaultExt(typeId: de.typeId, extId: g.extId) {
-                                                    gBare = true
-                                                }
-                                            }
-                                            if gBare {
-                                                if self.sameSelector(a: f, b: g) {
-                                                    self.errorAt(offset: self.fnAnchor(f: f), msg: "defaultExtension method collides with another bare-callable method of the same selector on this type (don't make it default, or rename — spec/09)")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                gi += 1
-                            }
-                        }
-                    }
-                }
-                fi += 1
-            }
-            di += 1
-        }
-    }
 }

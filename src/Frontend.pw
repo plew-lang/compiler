@@ -16,7 +16,7 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, DefaultExt, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -30,7 +30,7 @@ export struct Comp {
     // `c.arena.funcs`, `c.arena.bytes`, etc.
     pub mut val arena: Arena = <Arena />
     // declaration / conformance / name side-tables built during loading & analysis
-    // (see `Decls`): traits, conformances, method aliases, default extensions,
+    // (see `Decls`): traits, conformances, method aliases,
     // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
     // the import-name / chain-result / keyword-span caches.
     pub mut val decls: Decls = <Decls />
@@ -750,10 +750,6 @@ export fn runFrontend() -> Comp {
     // trait provided methods (spec/08): copy each `impl Trait { }` provided
     // method onto every conforming type, so they ride normal method resolution.
     c.instantiateProvidedMethods()
-    // defaultExtension collisions (spec/09): a default extension's method must not
-    // share a selector with the type's own / provided / another default extension's
-    // method (they would both join bare resolution). Loud at the declaration.
-    c.checkDefaultExtCollisions()
     // recursive value types (spec/03): mark fields that close a containment cycle
     // onto their owner; codegen stores them behind a heap pointer so the C type is
     // finite (hidden indirection; value semantics kept by deref-read/repoint-write).

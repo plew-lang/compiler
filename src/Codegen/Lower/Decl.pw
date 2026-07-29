@@ -76,15 +76,6 @@ pub impl Comp {
             self.decls.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
         }
         self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isExtern=false defOffset=d.span.start />)
-        // `defaultExtension #Ext` (spec/09): record (type, extension) so the extension's
-        // methods join this type's bare resolution surface (findMethod).
-        val tid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
-        mut val di: U64 = 0
-        while di < d.defaultExts.count() {
-            val extN: Bind = self.internBytes(s: d.defaultExts[di])
-            self.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout self, start: extN.nameStart, len: extN.nameLen) />)
-            di += 1
-        }
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
@@ -110,15 +101,6 @@ pub impl Comp {
             i += 1
         }
         self.arena.enums.append(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants isUnique=d.isUnique defOffset=d.span.start />)
-        // `defaultExtension #Ext` in the enum body (spec/09): record (type, extension) so
-        // the extension's methods join this enum's bare resolution surface (findMethod).
-        val tid: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
-        mut val di: U64 = 0
-        while di < d.defaultExts.count() {
-            val extN: Bind = self.internBytes(s: d.defaultExts[di])
-            self.decls.defaultExts.append(<DefaultExt typeId=tid extId=intern(c: inout self, start: extN.nameStart, len: extN.nameLen) />)
-            di += 1
-        }
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }

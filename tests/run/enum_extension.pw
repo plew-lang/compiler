@@ -1,11 +1,10 @@
 import @Std/Io with { print }
 
-// Extensions on an enum receiver (spec/09): a `#Ext` view method, and a
-// `defaultExtension` that puts the extension's methods on the enum's bare surface.
+// Extensions on an enum receiver (spec/09): methods are reached through an
+// explicit `#Ext` view.
 enum Color {
     Red
     Green
-    defaultExtension #Naming
 }
 extension Naming {
     pub impl Color {
@@ -25,7 +24,6 @@ extension Hidden {
 
 fn main() {
     val c: Color = <Color.Green />
-    print(c.name())          // 2  (bare, via defaultExtension)
     print(c#Naming.name())   // 2  (explicit view)
     print(c#Hidden.secret()) // 99 (view-only extension)
 }

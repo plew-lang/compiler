@@ -527,13 +527,6 @@ export struct AssocBinding {
     pub val ty: U64
 }
 
-// A `defaultExtension #Ext` declaration (spec/09): the extension's methods on
-// `typeId` join that type's bare resolution surface (findMethod admits them).
-export struct DefaultExt {
-    pub val typeId: U64
-    pub val extId: U64
-}
-
 export struct Conform {
     pub val typeStart: U64
     pub val typeLen: U64
@@ -864,7 +857,6 @@ pub impl DestructureSite { factory }
 // Declaration / conformance / name side-tables built during loading & analysis.
 // `traits`/`conforms`/`methodAliases` drive trait conformance (spec/08): trait
 // decls, recorded conformances, and `via` requirement→witness redirects.
-// `defaultExts`: `defaultExtension #Ext` (type id, ext id) pairs (spec/09).
 // `derives`: `@[...]` derive requests on type decls. `funcBounds`: `where T:
 // Trait` bounds keyed by function index. `deinits`: types with a `deinit` (Bind
 // = receiver type span). `assocBindings`: `type Item = Concrete` lines from
@@ -880,7 +872,6 @@ export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val conforms: Array[Conform] = []
     pub mut val methodAliases: Array[MethodAlias] = []
-    pub mut val defaultExts: Array[DefaultExt] = []
     pub mut val derives: Array[DeriveReq] = []
     pub mut val funcBounds: Array[FuncBound] = []
     pub mut val deinits: Array[Bind] = []
@@ -1114,7 +1105,6 @@ pub impl Variant { factory }
 pub impl TraitDef { factory }
 pub impl DeriveReq { factory }
 pub impl AssocBinding { factory }
-pub impl DefaultExt { factory }
 pub impl Conform { factory }
 pub impl MethodAlias { factory }
 pub impl FuncBound { factory }

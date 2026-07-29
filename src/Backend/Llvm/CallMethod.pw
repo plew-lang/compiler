@@ -433,7 +433,7 @@ pub impl LlvmCtx {
             // a bare call to a method that exists only as an extension method (spec/09):
             // extension methods don't join bare resolution — point the user at the view.
             if c.extMethodNameExists(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: nameStart, nameLen: nameLen) {
-                c.errorAt(offset: nameStart, msg: "this method is only provided by an extension — call it through the view (`value#Ext.method()`) or declare `defaultExtension #Ext` on the type")
+                c.errorAt(offset: nameStart, msg: "this method is only provided by an extension — call it through the view (`value#Ext.method()`)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             // a multi-path inter-trait conformance (spec/09): the type reaches the target

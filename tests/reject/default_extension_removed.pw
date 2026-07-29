@@ -1,0 +1,17 @@
+// `defaultExtension` was removed from spec/05/09: extension methods are always
+// opt-in at the use site (`value#Ext.method()`).
+struct P {
+    val n: I64
+    defaultExtension #Ext
+}
+
+extension Ext {
+    pub impl P {
+        fn greet() -> I64 { return self.n }
+    }
+}
+
+fn main() {
+    val p: P = <P n=4 />
+    p#Ext.greet()
+}

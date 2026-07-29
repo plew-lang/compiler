@@ -470,19 +470,6 @@ pub impl Comp {
         return scalarInfo()
     }
 
-    inout fn isDefaultExt(typeId: U64, extId: U64) -> Bool {
-        mut val i: U64 = 0
-        while i < self.decls.defaultExts.count() {
-            if self.decls.defaultExts[i].typeId == typeId {
-                if self.decls.defaultExts[i].extId == extId {
-                    return true
-                }
-            }
-            i += 1
-        }
-        return false
-    }
-
     inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
@@ -494,10 +481,8 @@ pub impl Comp {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 // an extension method does not join bare resolution (spec/09): it is
-                // reachable only through a `value#Ext.m()` view (findExtMethod) — unless
-                // the receiver type declared it as a `defaultExtension`, which admits the
-                // extension's methods to the type's bare surface.
-                if !(f.extId != 0U64 && !self.isDefaultExt(typeId: qRecvId, extId: f.extId)) {
+                // reachable only through a `value#Ext.m()` view (findExtMethod).
+                if f.extId == 0U64 {
                 // a multi-path inter-trait conformance witness (spec/09) does not join
                 // bare resolution — the type does not conform to the target trait bare;
                 // it is reachable only through the path view `value#P` (findExtMethodById).
