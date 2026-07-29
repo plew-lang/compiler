@@ -1,0 +1,8 @@
+// Index projection is also an aggregate partial move.
+import @Std/Io with { print }
+
+fn main() {
+    val xs: Array[I64] = [1I64, 2I64]
+    val x: I64 = move xs[0]
+    print(x)
+}

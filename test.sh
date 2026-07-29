@@ -104,10 +104,13 @@ done
 reject_results=$(printf '%s\n' tests/reject/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     pw="$1"; [ -f "$pw" ] || exit 0
     name=$(basename "$pw" .pw)
+    want="tests/reject/$name.err"
+    perr="/tmp/t_reject_$name.err"
     code=0
-    sh -c "./plewc \"\$1\" >/dev/null 2>/dev/null" sh "$pw" 2>/dev/null || code=$?
+    sh -c "./plewc \"\$1\" >/dev/null 2>\"\$2\"" sh "$pw" "$perr" 2>/dev/null || code=$?
     if [ "$code" -eq 0 ]; then echo "FAIL reject/$name(accepted)"
     elif [ "$code" -ge 128 ]; then echo "FAIL reject/$name(crash=$code)"
+    elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL reject/$name(diagnostic)"
     else echo "PASS reject/$name"; fi
 ' sh)
 rpass=$(printf '%s\n' "$reject_results" | grep -c '^PASS' || true)
