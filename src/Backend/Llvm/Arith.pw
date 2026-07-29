@@ -109,7 +109,7 @@ pub impl LlvmCtx {
         return self.numPrefixCode(c: inout c, start: nameStart, len: nameLen - sl)
     }
 
-    // The numeric intrinsic floor (spec/12, O6). A call to an `extern "plew-intrinsic"`
+    // The numeric intrinsic floor (spec/12, O6). A call to an `extern(plewIntrinsic)`
     // numeric op (`i8Add`, `u32Lt`, `i64Neg`, …) lowers HERE to the primitive LLVM
     // operation — this is the ONE place the compiler knows what a primitive numeric op
     // does. Every source operator (`+`, `<`, `~`, …) reaches it only THROUGH its trait

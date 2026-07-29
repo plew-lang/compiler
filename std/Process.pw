@@ -1,6 +1,6 @@
 // @Std/Process — process arguments and termination (runtime intrinsics; see
 // @Std/Io for the boundary mechanism).
-export extern "plew-intrinsic" {
+export extern(plewIntrinsic) {
     // Number of command-line arguments (argv count, including argv[0]).
     fn argCount() -> I64
     // The i-th command-line argument (empty when out of range).

@@ -1,7 +1,7 @@
 // Part of the lowering pass (root: _.pw): top-level item dispatch
 // (extern / decl / import / directive / newtype / global).
 
-// Lower an `extern "plew-intrinsic"` block (spec/15): each fn -> a Func(isExtern),
+// Lower an `extern(plewIntrinsic)` block (spec/15): each fn -> a Func(isExtern),
 // each opaque struct -> a body-less StructDef(isExtern). Mirrors parseExtern. fns
 // are appended before structs; within each array order is source order, which is
 // all that matters (the arrays are independent). Reports a non-intrinsic ABI.

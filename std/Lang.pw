@@ -28,7 +28,7 @@ export @Std/Core with { I8, I16, I32, I64, U8, U16, U32, U64, F32, F64, Bool, St
 // no library home (the compiler supplies both syntax and representation), so they are
 // DECLARED opaque here, in the ambient module. Listed in spec/15's ambient set, so they
 // belong in @Std/Lang's surface.
-extern "plew-intrinsic" {
+extern(plewIntrinsic) {
     struct Promise[T]     struct JoinHandle[T]
 }
 

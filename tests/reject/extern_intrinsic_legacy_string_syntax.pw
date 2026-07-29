@@ -1,0 +1,5 @@
+extern "plew-intrinsic" {
+    fn oldIntrinsic() -> I64
+}
+
+fn main() {}

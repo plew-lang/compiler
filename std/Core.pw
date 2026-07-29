@@ -16,7 +16,7 @@
 // `impl T as TryFrom[S]` per source into Core.gen.pw (auto-parted). (I64 as a TARGET has no
 // fallible sub-64-bit source — all widen into it — and the wide/float sources are
 // hand-written below, next to where TryFrom lives.)
-extern "plew-intrinsic" {
+extern(plewIntrinsic) {
     @[IntTryFrom(sources: ["I16", "I32", "U8", "U16", "U32"])]
     struct I8
     @[IntTryFrom(sources: ["I32", "U16", "U32"])]
@@ -41,7 +41,7 @@ extern "plew-intrinsic" {
 // TYPES (above) and the operator traits (`Add`/`Sub`/…) both live in this module, so
 // these witnesses (`impl I32 as Add[I32]`) are coherent type-owned impls in the type's
 // own module (no orphan). @Std/Lang re-exports the types to make them ambient.
-extern "plew-intrinsic" {
+extern(plewIntrinsic) {
     fn i8Add(a: I8, b: I8) -> I8
     fn i8Sub(a: I8, b: I8) -> I8
     fn i8Mul(a: I8, b: I8) -> I8
@@ -634,7 +634,7 @@ export enum Ordering { Less  Equal  Greater }
 // `Array`/`Dictionary`/`Set`/`String` are all built on it. Like `Ref`, it is named
 // explicitly (no literal produces it) → import-required, so it lives here with the
 // other floor primitives.
-extern "plew-intrinsic" {
+extern(plewIntrinsic) {
     struct StrongRefCell[T]
     struct WeakRefCell[T]
 }
@@ -655,7 +655,7 @@ export struct WeakMutableRef[T] {
     val cell: WeakRefCell[T]
 }
 
-export extern "plew-intrinsic" {
+export extern(plewIntrinsic) {
     struct Buffer[T]
 }
 
@@ -663,7 +663,7 @@ export extern "plew-intrinsic" {
 // capability narrowing, alive-test, and strong-lock. Lowered by the compiler to the
 // two-counter cell ops (strong = the header rc, weak = the unused count slot); the wrapper
 // methods below are intercepted at the call site, so these bodies are never emitted.
-extern "plew-intrinsic" {
+extern(plewIntrinsic) {
     // allocate a fresh strong read-only reference cell whose pointee owns `value`.
     fn refNew[T](value: move T) -> StrongRefCell[T]
     // allocate a fresh strong mutable reference cell whose pointee owns `value`.
@@ -751,7 +751,7 @@ export struct String {
 // The element type T is recovered from the `Buffer[T]` argument / receiver. Like Array's
 // `arrayPush`/etc, these are never emitted — the methods below are intercepted at the
 // call site — so the declarations only have to type-check the wrapper bodies.
-export extern "plew-intrinsic" {
+export extern(plewIntrinsic) {
     fn bufferNew[T]() -> Buffer[T]
     fn bufferCount[T](buffer: Buffer[T]) -> U64
     fn bufferCapacity[T](buffer: Buffer[T]) -> U64
@@ -916,7 +916,7 @@ export trait IndexSet[Key] { type Value   inout fn indexSet(key: Key, value~: Va
 // (`String as TryFrom[Array[U8]]`, below). Lowered inline to the {ptr,i64} reinterpret.
 // Exported so @Plew/Syntax's parser and the compiler can turn known-valid byte ranges
 // into Strings without paying re-validation; user code should prefer the checked form.
-export extern "plew-intrinsic" {
+export extern(plewIntrinsic) {
     fn stringFromBytesUnchecked(b~: Array[U8]) -> String
     // a float -> its decimal text (the backend lowers it to snprintf "%g").
     fn floatToString(value~: F64) -> String

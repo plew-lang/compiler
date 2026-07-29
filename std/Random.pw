@@ -5,7 +5,7 @@
 
 // The entropy source is the one runtime intrinsic: a fresh 64-bit value from the OS
 // (`/dev/urandom`). Everything else is pure Plew on top of it.
-export extern "plew-intrinsic" {
+export extern(plewIntrinsic) {
     // A fresh 64-bit value from the operating system's entropy source.
     fn entropyU64() -> U64
 }

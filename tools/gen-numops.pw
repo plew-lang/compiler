@@ -4,7 +4,7 @@
 // <OpTrait>` for every primitive numeric type and operator, each body delegating to
 // its intrinsic (`i32Add` etc., which lower in genNumIntrinsic). The output IS
 // `std/Core/Num.pw` verbatim — a `part ./Core/Num` of @Std/Core, so it holds ONLY
-// impl blocks. The matching `extern "plew-intrinsic"` floor these bodies call
+// impl blocks. The matching `extern(plewIntrinsic)` floor these bodies call
 // (`i8Add`, `u64WrapAdd`, …) is hand-maintained in std/Core.pw (the module root — a
 // part cannot declare externs); adding an op means editing BOTH this generator and
 // that floor.

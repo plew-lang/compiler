@@ -10,7 +10,7 @@
 // declaring module). `__dictSeed`: the per-process dictionary hash seed (random once per
 // run, stable after). `bitCastU64`: reinterpret a signed integer's two's-complement bits
 // as U64 (for hashing signed keys; `as U64` is lossless-only and rejects negatives).
-extern "plew-intrinsic" {
+extern(plewIntrinsic) {
     fn __dictSeed() -> U64
     fn bitCastU64(n: I64) -> U64
 }

@@ -423,14 +423,14 @@ export struct StructDef {
     // `deinit`. A unique value is never CoW-shared; bindings move ownership and
     // the last owner runs `deinit` at scope exit. Default false = copyable.
     pub val isUnique: Bool
-    // declared body-less in an `extern "plew-intrinsic"` block (spec/15 core-
+    // declared body-less in an `extern(plewIntrinsic)` block (spec/15 core-
     // library boundary): an opaque lang-item type whose representation is
     // compiler-intrinsic (`I32`→int32_t, `String`→PlewString). Codegen emits no C
     // struct for it; the declaration only establishes that this module (Core)
     // *owns* the type, so it may coherently `impl` traits for it. Default false.
     pub val isExtern: Bool
     // declared in an `extern(c)` block (spec/15 FFI): an opaque foreign-C handle
-    // type (`type LLVMModuleRef`). Unlike a plew-intrinsic opaque type, codegen
+    // type (`type LLVMModuleRef`). Unlike a plewIntrinsic opaque type, codegen
     // emits a `typedef void* <Name>;` (the real layout lives in the C library; we
     // self-emit the declaration so no foreign header `#include` is needed).
     pub val isCExtern: Bool = false
@@ -668,12 +668,12 @@ export struct Func {
     // `Promise[T]`. Lowered to a stackless state machine (frame + resume + entry)
     // rather than a plain C function. Default false = an ordinary synchronous fn.
     pub val isAsync: Bool
-    // `extern "plew-intrinsic"` declaration (spec/15 core-library boundary): a
+    // `extern(plewIntrinsic)` declaration (spec/15 core-library boundary): a
     // body-less signature bound to the runtime symbol `plew_<name>`. The compiler
     // emits no prototype/body; a call lowers to `plew_<name>(args)`. Default false.
     pub val isExtern: Bool
     // refinement of isExtern for an `extern(c)` block (spec/15 FFI): the callee is
-    // a foreign C symbol. Unlike a plew-intrinsic extern, the compiler emits a C
+    // a foreign C symbol. Unlike a plewIntrinsic extern, the compiler emits a C
     // prototype (still no body — the library provides it) and a call lowers to the
     // RAW name `<name>(args)` (no `plew_` prefix, no overload mangling). Default false.
     pub val isCExtern: Bool = false
@@ -1146,4 +1146,3 @@ export fn appendBytes(into: inout Array[U8], from: Array[U8]) {
         i += 1
     }
 }
-

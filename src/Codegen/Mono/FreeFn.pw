@@ -230,7 +230,7 @@ pub impl Comp {
         val fi: U64 = self.resolvedCallee(id: id)
         if fi < self.arena.funcs.count() {
             if self.arena.funcs[fi].isExtern {
-                // a generic `extern "plew-intrinsic"` (e.g. `arrayPush[T]`, `arrayGet[T]`):
+                // a generic `extern(plewIntrinsic)` (e.g. `arrayPush[T]`, `arrayGet[T]`):
                 // lowered inline at the call site, so it has no monomorphized instance —
                 // never register one (else a bogus prototype/body with an unmapped return
                 // type leaks out).

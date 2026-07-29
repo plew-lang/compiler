@@ -186,7 +186,7 @@ pub impl LlvmCtx {
         // Resolve the callee up front and dispatch by IDENTITY, not by raw name (audit-3 P0,
         // spec/12): a real Plew function — user OR std, isExtern=false, including std's own
         // `print` and Format wrappers — is emitted through its real body. The intrinsic floor
-        // intercepts below fire ONLY when the name resolves to a std `extern "plew-intrinsic"`
+        // intercepts below fire ONLY when the name resolves to a std `extern(plewIntrinsic)`
         // declaration (isExtern) or to nothing (a backend-synthesized floor op). This is what
         // stops a user `fn write`/`fn truncU8` from being silently replaced by the intrinsic.
         val cfi: U64 = self.findFuncViewAware(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)

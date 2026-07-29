@@ -422,7 +422,7 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                // (I/O builtins are ordinary `extern "plew-intrinsic"` declarations now,
+                // (I/O builtins are ordinary `extern(plewIntrinsic)` declarations now,
                 // so their return type comes from the resolved Func below — no special
                 // cases here.)
                 // `pow(base:, exp:)` (spec/12): the bare call dispatches on the base

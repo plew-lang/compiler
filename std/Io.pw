@@ -9,7 +9,7 @@
 
 import @Std/Core with { Format }
 
-export extern "plew-intrinsic" {
+export extern(plewIntrinsic) {
     // Write a string to stdout (no trailing newline).
     fn write(s: String)
     // Write a single byte to stdout.
