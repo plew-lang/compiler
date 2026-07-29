@@ -14,7 +14,7 @@ unique enum Holder {
 }
 
 fn consume(h: move Holder) {
-    match h {
+    match move h {
         Holder.Full(val c) => { print(c.v + 100) }
         Holder.Empty => { print(0I32) }
     }

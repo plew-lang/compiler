@@ -1,0 +1,17 @@
+// `match borrow` needs borrow-pattern bindings and is not part of v1.
+import @Std/Io with { print }
+
+unique struct File { pub val fd: I64 }
+
+unique enum ResultFile {
+    Ok(file: File)
+    Err(code: I64)
+}
+
+fn main() {
+    val r: ResultFile = <ResultFile.Ok file=<File fd=7 /> />
+    match borrow r {
+        ResultFile.Ok(val file) => { print(file.fd) }
+        ResultFile.Err(code: _) => { print(0I64) }
+    }
+}

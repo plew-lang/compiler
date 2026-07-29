@@ -375,6 +375,7 @@ pub impl Comp {
                 }
             }
             Expr.MatchExpr(val scrut, val arms) => {
+                self.checkMatchAccessMode(scrut: scrut, arms: arms)
                 self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {
@@ -692,6 +693,10 @@ pub impl Comp {
         if a.isStruct {
             while bi < a.binds.count() {
                 val bd: Bind = a.binds[bi]
+                if bd.nameLen == 0U64 {
+                    bi += 1
+                    continue
+                }
                 mut val ft: TypeInfo = scalarInfo()
                 if generic {
                     ft = self.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
@@ -704,6 +709,10 @@ pub impl Comp {
         } else {
             while bi < a.binds.count() {
                 val bd: Bind = a.binds[bi]
+                if bd.nameLen == 0U64 {
+                    bi += 1
+                    continue
+                }
                 if generic {
                     val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                     self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)

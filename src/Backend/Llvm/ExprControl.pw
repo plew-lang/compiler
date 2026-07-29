@@ -80,6 +80,7 @@ pub impl LlvmCtx {
             matchExpectedTy = crET
         }
         val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: scrut)
+        val consuming: Bool = c.matchScrutIsMove(scrut: scrut)
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a value-position struct destructuring match (irrefutable, one arm): bind the
         // scrutinee's fields (under any generic env), then evaluate the arm expression.
@@ -161,6 +162,9 @@ pub impl LlvmCtx {
         if !(exprAliasesPlace(c: inout c, id: scrut)) {
             self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot, ty: sty, kind: 0U64, structIdx: scrutSentinel, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: scrutRef)
             scrutTempLi = self.nLocals - 1U64
+            if consuming {
+                self.locMoved[scrutTempLi] = true
+            }
         }
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "vmatch.end"))
@@ -188,7 +192,7 @@ pub impl LlvmCtx {
             self.terminated = false
             if !(arm.isWildcard) {
                 val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
-                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
+                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot, consuming: consuming)
                 if didB {
                     c.cur.typeParams = savedVP
                     c.cur.typeArgs = savedVA
@@ -213,7 +217,11 @@ pub impl LlvmCtx {
                 // payload binds borrow the scrutinee's heap (bindMatchPayload marks them
                 // not-owned), so no scope-exit release is needed before branching — the
                 // arm VALUE is already an independent copy (`give` runs copyValueIfPlace).
-                // They are popped below (nLocals = saved), same as the statement match.
+                // In a consuming match, the binds are owned payload moves; drop them
+                // after the give value has been materialized but before leaving the arm.
+                if consuming {
+                    self.dropScope(c: inout c, fromMark: saved, excludeLi: scrutSentinel)
+                }
                 phiBlocks.append(LLVMGetInsertBlock(self.b))
                 LLVMBuildBr(self.b, contBB)
             }

@@ -24,6 +24,38 @@ pub impl Comp {
         }
     }
 
+    inout fn matchScrutIsMove(scrut: U64) -> Bool {
+        match self.arena.exprs[scrut] {
+            Expr.Move(operand: _, val isBorrow) => { return !(isBorrow) }
+            _ => { return false }
+        }
+    }
+
+    inout fn checkMatchAccessMode(scrut: U64, arms: Array[MatchArm]) {
+        match self.arena.exprs[scrut] {
+            Expr.Move(operand: _, val isBorrow) => {
+                if isBorrow {
+                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match borrow` is not part of v1; match a copyable value directly, or use `match move` to consume a unique enum (spec/11)")
+                }
+                if arms.count() > 0U64 {
+                    if arms[0].isStruct {
+                        self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match move` is consuming enum match; struct destructuring by move would be aggregate partial move, which v1 rejects (spec/11)")
+                    }
+                }
+                return
+            }
+            _ => {}
+        }
+        if self.isPlaceExpr(id: scrut) {
+            val ti: TypeInfo = self.typeOf(id: scrut)
+            if ti.kind == 2 {
+                if self.typeIsUnique(start: ti.nameStart, len: ti.nameLen) {
+                    self.errorAt(offset: self.exprOffset(id: scrut), msg: "matching a unique storage place requires `match move`; bare `match` does not consume the owner (spec/11)")
+                }
+            }
+        }
+    }
+
     inout fn checkUniqueArgModes(args: Array[Arg]) {
         mut val i: U64 = 0
         while i < args.count() {

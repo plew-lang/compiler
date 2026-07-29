@@ -606,6 +606,10 @@ pub impl Comp {
         mut val bi: U64 = 0
         while bi < a.binds.count() {
             val bd: Bind = a.binds[bi]
+            if bd.nameLen == 0U64 {
+                bi += 1
+                continue
+            }
             if genericMatch {
                 val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: scrutTi.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 // carry the payload's STRUCTURED ref (a generic payload `Pong[I64]`

@@ -276,6 +276,7 @@ pub impl Comp {
                 self.popLocals(mark: forMark)
             }
             Stmt.Match(val scrut, val arms) => {
+                self.checkMatchAccessMode(scrut: scrut, arms: arms)
                 self.verifyExpr(id: scrut)
                 self.checkMatchArmsEnum(scrut: scrut, arms: arms)
                 if !(self.matchExhaustive(arms: arms)) {

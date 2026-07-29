@@ -1,0 +1,22 @@
+// In a consuming match, `field: _` drops that active payload field at pattern
+// commit, before the arm body runs.
+import @Std/Io with { print }
+
+unique struct File {
+    pub val fd: I64
+    deinit { print(self.fd) }
+}
+
+unique enum ResultFile {
+    Ok(file: File)
+    Err(code: I64)
+}
+
+fn main() {
+    val r: ResultFile = <ResultFile.Ok file=<File fd=7 /> />
+    match move r {
+        ResultFile.Ok(file: _) => { print(100I64) }
+        ResultFile.Err(code: _) => { print(0I64) }
+    }
+    print(200I64)
+}

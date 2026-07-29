@@ -8,6 +8,7 @@
 
 pub impl LlvmCtx {
     inout fn genLlvmMatch(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
+        val consuming: Bool = c.matchScrutIsMove(scrut: scrut)
         val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: scrut)
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a struct destructuring match `match s { S { val x } => … }` is irrefutable
@@ -94,6 +95,9 @@ pub impl LlvmCtx {
         if !(exprAliasesPlace(c: inout c, id: scrut)) {
             self.pushLocalR(nameStart: 0U64, nameLen: 0U64, ptr: sslot, ty: sty, kind: 0U64, structIdx: scrutSentinel, isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: scrutRef)
             scrutTempLi = self.nLocals - 1U64
+            if consuming {
+                self.locMoved[scrutTempLi] = true
+            }
         }
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, sty, sslot, 0U64, anon()), anon())
         val contBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "match.end"))
@@ -127,16 +131,21 @@ pub impl LlvmCtx {
                 // bind the payload under the enum env, then restore the outer env so the
                 // arm body grounds against the enclosing method/function, not the enum.
                 val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
-                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot)
+                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot, consuming: consuming)
                 if didB {
                     c.cur.typeParams = savedMP
                     c.cur.typeArgs = savedMA
                 }
             }
             self.genLlvmBlock(c: inout c, id: arm.body)
-            // payload binds borrow the scrutinee's heap (bindMatchPayload marks them
-            // not-owned), so no scope-exit release is needed here — the binds in
-            // [savedBB, nLocals) all skip emitDeinitCall. Just pop them off the local stack.
+            if consuming {
+                if !(self.terminated) {
+                    self.dropScope(c: inout c, fromMark: savedBB, excludeLi: scrutSentinel)
+                }
+            }
+            // Non-consuming payload binds borrow the scrutinee's heap and skip
+            // scope-exit release. Consuming payload binds are owned and were dropped
+            // above on fall-through; moved-out binds are skipped by locMoved.
             self.nLocals = savedBB
             if !(self.terminated) {
                 LLVMBuildBr(self.b, contBB)
@@ -170,8 +179,31 @@ pub impl LlvmCtx {
 
     // Bind a match arm's payload fields as locals: read the variant payload struct
     // back from the scrutinee's payload area and extractvalue each bound field.
-    inout fn bindMatchPayload(c: inout Comp, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef) {
+    inout fn releasePayloadFieldValue(c: inout Comp, fd: FieldDef, fv: LLVMValueRef) {
+        if c.fieldIsBoxed(f: fd) {
+            self.emitBoxedFieldRelease(c: inout c, cell: fv, f: fd)
+            return
+        }
+        if fd.tyIsArray {
+            val er: U64 = arrayFieldElemRef(c: inout c, f: fd)
+            mut val ety: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
+            if er != 0U64 {
+                ety = self.llvmTypeOfRef(c: inout c, ref: er)
+            }
+            self.emitReleaseArrayValue(c: inout c, data: self.arrValData(c: inout c, arr: fv), count: self.arrValCount(c: inout c, arr: fv), elemTy: ety, elemRef: er)
+            return
+        }
+        val g: U64 = c.arcFieldTy(f: fd)
+        if c.arcNeedsRelease(ref: g) {
+            self.valueArc(c: inout c, v: fv, typeRef: g, retain: false)
+        }
+    }
+
+    inout fn bindMatchPayload(c: inout Comp, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef, consuming: Bool) {
         if arm.binds.count() == 0U64 {
+            if consuming {
+                self.emitEnumRelease(c: inout c, v: LLVMBuildLoad2(self.b, scrutTy, scrutSlot, anon()), eid: eid, ety: scrutTy)
+            }
             return
         }
         val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
@@ -247,9 +279,17 @@ pub impl LlvmCtx {
                 }
                 // a boxed (recursive) payload field holds a heap pointer; load the boxed
                 // value back. A non-boxed field is the value directly.
-                mut val fv: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fidx, anon())
+                val rawFv: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fidx, anon())
+                mut val fv: LLVMValueRef = rawFv
                 if c.fieldIsBoxed(f: fd) {
                     fv = LLVMBuildLoad2(self.b, pty, fv, anon())
+                }
+                if b.nameLen == 0U64 {
+                    if consuming {
+                        self.releasePayloadFieldValue(c: inout c, fd: fd, fv: rawFv)
+                    }
+                    bi += 1
+                    continue
                 }
                 // inside an async fn the bind's storage is a frame field (survives an
                 // `await` inside the arm); otherwise a plain alloca.
@@ -373,8 +413,10 @@ pub impl LlvmCtx {
                 // A non-array heap payload bind (String / struct / enum) also borrows — see
                 // the array note above; no retain, marked not-owned, escapes copy at the dest.
                 self.pushLocalR(nameStart: b.nameStart, nameLen: b.nameLen, ptr: slot, ty: pty, kind: bindKind, structIdx: bindStructIdx, isArr: isArrF, elemTy: elemTyF, elemKind: elemKindF, typeRef: tref)
-                // borrow: this bind never deinit's (it shares the scrutinee's still-owned heap).
-                self.setLocalOwned(owned: false)
+                // A normal match bind borrows the scrutinee's still-owned payload. A
+                // consuming match has moved the enum owner into this arm, so the bind
+                // becomes the new owner and will be dropped by the arm scope.
+                self.setLocalOwned(owned: consuming)
                 // an array payload bind (`Expr.Call(.., val args)` with args: Array[Arg]):
                 // track the element ref so nested-array/Ref elements resolve in the arm body.
                 if isArrF {

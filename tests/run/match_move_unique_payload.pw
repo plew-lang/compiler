@@ -1,0 +1,27 @@
+// `match move` consumes the enum owner and transfers an active payload bind to
+// the arm local, so moving that bind onward does not leave the original enum to
+// drop the same payload again.
+import @Std/Io with { print }
+
+unique struct File {
+    pub val fd: I64
+    deinit { print(self.fd) }
+}
+
+unique enum ResultFile {
+    Ok(file: File)
+    Err(code: I64)
+}
+
+fn take(f: move File) {
+    print(100I64)
+}
+
+fn main() {
+    val r: ResultFile = <ResultFile.Ok file=<File fd=7 /> />
+    match move r {
+        ResultFile.Ok(val file) => { take(f: move file) }
+        ResultFile.Err(code: _) => { print(0I64) }
+    }
+    print(200I64)
+}
