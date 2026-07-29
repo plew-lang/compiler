@@ -1,0 +1,10 @@
+extern(c) {
+    fn collide(x~: I64) -> I64
+}
+
+fn collide(x~: I64) -> I64 {
+    return x
+}
+
+fn main() {
+}

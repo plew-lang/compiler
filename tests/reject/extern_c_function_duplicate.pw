@@ -1,0 +1,10 @@
+extern(c) {
+    fn collide(x~: I64) -> I64
+}
+
+extern(c) {
+    fn collide(y~: U64) -> U64
+}
+
+fn main() {
+}

@@ -1,0 +1,10 @@
+extern(c) {
+    type Thing
+}
+
+struct Thing {
+    pub val n: I64
+}
+
+fn main() {
+}

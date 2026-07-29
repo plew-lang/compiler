@@ -1,0 +1,10 @@
+extern(c) {
+    fn collide(x~: I64) -> I64
+}
+
+extern(plewIntrinsic) {
+    fn collide(x~: I64) -> I64
+}
+
+fn main() {
+}

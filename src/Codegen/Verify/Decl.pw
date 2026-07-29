@@ -228,23 +228,24 @@ pub impl Comp {
     inout fn checkDupTypeNames() {
         mut val names: Array[U64] = []
         mut val offs: Array[U64] = []
+        mut val mods: Array[U64] = []
         mut val si: U64 = 0
         while si < self.arena.structs.count() {
             val sd: StructDef = self.arena.structs[si]
-            if !(sd.isExtern) {
-                if self.moduleOf(offset: sd.nameStart) == 0U64 {
-                    names.append(intern(c: inout self, start: sd.nameStart, len: sd.nameLen))
-                    offs.append(sd.nameStart)
-                }
+            if self.offsetIsLoaded(offset: sd.defOffset) {
+                names.append(sd.nameId)
+                offs.append(sd.defOffset)
+                mods.append(self.moduleOf(offset: sd.defOffset))
             }
             si += 1
         }
         mut val ei: U64 = 0
         while ei < self.arena.enums.count() {
             val ed: EnumDef = self.arena.enums[ei]
-            if self.moduleOf(offset: ed.nameStart) == 0U64 {
+            if self.offsetIsLoaded(offset: ed.defOffset) {
                 names.append(intern(c: inout self, start: ed.nameStart, len: ed.nameLen))
-                offs.append(ed.nameStart)
+                offs.append(ed.defOffset)
+                mods.append(self.moduleOf(offset: ed.defOffset))
             }
             ei += 1
         }
@@ -252,13 +253,29 @@ pub impl Comp {
         while i < names.count() {
             mut val j: U64 = i + 1U64
             while j < names.count() {
-                if names[i] == names[j] {
+                if mods[i] == mods[j] && names[i] == names[j] {
                     self.errorAt(offset: offs[j], msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
                 }
                 j += 1
             }
             i += 1
         }
+    }
+
+    inout fn funcDeclModule(f: Func) -> U64 {
+        if self.offsetIsLoaded(offset: f.defOffset) {
+            return self.moduleOf(offset: f.defOffset)
+        }
+        return self.moduleOf(offset: f.nameStart)
+    }
+
+    inout fn sameFuncNamespace(a: Func, b: Func) -> Bool {
+        if a.hasRecv != b.hasRecv { return false }
+        if a.isAssoc != b.isAssoc { return false }
+        if a.hasRecv || a.isAssoc {
+            return a.recvId == b.recvId
+        }
+        return true
     }
 
     inout fn paramViewId(p: Param) -> U64 {
@@ -322,8 +339,8 @@ pub impl Comp {
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
-            if f.typeParams.count() == 0U64 && !f.isProvided && !f.isExtern && !self.fnHasDefault(f: f) {
-                if self.moduleOf(offset: f.nameStart) == 0U64 {
+            if !f.isProvided {
+                if self.offsetIsLoaded(offset: f.defOffset) {
                     cand.append(fi)
                 }
             }
@@ -333,8 +350,21 @@ pub impl Comp {
         while i < cand.count() {
             mut val j: U64 = i + 1U64
             while j < cand.count() {
-                if self.isExactDupFn(a: self.arena.funcs[cand[i]], b: self.arena.funcs[cand[j]]) {
-                    self.errorAt(offset: self.arena.funcs[cand[j]].nameStart, msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
+                val a: Func = self.arena.funcs[cand[i]]
+                val b: Func = self.arena.funcs[cand[j]]
+                if self.funcDeclModule(f: a) == self.funcDeclModule(f: b) {
+                    if self.sameFuncNamespace(a: a, b: b) {
+                    if a.nameId == b.nameId {
+                        if !(a.hasRecv || a.isAssoc) && (a.isExtern || b.isExtern) {
+                            self.errorAt(offset: self.fnAnchor(f: b), msg: "duplicate function name: `extern(c)`, `extern(plewIntrinsic)`, and ordinary `fn` share one top-level namespace in a module")
+                        }
+                        if a.typeParams.count() == 0U64 && b.typeParams.count() == 0U64 && !self.fnHasDefault(f: a) && !self.fnHasDefault(f: b) {
+                            if self.isExactDupFn(a: a, b: b) {
+                                self.errorAt(offset: self.fnAnchor(f: b), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
+                            }
+                        }
+                    }
+                    }
                 }
                 j += 1
             }
