@@ -160,12 +160,6 @@ pub impl Comp {
             Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, body: _) => {
                 self.checkFnSigAgainst(ft: ft, params: params, retTy: retTy, offset: self.exprOffset(id: init))
             }
-            Expr.Ident(start: val s, len: val l) => {
-                val fi: U64 = self.firstFuncByName(nameStart: s, nameLen: l)
-                if fi < self.arena.funcs.count() {
-                    self.checkFnSigAgainst(ft: ft, params: self.arena.funcs[fi].params, retTy: self.arena.funcs[fi].retTy, offset: self.exprOffset(id: init))
-                }
-            }
             _ => {}
         }
     }
@@ -496,6 +490,14 @@ pub impl Comp {
                             }
                         }
                         k += 1
+                    }
+                    return
+                }
+                if self.typeHasAssocFn(typeStart: rStart, typeLen: rLen, nameStart: nameStart, nameLen: nameLen) {
+                    if args.count() == 0U64 {
+                        self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; call it with the required arguments or wrap the call in an explicit closure (spec/07)")
+                    } else {
+                        self.errorAt(offset: nameStart, msg: "no matching associated function for this argument list (spec/07)")
                     }
                     return
                 }

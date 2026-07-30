@@ -1,0 +1,6 @@
+// spec/04: pass a named function through an explicit closure wrapper.
+fn twice(n: I32) -> I32 { return n * 2 }
+fn apply(f: fn(n: I32) -> I32) -> I32 { return f(n: 3) }
+fn main() {
+    val x: I32 = apply(f: twice)
+}

@@ -1,6 +1,10 @@
-// Part of the LLVM backend (root: _.pw): function-value thunk creation and emission.
+// Part of the LLVM backend (root: _.pw): legacy named-function-value thunk creation.
 
-// ---- function-value thunks ----
+// ---- legacy named-function-value thunks ----
+//
+// v1 does not expose named function declarations as first-class values; callers must use
+// explicit closure literals. These helpers are intentionally idle while the backend's
+// closure ABI still has the historical storage slots.
 //
 // Index into st.thunk* for a function index, or st.thunkIdx.count().
 
@@ -16,17 +20,15 @@ pub impl LlvmCtx {
         return self.thunkIdx.count()
     }
 
-    // Declare a thunk `__fnthunk<fi>(ptr env, params...)` for plain user function `fi`
-    // (so a bare reference to it can be the {fn, env} value). Idempotent; only declares
-    // for a function the backend actually emits (a plain user fn).
+    // Legacy thunk declaration for the old implicit named-function-value path. Idempotent;
+    // unused in v1.
     inout fn declareThunk(c: inout Comp, fi: U64) {
         if self.thunkSlot(fi: fi) < self.thunkIdx.count() {
             return
         }
         val f: Func = c.arena.funcs[fi]
-        // a free function the backend emits as a `gf` instance (its body forwarded to by the
-        // thunk via ensureFnInst): mirror that path's acceptance (extern / main / method /
-        // async are not function-value-able here).
+        // A free function the backend emits as a `gf` instance (its body forwarded to by the
+        // thunk via ensureFnInst): mirror that path's acceptance.
         if f.hasRecv {
             return
         }
@@ -51,8 +53,7 @@ pub impl LlvmCtx {
         self.thunkTy.append(fty)
     }
 
-    // Declare a thunk for every bare identifier that names a plain free function (a
-    // function-as-value use; over-approx is harmless — an unused thunk just sits).
+    // Legacy collection hook; backend no longer calls it for source programs.
     inout fn collectThunks(c: inout Comp) {
         mut val i: U64 = 0
         while i < c.arena.exprs.count() {
@@ -72,8 +73,8 @@ pub impl LlvmCtx {
         }
     }
 
-    // Emit each thunk body: forward the closure args (skipping env at 0) to the plain
-    // function pf<fi>, returning its result.
+    // Emit each legacy thunk body: forward the closure args (skipping env at 0) to the
+    // plain function, returning its result.
     inout fn emitThunks(c: inout Comp) {
         mut val s: U64 = 0
         while s < self.thunkIdx.count() {
@@ -88,8 +89,7 @@ pub impl LlvmCtx {
                 av.append(LLVMGetParam(fv, pi + 1U64))
                 pi += 1
             }
-            // a free function is its 0-type-arg `gf` instance; a method-as-value still
-            // resolves through its `pf` symbol (methods are not yet unified — B3-2).
+            // A free function is its 0-type-arg `gf` instance.
             mut val callTy: LLVMTypeRef = self.voidty
             mut val callVal: LLVMValueRef = LLVMConstNull(self.ptrty)
             if f.hasRecv {

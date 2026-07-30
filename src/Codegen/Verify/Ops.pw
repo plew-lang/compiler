@@ -320,6 +320,19 @@ pub impl Comp {
     }
 
     inout fn verifyFieldReadVis(base: U64, nameStart: U64, nameLen: U64) {
+        match self.arena.exprs[base] {
+            Expr.Ident(val start, val len) => {
+                if self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.funcs.count()) {
+                    if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
+                        self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)")
+                    } else {
+                        self.errorAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)")
+                    }
+                    return
+                }
+            }
+            _ => {}
+        }
         val bt: TypeInfo = self.typeOf(id: base)
         if bt.kind == 2 {
             // an enum value has no fields — `opt.x` / `e.field` is always invalid (reach a

@@ -45,46 +45,27 @@ pub impl LlvmCtx {
             }
             Expr.Ident(val start, val len) => {
                 // the binding category recorded by the name-resolution pass (entry-module
-                // bodies); unfilled for std / synthesized nodes. A recorded Fn is definitely
-                // not a local, so skip the local scan and go straight to the closure value;
-                // value/unfilled take the local scan first (its own SSA-pointer mechanism).
+                // bodies); unfilled for std / synthesized nodes. A named function declaration
+                // is not a value (frontend rejects it); backend identifier emission only reads
+                // locals/params/globals.
                 mut val bindCode: I64 = identUnfilledCode()
                 mut val fnTarget: U64 = identNoTarget()
                 if id < c.typeCache.identBind.count() {
                     bindCode = c.typeCache.identBind[id]
                     fnTarget = c.typeCache.identTarget[id]
                 }
-                if bindCode != identFnCode() {
-                    // a recorded local/param: locate the resolver-decided DECLARATION by its
-                    // unique offset (not "innermost same-named local"); fall back to the name
-                    // scan for self / globals / unrecorded (std / synthesized) nodes.
-                    mut val li: U64 = self.nLocals
-                    if bindCode == identValueCode() && fnTarget != identNoTarget() {
-                        li = self.findLocalByDeclStart(declStart: fnTarget)
-                    }
-                    if li >= self.nLocals {
-                        li = self.findLocal(c: inout c, start: start, len: len)
-                    }
-                    if li < self.nLocals {
-                        return LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
-                    }
+                // a recorded local/param: locate the resolver-decided DECLARATION by its
+                // unique offset (not "innermost same-named local"); fall back to the name
+                // scan for self / globals / unrecorded (std / synthesized) nodes.
+                mut val li: U64 = self.nLocals
+                if bindCode == identValueCode() && fnTarget != identNoTarget() {
+                    li = self.findLocalByDeclStart(declStart: fnTarget)
                 }
-                // a bare reference to a free function (`val g = twice`): the closure
-                // {thunk, env=null} value, where the thunk adapts it to the closure ABI.
-                // Prefer the resolver-recorded callee; fall back to firstFuncByName for an
-                // unrecorded (std / synthesized) node.
-                mut val fvi: U64 = fnTarget
-                if fvi == identNoTarget() {
-                    fvi = c.firstFuncByName(nameStart: start, nameLen: len)
+                if li >= self.nLocals {
+                    li = self.findLocal(c: inout c, start: start, len: len)
                 }
-                if fvi < c.arena.funcs.count() {
-                    val ts: U64 = self.thunkSlot(fi: fvi)
-                    if ts < self.thunkIdx.count() {
-                        mut val cv: LLVMValueRef = LLVMGetUndef(self.closureTy)
-                        cv = LLVMBuildInsertValue(self.b, cv, self.thunkVal[ts], 0U64, anon())
-                        cv = LLVMBuildInsertValue(self.b, cv, LLVMConstNull(self.ptrty), 1U64, anon())
-                        return cv
-                    }
+                if li < self.nLocals {
+                    return LLVMBuildLoad2(self.b, self.locTy[li], self.locPtr[li], anon())
                 }
                 c.errorAt(offset: start, msg: "LLVM backend: unknown identifier (only locals supported so far)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)

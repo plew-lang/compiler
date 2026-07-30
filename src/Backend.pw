@@ -221,9 +221,8 @@ struct LlvmCtx {
     pub mut val cloIdx: Array[U64]
     pub mut val cloVal: Array[LLVMValueRef]
     pub mut val cloTy: Array[LLVMTypeRef]
-    // function-value thunks, cached by c.arena.funcs index: a bare function reference
-    // (`val g = twice`) becomes a closure {thunk, null}, where the thunk adapts the
-    // plain function to the env-first closure ABI by forwarding its arguments.
+    // Legacy named-function-value thunks. Kept empty in v1: a named function declaration is
+    // not a value, so first-class functions must be explicit closure literals.
     pub mut val thunkIdx: Array[U64]
     pub mut val thunkVal: Array[LLVMValueRef]
     pub mut val thunkTy: Array[LLVMTypeRef]
@@ -1043,8 +1042,6 @@ export fn emitLlvm(c: inout Comp) {
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
     st.collectClosures(c: inout c)
-    // declare function-value thunks (a bare function reference -> {thunk, null}).
-    st.collectThunks(c: inout c)
 
     // module-level variables (spec/15): emit `plew_init_globals` (one body that runs
     // every global's initializer once) and record each global's metadata, BEFORE any
@@ -1086,7 +1083,8 @@ export fn emitLlvm(c: inout Comp) {
     // generic-method instance bodies. (Free-function instance bodies — eager `gf` plus any
     // lazily declared via ensureFnInst — drain through genFnEmit in the fixpoint loop below.)
     st.emitGenMethods(c: inout c)
-    // lambda-lifted closure bodies + function-value thunks.
+    // lambda-lifted closure bodies. Named-function-value thunks stay empty in v1 because
+    // named declarations are not first-class values.
     st.emitClosures(c: inout c)
     st.emitThunks(c: inout c)
     // provided trait methods + lazily-declared std/generic methods reached during

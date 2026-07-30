@@ -1,0 +1,8 @@
+// spec/07: an associated function declaration is callable, but not a value.
+struct S { pub val x: I32 }
+pub impl S {
+    assoc fn make(x: I32) -> S { return <S x=x /> }
+}
+fn main() {
+    val f = S.make
+}

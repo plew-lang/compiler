@@ -1,0 +1,8 @@
+// spec/04: returning a function value requires an explicit closure wrapper.
+fn twice(n: I32) -> I32 { return n * 2 }
+fn make() -> fn(n: I32) -> I32 {
+    return twice
+}
+fn main() {
+    val g: fn(n: I32) -> I32 = make()
+}

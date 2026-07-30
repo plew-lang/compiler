@@ -40,14 +40,14 @@ pub impl Comp {
     // identTypeQualCode / identUndefCode) and the backend-locate `target` together (see
     // Ir.IdentBinding). Categories: `self`, a local/parameter/global (all live in
     // c.cur.locals during these passes — seedGlobalLocals folds globals in — so
-    // localIndexByName finds them) = a VALUE; a bare free-function name = a closure VALUE
-    // tracked as Fn (the backend lowers it to a {thunk, env} closure); a type / primitive /
-    // type-parameter of `tpFn` = a type QUALIFIER, valid only as an assoc-fn receiver
-    // (`Buffer.new()` / `T.make()`), never a value read; anything else = UNDEF. The target:
+    // localIndexByName finds them) = a VALUE; a bare free-function name = a callable
+    // DECLARATION, not a value; a type / primitive / type-parameter of `tpFn` = a type
+    // QUALIFIER, valid only as an assoc-fn receiver (`Buffer.new()` / `T.make()`), never a
+    // value read; anything else = UNDEF. The target:
     // for a local/param/global value, the DECLARATION's source offset (locals[li].nameStart)
     // — a unique per-declaration key the backend matches against its locStart, so it locates
     // exactly the declaration the resolver chose (not "the innermost same-named local"), with
-    // a name scan as a safe fallback; for a fn value, the resolved fn index; identNoTarget()
+    // a name scan as a safe fallback; for a callable declaration, the resolved fn index; identNoTarget()
     // for `self`, a type qualifier, or an undef. Each name table (locals, funcs) is scanned
     // at most once, so the classification and the target come from the SAME lookup and cannot
     // disagree — the resolver never re-derives what it already found. `tpFn >= funcs.count()`
@@ -99,11 +99,10 @@ pub impl Comp {
     }
 
     // Whether a resolved binding code (a classifyIdent / recordIdent result) is a
-    // VALUE-position read: a value or a free-fn closure value — not a type qualifier
-    // (`val x = SomeType` is a misuse) nor an unresolved name. Folds the duplicated
-    // `!= identValueCode && != identFnCode` guard the verify/generic Ident walks share.
+    // VALUE-position read: only a value, not a callable declaration, a type qualifier
+    // (`val x = SomeType` is a misuse), nor an unresolved name.
     inout fn bindIsValue(code: I64) -> Bool {
-        return code == identValueCode() || code == identFnCode()
+        return code == identValueCode()
     }
 
     inout fn identIsTypeQualifier(start: U64, len: U64, tpFn: U64) -> Bool {
@@ -368,6 +367,19 @@ pub impl Comp {
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
+                match self.arena.exprs[base] {
+                    Expr.Ident(val start, val len) => {
+                        if self.identIsTypeQualifier(start: start, len: len, tpFn: self.cur.checkFn) {
+                            if self.typeHasAssocFn(typeStart: start, typeLen: len, nameStart: nameStart, nameLen: nameLen) {
+                                self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; wrap the call in an explicit closure (e.g. `fn(...) { return Type.name(...) }`) (spec/07)")
+                            } else {
+                                self.errorAt(offset: nameStart, msg: "a type name has no fields; use `Type.fn(...)` to call an associated function, or construct a value before reading fields (spec/07)")
+                            }
+                            return
+                        }
+                    }
+                    _ => {}
+                }
                 self.checkBoundsExpr(exprId: base)
                 // a field access on a type-parameter value is invalid: `T` is opaque and
                 // traits declare methods, not fields, so a bound cannot grant a field
@@ -450,15 +462,20 @@ pub impl Comp {
                 // non-generic path runs (verifyExpr), now for EVERY module's GENERIC bodies —
                 // walked here regardless of instantiation, so a dead generic's `return n`
                 // (forgotten `self.`) is still caught at declaration (std included — no
-                // trusted-import boundary). A bare type-parameter name is a valid assoc-fn
-                // receiver (`T.make()`), like a type.
+                // trusted-import boundary). A named function is a callable declaration, not a
+                // value. A bare type-parameter name is a valid assoc-fn receiver (`T.make()`),
+                // like a type.
                 // value position: a bare type / type-parameter name reaching here is NOT a
                 // value (an assoc-fn receiver `T.make()` is rerouted via checkBoundsRecv) —
                 // so it is an undefined-identifier misuse (`val x = SomeType`).
                 if self.cur.checkFn < self.arena.funcs.count() {
                     val bindCode: I64 = self.recordIdent(id: exprId, start: start, len: len, tpFn: self.cur.checkFn)
                     if !(self.bindIsValue(code: bindCode)) {
-                        self.errorAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
+                        if bindCode == identFnCode() {
+                            self.errorAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)")
+                        } else {
+                            self.errorAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
+                        }
                     }
                 }
             }

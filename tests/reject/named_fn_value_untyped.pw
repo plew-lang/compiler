@@ -1,0 +1,5 @@
+// spec/04: a named function declaration is not a first-class value.
+fn twice(n: I32) -> I32 { return n * 2 }
+fn main() {
+    val g = twice
+}

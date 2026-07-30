@@ -307,7 +307,7 @@ export struct PatInfo {
 // The full resolution of a bare identifier, produced in ONE pass by resolveIdent:
 // its binding classification (`code` = identValueCode/FnCode/TypeQualCode/UndefCode)
 // and, for the backend to locate it without re-deriving by name, the `target`
-// (identTarget's value): a resolved free-function index for a fn value, the
+// (identTarget's value): a resolved free-function index for a callable declaration, the
 // DECLARATION's source offset (locals[li].nameStart) for a local/param value,
 // identNoTarget() for `self`, a global, a type qualifier, or an undef. This is the
 // single source both the classification query (classifyIdent/bindIsValue) and the
@@ -930,8 +930,9 @@ pub impl Modules { factory }
 // (TypeRef indices, deduped, post-order so a nested by-value instance precedes
 // its container). `fnInsts`: concrete instantiations of generic free functions.
 // `fnTypes`: distinct function-type TypeRefs (one C fn-pointer typedef each).
-// `fnThunks`: function indices used as bare values (each needs a closure-ABI
-// thunk). `captures`: closure value captures (flat, keyed by closure arena id).
+// `fnThunks`: legacy named-function-value thunk list, kept empty in v1 because named
+// declarations are callable but not values. `captures`: closure value captures (flat,
+// keyed by closure arena id).
 // `arrayElems`: distinct Array element type names (for PlewArray_<E> + runtime;
 // each reuses Bind as a (start,len) pair). `boxedFields`: fields whose declared
 // type transitively reaches their owning struct/enum (a containment cycle), so
@@ -981,14 +982,14 @@ export struct TypeCache {
     // (the verify/check Ident walk, where c.cur.locals is valid). PERSISTENT (like callee:
     // which entity a name binds to is lexical, not instantiation-dependent). Codes —
     // identUnfilledCode 0 / identValueCode 1 (self·local·param·global) / identFnCode 2
-    // (a bare free-function used as a closure value) / identTypeQualCode 3 (a type /
+    // (a bare free-function declaration; callable but not a value) / identTypeQualCode 3 (a type /
     // primitive / type-parameter, valid only as an assoc-fn receiver) / identUndefCode 4
     // (unresolved). The single record every pass reads instead of re-deriving the binding
-    // by name; the backend reads it to drive the local-vs-fn branch (its own findLocal is
-    // only the SSA-pointer mechanism). Unfilled for std / synthesized nodes.
+    // by name; the backend reads local targets only (its own findLocal is the SSA-pointer
+    // mechanism). Unfilled for std / synthesized nodes.
     pub mut val identBind: Array[I64] = []
     // resolved TARGET per Ident-expr id, paired with identBind: for identFnCode, the
-    // resolved free-function index (firstFuncByName result) so the backend reads the decided
+    // resolved free-function index (firstFuncByName result) so diagnostics read the decided
     // callee instead of re-deriving it; identNoTarget otherwise (a local's SSA slot stays the
     // backend's own findLocal mechanism). PERSISTENT, like callee/identBind.
     pub mut val identTarget: Array[U64] = []

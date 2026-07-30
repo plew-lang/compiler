@@ -815,8 +815,6 @@ export fn runFrontend() -> Comp {
     // discover concrete instantiations of generic free functions from call sites
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     c.collectFnInsts()
-    // discover bare function-value references (need a closure-ABI thunk each).
-    c.collectFnThunks()
     c.inCollection = false
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.

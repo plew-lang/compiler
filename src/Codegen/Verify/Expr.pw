@@ -412,12 +412,12 @@ pub impl Comp {
                 self.verifyBlock(blockId: elseBlk)
             }
             Expr.Ident(val start, val len) => {
-                // an identifier in read position must resolve to something in scope: `self`,
-                // a local / parameter / global, or a free-function name (a bare fn used as a
-                // closure value — the backend's genLlvmExpr Ident arm accepts exactly these).
-                // Otherwise it is undefined — caught here at declaration time over EVERY
-                // entry-module body (reachability-independent), not as a backend codegen
-                // side-effect that only fired for emitted/reachable bodies (spec/04).
+                // an identifier in read position must resolve to a value in scope: `self`, a
+                // local / parameter / global. A named function is a callable declaration, not a
+                // value; pass it around with an explicit closure wrapper. Otherwise it is
+                // undefined — caught here at declaration time over EVERY entry-module body
+                // (reachability-independent), not as a backend codegen side-effect that only
+                // fired for emitted/reachable bodies (spec/04).
                 // value position: a bare type / primitive name reaching here is NOT a value
                 // (an assoc-fn receiver `Buffer.new()` / `I64.fromBytes(...)` is rerouted via
                 // verifyRecv) — so it is an undefined-identifier misuse (`val x = SomeType`).
@@ -425,7 +425,11 @@ pub impl Comp {
                 // a non-generic body has no type params, so pass the funcs.count() sentinel.
                 val bindCode: I64 = self.recordIdent(id: id, start: start, len: len, tpFn: self.arena.funcs.count())
                 if !(self.bindIsValue(code: bindCode)) {
-                    self.errorAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, global, or function in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
+                    if bindCode == identFnCode() {
+                        self.errorAt(offset: start, msg: "a named function declaration cannot be used as a value; wrap it in an explicit closure (e.g. `fn(...) { return name(...) }`) (spec/04)")
+                    } else {
+                        self.errorAt(offset: start, msg: "undefined identifier: this name is not a local, parameter, or global in scope (a bare type name is valid only as an assoc-fn receiver like `Type.fn()`; a field of `self` needs `self.`) (spec/04)")
+                    }
                 }
                 // use-after-move (spec/03): reading a local whose value was `move`d away.
                 if self.cur.verifyMovedIdx.count() > 0U64 {

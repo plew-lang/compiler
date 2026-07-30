@@ -1,0 +1,6 @@
+// spec/04: a function-typed field initializer must be a function value, not a declaration.
+struct H { pub val cb: fn(n: I32) -> I32 }
+fn twice(n: I32) -> I32 { return n * 2 }
+fn main() {
+    val h: H = <H cb=twice />
+}

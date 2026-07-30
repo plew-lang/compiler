@@ -4,7 +4,7 @@ fn apply(f: fn(n: I32) -> I32, x: I32) -> I32 {
     return f(n: x)
 }
 fn main() {
-    val g: fn(n: I32) -> I32 = twice
+    val g: fn(n: I32) -> I32 = fn(n: I32) -> I32 { return twice(n: n) }
     print(g(n: 5))
-    print(apply(f: twice, x: 21))
+    print(apply(f: fn(n: I32) -> I32 { return twice(n: n) }, x: 21))
 }

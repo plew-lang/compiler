@@ -1,0 +1,6 @@
+// spec/07: a type-parameter associated function receiver still cannot be value-extracted.
+trait Maker { assoc fn make() -> Self }
+fn pick[T]() -> fn() -> T where T: Maker {
+    return T.make
+}
+fn main() {}
