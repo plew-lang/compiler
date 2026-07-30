@@ -292,7 +292,7 @@ pub impl Comp {
                 if self.exprContainsAwait(exprId: scrut) { return true }
                 mut val i: U64 = 0
                 while i < arms.count() {
-                    if self.exprContainsAwait(exprId: arms[i].body) { return true }
+                    if self.blockContainsAwait(blockId: arms[i].body) { return true }
                     i += 1U64
                 }
                 return false

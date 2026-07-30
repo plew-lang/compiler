@@ -1,0 +1,23 @@
+// Generic methods keep argument-to-parameter mapping when a middle default is
+// omitted.
+import @Std/Io with { print }
+
+fn mark(n: I64) -> I64 {
+    print(n)
+    return n
+}
+
+struct Box[T] {
+    val value: T
+}
+
+pub impl[T] Box[T] {
+    fn choose(a: I64 = mark(n: 1), b: I64, c: I64 = mark(n: 3)) -> I64 {
+        return a + b + c
+    }
+}
+
+fn main() {
+    val b: Box[I64] = <Box[I64] value=9I64 />
+    print(b.choose(b: mark(n: 20)))
+}

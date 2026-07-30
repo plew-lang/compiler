@@ -1,0 +1,16 @@
+// spec/04: a default argument cannot suspend, even when the await is nested in a
+// value-position match arm block.
+import @Std/Async with { sleep }
+
+enum Choice {
+    A
+    B
+}
+
+async fn later() -> Promise[I64] {
+    return await sleep(ms: 1)
+}
+
+fn f(x: I64 = match <Choice.A /> { Choice.A => { give await later() } Choice.B => { give 0I64 } }) -> I64 {
+    return x
+}

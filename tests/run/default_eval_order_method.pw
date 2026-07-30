@@ -1,0 +1,23 @@
+// Method calls with a middle default evaluate provided/default params in
+// declaration order.
+import @Std/Io with { print }
+
+fn mark(n: I64) -> I64 {
+    print(n)
+    return n
+}
+
+struct Counter {
+    val base: I64
+}
+
+pub impl Counter {
+    fn add(a: I64 = mark(n: 1), b: I64 = mark(n: 2), c: I64 = mark(n: 3)) -> I64 {
+        return self.base + a + b + c
+    }
+}
+
+fn main() {
+    val c: Counter = <Counter base=100 />
+    print(c.add(a: mark(n: 10), c: mark(n: 30)))
+}

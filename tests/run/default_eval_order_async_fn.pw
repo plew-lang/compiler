@@ -1,0 +1,18 @@
+// Async entry calls also build the ABI arg list in parameter declaration order.
+import @Std/Io with { print }
+import @Std/Async with { sleep }
+
+fn mark(n: I64) -> I64 {
+    print(n)
+    return n
+}
+
+async fn sum(a: I64 = mark(n: 1), b: I64 = mark(n: 2), c: I64 = mark(n: 3)) -> Promise[I64] {
+    await sleep(ms: 1)
+    return a + b + c
+}
+
+async fn main() {
+    val n: I64 = await sum(a: mark(n: 10), c: mark(n: 30))
+    print(n)
+}
