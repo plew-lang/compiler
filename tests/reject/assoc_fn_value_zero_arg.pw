@@ -1,0 +1,8 @@
+// spec/07: even a zero-argument associated function is not an `assoc val`.
+struct S { pub val x: I32 }
+pub impl S {
+    assoc fn make() -> S { return <S x=1 /> }
+}
+fn main() {
+    val f = S.make
+}

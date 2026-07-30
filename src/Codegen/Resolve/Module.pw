@@ -719,6 +719,61 @@ pub impl Comp {
         return false
     }
 
+    inout fn funcDeclLineHasAssocVal(f: Func) -> Bool {
+        mut val anchor: U64 = f.defOffset
+        if anchor == 0U64 {
+            anchor = f.nameStart
+        }
+        if anchor >= self.arena.bytes.count() {
+            return false
+        }
+        mut val lineStart: U64 = anchor
+        while lineStart > 0U64 {
+            if self.arena.bytes[lineStart - 1U64] == 10U8 {
+                break
+            }
+            lineStart -= 1
+        }
+        mut val sawAssoc: Bool = false
+        mut val sawVal: Bool = false
+        mut val i: U64 = lineStart
+        while i < anchor {
+            if i + 5U64 <= anchor {
+                if rangeEquals(bytes: self.arena.bytes, start: i, len: 5U64, kw: "assoc") {
+                    sawAssoc = true
+                }
+            }
+            if i + 3U64 <= anchor {
+                if rangeEquals(bytes: self.arena.bytes, start: i, len: 3U64, kw: "val") {
+                    sawVal = true
+                }
+            }
+            i += 1
+        }
+        return sawAssoc && sawVal
+    }
+
+    inout fn typeHasAssocVal(typeStart: U64, typeLen: U64, nameStart: U64, nameLen: U64) -> Bool {
+        val tnu: Bind = self.newtypeUnderName(start: typeStart, len: typeLen)
+        val tId: U64 = intern(c: inout self, start: tnu.nameStart, len: tnu.nameLen)
+        val nId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[i]
+            if f.isAssoc {
+                if f.recvId == tId {
+                    if f.nameId == nId {
+                        if self.funcDeclLineHasAssocVal(f: f) {
+                            return true
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
     inout fn typeRefHasFromFactory(errRef: U64, srcRef: U64) -> Bool {
         return self.typeRefFromFactoryIdx(errRef: errRef, srcRef: srcRef) < self.arena.funcs.count()
     }
@@ -790,7 +845,7 @@ pub impl Comp {
                     match self.arena.exprs[base] {
                         Expr.Ident(start: val tStart, len: val tLen) => {
                             if self.isTypeName(start: tStart, len: tLen) {
-                                if self.typeHasAssocFn(typeStart: tStart, typeLen: tLen, nameStart: nameStart, nameLen: nameLen) {
+                                if self.typeHasAssocVal(typeStart: tStart, typeLen: tLen, nameStart: nameStart, nameLen: nameLen) {
                                     val noArgs: Array[Arg] = []
                                     self.arena.exprs[i] = <Expr.Method recv=base nameStart=nameStart nameLen=nameLen args=noArgs />
                                 }

@@ -1,0 +1,9 @@
+// spec/07: pass associated functions with an explicit closure wrapper.
+struct S { pub val x: I32 }
+pub impl S {
+    assoc fn make() -> S { return <S x=1 /> }
+}
+fn take(f: fn() -> S) -> S { return f() }
+fn main() {
+    val s: S = take(f: S.make)
+}

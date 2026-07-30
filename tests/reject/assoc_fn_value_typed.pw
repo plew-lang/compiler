@@ -1,0 +1,8 @@
+// spec/07: contextual `fn` type does not implicitly wrap an associated function.
+struct S { pub val x: I32 }
+pub impl S {
+    assoc fn make() -> S { return <S x=1 /> }
+}
+fn main() {
+    val f: fn() -> S = S.make
+}
