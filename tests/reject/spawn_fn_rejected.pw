@@ -1,0 +1,5 @@
+spawn fn worker(value: I64) -> JoinHandle[I64] {
+    return value
+}
+
+fn main() {}

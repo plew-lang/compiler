@@ -1,0 +1,15 @@
+trait Numberish {
+    fn number() -> I64
+}
+
+nonsendable struct UiState {
+    val value: I64
+}
+
+impl UiState as Numberish {
+    fn number() -> I64 { return self.value }
+}
+
+fn main() {
+    val value: any sendable Numberish = <UiState value=1 />
+}

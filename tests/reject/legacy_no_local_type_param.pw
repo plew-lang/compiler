@@ -1,0 +1,7 @@
+// Old local/noLocal generic markers are removed. A marker-like identifier before
+// a type parameter is not accepted as ambient syntax.
+struct Box[noLocal T] {
+    val value: T
+}
+
+fn main() { }

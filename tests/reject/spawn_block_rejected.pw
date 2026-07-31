@@ -1,0 +1,5 @@
+fn main() {
+    spawn {
+        val value: I64 = 1
+    }
+}

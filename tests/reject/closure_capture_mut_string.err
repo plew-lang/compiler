@@ -1,0 +1,1 @@
+v1 rejects closure capture of mutable non-scalar values

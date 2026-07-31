@@ -67,6 +67,9 @@ pub impl Comp {
             return out
         }
         val tr: TypeRef = self.arena.types[ref]
+        if tr.isSendable {
+            appendBytes(into: inout out, from: "sendable ".bytes())
+        }
         mut val i: U64 = 0
         while i < tr.nameLen {
             out.append(self.arena.bytes[tr.nameStart + i])
@@ -157,7 +160,7 @@ pub impl Comp {
         if !(registered) {
             if self.inCollection {
                 val noTP: Array[Bind] = []
-                self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isExtern=false defOffset=sd.defOffset />)
+                self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isNonsendable=sd.isNonsendable isExtern=false defOffset=sd.defOffset />)
             }
         }
         mut val noArgs: Array[U64] = []
@@ -222,7 +225,7 @@ pub impl Comp {
             // rebuild with the identity facets preserved: the view (`P#Ext`) and the
             // existential (`any P`) are part of type identity — grounding the args
             // must not strip them.
-            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels />)
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable />)
         }
         return ref
     }

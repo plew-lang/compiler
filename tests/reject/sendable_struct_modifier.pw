@@ -1,0 +1,4 @@
+sendable struct Foo {
+}
+
+fn main() {}

@@ -1,0 +1,1 @@
+`spawn` is rejected in v1 until spawn-boundary sendability/effect checking is available

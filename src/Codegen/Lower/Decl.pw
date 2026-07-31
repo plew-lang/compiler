@@ -4,7 +4,7 @@
 // Lower generic parameter names `[T, U]` (Array[String]) to the arena's Bind spans.
 
 pub impl Comp {
-    inout fn lowerTypeParamNames(names: Array[String], anchor: U64) -> Array[Bind] {
+    inout fn lowerTypeParamNames(names: Array[String], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
         mut val out: Array[Bind] = []
         mut val i: U64 = 0
         while i < names.count() {
@@ -22,7 +22,11 @@ pub impl Comp {
                 }
                 k += 1
             }
-            out.append(b)
+            mut val isSendable: Bool = false
+            if i < sendableFlags.count() {
+                isSendable = sendableFlags[i]
+            }
+            out.append(<Bind nameStart=b.nameStart nameLen=b.nameLen nameId=b.nameId fieldStart=b.fieldStart fieldLen=b.fieldLen offset=b.offset isSendable=isSendable />)
             i += 1
         }
         return out
@@ -52,7 +56,7 @@ pub impl Comp {
 
     inout fn lowerStructDecl(d: DeclAst) {
         val nm: Bind = self.internBytes(s: d.name)
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start)
+        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable)
         // field types may reference `[T]` — make them the lowering-time scope so lowerType
         // marks type-parameter heads as skip (siteOffset 0). Restored at function end.
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -75,14 +79,14 @@ pub impl Comp {
             self.arena.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=nm.nameStart recvLen=nm.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
             self.decls.deinits.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen fieldStart=nm.nameStart fieldLen=nm.nameLen />)
         }
-        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isExtern=false defOffset=d.span.start />)
+        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
 
     inout fn lowerEnumDecl(d: DeclAst) {
         val nm: Bind = self.internBytes(s: d.name)
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start)
+        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable)
         // variant payload types may reference `[T]` — see lowerStructDecl.
         val savedTP: Array[Bind] = self.cur.typeParams
         self.cur.typeParams = typeParams
@@ -100,7 +104,7 @@ pub impl Comp {
             variants.append(<Variant nameStart=vn.nameStart nameLen=vn.nameLen nameId=intern(c: inout self, start: vn.nameStart, len: vn.nameLen) fields=vfields />)
             i += 1
         }
-        self.arena.enums.append(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants isUnique=d.isUnique defOffset=d.span.start />)
+        self.arena.enums.append(<EnumDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
         self.drainDerives(typeStart: nm.nameStart, typeLen: nm.nameLen, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
         self.cur.typeParams = savedTP
     }
@@ -108,7 +112,7 @@ pub impl Comp {
     inout fn lowerFuncDecl(d: DeclAst) {
         val nameStart: U64 = d.nameSpan.start
         val nameLen: U64 = d.nameSpan.end - d.nameSpan.start
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: nameStart)
+        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: nameStart, sendableFlags: d.typeParamSendable)
         // param / return / body-local types may reference `[T]` — make them the lowering-time
         // scope so lowerType marks type-parameter heads as skip (siteOffset 0).
         val savedTP: Array[Bind] = self.cur.typeParams

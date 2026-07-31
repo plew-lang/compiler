@@ -1,0 +1,1 @@
+`sendable` in type syntax is only valid before `fn` or after `any`

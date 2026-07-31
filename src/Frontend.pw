@@ -168,7 +168,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels siteOffset=t.siteOffset />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable siteOffset=t.siteOffset />)
         return id
     }
 }

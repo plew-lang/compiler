@@ -1,0 +1,5 @@
+fn main() {
+    val work: sendable fn(value: I64) -> I64 = sendable fn(value: I64) -> I64 {
+        return value
+    }
+}

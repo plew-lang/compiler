@@ -59,6 +59,9 @@ pub impl Comp {
         }
         val te: TypeRef = self.arena.types[exp]
         val tin: TypeRef = self.arena.types[inferred]
+        if te.isSendable && !(tin.isSendable) {
+            return false
+        }
         if te.isAny || tin.isAny {
             // a CONCRETE value coercing INTO `any P` must conform to P (spec/08) — else its
             // existential box has no vtable entry and a member call null-dereferences at

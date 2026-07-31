@@ -1,0 +1,7 @@
+// Old local/noLocal generic markers are removed. Use explicit sendable/nonsendable
+// surface forms instead.
+struct Box[local T] {
+    val value: T
+}
+
+fn main() { }

@@ -1,0 +1,8 @@
+fn main() {
+    val inner: fn() -> I64 = fn() -> I64 {
+        return 1
+    }
+    val outer: fn() -> fn() -> I64 = fn() -> fn() -> I64 {
+        return inner
+    }
+}

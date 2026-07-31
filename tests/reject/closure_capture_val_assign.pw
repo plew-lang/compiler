@@ -1,0 +1,6 @@
+fn main() {
+    val base: I64 = 1
+    val update: fn() = fn() {
+        base = 2
+    }
+}

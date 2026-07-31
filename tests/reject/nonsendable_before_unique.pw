@@ -1,0 +1,4 @@
+nonsendable unique struct Foo {
+}
+
+fn main() {}

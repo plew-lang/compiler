@@ -1,0 +1,5 @@
+struct Box[nonsendable T] {
+    val value: T
+}
+
+fn main() {}

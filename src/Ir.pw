@@ -57,6 +57,10 @@ export struct TypeRef {
     // (spec/08,12). Empty for ordinary generic args. Resolved against the trait's
     // type params + associated types when building the existential's dispatch thunks.
     pub val argLabels: Array[U64] = []
+    // `any sendable P` / `sendable fn(...) -> R`: a type-level sendability guarantee
+    // written at the surface. It is recorded as part of the type spelling now; the
+    // full capture/effect/spawn checks land with the ownership IR.
+    pub val isSendable: Bool = false
     // the REAL source offset where this type was written (TypeAst.span.start), stamped by
     // `lowerType` for scoped type-visibility (Check/Visibility.pw). Unlike nameStart (which
     // is re-interned and so unusable for `moduleOf`), this is a genuine source coordinate:
@@ -171,6 +175,9 @@ export struct Bind {
     // original-source byte offset of the bound field name (for diagnostics):
     // fieldStart is re-interned and does not map to a source line. 0 = unknown.
     pub val offset: U64 = 0
+    // A generic type parameter written `[sendable T]`. False for ordinary binders and
+    // for non-type uses of Bind (match binds, field pairs, module ranges, ...).
+    pub val isSendable: Bool = false
 }
 
 // A call argument: the expression plus whether it was passed `inout` (which
@@ -416,15 +423,18 @@ export struct StructDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
-    // generic type parameters `[T, U]` (each a name span; reuses Bind). Empty
-    // for a non-generic struct. Capability markers (noLocal/allowUnique) are
-    // skipped at parse time (v1: allowUnique unimplemented, noLocal a no-op).
+    // generic type parameters `[T, U]` (each a name span; reuses Bind). Empty for
+    // a non-generic struct. `[sendable T]` is recorded on Bind.isSendable.
     pub val typeParams: Array[Bind]
     pub val fields: Array[FieldDef]
     // declared `unique struct` (spec/03): copy-incapable, move-only, may carry a
     // `deinit`. A unique value is never CoW-shared; bindings move ownership and
     // the last owner runs `deinit` at scope exit. Default false = copyable.
     pub val isUnique: Bool
+    // declared `nonsendable struct`: a thread-affinity marker independent of field
+    // composition. The query/diagnostic semantics are staged after the surface is
+    // represented.
+    pub val isNonsendable: Bool = false
     // declared body-less in an `extern(plewIntrinsic)` block (spec/15 core-
     // library boundary): an opaque lang-item type whose representation is
     // compiler-intrinsic (`I32`→int32_t, `String`→PlewString). Codegen emits no C
@@ -619,6 +629,8 @@ export struct EnumDef {
     // `unique enum` (spec/03): copy-forbidden, move-only — same single-ownership
     // regime as a unique struct (a unique payload may live in it legally).
     pub val isUnique: Bool = false
+    // declared `nonsendable enum` (see StructDef.isNonsendable).
+    pub val isNonsendable: Bool = false
     // original source offset of the declaration (see StructDef.defOffset): kept for
     // `moduleOf` (the lang-item redefinition check), since nameStart is re-interned.
     pub val defOffset: U64 = 0

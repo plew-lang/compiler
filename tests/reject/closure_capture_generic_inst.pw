@@ -1,0 +1,10 @@
+struct Box[T] {
+    val value: T
+}
+
+fn main() {
+    val box: Box[I64] = <Box value=1 />
+    val f: fn() -> I64 = fn() -> I64 {
+        return box.value
+    }
+}

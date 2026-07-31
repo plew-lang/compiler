@@ -1,0 +1,4 @@
+unique nonsendable Foo {
+}
+
+fn main() {}

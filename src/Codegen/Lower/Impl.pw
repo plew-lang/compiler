@@ -36,7 +36,7 @@ pub impl Comp {
             typeParams.append(implParamBinds[ipi])
             ipi += 1
         }
-        val ownParams: Array[Bind] = self.lowerTypeParamNames(names: m.typeParams, anchor: m.nameSpan.start)
+        val ownParams: Array[Bind] = self.lowerTypeParamNames(names: m.typeParams, anchor: m.nameSpan.start, sendableFlags: m.typeParamSendable)
         mut val opi: U64 = 0
         while opi < ownParams.count() {
             typeParams.append(ownParams[opi])
@@ -134,7 +134,7 @@ pub impl Comp {
 
     inout fn lowerImpl(im: ImplAst) {
         val recvN: Bind = self.internBytes(s: im.recvType.name)
-        val implParamBinds: Array[Bind] = self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start)
+        val implParamBinds: Array[Bind] = self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start, sendableFlags: im.implParamSendable)
         // the impl's lowering-time skip scope: its `[T]`, plus the associated types of the trait
         // it implements/extends — both a bare `impl Iterator` (recv IS the trait, its provided
         // methods name `Item`) and `impl T as Tr` (the witnessed signatures name `Tr`'s assoc
@@ -217,7 +217,7 @@ pub impl Comp {
     inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Func {
         val nameStart: U64 = sig.nameSpan.start
         val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: sig.typeParams, anchor: nameStart)
+        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: sig.typeParams, anchor: nameStart, sendableFlags: sig.typeParamSendable)
         // a requirement signature's `[U]` (and the trait's own params, kept in self.cur.typeParams
         // by lowerTrait) are in scope for its param/return types — skip those heads in lowerType.
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -263,7 +263,7 @@ pub impl Comp {
             assocTypes.append(self.internBytes(s: t.assocTypes[ai]))
             ai += 1
         }
-        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart)
+        val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable)
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = []
         mut val stpi: U64 = 0

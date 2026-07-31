@@ -1,0 +1,6 @@
+fn main() {
+    mut val text: String = "hi"
+    val f: fn() -> String = fn() -> String {
+        return text
+    }
+}

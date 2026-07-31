@@ -47,7 +47,11 @@ pub impl Comp {
             // non-generic intrinsics (`Ref`/`WeakRef`/the scalar lang-items) and FFI types.
             mut val externTP: Array[Bind] = []
             if si < e.structTypeParams.count() {
-                externTP = self.lowerTypeParamNames(names: e.structTypeParams[si], anchor: defOff)
+                mut val sendableFlags: Array[Bool] = []
+                if si < e.structTypeParamSendable.count() {
+                    sendableFlags = e.structTypeParamSendable[si]
+                }
+                externTP = self.lowerTypeParamNames(names: e.structTypeParams[si], anchor: defOff, sendableFlags: sendableFlags)
             }
             val noFields: Array[FieldDef] = []
             // `String` is the one intrinsic that is really a value-semantics struct over a

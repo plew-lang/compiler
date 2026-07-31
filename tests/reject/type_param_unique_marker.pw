@@ -1,0 +1,5 @@
+struct Box[unique T] {
+    val value: T
+}
+
+fn main() {}

@@ -24,7 +24,7 @@ pub impl Comp {
                 // a bare NAME lookup must not alias a facet-carrying ref: `P#Ext`
                 // (viewExtId) and `any P` (isAny) are distinct types from plain `P`
                 // (spec/08,09) — returning one for the other leaks the facet.
-                if t.nameId == q && t.viewExtId == 0U64 && !(t.isAny) {
+                if t.nameId == q && t.viewExtId == 0U64 && !(t.isAny) && !(t.isSendable) {
                     return i
                 }
             }

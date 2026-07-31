@@ -44,6 +44,11 @@ pub impl Comp {
     // the one the grounding pass rebuilds for the same type.
     inout fn recordTypeKey(pty: PType) -> Array[U8] {
         mut val out: Array[U8] = []
+        if pty.ref < self.arena.types.count() {
+            if self.arena.types[pty.ref].isSendable {
+                appendBytes(into: inout out, from: "sendable ".bytes())
+            }
+        }
         mut val i: U64 = 0
         while i < pty.len {
             out.append(self.arena.bytes[pty.start + i])
@@ -188,7 +193,7 @@ pub impl Comp {
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

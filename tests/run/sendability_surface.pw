@@ -1,0 +1,54 @@
+import @Std/Io with { print }
+
+trait Numberish {
+    fn number() -> I64
+}
+
+nonsendable struct UiState {
+    val value: I64
+}
+
+unique nonsendable enum Token {
+    Ready(value: I64)
+}
+
+export unique nonsendable struct ExportedOwner {
+    pub val value: I64
+}
+
+struct Box[sendable T] {
+    pub val value: T
+}
+
+struct ExistentialBox {
+    pub val value: any sendable Numberish
+}
+
+struct HandlerBox {
+    pub val handler: sendable fn(value: I64) -> I64
+}
+
+impl UiState as Numberish {
+    fn number() -> I64 { return self.value }
+}
+
+fn readNumber(value: any sendable Numberish) -> I64 {
+    return 0
+}
+
+fn callHandler(handler: sendable fn(value: I64) -> I64) -> I64 {
+    return 0
+}
+
+fn generic[sendable T](value: T) -> I64 {
+    return 1
+}
+
+fn main() {
+    val b: Box[I64] = <Box value=3 />
+    val owner: ExportedOwner = <ExportedOwner value=6 />
+    print(b.value)
+    print(owner.value)
+    print(generic(value: 8I64))
+    print(7I64)
+}

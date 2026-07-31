@@ -1,0 +1,5 @@
+fn main() {
+    val handler: sendable fn(value: I64) -> I64 = fn(value: I64) -> I64 {
+        return value
+    }
+}

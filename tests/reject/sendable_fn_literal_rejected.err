@@ -1,0 +1,1 @@
+`sendable fn` literals are rejected in v1 until sendable capture/effect checking is available
