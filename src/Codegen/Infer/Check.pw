@@ -98,6 +98,24 @@ pub impl Comp {
         if self.typesCompatible(expected: expectedRef, inferred: inferred) {
             return
         }
+        if expectedRef < self.arena.types.count() {
+            val expectedGround: U64 = self.groundTypeRef(ref: expectedRef)
+            if expectedGround < self.arena.types.count() {
+                val expectedTy: TypeRef = self.arena.types[expectedGround]
+                if expectedTy.isSendable {
+                    if inferred != 0U64 {
+                        if inferred < self.arena.types.count() {
+                            if !(self.typeRefIsSendable(ref: inferred)) {
+                                if !(self.tcLog) {
+                                    self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "this value does not provide the `sendable` guarantee required here (use a `sendable fn` literal or a structurally sendable value; spec/04,14)")
+                                }
+                                return
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if self.tcLog {
             eprint(text: "TC ")
             eprint(text: pos)

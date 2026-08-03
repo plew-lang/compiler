@@ -1,0 +1,5 @@
+fn twice(value: I64) -> I64 { return value * 2I64 }
+
+fn main() {
+    val handler: sendable fn(value: I64) -> I64 = twice
+}

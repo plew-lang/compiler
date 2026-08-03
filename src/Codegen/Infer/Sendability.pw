@@ -1,0 +1,157 @@
+// Part of type inference/checking (root: _.pw): conservative structural
+// sendability queries. This is the mid-ir-prep layer: it answers only from the
+// declared type graph and written `sendable` guarantees, not from closure effects
+// or spawn reachability.
+
+pub impl Comp {
+    inout fn typeRefIsSendable(ref: U64) -> Bool {
+        return self.typeRefIsSendableDepth(ref: ref, depth: 32U64)
+    }
+
+    inout fn typeRefIsNonsendable(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.types.count() {
+            return true
+        }
+        return !(self.typeRefIsSendable(ref: ref))
+    }
+
+    inout fn typeRefIsSendableDepth(ref: U64, depth: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.types.count() {
+            return false
+        }
+        if depth == 0U64 {
+            return false
+        }
+        val rr: U64 = self.resolveTy(tyRef: ref)
+        if rr >= self.arena.types.count() {
+            return false
+        }
+        val t: TypeRef = self.arena.types[rr]
+        if t.isAny {
+            return t.isSendable
+        }
+        if self.isFnType(ref: rr) {
+            return t.isSendable
+        }
+        if self.isActiveTypeParam(t: t) {
+            return self.typeParamHasSendableBound(t: t)
+        }
+        if self.isMutableRefInst(ref: rr) || self.isWeakMutableRefInst(ref: rr) {
+            return false
+        }
+        if self.isRefInst(ref: rr) || self.isWeakRefInst(ref: rr) {
+            if t.args.count() != 1U64 {
+                return false
+            }
+            return self.typeRefIsSendableDepth(ref: t.args[0], depth: depth - 1U64)
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Promise") {
+            return false
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Buffer") {
+            if t.args.count() != 1U64 {
+                return false
+            }
+            return self.typeRefIsSendableDepth(ref: t.args[0], depth: depth - 1U64)
+        }
+        if self.primOrStringIsSendable(t: t) {
+            return true
+        }
+        val under: U64 = self.newtypeUnderRef(start: t.nameStart, len: t.nameLen)
+        if under != 0U64 {
+            return self.typeRefIsSendableDepth(ref: under, depth: depth - 1U64)
+        }
+        val si: U64 = self.structDefByNameAny(start: t.nameStart, len: t.nameLen)
+        if si < self.arena.structs.count() {
+            val sd: StructDef = self.arena.structs[si]
+            if sd.isNonsendable {
+                return false
+            }
+            return self.fieldsAreSendable(params: sd.typeParams, targs: t.args, fields: sd.fields, depth: depth - 1U64)
+        }
+        mut val ei: U64 = self.concreteEnumIndex(nStart: t.nameStart, nLen: t.nameLen)
+        if ei >= self.arena.enums.count() {
+            ei = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+        }
+        if ei < self.arena.enums.count() {
+            val ed: EnumDef = self.arena.enums[ei]
+            if ed.isNonsendable {
+                return false
+            }
+            mut val vi: U64 = 0
+            while vi < ed.variants.count() {
+                if !(self.fieldsAreSendable(params: ed.typeParams, targs: t.args, fields: ed.variants[vi].fields, depth: depth - 1U64)) {
+                    return false
+                }
+                vi += 1U64
+            }
+            return true
+        }
+        return false
+    }
+
+    inout fn primOrStringIsSendable(t: TypeRef) -> Bool {
+        if self.isPrimType(start: t.nameStart, len: t.nameLen) {
+            return true
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "String")
+    }
+
+    inout fn typeParamHasSendableBound(t: TypeRef) -> Bool {
+        if !(self.isActiveTypeParam(t: t)) {
+            return false
+        }
+        if t.args.count() != 0U64 {
+            return false
+        }
+        mut val i: U64 = self.cur.typeParams.count()
+        while i > 0U64 {
+            i -= 1U64
+            val p: Bind = self.cur.typeParams[i]
+            if p.nameId == t.nameId {
+                return p.isSendable
+            }
+        }
+        return false
+    }
+
+    inout fn isActiveTypeParam(t: TypeRef) -> Bool {
+        if t.args.count() != 0U64 {
+            return false
+        }
+        mut val i: U64 = self.cur.typeParams.count()
+        while i > 0U64 {
+            i -= 1U64
+            if self.cur.typeParams[i].nameId == t.nameId {
+                return true
+            }
+        }
+        return false
+    }
+
+    inout fn fieldsAreSendable(params: Array[Bind], targs: Array[U64], fields: Array[FieldDef], depth: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < fields.count() {
+            val grounded: U64 = self.groundFieldSendabilityType(params: params, targs: targs, ref: fields[i].ty)
+            if !(self.typeRefIsSendableDepth(ref: grounded, depth: depth)) {
+                return false
+            }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn groundFieldSendabilityType(params: Array[Bind], targs: Array[U64], ref: U64) -> U64 {
+        if params.count() == 0U64 {
+            return ref
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        self.cur.typeParams = params
+        self.cur.typeArgs = targs
+        val grounded: U64 = self.groundTypeRef(ref: ref)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        return grounded
+    }
+}

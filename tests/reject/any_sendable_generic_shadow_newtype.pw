@@ -1,0 +1,25 @@
+trait Numberish {
+    fn number() -> I64
+}
+
+impl I64 as Numberish {
+    fn number() -> I64 { return self }
+}
+
+newtype Payload = I64
+
+struct Count {
+    val value: I64
+}
+
+impl Count as Numberish {
+    fn number() -> I64 { return self.value }
+}
+
+fn erase[Payload](value: Payload) where Payload: Numberish {
+    val erased: any sendable Numberish = value
+}
+
+fn main() {
+    erase(value: <Count value=1 />)
+}

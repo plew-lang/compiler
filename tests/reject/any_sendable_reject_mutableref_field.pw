@@ -1,0 +1,21 @@
+import @Std/Core with { MutableRef }
+
+trait Numberish {
+    fn number() -> I64
+}
+
+struct Cell {
+    pub val value: I64
+}
+
+struct Box {
+    pub val cell: MutableRef[Cell]
+}
+
+impl Box as Numberish {
+    fn number() -> I64 { return self.cell->value }
+}
+
+fn main() {
+    val value: any sendable Numberish = <Box cell=<MutableRef value=<Cell value=1 /> /> />
+}

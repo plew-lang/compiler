@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+trait Numberish {
+    fn number() -> I64
+}
+
+struct Count {
+    val value: I64
+}
+
+impl Count as Numberish {
+    fn number() -> I64 { return self.value }
+}
+
+newtype WrappedCount = Count
+
+fn main() {
+    val value: any sendable Numberish = (<Count value=9 /> as WrappedCount)
+    print(value.number())
+}

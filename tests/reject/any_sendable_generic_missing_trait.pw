@@ -1,0 +1,11 @@
+trait Numberish {
+    fn number() -> I64
+}
+
+fn erase[sendable T](value: T) {
+    val erased: any sendable Numberish = value
+}
+
+fn main() {
+    erase(value: 1I64)
+}

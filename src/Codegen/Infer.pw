@@ -16,4 +16,5 @@
 // Split across `Infer/` for readability; all parts share the module scope.
 
 part ./Infer/Type
+part ./Infer/Sendability
 part ./Infer/Check

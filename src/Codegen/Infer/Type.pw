@@ -59,7 +59,7 @@ pub impl Comp {
         }
         val te: TypeRef = self.arena.types[exp]
         val tin: TypeRef = self.arena.types[inferred]
-        if te.isSendable && !(tin.isSendable) {
+        if te.isSendable && !(self.typeRefIsSendable(ref: inferred)) {
             return false
         }
         if te.isAny || tin.isAny {
@@ -70,6 +70,12 @@ pub impl Comp {
             // existing `any` source is left to the conservative pass-through.
             if te.isAny {
                 if !(tin.isAny) {
+                    if self.isActiveTypeParam(t: tin) {
+                        if !(self.activeTypeParamConformsToTrait(source: tin, trait: te)) {
+                            return false
+                        }
+                        return true
+                    }
                     val srcId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
                     if srcId != 0U64 {
                         val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
@@ -271,6 +277,27 @@ pub impl Comp {
             return false
         }
         return self.knownNamedTypeId(start: ia.nameStart, len: ia.nameLen) != 0U64
+    }
+
+    inout fn activeTypeParamConformsToTrait(source: TypeRef, trait: TypeRef) -> Bool {
+        if self.cur.checkFn >= self.arena.funcs.count() {
+            return false
+        }
+        val qTp: U64 = source.nameId
+        val qTrait: U64 = trait.nameId
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count() {
+            val fb: FuncBound = self.decls.funcBounds[bi]
+            if fb.fnIdx == self.cur.checkFn {
+                if fb.paramNameId == qTp {
+                    if fb.traitNameId == qTrait {
+                        return true
+                    }
+                }
+            }
+            bi += 1U64
+        }
+        return false
     }
 
     // The interned name id of a GENERIC struct def head (`Box` of `struct Box[T]`),
