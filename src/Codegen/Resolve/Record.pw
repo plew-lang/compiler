@@ -406,6 +406,7 @@ pub impl Comp {
         // global resolves.
         self.cur.locals = []
         self.cur.hasRecv = false
+        self.cur.extId = 0
         self.cur.recvInstRef = 0
         self.cur.selfRef = 0
         self.cur.itemRef = 0
@@ -426,6 +427,7 @@ pub impl Comp {
                 self.cur.hasRecv = f.hasRecv
                 self.cur.recvStart = f.recvStart
                 self.cur.recvLen = f.recvLen
+                self.cur.extId = f.extId
                 self.cur.selfInout = f.selfInout
                 self.cur.recvInstRef = 0
                 self.cur.selfRef = self.parametricSelfRef(f: f)
@@ -448,6 +450,7 @@ pub impl Comp {
         }
         self.cur.locals = []
         self.cur.hasRecv = false
+        self.cur.extId = 0
         self.cur.selfRef = 0
         self.cur.itemRef = 0
         self.cur.checkFn = self.arena.funcs.count()

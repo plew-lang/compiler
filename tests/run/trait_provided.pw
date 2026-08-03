@@ -9,12 +9,14 @@ pub impl Stepper {
     fn doubleStep() -> I64 { return self.step() + self.step() }
 }
 
-struct Counter { val n: I64 }
+struct Counter { pub val n: I64 }
+pub impl Counter { factory }
 pub impl Counter as Stepper {
     fn step() -> I64 { return self.n }
 }
 
-struct Two { val m: I64 }
+struct Two { pub val m: I64 }
+pub impl Two { factory }
 pub impl Two as Stepper {
     fn step() -> I64 { return self.m * 2I64 }
 }

@@ -1,6 +1,7 @@
 import @Std/Io with { print }
 import @Std/Core with { MutableRef }
 struct Bag { pub mut val items: Array[I32] }
+pub impl Bag { factory }
 fn main() {
     val r: MutableRef[Bag] = <MutableRef[Bag] value=<Bag items=[1, 2, 3] /> />
     val s: MutableRef[Bag] = r

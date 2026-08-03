@@ -4,6 +4,7 @@ import @Std/Io with { print }
 // result must dispatch on T's struct, like a plain receiver (regression — once
 // rejected as "method call only on a registered struct value").
 struct Plain { pub val n: I64 }
+pub impl Plain { factory }
 pub impl Plain { fn show() -> I64 { return self.n } }
 newtype Wrapped = Plain
 

@@ -5,6 +5,7 @@ import @Std/Io with { print }
 // `-> Self` / a `Self` param / `return self` ground.
 trait Dup { fn dup() -> Self }
 struct N { pub val n: I64 }
+pub impl N { factory }
 pub impl N as Dup { fn dup() -> Self { return self } }
 
 fn main() {

@@ -4,10 +4,12 @@ struct Pair[A, B] {
     pub val first: A
     pub val second: B
 }
+pub impl Pair { factory }
 
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 fn main() {
     val p: Pair[I32, U8] = <Pair[I32, U8] first=100 second=7 />

@@ -8,6 +8,7 @@ unique struct File {
     pub mut val fd: I64
     deinit { print(self.fd) }
 }
+pub impl File { factory }
 
 fn main() {
     val r: MutableRef[File] = <MutableRef[File] value=<File fd=5 /> />

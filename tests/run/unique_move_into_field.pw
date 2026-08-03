@@ -3,10 +3,12 @@ import @Std/Io with { write, print }
 // A unique value can be moved into a struct field at construction; the source is
 // consumed, so deinit runs exactly once (via the new owner).
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit { print(self.fd) }
 }
-unique struct Holder { val f: File }
+pub impl File { factory }
+unique struct Holder { pub val f: File }
+pub impl Holder { factory }
 
 fn main() {
     val a: File = <File fd=7 />

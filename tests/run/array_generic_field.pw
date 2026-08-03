@@ -7,10 +7,12 @@ import @Std/Core with { MutableRef }
 struct Cell {
     pub mut val v: I32
 }
+pub impl Cell { factory }
 
 struct Holder[T] {
     pub val items: Array[T]
 }
+pub impl Holder { factory }
 
 fn main() {
     mut val ints: Array[I32] = []

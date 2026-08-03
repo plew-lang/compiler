@@ -7,7 +7,8 @@ import @Std/Io with { print }
 // must still resolve, not error.
 trait P { fn p() -> I64 }
 trait R { fn r() -> I64 }
-struct S { val v: I64 }
+struct S { pub val v: I64 }
+pub impl S { factory }
 pub impl S as P { fn p() -> I64 { return self.v } }
 pub impl P as R { fn r() -> I64 { return self.p() + 1I64 } }
 

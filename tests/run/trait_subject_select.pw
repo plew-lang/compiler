@@ -10,14 +10,16 @@ trait R { fn r() -> I64 }
 trait Only { fn o() -> I64 }
 trait Derived { fn d() -> I64 }
 
-struct S { val v: I64 }
+struct S { pub val v: I64 }
+pub impl S { factory }
 pub impl S as P { fn p() -> I64 { return self.v } }
 pub impl S as Q { fn q() -> I64 { return self.v * 2I64 } }
 // two paths to R: via P and via Q → bare S.r() is ambiguous, pick with S#P / S#Q.
 pub impl P as R { fn r() -> I64 { return self.p() + 1I64 } }
 pub impl Q as R { fn r() -> I64 { return self.q() + 100I64 } }
 
-struct W { val w: I64 }
+struct W { pub val w: I64 }
+pub impl W { factory }
 pub impl W as Only { fn o() -> I64 { return self.w } }
 // single path to Derived: rides the bare surface (no `#` needed).
 pub impl Only as Derived { fn d() -> I64 { return self.o() * 3I64 } }

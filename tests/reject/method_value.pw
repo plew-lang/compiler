@@ -1,8 +1,11 @@
 import @Std/Io with { print }
 // A method cannot be bound to a value (spec/07): `val f = w.get` must be a loud
 // reject, not a silent broken-C field access. (Wrap in a closure to pass around.)
-struct W { pub(get) val x: I32 }
-pub impl W { fn get() -> I32 { return self.x } }
+struct W { pub val x: I32 }
+pub impl W {
+    factory
+    fn get() -> I32 { return self.x }
+}
 fn main() {
     val w: W = <W x=7 />
     val f = w.get

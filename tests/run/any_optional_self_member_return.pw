@@ -6,7 +6,8 @@ import @Std/Io with { print }
 // heap payload is retained into the fresh box and the witness's owned result released, so
 // the erased Optional solely owns its box (value semantics, leak-free).
 trait Peek { fn peek() -> Optional[Self]  fn tag() -> I64 }
-struct A { val n: I64 }
+struct A { pub val n: I64 }
+pub impl A { factory }
 pub impl A as Peek {
     fn peek() -> Optional[Self] {
         if self.n < 0I64 { return <Optional[Self].None /> }

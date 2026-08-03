@@ -10,11 +10,13 @@ struct Entry[K, V] {
     pub val key: K
     pub val value: V
 }
+pub impl Entry { factory }
 
 struct Map[K, V] {
-    pub(get) mut val entries: Array[Entry[K, V]]
-    pub(get) mut val count: U64
+    pub mut val entries: Array[Entry[K, V]]
+    pub mut val count: U64
 }
+pub impl Map { factory }
 
 pub impl[K, V] Map[K, V] {
     inout fn put(key: K, value: V) {

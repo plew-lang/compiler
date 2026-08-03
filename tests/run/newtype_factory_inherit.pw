@@ -6,6 +6,7 @@
 import @Std/Io with { print }
 
 struct Rgb { pub val code: I32  pub val alpha: I32 }
+pub impl Rgb { factory }
 pub impl Rgb {
     factory
     factory gray(level: I32) { return <Rgb code=level alpha=255I32 /> }

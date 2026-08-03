@@ -1,8 +1,10 @@
 import @Std/Io with { print }
 // spec/05: `Lexer` declares a public `factory`, so it is constructible from another
-// module. (A type defined in THIS module needs no factory for same-module construction.)
+// module. `Local` declares one too: the default memberwise factory is private even
+// inside the same module unless the caller is in the type's anonymous impl.
 import @Plew/Syntax with { Lexer }
 struct Local { pub val n: I64 }
+pub impl Local { factory }
 fn main() {
     val l: Lexer = <Lexer bytes=[] pos=0U64 toks=[] depth=0I64 />
     val loc: Local = <Local n=5I64 />

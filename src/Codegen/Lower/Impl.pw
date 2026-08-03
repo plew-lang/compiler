@@ -12,6 +12,28 @@
 // visibility walk (siteOffset 0). Used to seed an impl/extension's lowering-time skip scope.
 
 pub impl Comp {
+    inout fn checkPubMemberwiseFactory(recvN: Bind, offset: U64) {
+        mut val sidx: U64 = self.structIndexByName(start: recvN.nameStart, len: recvN.nameLen)
+        if sidx >= self.arena.structs.count() {
+            sidx = self.genericStructIndex(nameStart: recvN.nameStart, nameLen: recvN.nameLen)
+        }
+        if sidx >= self.arena.structs.count() {
+            return
+        }
+        val sd: StructDef = self.arena.structs[sidx]
+        if sd.isExtern {
+            return
+        }
+        mut val fi: U64 = 0
+        while fi < sd.fields.count() {
+            val f: FieldDef = sd.fields[fi]
+            if !(f.hasDefault) && f.vis != 2U64 {
+                self.errorAt(offset: offset, msg: "a public memberwise factory requires every field without a default value to be `pub`; otherwise construction would expose private or `pub(get)` state")
+            }
+            fi += 1U64
+        }
+    }
+
     inout fn appendTraitAssocTypes(scope: inout Array[Bind], nameId: U64) {
         mut val ti: U64 = 0
         while ti < self.decls.traits.count() {
@@ -184,8 +206,10 @@ pub impl Comp {
                 }
                 MemberKind.Factory => {
                     // `factory` in a `pub impl T` publishes T's default memberwise factory
-                    // (spec/05) — record T's name id so cross-module `<T …/>` is allowed.
+                    // (spec/05) — record T's name id so `<T …/>` is allowed outside
+                    // T's anonymous impl.
                     if im.isPub {
+                        self.checkPubMemberwiseFactory(recvN: recvN, offset: m.nameSpan.start)
                         self.decls.pubFactories.append(intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
                     }
                 }

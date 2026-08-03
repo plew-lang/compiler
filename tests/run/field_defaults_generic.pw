@@ -8,6 +8,7 @@ struct Box[T] {
     pub val tag: I32 = 99
     pub val tags: Array[I32] = []
 }
+pub impl Box { factory }
 
 fn main() {
     val a: Box[I32] = <Box[I32] v=5 />

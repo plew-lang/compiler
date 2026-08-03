@@ -11,6 +11,7 @@ trait Container {
 }
 
 struct IntBox { pub val v: I64 }
+pub impl IntBox { factory }
 pub impl IntBox as Container {
     type Item = I64
     fn firstOr(fallback: I64) -> I64 { return self.v }
@@ -18,6 +19,7 @@ pub impl IntBox as Container {
 }
 
 struct Pair { pub val a: I64  pub val b: I64 }
+pub impl Pair { factory }
 pub impl Pair as Container {
     type Item = I64
     fn firstOr(fallback: I64) -> I64 { return self.a }

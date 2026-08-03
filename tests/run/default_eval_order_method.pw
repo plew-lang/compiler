@@ -8,8 +8,9 @@ fn mark(n: I64) -> I64 {
 }
 
 struct Counter {
-    val base: I64
+    pub val base: I64
 }
+pub impl Counter { factory }
 
 pub impl Counter {
     fn add(a: I64 = mark(n: 1), b: I64 = mark(n: 2), c: I64 = mark(n: 3)) -> I64 {

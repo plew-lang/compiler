@@ -13,7 +13,8 @@ pub impl Super { fn twice() -> I64 { return self.base() * 2I64 } }
 trait Mid: Super { fn mid() -> I64 }
 trait Sub: Mid { fn extra() -> I64 }
 
-struct S { val n: I64 }
+struct S { pub val n: I64 }
+pub impl S { factory }
 pub impl S as Super { fn base() -> I64 { return self.n } }
 pub impl S as Mid { fn mid() -> I64 { return 100I64 } }
 pub impl S as Sub { fn extra() -> I64 { return 7I64 } }

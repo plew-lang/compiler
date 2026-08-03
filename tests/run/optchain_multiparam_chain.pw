@@ -6,6 +6,7 @@
 import @Std/Io with { print }
 import @Std/Core
 struct Inner { pub val n: I64 }
+pub impl Inner { factory }
 enum Slot[Meta, T] {
     Full(v: T)
     Empty

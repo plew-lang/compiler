@@ -6,9 +6,11 @@ import @Std/Io with { print }
 // name-only recovery degraded it to the plain trait name and misrouted the call to
 // the free-fn inference path.
 trait Shape { fn area() -> I64 }
-struct Sq { val s: I64 }
+struct Sq { pub val s: I64 }
+pub impl Sq { factory }
 pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
 struct Holder { pub val item: any Shape }
+pub impl Holder { factory }
 pub impl Holder { fn get() -> any Shape { return self.item } }
 
 fn main() {

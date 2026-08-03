@@ -1,0 +1,5 @@
+import ./Secret with { Secret as S }
+
+fn main() {
+    val value = <S visible=1I64 hidden=2I64 />
+}

@@ -9,6 +9,7 @@ struct Config {
     pub mut val retries: I32 = 3
     pub val tags: Array[I32] = []
 }
+pub impl Config { factory }
 
 fn main() {
     val a: Config = <Config />

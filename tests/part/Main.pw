@@ -8,6 +8,7 @@ part ./Helper
 struct N {
     pub val v: I64
 }
+pub impl N { factory }
 
 fn main() {
     print((<N v=7 />).triple())

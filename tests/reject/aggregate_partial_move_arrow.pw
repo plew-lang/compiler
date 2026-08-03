@@ -6,6 +6,7 @@ struct Pair {
     pub val left: I64
     pub val right: I64
 }
+pub impl Pair { factory }
 
 fn main() {
     val p: MutableRef[Pair] = <MutableRef value=<Pair left=1I64 right=2I64 /> />

@@ -5,6 +5,7 @@ import @Std/Io with { print }
 // the box does not affect the existential's boxed value.
 trait Show { fn first() -> I64 }
 struct Holder { pub mut val items: Array[I64] }
+pub impl Holder { factory }
 pub impl Holder as Show { fn first() -> I64 { return self.items[0] } }
 
 fn main() {

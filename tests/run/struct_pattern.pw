@@ -7,17 +7,20 @@ import @Std/Io with { print }
 struct Inner {
     pub val n: I32
 }
+pub impl Inner { factory }
 
 struct Outer {
     pub val tag: I32
     pub val items: Array[I32]
     pub val inner: Inner
 }
+pub impl Outer { factory }
 
 struct Box[T] {
     pub val v: T
     pub val w: I32
 }
+pub impl Box { factory }
 
 fn sumBox(b: Box[I32]) -> I32 {
     return match b {

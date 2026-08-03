@@ -4,6 +4,7 @@ import @Std/Io with { print }
 // field access / method call on it resolves (previously only the struct-DESTRUCTURE
 // for-loop tracked the element type). Primitive elements stay plain scalars.
 struct P { pub val x: I64  pub val y: I64 }
+pub impl P { factory }
 fn main() {
     mut val ps: Array[P] = []
     ps.append(<P x=1 y=2 />)

@@ -5,7 +5,8 @@ import @Std/Io with { print }
 // into the existential (None stays None). The heap-carrying payload is retained so the
 // erased value co-owns it — the source Optional stays an independent, still-usable value.
 trait Named { fn label() -> String }
-struct Person { val name: String }
+struct Person { pub val name: String }
+pub impl Person { factory }
 pub impl Person as Named { fn label() -> String { return self.name } }
 fn describe(o: Optional[any Named]) {
     match o {

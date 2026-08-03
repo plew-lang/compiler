@@ -11,8 +11,10 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
-struct Box { mut val r: MutableRef[Cell] }
+struct Box { pub mut val r: MutableRef[Cell] }
+pub impl Box { factory }
 pub impl Box {
     // overwrite a directly-typed `MutableRef` field via `self.field =` (the Ident-base assign path).
     inout fn put(r: MutableRef[Cell]) { self.r = r }

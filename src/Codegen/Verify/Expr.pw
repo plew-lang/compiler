@@ -201,7 +201,7 @@ pub impl Comp {
                     }
                 }
                 // field gate (spec/05): a non-`pub` field cannot be set from another module.
-                self.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields)
+                self.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields, offset: self.exprOffset(id: id))
                 mut val i: U64 = 0
                 while i < fields.count() {
                     self.verifyExpr(id: fields[i].value)

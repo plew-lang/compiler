@@ -5,6 +5,7 @@
 import @Std/Io with { print }
 import @Std/Core with { MutableRef }
 struct Holder { pub mut val xs: Array[I64] }
+pub impl Holder { factory }
 fn touch(a: inout Array[I64], b: inout I64) { b = 42  a.append(9) }
 fn main() {
     val r1: MutableRef[Holder] = <MutableRef[Holder] value=<Holder xs=[1,2,3] /> />

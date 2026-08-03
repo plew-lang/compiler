@@ -6,17 +6,21 @@ import @Std/Io with { print }
 // to concrete types in the dispatch thunks while `Self` stays erased — heterogeneous
 // concretes still share the existential.
 trait Producer[Out] { fn produce() -> Out }
-struct IntGen { val v: I32 }
-struct Doubler { val v: I32 }
+struct IntGen { pub val v: I32 }
+pub impl IntGen { factory }
+struct Doubler { pub val v: I32 }
+pub impl Doubler { factory }
 pub impl IntGen as Producer[I32] { fn produce() -> I32 { return self.v } }
 pub impl Doubler as Producer[I32] { fn produce() -> I32 { return self.v + self.v } }
 
 trait Source { type Item  fn first() -> Item }
-struct S64 { val v: I64 }
+struct S64 { pub val v: I64 }
+pub impl S64 { factory }
 pub impl S64 as Source { type Item = I64  fn first() -> I64 { return self.v } }
 
 trait Adder[Rhs] { fn combine(rhs: Rhs) -> I64 }
-struct Acc { val base: I64 }
+struct Acc { pub val base: I64 }
+pub impl Acc { factory }
 pub impl Acc as Adder[I64] { fn combine(rhs: I64) -> I64 { return self.base + rhs } }
 
 fn main() {

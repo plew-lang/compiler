@@ -1,0 +1,7 @@
+// spec/05: publishing the memberwise factory is only valid when every field without
+// a default value is `pub`; otherwise construction would expose private state.
+struct Box {
+    pub val n: I64
+    pub(get) mut val hidden: I64
+}
+pub impl Box { factory }

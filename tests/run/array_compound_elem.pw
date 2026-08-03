@@ -8,10 +8,12 @@ import @Std/Core with { MutableRef }
 struct Cell {
     pub mut val v: I32
 }
+pub impl Cell { factory }
 
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 fn main() {
     // Array[MutableRef[T]]: shared mutation through an element

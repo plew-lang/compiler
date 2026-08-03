@@ -10,8 +10,10 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Box[T] { pub val item: T }
+pub impl Box { factory }
 
 fn main() {
     val bb: Box[Box[String]] = <Box item=<Box item=("heap" + "-payload") /> />

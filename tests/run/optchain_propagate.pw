@@ -5,9 +5,12 @@
 import @Std/Io with { print, write }
 import @Std/Core
 struct C { pub val n: I64 }
+pub impl C { factory }
 pub impl C { fn doubled() -> I64 { return self.n * 2 } }
 struct B { pub val c: C }
+pub impl B { factory }
 struct A { pub val b: B }
+pub impl A { factory }
 fn main() {
     val a: A = <A b=<B c=<C n=21 /> /> />
     val some: Optional[A] = <Optional[A].Some v=a />

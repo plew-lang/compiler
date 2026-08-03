@@ -5,6 +5,7 @@ import @Std/Io with { print }
 // assignment inside an `inout` method (the Dictionary.grow shape) and a bare
 // `s.f = a` on a local struct.
 struct Bag { pub mut val items: Array[I32] }
+pub impl Bag { factory }
 pub impl Bag {
     inout fn put(ys: Array[I32]) {
         self.items = ys

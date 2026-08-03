@@ -1,8 +1,9 @@
 import @Std/Io with { print }
 
 struct Box[T] {
-    val v: T
+    pub val v: T
 }
+pub impl Box { factory }
 
 pub impl[T] Box[T] {
     fn get() -> T {

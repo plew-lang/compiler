@@ -3,6 +3,7 @@ import @Std/Core with { Iterator }
 
 // map's output element type B (Bool) differs from the inner Item (I64).
 struct Counter { pub mut val n: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

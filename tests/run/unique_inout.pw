@@ -3,9 +3,10 @@ import @Std/Io with { write, print }
 // `inout` is valid for unique types (a mutable borrow consumes nothing): the
 // caller keeps ownership and deinit runs once at its scope.
 unique struct File {
-    mut val fd: I64
+    pub mut val fd: I64
     deinit { print(self.fd) }
 }
+pub impl File { factory }
 pub impl File {
     inout fn setFd(n: I64) { self.fd = n }
     fn current() -> I64 { return self.fd }

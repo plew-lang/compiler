@@ -5,6 +5,7 @@ import @Std/Core with { Eq, Ord, Ordering }
 // and `< <= > >=` to the Ord witness `compare` (a tag test on its Ordering).
 // Eq/Ord/Ordering are @Std/Core traits (the primitive conformances ride them too).
 struct Money { pub val cents: I64 }
+pub impl Money { factory }
 impl Money as Eq {
     assoc fn eq(lhs: Money, rhs: Money) -> Bool { return lhs.cents == rhs.cents }
 }

@@ -8,11 +8,13 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Rec {
     pub val tag: String
     pub val cell: MutableRef[Cell]
 }
+pub impl Rec { factory }
 
 enum Msg {
     Note(text: String)

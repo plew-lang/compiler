@@ -4,9 +4,10 @@ import @Std/Io with { write, print }
 // the *other* branch would return. The exclusion is per-exit, not a persisted
 // move, so each path deinits exactly the locals it does not hand back.
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit { print(self.fd) }
 }
+pub impl File { factory }
 
 fn pick(cond: Bool) -> File {
     val a: File = <File fd=1 />

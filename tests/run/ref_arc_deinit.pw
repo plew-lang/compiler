@@ -12,6 +12,7 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 // `r` is a place arg = a borrow; `make` reads it and returns a fresh MutableRef (a temporary the
 // caller must release). Exercises borrow-not-released + return-retains + temporary cleanup.

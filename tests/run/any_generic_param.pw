@@ -7,12 +7,14 @@ import @Std/Io with { print }
 // signature and the body binding must agree on the fat-pointer representation (a bare
 // `T` is not `any`, so the body binding grounds T -> any P to match paramLlvmTy).
 trait Shape { fn area() -> I64 }
-struct Sq { val s: I64 }
+struct Sq { pub val s: I64 }
+pub impl Sq { factory }
 pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
 
 fn identity[T](x: T) -> T { return x }
 
-struct Wrapper[T] { val item: T }
+struct Wrapper[T] { pub val item: T }
+pub impl Wrapper { factory }
 pub impl[T] Wrapper[T] { fn get() -> T { return self.item } }
 
 fn main() {

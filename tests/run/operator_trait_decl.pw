@@ -17,6 +17,7 @@ trait Mul[Rhs] {
 }
 
 struct Vec2 { pub val x: I64  pub val y: I64 }
+pub impl Vec2 { factory }
 
 impl Vec2 as Add[Vec2] {
     type Output = Vec2

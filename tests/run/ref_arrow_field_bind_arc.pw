@@ -6,6 +6,7 @@ import @Std/Io with { print }
 import @Std/Core with { MutableRef }
 
 struct Inner { pub val xs: Array[I64]  pub val name: String }
+pub impl Inner { factory }
 
 fn main() {
     mut val r: MutableRef[Inner] = <MutableRef value=<Inner xs=[1, 2, 3] name="pointee" /> />

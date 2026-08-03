@@ -4,7 +4,9 @@
 import @Std/Io with { print }
 
 struct Celsius { pub val c: I64 }
+pub impl Celsius { factory }
 struct Fahrenheit { pub val f: I64 }
+pub impl Fahrenheit { factory }
 
 pub impl Celsius {
     factory(from: Fahrenheit) {

@@ -6,7 +6,9 @@ import @Std/Core
 // including nested chains. `Loaded[T]` models "loaded / not yet loaded".
 
 struct Box { pub val n: I32 }
+pub impl Box { factory }
 struct Outer { pub val box: Box }
+pub impl Outer { factory }
 
 enum Loaded[T] {
     NotLoaded

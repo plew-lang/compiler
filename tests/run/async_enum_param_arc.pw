@@ -12,6 +12,7 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 enum Msg {
     Boxed(r: MutableRef[Cell])
     Quit

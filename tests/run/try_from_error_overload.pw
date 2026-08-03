@@ -5,6 +5,7 @@
 import @Std/Io with { print }
 import @Std/Core
 struct MyErr { pub val code: I32 }
+pub impl MyErr { factory }
 pub impl MyErr {
     factory from(n: I32) { return <MyErr code=100I32 /> }
     factory from(s: String) { return <MyErr code=200I32 /> }

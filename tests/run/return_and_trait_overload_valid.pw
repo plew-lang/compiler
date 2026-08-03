@@ -6,6 +6,7 @@ trait Show {
     fn show(x: Bool) -> I64
 }
 struct S { pub val n: I64 }
+pub impl S { factory }
 pub impl S as Show {
     fn show(x: I64) -> I64 { return self.n + x }
     fn show(x: Bool) -> I64 { return self.n }

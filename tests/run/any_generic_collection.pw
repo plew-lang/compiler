@@ -7,8 +7,10 @@ import @Std/Io with { print }
 // PLACE copies it by retaining its box, and a Dictionary[K, any P] exercises the
 // same insert/read path plus the missing-key-panicking subscript.
 trait Shape { fn area() -> I64 }
-struct Sq { val s: I64 }
-struct Rect { val w: I64  val h: I64 }
+struct Sq { pub val s: I64 }
+pub impl Sq { factory }
+struct Rect { pub val w: I64  pub val h: I64 }
+pub impl Rect { factory }
 pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
 pub impl Rect as Shape { fn area() -> I64 { return self.w * self.h } }
 

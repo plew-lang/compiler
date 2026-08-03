@@ -6,7 +6,8 @@ trait Drawable {
     fn draw() -> I64
 }
 
-struct Sprite { val w: I64 }
+struct Sprite { pub val w: I64 }
+pub impl Sprite { factory }
 pub impl Sprite {
     fn render() -> I64 { return self.w }
 }

@@ -4,6 +4,7 @@ struct Counter {
     pub mut val n: I64
     pub mut val xs: Array[I64]
 }
+pub impl Counter { factory }
 fn bump(c: inout Counter, by: I64) {
     c.n += by
     c.xs.append(c.n)

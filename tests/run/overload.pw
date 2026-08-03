@@ -7,7 +7,8 @@ fn f(y: I64) -> I64 { return y + 100I64 }          // by label (x vs y)
 fn g(x: I64) -> I64 { return x }                   // by argument type
 fn g(x: String) -> I64 { return 99I64 }
 
-struct C { val n: I64 }
+struct C { pub val n: I64 }
+pub impl C { factory }
 pub impl C {
     fn add(x: I64) -> I64 { return self.n + x }    // method overloads too
     fn add(x: I64, y: I64) -> I64 { return self.n + x + y }

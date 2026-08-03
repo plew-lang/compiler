@@ -5,8 +5,11 @@ import @Std/Io with { print, write }
 import @Std/Core
 import @Std/Core with { MutableRef }
 struct Cell { pub val v: I64 }
+pub impl Cell { factory }
 struct RBox { pub val c: MutableRef[Cell] }
+pub impl RBox { factory }
 struct Outer { pub val inner: RBox }
+pub impl Outer { factory }
 fn mkO(v: I64) -> Optional[Outer] {
     return <Optional.Some v=<Outer inner=<RBox c=<MutableRef value=<Cell v=v /> /> /> /> />
 }

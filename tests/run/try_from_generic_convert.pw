@@ -6,8 +6,11 @@
 import @Std/Io with { print }
 import @Std/Core
 struct Dist[Unit] { pub val v: I64 }
+pub impl Dist { factory }
 struct Meters {}
+pub impl Meters { factory }
 struct Feet {}
+pub impl Feet { factory }
 pub impl Dist[Feet] { factory from(d: Dist[Meters]) { return <Dist[Feet] v=d.v * 3I64 /> } }
 fn inner() -> Result[I64, Dist[Meters]] { return <Result.Err error=<Dist[Meters] v=10I64 /> /> }
 fn outer() -> Result[I64, Dist[Feet]] {

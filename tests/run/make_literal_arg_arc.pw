@@ -5,6 +5,7 @@
 import @Std/Io with { print }
 
 struct Bag { pub val label: String }
+pub impl Bag { factory }
 
 fn tag(bag: Bag) -> String { return bag.label }
 

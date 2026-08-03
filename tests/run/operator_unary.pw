@@ -5,7 +5,9 @@ trait Neg { type Output  assoc fn neg(value: Self) -> Output }
 trait Not { type Output  assoc fn not(value: Self) -> Output }
 
 struct Money { pub val cents: I64 }
+pub impl Money { factory }
 struct Switch { pub val on: I64 }
+pub impl Switch { factory }
 
 impl Money as Neg {
     type Output = Money

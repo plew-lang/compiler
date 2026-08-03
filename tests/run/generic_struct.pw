@@ -3,6 +3,7 @@ import @Std/Io with { print }
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 fn main() {
     val bi: Box[I32] = <Box[I32] v=5 />

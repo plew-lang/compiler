@@ -7,6 +7,7 @@ import @Std/Io with { print }
 // routes through generic-receiver dispatch. (fold[B]'s method-own type param is a
 // separate remaining gap — not exercised here.)
 struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

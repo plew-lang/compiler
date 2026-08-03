@@ -6,6 +6,7 @@
 import @Std/Io with { print }
 
 struct S { pub val text: String }
+pub impl S { factory }
 enum Tok { Word(text: String) Eof }
 
 fn nameOf(t: Tok) -> String {

@@ -7,11 +7,13 @@ unique struct Res {
         print("deinit " + self.name)
     }
 }
+pub impl Res { factory }
 
 struct Thing {
     pub val name: String
     pub val r: MutableRef[Res]
 }
+pub impl Thing { factory }
 
 fn mk(name: String) -> Thing {
     return <Thing name=name r=<MutableRef value=<Res name=name /> /> />

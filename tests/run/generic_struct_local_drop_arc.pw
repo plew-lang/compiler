@@ -5,10 +5,12 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 // Swift-guaranteed (+0) arg convention: a by-value heap-carrying arg is a BORROW —
 // no retain at the call, no release in the callee. The caller's binding stays the

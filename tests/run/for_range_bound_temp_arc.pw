@@ -1,6 +1,7 @@
 import @Std/Io with { print, write }
 
 struct Sized { pub val n: U64  pub val tag: String }
+pub impl Sized { factory }
 
 fn makeSized() -> Sized {
     return <Sized n=3U64 tag="he" + "ap" />

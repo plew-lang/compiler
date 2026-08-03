@@ -4,6 +4,7 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 fn mkArr() -> Array[MutableRef[Cell]] {
     return [<MutableRef value=<Cell v=1 /> />, <MutableRef value=<Cell v=2 /> />]
 }

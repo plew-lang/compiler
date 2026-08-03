@@ -6,6 +6,7 @@ import @Std/Io with { print }
 struct Box[T] {
     pub val items: Array[T]
 }
+pub impl Box { factory }
 
 pub impl[T] Box[T] {
     fn at(i: U64) -> T {

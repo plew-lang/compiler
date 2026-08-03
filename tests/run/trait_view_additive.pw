@@ -7,6 +7,7 @@ import @Std/Io with { print }
 // (spec/09). Trait views (`#P`) and extension views (`#A`) work the same way and
 // stack into a view chain (`s#A`, `sa#P`, `sp#A`).
 struct S {}
+pub impl S { factory }
 pub impl S { fn s() -> I64 { return 1I64 } }
 extension A { pub impl S { fn a() -> I64 { return 2I64 } } }
 trait P {}

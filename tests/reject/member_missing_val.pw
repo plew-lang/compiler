@@ -1,0 +1,1 @@
+struct Box { pub(get) mut n: I64 }

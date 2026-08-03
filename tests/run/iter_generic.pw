@@ -5,6 +5,7 @@ struct BoxIter[T] {
     pub val items: Array[T]
     pub mut val i: U64
 }
+pub impl BoxIter { factory }
 pub impl[T] BoxIter[T] as Iterator {
     type Item = T
     inout fn next() -> Optional[T] {
@@ -19,6 +20,7 @@ pub impl[T] BoxIter[T] as Iterator {
 struct Box[T] {
     pub val items: Array[T]
 }
+pub impl Box { factory }
 pub impl[T] Box[T] as Iterable {
     type Item = T
     type Iter = BoxIter[T]

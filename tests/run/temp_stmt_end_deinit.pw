@@ -8,6 +8,7 @@ unique struct Res {
     pub val tag: I64
     deinit { print(self.tag) }
 }
+pub impl Res { factory }
 
 fn probe(res: borrow Res) -> I64 {
     return res.tag

@@ -1,4 +1,5 @@
 import @Std/Io with { print }
 struct A { pub val x: I64 }
+pub impl A { factory }
 pub impl A { fn add(n: I64) -> I64 { return self.x + n } }
 fn main() { val a: A = <A x=10 />  print(a.add(n: 5I64)) }

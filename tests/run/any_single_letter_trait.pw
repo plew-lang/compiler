@@ -5,7 +5,8 @@ import @Std/Io with { print }
 // registers and its elements dispatch. (A type-param-shaped trait name previously
 // poisoned registration and crashed the backend.)
 trait P { fn v() -> I64 }
-struct S { val n: I64 }
+struct S { pub val n: I64 }
+pub impl S { factory }
 pub impl S as P { fn v() -> I64 { return self.n } }
 
 fn main() {

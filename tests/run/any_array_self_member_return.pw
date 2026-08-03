@@ -6,7 +6,8 @@ import @Std/Io with { print }
 // into the fresh buffer and the witness's owned array released, so the erased array solely
 // owns its elements (value semantics, leak-free). An empty array erases to an empty array.
 trait Bag { fn items() -> Array[Self]  fn tag() -> I64 }
-struct A { val n: I64 }
+struct A { pub val n: I64 }
+pub impl A { factory }
 pub impl A as Bag {
     fn items() -> Array[Self] {
         if self.n < 0I64 { return [] }

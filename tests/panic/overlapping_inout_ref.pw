@@ -4,6 +4,7 @@
 import @Std/Io with { print }
 import @Std/Core with { MutableRef }
 struct Counter { pub mut val n: I32 }
+pub impl Counter { factory }
 fn bump2(x: inout I32, y: inout I32) { x = x + 1I32  y = y + 10I32 }
 fn main() {
     val r1: MutableRef[Counter] = <MutableRef[Counter] value=<Counter n=5 /> />

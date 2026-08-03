@@ -4,6 +4,7 @@
 import @Std/Io with { print }
 
 struct Celsius { pub val degrees: I64 }
+pub impl Celsius { factory }
 pub impl Celsius {
     factory fromTens(tens: I64) {
         return <Celsius degrees=tens * 10 />

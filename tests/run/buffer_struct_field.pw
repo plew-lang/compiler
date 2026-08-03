@@ -8,8 +8,9 @@ import @Std/Io with { print }
 import @Std/Core with { Buffer }
 
 struct Holder {
-    pub(get) mut val items: Buffer[String]
+    pub mut val items: Buffer[String]
 }
+pub impl Holder { factory }
 
 fn build() -> Buffer[String] {
     mut val b: Buffer[String] = Buffer.new()

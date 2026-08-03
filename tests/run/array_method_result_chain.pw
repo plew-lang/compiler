@@ -4,7 +4,8 @@
 // that String `.bytes()` and Array `.count()` methodization rely on.
 import @Std/Io with { print }
 
-struct Holder { val xs: Array[I64] }
+struct Holder { pub val xs: Array[I64] }
+pub impl Holder { factory }
 pub impl Holder {
     fn items() -> Array[I64] { return self.xs }
 }

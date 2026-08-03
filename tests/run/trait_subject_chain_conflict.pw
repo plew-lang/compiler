@@ -8,7 +8,8 @@ trait C { fn cv() -> I64 }
 trait D { fn dv() -> I64 }
 trait B { fn b() -> I64 }
 trait A { fn a() -> I64 }
-struct S { val v: I64 }
+struct S { pub val v: I64 }
+pub impl S { factory }
 pub impl S as C { fn cv() -> I64 { return self.v } }
 pub impl S as D { fn dv() -> I64 { return self.v * 100I64 } }
 pub impl C as B { fn b() -> I64 { return self.cv() + 1I64 } }   // b via C

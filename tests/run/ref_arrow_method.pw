@@ -12,12 +12,14 @@ unique struct Counter {
     pub mut val n: I32          // pub so `r->n` R/W is reachable from `main` (spec/05: `->` obeys field visibility)
     deinit { print(99I32) }
 }
+pub impl Counter { factory }
 pub impl Counter {
     inout fn add(by: I32) { self.n = self.n + by }
     fn total() -> I32 { return self.n }
 }
 
-struct Box[T] { val v: T }
+struct Box[T] { pub val v: T }
+pub impl Box { factory }
 pub impl[T] Box[T] { fn get() -> T { return self.v } }
 
 fn main() {

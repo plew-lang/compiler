@@ -8,6 +8,7 @@ import @Std/Io with { print }
 import @Std/Core with { Iterator }
 
 struct Counter { pub mut val n: I32 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I32
     inout fn next() -> Optional[I32] {

@@ -8,6 +8,7 @@ import @Std/Io with { print }
 
 trait Special { fn mark() -> I64 }
 struct Plain { pub val v: I64 }
+pub impl Plain { factory }
 pub impl Plain as Special { fn mark() -> I64 { return self.v * 10 } }
 
 fn needs[T](x: T) -> I64 where T: Special { return x.mark() }

@@ -5,7 +5,8 @@ import @Std/Io with { print }
 // widens from an 8-byte concrete to a 16-byte existential fat pointer, so codegen boxes each
 // element into the existential. The source array stays independent (value semantics).
 trait Shape { fn area() -> I64 }
-struct Sq { val s: I64 }
+struct Sq { pub val s: I64 }
+pub impl Sq { factory }
 pub impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
 
 fn main() {

@@ -11,6 +11,7 @@ unique struct R {
     pub mut val n: I32
     deinit { print(90I32 + self.n) }
 }
+pub impl R { factory }
 
 mut val g: MutableRef[R] = <MutableRef[R] value=<R n=1I32 /> />
 

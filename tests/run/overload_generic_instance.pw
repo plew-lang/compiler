@@ -6,6 +6,7 @@ import @Std/Io with { print }
 // not just the head name "Box" — head-name-only reported a false "duplicate function"
 // and, when it slipped past, dispatched every call to the first-declared overload.
 struct Box[T] { pub val v: T }
+pub impl Box { factory }
 
 fn f(b: Box[String]) -> I64 { return 222I64 }
 fn f(b: Box[I64]) -> I64 { return 111I64 }

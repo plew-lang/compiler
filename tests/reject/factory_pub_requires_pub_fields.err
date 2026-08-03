@@ -1,0 +1,1 @@
+a public memberwise factory requires every field without a default value to be `pub`

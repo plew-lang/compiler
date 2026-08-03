@@ -6,6 +6,7 @@ import @Std/Io with { print }
 // receiver's concrete item via the Self/Item env (llvmFnRetTy + ensureProvidedDeclared),
 // so the `pf`/`gm` function returns `Optional[I64]`, matching the body's construction.
 struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

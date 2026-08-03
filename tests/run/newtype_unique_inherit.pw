@@ -5,7 +5,8 @@
 // end of `sink`, then again for a separately-scoped value).
 import @Std/Io with { write }
 
-unique struct File { val fd: I32  deinit { write(s: "closed\n") } }
+unique struct File { pub val fd: I32  deinit { write(s: "closed\n") } }
+pub impl File { factory }
 newtype RoFile = File
 
 fn sink(f: move RoFile) { write(s: "got\n") }

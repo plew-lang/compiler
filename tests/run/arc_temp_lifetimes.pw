@@ -10,11 +10,13 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 unique struct Loud {
     pub val v: I32
     deinit { print(self.v + 500I32) }
 }
+pub impl Loud { factory }
 
 fn mk(v: I32) -> Cell {
     return <Cell v=v />

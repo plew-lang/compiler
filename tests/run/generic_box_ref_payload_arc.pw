@@ -5,14 +5,17 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 struct Outer {
     pub val b: Box[MutableRef[Cell]]
 }
+pub impl Outer { factory }
 
 enum Wrap {
     Hold(b: Box[MutableRef[Cell]])

@@ -5,6 +5,7 @@ import @Std/Io with { print }
 // same id. Also exercises generic-enum RHS construction inferring its type args from
 // the local's tracked instance type.
 struct A { pub val x: I64 }
+pub impl A { factory }
 fn mkA() -> A { return <A x=5 /> }
 
 fn main() {

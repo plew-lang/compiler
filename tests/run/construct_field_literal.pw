@@ -5,7 +5,9 @@ import @Std/Io with { print }
 // constructs it, so its field types are available during lowering). Covers dict / record
 // literals (and `()` unit) as JSX field values, which carry no type of their own.
 struct Seg { pub val from: (x: I64, y: I64)  pub val to: (x: I64, y: I64) }
+pub impl Seg { factory }
 struct Bag { pub mut val m: Dictionary[U64, Bool] }
+pub impl Bag { factory }
 enum Shape { Point(at: (x: I64, y: I64))  Empty }
 
 fn main() {

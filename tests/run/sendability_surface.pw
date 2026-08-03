@@ -5,8 +5,9 @@ trait Numberish {
 }
 
 nonsendable struct UiState {
-    val value: I64
+    pub val value: I64
 }
+pub impl UiState { factory }
 
 unique nonsendable enum Token {
     Ready(value: I64)
@@ -15,18 +16,22 @@ unique nonsendable enum Token {
 export unique nonsendable struct ExportedOwner {
     pub val value: I64
 }
+pub impl ExportedOwner { factory }
 
 struct Box[sendable T] {
     pub val value: T
 }
+pub impl Box { factory }
 
 struct ExistentialBox {
     pub val value: any sendable Numberish
 }
+pub impl ExistentialBox { factory }
 
 struct HandlerBox {
     pub val handler: sendable fn(value: I64) -> I64
 }
+pub impl HandlerBox { factory }
 
 impl UiState as Numberish {
     fn number() -> I64 { return self.value }

@@ -52,6 +52,7 @@ pub impl Comp {
                 self.cur.hasRecv = f.hasRecv
                 self.cur.recvStart = f.recvStart
                 self.cur.recvLen = f.recvLen
+                self.cur.extId = f.extId
                 self.cur.selfInout = f.selfInout
                 self.cur.recvInstRef = 0
                 self.cur.typeParams = noParams
@@ -94,6 +95,7 @@ pub impl Comp {
             self.cur.hasRecv = gf.hasRecv
             self.cur.recvStart = gf.recvStart
             self.cur.recvLen = gf.recvLen
+            self.cur.extId = gf.extId
             self.cur.selfInout = gf.selfInout
             self.cur.recvInstRef = fin.recvInstRef
             if gf.hasRecv {
@@ -125,6 +127,7 @@ pub impl Comp {
         val noA: Array[U64] = []
         self.cur.locals = []
         self.cur.hasRecv = false
+        self.cur.extId = 0
         self.cur.typeParams = noP
         self.cur.typeArgs = noA
         self.cur.inClosure = false

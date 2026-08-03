@@ -5,6 +5,7 @@ import @Std/Io with { print }
 struct P {
     pub val x: I32
 }
+pub impl P { factory }
 
 fn main() {
     val n: I32 = 1

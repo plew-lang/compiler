@@ -33,5 +33,6 @@ fn main() {
 
 struct Point {
     pub mut val x: I64
-    val y: I64
+    pub val y: I64
 }
+pub impl Point { factory }

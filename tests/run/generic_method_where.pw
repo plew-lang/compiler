@@ -3,10 +3,12 @@ import @Std/Io with { print }
 // A generic method with a `where T: Trait` bound: the body is checked (#9) and
 // the receiver instantiation's type argument must conform (#8).
 trait Bar { fn bar() -> I64 }
-struct N { val v: I64 }
+struct N { pub val v: I64 }
+pub impl N { factory }
 pub impl N as Bar { fn bar() -> I64 { return self.v } }
 
-struct Box[T] { val item: T }
+struct Box[T] { pub val item: T }
+pub impl Box { factory }
 pub impl[T] Box[T] {
     fn useBar() -> I64 where T: Bar { return self.item.bar() }
 }

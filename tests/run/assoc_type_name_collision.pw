@@ -11,6 +11,7 @@ import @Std/Io with { print }
 // check. Defining `struct Item` alone loads those copies into the arena, so this also
 // pins that a name collision with any std associated type stays compilable.
 struct Item { pub val v: I64 }
+pub impl Item { factory }
 
 fn main() {
     val xs: Array[I64] = [1I64, 2I64, 3I64]

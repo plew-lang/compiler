@@ -4,13 +4,15 @@
 import @Std/Io with { print }
 
 struct Person {
-    val name: I64
-    val age: I64
+    pub val name: I64
+    pub val age: I64
 }
+pub impl Person { factory }
 
 struct Group {
-    val members: Array[I64]
+    pub val members: Array[I64]
 }
+pub impl Group { factory }
 
 fn main() {
     val people: Array[Person] = [<Person name=1 age=30 />, <Person name=2 age=40 />]

@@ -11,6 +11,7 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 fn mk(v: I32) -> MutableRef[Cell] {
     print(v + 1000I32)

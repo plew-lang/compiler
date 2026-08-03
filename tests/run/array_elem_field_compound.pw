@@ -6,6 +6,7 @@ import @Std/Io with { print }
 struct P {
     pub mut val x: I32
 }
+pub impl P { factory }
 
 fn main() {
     mut val xs: Array[P] = []

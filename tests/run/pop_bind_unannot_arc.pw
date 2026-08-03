@@ -8,6 +8,7 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 fn main() {
     mut val xs: Array[MutableRef[Cell]] = []

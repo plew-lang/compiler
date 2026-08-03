@@ -1,5 +1,6 @@
 import @Std/Io with { print }
 struct Box[T] { pub mut val v: T }
+pub impl Box { factory }
 fn main() {
     mut val a: Box[Array[I32]] = <Box[Array[I32]] v=[1, 2] />
     mut val b: Box[Array[I32]] = a

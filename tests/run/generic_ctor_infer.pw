@@ -8,11 +8,13 @@ import @Std/Io with { print }
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 struct Pair[A, B] {
     pub val a: A
     pub val b: B
 }
+pub impl Pair { factory }
 
 fn makeBox() -> Box[I64] {
     return <Box v=42 />

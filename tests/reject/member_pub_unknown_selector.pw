@@ -1,0 +1,2 @@
+// spec/05: the only field visibility forms are `pub` and `pub(get)`.
+struct Box { pub(set) mut val n: I64 }

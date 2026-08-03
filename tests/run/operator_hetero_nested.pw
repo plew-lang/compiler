@@ -7,6 +7,7 @@ import @Std/Io with { print }
 trait Add[Rhs] { type Output  assoc fn add(lhs: Self, rhs: Rhs) -> Output }
 trait Mul[Rhs] { type Output  assoc fn mul(lhs: Self, rhs: Rhs) -> Output }
 struct Vec2 { pub val x: I64  pub val y: I64 }
+pub impl Vec2 { factory }
 
 impl Vec2 as Add[I64] {
     type Output = Vec2

@@ -3,9 +3,11 @@ import @Std/Io with { print }
 // Transitive monomorphization with eager bound checking: outer[U] forwards to
 // inner[T], and the bound (Getter) propagates so both bodies type-check.
 trait Getter { fn get() -> I64 }
-struct A { val n: I64 }
+struct A { pub val n: I64 }
+pub impl A { factory }
 pub impl A as Getter { fn get() -> I64 { return self.n } }
-struct B { val m: I64 }
+struct B { pub val m: I64 }
+pub impl B { factory }
 pub impl B as Getter { fn get() -> I64 { return self.m * 10I64 } }
 
 fn inner[T](x: T) -> I64 where T: Getter { return x.get() }

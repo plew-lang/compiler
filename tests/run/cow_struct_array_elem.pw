@@ -4,7 +4,9 @@ import @Std/Io with { print }
 // array, then dropped at scope exit — exercises value-semantics ownership of
 // struct-element arrays (the array deep-owns its elements; push/set copy them).
 struct Item { pub val v: I64 }
+pub impl Item { factory }
 struct Box { pub val items: Array[Item] }
+pub impl Box { factory }
 
 fn build(flag: Bool) -> I64 {
     mut val store: Array[Box] = []

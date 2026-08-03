@@ -5,10 +5,12 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 enum Inner {
     Keep(r: MutableRef[Cell])

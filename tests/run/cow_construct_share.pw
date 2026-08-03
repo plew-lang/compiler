@@ -6,6 +6,7 @@
 // self-compile, which builds them constantly.)
 import @Std/Io with { print }
 struct Bag { pub mut val items: Array[I32] }
+pub impl Bag { factory }
 fn main() {
     mut val arr: Array[I32] = [1, 2, 3]
     val h: Bag = <Bag items=arr />   // h co-owns arr's buffer (CoW-share)

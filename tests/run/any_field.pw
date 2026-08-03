@@ -5,12 +5,15 @@ import @Std/Io with { print }
 // dynamic dispatch goes through the field's fat pointer. Reassigning a `mut val`
 // existential local re-boxes the new concrete.
 trait Drawable { fn draw() -> I64 }
-struct Circle { val r: I64 }
-struct Square { val s: I64 }
+struct Circle { pub val r: I64 }
+pub impl Circle { factory }
+struct Square { pub val s: I64 }
+pub impl Square { factory }
 pub impl Circle as Drawable { fn draw() -> I64 { return self.r * 2I64 } }
 pub impl Square as Drawable { fn draw() -> I64 { return self.s + 100I64 } }
 
 struct Wrapper { pub val inner: any Drawable }
+pub impl Wrapper { factory }
 
 fn main() {
     val c: Circle = <Circle r=6 />

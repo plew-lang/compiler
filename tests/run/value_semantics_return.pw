@@ -1,5 +1,6 @@
 import @Std/Io with { print }
 struct Box { pub mut val xs: Array[I32] }
+pub impl Box { factory }
 fn getXs(b: Box) -> Array[I32] {
     return b.xs
 }

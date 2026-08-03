@@ -11,6 +11,9 @@ struct Counter {
 }
 
 pub impl Counter {
+    factory start(count: U64, tag: U64, secret: U64) {
+        return <Counter count=count tag=tag secret=secret />
+    }
     inout fn bump() {
         self.count = self.count + self.secret
     }
@@ -18,7 +21,7 @@ pub impl Counter {
 }
 
 fn main() {
-    mut val c = <Counter count=5U64 tag=7U64 secret=3U64 />
+    mut val c = <Counter.start count=5U64 tag=7U64 secret=3U64 />
     print(c.count)            // pub(get): read OK
     print(c.tag)              // pub: read OK
     c.tag = 9U64              // pub: write OK

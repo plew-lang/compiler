@@ -5,10 +5,12 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Holder {
     pub val cell: MutableRef[Cell]
 }
+pub impl Holder { factory }
 
 fn main() {
     val o: Optional[Holder] = <Optional.Some v=<Holder cell=<MutableRef value=<Cell v=55 /> /> /> />

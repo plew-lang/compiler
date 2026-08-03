@@ -16,6 +16,7 @@ struct Config {
     pub val b: I64 = mark(n: 102)
     pub val c: I64 = mark(n: 103)
 }
+pub impl Config { factory }
 
 fn main() {
     print(sum(a: mark(n: 10), c: mark(n: 30)))

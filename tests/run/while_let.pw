@@ -3,6 +3,7 @@
 import @Std/Io with { print }
 
 struct Counter { pub mut val n: I64 }
+pub impl Counter { factory }
 
 fn step(c: inout Counter, limit: I64) -> Optional[I64] {
     if c.n < limit {

@@ -6,7 +6,9 @@
 import @Std/Io with { print }
 
 struct Box[T] { pub val v: T }
+pub impl Box { factory }
 struct Pair[T] { pub val a: T pub val b: T }
+pub impl Pair { factory }
 
 fn main() {
     // no annotation: T inferred from the field value 42I32

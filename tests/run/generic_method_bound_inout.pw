@@ -13,6 +13,7 @@ trait Sink {
 }
 
 struct Bag { pub mut val sum: U64 }
+pub impl Bag { factory }
 pub impl Bag as Sink {
     inout fn put(n: U64) { self.sum = self.sum ^ n }
     fn total() -> U64 { return self.sum }
@@ -29,6 +30,7 @@ pub impl U64 as Absorb {
 }
 
 struct Pair { pub val a: U64  pub val b: U64 }
+pub impl Pair { factory }
 pub impl Pair as Absorb {
     fn absorb[S](sink: inout S) where S: Sink {
         self.a.absorb(sink: inout sink)

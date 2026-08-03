@@ -4,8 +4,10 @@ import @Std/Io with { print }
 // concrete conforming argument is boxed at the call, and a concrete returned value
 // is boxed at the return — both type-erased to the existential.
 trait Drawable { fn draw() -> I64 }
-struct Circle { val r: I64 }
-struct Square { val s: I64 }
+struct Circle { pub val r: I64 }
+pub impl Circle { factory }
+struct Square { pub val s: I64 }
+pub impl Square { factory }
 pub impl Circle as Drawable { fn draw() -> I64 { return self.r * 2I64 } }
 pub impl Square as Drawable { fn draw() -> I64 { return self.s + 100I64 } }
 

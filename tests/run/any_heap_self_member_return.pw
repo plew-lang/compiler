@@ -6,7 +6,8 @@ import @Std/Io with { print }
 // owns its boxes while the receiver stays independently usable — no leak, no double-free
 // (verified under ASan + LeakSanitizer by the gate).
 trait Named { fn dup() -> Optional[Self]  fn copies() -> Array[Self]  fn label() -> String }
-struct Person { val name: String }
+struct Person { pub val name: String }
+pub impl Person { factory }
 pub impl Person as Named {
     fn dup() -> Optional[Self] { return <Optional[Self].Some v=self /> }
     fn copies() -> Array[Self] { return [self, self] }

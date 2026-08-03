@@ -4,7 +4,8 @@ import @Std/Io with { print }
 // distinct overloads that coexist and select on the argument's view. (Front-end
 // type resolution can't see a local's struct type, so the backend refines the
 // label-only match by the arguments' views.)
-struct P { val n: I64 }
+struct P { pub val n: I64 }
+pub impl P { factory }
 pub impl P { fn raw() -> I64 { return self.n } }
 extension Ext { pub impl P { fn tag() -> I64 { return self.n * 100I64 } } }
 

@@ -28,12 +28,14 @@ export struct Dep {
     pub val loc: Array[U8]
     pub val version: Array[U8]
 }
+pub impl Dep { factory }
 
 // A parsed manifest: the package's own `name` and its declared dependencies.
 export struct Manifest {
     pub val name: Array[U8]
     pub val deps: Array[Dep]
 }
+pub impl Manifest { factory }
 
 // Parse a `Plew.toml` byte buffer into a Manifest (name + dependency list) via the
 // shared @Toml reader. Each `[dependencies]` field is `Key = { path | git, version }`.

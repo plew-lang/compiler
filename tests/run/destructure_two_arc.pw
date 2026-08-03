@@ -8,6 +8,7 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 fn makePair(a: I64, b: I64) -> (x: MutableRef[Cell], y: MutableRef[Cell]) {
     return (x: <MutableRef value=<Cell v=a /> />, y: <MutableRef value=<Cell v=b /> />)

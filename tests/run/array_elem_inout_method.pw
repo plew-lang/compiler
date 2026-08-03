@@ -7,6 +7,7 @@ import @Std/Io with { print }
 struct Cnt {
     pub mut val n: I32
 }
+pub impl Cnt { factory }
 
 pub impl Cnt {
     inout fn bump(by: I32) {

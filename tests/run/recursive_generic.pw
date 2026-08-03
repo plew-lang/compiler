@@ -8,6 +8,7 @@ struct Node[T] {
     pub val value: T
     pub val next: Optional[Node[T]]
 }
+pub impl Node { factory }
 
 enum Tree[T] {
     Leaf(v: T)
@@ -21,10 +22,12 @@ struct Ping[T] {
     pub val v: T
     pub val pong: Optional[Pong[T]]
 }
+pub impl Ping { factory }
 struct Pong[T] {
     pub val w: T
     pub val ping: Optional[Ping[T]]
 }
+pub impl Pong { factory }
 
 fn sumList(n: Node[I64]) -> I64 {
     match n.next {

@@ -5,6 +5,7 @@
 import @Std/Io with { print }
 import @Std/Core with { MutableRef }
 struct Holder { pub mut val xs: Array[I64] }
+pub impl Holder { factory }
 fn bump2(x: inout I64, y: inout I64) { x = x + 1  y = y + 10 }
 fn main() {
     val r1: MutableRef[Holder] = <MutableRef[Holder] value=<Holder xs=[1, 2, 3] /> />

@@ -7,6 +7,7 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 fn mkOpt() -> Optional[MutableRef[Cell]] {
     return <Optional.Some v=<MutableRef value=<Cell v=1 /> /> />

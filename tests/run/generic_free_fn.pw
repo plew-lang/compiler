@@ -5,9 +5,11 @@ import @Std/Io with { print }
 // bounded by Getter, which declares get().
 trait Getter { fn get() -> I64 }
 
-struct A { val n: I64 }
+struct A { pub val n: I64 }
+pub impl A { factory }
 pub impl A as Getter { fn get() -> I64 { return self.n } }
-struct B { val m: I64 }
+struct B { pub val m: I64 }
+pub impl B { factory }
 pub impl B as Getter { fn get() -> I64 { return self.m + 100I64 } }
 
 fn step[T](x: T) -> I64 where T: Getter { return x.get() }

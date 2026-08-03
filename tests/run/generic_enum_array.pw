@@ -11,6 +11,7 @@ import @Std/Io with { print }
 import @Std/Core
 
 struct BoxG[T] { pub val value: T }
+pub impl BoxG { factory }
 
 fn main() {
     val xs = [<Optional[I64].Some v=7I64 />, <Optional[I64].None />]

@@ -5,8 +5,10 @@ import @Std/Io with { print }
 // thunk re-boxes the witness's concrete result into the same existential), so
 // `a.dup()` on `any Dup` yields another `any Dup`.
 trait Dup { fn dup() -> Self  fn val() -> I64 }
-struct N { val n: I64 }
-struct M { val m: I64 }
+struct N { pub val n: I64 }
+pub impl N { factory }
+struct M { pub val m: I64 }
+pub impl M { factory }
 pub impl N as Dup { fn dup() -> Self { return self }  fn val() -> I64 { return self.n } }
 pub impl M as Dup { fn dup() -> Self { return self }  fn val() -> I64 { return self.m * 10I64 } }
 

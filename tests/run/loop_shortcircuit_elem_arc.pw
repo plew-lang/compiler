@@ -7,6 +7,7 @@
 import @Std/Io with { print }
 
 struct Item { pub val name: String }
+pub impl Item { factory }
 
 fn main() {
     mut val xs: Array[Item] = []

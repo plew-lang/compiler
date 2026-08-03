@@ -5,8 +5,9 @@ import @Std/Io with { print }
 // static type, so a bare `.method()` on a `#Ext`-typed value resolves through the
 // extension (which shadows a same-name bare method under the view).
 struct P {
-    val n: I64
+    pub val n: I64
 }
+pub impl P { factory }
 
 // the type's own greet (bare resolution)
 pub impl P {

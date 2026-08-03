@@ -2,6 +2,7 @@ import @Std/Core
 import @Std/Io with { print }
 
 struct Fail { pub val msg: String }
+pub impl Fail { factory }
 
 fn stage(r: Result[U64, Fail]) -> Result[U64, Fail] {
     val n: U64 = try r

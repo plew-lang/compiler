@@ -11,6 +11,7 @@ trait MyEq {
 struct P {
     pub val x: I64
 }
+pub impl P { factory }
 
 pub impl P as MyEq {
     fn eqTo(other: Self) -> Bool {

@@ -6,7 +6,8 @@ import @Std/Io with { print }
 trait Greet { fn name() -> I64 }
 trait Show { fn show() -> I64 }
 
-struct P { val n: I64 }
+struct P { pub val n: I64 }
+pub impl P { factory }
 pub impl P as Greet { fn name() -> I64 { return self.n } }
 
 // third-party provided method on the trait

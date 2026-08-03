@@ -9,6 +9,7 @@ struct Pair[A, B] {
     pub val a: A
     pub val b: B
 }
+pub impl Pair { factory }
 pub impl[A, B] Pair[A, B] {
     factory
     assoc fn of(a: A, b: B) -> Pair[A, B] { return <Pair a=a b=b /> }
@@ -17,6 +18,7 @@ pub impl[A, B] Pair[A, B] {
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 pub impl[T] Box[T] {
     factory
     assoc fn make(v: T) -> Box[T] { return <Box v=v /> }

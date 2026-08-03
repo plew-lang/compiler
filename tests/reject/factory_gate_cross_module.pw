@@ -1,6 +1,0 @@
-// spec/05: the default memberwise factory is module-private — constructing a type
-// from ANOTHER module requires it to declare a public factory (`pub impl T { factory }`).
-// `Span` (an @Plew/Syntax struct) declares no factory, so this cross-module
-// construction is rejected.
-import @Plew/Syntax with { Span }
-fn main() { val s: Span = <Span start=0U64 end=1U64 /> }

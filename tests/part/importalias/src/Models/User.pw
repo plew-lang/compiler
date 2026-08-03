@@ -4,6 +4,7 @@
 export struct User {
     pub val id: I64
 }
+pub impl User { factory }
 pub impl User {
     factory
     assoc fn make(id: I64) -> User { return <User id=id /> }

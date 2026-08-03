@@ -16,6 +16,7 @@ pub impl Named {
 }
 
 struct Pair { pub val a: I64  pub val b: I64 }
+pub impl Pair { factory }
 pub impl Pair as Named {
     fn first() -> I64 { return self.a }
     fn second() -> I64 { return self.b }

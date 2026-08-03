@@ -10,6 +10,7 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 fn main() {
     // temp MutableRef arg: deinit fires at statement end, before the next line.

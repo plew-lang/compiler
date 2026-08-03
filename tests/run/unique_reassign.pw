@@ -4,9 +4,10 @@ import @Std/Io with { write, print }
 // then takes ownership of the new (moved or freshly constructed) one — each value's
 // deinit runs exactly once.
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit { print(self.fd) }
 }
+pub impl File { factory }
 
 fn main() {
     mut val x: File = <File fd=1 />

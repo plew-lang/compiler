@@ -4,7 +4,9 @@
 import @Std/Io with { print }
 import @Std/Core
 struct Box[T] { pub val v: T }
+pub impl Box { factory }
 struct DstErr { pub val code: I32 }
+pub impl DstErr { factory }
 pub impl DstErr { factory from(b: Box[String]) { return <DstErr code=55I32 /> } }
 fn inner() -> Result[I32, Box[String]] { return <Result.Err error=<Box[String] v="oops" /> /> }
 fn outer() -> Result[I32, DstErr] {

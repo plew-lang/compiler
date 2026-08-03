@@ -4,6 +4,7 @@ unique struct R {
     pub val t: I64
     deinit { print(self.t) }
 }
+pub impl R { factory }
 
 fn merge(a: borrow R, b: borrow R) -> I64 {
     return a.t + b.t

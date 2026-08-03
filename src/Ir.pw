@@ -1057,6 +1057,8 @@ export struct Cursor {
     pub mut val hasRecv: Bool = false
     pub mut val recvStart: U64 = 0
     pub mut val recvLen: U64 = 0
+    // 0 for the type's anonymous impl; nonzero for a named extension impl.
+    pub mut val extId: U64 = 0
     pub mut val selfInout: Bool = false
     pub mut val selfMove: Bool = false
     pub mut val recvInstRef: U64 = 0

@@ -18,8 +18,9 @@ import @Std/Io with { print }
 import @Std/Core with { Buffer }
 
 struct Stack[T] {
-    mut val data: Buffer[T]
+    pub mut val data: Buffer[T]
 }
+pub impl Stack { factory }
 
 pub impl[T] Stack[T] {
     factory new() {

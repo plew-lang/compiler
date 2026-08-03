@@ -7,6 +7,7 @@ unique struct File {
     pub val fd: I64
     deinit { print(self.fd) }
 }
+pub impl File { factory }
 
 unique enum ResultFile {
     Ok(file: File)

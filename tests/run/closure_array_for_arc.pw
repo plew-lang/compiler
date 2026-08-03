@@ -10,6 +10,7 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 fn main() {
     val a: MutableRef[Cell] = <MutableRef value=<Cell v=122 /> />

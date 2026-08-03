@@ -5,7 +5,9 @@ import @Std/Core
 import @Std/Io with { print }
 
 struct IoErr { pub val code: I32 }
+pub impl IoErr { factory }
 struct AppErr { pub val code: I32 }
+pub impl AppErr { factory }
 
 pub impl AppErr {
     factory(from: IoErr) {

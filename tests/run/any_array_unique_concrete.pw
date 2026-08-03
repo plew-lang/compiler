@@ -7,7 +7,8 @@ import @Std/Io with { print }
 // on it (Array's real-storage rule is checkArrayElemsNotUnique over recorded element
 // annotations). The box's drop still runs the unique concrete's deinit.
 trait Shape { fn area() -> I64 }
-unique struct Sq { val s: I64  deinit { print(self.s) } }
+unique struct Sq { pub val s: I64  deinit { print(self.s) } }
+pub impl Sq { factory }
 impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
 
 fn main() {

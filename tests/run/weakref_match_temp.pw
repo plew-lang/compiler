@@ -12,6 +12,7 @@ unique struct Cell {
     pub mut val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 // returning arm: the matched temp must be dropped on the `return` path (via dropScope).
 fn readVia(w: WeakMutableRef[Cell]) -> I32 {

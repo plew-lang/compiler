@@ -232,6 +232,7 @@ export struct MapIter[I, F, B] {
     pub mut val inner: I
     pub val f: F
 }
+pub impl[I, F, B] MapIter[I, F, B] { factory }
 pub impl[I, F, B] MapIter[I, F, B] as Iterator where I: Iterator {
     type Item = B
     inout fn next() -> Optional[B] {
@@ -248,6 +249,7 @@ export struct FilterIter[I, P, E] {
     pub mut val inner: I
     pub val p: P
 }
+pub impl[I, P, E] FilterIter[I, P, E] { factory }
 pub impl[I, P, E] FilterIter[I, P, E] as Iterator where I: Iterator {
     type Item = E
     inout fn next() -> Optional[E] {
@@ -272,6 +274,7 @@ export struct TakeIter[I, E] {
     pub mut val inner: I
     pub mut val remaining: U64
 }
+pub impl[I, E] TakeIter[I, E] { factory }
 pub impl[I, E] TakeIter[I, E] as Iterator where I: Iterator {
     type Item = E
     inout fn next() -> Optional[E] {
@@ -289,6 +292,7 @@ export struct SkipIter[I, E] {
     pub mut val inner: I
     pub mut val pending: U64
 }
+pub impl[I, E] SkipIter[I, E] { factory }
 pub impl[I, E] SkipIter[I, E] as Iterator where I: Iterator {
     type Item = E
     inout fn next() -> Optional[E] {
@@ -316,6 +320,7 @@ export struct EnumerateIter[I, E] {
     // `inner` + call args) starts the count correctly without an explicit field.
     pub mut val n: U64 = 0U64
 }
+pub impl[I, E] EnumerateIter[I, E] { factory }
 pub impl[I, E] EnumerateIter[I, E] as Iterator where I: Iterator {
     type Item = (index: U64, value: E)
     inout fn next() -> Optional[(index: U64, value: E)] {
@@ -1135,6 +1140,7 @@ pub impl String as Add[String] {
 export struct RangeError {
     pub val value: I64
 }
+pub impl RangeError { factory }
 
 // Failure-possible conversion (spec/12): `checked` is a fallible factory yielding
 // `Result[Self, Error]`. `as` (From) is total; `TryFrom` covers narrowing/parsing
@@ -1440,6 +1446,7 @@ pub impl U8 as TryFrom[F64] {
 export struct Utf8Error {
     pub val index: U64
 }
+pub impl Utf8Error { factory }
 
 // Whether byte `b` is a UTF-8 continuation byte (0x80..=0xBF).
 fn utf8IsCont(b: U8) -> Bool {
@@ -1519,6 +1526,7 @@ pub impl String as TryFrom[Array[U8]] {
 export struct ParseError {
     pub val input: String
 }
+pub impl ParseError { factory }
 
 // Parse a decimal string to `I64` (spec/12 TryFrom): `<I64.checked source="-42"/>`
 // yields `Result[I64, ParseError]`. Accumulates in NEGATIVE space (so `I64.min`, whose

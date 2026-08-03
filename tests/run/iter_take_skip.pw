@@ -5,6 +5,7 @@ import @Std/Io with { print }
 // the same generic adapter-construction path as map/filter (adapterCallResultInst), so
 // they chain with each other and with terminals.
 struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

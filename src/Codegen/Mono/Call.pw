@@ -762,6 +762,7 @@ pub impl Comp {
                             self.cur.hasRecv = true
                             self.cur.recvStart = mf.recvStart
                             self.cur.recvLen = mf.recvLen
+                            self.cur.extId = mf.extId
                             self.cur.selfInout = mf.selfInout
                             self.cur.recvInstRef = instRef
                             self.cur.typeParams = mf.typeParams
@@ -790,6 +791,7 @@ pub impl Comp {
         val noA: Array[U64] = []
         self.cur.locals = []
         self.cur.hasRecv = false
+        self.cur.extId = 0
         self.cur.recvInstRef = 0
         self.cur.typeParams = noP
         self.cur.typeArgs = noA

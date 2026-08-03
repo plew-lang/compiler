@@ -6,9 +6,10 @@
 import @Std/Io with { print }
 
 struct Person {
-    val name: String
-    val age: I64
+    pub val name: String
+    pub val age: I64
 }
+pub impl Person { factory }
 
 fn main() {
     // heap strings (concat), not literals (literals carry a sentinel rc)

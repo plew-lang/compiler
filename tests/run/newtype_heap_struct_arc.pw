@@ -6,6 +6,7 @@
 import @Std/Io with { print }
 
 struct Holder { pub val name: String  pub val tags: Array[String] }
+pub impl Holder { factory }
 
 newtype Labeled = Holder
 

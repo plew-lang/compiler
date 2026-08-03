@@ -4,7 +4,8 @@ import @Std/Io with { print }
 // methods to a type that are NOT visible to bare resolution (`p.greet()` is an
 // error) and are reached only through a call-site `value#Name.method()` view.
 // Different extensions may define the same method name; `#Name` disambiguates.
-struct P { val n: I64 }
+struct P { pub val n: I64 }
+pub impl P { factory }
 
 extension Greeting {
     impl P {

@@ -4,6 +4,7 @@ struct Pt {
     pub val x: I32
     pub val y: I32
 }
+pub impl Pt { factory }
 
 fn makeFirst(xs: Array[I32]) -> fn() -> I32 {
     return fn() -> I32 { return xs[0] }

@@ -1,0 +1,15 @@
+// spec/09 + spec/05: a named extension is not the type's anonymous impl, so it
+// cannot read private fields.
+struct Box { val secret: I64 }
+pub impl Box {
+    factory make(secret: I64) { return <Box secret=secret /> }
+}
+extension View {
+    impl Box {
+        fn reveal() -> I64 { return self.secret }
+    }
+}
+fn main() {
+    val b = <Box.make secret=3 />
+    val n = b#View.reveal()
+}

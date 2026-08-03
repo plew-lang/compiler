@@ -19,6 +19,7 @@ pub impl Comp {
         self.cur.retIsArray = false
         self.cur.retTy = 0
         self.cur.hasRecv = false
+        self.cur.extId = 0
         self.clearSelfItemEnv()
         self.cur.branchBase = 0
         self.cur.locals = []

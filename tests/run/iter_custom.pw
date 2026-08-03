@@ -5,6 +5,7 @@ import @Std/Core with { Iterator, Iterable }
 struct CountdownIter {
     pub mut val n: I64
 }
+pub impl CountdownIter { factory }
 
 pub impl CountdownIter as Iterator {
     type Item = I64
@@ -21,6 +22,7 @@ pub impl CountdownIter as Iterator {
 struct Countdown {
     pub val start: I64
 }
+pub impl Countdown { factory }
 
 pub impl Countdown as Iterable {
     type Item = I64

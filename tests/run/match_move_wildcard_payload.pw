@@ -3,11 +3,12 @@
 import @Std/Io with { print }
 
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit {
         print(self.fd)
     }
 }
+pub impl File { factory }
 
 unique enum ResultFile {
     Ok(file: File)

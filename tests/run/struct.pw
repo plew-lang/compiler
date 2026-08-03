@@ -4,10 +4,12 @@ struct Point {
     pub val x: I64
     pub val y: I64
 }
+pub impl Point { factory }
 struct Line {
     pub val a: Point
     pub val b: Point
 }
+pub impl Line { factory }
 fn main() {
     val p: Point = <Point x=3 y=4 />
     val q: Point = <Point x=10 y=20 />

@@ -7,7 +7,9 @@
 import @Std/Io with { print }
 
 struct Pt { pub val x: I64 pub val y: I64 pub val z: I64 }
+pub impl Pt { factory }
 struct Box[T] { pub val v: T pub val tag: I64 }
+pub impl Box { factory }
 
 fn main() {
     val p = <Pt x=3 y=4 z=5 />

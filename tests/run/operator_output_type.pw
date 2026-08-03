@@ -3,7 +3,9 @@
 import @Std/Io with { print }
 
 struct Point { pub val x: I64  pub val y: I64 }
+pub impl Point { factory }
 struct Vector { pub val dx: I64  pub val dy: I64 }
+pub impl Vector { factory }
 
 impl Point as Sub[Point] {
     type Output = Vector

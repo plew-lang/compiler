@@ -5,6 +5,7 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 enum Inner {
     Keep(r: MutableRef[Cell])

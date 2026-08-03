@@ -8,7 +8,8 @@ import @Std/Io with { print }
 trait Into[U] { fn into() -> U }
 trait Tag { fn tag() -> I64 }
 
-struct S { val n: I64 }
+struct S { pub val n: I64 }
+pub impl S { factory }
 pub impl S as Into[I64] { fn into() -> I64 { return self.n } }
 pub impl S as Tag { fn tag() -> I64 { return 100I64 } }
 

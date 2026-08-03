@@ -6,6 +6,7 @@ import @Std/Io with { print }
 // method instances a use needs are all registered (audit-5 L3: field access
 // gave a misleading "not a registered struct" reject; a method call SIGSEGV'd).
 struct Box[T] { pub val v: T }
+pub impl Box { factory }
 
 pub impl[T] Box[T] {
     fn get() -> T { return self.v }

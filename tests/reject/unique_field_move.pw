@@ -1,8 +1,10 @@
 // Aggregate partial moves are not part of v1: `move h.f` would leave `h`
 // partially initialized and collide with deterministic drop/deinit.
 import @Std/Io with { write }
-unique struct File { val fd: I64 }
-unique struct Holder { val f: File }
+unique struct File { pub val fd: I64 }
+pub impl File { factory }
+unique struct Holder { pub val f: File }
+pub impl Holder { factory }
 fn main() {
     val h: Holder = <Holder f=<File fd=1 /> />
     val x: File = move h.f

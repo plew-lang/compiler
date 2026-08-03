@@ -33,6 +33,7 @@ export struct Lock {
 // construct these (spec/05: the default memberwise factory is module-private).
 pub impl Name { factory }
 pub impl LockPkg { factory }
+pub impl Lock { factory }
 
 // An empty lock (no packages / referrers) — for the no-Plew.lock case.
 export fn emptyLock() -> Lock {

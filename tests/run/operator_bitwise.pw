@@ -6,6 +6,7 @@ trait BitOr[Rhs]  { type Output  assoc fn bitor(lhs: Self, rhs: Rhs) -> Output }
 trait Shl[Rhs]    { type Output  assoc fn shl(lhs: Self, rhs: Rhs) -> Output }
 
 struct Flags { pub val bits: U64 }
+pub impl Flags { factory }
 
 impl Flags as BitAnd[Flags] {
     type Output = Flags

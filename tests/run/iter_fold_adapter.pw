@@ -7,6 +7,7 @@ import @Std/Io with { print }
 // accumulator) is inferred from the call and appended to the env — resolved by
 // last-match so the accumulator B shadows the item B (Codegen/Infer + Mono.resolveTy).
 struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

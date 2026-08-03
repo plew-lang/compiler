@@ -4,6 +4,7 @@ import @Std/Io with { print }
 // grounding extends to arrays: `Array[Item]` declares as `Array[I64]`). Works on a bare
 // iterator and at the end of an adapter chain.
 struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

@@ -5,10 +5,12 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Holder {
     pub val r: MutableRef[Cell]
 }
+pub impl Holder { factory }
 
 pub impl Holder {
     factory

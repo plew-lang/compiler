@@ -6,6 +6,7 @@ import @Std/Io with { print }
 // i64 scalar default (audit-5 L2: this SIGSEGV'd the compiler; the corpus had
 // only `Array[T]`-param generic fns).
 struct Box[T] { pub val v: T }
+pub impl Box { factory }
 
 fn unwrap[T](box: Box[T]) -> T { return box.v }
 

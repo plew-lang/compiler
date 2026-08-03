@@ -4,6 +4,7 @@ import @Std/Io with { print }
 // struct/type resolvers must reach the branch's `give` value to dispatch the
 // method (regression — these once fell through to the sentinel and were rejected).
 struct Counter { pub val n: I64 }
+pub impl Counter { factory }
 pub impl Counter {
     fn doubled() -> I64 { return self.n * 2 }
 }

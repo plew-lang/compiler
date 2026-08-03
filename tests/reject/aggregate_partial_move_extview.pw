@@ -2,13 +2,14 @@
 import @Std/Io with { print }
 
 struct Pair {
-    val left: I64
-    val right: I64
+    pub val left: I64
+    pub val right: I64
 }
+pub impl Pair { factory }
 
 extension View {
     pub impl Pair {
-        fn sum() -> I64 { return self.left + self.right }
+        fn sum() -> I64 { return 0I64 }
     }
 }
 

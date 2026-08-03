@@ -5,7 +5,8 @@ import @Std/Io with { print }
 // pointer is passed by pointer to the witness, which mutates the boxed value in
 // place — the box is shared via the fat pointer, so the mutation persists.
 trait Counter { inout fn bump() -> I64 }
-struct C { mut val n: I64 }
+struct C { pub mut val n: I64 }
+pub impl C { factory }
 pub impl C as Counter { inout fn bump() -> I64 { self.n += 1I64  return self.n } }
 
 fn main() {

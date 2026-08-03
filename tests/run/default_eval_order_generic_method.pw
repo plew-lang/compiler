@@ -8,8 +8,9 @@ fn mark(n: I64) -> I64 {
 }
 
 struct Box[T] {
-    val value: T
+    pub val value: T
 }
+pub impl Box { factory }
 
 pub impl[T] Box[T] {
     fn choose(a: I64 = mark(n: 1), b: I64, c: I64 = mark(n: 3)) -> I64 {

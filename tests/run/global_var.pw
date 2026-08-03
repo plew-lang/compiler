@@ -9,6 +9,7 @@ mut val counter = 0I64
 val nums: Array[I64] = [1I64, 2I64, 3I64]
 
 struct Point { pub val x: I64  pub val y: I64 }
+pub impl Point { factory }
 val origin: Point = <Point x=7 y=8 />
 mut val cursor: Point = <Point x=0 y=0 />
 

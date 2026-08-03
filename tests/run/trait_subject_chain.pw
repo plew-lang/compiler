@@ -9,7 +9,8 @@ trait C { fn c() -> I64 }
 trait B { fn b() -> I64 }
 trait A { fn a() -> I64 }
 
-struct S { val v: I64 }
+struct S { pub val v: I64 }
+pub impl S { factory }
 pub impl S as C { fn c() -> I64 { return self.v } }
 pub impl C as B { fn b() -> I64 { return self.c() + 1I64 } }
 pub impl B as A { fn a() -> I64 { return self.b() + 10I64 } }

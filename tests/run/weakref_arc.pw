@@ -15,11 +15,13 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 // holds a weak observer; `peek` upgrades and reads the pointee (999 when the cell is dead).
 struct Watcher {
-    val w: WeakMutableRef[Cell]
+    pub val w: WeakMutableRef[Cell]
 }
+pub impl Watcher { factory }
 pub impl Watcher {
     fn peek() -> I32 {
         val o: Optional[MutableRef[Cell]] = self.w.upgrade()
@@ -44,10 +46,12 @@ unique struct Parent {
     pub mut val child: Optional[MutableRef[Child]]
     deinit { print(70I32) }
 }
+pub impl Parent { factory }
 unique struct Child {
-    val up: WeakMutableRef[Parent]
+    pub val up: WeakMutableRef[Parent]
     deinit { print(80I32) }
 }
+pub impl Child { factory }
 
 fn main() {
     // 1) alive: a live cell -> upgrade Some, reads 7.

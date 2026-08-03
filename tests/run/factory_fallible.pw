@@ -4,6 +4,7 @@
 import @Std/Io with { print, write }
 
 struct Pct { pub val v: I64 }
+pub impl Pct { factory }
 pub impl Pct {
     optional factory make(n: I64) {
         if n < 0 { return <Optional.None /> }
@@ -14,6 +15,7 @@ pub impl Pct {
 
 enum AgeErr { TooSmall TooBig }
 struct Age { pub val years: I64 }
+pub impl Age { factory }
 pub impl Age {
     result[AgeErr] factory of(n: I64) {
         if n < 0 { return <Result.Err error=<AgeErr.TooSmall /> /> }

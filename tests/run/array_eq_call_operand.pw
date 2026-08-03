@@ -9,11 +9,13 @@ import @Std/Io with { print }
 // element kinds and every operand form (call / local / field / method, either side) are
 // exercised so the witness resolves to `Array.eq` uniformly.
 struct Point { pub val x: I64  pub val y: I64 }
+pub impl Point { factory }
 pub impl Point as Eq {
     assoc fn eq(lhs~: Self, rhs~: Self) -> Bool { return lhs.x == rhs.x && lhs.y == rhs.y }
 }
 
 struct Holder { pub val items: Array[Point] }
+pub impl Holder { factory }
 pub impl Holder {
     fn items2() -> Array[Point] { return self.items }
 }

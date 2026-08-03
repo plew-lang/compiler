@@ -7,10 +7,12 @@ import @Std/Io with { print }
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 struct Holder[T] {
-    pub(get) mut val items: Array[Box[T]]
+    pub mut val items: Array[Box[T]]
 }
+pub impl Holder { factory }
 
 fn main() {
     mut val h = <Holder[I64] items=[] />

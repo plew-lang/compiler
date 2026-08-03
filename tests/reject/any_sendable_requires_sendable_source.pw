@@ -3,8 +3,9 @@ trait Numberish {
 }
 
 nonsendable struct UiState {
-    val value: I64
+    pub val value: I64
 }
+pub impl UiState { factory }
 
 impl UiState as Numberish {
     fn number() -> I64 { return self.value }

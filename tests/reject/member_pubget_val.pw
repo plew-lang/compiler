@@ -1,0 +1,3 @@
+// spec/05: `pub(get)` only makes sense for a `mut val` setter. A public read-only
+// immutable field is spelled `pub val`.
+struct Box { pub(get) val n: I64 }

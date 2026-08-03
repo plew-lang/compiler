@@ -5,6 +5,7 @@ import @Std/Io with { print }
 struct Counter {
     pub mut val n: I64
 }
+pub impl Counter { factory }
 
 pub impl Counter {
     fn doubled() -> I64 {

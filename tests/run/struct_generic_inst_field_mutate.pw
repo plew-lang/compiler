@@ -5,6 +5,7 @@ import @Std/Io with { print }
 struct Box2 {
     pub mut val a: Optional[I64]
 }
+pub impl Box2 { factory }
 
 fn main() {
     val xs: Array[Box2] = [<Box2 a=<Optional.Some v=1I64 /> />, <Box2 a=<Optional.None /> />]

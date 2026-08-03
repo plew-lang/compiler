@@ -3,6 +3,7 @@ import @Std/Core with { Iterator }
 
 // map comes from @Std/Core (no local adapter). Output type may differ from Item.
 struct Counter { pub mut val n: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

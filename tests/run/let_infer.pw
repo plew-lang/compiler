@@ -7,6 +7,7 @@ struct P {
     pub val x: I32
     pub val y: I32
 }
+pub impl P { factory }
 
 fn mk() -> Array[I32] {
     return [10, 20, 30]

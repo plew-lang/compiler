@@ -55,6 +55,7 @@ pub impl Comp {
         self.cur.hasRecv = f.hasRecv
         self.cur.recvStart = f.recvStart
         self.cur.recvLen = f.recvLen
+        self.cur.extId = f.extId
         self.cur.selfInout = f.selfInout
         self.cur.selfMove = f.selfMove
         if f.hasRecv {
@@ -75,6 +76,10 @@ pub impl Comp {
             pi += 1
         }
         self.verifyBlock(blockId: f.body)
+        self.cur.hasRecv = false
+        self.cur.recvStart = 0
+        self.cur.recvLen = 0
+        self.cur.extId = 0
     }
 
     inout fn verifyMarkMoved(idx: U64) {

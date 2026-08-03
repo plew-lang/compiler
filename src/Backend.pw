@@ -341,6 +341,7 @@ struct LlvmCtx {
     pub mut val loopUnwindMark: Array[U64]
     pub mut val loopDepth: U64
 }
+pub impl LlvmCtx { factory }
 
 // ---- libLLVM-C bindings (raw FFI floor; positional, no labels) ----
 //

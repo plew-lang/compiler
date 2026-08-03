@@ -1,0 +1,6 @@
+// spec/05: the default memberwise factory is private to the type's anonymous impl,
+// not merely to the declaring module.
+struct Box { pub val n: I64 }
+fn main() {
+    val b = <Box n=1 />
+}

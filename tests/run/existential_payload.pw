@@ -10,11 +10,14 @@ import @Std/Io with { print }
 // dispatch (the bind was typed i64, truncating the fat pointer to a null receiver).
 trait Shape { fn area() -> I64 }
 unique struct Sq { pub val s: I64  deinit { print(self.s) } }
+pub impl Sq { factory }
 impl Sq as Shape { fn area() -> I64 { return self.s * self.s } }
 
 struct Boxed { pub val v: any Shape }
+pub impl Boxed { factory }
 enum Holder { Wrap(v: any Shape) }
 struct Wrapper[T] { pub val v: T }
+pub impl Wrapper { factory }
 
 fn main() {
     // struct field

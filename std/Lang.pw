@@ -253,9 +253,10 @@ pub impl[T] Array[T] as IndexSet[U64] {
 // Array type-name branch in the for-loop. ArrayIter holds the array (value semantics; the
 // CoW buffer is shared, not copied — iteration does not mutate) and a cursor.
 struct ArrayIter[T] {
-    val arr: Array[T]
-    mut val idx: U64
+    pub val arr: Array[T]
+    pub mut val idx: U64
 }
+pub impl[T] ArrayIter[T] { factory }
 pub impl[T] ArrayIter[T] as Iterator {
     type Item = T
     inout fn next() -> Optional[T] {

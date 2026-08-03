@@ -7,6 +7,7 @@ struct Node {
     pub mut val v: I64
     pub mut val next: Optional[Node]
 }
+pub impl Node { factory }
 
 fn main() {
     mut val a: Node = <Node v=1 next=<Optional.Some v=<Node v=2 next=<Optional.None /> /> /> />

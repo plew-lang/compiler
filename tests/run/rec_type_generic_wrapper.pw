@@ -6,6 +6,7 @@ import @Std/Io with { print }
 // is never boxed, the layout is infinite, and monomorphizing overflows the compiler
 // stack (review/12 SIGSEGV pin).
 struct Box[T] { pub val v: T }
+pub impl Box { factory }
 enum List { Cons(head: I64, tail: Box[List])  Nil }
 
 fn sum(l: List) -> I64 {

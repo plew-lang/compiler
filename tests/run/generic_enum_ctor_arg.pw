@@ -11,6 +11,7 @@ fn take(o: Optional[I64]) -> I64 {
 }
 
 struct Box { pub val base: I64 }
+pub impl Box { factory }
 pub impl Box {
     fn pick(o: Optional[I64]) -> I64 {
         match o {

@@ -5,5 +5,5 @@ export fn addOne(n: I64) -> I64 {
 export struct Box {
     pub val v: I64
 }
-// public factory so a consumer (reached via the barrel) can construct it (spec/05).
 pub impl Box { factory }
+// public factory so a consumer (reached via the barrel) can construct it (spec/05).

@@ -18,6 +18,7 @@ fn unit() -> (x: I64, y: I64) { return (x: 1, y: 1) }
 
 // A record as a struct field (nested record access).
 struct Segment { pub val from: (x: I64, y: I64)  pub val to: (x: I64, y: I64) }
+pub impl Segment { factory }
 
 fn main() {
     val r: (quotient: I64, remainder: I64) = divMod(a: 17, b: 5)

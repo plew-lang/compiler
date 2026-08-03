@@ -5,8 +5,10 @@ import @Std/Io with { print }
 // shape the spec motivates.
 trait Drawable { fn draw() -> String }
 
-struct Circle { val r: I64 }
-struct Label { val text: String }
+struct Circle { pub val r: I64 }
+pub impl Circle { factory }
+struct Label { pub val text: String }
+pub impl Label { factory }
 pub impl Circle as Drawable { fn draw() -> String { return "circle" } }
 pub impl Label as Drawable { fn draw() -> String { return self.text } }
 

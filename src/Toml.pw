@@ -17,6 +17,7 @@ export struct KV {
     pub val key: Array[U8]
     pub val str: Array[U8]
 }
+pub impl KV { factory }
 
 // A field value: a scalar (raw bytes), an array of scalars, or an inline table of
 // scalars. Bounded depth (no value contains another Value) — enough for the
@@ -32,6 +33,7 @@ export struct Field {
     pub val key: Array[U8]
     pub val value: Value
 }
+pub impl Field { factory }
 
 // A table: its header (`""` = the top-level table before any `[…]`), whether it
 // came from a `[[array-of-table]]` header, and its fields. Repeated `[[x]]`
@@ -41,17 +43,20 @@ export struct Section {
     pub val isArrayElem: Bool
     pub val fields: Array[Field]
 }
+pub impl Section { factory }
 
 // A parsed document: an ordered list of sections (top-level first).
 export struct TomlDoc {
     pub val sections: Array[Section]
 }
+pub impl TomlDoc { factory }
 
 // A (value, next-index) cursor result for the byte scanners.
 struct Scan {
     pub val text: Array[U8]
     pub val next: U64
 }
+pub impl Scan { factory }
 
 // Whether `a` equals the byte span `src[start .. start+len]`.
 export fn spanEqArr(a: Array[U8], src: Array[U8], start: U64, len: U64) -> Bool {

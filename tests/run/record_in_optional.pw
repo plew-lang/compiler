@@ -9,6 +9,7 @@ import @Std/Io with { print }
 struct Wrap[E] {
     pub val v: E
 }
+pub impl Wrap { factory }
 pub impl[E] Wrap[E] {
     // returns a GENERIC record: the field `value` is the type parameter E.
     fn paired(n: U64) -> Optional[(index: U64, value: E)] {

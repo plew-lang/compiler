@@ -9,6 +9,7 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 fn main() {
     (val name, n: _) = (name: "s", n: <MutableRef value=<Cell v=7 /> />)

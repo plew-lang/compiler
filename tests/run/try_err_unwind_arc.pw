@@ -4,6 +4,7 @@ import @Std/Core
 import @Std/Io with { print }
 
 struct Fail { pub val code: I32 }
+pub impl Fail { factory }
 
 fn mayFail(tag: String, ok: Bool) -> Result[U64, Fail] {
     if ok {

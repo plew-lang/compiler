@@ -4,7 +4,8 @@ import @Std/Io with { print }
 // an independent value — its boxed concrete is duplicated (the vtable's copy thunk),
 // so mutating one through an `inout` method does not affect the other.
 trait Counter { inout fn bump() -> I64 }
-struct C { mut val n: I64 }
+struct C { pub mut val n: I64 }
+pub impl C { factory }
 pub impl C as Counter { inout fn bump() -> I64 { self.n += 1I64  return self.n } }
 
 fn main() {

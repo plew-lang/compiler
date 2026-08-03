@@ -8,6 +8,7 @@ import @Std/Core with { MutableRef }
 struct Cell {
     pub mut val v: I32
 }
+pub impl Cell { factory }
 
 fn first[T](xs: Array[T]) -> T {
     return xs[0]

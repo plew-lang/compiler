@@ -279,7 +279,8 @@ pub impl Comp {
     }
 
     inout fn fieldDeclaredMut(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> Bool {
-        val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
+        val arS: Bind = self.aliasReal(start: structStart, len: structLen)
+        val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
         while si < self.arena.structs.count() {
@@ -301,7 +302,8 @@ pub impl Comp {
     }
 
     inout fn fieldVis(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> U64 {
-        val qStruct: U64 = intern(c: inout self, start: structStart, len: structLen)
+        val arS: Bind = self.aliasReal(start: structStart, len: structLen)
+        val qStruct: U64 = intern(c: inout self, start: arS.nameStart, len: arS.nameLen)
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
         mut val si: U64 = 0
         while si < self.arena.structs.count() {
@@ -341,10 +343,7 @@ pub impl Comp {
     }
 
     inout fn inAnonImplOf(ownerStart: U64, ownerLen: U64) -> Bool {
-        if self.cur.hasRecv {
-            return spansEqual(c: inout self, aStart: self.cur.recvStart, aLen: self.cur.recvLen, bStart: ownerStart, bLen: ownerLen)
-        }
-        if self.cur.recvStart != 0 {
+        if self.cur.recvStart != 0U64 && self.cur.extId == 0U64 {
             return spansEqual(c: inout self, aStart: self.cur.recvStart, aLen: self.cur.recvLen, bStart: ownerStart, bLen: ownerLen)
         }
         return false
@@ -382,7 +381,7 @@ pub impl Comp {
         }
     }
 
-    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField]) {
+    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField], offset: U64) {
         if isEnum {
             return
         }
@@ -404,41 +403,42 @@ pub impl Comp {
         if sd.isExtern {
             return
         }
-        val defMod: U64 = self.moduleOf(offset: sd.defOffset)
+        val inOwnerImpl: Bool = self.inAnonImplOf(ownerStart: typeStart, ownerLen: typeLen)
         mut val i: U64 = 0
         while i < fields.count() {
             val v: U64 = self.fieldVis(structStart: typeStart, structLen: typeLen, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
-            if v == 0U64 || v == 1U64 {
-                // gate by the field's ORIGINAL source offset (nameStart is re-interned and
-                // does not map to a module); synthesized constructions carry an unloaded
-                // offset (the dict literal's `keys`/… use the interned span) and are skipped.
-                if self.offsetIsLoaded(offset: fields[i].offset) {
-                    if self.moduleOf(offset: fields[i].offset) != defMod {
+            if !inOwnerImpl {
+                if v == 0U64 || v == 1U64 {
+                    // gate by the field's ORIGINAL source offset (nameStart is re-interned
+                    // and does not map to a module); synthesized constructions carry an
+                    // unloaded offset (the dict literal's `keys`/… use the interned span)
+                    // and are skipped.
+                    if self.offsetIsLoaded(offset: fields[i].offset) {
                         if v == 0U64 {
-                            self.errorAt(offset: fields[i].offset, msg: "cannot set a private field when constructing from another module (the field is not `pub`)")
+                            self.errorAt(offset: fields[i].offset, msg: "cannot set a private field when constructing outside its type's anonymous impl")
                         } else {
-                            self.errorAt(offset: fields[i].offset, msg: "cannot set a `pub(get)` field when constructing from another module (it is read-only outside its module)")
+                            self.errorAt(offset: fields[i].offset, msg: "cannot set a `pub(get)` field when constructing outside its type's anonymous impl (it is read-only outside the type)")
                         }
                     }
                 }
             }
             i += 1U64
         }
-        // factory publication gate (spec/05): even with all fields `pub`, the default
-        // memberwise factory is module-private — constructing `<T …/>` from ANOTHER module
-        // requires `T` to declare a public factory (`pub impl T { factory }`). Find a
-        // representative construction-site offset (a loaded field) to locate its module.
-        mut val ci: U64 = 0
-        while ci < fields.count() {
-            if self.offsetIsLoaded(offset: fields[ci].offset) {
-                if self.moduleOf(offset: fields[ci].offset) != defMod {
-                    if !(self.structHasPubFactory(nameId: sd.nameId)) {
-                        self.errorAt(offset: fields[ci].offset, msg: "constructing this type from another module requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is module-private (spec/05)")
+        // factory publication gate (spec/05): the default memberwise factory is private
+        // to the type's anonymous impl. Outside it, `<T .../>` requires an explicit
+        // `pub impl T { factory }`, even in the same module.
+        if !inOwnerImpl {
+            if !(self.structHasPubFactory(nameId: sd.nameId)) {
+                mut val ci: U64 = 0
+                while ci < fields.count() {
+                    if self.offsetIsLoaded(offset: fields[ci].offset) {
+                        self.errorAt(offset: fields[ci].offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
                     }
+                    ci += 1U64
                 }
-                ci = fields.count()
-            } else {
-                ci += 1U64
+                if fields.count() == 0U64 {
+                    self.errorAt(offset: offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
+                }
             }
         }
     }

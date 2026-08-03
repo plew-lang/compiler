@@ -7,6 +7,7 @@ struct Pair {
     pub val a: Optional[I64]
     pub val b: Optional[String]
 }
+pub impl Pair { factory }
 
 fn main() {
     val p: Pair = <Pair a=<Optional.Some v=7I64 /> b=<Optional.Some v="hi" /> />

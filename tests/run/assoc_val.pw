@@ -3,6 +3,7 @@
 import @Std/Io with { print }
 
 struct Circle { pub val r: I64 }
+pub impl Circle { factory }
 pub impl Circle {
     assoc val unitRadius: I64 = 1
     assoc val name: String = "circle"

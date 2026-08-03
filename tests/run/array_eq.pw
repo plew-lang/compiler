@@ -7,6 +7,7 @@ import @Std/Io with { print }
 // (struct element) via the `bufferBytewiseComparable` compile-time const. Both
 // element kinds are exercised here.
 struct Point { pub val x: I64  pub val y: I64 }
+pub impl Point { factory }
 pub impl Point as Eq {
     assoc fn eq(lhs~: Self, rhs~: Self) -> Bool {
         return lhs.x == rhs.x && lhs.y == rhs.y

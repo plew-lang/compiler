@@ -4,6 +4,7 @@ import @Std/Io with { print }
 // `Optional[I64]` types `5` as I64 (no `5I64` suffix needed). Covers let, return,
 // and a generic struct field.
 struct Box[T] { pub val v: T }
+pub impl Box { factory }
 fn wrap() -> Optional[I64] { return <Optional.Some v=7 /> }
 fn main() {
     val o: Optional[I64] = <Optional.Some v=5 />

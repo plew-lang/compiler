@@ -6,11 +6,13 @@ import @Std/Io with { print }
 struct Box[T] {
     pub val value: T
 }
+pub impl Box { factory }
 
 struct Holder {
     pub val b: Box[I64]
     pub val tag: I64
 }
+pub impl Holder { factory }
 
 fn make() -> Holder {
     return <Holder b=<Box value=55I64 /> tag=1I64 />

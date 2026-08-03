@@ -5,22 +5,27 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Holder {
     pub val r: MutableRef[Cell]
 }
+pub impl Holder { factory }
 
 struct Named {
     pub val name: String
 }
+pub impl Named { factory }
 
 struct Box[T] {
     pub val v: T
 }
+pub impl Box { factory }
 
 struct Carton {
     pub val b: Box[MutableRef[Cell]]
 }
+pub impl Carton { factory }
 
 fn refField() {
     val r: MutableRef[Cell] = <MutableRef value=<Cell v=9I32 /> />

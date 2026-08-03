@@ -5,7 +5,8 @@ import @Std/Io with { print }
 // iterator's state advances in place), binding x to each Some payload until None —
 // the ergonomic form of the manual while+match in any_iterator.
 trait Iter2 { type Item  inout fn next() -> Optional[Item] }
-struct Range2 { mut val cur: I64  val end: I64 }
+struct Range2 { pub mut val cur: I64  pub val end: I64 }
+pub impl Range2 { factory }
 pub impl Range2 as Iter2 {
     type Item = I64
     inout fn next() -> Optional[I64] {

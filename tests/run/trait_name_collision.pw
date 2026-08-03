@@ -11,6 +11,7 @@ trait Mul { fn doubled() -> I64 }
 trait Sub: Mul { fn extra() -> I64 }
 
 struct Box { pub val n: I64 }
+pub impl Box { factory }
 
 pub impl Box as Not { fn flip() -> I64 { return 1I64 - self.n } }
 pub impl Box as Mul { fn doubled() -> I64 { return self.n * 2I64 } }

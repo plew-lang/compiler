@@ -7,6 +7,7 @@ import @Std/Io with { print }
 struct Wrap {
     pub val tag: String
 }
+pub impl Wrap { factory }
 pub impl Wrap {
     factory tagged(tag: String) {
         return <Wrap tag=tag />

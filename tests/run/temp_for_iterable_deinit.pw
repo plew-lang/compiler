@@ -5,10 +5,12 @@ unique struct Cell {
     pub val v: I64
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 struct Box {
     pub val r: MutableRef[Cell]
 }
+pub impl Box { factory }
 
 fn makeArr() -> Array[Box] {
     mut val xs: Array[Box] = []

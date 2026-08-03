@@ -8,8 +8,9 @@ import @Std/Io with { print }
 import @Std/Hash with { Hash, SipHasher }
 
 struct Hasher1[K] {
-    pub(get) mut val seed: U64
+    pub mut val seed: U64
 }
+pub impl Hasher1 { factory }
 
 pub impl[K] Hasher1[K] {
     fn digest(key: K) -> U64 where K: Hash {

@@ -141,10 +141,13 @@ done
 pr_results=$(printf '%s\n' tests/partreject/*/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
     main="$1"; [ -f "$main" ] || exit 0
     name=$(basename "$(dirname "$main")")
+    want="$(dirname "$main")/Main.err"
+    perr="/tmp/t_partreject_$name.err"
     code=0
-    sh -c "./plewc \"\$1\" >/dev/null 2>/dev/null" sh "$main" 2>/dev/null || code=$?
+    sh -c "./plewc \"\$1\" >/dev/null 2>\"\$2\"" sh "$main" "$perr" 2>/dev/null || code=$?
     if [ "$code" -eq 0 ]; then echo "FAIL partreject/$name(accepted)"
     elif [ "$code" -ge 128 ]; then echo "FAIL partreject/$name(crash=$code)"
+    elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL partreject/$name(diagnostic)"
     else echo "PASS partreject/$name"; fi
 ' sh)
 prpass=$(printf '%s\n' "$pr_results" | grep -c '^PASS' || true)

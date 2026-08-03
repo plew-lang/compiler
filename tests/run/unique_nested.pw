@@ -3,14 +3,16 @@ import @Std/Io with { write, print }
 // Nested unique types: when an owner is destroyed, its own `deinit` body runs
 // first, then each field's deinit in declaration order, recursively (spec/03).
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit { print(self.fd) }
 }
+pub impl File { factory }
 unique struct Pair {
-    val a: File
-    val b: File
+    pub val a: File
+    pub val b: File
     deinit { print(0I64) }
 }
+pub impl Pair { factory }
 
 // Moving a nested-unique value transfers the whole tree; deinit still runs once.
 fn sink(p: move Pair) {

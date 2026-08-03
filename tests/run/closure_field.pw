@@ -6,6 +6,7 @@ import @Std/Io with { print }
 struct Apply[F] {
     pub val f: F
 }
+pub impl Apply { factory }
 
 pub impl[F] Apply[F] {
     fn run(x: I64) -> I64 {

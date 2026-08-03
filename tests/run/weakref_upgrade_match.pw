@@ -9,6 +9,7 @@ import @Std/Io with { print }
 import @Std/Core with { MutableRef, WeakMutableRef }
 
 struct Node { pub mut val x: I32 }
+pub impl Node { factory }
 
 // upgrade matched directly; the alive branch reads through the upgraded strong handle.
 fn peek(w: WeakMutableRef[Node]) -> I32 {

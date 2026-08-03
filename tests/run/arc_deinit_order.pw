@@ -9,22 +9,26 @@ unique struct Cell {
     pub val v: I32
     deinit { print(self.v) }
 }
+pub impl Cell { factory }
 
 unique struct Mid {
     pub val c1: Cell
     pub val c2: Cell
     deinit { print(10I32) }
 }
+pub impl Mid { factory }
 
 unique struct Outer {
     pub val m: Mid
     pub val c3: Cell
     deinit { print(20I32) }
 }
+pub impl Outer { factory }
 
 struct Holder {
     pub mut val c: MutableRef[Cell]
 }
+pub impl Holder { factory }
 
 fn mk(v: I32) -> Cell {
     print(v + 1000I32)

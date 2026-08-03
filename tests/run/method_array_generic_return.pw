@@ -1,5 +1,6 @@
 import @Std/Io with { print }
 struct Maker { pub val n: I64 }
+pub impl Maker { factory }
 pub impl Maker {
     fn pair[A](value: A) -> Array[A] { return [value, value] }
 }

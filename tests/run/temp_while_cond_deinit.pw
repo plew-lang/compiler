@@ -4,6 +4,7 @@ unique struct R {
     pub val t: I64
     deinit { print(self.t) }
 }
+pub impl R { factory }
 
 fn below(res: borrow R, i: I64) -> Bool {
     return i < res.t

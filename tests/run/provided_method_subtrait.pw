@@ -19,6 +19,7 @@ pub impl Polite {
 }
 
 struct S { pub val n: I64 }
+pub impl S { factory }
 pub impl S as Greet {
     fn greetName() -> String { return "s" }
 }

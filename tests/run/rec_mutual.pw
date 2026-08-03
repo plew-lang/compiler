@@ -6,9 +6,11 @@ struct Term {
     pub val n: I64
     pub val rest: Optional[Sum]
 }
+pub impl Term { factory }
 struct Sum {
     pub val head: Term
 }
+pub impl Sum { factory }
 
 fn evalTerm(t: Term) -> I64 {
     match t.rest {

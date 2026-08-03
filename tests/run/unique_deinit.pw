@@ -3,14 +3,16 @@ import @Std/Io with { write, print }
 // A unique (copy-incapable, move-only) resource type with a `deinit` that runs
 // deterministically when its last owner leaves scope (spec/03).
 unique struct File {
-    val fd: I64
+    pub val fd: I64
     deinit { print(self.fd) }
 }
+pub impl File { factory }
 
 // deinit may also be declared in an `impl` block.
 unique struct Socket {
-    val id: I64
+    pub val id: I64
 }
+pub impl Socket { factory }
 impl Socket {
     deinit { print(self.id) }
 }
