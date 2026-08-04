@@ -476,10 +476,16 @@ pub impl Comp {
         mut val typeMatch2: U64 = self.arena.funcs.count()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        val useMod: U64 = self.moduleOf(offset: nameStart)
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
+                mut val visibleHere: Bool = true
+                if f.isProvided && !(f.isPub) && f.providedOwnerMod != 4000000000U64 {
+                    visibleHere = f.providedOwnerMod == useMod
+                }
+                if visibleHere {
                 // an extension method does not join bare resolution (spec/09): it is
                 // reachable only through a `value#Ext.m()` view (findExtMethod).
                 if f.extId == 0U64 {
@@ -504,6 +510,7 @@ pub impl Comp {
                             }
                         }
                     }
+                }
                 }
                 }
                 }
@@ -595,20 +602,27 @@ pub impl Comp {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val qSrcId: U64 = srcId
+        val useMod: U64 = self.moduleOf(offset: nameStart)
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
-                if f.extId == qSrcId || f.srcTraitId == qSrcId {
-                    if f.nameId == qNameId {
-                        if f.recvId == qRecvId {
-                            if self.paramsLabelsOk(params: f.params, args: args) {
-                                if firstLabel == self.arena.funcs.count() {
-                                    firstLabel = i
-                                }
-                                if self.paramsTypesMatch(params: f.params, args: args) {
-                                    return i
+                mut val visibleHere: Bool = true
+                if f.isProvided && !(f.isPub) && f.providedOwnerMod != 4000000000U64 {
+                    visibleHere = f.providedOwnerMod == useMod
+                }
+                if visibleHere {
+                    if f.extId == qSrcId || f.srcTraitId == qSrcId {
+                        if f.nameId == qNameId {
+                            if f.recvId == qRecvId {
+                                if self.paramsLabelsOk(params: f.params, args: args) {
+                                    if firstLabel == self.arena.funcs.count() {
+                                        firstLabel = i
+                                    }
+                                    if self.paramsTypesMatch(params: f.params, args: args) {
+                                        return i
+                                    }
                                 }
                             }
                         }

@@ -788,6 +788,7 @@ export fn runFrontend() -> Comp {
     // a copyable receiver.
     c.checkOverloadCollisions()
     c.checkDuplicateTraitReqs()
+    c.checkTraitProvidedMethodOwners()
     c.checkImplOnBuiltin()
     c.checkImplOnNewtype()
     c.checkMoveFnReceivers()

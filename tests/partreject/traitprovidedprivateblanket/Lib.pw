@@ -1,0 +1,33 @@
+export trait Named {
+    fn nm() -> I64
+}
+
+export trait Show {
+    fn show() -> I64
+}
+
+impl Named {
+    fn internalNameTwice() -> I64 {
+        return self.nm() + self.nm()
+    }
+}
+
+pub impl Named as Show {
+    fn show() -> I64 {
+        return self.internalNameTwice() + 1I64
+    }
+}
+
+export struct A {
+    pub val n: I64
+}
+
+pub impl A {
+    factory
+}
+
+pub impl A as Named {
+    fn nm() -> I64 {
+        return self.n
+    }
+}

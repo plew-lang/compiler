@@ -375,6 +375,11 @@ pub impl Comp {
 
     inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
         if !(mf.isPub) {
+            if mf.isProvided && mf.providedOwnerMod != 4000000000U64 {
+                if self.moduleOf(offset: offset) == mf.providedOwnerMod {
+                    return
+                }
+            }
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
                 self.errorAt(offset: offset, msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
             }

@@ -1,0 +1,9 @@
+export trait Super {
+    fn base() -> I64
+}
+
+impl Super {
+    fn privateSuper() -> I64 {
+        return self.base() + 1I64
+    }
+}

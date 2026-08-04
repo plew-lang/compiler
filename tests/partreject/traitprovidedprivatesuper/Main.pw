@@ -1,0 +1,4 @@
+import ./B with { useSub }
+
+fn main() {
+}

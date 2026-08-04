@@ -1,0 +1,9 @@
+import ./Lib with { Stepper }
+
+pub impl Stepper {
+    fn helper() -> I64 {
+        return self.step()
+    }
+}
+
+fn main() {}

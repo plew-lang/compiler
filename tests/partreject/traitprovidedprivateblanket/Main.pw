@@ -1,0 +1,6 @@
+import ./Lib with { A }
+
+fn main() {
+    val a = <A n=4I64 />
+    val x: I64 = a.internalNameTwice()
+}

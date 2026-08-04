@@ -109,14 +109,15 @@ pub impl Comp {
         return self.classifyIdent(start: start, len: len, tpFn: tpFn) == identTypeQualCode()
     }
 
-    inout fn traitProvidesMember(traitNameId: U64, qName: U64, args: Array[Arg], depth: U64) -> Bool {
+    inout fn traitProvidesMember(traitNameId: U64, traitArity: U64, qName: U64, args: Array[Arg], depth: U64, useMod: U64) -> Bool {
         if depth > 64U64 {
             return false
         }
         mut val ti: U64 = 0
         while ti < self.decls.traits.count() {
             val t: TraitDef = self.decls.traits[ti]
-            if t.nameId == traitNameId {
+            if t.nameId == traitNameId && self.traitArityMatches(actual: t.typeParams.count(), expected: traitArity) {
+                val concreteArity: U64 = t.typeParams.count()
                 // requirement of this trait
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
@@ -133,28 +134,31 @@ pub impl Comp {
                 while sti < t.supertraits.count() {
                     val sup: Bind = t.supertraits[sti]
                     val supId: U64 = intern(c: inout self, start: sup.nameStart, len: sup.nameLen)
-                    if self.traitProvidesMember(traitNameId: supId, qName: qName, args: args, depth: depth + 1U64) {
+                    if self.traitProvidesMember(traitNameId: supId, traitArity: 4000000000U64, qName: qName, args: args, depth: depth + 1U64, useMod: useMod) {
                         return true
                     }
                     sti += 1
                 }
-            }
-            ti += 1
-        }
-        // provided method of this trait (a method with recv = the trait)
-        mut val gi: U64 = 0
-        while gi < self.arena.funcs.count() {
-            val g: Func = self.arena.funcs[gi]
-            if g.hasRecv {
-                if g.recvId == traitNameId {
-                    if g.nameId == qName {
-                        if self.paramsLabelsOk(params: g.params, args: args) {
-                            return true
+                // provided method of this trait (a method with recv = the trait)
+                val includePrivateProvided: Bool = useMod == self.traitModuleByIdArity(traitId: traitNameId, arity: concreteArity)
+                mut val gi: U64 = 0
+                while gi < self.arena.funcs.count() {
+                    val g: Func = self.arena.funcs[gi]
+                    if g.hasRecv {
+                        if g.recvId == traitNameId && g.provTraitArity == concreteArity {
+                            if includePrivateProvided || g.isPub {
+                                if g.nameId == qName {
+                                    if self.paramsLabelsOk(params: g.params, args: args) {
+                                        return true
+                                    }
+                                }
+                            }
                         }
                     }
+                    gi += 1
                 }
             }
-            gi += 1
+            ti += 1
         }
         return false
     }
@@ -168,7 +172,7 @@ pub impl Comp {
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
                     val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
-                    if self.traitProvidesMember(traitNameId: qTrait, qName: qName, args: args, depth: 0U64) {
+                    if self.traitProvidesMember(traitNameId: qTrait, traitArity: 4000000000U64, qName: qName, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart)) {
                         return true
                     }
                 }
@@ -338,7 +342,7 @@ pub impl Comp {
                             // supertrait members (spec/08). Anything else is undefined on Self.
                             val qm: U64 = intern(c: inout self, start: nameStart, len: nameLen)
                             val selfTraitId: U64 = intern(c: inout self, start: self.arena.funcs[self.cur.checkFn].recvStart, len: self.arena.funcs[self.cur.checkFn].recvLen)
-                            if !(self.traitProvidesMember(traitNameId: selfTraitId, qName: qm, args: args, depth: 0U64)) {
+                            if !(self.traitProvidesMember(traitNameId: selfTraitId, traitArity: self.arena.funcs[self.cur.checkFn].provTraitArity, qName: qm, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart))) {
                                 self.errorAt(offset: nameStart, msg: "method not provided by this trait: a provided method's `self` (Self) can only use the trait's requirements / provided methods / supertrait members (spec/08)")
                             }
                         } else {

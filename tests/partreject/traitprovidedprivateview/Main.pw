@@ -1,0 +1,6 @@
+import ./Lib with { Counter, Stepper }
+
+fn main() {
+    val c = <Counter n=7I64 />
+    val x: I64 = c#Stepper.internalTwice()
+}

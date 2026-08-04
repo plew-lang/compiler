@@ -23,9 +23,30 @@ pub impl Comp {
 
     inout fn methodRecvIsTrait(f: Func) -> Bool {
         if f.hasRecv {
-            return self.isTraitName(start: f.recvStart, len: f.recvLen)
+            return self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity) != 4000000000U64
         }
         return false
+    }
+
+    inout fn traitModuleByIdArity(traitId: U64, arity: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.decls.traits.count() {
+            val t: TraitDef = self.decls.traits[i]
+            if t.nameId == traitId {
+                if t.typeParams.count() == arity {
+                    return self.moduleOf(offset: t.nameStart)
+                }
+            }
+            i += 1
+        }
+        return 4000000000U64
+    }
+
+    inout fn traitArityMatches(actual: U64, expected: U64) -> Bool {
+        if expected == 4000000000U64 {
+            return true
+        }
+        return actual == expected
     }
 
     inout fn methodInRange(lo: U64, hi: U64, recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
@@ -319,7 +340,11 @@ pub impl Comp {
                             }
                             tp += 1
                         }
-                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag viewOnly=(viewRoot != 0U64) selfViewId=viewRoot defOffset=f.defOffset />)
+                        mut val providedOwnerMod: U64 = f.providedOwnerMod
+                        if !(f.isPub) {
+                            providedOwnerMod = self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity)
+                        }
+                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag providedOwnerMod=providedOwnerMod viewOnly=(viewRoot != 0U64) selfViewId=viewRoot defOffset=f.defOffset />)
                     }
                 }
             }
@@ -347,6 +372,7 @@ pub impl Comp {
             while fi < nFuncs {
                 val f: Func = self.arena.funcs[fi]
                 if f.hasRecv {
+                    val copyOwnerMod: U64 = self.traitModuleByIdArity(traitId: cf.traitId, arity: cf.traitArgs.count())
                     // match the conformance to the right same-name trait by arity (spec/08:
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
                     // operator `Sub[Rhs]`). Without the arity gate a provided method on the
@@ -368,7 +394,11 @@ pub impl Comp {
                             // preserve extId: a trait-subject extension method (spec/09
                             // `extension Ext { impl Trait { … } }`) stays view-gated on the
                             // conformer, reached via `value#Ext.m()` not a bare call.
-                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId extId=f.extId defOffset=f.defOffset />)
+                            mut val providedOwnerMod: U64 = 4000000000U64
+                            if !(f.isPub) {
+                                providedOwnerMod = copyOwnerMod
+                            }
+                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId providedOwnerMod=providedOwnerMod extId=f.extId defOffset=f.defOffset />)
                         }
                     }
                 }

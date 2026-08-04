@@ -1,0 +1,23 @@
+export trait Stepper {
+    fn step() -> I64
+}
+
+impl Stepper {
+    fn internalTwice() -> I64 {
+        return self.step() + self.step()
+    }
+}
+
+export struct Counter {
+    pub val n: I64
+}
+
+pub impl Counter {
+    factory
+}
+
+pub impl Counter as Stepper {
+    fn step() -> I64 {
+        return self.n
+    }
+}

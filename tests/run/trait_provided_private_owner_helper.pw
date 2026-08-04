@@ -1,0 +1,38 @@
+import @Std/Io with { print }
+
+trait Stepper {
+    fn step() -> I64
+}
+
+impl Stepper {
+    fn internalTwice() -> I64 {
+        return self.step() + self.step()
+    }
+}
+
+pub impl Stepper {
+    fn publicTriple() -> I64 {
+        return self.internalTwice() + self.step()
+    }
+}
+
+struct Counter {
+    pub val n: I64
+}
+pub impl Counter { factory }
+pub impl Counter as Stepper {
+    fn step() -> I64 {
+        return self.n
+    }
+}
+
+fn ownerBound[T](value: T) -> I64 where T: Stepper {
+    return value.internalTwice()
+}
+
+fn main() {
+    val c = <Counter n=7I64 />
+    print(c.internalTwice())
+    print(c.publicTriple())
+    print(ownerBound(value: c))
+}

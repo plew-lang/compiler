@@ -1,0 +1,12 @@
+import ./Lib with { Stepper }
+
+extension Extra {
+    pub impl Stepper {
+        fn exposed() -> I64 {
+            return self.internalTwice()
+        }
+    }
+}
+
+fn main() {
+}

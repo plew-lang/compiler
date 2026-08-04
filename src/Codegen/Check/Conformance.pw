@@ -56,6 +56,24 @@ pub impl Comp {
         }
     }
 
+    inout fn checkTraitProvidedMethodOwners() {
+        mut val i: U64 = 0
+        while i < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[i]
+            if f.extId == 0U64 {
+                if self.methodRecvIsTrait(f: f) {
+                    val ownerMod: U64 = self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity)
+                    if ownerMod != 4000000000U64 {
+                        if self.moduleOf(offset: self.fnAnchor(f: f)) != ownerMod {
+                            self.errorAt(offset: self.fnAnchor(f: f), msg: "provided methods for a trait must be declared in the trait owner's module; use a named extension for third-party additions (spec/08,15)")
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+    }
+
     inout fn checkMoveFnReceivers() {
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {

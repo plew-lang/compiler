@@ -13,14 +13,15 @@ pub impl Comp {
     // (tpStart/tpLen — the conformer IS the type param, so it grounds per instance); a
     // structured return mentioning `Self`/`Item` stays unknown for now (recording it
     // raw would let the ENCLOSING method's Self substitute in — a different Self).
-    inout fn traitMemberRetInfo(traitNameId: U64, qName: U64, args: Array[Arg], tpStart: U64, tpLen: U64, depth: U64) -> TypeInfo {
+    inout fn traitMemberRetInfo(traitNameId: U64, traitArity: U64, qName: U64, args: Array[Arg], tpStart: U64, tpLen: U64, depth: U64, useMod: U64) -> TypeInfo {
         if depth > 64U64 {
             return scalarInfo()
         }
         mut val ti: U64 = 0
         while ti < self.decls.traits.count() {
             val t: TraitDef = self.decls.traits[ti]
-            if t.nameId == traitNameId {
+            if t.nameId == traitNameId && self.traitArityMatches(actual: t.typeParams.count(), expected: traitArity) {
+                val concreteArity: U64 = t.typeParams.count()
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
                     val r: Func = t.reqs[ri]
@@ -35,24 +36,27 @@ pub impl Comp {
                 while sti < t.supertraits.count() {
                     val sup: Bind = t.supertraits[sti]
                     val supId: U64 = intern(c: inout self, start: sup.nameStart, len: sup.nameLen)
-                    val sr: TypeInfo = self.traitMemberRetInfo(traitNameId: supId, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: depth + 1U64)
+                    val sr: TypeInfo = self.traitMemberRetInfo(traitNameId: supId, traitArity: 4000000000U64, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: depth + 1U64, useMod: useMod)
                     if sr.nameLen != 0U64 {
                         return sr
                     }
                     sti += 1
                 }
-            }
-            ti += 1
-        }
-        mut val gi: U64 = 0
-        while gi < self.arena.funcs.count() {
-            val g: Func = self.arena.funcs[gi]
-            if g.hasRecv && g.recvId == traitNameId && g.nameId == qName {
-                if self.paramsLabelsOk(params: g.params, args: args) {
-                    return self.boundRetInfoOf(f: g, tpStart: tpStart, tpLen: tpLen)
+                val includePrivateProvided: Bool = useMod == self.traitModuleByIdArity(traitId: traitNameId, arity: concreteArity)
+                mut val gi: U64 = 0
+                while gi < self.arena.funcs.count() {
+                    val g: Func = self.arena.funcs[gi]
+                    if g.hasRecv && g.recvId == traitNameId && g.provTraitArity == concreteArity && g.nameId == qName {
+                        if includePrivateProvided || g.isPub {
+                            if self.paramsLabelsOk(params: g.params, args: args) {
+                                return self.boundRetInfoOf(f: g, tpStart: tpStart, tpLen: tpLen)
+                            }
+                        }
+                    }
+                    gi += 1
                 }
             }
-            gi += 1
+            ti += 1
         }
         return scalarInfo()
     }
@@ -154,7 +158,7 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
                 val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
-                val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64)
+                val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, traitArity: 4000000000U64, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
                 if r.nameLen != 0U64 {
                     return r
                 }
@@ -789,26 +793,9 @@ pub impl Comp {
                     if self.isSelfTypeInProvided(start: rt.nameStart, len: rt.nameLen) {
                         val sTrait: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
                         val sMethod: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-                        mut val sti: U64 = 0
-                        while sti < self.decls.traits.count() {
-                            if self.decls.traits[sti].nameId == sTrait {
-                                val sreqs: Array[Func] = self.decls.traits[sti].reqs
-                                mut val sri: U64 = 0
-                                while sri < sreqs.count() {
-                                    if sreqs[sri].nameId == sMethod {
-                                        if sreqs[sri].hasRet {
-                                            if !(sreqs[sri].retIsArray) {
-                                                if self.isPrimType(start: sreqs[sri].retStart, len: sreqs[sri].retLen) || rangeEquals(bytes: self.arena.bytes, start: sreqs[sri].retStart, len: sreqs[sri].retLen, kw: "String") {
-                                                    return self.typeInfoOfName(start: sreqs[sri].retStart, len: sreqs[sri].retLen, isArray: false)
-                                                }
-                                            }
-                                        }
-                                        return scalarInfo()
-                                    }
-                                    sri += 1
-                                }
-                            }
-                            sti += 1
+                        val sr: TypeInfo = self.traitMemberRetInfo(traitNameId: sTrait, traitArity: self.arena.funcs[self.cur.checkFn].provTraitArity, qName: sMethod, args: args, tpStart: rt.nameStart, tpLen: rt.nameLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
+                        if sr.nameLen != 0U64 {
+                            return sr
                         }
                         return scalarInfo()
                     }

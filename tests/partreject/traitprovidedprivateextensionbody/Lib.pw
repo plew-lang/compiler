@@ -1,0 +1,9 @@
+export trait Stepper {
+    fn step() -> I64
+}
+
+impl Stepper {
+    fn internalTwice() -> I64 {
+        return self.step() + self.step()
+    }
+}

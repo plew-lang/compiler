@@ -1,0 +1,30 @@
+import ./A with { Super }
+
+export trait Sub: Super {
+}
+
+export fn useSub[T](value: T) -> I64 where T: Sub {
+    return value.privateSuper()
+}
+
+struct Box {
+    pub val n: I64
+}
+
+pub impl Box {
+    factory
+}
+
+impl Box as Super {
+    fn base() -> I64 {
+        return self.n
+    }
+}
+
+impl Box as Sub {
+}
+
+fn main() {
+    val b = <Box n=4I64 />
+    val x: I64 = useSub(value: b)
+}
