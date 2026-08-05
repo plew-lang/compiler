@@ -1,4 +1,5 @@
 import ./A with { Super }
+export ./A with { Super }
 
 export trait Sub: Super {
 }

@@ -16,6 +16,7 @@
 import @Std/Io with { fileExists, readFileBytes }
 import ./Toml with { TomlDoc, Section, Field, Value, KV, parseToml, topStr, inlineGet, bytesEq, spanEqArr, appendBytes }
 import ./Lock with { Lock, lockCommitForConstraint, parseLock, emptyLock }
+export ./Lock with { Lock, LockPkg, Name }
 import ./Cache with { srcDir }
 
 // One declared dependency from `[dependencies]`. `key` is the binding name the

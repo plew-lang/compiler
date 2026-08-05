@@ -1,4 +1,5 @@
 import ./A with { A }
+export ./A with { A }
 
 export trait B {
     fn b() -> I64

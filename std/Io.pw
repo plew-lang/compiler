@@ -8,6 +8,7 @@
 //
 
 import @Std/Core with { Format }
+export @Std/Core with { Format }
 
 export extern(plewIntrinsic) {
     // Write a string to stdout (no trailing newline).

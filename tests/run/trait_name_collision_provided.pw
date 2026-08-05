@@ -10,14 +10,14 @@ import @Std/Io with { print }
 trait Greet { fn greetName() -> String }
 trait Sub: Greet { fn extra() -> I64 }
 
-pub impl Sub {
+impl Sub {
     fn useOwn() -> I64 { return self.extra() }
 }
 
 struct S { pub val n: I64 }
 pub impl S { factory }
-pub impl S as Greet { fn greetName() -> String { return "s" } }
-pub impl S as Sub { fn extra() -> I64 { return self.n } }
+impl S as Greet { fn greetName() -> String { return "s" } }
+impl S as Sub { fn extra() -> I64 { return self.n } }
 
 fn main() {
     val s: S = <S n=9I64 />

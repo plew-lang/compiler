@@ -17,6 +17,8 @@ import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
+export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -99,7 +101,7 @@ export struct Comp {
 // (start,len,arr) is the head/array view; ty the structured TypeRef. Produced by
 // `Comp.inferLetType` — the ONE un-annotated-let inference the scan, record, and
 // verify passes share, so they all see the same local type.
-struct LetEff {
+export struct LetEff {
     pub val start: U64
     pub val len: U64
     pub val arr: Bool
@@ -110,7 +112,7 @@ pub impl LetEff { factory }
 // A folded constant integer: non-negative magnitude `value` (U64) plus a `neg`
 // sign, mirroring the literal model (Expr.Int is a magnitude; `-` is a Unary).
 // (Used by Check/Literal's integer-bounds folding; a Frontend-internal helper.)
-struct ConstInt {
+export struct ConstInt {
     pub val isConst: Bool
     pub val neg: Bool
     pub val value: U64
@@ -119,7 +121,7 @@ pub impl ConstInt { factory }
 
 // An integer type's bit width + signedness, known only when a span names an integer
 // type. (Used by Check/Literal's bounds checking; a Frontend-internal helper.)
-struct IntTy {
+export struct IntTy {
     pub val known: Bool
     pub val bits: U64
     pub val sgn: Bool
@@ -128,7 +130,7 @@ pub impl IntTy { factory }
 
 // One scalar-match arm's `if` condition. A wildcard has none (it is the terminal
 // `else`). (Used by Lower/Match's scalar-match lowering; a Frontend-internal helper.)
-struct ScalarCond {
+export struct ScalarCond {
     pub val hasCond: Bool
     pub val cond: U64
 }
@@ -809,6 +811,7 @@ export fn runFrontend() -> Comp {
     c.detectImportCycles()
     c.checkUseVisibility()
     c.checkTypeVisibility()
+    c.checkPublicApiClosure()
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to
     // `deriveFromSource`/`write` is exempt from import hygiene) and before

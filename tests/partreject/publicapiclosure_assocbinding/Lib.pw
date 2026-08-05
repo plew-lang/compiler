@@ -1,0 +1,16 @@
+export trait HasItem {
+    type Item
+}
+
+struct Hidden {
+    pub val n: I64
+}
+
+export struct Box {
+    pub val n: I64
+}
+pub impl Box { factory }
+
+pub impl Box as HasItem {
+    type Item = Hidden
+}

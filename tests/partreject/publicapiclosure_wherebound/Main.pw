@@ -1,0 +1,3 @@
+import ./Lib with { id }
+
+fn main() {}

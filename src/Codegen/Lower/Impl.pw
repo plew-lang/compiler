@@ -261,7 +261,7 @@ pub impl Comp {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
-            self.decls.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false witnessed=witnessed extId=cfExtId defOffset=im.span.start />)
+            self.decls.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false isPub=im.isPub witnessed=witnessed extId=cfExtId defOffset=im.span.start />)
         }
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.

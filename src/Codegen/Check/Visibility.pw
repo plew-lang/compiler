@@ -257,6 +257,483 @@ pub impl Comp {
             i += 1
         }
     }
+
+    inout fn typeDeclModuleMissing() -> U64 {
+        return 4000000000U64
+    }
+
+    // Does this module's public surface provide `(nameStart,nameLen)`? Direct exports and
+    // re-exports both record the surface module in Bind.fieldStart.
+    inout fn nameOnPublicSurfaceOfModule(surfaceMod: U64, nameStart: U64, nameLen: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.modules.exports.count() {
+            val e: Bind = self.modules.exports[i]
+            if spansEqual(c: inout self, aStart: e.nameStart, aLen: e.nameLen, bStart: nameStart, bLen: nameLen) {
+                val declMod: U64 = self.typeDeclModule(start: e.nameStart, len: e.nameLen)
+                if declMod != self.typeDeclModuleMissing() {
+                    if declMod == surfaceMod { return true }
+                    if self.moduleOf(offset: e.nameStart) == surfaceMod { return true }
+                } else {
+                    if e.fieldStart == surfaceMod { return true }
+                    if self.moduleOf(offset: e.nameStart) == surfaceMod { return true }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn typeDeclModule(start: U64, len: U64) -> U64 {
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = 0
+        while i < self.arena.structs.count() {
+            val sd: StructDef = self.arena.structs[i]
+            if sd.nameId == qId {
+                if sd.defOffset != 0U64 { return self.moduleOf(offset: sd.defOffset) }
+            }
+            i += 1
+        }
+        i = 0
+        while i < self.arena.enums.count() {
+            val ed: EnumDef = self.arena.enums[i]
+            if ed.nameId == qId {
+                if ed.defOffset != 0U64 { return self.moduleOf(offset: ed.defOffset) }
+            }
+            i += 1
+        }
+        i = 0
+        while i < self.decls.traits.count() {
+            val td: TraitDef = self.decls.traits[i]
+            if td.nameId == qId { return self.moduleOf(offset: td.nameStart) }
+            i += 1
+        }
+        i = 0
+        while i < self.arena.newtypes.count() {
+            val nt: NewtypeDef = self.arena.newtypes[i]
+            if nt.nameId == qId {
+                if nt.defOffset != 0U64 { return self.moduleOf(offset: nt.defOffset) }
+            }
+            i += 1
+        }
+        return self.typeDeclModuleMissing()
+    }
+
+    inout fn namePublicInSurface(surfaceMod: U64, start: U64, len: U64) -> Bool {
+        if len == 0 { return true }
+        if self.isRecordSurfaceName(start: start, len: len) { return true }
+        if self.isAmbientInLang(start: start, len: len) { return true }
+        if !(self.typeDeclExistsGlobally(start: start, len: len)) {
+            // Type parameters, `Self`, and associated-type binders are not module names.
+            return true
+        }
+        return self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: start, nameLen: len)
+    }
+
+    inout fn checkSurfaceName(surfaceMod: U64, start: U64, len: U64, offset: U64) {
+        if !(self.namePublicInSurface(surfaceMod: surfaceMod, start: start, len: len)) {
+            self.errorAt(offset: offset, msg: "public API signature mentions a name that is not reachable from the same public surface — export or re-export it from this module (spec/15 public API closure)")
+        }
+    }
+
+    inout fn isRecordSurfaceName(start: U64, len: U64) -> Bool {
+        if len == 0 { return false }
+        if start >= self.arena.bytes.count() { return false }
+        return self.arena.bytes[start] == 40U8
+    }
+
+    inout fn checkRecordSurfaceFields(surfaceMod: U64, start: U64, len: U64, offset: U64) {
+        if !(self.isRecordSurfaceName(start: start, len: len)) { return }
+        val qId: U64 = intern(c: inout self, start: start, len: len)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count() {
+            val sd: StructDef = self.arena.structs[si]
+            if sd.nameId == qId {
+                mut val fi: U64 = 0
+                while fi < sd.fields.count() {
+                    self.checkSurfaceType(surfaceMod: surfaceMod, ref: sd.fields[fi].ty, offset: offset)
+                    fi += 1
+                }
+                return
+            }
+            si += 1
+        }
+    }
+
+    inout fn checkSurfaceType(surfaceMod: U64, ref: U64, offset: U64) {
+        if ref == 0U64 { return }
+        if ref >= self.arena.types.count() { return }
+        val t: TypeRef = self.arena.types[ref]
+        if t.siteOffset == 0U64 {
+            if self.isRecordSurfaceName(start: t.nameStart, len: t.nameLen) {
+                self.checkRecordSurfaceFields(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: offset)
+            }
+            mut val ai0: U64 = 0
+            while ai0 < t.args.count() {
+                self.checkSurfaceType(surfaceMod: surfaceMod, ref: t.args[ai0], offset: offset)
+                ai0 += 1
+            }
+            return
+        }
+        mut val errOffset: U64 = offset
+        if t.siteOffset != 0U64 {
+            if self.offsetIsLoaded(offset: t.siteOffset) {
+                errOffset = t.siteOffset
+            }
+        }
+        self.checkSurfaceName(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: errOffset)
+        self.checkRecordSurfaceFields(surfaceMod: surfaceMod, start: t.nameStart, len: t.nameLen, offset: errOffset)
+        if t.assocTraitLen != 0U64 {
+            self.checkSurfaceName(surfaceMod: surfaceMod, start: t.assocTraitStart, len: t.assocTraitLen, offset: errOffset)
+        }
+        mut val i: U64 = 0
+        while i < t.args.count() {
+            self.checkSurfaceType(surfaceMod: surfaceMod, ref: t.args[i], offset: errOffset)
+            i += 1
+        }
+    }
+
+    inout fn checkSurfaceParam(surfaceMod: U64, p: Param, offset: U64) {
+        self.checkSurfaceType(surfaceMod: surfaceMod, ref: p.ty, offset: offset)
+    }
+
+    inout fn checkSurfaceFuncSignature(surfaceMod: U64, fnIdx: U64, offset: U64) {
+        if fnIdx >= self.arena.funcs.count() { return }
+        val f: Func = self.arena.funcs[fnIdx]
+        mut val pi: U64 = 0
+        while pi < f.params.count() {
+            self.checkSurfaceParam(surfaceMod: surfaceMod, p: f.params[pi], offset: offset)
+            pi += 1
+        }
+        if f.hasRet {
+            self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.retTy, offset: offset)
+        }
+        mut val bi: U64 = 0
+        while bi < self.decls.funcBounds.count() {
+            val b: FuncBound = self.decls.funcBounds[bi]
+            if b.fnIdx == fnIdx {
+                self.checkSurfaceType(surfaceMod: surfaceMod, ref: b.paramTy, offset: offset)
+                self.checkSurfaceName(surfaceMod: surfaceMod, start: b.traitStart, len: b.traitLen, offset: offset)
+            }
+            bi += 1
+        }
+    }
+
+    inout fn checkPublicStructSurface(sd: StructDef) {
+        val surfaceMod: U64 = self.typeDeclModule(start: sd.nameStart, len: sd.nameLen)
+        if surfaceMod == self.typeDeclModuleMissing() { return }
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: sd.nameStart, nameLen: sd.nameLen)) { return }
+        self.checkStructSurfaceInModule(surfaceMod: surfaceMod, sd: sd)
+    }
+
+    inout fn checkStructSurfaceInModule(surfaceMod: U64, sd: StructDef) {
+        mut val fi: U64 = 0
+        while fi < sd.fields.count() {
+            val f: FieldDef = sd.fields[fi]
+            if f.vis != 0U64 {
+                self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
+            }
+            fi += 1
+        }
+    }
+
+    inout fn checkPublicEnumSurface(ed: EnumDef) {
+        val surfaceMod: U64 = self.typeDeclModule(start: ed.nameStart, len: ed.nameLen)
+        if surfaceMod == self.typeDeclModuleMissing() { return }
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: ed.nameStart, nameLen: ed.nameLen)) { return }
+        self.checkEnumSurfaceInModule(surfaceMod: surfaceMod, ed: ed)
+    }
+
+    inout fn checkEnumSurfaceInModule(surfaceMod: U64, ed: EnumDef) {
+        mut val vi: U64 = 0
+        while vi < ed.variants.count() {
+            val v: Variant = ed.variants[vi]
+            mut val fi: U64 = 0
+            while fi < v.fields.count() {
+                val f: FieldDef = v.fields[fi]
+                self.checkSurfaceType(surfaceMod: surfaceMod, ref: f.ty, offset: f.nameStart)
+                fi += 1
+            }
+            vi += 1
+        }
+    }
+
+    inout fn checkPublicNewtypeSurface(nt: NewtypeDef) {
+        val surfaceMod: U64 = self.typeDeclModule(start: nt.nameStart, len: nt.nameLen)
+        if surfaceMod == self.typeDeclModuleMissing() { return }
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: nt.nameStart, nameLen: nt.nameLen)) { return }
+        self.checkNewtypeSurfaceInModule(surfaceMod: surfaceMod, nt: nt)
+    }
+
+    inout fn checkNewtypeSurfaceInModule(surfaceMod: U64, nt: NewtypeDef) {
+        self.checkSurfaceType(surfaceMod: surfaceMod, ref: nt.underRef, offset: nt.defOffset)
+    }
+
+    inout fn checkPublicGlobalSurface(g: Global) {
+        val surfaceMod: U64 = self.moduleOf(offset: g.nameStart)
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: g.nameStart, nameLen: g.nameLen)) { return }
+        self.checkGlobalSurfaceInModule(surfaceMod: surfaceMod, g: g)
+    }
+
+    inout fn checkGlobalSurfaceInModule(surfaceMod: U64, g: Global) {
+        if g.letStmt >= self.arena.stmts.count() { return }
+        match self.arena.stmts[g.letStmt] {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
+                val eff: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+                self.checkSurfaceType(surfaceMod: surfaceMod, ref: eff.ty, offset: g.nameStart)
+            }
+            _ => {}
+        }
+    }
+
+    inout fn checkPublicTraitSurface(td: TraitDef) {
+        val surfaceMod: U64 = self.moduleOf(offset: td.nameStart)
+        if !(self.traitDeclExported(td: td)) { return }
+        self.checkTraitSurfaceInModule(surfaceMod: surfaceMod, td: td)
+    }
+
+    inout fn checkTraitSurfaceInModule(surfaceMod: U64, td: TraitDef) {
+        mut val si: U64 = 0
+        while si < td.supertraits.count() {
+            self.checkSurfaceName(surfaceMod: surfaceMod, start: td.supertraits[si].nameStart, len: td.supertraits[si].nameLen, offset: td.supertraits[si].nameStart)
+            si += 1
+        }
+        mut val ri: U64 = 0
+        while ri < td.reqs.count() {
+            val req: Func = td.reqs[ri]
+            mut val pi: U64 = 0
+            while pi < req.params.count() {
+                self.checkSurfaceParam(surfaceMod: surfaceMod, p: req.params[pi], offset: req.nameStart)
+                pi += 1
+            }
+            if req.hasRet {
+                self.checkSurfaceType(surfaceMod: surfaceMod, ref: req.retTy, offset: req.nameStart)
+            }
+            ri += 1
+        }
+    }
+
+    inout fn traitDeclExported(td: TraitDef) -> Bool {
+        mut val i: U64 = 0
+        while i < self.modules.exports.count() {
+            val e: Bind = self.modules.exports[i]
+            if e.nameStart == td.nameStart {
+                if e.nameLen == td.nameLen { return true }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn traitIdArityExportedInModule(traitId: U64, arity: U64, mod: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.decls.traits.count() {
+            val td: TraitDef = self.decls.traits[i]
+            if td.nameId == traitId {
+                if td.typeParams.count() == arity {
+                    if self.moduleOf(offset: td.nameStart) == mod {
+                        return self.traitDeclExported(td: td)
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn checkPublicConformanceSurface(cf: Conform) {
+        if !(cf.isPub) { return }
+        if cf.extId != 0U64 { return }
+        val surfaceMod: U64 = self.moduleOf(offset: cf.defOffset)
+        if self.traitModuleByIdArity(traitId: cf.typeId, arity: cf.typeArity) != self.typeDeclModuleMissing() {
+            if !(self.traitIdArityExportedInModule(traitId: cf.typeId, arity: cf.typeArity, mod: surfaceMod)) { return }
+        }
+        if self.typeDeclModule(start: cf.typeStart, len: cf.typeLen) != surfaceMod { return }
+        if !(self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: cf.typeStart, nameLen: cf.typeLen)) { return }
+        self.checkSurfaceName(surfaceMod: surfaceMod, start: cf.traitStart, len: cf.traitLen, offset: cf.defOffset)
+        mut val ai: U64 = 0
+        while ai < cf.traitArgs.count() {
+            self.checkSurfaceType(surfaceMod: surfaceMod, ref: cf.traitArgs[ai], offset: cf.defOffset)
+            ai += 1
+        }
+        self.checkPublicConformanceAssocBindings(surfaceMod: surfaceMod, cf: cf)
+    }
+
+    inout fn checkPublicConformanceAssocBindings(surfaceMod: U64, cf: Conform) {
+        mut val ai: U64 = 0
+        while ai < self.decls.assocBindings.count() {
+            val ab: AssocBinding = self.decls.assocBindings[ai]
+            if ab.recvId == cf.typeId {
+                if ab.traitId == cf.traitId {
+                    self.checkSurfaceType(surfaceMod: surfaceMod, ref: ab.ty, offset: ab.nameStart)
+                }
+            }
+            ai += 1
+        }
+    }
+
+    inout fn surfaceCanExportDeclModule(surfaceMod: U64, declMod: U64) -> Bool {
+        if surfaceMod == declMod { return true }
+        mut val i: U64 = 0
+        while i < self.modules.reExportEdges.count() {
+            val e: Bind = self.modules.reExportEdges[i]
+            if e.fieldStart == surfaceMod {
+                if e.fieldLen == declMod { return true }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn exportEntrySurfaceModule(e: Bind) -> U64 {
+        if e.fieldStart != 0U64 { return e.fieldStart }
+        val declMod: U64 = self.typeDeclModule(start: e.nameStart, len: e.nameLen)
+        if declMod != self.typeDeclModuleMissing() {
+            mut val i: U64 = 0
+            while i < self.modules.reExportEdges.count() {
+                val edge: Bind = self.modules.reExportEdges[i]
+                if edge.fieldStart == 0U64 {
+                    if edge.fieldLen == declMod {
+                        if self.moduleOf(offset: e.nameStart) == 0U64 { return 0U64 }
+                    }
+                }
+                i += 1
+            }
+            return declMod
+        }
+        return self.moduleOf(offset: e.nameStart)
+    }
+
+    inout fn checkExportEntrySurface(e: Bind) {
+        val surfaceMod: U64 = self.exportEntrySurfaceModule(e: e)
+        val qId: U64 = intern(c: inout self, start: e.nameStart, len: e.nameLen)
+        mut val si: U64 = 0
+        while si < self.arena.structs.count() {
+            val sd: StructDef = self.arena.structs[si]
+            if sd.nameId == qId {
+                if self.surfaceCanExportDeclModule(surfaceMod: surfaceMod, declMod: self.moduleOf(offset: sd.defOffset)) {
+                    self.checkStructSurfaceInModule(surfaceMod: surfaceMod, sd: sd)
+                }
+            }
+            si += 1
+        }
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count() {
+            val ed: EnumDef = self.arena.enums[ei]
+            if ed.nameId == qId {
+                if self.surfaceCanExportDeclModule(surfaceMod: surfaceMod, declMod: self.moduleOf(offset: ed.defOffset)) {
+                    self.checkEnumSurfaceInModule(surfaceMod: surfaceMod, ed: ed)
+                }
+            }
+            ei += 1
+        }
+        mut val nti: U64 = 0
+        while nti < self.arena.newtypes.count() {
+            val nt: NewtypeDef = self.arena.newtypes[nti]
+            if nt.nameId == qId {
+                if self.surfaceCanExportDeclModule(surfaceMod: surfaceMod, declMod: self.moduleOf(offset: nt.defOffset)) {
+                    self.checkNewtypeSurfaceInModule(surfaceMod: surfaceMod, nt: nt)
+                }
+            }
+            nti += 1
+        }
+        mut val ti: U64 = 0
+        while ti < self.decls.traits.count() {
+            val td: TraitDef = self.decls.traits[ti]
+            if td.nameId == qId {
+                if self.surfaceCanExportDeclModule(surfaceMod: surfaceMod, declMod: self.moduleOf(offset: td.nameStart)) {
+                    self.checkTraitSurfaceInModule(surfaceMod: surfaceMod, td: td)
+                }
+            }
+            ti += 1
+        }
+        mut val gi: U64 = 0
+        while gi < self.arena.globals.count() {
+            val g: Global = self.arena.globals[gi]
+            if spansEqual(c: inout self, aStart: g.nameStart, aLen: g.nameLen, bStart: e.nameStart, bLen: e.nameLen) {
+                if self.surfaceCanExportDeclModule(surfaceMod: surfaceMod, declMod: self.moduleOf(offset: g.nameStart)) {
+                    self.checkGlobalSurfaceInModule(surfaceMod: surfaceMod, g: g)
+                }
+            }
+            gi += 1
+        }
+        mut val fi: U64 = 0
+        while fi < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[fi]
+            if !(f.hasRecv) {
+                if !(f.isAssoc) {
+                    if spansEqual(c: inout self, aStart: f.nameStart, aLen: f.nameLen, bStart: e.nameStart, bLen: e.nameLen) {
+                        if self.surfaceCanExportDeclModule(surfaceMod: surfaceMod, declMod: self.moduleOf(offset: f.nameStart)) {
+                            self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.nameStart)
+                        }
+                    }
+                }
+            }
+            fi += 1
+        }
+    }
+
+    inout fn checkPublicApiClosure() {
+        mut val exi: U64 = 0
+        while exi < self.modules.exports.count() {
+            self.checkExportEntrySurface(e: self.modules.exports[exi])
+            exi += 1
+        }
+        mut val fi: U64 = 0
+        while fi < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[fi]
+            if f.hasRecv || f.isAssoc {
+                if f.isPub {
+                    mut val surfaceMod: U64 = self.moduleOf(offset: f.defOffset)
+                    if f.defOffset == 0U64 {
+                        surfaceMod = self.typeDeclModule(start: f.recvStart, len: f.recvLen)
+                    }
+                    if surfaceMod != self.typeDeclModuleMissing() {
+                        if self.typeDeclModule(start: f.recvStart, len: f.recvLen) == surfaceMod {
+                            if self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: f.recvStart, nameLen: f.recvLen) {
+                                self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.defOffset)
+                            }
+                        }
+                    }
+                }
+            } else {
+                val surfaceMod: U64 = self.moduleOf(offset: f.nameStart)
+                if self.nameOnPublicSurfaceOfModule(surfaceMod: surfaceMod, nameStart: f.nameStart, nameLen: f.nameLen) {
+                    self.checkSurfaceFuncSignature(surfaceMod: surfaceMod, fnIdx: fi, offset: f.nameStart)
+                }
+            }
+            fi += 1
+        }
+        mut val si: U64 = 0
+        while si < self.arena.structs.count() {
+            self.checkPublicStructSurface(sd: self.arena.structs[si])
+            si += 1
+        }
+        mut val ei: U64 = 0
+        while ei < self.arena.enums.count() {
+            self.checkPublicEnumSurface(ed: self.arena.enums[ei])
+            ei += 1
+        }
+        mut val nti: U64 = 0
+        while nti < self.arena.newtypes.count() {
+            self.checkPublicNewtypeSurface(nt: self.arena.newtypes[nti])
+            nti += 1
+        }
+        mut val gi: U64 = 0
+        while gi < self.arena.globals.count() {
+            self.checkPublicGlobalSurface(g: self.arena.globals[gi])
+            gi += 1
+        }
+        mut val ti: U64 = 0
+        while ti < self.decls.traits.count() {
+            self.checkPublicTraitSurface(td: self.decls.traits[ti])
+            ti += 1
+        }
+        mut val ci: U64 = 0
+        while ci < self.decls.conforms.count() {
+            self.checkPublicConformanceSurface(cf: self.decls.conforms[ci])
+            ci += 1
+        }
+    }
 }
 
 pub impl Comp {

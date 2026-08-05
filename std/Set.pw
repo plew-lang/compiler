@@ -8,6 +8,8 @@
 // `Dictionary`, minus the value column.
 import @Std/Hash with { Hash, SipHasher }
 import @Std/Core with { Buffer }
+export @Std/Hash with { Hash }
+export @Std/Core with { Eq }
 
 export struct Set[E] {
     mut val items: Buffer[E]

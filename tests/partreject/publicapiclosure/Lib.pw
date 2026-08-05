@@ -1,0 +1,14 @@
+struct Hidden {
+    pub val n: I64
+}
+pub impl Hidden { factory }
+
+export struct Box {
+    pub val h: Hidden
+}
+
+pub impl Box { factory }
+
+export fn make() -> Hidden {
+    return <Hidden n=1I64 />
+}

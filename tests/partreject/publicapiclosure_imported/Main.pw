@@ -1,0 +1,5 @@
+import ./Lib with { leak }
+
+fn main() {
+    val x = leak()
+}

@@ -1,0 +1,9 @@
+export struct Dep {
+    pub val n: I64
+}
+pub impl Dep { factory }
+
+export struct Box {
+    pub val dep: Dep
+}
+pub impl Box { factory }

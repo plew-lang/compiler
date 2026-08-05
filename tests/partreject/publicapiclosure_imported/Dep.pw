@@ -1,0 +1,4 @@
+export struct External {
+    pub val n: I64
+}
+pub impl External { factory }

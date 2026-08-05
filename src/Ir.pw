@@ -568,6 +568,9 @@ export struct Conform {
     // synthesized by `@[Eq]`/`@[Ord]` derive: exempt from the unknown-trait and
     // completeness checks (the witness is compiler-generated and complete).
     pub val derived: Bool
+    // block visibility of the source `impl Type as Trait` (spec/05,08): a public
+    // conformance is part of an exported type's outside surface.
+    pub val isPub: Bool = false
     // for a trait-subject inter-trait conformance `impl B as A` written inside a
     // named `extension Ext { … }` (spec/09): the extension's name id, so the
     // conferral stays view-gated (`value#Ext`) and is NOT auto-conferred onto the
