@@ -1,0 +1,19 @@
+trait Parser {
+    type Output
+    fn parse() -> Output
+}
+
+struct P {}
+pub impl P { factory }
+pub impl P as Parser {
+    type Output = I64
+    fn parse() -> I64 { return 1I64 }
+}
+
+fn bad[T](value: T) -> T#Parser.Missing where T: Parser {
+    return value.parse()
+}
+
+fn main() {
+    bad(value: <P />)
+}

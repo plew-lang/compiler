@@ -57,6 +57,15 @@ export struct TypeRef {
     // (spec/08,12). Empty for ordinary generic args. Resolved against the trait's
     // type params + associated types when building the existential's dispatch thunks.
     pub val argLabels: Array[U64] = []
+    // Associated-type projection (spec/08): `T#Trait.Item` / `T.Item`. The head
+    // name/args above name the projected-from type; assocTrait* is 0 for the short
+    // form whose source trait must be inferred uniquely from bounds.
+    pub val assocTraitStart: U64 = 0
+    pub val assocTraitLen: U64 = 0
+    pub val assocTraitId: U64 = 0
+    pub val assocNameStart: U64 = 0
+    pub val assocNameLen: U64 = 0
+    pub val assocNameId: U64 = 0
     // `any sendable P` / `sendable fn(...) -> R`: a type-level sendability guarantee
     // written at the surface. It is recorded as part of the type spelling now; the
     // full capture/effect/spawn checks land with the ownership IR.
@@ -604,6 +613,10 @@ export struct FuncBound {
     pub val fnIdx: U64
     pub val paramStart: U64
     pub val paramLen: U64
+    // Structured left-hand type of the bound. For legacy `where T: Trait` this is
+    // the same bare type parameter as paramStart/paramLen; for associated-type
+    // bounds it can be `T#Iterator.Item`.
+    pub val paramTy: U64 = 0
     // interned ids (Phase D) of the bounded type-parameter name and the required
     // trait name, set at construction (both names come from internBytes). The
     // instantiation-time bound check matches the type parameter by integer ==.

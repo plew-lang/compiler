@@ -1,0 +1,15 @@
+trait Parser {
+    type Output
+    fn parse() -> Output
+}
+
+trait Generator {
+    type Output
+    fn generate() -> Output
+}
+
+fn useOutput[T](x: T) -> T.Output where T: Parser, T: Generator {
+    return x.parse()
+}
+
+fn main() {}

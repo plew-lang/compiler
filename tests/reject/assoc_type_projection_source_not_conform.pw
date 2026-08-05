@@ -1,0 +1,16 @@
+trait Parser {
+    type Output
+    fn parse() -> Output
+}
+
+trait Mark {}
+
+struct Q {}
+pub impl Q { factory }
+pub impl Q as Mark {}
+
+fn needProjected[T](x: T) where T#Parser.Output: Mark {}
+
+fn main() {
+    needProjected(x: <Q />)
+}

@@ -1,0 +1,34 @@
+trait Parser {
+    type Output
+    fn parse() -> Output
+}
+
+trait Mark {}
+
+trait Use {
+    fn use() -> I64
+}
+
+struct NoMark {}
+
+struct S {}
+pub impl S { factory }
+pub impl S as Mark {}
+pub impl S as Parser {
+    type Output = NoMark
+    fn parse() -> NoMark { return <NoMark /> }
+}
+
+struct Box[T] {
+    pub val value: T
+}
+pub impl[T] Box[T] { factory }
+pub impl[T] Box[T] as Use where T#Parser.Output: Mark {
+    fn use() -> I64 { return 1I64 }
+}
+
+fn needUse[T](value: T) where T: Use {}
+
+fn main() {
+    needUse(value: <Box[S] value=<S /> />)
+}

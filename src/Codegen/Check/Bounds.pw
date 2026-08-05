@@ -388,7 +388,14 @@ pub impl Comp {
         if ref >= self.arena.types.count() {
             return false
         }
+        val rr: U64 = self.resolveTy(tyRef: ref)
+        if rr != ref {
+            return self.conformsInstance(ref: rr, traitStart: traitStart, traitLen: traitLen)
+        }
         val t: TypeRef = self.arena.types[ref]
+        if t.assocNameId != 0U64 {
+            return false
+        }
         // name-level: is there ANY `impl <head> as Trait` (unconditional part; also handles
         // primitives/String/newtype). No name-level conformance ⟹ definitely not.
         if !(self.typeConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, traitStart: traitStart, traitLen: traitLen)) {
@@ -418,6 +425,25 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == wfi {
+                if fb.paramTy != 0U64 {
+                    val savedP: Array[Bind] = self.cur.typeParams
+                    val savedA: Array[U64] = self.cur.typeArgs
+                    self.cur.typeParams = wf.typeParams
+                    self.cur.typeArgs = t.args
+                    val lhs: U64 = self.groundTypeRef(ref: fb.paramTy)
+                    self.cur.typeParams = savedP
+                    self.cur.typeArgs = savedA
+                    if lhs >= self.arena.types.count() {
+                        return false
+                    }
+                    if !(self.tyRefIsGround(ref: lhs)) {
+                        return false
+                    }
+                    if !(self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                        return false
+                    }
+                    bi += 1
+                } else {
                 // map the bound's type-param name to its position in the witness type params;
                 // a receiver/impl param (position < instance arity) is checked against the
                 // matching instance arg, a method-own param (position ≥ arity) is unrelated
@@ -435,8 +461,11 @@ pub impl Comp {
                         return false
                     }
                 }
+                bi += 1
+                }
+            } else {
+                bi += 1
             }
-            bi += 1
         }
         return true
     }
@@ -466,6 +495,26 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fin.fnIdx {
+                if fb.paramTy != 0U64 {
+                    val savedP: Array[Bind] = self.cur.typeParams
+                    val savedA: Array[U64] = self.cur.typeArgs
+                    self.cur.typeParams = f.typeParams
+                    self.cur.typeArgs = fin.args
+                    val lhs: U64 = self.groundTypeRef(ref: fb.paramTy)
+                    self.cur.typeParams = savedP
+                    self.cur.typeArgs = savedA
+                    if lhs < self.arena.types.count() {
+                        val at: TypeRef = self.arena.types[lhs]
+                        mut val ok: Bool = self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                        if !ok && at.viewExtId != 0U64 {
+                            ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                        }
+                        if !ok {
+                            self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
+                        }
+                    }
+                    bi += 1
+                } else {
                 mut val pi: U64 = 0
                 while pi < f.typeParams.count() {
                     val tp: Bind = f.typeParams[pi]
@@ -489,8 +538,11 @@ pub impl Comp {
                     }
                     pi += 1
                 }
+                bi += 1
+                }
+            } else {
+                bi += 1
             }
-            bi += 1
         }
     }
 
@@ -516,6 +568,25 @@ pub impl Comp {
                     while bi < self.decls.funcBounds.count() {
                         val fb: FuncBound = self.decls.funcBounds[bi]
                         if fb.fnIdx == mfi {
+                            if fb.paramTy != 0U64 {
+                                val savedP: Array[Bind] = self.cur.typeParams
+                                val savedA: Array[U64] = self.cur.typeArgs
+                                self.cur.typeParams = f.typeParams
+                                self.cur.typeArgs = inst.args
+                                val lhs: U64 = self.groundTypeRef(ref: fb.paramTy)
+                                self.cur.typeParams = savedP
+                                self.cur.typeArgs = savedA
+                                if lhs < self.arena.types.count() {
+                                    val at: TypeRef = self.arena.types[lhs]
+                                    mut val ok: Bool = self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                                    if !ok && at.viewExtId != 0U64 {
+                                        ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                                    }
+                                    if !ok {
+                                        self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
+                                    }
+                                }
+                            } else {
                             mut val pi: U64 = 0
                             while pi < f.typeParams.count() {
                                 val tp: Bind = f.typeParams[pi]
@@ -527,6 +598,7 @@ pub impl Comp {
                                     }
                                 }
                                 pi += 1
+                            }
                             }
                         }
                         bi += 1

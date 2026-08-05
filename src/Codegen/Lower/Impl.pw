@@ -51,6 +51,24 @@ pub impl Comp {
 
     inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
         val nameN: Bind = self.internBytes(s: m.name)
+        mut val boundTypes: Array[TypeAst] = []
+        mut val boundTraits: Array[String] = []
+        mut val bi0: U64 = 0
+        while bi0 < im.whereTypes.count() {
+            boundTypes.append(im.whereTypes[bi0])
+            if bi0 < im.whereTraits.count() {
+                boundTraits.append(im.whereTraits[bi0])
+            }
+            bi0 += 1
+        }
+        mut val bi1: U64 = 0
+        while bi1 < m.whereTypes.count() {
+            boundTypes.append(m.whereTypes[bi1])
+            if bi1 < m.whereTraits.count() {
+                boundTraits.append(m.whereTraits[bi1])
+            }
+            bi1 += 1
+        }
         // typeParams = impl's `[T]` (in scope for every member) ++ the method's own.
         mut val typeParams: Array[Bind] = []
         mut val ipi: U64 = 0
@@ -71,6 +89,8 @@ pub impl Comp {
         // above, stored on the Func for codegen, stays impl ++ method; assoc types aren't generic
         // substitution params, only skip-scope.)
         val savedTP: Array[Bind] = self.cur.typeParams
+        val savedWT: Array[TypeAst] = self.lowerWhereTypes
+        val savedWTr: Array[String] = self.lowerWhereTraits
         mut val skipScope: Array[Bind] = savedTP
         mut val ski: U64 = 0
         while ski < ownParams.count() {
@@ -78,13 +98,16 @@ pub impl Comp {
             ski += 1
         }
         self.cur.typeParams = skipScope
-        val params: Array[Param] = self.lowerParams(params: m.params)
+        self.lowerWhereTypes = boundTypes
+        self.lowerWhereTraits = boundTraits
+        val normParams: Array[ParamAst] = self.normalizeParams(params: m.params, whereTypes: boundTypes, whereTraits: boundTraits)
+        val params: Array[Param] = self.lowerParams(params: normParams)
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if m.hasRet {
-            val pt: PType = self.lowerType(t: m.ret)
+            val pt: PType = self.lowerType(t: self.normalizeProjectionType(t: m.ret, whereTypes: boundTypes, whereTraits: boundTraits))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -132,6 +155,8 @@ pub impl Comp {
                 self.decls.methodAliases.append(<MethodAlias recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) aliasStart=nameN.nameStart aliasLen=nameN.nameLen aliasId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) realStart=realN.nameStart realLen=realN.nameLen realId=intern(c: inout self, start: realN.nameStart, len: realN.nameLen) />)
                 witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
                 self.cur.typeParams = savedTP
+                self.lowerWhereTypes = savedWT
+                self.lowerWhereTraits = savedWTr
                 return
             }
             witnessed.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) typeParams=typeParams params=params hasRet=m.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
@@ -149,9 +174,11 @@ pub impl Comp {
             extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
         }
         self.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() defOffset=m.nameSpan.start />)
-        self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits)
-        self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits)
+        self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes)
+        self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes)
         self.cur.typeParams = savedTP
+        self.lowerWhereTypes = savedWT
+        self.lowerWhereTraits = savedWTr
     }
 
     inout fn lowerImpl(im: ImplAst) {
@@ -174,7 +201,11 @@ pub impl Comp {
             self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: trN.nameStart, len: trN.nameLen))
         }
         val savedTP: Array[Bind] = self.cur.typeParams
+        val savedWT: Array[TypeAst] = self.lowerWhereTypes
+        val savedWTr: Array[String] = self.lowerWhereTraits
         self.cur.typeParams = implScope
+        self.lowerWhereTypes = im.whereTypes
+        self.lowerWhereTraits = im.whereTraits
         mut val witnessed: Array[Func] = []
         mut val mi: U64 = 0
         while mi < im.members.count() {
@@ -236,6 +267,8 @@ pub impl Comp {
         // declStart/declEnd = the impl block's source span for the gen harness slice.
         self.drainDerives(typeStart: recvN.nameStart, typeLen: recvN.nameLen, isEnum: false, declStart: im.span.start, declEnd: im.span.end)
         self.cur.typeParams = savedTP
+        self.lowerWhereTypes = savedWT
+        self.lowerWhereTraits = savedWTr
     }
 
     inout fn lowerSigToFunc(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> Func {

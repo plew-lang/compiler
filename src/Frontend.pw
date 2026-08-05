@@ -38,6 +38,11 @@ export struct Comp {
     pub mut val parseScratch: ParseScratch = <ParseScratch />
     // the per-body codegen / lowering / verify cursor (see `Cursor`).
     pub mut val cur: Cursor = <Cursor />
+    // lowering-time where constraints for associated-type short projection
+    // normalization (`T.Item` -> `T#Trait.Item`). Kept on Comp rather than Cursor
+    // because it uses Syntax-layer TypeAst and must not leak into Ir.pw.
+    pub mut val lowerWhereTypes: Array[TypeAst] = []
+    pub mut val lowerWhereTraits: Array[String] = []
     // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
     // The driver then suppresses the user's own `main` and the auto-part of
     // `<Foo>.gen.pw`, and emits a synthesized harness `main` (`genMainIdx`) that
@@ -172,7 +177,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable siteOffset=t.siteOffset />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable siteOffset=t.siteOffset />)
         return id
     }
 }

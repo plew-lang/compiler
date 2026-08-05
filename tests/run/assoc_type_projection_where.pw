@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+import @Std/Core with { Format }
+
+trait Parser {
+    type Output
+    fn parse() -> Output
+}
+
+struct P {}
+pub impl P { factory }
+
+pub impl P as Parser {
+    type Output = I64
+    fn parse() -> I64 { return 41I64 }
+}
+
+fn parseOne[T](x: T) -> T#Parser.Output where T: Parser, T#Parser.Output: Format {
+    return x.parse()
+}
+
+fn main() {
+    print(parseOne(x: <P />))
+}

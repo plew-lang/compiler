@@ -4,6 +4,110 @@
 // Lower generic parameter names `[T, U]` (Array[String]) to the arena's Bind spans.
 
 pub impl Comp {
+    inout fn traitHasAssocId(traitId: U64, assocId: U64) -> Bool {
+        mut val ti: U64 = 0
+        while ti < self.decls.traits.count() {
+            val tr: TraitDef = self.decls.traits[ti]
+            if tr.nameId == traitId {
+                mut val ai: U64 = 0
+                while ai < tr.assocTypes.count() {
+                    if tr.assocTypes[ai].nameId == assocId {
+                        return true
+                    }
+                    ai += 1
+                }
+            }
+            ti += 1
+        }
+        return false
+    }
+
+    inout fn boundLhsMatchesType(lhs: TypeAst, t: TypeAst) -> Bool {
+        if lhs.projectionAssoc.bytes().count() > 0 {
+            return false
+        }
+        if lhs.extView.bytes().count() > 0 {
+            return false
+        }
+        if lhs.name != t.name {
+            return false
+        }
+        if lhs.args.count() != t.args.count() {
+            return false
+        }
+        mut val i: U64 = 0
+        while i < lhs.args.count() {
+            if !(self.boundLhsMatchesType(lhs: lhs.args[i], t: t.args[i])) {
+                return false
+            }
+            i += 1
+        }
+        return true
+    }
+
+    inout fn uniqueProjectionTrait(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> String {
+        val assocN: Bind = self.internBytes(s: t.projectionAssoc)
+        mut val found: String = ""
+        mut val foundId: U64 = 0
+        mut val count: U64 = 0
+        mut val i: U64 = 0
+        while i < whereTypes.count() {
+            if self.boundLhsMatchesType(lhs: whereTypes[i], t: t) {
+                if i < whereTraits.count() {
+                    val trN: Bind = self.internBytes(s: whereTraits[i])
+                    if self.traitHasAssocId(traitId: trN.nameId, assocId: assocN.nameId) {
+                        if foundId != trN.nameId {
+                            found = whereTraits[i]
+                            foundId = trN.nameId
+                            count += 1U64
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        if count == 1U64 {
+            return found
+        }
+        if count == 0U64 {
+            self.errorAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)")
+        } else {
+            self.errorAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)")
+        }
+        return ""
+    }
+
+    inout fn normalizeProjectionType(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> TypeAst {
+        mut val args: Array[TypeAst] = []
+        mut val i: U64 = 0
+        while i < t.args.count() {
+            args.append(self.normalizeProjectionType(t: t.args[i], whereTypes: whereTypes, whereTraits: whereTraits))
+            i += 1
+        }
+        mut val projectionTrait: String = t.projectionTrait
+        if t.projectionAssoc.bytes().count() > 0 {
+            if projectionTrait.bytes().count() == 0 {
+                projectionTrait = self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits)
+            }
+        }
+        return <TypeAst name=t.name args=args span=t.span extView=t.extView projectionTrait=projectionTrait projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord />
+    }
+
+    inout fn normalizeProjectionTypeActive(t: TypeAst) -> TypeAst {
+        return self.normalizeProjectionType(t: t, whereTypes: self.lowerWhereTypes, whereTraits: self.lowerWhereTraits)
+    }
+
+    inout fn normalizeParams(params: Array[ParamAst], whereTypes: Array[TypeAst], whereTraits: Array[String]) -> Array[ParamAst] {
+        mut val out: Array[ParamAst] = []
+        mut val i: U64 = 0
+        while i < params.count() {
+            val p: ParamAst = params[i]
+            out.append(<ParamAst name=p.name ty=self.normalizeProjectionType(t: p.ty, whereTypes: whereTypes, whereTraits: whereTraits) isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=p.hasDefault defaultVal=p.defaultVal span=p.span />)
+            i += 1
+        }
+        return out
+    }
+
     inout fn lowerTypeParamNames(names: Array[String], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
         mut val out: Array[Bind] = []
         mut val i: U64 = 0
@@ -116,14 +220,19 @@ pub impl Comp {
         // param / return / body-local types may reference `[T]` — make them the lowering-time
         // scope so lowerType marks type-parameter heads as skip (siteOffset 0).
         val savedTP: Array[Bind] = self.cur.typeParams
+        val savedWT: Array[TypeAst] = self.lowerWhereTypes
+        val savedWTr: Array[String] = self.lowerWhereTraits
         self.cur.typeParams = typeParams
-        val params: Array[Param] = self.lowerParams(params: d.params)
+        self.lowerWhereTypes = d.whereTypes
+        self.lowerWhereTraits = d.whereTraits
+        val normParams: Array[ParamAst] = self.normalizeParams(params: d.params, whereTypes: d.whereTypes, whereTraits: d.whereTraits)
+        val params: Array[Param] = self.lowerParams(params: normParams)
         mut val retStart: U64 = 0
         mut val retLen: U64 = 0
         mut val retIsArray: Bool = false
         mut val retRef: U64 = 0
         if d.hasRet {
-            val pt: PType = self.lowerType(t: d.ret)
+            val pt: PType = self.lowerType(t: self.normalizeProjectionType(t: d.ret, whereTypes: d.whereTypes, whereTraits: d.whereTraits))
             retStart = pt.start
             retLen = pt.len
             retIsArray = pt.isArray
@@ -134,26 +243,28 @@ pub impl Comp {
         val body: U64 = self.lowerBlock(b: d.body)
         self.cur.lowerRetTy = savedRet
         self.cur.typeParams = savedTP
+        self.lowerWhereTypes = savedWT
+        self.lowerWhereTraits = savedWTr
         val fnIdx: U64 = self.arena.funcs.count()
         self.arena.funcs.append(<Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=nameStart />)
-        mut val wi: U64 = 0
-        while wi < d.whereParams.count() {
-            val pn: Bind = self.internBytes(s: d.whereParams[wi])
-            val tn: Bind = self.internBytes(s: d.whereTraits[wi])
-            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
-            wi += 1
-        }
+        self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes)
         // attach pending `@[...]` directives to this fn (a macro on a free function);
         // declStart/declEnd = the fn's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
     }
 
-    inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String]) {
+    inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = []) {
         mut val i: U64 = 0
         while i < params.count() {
             val pn: Bind = self.internBytes(s: params[i])
             val tn: Bind = self.internBytes(s: traits[i])
-            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
+            mut val pty: U64 = 0
+            if i < types.count() {
+                pty = self.lowerType(t: self.normalizeProjectionType(t: types[i], whereTypes: types, whereTraits: traits)).ref
+            } else {
+                pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen)
+            }
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
             i += 1
         }
     }

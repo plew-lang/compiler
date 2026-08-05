@@ -4,6 +4,83 @@
 // Is `ref` a concrete generic *enum* instantiation specifically?
 
 pub impl Comp {
+    inout fn plainRefOfProjection(t: TypeRef) -> U64 {
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable />)
+    }
+
+    inout fn assocBindingFor(baseRef: U64, traitId: U64, assocId: U64) -> U64 {
+        if baseRef >= self.arena.types.count() {
+            return 0
+        }
+        val base: TypeRef = self.arena.types[baseRef]
+        mut val found: U64 = 0
+        mut val count: U64 = 0
+        mut val i: U64 = 0
+        while i < self.decls.assocBindings.count() {
+            val ab: AssocBinding = self.decls.assocBindings[i]
+            if ab.recvId == base.nameId && ab.nameId == assocId {
+                if traitId == 0U64 || ab.traitId == traitId {
+                    found = i + 1U64
+                    count += 1U64
+                }
+            }
+            i += 1
+        }
+        if count == 1U64 {
+            val ab: AssocBinding = self.decls.assocBindings[found - 1U64]
+            mut val params: Array[Bind] = []
+            val si: U64 = self.genericStructIndex(nameStart: base.nameStart, nameLen: base.nameLen)
+            if si < self.arena.structs.count() {
+                params = self.arena.structs[si].typeParams
+            } else {
+                val ei: U64 = self.genericEnumIndex(nameStart: base.nameStart, nameLen: base.nameLen)
+                if ei < self.arena.enums.count() {
+                    params = self.arena.enums[ei].typeParams
+                }
+            }
+            if params.count() > 0U64 && params.count() == base.args.count() {
+                val savedP: Array[Bind] = self.cur.typeParams
+                val savedA: Array[U64] = self.cur.typeArgs
+                self.cur.typeParams = params
+                self.cur.typeArgs = base.args
+                val g: U64 = self.groundTypeRef(ref: ab.ty)
+                self.cur.typeParams = savedP
+                self.cur.typeArgs = savedA
+                return g
+            }
+            return ab.ty
+        }
+        return 0
+    }
+
+    inout fn resolveAssocProjection(tyRef: U64) -> U64 {
+        val t: TypeRef = self.arena.types[tyRef]
+        if t.assocNameId == 0U64 {
+            return tyRef
+        }
+        val baseRef: U64 = self.groundTypeRef(ref: self.plainRefOfProjection(t: t))
+        if baseRef >= self.arena.types.count() {
+            return tyRef
+        }
+        if !(self.tyRefIsGround(ref: baseRef)) {
+            return tyRef
+        }
+        if t.assocTraitId == 0U64 {
+            self.errorAt(offset: t.siteOffset, msg: "associated-type short projection was not resolved from a unique `where` source — write `T#Trait.Item` (spec/08)")
+            return tyRef
+        }
+        if !(self.conformsInstance(ref: baseRef, traitStart: t.assocTraitStart, traitLen: t.assocTraitLen)) {
+            self.errorAt(offset: t.siteOffset, msg: "associated-type projection source does not conform to the selected trait (spec/08)")
+            return tyRef
+        }
+        val bound: U64 = self.assocBindingFor(baseRef: baseRef, traitId: t.assocTraitId, assocId: t.assocNameId)
+        if bound != 0U64 {
+            return self.groundTypeRef(ref: bound)
+        }
+        self.errorAt(offset: t.siteOffset, msg: "associated-type projection names an associated type that is not bound by the selected conformance (spec/08)")
+        return tyRef
+    }
+
     inout fn isGenericEnumInst(ref: U64) -> Bool {
         if ref >= self.arena.types.count() {
             return false
@@ -28,6 +105,9 @@ pub impl Comp {
         // types, so two generic instantiations differing only by the view argument are
         // distinct instances (`useR[S#P]` vs `useR[S#Q]` get separate bodies/dispatch).
         if ta.viewExtId != tb.viewExtId {
+            return false
+        }
+        if ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId {
             return false
         }
         if ta.args.count() != tb.args.count() {
@@ -105,6 +185,9 @@ pub impl Comp {
             return tyRef
         }
         val t: TypeRef = self.arena.types[tyRef]
+        if t.assocNameId != 0U64 {
+            return self.resolveAssocProjection(tyRef: tyRef)
+        }
         if t.args.count() == 0 {
             // `Self`/`Item` as types (provided methods on a trait): resolve to the
             // receiver type and its associated `Item` binding (set per method).
@@ -211,6 +294,13 @@ pub impl Comp {
         // type-param name by the check below, poisoning `Array[any P]` registration).
         if t.isAny {
             return true
+        }
+        if t.assocNameId != 0U64 {
+            val r: U64 = self.resolveTy(tyRef: ref)
+            if r == ref {
+                return false
+            }
+            return self.tyRefIsGround(ref: r)
         }
         if self.isTypeParamName(start: t.nameStart, len: t.nameLen) {
             return false

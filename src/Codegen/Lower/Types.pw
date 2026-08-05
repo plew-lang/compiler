@@ -139,6 +139,10 @@ pub impl Comp {
     }
 
     inout fn lowerType(t: TypeAst) -> PType {
+        return self.lowerTypeCore(t: self.normalizeProjectionTypeActive(t: t))
+    }
+
+    inout fn lowerTypeCore(t: TypeAst) -> PType {
         // a labelled anonymous record type `(x: I32, y: I32)` (spec/02): lower to its
         // synthetic structural struct and return a PType naming it.
         if t.isRecord {
@@ -167,6 +171,24 @@ pub impl Comp {
             val evN: Bind = self.internBytes(s: t.extView)
             viewExtId = intern(c: inout self, start: evN.nameStart, len: evN.nameLen)
         }
+        mut val assocTraitStart: U64 = 0
+        mut val assocTraitLen: U64 = 0
+        mut val assocTraitId: U64 = 0
+        if t.projectionTrait.bytes().count() > 0 {
+            val atn: Bind = self.internBytes(s: t.projectionTrait)
+            assocTraitStart = atn.nameStart
+            assocTraitLen = atn.nameLen
+            assocTraitId = intern(c: inout self, start: atn.nameStart, len: atn.nameLen)
+        }
+        mut val assocNameStart: U64 = 0
+        mut val assocNameLen: U64 = 0
+        mut val assocNameId: U64 = 0
+        if t.projectionAssoc.bytes().count() > 0 {
+            val aan: Bind = self.internBytes(s: t.projectionAssoc)
+            assocNameStart = aan.nameStart
+            assocNameLen = aan.nameLen
+            assocNameId = intern(c: inout self, start: aan.nameStart, len: aan.nameLen)
+        }
         // intern any named binding labels (`Item`/`Output` in `any P[Item=I32]`) parallel
         // to args; 0 for a positional argument.
         mut val argLabels: Array[U64] = []
@@ -188,12 +210,12 @@ pub impl Comp {
         mut val tpi: U64 = 0
         while tpi < self.cur.typeParams.count() {
             val tp: Bind = self.cur.typeParams[tpi]
-            if spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
+            if t.projectionAssoc.bytes().count() == 0 && spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
                 site = 0U64
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

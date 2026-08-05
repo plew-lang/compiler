@@ -1,0 +1,10 @@
+trait Add[Rhs] {
+    type Output
+    fn add(rhs: Rhs) -> Output
+}
+
+fn addOne[T](value: T) -> T#Add[I64].Output where T: Add[I64] {
+    return value.add(rhs: 1I64)
+}
+
+fn main() {}

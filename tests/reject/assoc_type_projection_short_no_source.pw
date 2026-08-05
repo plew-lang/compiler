@@ -1,0 +1,10 @@
+trait Parser {
+    type Output
+    fn parse() -> Output
+}
+
+fn parseOne[T](x: T) -> T.Output {
+    return x.parse()
+}
+
+fn main() {}
