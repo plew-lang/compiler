@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+import ./B with { S }
+
+fn main() {
+    val s: S = <S value=4I64 />
+    print(s.a())
+}

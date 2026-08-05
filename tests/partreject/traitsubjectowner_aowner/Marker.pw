@@ -1,0 +1,7 @@
+import ./B with { B }
+
+export trait Marker {}
+
+// Marker owns the target trait, but not the subject trait. A bare conformance
+// would ambiently add Marker to every B-conformer, so it must use an extension.
+pub impl B as Marker {}

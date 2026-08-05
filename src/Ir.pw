@@ -543,6 +543,11 @@ export struct Conform {
     pub val typeStart: U64
     pub val typeLen: U64
     pub val typeId: U64 = 0
+    // arity of the impl subject. For `impl B as A`, this disambiguates same-name
+    // traits such as a user `Sub` and Core's `Sub[Rhs]`; for concrete types it is
+    // the receiver type-arg count. The conformance owner checks only use it when
+    // the subject is a trait.
+    pub val typeArity: U64 = 0
     pub val traitStart: U64
     pub val traitLen: U64
     pub val traitId: U64 = 0
@@ -565,6 +570,9 @@ export struct Conform {
     // root trait (the divergent subject). Such a conform does NOT make the type
     // conform bare (it is reached only via `value#root`); 0 = a bare conformance.
     pub val viewRootId: U64 = 0
+    // source offset of the impl declaration. Conform.typeStart is an interned span,
+    // so diagnostics and owner-module checks must use this source anchor.
+    pub val defOffset: U64 = 0
     // signatures of the members this impl witnessed (body method or `via` line),
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.

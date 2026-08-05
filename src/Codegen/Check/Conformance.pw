@@ -74,6 +74,78 @@ pub impl Comp {
         }
     }
 
+    inout fn checkTraitSubjectConformOwners() {
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[i]
+            if !(cf.derived) && cf.extId == 0U64 && !(self.isMacrointerfaceCompatConform(cf: cf)) {
+                val ownerMod: U64 = self.traitModuleByIdArity(traitId: cf.typeId, arity: cf.typeArity)
+                if ownerMod != 4000000000U64 {
+                    if self.moduleOf(offset: cf.defOffset) != ownerMod {
+                        self.errorAt(offset: cf.defOffset, msg: "bare inter-trait conformance `impl B as A` must be declared in the subject trait's owner module; use a named extension for third-party additions (spec/08,09)")
+                    }
+                }
+            }
+            i += 1
+        }
+    }
+
+    inout fn isMacrointerfaceCompatConform(cf: Conform) -> Bool {
+        // Compatibility shim until spec/16's `macro Foo as Derive` surface is lowered
+        // to a dedicated macro-provider IR. The current M1 dogfood represents built-in
+        // derives as `impl Eq/Hash as Derive` in @Plew/Syntax; these are macrointerface
+        // provider registrations, not ordinary runtime inter-trait conformances.
+        if cf.traitArgs.count() != 0U64 {
+            return false
+        }
+        val ownerMod: U64 = self.traitModuleByIdArity(traitId: cf.traitId, arity: 0U64)
+        if ownerMod == 4000000000U64 {
+            return false
+        }
+        if self.moduleOf(offset: cf.defOffset) != ownerMod {
+            return false
+        }
+        if !(self.moduleIsSyntaxRoot(mod: ownerMod)) {
+            return false
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: "Derive") {
+            return true
+        }
+        return rangeEquals(bytes: self.arena.bytes, start: cf.traitStart, len: cf.traitLen, kw: "ParameterizedDerive")
+    }
+
+    inout fn moduleIsSyntaxRoot(mod: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.modules.ranges.count() {
+            if self.modules.ranges[i].fieldStart == mod {
+                if i < self.modules.rangePaths.count() {
+                    if self.pathHasSuffix(path: self.modules.rangePaths[i], suffix: "/syntax/src/_.pw") {
+                        return true
+                    }
+                }
+            }
+            i += 1
+        }
+        return false
+    }
+
+    inout fn pathHasSuffix(path: String, suffix: String) -> Bool {
+        val p: Array[U8] = path.bytes()
+        val s: Array[U8] = suffix.bytes()
+        if p.count() < s.count() {
+            return false
+        }
+        mut val i: U64 = 0
+        val base: U64 = p.count() - s.count()
+        while i < s.count() {
+            if p[base + i] != s[i] {
+                return false
+            }
+            i += 1
+        }
+        return true
+    }
+
     inout fn checkMoveFnReceivers() {
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {

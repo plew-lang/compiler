@@ -1,0 +1,9 @@
+export trait B {}
+
+export struct S {}
+
+pub impl S {
+    factory
+}
+
+pub impl S as B {}

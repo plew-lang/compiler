@@ -1,0 +1,7 @@
+import ./B with { B }
+
+export trait Derive {}
+
+// Same spelling as the temporary macrointerface shim, but this is an ordinary
+// user trait. The bare conformance is still allowed only in B's owner module.
+pub impl B as Derive {}

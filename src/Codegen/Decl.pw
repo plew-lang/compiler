@@ -138,6 +138,31 @@ pub impl Comp {
         return false
     }
 
+    inout fn conformExistsArity(typeId: U64, traitId: U64, traitArity: U64) -> Bool {
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count() {
+            if self.decls.conforms[i].typeId == typeId {
+                if self.decls.conforms[i].traitId == traitId {
+                    if self.decls.conforms[i].traitArgs.count() == traitArity {
+                        if self.decls.conforms[i].viewRootId == 0U64 {
+                            return true
+                        }
+                    }
+                }
+            }
+            i += 1
+        }
+        mut val ni: U64 = 0
+        while ni < self.arena.newtypes.count() {
+            if self.arena.newtypes[ni].nameId == typeId {
+                val underId: U64 = intern(c: inout self, start: self.arena.newtypes[ni].underStart, len: self.arena.newtypes[ni].underLen)
+                return self.conformExistsArity(typeId: underId, traitId: traitId, traitArity: traitArity)
+            }
+            ni += 1
+        }
+        return false
+    }
+
     inout fn isExtName(start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         if qId == 0U64 {
@@ -185,7 +210,7 @@ pub impl Comp {
                 if cf.traitId == aTraitId {
                     if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
                         // cf is `impl B as A`; does tId conform to the subject trait B?
-                        if self.conformExists(typeId: tId, traitId: cf.typeId) {
+                        if self.conformExistsArity(typeId: tId, traitId: cf.typeId, traitArity: cf.typeArity) {
                             count += 1
                         }
                     }
@@ -222,7 +247,7 @@ pub impl Comp {
                     }
                     if viaView {
                         // does the underlying type conform to the subject trait B?
-                        if self.conformExists(typeId: typeId, traitId: cf.typeId) {
+                        if self.conformExistsArity(typeId: typeId, traitId: cf.typeId, traitArity: cf.typeArity) {
                             return true
                         }
                     }
@@ -254,7 +279,7 @@ pub impl Comp {
                     mut val cj: U64 = 0
                     while cj < self.decls.conforms.count() {
                         val cand: Conform = self.decls.conforms[cj]
-                        if cand.traitId == cf.typeId {
+                        if cand.traitId == cf.typeId && cand.traitArgs.count() == cf.typeArity {
                             if !(self.isTraitName(start: cand.typeStart, len: cand.typeLen)) {
                                 // the view-root under which we confer A on T via this impl
                                 // (spec/09 chain conflict). If the candidate conformance to B
@@ -351,7 +376,7 @@ pub impl Comp {
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-            self.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot />)
+            self.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot defOffset=blanket.defOffset />)
         }
     }
 

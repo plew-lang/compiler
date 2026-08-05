@@ -1,0 +1,16 @@
+trait Sub {}
+trait Sub[Rhs] {}
+trait Marker {}
+
+struct S {}
+pub impl S { factory }
+
+pub impl S as Sub[I64] {}
+pub impl Sub as Marker {}
+
+fn needMarker[T](value: T) where T: Marker {}
+
+fn main() {
+    val s: S = <S />
+    needMarker(value: s)
+}

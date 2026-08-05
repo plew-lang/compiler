@@ -1,0 +1,26 @@
+import ./A with { A }
+
+export trait B {
+    fn b() -> I64
+}
+
+export struct S {
+    pub val value: I64
+}
+
+pub impl S {
+    factory
+}
+
+pub impl S as B {
+    fn b() -> I64 {
+        return self.value
+    }
+}
+
+// Bare inter-trait conformance is legal in the subject trait owner's module.
+pub impl B as A {
+    fn a() -> I64 {
+        return self.b() + 1I64
+    }
+}

@@ -745,6 +745,11 @@ export fn runFrontend() -> Comp {
     // module-level variable init order (spec/15): topologically sort globals so a
     // forward reference in an initializer reads the already-initialized value.
     c.orderGlobalsByDependency()
+    // conformance provenance (spec/08,09): owner-module-only bare trait provided
+    // methods and bare `impl B as A` must be validated before they can confer
+    // methods/conformances onto other types.
+    c.checkTraitProvidedMethodOwners()
+    c.checkTraitSubjectConformOwners()
     // inter-trait conformance (spec/08,09): `impl B as A` makes every type
     // conforming to subject trait B also conform to A; copy the methods onto each
     // conforming concrete type (before provided methods, so A's own provided
@@ -788,7 +793,6 @@ export fn runFrontend() -> Comp {
     // a copyable receiver.
     c.checkOverloadCollisions()
     c.checkDuplicateTraitReqs()
-    c.checkTraitProvidedMethodOwners()
     c.checkImplOnBuiltin()
     c.checkImplOnNewtype()
     c.checkMoveFnReceivers()
