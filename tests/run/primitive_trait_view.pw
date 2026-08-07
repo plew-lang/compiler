@@ -1,0 +1,8 @@
+import @Std/Core with { Eq }
+import @Std/Io with { print }
+
+fn main() {
+    val value: I64 = 1I64
+    val viewed = value#Eq
+    print(value)
+}

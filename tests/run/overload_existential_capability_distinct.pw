@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+trait P {}
+struct S {}
+pub impl S { factory }
+pub impl S as P {}
+
+fn choose(value: any P) -> I64 { return 1I64 }
+fn choose(value: any sendable P) -> I64 { return 2I64 }
+
+fn main() {
+    val plain: any P = <S />
+    val safe: any sendable P = <S />
+    print(choose(value: plain))
+    print(choose(value: safe))
+}

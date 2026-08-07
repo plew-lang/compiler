@@ -1,0 +1,10 @@
+trait Mark {}
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+extension Extra {
+    impl[T] Box[T] as Mark {}
+    impl Box[I64] as Mark {}
+}
+
+fn main() {}

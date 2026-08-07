@@ -98,7 +98,7 @@ pub impl Comp {
         }
         val ta: TypeRef = self.arena.types[a]
         val tb: TypeRef = self.arena.types[b]
-        if ta.nameId != tb.nameId {
+        if ta.nameId != tb.nameId || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable {
             return false
         }
         // a `#`-view is part of type identity (spec/09): `S`, `S#P`, `S#Q` are distinct

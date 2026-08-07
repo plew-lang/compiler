@@ -229,8 +229,7 @@ pub impl Comp {
                 if typeRef == 0U64 || cf.subjectTy == 0U64 {
                     return true
                 }
-                mut val binds: Array[UnifyBind] = []
-                if self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds, ignoreTopView: true) {
+                if self.conformanceSubjectMatches(cf: cf, typeRef: typeRef) {
                     return true
                 }
             }
@@ -267,7 +266,7 @@ pub impl Comp {
         return count
     }
 
-    inout fn viewConformsTo(typeStart: U64, typeLen: U64, viewId: U64, traitStart: U64, traitLen: U64) -> Bool {
+    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64) -> Bool {
         if viewId == 0U64 {
             return false
         }
@@ -276,6 +275,13 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
+            // Direct `extension Ext { impl T as P }` conformances are view
+            // facts too (not only trait-subject `impl B as A` edges).
+            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && self.conformanceSubjectMatches(cf: cf, typeRef: typeRef) {
+                if !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) {
+                    return true
+                }
+            }
             if cf.traitId == targetId {
                 // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
                 // a bare inter-trait conform whose subject trait is the view, or an

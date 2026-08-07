@@ -1,0 +1,4 @@
+import ./A with { pick }
+import ./B with { pick }
+
+fn main() { pick(value: 1I64) }

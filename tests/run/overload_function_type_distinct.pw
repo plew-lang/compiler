@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+
+fn choose(f: fn(x: I64) -> I64) -> I64 { return 64I64 }
+fn choose(f: fn(x: String) -> String) -> I64 { return 7I64 }
+
+fn main() {
+    print(choose(f: fn(x: String) -> String { return x }))
+}

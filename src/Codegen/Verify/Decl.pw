@@ -5,6 +5,39 @@
 // Verify every non-extern, non-template function body.
 
 pub impl Comp {
+    // A written `#Name` has no syntax for choosing between distinct trait
+    // declarations and an extension of the same spelling.  Resolve that text
+    // to source identities before member lookup; candidate type matching must
+    // never silently choose one source for the user.
+    inout fn viewSourceCount(typeStart: U64, typeLen: U64, typeRef: U64, srcStart: U64, srcLen: U64) -> U64 {
+        val srcId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
+        val typeId: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val count: U64 = 0U64
+        if self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef) { count = 1U64 }
+        mut val firstTraitOwner: U64 = 0U64
+        mut val firstTraitArity: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[i]
+            if cf.extId == 0U64 && cf.typeId == typeId && cf.traitId == srcId {
+                val applies: Bool = self.conformanceSubjectMatches(cf: cf, typeRef: typeRef)
+                if applies {
+                    val arity: U64 = cf.traitArgs.count()
+                    val owner: U64 = self.traitDeclOffsetByIdArity(traitId: srcId, arity: arity)
+                    if firstTraitOwner == 0U64 {
+                        firstTraitOwner = owner
+                        firstTraitArity = arity
+                        count += 1U64
+                    } else if firstTraitOwner != owner || firstTraitArity != arity {
+                        return 2U64
+                    }
+                }
+            }
+            i += 1U64
+        }
+        return count
+    }
+
     inout fn verifyProgram() {
         // global initializers first: module-level `val g = …` is program code too, and
         // the acceptance rules (literal context/range, array-element consistency,
@@ -82,10 +115,30 @@ pub impl Comp {
         // source is applicable and let callable lookup select (or loudly reject
         // an ambiguity between) the concrete source candidates.
         val traitNamed: Bool = self.isTraitName(start: srcStart, len: srcLen)
-        val traitApplies: Bool = traitNamed && self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)
+        // A trait view is an application of a concrete conformance, not a
+        // name-level statement about the receiver head.  This is deliberately
+        // the same query used by `where`: `Box[I64] as P` must not make
+        // `Box[String]#P` well-formed.
+        mut val traitApplies: Bool = false
+        if traitNamed {
+            if rt.ref != 0U64 {
+                traitApplies = self.conformsInstance(ref: rt.ref, traitStart: srcStart, traitLen: srcLen)
+            } else if self.recvOwnParamCount(rt: rt) == 0U64 {
+                // Scalars (and other monomorphic receiver heads) carry no
+                // TypeRef in TypeInfo.  Name identity is complete only in
+                // this arity-zero case; generic receivers must use the full
+                // instance query above.
+                traitApplies = self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)
+            }
+        }
         val extNamed: Bool = self.isExtName(start: srcStart, len: srcLen)
         val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref)
-        if traitApplies || extApplies { return }
+        if traitApplies || extApplies {
+            if self.viewSourceCount(typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref, srcStart: srcStart, srcLen: srcLen) > 1U64 {
+                self.errorAt(offset: self.exprOffset(id: recv), msg: "ambiguous view source: this `#` name denotes multiple declaration sources")
+            }
+            return
+        }
         if traitNamed {
             self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
         }

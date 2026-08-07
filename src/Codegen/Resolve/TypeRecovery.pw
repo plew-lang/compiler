@@ -150,6 +150,21 @@ pub impl Comp {
             if self.refsGenericArgComparable(a: ti.ref, b: p.ty) {
                 return self.typeRefEq(a: ti.ref, b: p.ty)
             }
+            // Function types are structural (labels, parameters, return type,
+            // and sendability).  They must not collapse to the shared `fn`
+            // head during overload resolution.
+            if self.isFnType(ref: ti.ref) && self.isFnType(ref: p.ty) {
+                return self.typeRefEq(a: ti.ref, b: p.ty)
+            }
+            // Existentials share their trait name as a head, but `any P` and
+            // `any sendable P` are distinct callable parameter forms.  Route
+            // them through the same complete TypeRef identity used for fn
+            // types instead of letting the fallback erase the capability.
+            if ti.ref != 0U64 && p.ty != 0U64 && ti.ref < self.arena.types.count() && p.ty < self.arena.types.count() {
+                if self.arena.types[ti.ref].isAny || self.arena.types[p.ty].isAny {
+                    return self.typeRefEq(a: ti.ref, b: p.ty)
+                }
+            }
             return intern(c: inout self, start: ti.nameStart, len: ti.nameLen) == p.tyNameId
         }
         // ti.kind == 0: a scalar / integer. A suffixed/typed value carries its name;

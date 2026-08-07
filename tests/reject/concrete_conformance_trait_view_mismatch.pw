@@ -1,0 +1,11 @@
+trait Mark {}
+
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+impl Box[I64] as Mark {}
+
+fn main() {
+    val box: Box[String] = <Box[String] value="no" />
+    val invalid = box#Mark
+}

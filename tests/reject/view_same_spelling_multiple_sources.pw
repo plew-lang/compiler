@@ -1,0 +1,12 @@
+trait Extra {}
+trait Mark {}
+struct Box {}
+pub impl Box { factory }
+pub impl Box as Extra {}
+
+extension Extra { impl Box as Mark {} }
+
+fn main() {
+    val box: Box = <Box />
+    val viewed = box#Extra
+}

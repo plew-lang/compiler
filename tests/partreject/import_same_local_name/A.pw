@@ -1,0 +1,1 @@
+export fn pick(value: I64) -> I64 { return 1I64 }

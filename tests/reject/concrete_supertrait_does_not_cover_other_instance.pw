@@ -1,0 +1,10 @@
+trait Super {}
+trait Sub: Super {}
+
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+impl Box[String] as Super {}
+impl Box[I64] as Sub {}
+
+fn main() {}

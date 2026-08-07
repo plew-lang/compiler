@@ -1,0 +1,12 @@
+trait Mark {}
+struct Box {}
+pub impl Box { factory }
+
+extension Extra { impl Box as Mark {} }
+
+fn needsMark[T](value: T) where T: Mark {}
+
+fn main() {
+    val box: Box = <Box />
+    needsMark(value: box)
+}
