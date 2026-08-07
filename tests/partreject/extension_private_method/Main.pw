@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+import ./Lib with { Box }
+import ./Ext
+
+fn main() {
+    val box: Box = <Box value=7I64 />
+    print(box#Extra.secret())
+}

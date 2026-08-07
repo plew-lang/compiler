@@ -1,0 +1,2 @@
+export struct Box { pub val value: I64 }
+pub impl Box { factory }

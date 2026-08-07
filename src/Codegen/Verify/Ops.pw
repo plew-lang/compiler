@@ -361,19 +361,13 @@ pub impl Comp {
         }
     }
 
-    inout fn verifyMethodVis(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-        val rt: TypeInfo = self.typeOf(id: recv)
-        if rt.kind == 2 {
-            // resolve the method on the receiver type to get its Func (checkMethodVis
-            // inspects the impl block's visibility); skip if unresolved (a separate
-            // "no such method" diagnostic covers that).
-            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
-            if mi < self.arena.funcs.count() {
-                self.checkMethodVis(ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: self.arena.funcs[mi], offset: nameStart)
+    inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: Array[Arg]) {
+        if mf < self.arena.funcs.count() {
+                self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.funcs[mf], offset: nameStart)
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
                 // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
                 // value that is immediately discarded — spec/03).
-                if self.arena.funcs[mi].selfInout {
+                if self.arena.funcs[mf].selfInout {
                     if !(self.exprIsPlace(id: recv)) {
                         self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
                     }
@@ -393,7 +387,16 @@ pub impl Comp {
                         k += 1U64
                     }
                 }
-            }
+        }
+    }
+
+    inout fn verifyMethodVis(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+        val rt: TypeInfo = self.typeOf(id: recv)
+        if rt.kind == 2 {
+            // Resolve once, then validate the resolved callable. `#` methods
+            // use the same final validation entry point below.
+            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+            self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mi, args: args)
         }
         // a mutating built-in array method (`append`) on an immutable / non-place array.
         if rt.kind == 3 {

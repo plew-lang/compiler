@@ -1,0 +1,13 @@
+struct Box { pub val value: I64 }
+pub impl Box { factory }
+
+extension Extra {
+    pub impl Box {
+        fn add(value: I64) -> I64 { return self.value + value }
+    }
+}
+
+fn main() {
+    val box: Box = <Box value=7I64 />
+    box#Extra.add(value: true)
+}

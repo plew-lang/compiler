@@ -90,8 +90,14 @@ pub impl Comp {
                 self.verifyArgs(args: args)
                 self.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             }
-            Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
                 self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
+                val rt: TypeInfo = self.typeOf(id: recv)
+                if rt.nameLen != 0U64 {
+                    val mf: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+                    self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
+                    self.checkResolvedMethodArgCategories(mf: mf, args: args)
+                }
                 self.verifyExpr(id: recv)
                 self.verifyArgs(args: args)
             }

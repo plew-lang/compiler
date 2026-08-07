@@ -45,6 +45,28 @@ pub impl Comp {
         return 0U64
     }
 
+    // Final argument-type validation operates on the already source-selected
+    // callable.  Bare and `#` method calls must not rediscover candidates by
+    // different rules after resolution.
+    inout fn checkResolvedMethodArgCategories(mf: U64, args: Array[Arg]) {
+        if mf >= self.arena.funcs.count() { return }
+        val cf: Func = self.arena.funcs[mf]
+        // Generic and provided methods need their resolved substitution before
+        // this conservative non-generic category checker can compare values.
+        // Preserve the ordinary-method boundary; this helper only removes the
+        // source-selection split, it does not invent a second generic checker.
+        if cf.typeParams.count() > 0U64 || cf.isProvided { return }
+        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
+        mut val ai: U64 = 0U64
+        while ai < args.count() {
+            val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
+            if pIdx < cf.params.count() {
+                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
+            }
+            ai += 1U64
+        }
+    }
+
     inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
         val rt: TypeInfo = self.typeOf(id: recv)
         if rt.kind != 2 {
@@ -74,18 +96,7 @@ pub impl Comp {
         if anyOther || count != 1U64 {
             return
         }
-        val cf: Func = self.arena.funcs[theFi]
-        if !(self.paramsLabelsOk(params: cf.params, args: args)) {
-            return
-        }
-        mut val ai: U64 = 0
-        while ai < args.count() {
-            val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
-            if pIdx < cf.params.count() {
-                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
-            }
-            ai += 1
-        }
+        self.checkResolvedMethodArgCategories(mf: theFi, args: args)
     }
 
     inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: Array[Arg]) {

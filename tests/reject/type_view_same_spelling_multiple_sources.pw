@@ -1,0 +1,17 @@
+trait Extra {}
+
+struct Box { pub val value: I64 }
+pub impl Box { factory }
+pub impl Box as Extra {}
+
+extension Extra {
+    pub impl Box {
+        fn valueFromExtension() -> I64 { return 1I64 }
+    }
+}
+
+fn accepts(value: Box#Extra) -> I64 {
+    return value.valueFromExtension()
+}
+
+fn main() {}

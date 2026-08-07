@@ -57,6 +57,7 @@ pub impl Comp {
         self.cur.branchBase = 0
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
+        self.checkTypeViewSources()
         mut val gvi: U64 = 0
         while gvi < self.arena.globals.count() {
             self.verifyStmt(stmtId: self.arena.globals[gvi].letStmt)
@@ -102,14 +103,10 @@ pub impl Comp {
         self.checkDeclShapes()
     }
 
-    inout fn checkViewValid(recv: U64, srcStart: U64, srcLen: U64, strip: Bool) {
-        if strip {
-            return
-        }
-        val rt: TypeInfo = self.exprType(id: recv)
-        if rt.nameLen == 0U64 {
-            return
-        }
+    // The source-selection proof for both `value#Name` and `Type#Name`.
+    // `allowMonomorphicFallback` exists only for expression type recovery:
+    // scalar values have no TypeRef, whereas an authored type annotation does.
+    inout fn checkViewSourceValid(typeStart: U64, typeLen: U64, typeRef: U64, srcStart: U64, srcLen: U64, offset: U64, allowMonomorphicFallback: Bool) {
         // `#X` names a source, not a syntactic category. A trait and an
         // extension may have the same spelling; accept the view when either
         // source is applicable and let callable lookup select (or loudly reject
@@ -121,31 +118,51 @@ pub impl Comp {
         // `Box[String]#P` well-formed.
         mut val traitApplies: Bool = false
         if traitNamed {
-            if rt.ref != 0U64 {
-                traitApplies = self.conformsInstance(ref: rt.ref, traitStart: srcStart, traitLen: srcLen)
-            } else if self.recvOwnParamCount(rt: rt) == 0U64 {
+            if typeRef != 0U64 {
+                traitApplies = self.conformsInstance(ref: typeRef, traitStart: srcStart, traitLen: srcLen)
+            } else if allowMonomorphicFallback {
                 // Scalars (and other monomorphic receiver heads) carry no
                 // TypeRef in TypeInfo.  Name identity is complete only in
                 // this arity-zero case; generic receivers must use the full
                 // instance query above.
-                traitApplies = self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)
+                traitApplies = self.typeConformsTo(typeStart: typeStart, typeLen: typeLen, traitStart: srcStart, traitLen: srcLen)
             }
         }
         val extNamed: Bool = self.isExtName(start: srcStart, len: srcLen)
-        val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref)
+        val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef)
         if traitApplies || extApplies {
-            if self.viewSourceCount(typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref, srcStart: srcStart, srcLen: srcLen) > 1U64 {
-                self.errorAt(offset: self.exprOffset(id: recv), msg: "ambiguous view source: this `#` name denotes multiple declaration sources")
+            if self.viewSourceCount(typeStart: typeStart, typeLen: typeLen, typeRef: typeRef, srcStart: srcStart, srcLen: srcLen) > 1U64 {
+                self.errorAt(offset: offset, msg: "ambiguous view source: this `#` name denotes multiple declaration sources")
             }
             return
         }
         if traitNamed {
-            self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
+            self.errorAt(offset: offset, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
         }
         if extNamed {
-            self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
+            self.errorAt(offset: offset, msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
         }
-        self.errorAt(offset: self.exprOffset(id: recv), msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+        self.errorAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+    }
+
+    inout fn checkTypeViewSources() {
+        mut val i: U64 = 0U64
+        while i < self.arena.types.count() {
+            val t: TypeRef = self.arena.types[i]
+            // Synthetic TypeRefs and type-parameter heads have no authored
+            // annotation site. Every user-written `Type#Name` does.
+            if t.viewExtId != 0U64 && t.siteOffset != 0U64 && t.viewExtId <= self.interner.count {
+                self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[t.viewExtId - 1U64], srcLen: self.interner.lens[t.viewExtId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)
+            }
+            i += 1U64
+        }
+    }
+
+    inout fn checkViewValid(recv: U64, srcStart: U64, srcLen: U64, strip: Bool) {
+        if strip { return }
+        val rt: TypeInfo = self.exprType(id: recv)
+        if rt.nameLen == 0U64 { return }
+        self.checkViewSourceValid(typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref, srcStart: srcStart, srcLen: srcLen, offset: self.exprOffset(id: recv), allowMonomorphicFallback: rt.ref == 0U64 && self.recvOwnParamCount(rt: rt) == 0U64)
     }
 
     inout fn checkDeclShapes() {

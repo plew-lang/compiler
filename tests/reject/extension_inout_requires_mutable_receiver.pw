@@ -1,0 +1,13 @@
+struct Box { pub mut val value: I64 }
+pub impl Box { factory }
+
+extension Extra {
+    pub impl Box {
+        inout fn bump() { self.value += 1I64 }
+    }
+}
+
+fn main() {
+    val box: Box = <Box value=7I64 />
+    box#Extra.bump()
+}

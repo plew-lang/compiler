@@ -1,0 +1,7 @@
+import ./Lib with { Box }
+
+extension Extra {
+    impl Box {
+        fn secret() -> I64 { return self.value }
+    }
+}
