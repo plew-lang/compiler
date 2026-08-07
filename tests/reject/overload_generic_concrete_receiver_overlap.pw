@@ -1,0 +1,15 @@
+// A generic receiver pattern and a concrete receiver pattern share the
+// `Box[I64]` call surface.  This must be rejected at declaration time, just as
+// it is inside a named extension bundle.
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+pub impl[T] Box[T] {
+    fn pick() -> I64 { return 1I64 }
+}
+
+pub impl Box[I64] {
+    fn pick() -> I64 { return 2I64 }
+}
+
+fn main() {}

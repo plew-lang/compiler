@@ -178,6 +178,16 @@ pub impl Comp {
         return true
     }
 
+    // The resolver's one argument-side classification.  Rank 0 is no exposed
+    // callable form, 1 is a selector-only match (for diagnostics/fallback),
+    // and 2 is a complete call match.  Every resolver entry point consumes the
+    // same rank instead of composing label and type tests independently.
+    inout fn callableArgMatchRank(f: Func, args: Array[Arg]) -> U64 {
+        if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
+        if self.paramsTypesMatch(params: f.params, args: args) { return 2U64 }
+        return 1U64
+    }
+
     // An argument that is an unsuffixed integer literal carries no type name, so it
     // adapts to any integer parameter (argMatchesParam's last clause). Such an
     // argument is the only source of "one call matches two overloads": a typed value

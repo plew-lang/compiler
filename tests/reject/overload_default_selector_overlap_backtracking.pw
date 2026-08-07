@@ -1,0 +1,6 @@
+// Both defaults at the first mismatch must be explored.  Omitting each `b`
+// exposes the common `tag(a:, c:)` form despite the different `b` types.
+fn tag(a: I64 = 1I64, b: String = "x", c: I64) -> I64 { return c }
+fn tag(b: I64 = 2I64, a: I64 = 1I64, c: I64) -> I64 { return c }
+
+fn main() {}

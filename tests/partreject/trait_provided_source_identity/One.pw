@@ -1,0 +1,2 @@
+export trait Clash[R] {}
+pub impl[R] Clash[R] { fn pick() -> I64 { return 2I64 } }

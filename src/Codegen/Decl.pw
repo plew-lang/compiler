@@ -187,20 +187,54 @@ pub impl Comp {
             }
             i += 1
         }
+        // A conformance-only extension is still a named source surface.
+        i = 0U64
+        while i < self.decls.conforms.count() {
+            if self.decls.conforms[i].extId == qId {
+                return true
+            }
+            i += 1U64
+        }
         return false
     }
 
-    inout fn extAppliesToType(extStart: U64, extLen: U64, typeStart: U64, typeLen: U64) -> Bool {
+    // Source applicability uses the complete receiver pattern when one is
+    // available.  A named extension on `Box[I64]` must not make `Box[String]#X`
+    // valid merely because both receivers share the `Box` head.
+    inout fn extAppliesToType(extStart: U64, extLen: U64, typeStart: U64, typeLen: U64, typeRef: U64 = 0U64) -> Bool {
         val qExt: U64 = intern(c: inout self, start: extStart, len: extLen)
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {
             if self.arena.funcs[i].extId == qExt {
                 if self.arena.funcs[i].recvId == qType {
-                    return true
+                    if typeRef == 0U64 || self.arena.funcs[i].recvTy == 0U64 {
+                        return true
+                    }
+                    mut val binds: Array[UnifyBind] = []
+                    if self.unifyPatterns(a: self.arena.funcs[i].recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: self.arena.funcs[i].typeParams, bParams: [], binds: inout binds, ignoreTopView: true) {
+                        return true
+                    }
                 }
             }
             i += 1
+        }
+        // A named extension may contribute only a conformance.  It is still a
+        // real source surface: `value#Ext` is needed to expose that conformance
+        // to a bound even when no member happens to be declared in the bundle.
+        i = 0U64
+        while i < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[i]
+            if cf.extId == qExt && cf.typeId == qType {
+                if typeRef == 0U64 || cf.subjectTy == 0U64 {
+                    return true
+                }
+                mut val binds: Array[UnifyBind] = []
+                if self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds, ignoreTopView: true) {
+                    return true
+                }
+            }
+            i += 1U64
         }
         // a newtype inherits the underlying type's extensions (spec/10).
         mut val ni: U64 = 0

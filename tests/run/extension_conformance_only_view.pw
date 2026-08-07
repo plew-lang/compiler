@@ -1,0 +1,18 @@
+// An extension with no members still contributes a source-selectable
+// conformance surface, so the view can satisfy a generic bound.
+import @Std/Io with { print }
+
+trait Mark {}
+struct Box {}
+pub impl Box { factory }
+
+extension Extra {
+    impl Box as Mark {}
+}
+
+fn needsMark[T](value: T) -> I64 where T: Mark { return 1I64 }
+
+fn main() {
+    val box: Box = <Box />
+    print(needsMark(value: box#Extra))
+}

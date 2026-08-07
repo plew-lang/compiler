@@ -84,7 +84,7 @@ pub impl Comp {
         val traitNamed: Bool = self.isTraitName(start: srcStart, len: srcLen)
         val traitApplies: Bool = traitNamed && self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)
         val extNamed: Bool = self.isExtName(start: srcStart, len: srcLen)
-        val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)
+        val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref)
         if traitApplies || extApplies { return }
         if traitNamed {
             self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")

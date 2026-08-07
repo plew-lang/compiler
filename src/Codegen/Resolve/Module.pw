@@ -270,6 +270,7 @@ pub impl Comp {
         // merely name-visible one so coexisting versions bind their own export.
         mut val firstLabelEdge: U64 = self.arena.funcs.count()
         mut val typeMatchEdge: U64 = self.arena.funcs.count()
+        mut val typeMatch2Edge: U64 = self.arena.funcs.count()
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0
         while i < self.decls.callables.count() {
@@ -281,7 +282,8 @@ pub impl Comp {
             // named `add` from colliding with Core's `Add.add` (spec/07).
             if !(f.hasRecv || f.isAssoc) {
                 if f.nameId == qId {
-                    if self.paramsLabelsOk(params: f.params, args: args) {
+                    val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)
+                    if matchRank != 0U64 {
                         val same: Bool = cand.sourceModule == useMod
                         val visible: Bool = same || self.nameVisibleFrom(useMod: useMod, candStart: f.nameStart, candLen: f.nameLen)
                         val edged: Bool = visible && self.hasImportEdge(useMod: useMod, targetMod: cand.sourceModule)
@@ -300,7 +302,7 @@ pub impl Comp {
                                 firstLabelSame = cand.funcIdx
                             }
                         }
-                        if self.paramsTypesMatch(params: f.params, args: args) {
+                        if matchRank == 2U64 {
                             if visible {
                                 if typeMatch == self.arena.funcs.count() {
                                     typeMatch = cand.funcIdx
@@ -322,6 +324,10 @@ pub impl Comp {
                             if edged {
                                 if typeMatchEdge == self.arena.funcs.count() {
                                     typeMatchEdge = cand.funcIdx
+                                } else {
+                                    if typeMatch2Edge == self.arena.funcs.count() {
+                                        typeMatch2Edge = cand.funcIdx
+                                    }
                                 }
                             }
                         }
@@ -341,6 +347,7 @@ pub impl Comp {
         // then a DIRECTLY-imported module's candidate (prefer the version this module
         // actually imported when a name is shared across coexisting versions).
         if typeMatchEdge != self.arena.funcs.count() {
+            self.checkOverloadAmbiguity(a: typeMatchEdge, b: typeMatch2Edge, args: args)
             return typeMatchEdge
         }
         if firstLabelEdge != self.arena.funcs.count() {
@@ -372,8 +379,9 @@ pub impl Comp {
                 val gf: Func = self.arena.funcs[gc.funcIdx]
                 if !(gf.hasRecv || gf.isAssoc) {
                     if gf.nameId == qId {
-                        if self.paramsLabelsOk(params: gf.params, args: args) {
-                            if self.paramsTypesMatch(params: gf.params, args: args) {
+                        val matchRank: U64 = self.callableArgMatchRank(f: gf, args: args)
+                        if matchRank != 0U64 {
+                            if matchRank == 2U64 {
                                 return gc.funcIdx
                             }
                             if gLabel == self.arena.funcs.count() {
@@ -480,6 +488,8 @@ pub impl Comp {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
+        mut val typeMatchEntry: U64 = self.decls.callables.count()
+        mut val typeMatch2Entry: U64 = self.decls.callables.count()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val useMod: U64 = self.moduleOf(offset: nameStart)
@@ -502,16 +512,19 @@ pub impl Comp {
                 if !(f.viewOnly) {
                 if f.nameId == qNameId {
                     if self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
-                        if self.paramsLabelsOk(params: f.params, args: args) {
+                        val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)
+                        if matchRank != 0U64 {
                             if firstLabel == self.arena.funcs.count() {
                                 firstLabel = cand.funcIdx
                             }
-                            if self.paramsTypesMatch(params: f.params, args: args) {
+                            if matchRank == 2U64 {
                                 if typeMatch == self.arena.funcs.count() {
                                     typeMatch = cand.funcIdx
+                                    typeMatchEntry = i
                                 } else {
                                     if typeMatch2 == self.arena.funcs.count() {
                                         typeMatch2 = cand.funcIdx
+                                        typeMatch2Entry = i
                                     }
                                 }
                             }
@@ -531,9 +544,9 @@ pub impl Comp {
             // are disambiguated by the args, and identical-trait copies are the same
             // method.)
             if typeMatch2 != self.arena.funcs.count() {
-                if self.arena.funcs[typeMatch].srcTraitId != 0U64 {
-                    if self.arena.funcs[typeMatch2].srcTraitId != 0U64 {
-                        if self.arena.funcs[typeMatch].srcTraitId != self.arena.funcs[typeMatch2].srcTraitId {
+                if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
+                    if self.decls.callables[typeMatchEntry].sourceKind == 2U64 && self.decls.callables[typeMatch2Entry].sourceKind == 2U64 {
+                        if !(self.sameCallableSource(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
                             self.errorAt(offset: nameStart, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
                         }
                     }
@@ -630,11 +643,12 @@ pub impl Comp {
                     if self.callableMatchesSource(c: cand, sourceId: qSrcId) {
                         if f.nameId == qNameId {
                             if self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
-                                if self.paramsLabelsOk(params: f.params, args: args) {
+                                val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)
+                                if matchRank != 0U64 {
                                     if firstLabel == self.arena.funcs.count() {
                                         firstLabel = cand.funcIdx
                                     }
-                                    if self.paramsTypesMatch(params: f.params, args: args) {
+                                    if matchRank == 2U64 {
                                         if typeMatch == self.arena.funcs.count() {
                                             typeMatch = cand.funcIdx
                                             typeMatchEntry = i
@@ -682,11 +696,12 @@ pub impl Comp {
             if f.isAssoc {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
-                        if self.paramsLabelsOk(params: f.params, args: args) {
+                        val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)
+                        if matchRank != 0U64 {
                             if firstLabel == self.arena.funcs.count() {
                                 firstLabel = cand.funcIdx
                             }
-                            if self.paramsTypesMatch(params: f.params, args: args) {
+                            if matchRank == 2U64 {
                                 if typeMatch == self.arena.funcs.count() {
                                     typeMatch = cand.funcIdx
                                 } else {
@@ -702,6 +717,12 @@ pub impl Comp {
             i += 1
         }
         if typeMatch != self.arena.funcs.count() {
+            // A type qualifier carries only the receiver head (`Box.tag()`),
+            // not generic arguments.  Distinct receiver patterns that both
+            // reach this point therefore cannot be selected by the caller.
+            if typeMatch2 != self.arena.funcs.count() {
+                self.errorAt(offset: nameStart, msg: "ambiguous associated call: this type qualifier matches more than one receiver pattern")
+            }
             self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             return typeMatch
         }

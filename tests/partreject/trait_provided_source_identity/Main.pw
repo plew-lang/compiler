@@ -1,0 +1,13 @@
+import ./Zero with { Clash }
+import ./One with { Clash }
+
+struct S {}
+pub impl S { factory }
+pub impl S as Clash {}
+pub impl S as Clash[I64] {}
+
+// Source spelling alone cannot merge the two provided surfaces.
+fn main() {
+    val s: S = <S />
+    s.pick()
+}

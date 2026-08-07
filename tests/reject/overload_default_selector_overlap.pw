@@ -1,0 +1,6 @@
+// Omission of different defaulted parameters exposes the same `tag(value:)`
+// callable form.  Equal declaration arity does not make the form distinct.
+fn tag(left: I64 = 1I64, value: I64) -> I64 { return value }
+fn tag(value: I64, right: I64 = 2I64) -> I64 { return value }
+
+fn main() {}

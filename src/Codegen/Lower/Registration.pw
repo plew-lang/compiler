@@ -12,18 +12,15 @@ pub impl Comp {
         return self.moduleOf(offset: f.nameStart)
     }
 
+    // Namespace and receiver-head filtering only.  This deliberately does NOT
+    // compare complete receiver patterns: `Box[T]` and `Box[I64]` have a common
+    // invocation, even though they are not alpha-equal declarations.  The shared
+    // callable-form overlap check below owns that semantic question.
     inout fn sameFuncCandidateBucket(a: Func, b: Func) -> Bool {
         if a.hasRecv != b.hasRecv { return false }
         if a.isAssoc != b.isAssoc { return false }
         if a.hasRecv || a.isAssoc {
             if a.recvId != b.recvId { return false }
-            // Registration and lookup must share the same receiver key.  A
-            // declaration receiver is a type pattern, so Box[I64] and
-            // Box[Bool] are distinct namespaces while Box[T] and Box[U] are
-            // the same namespace modulo their binders.
-            if !(self.typeRefsAlphaEq(a: a.recvTy, b: b.recvTy, aParams: a.typeParams, bParams: b.typeParams)) {
-                return false
-            }
         }
         return a.extId == b.extId
     }
@@ -35,32 +32,6 @@ pub impl Comp {
             if a.params[i].noLabel != b.params[i].noLabel { return false }
             if !(a.params[i].noLabel) && a.params[i].nameId != b.params[i].nameId { return false }
             i += 1U64
-        }
-        return true
-    }
-
-    // The callable table indexes every selector a declaration exposes, including
-    // forms obtained by omitting defaulted parameters.  Labels are unique within a
-    // declaration, so this two-stream walk decides whether at least one call-label
-    // sequence can be accepted by both declarations.
-    inout fn selectorFormsOverlap(a: Array[Param], b: Array[Param]) -> Bool {
-        mut val ai: U64 = 0
-        mut val bi: U64 = 0
-        while ai < a.count() || bi < b.count() {
-            if ai == a.count() {
-                if b[bi].hasDefault { bi += 1U64 } else { return false }
-            } else if bi == b.count() {
-                if a[ai].hasDefault { ai += 1U64 } else { return false }
-            } else if a[ai].noLabel == b[bi].noLabel && (a[ai].noLabel || a[ai].nameId == b[bi].nameId) {
-                ai += 1U64
-                bi += 1U64
-            } else if a[ai].hasDefault {
-                ai += 1U64
-            } else if b[bi].hasDefault {
-                bi += 1U64
-            } else {
-                return false
-            }
         }
         return true
     }
@@ -203,15 +174,65 @@ pub impl Comp {
         return true
     }
 
-    inout fn paramsMayOverlap(a: Func, b: Func) -> Bool {
-        mut val binds: Array[UnifyBind] = []
+    inout fn copyUnifyBinds(binds: Array[UnifyBind]) -> Array[UnifyBind] {
+        mut val copied: Array[UnifyBind] = []
         mut val i: U64 = 0U64
-        while i < a.params.count() {
-            if a.params[i].tyIsArray != b.params[i].tyIsArray { return false }
-            if !(self.unifyPatterns(a: a.params[i].ty, aSide: 0U64, b: b.params[i].ty, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds)) { return false }
+        while i < binds.count() {
+            copied.append(binds[i])
             i += 1U64
         }
-        return true
+        return copied
+    }
+
+    inout fn receiverPatternsMayOverlap(a: Func, b: Func) -> Bool {
+        if !(a.hasRecv || a.isAssoc) { return true }
+        mut val binds: Array[UnifyBind] = []
+        return self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds, ignoreTopView: true)
+    }
+
+    // Search the two default-argument selector automata for a shared form. A
+    // label match is not forced: either side may omit a defaulted parameter to
+    // expose a later form, so each branch owns an independent substitution.
+    inout fn callableFormsMayOverlapAt(a: Func, b: Func, ai: U64, bi: U64, binds: Array[UnifyBind]) -> Bool {
+        if ai == a.params.count() && bi == b.params.count() { return true }
+        if ai == a.params.count() {
+            if b.params[bi].hasDefault {
+                return self.callableFormsMayOverlapAt(a: a, b: b, ai: ai, bi: bi + 1U64, binds: binds)
+            }
+            return false
+        }
+        if bi == b.params.count() {
+            if a.params[ai].hasDefault {
+                return self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi, binds: binds)
+            }
+            return false
+        }
+        if a.params[ai].noLabel == b.params[bi].noLabel && (a.params[ai].noLabel || a.params[ai].nameId == b.params[bi].nameId) {
+            if a.params[ai].tyIsArray == b.params[bi].tyIsArray {
+                mut val matched: Array[UnifyBind] = self.copyUnifyBinds(binds: binds)
+                if self.unifyPatterns(a: a.params[ai].ty, aSide: 0U64, b: b.params[bi].ty, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout matched) {
+                    if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi + 1U64, binds: matched) { return true }
+                }
+            }
+        }
+        if a.params[ai].hasDefault {
+            if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi, binds: self.copyUnifyBinds(binds: binds)) { return true }
+        }
+        if b.params[bi].hasDefault {
+            if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai, bi: bi + 1U64, binds: self.copyUnifyBinds(binds: binds)) { return true }
+        }
+        return false
+    }
+
+    // Do the two declarations expose one common callable form? Receiver and
+    // selected arguments share one substitution: after `Box[T]` meets
+    // `Box[I64]`, later `T` positions are necessarily I64 too.
+    inout fn callableFormsMayOverlap(a: Func, b: Func) -> Bool {
+        mut val binds: Array[UnifyBind] = []
+        if a.hasRecv || a.isAssoc {
+            if !(self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds, ignoreTopView: true)) { return false }
+        }
+        return self.callableFormsMayOverlapAt(a: a, b: b, ai: 0U64, bi: 0U64, binds: binds)
     }
 
     inout fn checkFuncRegistration(f: Func) {
@@ -234,17 +255,14 @@ pub impl Comp {
                         if !(f.hasRecv || f.isAssoc) && prior.nameId == f.nameId && (prior.isExtern || f.isExtern) {
                             self.errorAt(offset: f.defOffset, msg: "duplicate function name: extern declarations and ordinary functions share one top-level namespace in a module")
                         }
-                    if prior.nameId == f.nameId && self.selectorFormsOverlap(a: prior.params, b: f.params) {
-                        if prior.params.count() != f.params.count() {
-                            self.errorAt(offset: f.defOffset, msg: "duplicate callable selector after default-argument omission in one declaration namespace (spec/04,07,09)")
-                        }
-                    if self.sameFuncSelector(a: prior, b: f) {
+                    if prior.nameId == f.nameId {
+                    if self.sameFuncSelector(a: prior, b: f) && self.receiverPatternsMayOverlap(a: prior, b: f) {
                         if !(self.sameGenericShape(a: prior, b: f)) {
                             self.errorAt(offset: f.defOffset, msg: "generic overloads with the same selector must have the same type-argument count and generic parameter positions (spec/07)")
                         }
-                        if self.paramsMayOverlap(a: prior, b: f) {
-                            self.errorAt(offset: f.defOffset, msg: "duplicate or overlapping overload in one declaration namespace: overloads must differ at a concrete parameter position (spec/07,09)")
-                        }
+                    }
+                    if self.callableFormsMayOverlap(a: prior, b: f) {
+                        self.errorAt(offset: f.defOffset, msg: "duplicate or overlapping callable form in one declaration namespace (spec/04,07,09)")
                     }
                     }
                     }

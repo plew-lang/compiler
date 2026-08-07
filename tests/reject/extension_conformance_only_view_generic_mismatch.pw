@@ -1,0 +1,16 @@
+// A conformance-only extension on one generic instance cannot be viewed from
+// a different instance sharing only the receiver head.
+trait Mark {}
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+extension Extra {
+    impl Box[I64] as Mark {}
+}
+
+fn needsMark[T](value: T) -> I64 where T: Mark { return 1I64 }
+
+fn main() {
+    val box: Box[String] = <Box[String] value="no" />
+    needsMark(value: box#Extra)
+}

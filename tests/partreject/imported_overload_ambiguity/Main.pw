@@ -1,0 +1,5 @@
+import ./Lib with { pick }
+
+// A directly imported module is a resolution tier, not a first-match escape
+// hatch: this unsuffixed literal matches both overloads in that tier.
+fn main() { pick(value: 0) }

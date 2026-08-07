@@ -1,0 +1,14 @@
+// The current type-qualifier surface cannot use generic arguments to choose
+// between disjoint receiver patterns, so it must never choose one by order.
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+pub impl Box[I64] {
+    assoc fn tag() -> I64 { return 64I64 }
+}
+
+pub impl Box[String] {
+    assoc fn tag() -> I64 { return 7I64 }
+}
+
+fn main() { Box.tag() }

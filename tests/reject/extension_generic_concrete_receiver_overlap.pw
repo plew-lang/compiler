@@ -1,0 +1,15 @@
+// The named bundle must reject the same receiver-pattern overlap too.
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+
+extension Extra {
+    pub impl[T] Box[T] {
+        fn pick() -> I64 { return 1I64 }
+    }
+
+    pub impl Box[I64] {
+        fn pick() -> I64 { return 2I64 }
+    }
+}
+
+fn main() {}
