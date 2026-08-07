@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+struct Box[T] { pub val value: T }
+
+// The equations required to match both overloads are T = Box[U] and
+// U = Box[T], which have no finite solution. Shared unification must therefore
+// keep these declarations distinct rather than checking each parameter alone.
+fn route[T](first: T, second: Box[T]) -> I64 { return 1I64 }
+fn route[U](first: Box[U], second: U) -> I64 { return 2I64 }
+
+fn main() { print(0I64) }

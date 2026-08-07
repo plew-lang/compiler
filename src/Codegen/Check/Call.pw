@@ -332,7 +332,7 @@ pub impl Comp {
             }
         }
         if rt.kind == 2 {
-            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
             if mi != self.arena.funcs.count() {
                 val mf: Func = self.arena.funcs[mi]
                 self.tcCheckGenericArgConsistency(f: mf, args: args)

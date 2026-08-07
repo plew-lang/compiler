@@ -1,5 +1,7 @@
+import @Std/Io with { print }
 import ./Lib with { leak }
 
 fn main() {
     val x = leak()
+    print(x.n)
 }

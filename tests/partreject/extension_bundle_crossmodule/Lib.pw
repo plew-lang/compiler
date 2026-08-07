@@ -1,0 +1,2 @@
+export struct Subject { pub val n: I64 }
+pub impl Subject { factory }

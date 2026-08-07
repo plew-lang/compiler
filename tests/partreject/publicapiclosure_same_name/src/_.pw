@@ -1,0 +1,6 @@
+import @Dep with { Token }
+import /Internal with { Token as InternalToken }
+
+export fn parse() -> InternalToken {
+    return <InternalToken local=1I64 />
+}

@@ -7,8 +7,8 @@ import @Std/Io with { print }
 // types that conform to the user's `Sub` — not onto every integer (which conform
 // to Core's `Sub[Rhs]`). instantiateProvidedMethods matches by name AND arity, so
 // the provided copy lands on `S` alone and Core's subtraction keeps working.
-trait Greet { fn greetName() -> String }
-trait Sub: Greet { fn extra() -> I64 }
+export trait Greet { fn greetName() -> String }
+export trait Sub: Greet { fn extra() -> I64 }
 
 impl Sub {
     fn useOwn() -> I64 { return self.extra() }

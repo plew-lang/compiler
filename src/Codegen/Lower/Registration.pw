@@ -1,0 +1,349 @@
+// Declaration-candidate registration (root: Lower.pw).
+//
+// `Decls.callables` is the single candidate surface consumed by registration and
+// resolution. Function bodies/signatures remain in `arena.funcs`; every source
+// declaration enters the surface through registerDeclaredFunc.
+
+pub impl Comp {
+    inout fn funcDeclModule(f: Func) -> U64 {
+        if self.offsetIsLoaded(offset: f.defOffset) {
+            return self.moduleOf(offset: f.defOffset)
+        }
+        return self.moduleOf(offset: f.nameStart)
+    }
+
+    inout fn sameFuncCandidateBucket(a: Func, b: Func) -> Bool {
+        if a.hasRecv != b.hasRecv { return false }
+        if a.isAssoc != b.isAssoc { return false }
+        if a.hasRecv || a.isAssoc {
+            if a.recvId != b.recvId { return false }
+            // Registration and lookup must share the same receiver key.  A
+            // declaration receiver is a type pattern, so Box[I64] and
+            // Box[Bool] are distinct namespaces while Box[T] and Box[U] are
+            // the same namespace modulo their binders.
+            if !(self.typeRefsAlphaEq(a: a.recvTy, b: b.recvTy, aParams: a.typeParams, bParams: b.typeParams)) {
+                return false
+            }
+        }
+        return a.extId == b.extId
+    }
+
+    inout fn sameFuncSelector(a: Func, b: Func) -> Bool {
+        if a.nameId != b.nameId || a.params.count() != b.params.count() { return false }
+        mut val i: U64 = 0
+        while i < a.params.count() {
+            if a.params[i].noLabel != b.params[i].noLabel { return false }
+            if !(a.params[i].noLabel) && a.params[i].nameId != b.params[i].nameId { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    // The callable table indexes every selector a declaration exposes, including
+    // forms obtained by omitting defaulted parameters.  Labels are unique within a
+    // declaration, so this two-stream walk decides whether at least one call-label
+    // sequence can be accepted by both declarations.
+    inout fn selectorFormsOverlap(a: Array[Param], b: Array[Param]) -> Bool {
+        mut val ai: U64 = 0
+        mut val bi: U64 = 0
+        while ai < a.count() || bi < b.count() {
+            if ai == a.count() {
+                if b[bi].hasDefault { bi += 1U64 } else { return false }
+            } else if bi == b.count() {
+                if a[ai].hasDefault { ai += 1U64 } else { return false }
+            } else if a[ai].noLabel == b[bi].noLabel && (a[ai].noLabel || a[ai].nameId == b[bi].nameId) {
+                ai += 1U64
+                bi += 1U64
+            } else if a[ai].hasDefault {
+                ai += 1U64
+            } else if b[bi].hasDefault {
+                bi += 1U64
+            } else {
+                return false
+            }
+        }
+        return true
+    }
+
+    inout fn binderIndex(params: Array[Bind], nameId: U64) -> U64 {
+        mut val i: U64 = 0
+        while i < params.count() {
+            if params[i].nameId == nameId { return i }
+            i += 1U64
+        }
+        return params.count()
+    }
+
+    // Structural equality modulo the two declaration binder lists. This is the
+    // declaration-key equality, not call-site type compatibility.
+    inout fn typeRefsAlphaEq(a: U64, b: U64, aParams: Array[Bind], bParams: Array[Bind]) -> Bool {
+        if a == 0U64 || b == 0U64 { return a == b }
+        if a >= self.arena.types.count() || b >= self.arena.types.count() { return false }
+        val ta: TypeRef = self.arena.types[a]
+        val tb: TypeRef = self.arena.types[b]
+        val ai: U64 = self.binderIndex(params: aParams, nameId: ta.nameId)
+        val bi: U64 = self.binderIndex(params: bParams, nameId: tb.nameId)
+        if ai < aParams.count() || bi < bParams.count() {
+            return ai == bi && ai < aParams.count() && bi < bParams.count()
+        }
+        if ta.nameId != tb.nameId || ta.viewExtId != tb.viewExtId { return false }
+        if ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId { return false }
+        if ta.args.count() != tb.args.count() { return false }
+        mut val i: U64 = 0
+        while i < ta.args.count() {
+            if !(self.typeRefsAlphaEq(a: ta.args[i], b: tb.args[i], aParams: aParams, bParams: bParams)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn typeRefUsesBinders(ref: U64, params: Array[Bind]) -> Bool {
+        if ref == 0U64 || ref >= self.arena.types.count() { return false }
+        val t: TypeRef = self.arena.types[ref]
+        if self.binderIndex(params: params, nameId: t.nameId) < params.count() { return true }
+        mut val i: U64 = 0
+        while i < t.args.count() {
+            if self.typeRefUsesBinders(ref: t.args[i], params: params) { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn sameGenericShape(a: Func, b: Func) -> Bool {
+        if a.typeParams.count() != b.typeParams.count() || a.params.count() != b.params.count() { return false }
+        mut val i: U64 = 0
+        while i < a.params.count() {
+            if self.typeRefUsesBinders(ref: a.params[i].ty, params: a.typeParams) != self.typeRefUsesBinders(ref: b.params[i].ty, params: b.typeParams) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn unificationBindingIndex(binds: Array[UnifyBind], side: U64, nameId: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < binds.count() {
+            if binds[i].side == side && binds[i].nameId == nameId { return i }
+            i += 1U64
+        }
+        return binds.count()
+    }
+
+    // A type parameter is a free unification variable only in its bare form;
+    // `T#P` / projections retain their structural view/projection constraints.
+    inout fn plainBinder(ref: U64, params: Array[Bind]) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return params.count() }
+        val t: TypeRef = self.arena.types[ref]
+        if t.viewExtId != 0U64 || t.assocTraitId != 0U64 || t.args.count() != 0U64 { return params.count() }
+        return self.binderIndex(params: params, nameId: t.nameId)
+    }
+
+    inout fn occursInPattern(side: U64, nameId: U64, ref: U64, refSide: U64, aParams: Array[Bind], bParams: Array[Bind], binds: Array[UnifyBind]) -> Bool {
+        mut val params: Array[Bind] = aParams
+        if refSide != 0U64 { params = bParams }
+        val bi: U64 = self.plainBinder(ref: ref, params: params)
+        if bi < params.count() {
+            if refSide == side && params[bi].nameId == nameId { return true }
+            // Corresponding generic parameters in two same-shape overloads are
+            // one logical variable for overlap purposes (T in each signature),
+            // even though their source binders are distinct records.
+            mut val targetParams: Array[Bind] = aParams
+            if side != 0U64 { targetParams = bParams }
+            val targetIdx: U64 = self.binderIndex(params: targetParams, nameId: nameId)
+            if refSide != side && targetIdx == bi { return true }
+            val bound: U64 = self.unificationBindingIndex(binds: binds, side: refSide, nameId: params[bi].nameId)
+            if bound < binds.count() {
+                return self.occursInPattern(side: side, nameId: nameId, ref: binds[bound].ref, refSide: binds[bound].refSide, aParams: aParams, bParams: bParams, binds: binds)
+            }
+            return false
+        }
+        if ref == 0U64 || ref >= self.arena.types.count() { return false }
+        val t: TypeRef = self.arena.types[ref]
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            if self.occursInPattern(side: side, nameId: nameId, ref: t.args[i], refSide: refSide, aParams: aParams, bParams: bParams, binds: binds) { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn unifyPatterns(a: U64, aSide: U64, b: U64, bSide: U64, aParams: Array[Bind], bParams: Array[Bind], binds: inout Array[UnifyBind]) -> Bool {
+        mut val aScope: Array[Bind] = aParams
+        if aSide != 0U64 { aScope = bParams }
+        mut val bScope: Array[Bind] = aParams
+        if bSide != 0U64 { bScope = bParams }
+        val av: U64 = self.plainBinder(ref: a, params: aScope)
+        val bv: U64 = self.plainBinder(ref: b, params: bScope)
+        if av < aScope.count() && bv < bScope.count() {
+            return av == bv
+        }
+        if av < aScope.count() {
+            val found: U64 = self.unificationBindingIndex(binds: binds, side: aSide, nameId: aScope[av].nameId)
+            if found < binds.count() {
+                return self.unifyPatterns(a: binds[found].ref, aSide: binds[found].refSide, b: b, bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)
+            }
+            if self.occursInPattern(side: aSide, nameId: aScope[av].nameId, ref: b, refSide: bSide, aParams: aParams, bParams: bParams, binds: binds) { return false }
+            binds.append(<UnifyBind side=aSide nameId=aScope[av].nameId ref=b refSide=bSide />)
+            return true
+        }
+        if bv < bScope.count() {
+            return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds)
+        }
+        if a == 0U64 || b == 0U64 || a >= self.arena.types.count() || b >= self.arena.types.count() { return a == b }
+        val ta: TypeRef = self.arena.types[a]
+        val tb: TypeRef = self.arena.types[b]
+        if ta.nameId != tb.nameId || ta.viewExtId != tb.viewExtId || ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return false }
+        mut val i: U64 = 0U64
+        while i < ta.args.count() {
+            if !(self.unifyPatterns(a: ta.args[i], aSide: aSide, b: tb.args[i], bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn paramsMayOverlap(a: Func, b: Func) -> Bool {
+        mut val binds: Array[UnifyBind] = []
+        mut val i: U64 = 0U64
+        while i < a.params.count() {
+            if a.params[i].tyIsArray != b.params[i].tyIsArray { return false }
+            if !(self.unifyPatterns(a: a.params[i].ty, aSide: 0U64, b: b.params[i].ty, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn checkFuncRegistration(f: Func) {
+        mut val i: U64 = 0
+        while i < self.decls.callables.count() {
+            val priorEntry: Callable = self.decls.callables[i]
+            val prior: Func = self.arena.funcs[priorEntry.funcIdx]
+            if !prior.isProvided {
+                // A bare declaration namespace is module-owned.  A named
+                // extension is instead its own bundle: `#Ext` carries no module
+                // qualifier at a call site, so every declaration named Ext must
+                // enter this one collision domain even when loaded from another
+                // module.
+                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == f.extId) || self.funcDeclModule(f: prior) == self.funcDeclModule(f: f)
+                if sameNamespace {
+                    if self.sameFuncCandidateBucket(a: prior, b: f) {
+                        // Raw foreign/intrinsic functions have one linker symbol,
+                        // not a Plew overload family. Their name collision is a
+                        // registration collision before selector matching.
+                        if !(f.hasRecv || f.isAssoc) && prior.nameId == f.nameId && (prior.isExtern || f.isExtern) {
+                            self.errorAt(offset: f.defOffset, msg: "duplicate function name: extern declarations and ordinary functions share one top-level namespace in a module")
+                        }
+                    if prior.nameId == f.nameId && self.selectorFormsOverlap(a: prior.params, b: f.params) {
+                        if prior.params.count() != f.params.count() {
+                            self.errorAt(offset: f.defOffset, msg: "duplicate callable selector after default-argument omission in one declaration namespace (spec/04,07,09)")
+                        }
+                    if self.sameFuncSelector(a: prior, b: f) {
+                        if !(self.sameGenericShape(a: prior, b: f)) {
+                            self.errorAt(offset: f.defOffset, msg: "generic overloads with the same selector must have the same type-argument count and generic parameter positions (spec/07)")
+                        }
+                        if self.paramsMayOverlap(a: prior, b: f) {
+                            self.errorAt(offset: f.defOffset, msg: "duplicate or overlapping overload in one declaration namespace: overloads must differ at a concrete parameter position (spec/07,09)")
+                        }
+                    }
+                    }
+                    }
+                }
+            }
+            i += 1U64
+        }
+    }
+
+    inout fn registerDeclaredFunc(f: Func) -> U64 {
+        val idx: U64 = self.arena.funcs.count()
+        self.arena.funcs.append(f)
+        self.registerCallable(funcIdx: idx, checkCollisions: true)
+        return idx
+    }
+
+    // The only entrance to the resolver's surface table. Derived provided
+    // methods call this after their body record is appended; source selection is
+    // therefore represented once, instead of reconstructed separately by # calls.
+    inout fn registerCallable(funcIdx: U64, checkCollisions: Bool = false) {
+        if funcIdx >= self.arena.funcs.count() { return }
+        val f: Func = self.arena.funcs[funcIdx]
+        // Source declarations cannot enter a surface which already has a
+        // call-indistinguishable candidate.  Provided copies are synthesized
+        // dispatch artifacts; their source trait is selected separately and
+        // therefore deliberately bypass this source-declaration check.
+        if checkCollisions {
+            self.checkFuncRegistration(f: f)
+        }
+        mut val sourceKind: U64 = 0U64
+        mut val sourceId: U64 = 0U64
+        if f.extId != 0U64 {
+            sourceKind = 1U64
+            sourceId = f.extId
+        } else if f.srcTraitId != 0U64 {
+            sourceKind = 2U64
+            sourceId = f.srcTraitId
+        }
+        self.decls.callables.append(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceModule=self.funcDeclModule(f: f) />)
+    }
+
+    inout fn callableIsBare(c: Callable) -> Bool {
+        return c.sourceKind == 0U64
+    }
+
+    inout fn callableMatchesSource(c: Callable, sourceId: U64) -> Bool {
+        return c.sourceKind != 0U64 && c.sourceId == sourceId
+    }
+
+    // Match a call receiver against the declaration's complete receiver pattern.
+    // A generic impl such as Box[T] is a pattern, whereas Box[I64] is exact.
+    // Calls without a recovered TypeRef retain the legacy head-name fallback.
+    inout fn callableReceiverMatches(f: Func, recvId: U64, recvRef: U64) -> Bool {
+        if f.recvId != recvId { return false }
+        if recvRef == 0U64 || f.recvTy == 0U64 { return true }
+        if recvRef >= self.arena.types.count() || f.recvTy >= self.arena.types.count() { return true }
+        // A view selects source; it does not rewrite the extension declaration's
+        // subject pattern. Keep the legacy receiver-head match for viewed values
+        // until view stacking receives its own normalized TypePattern.
+        if self.arena.types[recvRef].viewExtId != 0U64 { return true }
+        mut val binds: Array[UnifyBind] = []
+        return self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: f.typeParams, bParams: [], binds: inout binds)
+    }
+
+    inout fn sameTypeRefListAlphaEq(a: Array[U64], b: Array[U64], aParams: Array[Bind], bParams: Array[Bind]) -> Bool {
+        if a.count() != b.count() { return false }
+        mut val i: U64 = 0
+        while i < a.count() {
+            if !(self.typeRefsAlphaEq(a: a[i], b: b[i], aParams: aParams, bParams: bParams)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn checkConformanceRegistration(cf: Conform) {
+        mut val i: U64 = 0
+        while i < self.decls.conforms.count() {
+            val prior: Conform = self.decls.conforms[i]
+            if !prior.derived {
+                // As with methods, a named extension is one source-selectable
+                // bundle, not one bundle per defining module.  Its conformance
+                // key must therefore be unique across all of its parts.
+                val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == cf.extId) || self.moduleOf(offset: prior.defOffset) == self.moduleOf(offset: cf.defOffset)
+                if sameNamespace {
+                    if prior.extId == cf.extId && prior.traitId == cf.traitId {
+                        if prior.typeId == cf.typeId && prior.typeArity == cf.typeArity {
+                            if self.sameTypeRefListAlphaEq(a: prior.subjectArgs, b: cf.subjectArgs, aParams: prior.typeParams, bParams: cf.typeParams) {
+                                if self.sameTypeRefListAlphaEq(a: prior.traitArgs, b: cf.traitArgs, aParams: prior.typeParams, bParams: cf.typeParams) {
+                                self.errorAt(offset: cf.defOffset, msg: "duplicate trait conformance in one declaration namespace (spec/08,09)")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            i += 1U64
+        }
+    }
+
+    inout fn registerDeclaredConformance(cf: Conform) {
+        self.checkConformanceRegistration(cf: cf)
+        self.decls.conforms.append(cf)
+    }
+
+}

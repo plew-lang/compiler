@@ -132,6 +132,16 @@ pub impl Comp {
             return false
         }
         if ti.kind == 2 {
+            // A # view is part of ordinary named-type identity too.  The older
+            // generic-instance-only comparison accidentally treated A and A#P as
+            // the same concrete argument type during overload resolution.
+            if ti.ref != 0U64 && p.ty != 0U64 {
+                if ti.ref < self.arena.types.count() && p.ty < self.arena.types.count() {
+                    if self.arena.types[ti.ref].viewExtId != self.arena.types[p.ty].viewExtId {
+                        return false
+                    }
+                }
+            }
             // generic-instance discrimination (spec/07: distinguish at concrete argument
             // positions): `f(b: Box[I64])` vs `f(b: Box[String])` share a head name but
             // differ in type args. Compare the FULL grounded refs when both sides are

@@ -49,7 +49,7 @@ pub impl Comp {
         }
     }
 
-    inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
+    inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
         mut val boundTraits: Array[String] = []
@@ -173,7 +173,7 @@ pub impl Comp {
             val extN: Bind = self.internBytes(s: im.extName)
             extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
         }
-        self.arena.funcs.append(<Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() defOffset=m.nameSpan.start />)
+        self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() defOffset=m.nameSpan.start />)
         self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes)
         self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes)
         self.cur.typeParams = savedTP
@@ -206,23 +206,36 @@ pub impl Comp {
         self.cur.typeParams = implScope
         self.lowerWhereTypes = im.whereTypes
         self.lowerWhereTraits = im.whereTraits
+        // Trait subjects are not value TypeRefs; concrete impl receivers are.
+        // Preserve the latter's complete pattern (including generic arguments)
+        // for callable-surface matching instead of collapsing to recvId.
+        mut val recvTy: U64 = 0U64
+        if !(self.isTraitName(start: recvN.nameStart, len: recvN.nameLen)) {
+            recvTy = self.lowerType(t: im.recvType).ref
+        }
+        mut val subjectArgs: Array[U64] = []
+        mut val subjectArgIdx: U64 = 0
+        while subjectArgIdx < im.recvType.args.count() {
+            subjectArgs.append(self.lowerType(t: im.recvType.args[subjectArgIdx]).ref)
+            subjectArgIdx += 1U64
+        }
         mut val witnessed: Array[Func] = []
         mut val mi: U64 = 0
         while mi < im.members.count() {
             val m: MemberAst = im.members[mi]
             match m.kind {
                 MemberKind.Method => {
-                    self.lowerMethodMember(im: im, m: m, recvN: recvN, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
+                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
                 }
                 MemberKind.AssocFn => {
-                    self.lowerMethodMember(im: im, m: m, recvN: recvN, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
+                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
                 }
                 MemberKind.Deinit => {
                     val deinitN: Bind = self.internBytes(s: "deinit")
                     val body: U64 = self.lowerBlock(b: m.body)
                     val noParams: Array[Param] = []
                     val noTypeParams: Array[Bind] = []
-                    self.arena.funcs.append(<Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+                    self.registerDeclaredFunc(f: <Func nameStart=deinitN.nameStart nameLen=deinitN.nameLen nameId=intern(c: inout self, start: deinitN.nameStart, len: deinitN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=noTypeParams params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=body hasRecv=true recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=im.span.start />)
                     self.decls.deinits.append(<Bind nameStart=recvN.nameStart nameLen=recvN.nameLen fieldStart=recvN.nameStart fieldLen=recvN.nameLen />)
                 }
                 MemberKind.AssocType => {
@@ -233,7 +246,7 @@ pub impl Comp {
                         val trN: Bind = self.internBytes(s: im.traitName)
                         trId = trN.nameId
                     }
-                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
+                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId implOffset=im.span.start tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
                 }
                 MemberKind.Factory => {
                     // `factory` in a `pub impl T` publishes T's default memberwise factory
@@ -261,7 +274,7 @@ pub impl Comp {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
-            self.decls.conforms.append(<Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false isPub=im.isPub witnessed=witnessed extId=cfExtId defOffset=im.span.start />)
+            self.registerDeclaredConformance(cf: <Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false isPub=im.isPub witnessed=witnessed extId=cfExtId defOffset=im.span.start />)
         }
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.

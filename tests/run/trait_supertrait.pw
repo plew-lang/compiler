@@ -1,7 +1,7 @@
 import @Std/Io with { print }
 // `trait Sub: Super` — conforming to Sub also requires Super; both usable.
-trait Super { fn base() -> I64 }
-trait Sub: Super { fn extra() -> I64 }
+export trait Super { fn base() -> I64 }
+export trait Sub: Super { fn extra() -> I64 }
 struct X { pub val n: I64 }
 pub impl X { factory }
 pub impl X as Super { fn base() -> I64 { return self.n } }

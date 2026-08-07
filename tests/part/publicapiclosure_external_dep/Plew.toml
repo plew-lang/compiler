@@ -1,0 +1,4 @@
+name = "publicapiclosure-external-dep"
+
+[dependencies]
+Dep = { path = "dep" }

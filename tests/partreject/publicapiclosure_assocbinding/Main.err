@@ -1,1 +1,1 @@
-public API signature mentions a name that is not reachable from the same public surface
+public API signature mentions a package-local name that is not reachable from the package root public surface

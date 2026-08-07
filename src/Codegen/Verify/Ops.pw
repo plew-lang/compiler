@@ -367,7 +367,7 @@ pub impl Comp {
             // resolve the method on the receiver type to get its Func (checkMethodVis
             // inspects the impl block's visibility); skip if unresolved (a separate
             // "no such method" diagnostic covers that).
-            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
             if mi < self.arena.funcs.count() {
                 self.checkMethodVis(ownerStart: rt.nameStart, ownerLen: rt.nameLen, mf: self.arena.funcs[mi], offset: nameStart)
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE

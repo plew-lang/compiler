@@ -237,6 +237,42 @@ export fn findSrcRoot(entry: Array[U8]) -> Array[U8] {
     return sr
 }
 
+export fn pathStartsWith(path: Array[U8], prefix: Array[U8]) -> Bool {
+    if prefix.count() == 0 {
+        return false
+    }
+    if path.count() < prefix.count() {
+        return false
+    }
+    mut val i: U64 = 0
+    while i < prefix.count() {
+        if path[i] != prefix[i] {
+            return false
+        }
+        i += 1
+    }
+    return true
+}
+
+// The package external surface root for a loaded file. Bundled std modules are
+// individual `@Std/...` package faces, so their root is the module file itself.
+// Manifest-backed packages use `<pkg>/src/_.pw`. Standalone files return empty;
+// the loader treats those as self-rooted modules.
+export fn packageRootPath(entry: Array[U8], stdRoot: Array[U8]) -> Array[U8] {
+    mut val out: Array[U8] = []
+    if pathStartsWith(path: entry, prefix: stdRoot) {
+        appendBytes(into: inout out, from: entry)
+        return out
+    }
+    val srcRoot: Array[U8] = findSrcRoot(entry: entry)
+    if srcRoot.count() == 0 {
+        return out
+    }
+    appendBytes(into: inout out, from: srcRoot)
+    appendBytes(into: inout out, from: "_.pw".bytes())
+    return out
+}
+
 // `<path>.pw` -> `<path>.gen.pw` (the auto-parted generated sibling). Empty if
 // `path` does not end in `.pw` (46='.', 112='p', 119='w').
 export fn genSiblingPath(path: Array[U8]) -> Array[U8] {

@@ -1,0 +1,5 @@
+import /Internal with { Token }
+
+export fn parse() -> Token {
+    return <Token n=1I64 />
+}

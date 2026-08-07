@@ -1,0 +1,5 @@
+import /Internal with { PrivateMarker as Marker }
+
+export fn id[T](value: T) -> T where T: Marker {
+    return value
+}

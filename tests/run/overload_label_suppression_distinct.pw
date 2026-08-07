@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+// `value~:` and `value:` are different selectors. Registration must preserve
+// the resolver's label-suppression bit rather than comparing the binder name.
+fn show(value~: I64) -> I64 { return value + 1I64 }
+fn show(value: I64) -> I64 { return value + 2I64 }
+
+fn main() {
+    print(show(3I64))
+    print(show(value: 3I64))
+}

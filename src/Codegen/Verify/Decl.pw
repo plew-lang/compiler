@@ -103,7 +103,6 @@ pub impl Comp {
         self.checkBlanketHeadless()
         self.checkNewtypeCycles()
         self.checkDupTypeNames()
-        self.checkDupFns()
         self.checkDupParamLabels()
         mut val si: U64 = 0
         while si < self.arena.structs.count() {
@@ -256,116 +255,6 @@ pub impl Comp {
             while j < names.count() {
                 if mods[i] == mods[j] && names[i] == names[j] {
                     self.errorAt(offset: offs[j], msg: "duplicate type name (a struct/enum with this name is already declared in this module)")
-                }
-                j += 1
-            }
-            i += 1
-        }
-    }
-
-    inout fn funcDeclModule(f: Func) -> U64 {
-        if self.offsetIsLoaded(offset: f.defOffset) {
-            return self.moduleOf(offset: f.defOffset)
-        }
-        return self.moduleOf(offset: f.nameStart)
-    }
-
-    inout fn sameFuncNamespace(a: Func, b: Func) -> Bool {
-        if a.hasRecv != b.hasRecv { return false }
-        if a.isAssoc != b.isAssoc { return false }
-        if a.hasRecv || a.isAssoc {
-            return a.recvId == b.recvId
-        }
-        return true
-    }
-
-    inout fn paramViewId(p: Param) -> U64 {
-        if p.ty < self.arena.types.count() {
-            return self.arena.types[p.ty].viewExtId
-        }
-        return 0U64
-    }
-
-    inout fn isExactDupFn(a: Func, b: Func) -> Bool {
-        if a.nameId != b.nameId {
-            return false
-        }
-        if a.recvId != b.recvId {
-            return false
-        }
-        if a.extId != b.extId {
-            return false
-        }
-        if a.params.count() != b.params.count() {
-            return false
-        }
-        mut val i: U64 = 0
-        while i < a.params.count() {
-            val pa: Param = a.params[i]
-            val pb: Param = b.params[i]
-            if pa.noLabel != pb.noLabel {
-                return false
-            }
-            if !(pa.noLabel) {
-                if pa.nameId != pb.nameId {
-                    return false
-                }
-            }
-            if pa.tyNameId != pb.tyNameId {
-                return false
-            }
-            // two generic-instance params with the same head but different type args are
-            // NOT duplicates (spec/07): `f(Box[I64])` and `f(Box[String])` are distinct
-            // overloads. Head-name equality alone would mis-report them as a duplicate.
-            // (fn-typed / existential params keep head-name identity — see
-            // refsGenericArgComparable.)
-            if self.refsGenericArgComparable(a: pa.ty, b: pb.ty) {
-                if !(self.typeRefEq(a: pa.ty, b: pb.ty)) {
-                    return false
-                }
-            }
-            if pa.tyIsArray != pb.tyIsArray {
-                return false
-            }
-            if self.paramViewId(p: pa) != self.paramViewId(p: pb) {
-                return false
-            }
-            i += 1
-        }
-        return true
-    }
-
-    inout fn checkDupFns() {
-        mut val cand: Array[U64] = []
-        mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
-            if !f.isProvided {
-                if self.offsetIsLoaded(offset: f.defOffset) {
-                    cand.append(fi)
-                }
-            }
-            fi += 1
-        }
-        mut val i: U64 = 0
-        while i < cand.count() {
-            mut val j: U64 = i + 1U64
-            while j < cand.count() {
-                val a: Func = self.arena.funcs[cand[i]]
-                val b: Func = self.arena.funcs[cand[j]]
-                if self.funcDeclModule(f: a) == self.funcDeclModule(f: b) {
-                    if self.sameFuncNamespace(a: a, b: b) {
-                    if a.nameId == b.nameId {
-                        if !(a.hasRecv || a.isAssoc) && (a.isExtern || b.isExtern) {
-                            self.errorAt(offset: self.fnAnchor(f: b), msg: "duplicate function name: `extern(c)`, `extern(plewIntrinsic)`, and ordinary `fn` share one top-level namespace in a module")
-                        }
-                        if a.typeParams.count() == 0U64 && b.typeParams.count() == 0U64 && !self.fnHasDefault(f: a) && !self.fnHasDefault(f: b) {
-                            if self.isExactDupFn(a: a, b: b) {
-                                self.errorAt(offset: self.fnAnchor(f: b), msg: "duplicate function: another declaration has the same name, labels, and parameter types (overloads must differ in a label or a parameter type)")
-                            }
-                        }
-                    }
-                    }
                 }
                 j += 1
             }

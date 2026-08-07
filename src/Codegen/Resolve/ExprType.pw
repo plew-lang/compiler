@@ -665,7 +665,7 @@ pub impl Comp {
                 // copies live on the type and resolve bare).
                 val rt: TypeInfo = self.exprType(id: recv)
                 if rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0) {
-                    mut val mfi: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    mut val mfi: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                     if mfi >= self.arena.funcs.count() {
                         // the receiver's own view chain: nested `v#A#B` re-view nodes
                         // (a `#!Ext` strip ends the chain), then the unwrapped base
@@ -679,7 +679,7 @@ pub impl Comp {
                                         go = false
                                     } else {
                                         if mfi >= self.arena.funcs.count() {
-                                            mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: intern(c: inout self, start: vs, len: vl), nameStart: nameStart, nameLen: nameLen, args: args)
+                                            mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: intern(c: inout self, start: vs, len: vl), nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                                         }
                                         cvr = vr
                                     }
@@ -689,12 +689,12 @@ pub impl Comp {
                         }
                         if mfi >= self.arena.funcs.count() && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
                             if self.arena.types[rt.ref].viewExtId != 0U64 {
-                                mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args)
+                                mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                             }
                         }
                     }
                     if mfi >= self.arena.funcs.count() {
-                        mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                        mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                     }
                     if mfi < self.arena.funcs.count() {
                         val mf: Func = self.arena.funcs[mfi]
@@ -828,13 +828,13 @@ pub impl Comp {
                             }
                         }
                     }
-                    mut val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    mut val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                     // a viewed binding (`val sa = s#A; sa.a()`): a bare call resolves
                     // through the value's static view too (additive, spec/09) — the
                     // extension's method is reachable without re-viewing.
                     if mi == self.arena.funcs.count() && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
                         if self.arena.types[rt.ref].viewExtId != 0U64 {
-                            mi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args)
+                            mi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                         }
                     }
                     if mi == self.arena.funcs.count() {

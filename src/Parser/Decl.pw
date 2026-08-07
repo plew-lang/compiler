@@ -97,4 +97,8 @@ pub impl Comp {
     inout fn recordExport(nameStart: U64, nameLen: U64) {
         self.modules.exports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=self.moduleOf(offset: nameStart) fieldLen=0 />)
     }
+
+    inout fn recordExportFrom(nameStart: U64, nameLen: U64, moduleOffset: U64) {
+        self.modules.exports.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=self.moduleOf(offset: moduleOffset) fieldLen=0 />)
+    }
 }

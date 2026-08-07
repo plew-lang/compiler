@@ -70,6 +70,13 @@ export struct TypeRef {
     // written at the surface. It is recorded as part of the type spelling now; the
     // full capture/effect/spawn checks land with the ownership IR.
     pub val isSendable: Bool = false
+    // Resolved declaration identity for this type head. The real declaration
+    // offset is unique across loaded packages even when their spellings collide.
+    pub val hasDecl: Bool = false
+    pub val declOffset: U64 = 0
+    // Resolved source trait identity for `T#Trait.Item`.
+    pub val hasAssocTraitDecl: Bool = false
+    pub val assocTraitDeclOffset: U64 = 0
     // the REAL source offset where this type was written (TypeAst.span.start), stamped by
     // `lowerType` for scoped type-visibility (Check/Visibility.pw). Unlike nameStart (which
     // is re-interned and so unusable for `moduleOf`), this is a genuine source coordinate:
@@ -541,6 +548,9 @@ export struct AssocBinding {
     // the trait whose associated type this binds (e.g. `Sub`), so a type with several
     // operator conformances can bind `Output` differently per trait. 0 if none.
     pub val traitId: U64 = 0
+    // Source impl identity. Receiver and trait text are not sufficient when a type
+    // has multiple parameterized conformances to the same trait.
+    pub val implOffset: U64 = 0
     // bound concrete type (head span + structured ref + array flag).
     pub val tyStart: U64
     pub val tyLen: U64
@@ -552,6 +562,17 @@ export struct Conform {
     pub val typeStart: U64
     pub val typeLen: U64
     pub val typeId: U64 = 0
+    // Full structured subject type. The legacy typeId/typeArity pair is kept for
+    // older conformance walks, but declaration registration must distinguish
+    // `Box[I64]` from `Box[String]` and alpha-equivalent generic subjects.
+    pub val subjectTy: U64 = 0
+    // Structured arguments of the subject head. Kept separately because a trait
+    // subject is not a value TypeRef and must not enter the value-type visibility
+    // table merely to form a declaration key.
+    pub val subjectArgs: Array[U64] = []
+    // Binders introduced by `impl[T]`; used to compare subject keys modulo
+    // spelling (`impl[T] Box[T]` == `impl[U] Box[U]`).
+    pub val typeParams: Array[Bind] = []
     // arity of the impl subject. For `impl B as A`, this disambiguates same-name
     // traits such as a user `Sub` and Core's `Sub[Rhs]`; for concrete types it is
     // the receiver type-arg count. The conformance owner checks only use it when
@@ -666,6 +687,10 @@ export struct Func {
     // interned ids (Phase C): name and (for methods/assoc) receiver type name.
     pub val nameId: U64 = 0
     pub val recvId: U64 = 0
+    // Full receiver type for a method/associated function. recvId is only the
+    // head-name fast path; this preserves the generic arguments and # view that
+    // are part of the declaration namespace.
+    pub val recvTy: U64 = 0
     // generic type parameters `fn id[T](...)` (name spans; empty if not
     // generic). For a method, an `impl[T] Type[T]`-introduced parameter also
     // lands here. Consumed by G3 monomorphization.
@@ -755,6 +780,31 @@ export struct Func {
     // 0 for synthesized funcs (deinit walkers, witness sigs, the record `main`).
     pub val defOffset: U64 = 0
 }
+
+// A callable surface entry. Func is an implementation/body record; this table is
+// the semantic call namespace consumed by every resolver query. sourceKind is
+// 0=bare/inherent, 1=named extension, 2=trait-provided/path surface.
+export struct Callable {
+    pub val funcIdx: U64
+    pub val sourceKind: U64
+    pub val sourceId: U64
+    // A name is not an extension identity across modules. Keep the defining
+    // module so a source-qualified query can reject an ambiguous same-spelled
+    // source rather than choosing whichever Func happened to be appended first.
+    pub val sourceModule: U64
+}
+pub impl Callable { factory }
+
+// A binding made while asking whether two declared generic signatures have a
+// common finite instantiation. `side` / `refSide` are 0 or 1 and keep binders
+// from the two declarations distinct even when they share a spelling such as T.
+export struct UnifyBind {
+    pub val side: U64
+    pub val nameId: U64
+    pub val ref: U64
+    pub val refSide: U64
+}
+pub impl UnifyBind { factory }
 
 // A module-level variable (spec/15): `val x = e` / `mut val x = e`. `letStmt` is
 // the arena `Stmt.Let` the shared parser produced (name / optional type /
@@ -913,6 +963,7 @@ pub impl DestructureSite { factory }
 // (see DestructureSite). `kwCache`: cached built-in name spans (O(1) kwSpan).
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
+    pub mut val callables: Array[Callable] = []
     pub mut val conforms: Array[Conform] = []
     pub mut val methodAliases: Array[MethodAlias] = []
     pub mut val derives: Array[DeriveReq] = []
@@ -957,6 +1008,15 @@ export struct Modules {
     // module is visible to a consumer that imported the re-exporting module (the barrel) and
     // brought the name into scope — the barrel need not be the name's defining module.
     pub mut val reExportEdges: Array[Bind] = []
+    // package root surface for each module (nameStart = module id, fieldStart = root
+    // module id). For package-backed source this is `src/_.pw`; for standalone files and
+    // bundled std modules it is the module itself. Public API closure uses this to distinguish
+    // a module-local `export` from the package's external surface (spec/15).
+    pub mut val packageRoots: Array[Bind] = []
+    // Local import/re-export spelling -> original spelling + target module. This
+    // is provenance for declaration-identity resolution, not a visibility table.
+    pub mut val importOrigins: Array[Bind] = []
+    pub mut val reExportOrigins: Array[Bind] = []
     // the module id of the ambient lang-item module @Std/Lang (std/Lang.pw), or the
     // "none" sentinel 4_000_000_000 when it was not loaded. Lang is THE ambient module
     // (spec/15): the types it declares — the language's built-in types — are in scope

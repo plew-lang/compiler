@@ -1,0 +1,5 @@
+import / with { parse }
+
+fn main() {
+    val t = parse()
+}

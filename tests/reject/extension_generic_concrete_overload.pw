@@ -1,0 +1,12 @@
+// An extension is one declaration namespace: `#Extra` cannot choose between a
+// generic member and a concrete member sharing the same selector (spec/07,09).
+struct Number { pub val value: I64 }
+
+extension Extra {
+    pub impl Number {
+        fn show[T](item: T) -> I64 { return 1I64 }
+        fn show(item: I64) -> I64 { return 2I64 }
+    }
+}
+
+fn main() {}

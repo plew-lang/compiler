@@ -1,0 +1,6 @@
+// Same selector overloads must expose one generic inference shape even when a
+// concrete position would otherwise make calls distinguishable (spec/07).
+fn choose[T](first: I16, second: T) -> I64 { return 1I64 }
+fn choose(first: I32, second: I32) -> I64 { return 2I64 }
+
+fn main() {}

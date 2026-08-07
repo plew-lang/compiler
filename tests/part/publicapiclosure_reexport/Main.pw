@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+import ./Barrel with { Box }
+import ./Defs with { Dep }
+
+fn main() {
+    val b = <Box dep=<Dep n=7I64 /> />
+    print(b.dep.n)
+}

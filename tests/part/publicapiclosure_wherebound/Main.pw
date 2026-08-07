@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+import ./Lib with { id }
+import ./Dep with { Marker }
+
+struct Box {
+    pub val n: I64
+}
+pub impl Box { factory }
+pub impl Box as Marker {}
+
+fn main() {
+    val b = id(value: <Box n=9I64 />)
+    print(b.n)
+}

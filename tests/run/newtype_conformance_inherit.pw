@@ -5,7 +5,7 @@
 // witness is dispatched through the newtype (its inherited `self.bytes()` works too).
 import @Std/Io with { print }
 
-trait Loud { fn boom() -> U64 }
+export trait Loud { fn boom() -> U64 }
 pub impl String as Loud { fn boom() -> U64 { return self.bytes().count() + 100U64 } }
 fn needs[T](x: T) -> U64 where T: Loud { return x.boom() }
 

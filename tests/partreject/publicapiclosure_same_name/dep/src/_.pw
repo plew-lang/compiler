@@ -1,0 +1,4 @@
+export struct Token {
+    pub val remote: I64
+}
+pub impl Token { factory }

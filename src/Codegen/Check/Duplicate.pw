@@ -14,6 +14,9 @@ pub impl Comp {
             if a[i].nameId != b[i].nameId {
                 return false
             }
+            if a[i].noLabel != b[i].noLabel {
+                return false
+            }
             i += 1
         }
         return true
@@ -56,38 +59,6 @@ pub impl Comp {
                 a += 1U64
             }
             ti += 1U64
-        }
-    }
-
-    inout fn checkOverloadCollisions() {
-        mut val i: U64 = 0
-        while i < self.arena.funcs.count() {
-            val fi: Func = self.arena.funcs[i]
-            if !(fi.hasRecv) {
-                if !(fi.isAssoc) {
-                    mut val j: U64 = i + 1
-                    while j < self.arena.funcs.count() {
-                        val fj: Func = self.arena.funcs[j]
-                        if !(fj.hasRecv) {
-                            if !(fj.isAssoc) {
-                                if fi.nameId == fj.nameId {
-                                    if self.sameLabels(a: fi.params, b: fj.params) {
-                                        if fi.typeParams.count() > 0 {
-                                            self.errorAt(offset: self.fnAnchor(f: fj), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
-                                        } else {
-                                            if fj.typeParams.count() > 0 {
-                                                self.errorAt(offset: self.fnAnchor(f: fj), msg: "a generic function shares its selector (name + labels) with another overload; spec forbids generic/concrete overload on the same selector")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        j += 1
-                    }
-                }
-            }
-            i += 1
         }
     }
 

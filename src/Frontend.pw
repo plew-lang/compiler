@@ -16,10 +16,10 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Callable, UnifyBind, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
-import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, genSiblingPath, pathSeen, moduleIdOfPath }
+export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, EnumDef, Func, Callable, UnifyBind, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
+import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
 import ./Cache with { cacheRoot }
@@ -179,8 +179,24 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable siteOffset=t.siteOffset />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
         return id
+    }
+
+    inout fn recordImportOrigins(imp: ImportAst, targetMod: U64, reExport: Bool) {
+        mut val i: U64 = 0
+        while i < imp.names.count() {
+            val real: Span = imp.nameSpans[i]
+            mut val local: Span = real
+            if i < imp.nameAliasSpans.count() {
+                val alias: Span = imp.nameAliasSpans[i]
+                if alias.end > alias.start { local = alias }
+            }
+            val entry: Bind = <Bind nameStart=local.start nameLen=local.end - local.start nameId=real.end - real.start fieldStart=real.start fieldLen=targetMod />
+            if reExport { self.modules.reExportOrigins.append(entry) }
+            else { self.modules.importOrigins.append(entry) }
+            i += 1
+        }
     }
 }
 
@@ -550,6 +566,25 @@ export fn runFrontend() -> Comp {
             qi += 1
             val moduleId: U64 = ent.fieldStart
             val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
+            mut val hasPkgRoot: Bool = false
+            mut val pri: U64 = 0
+            while pri < c.modules.packageRoots.count() {
+                if c.modules.packageRoots[pri].nameStart == moduleId {
+                    hasPkgRoot = true
+                }
+                pri += 1
+            }
+            if !(hasPkgRoot) {
+                mut val pkgRootModule: U64 = moduleId
+                val pkgRootPath: Array[U8] = packageRootPath(entry: path, stdRoot: stdRoot)
+                if pkgRootPath.count() != 0 {
+                    val foundRoot: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: pkgRootPath)
+                    if foundRoot != 4000000000U64 {
+                        pkgRootModule = foundRoot
+                    }
+                }
+                c.modules.packageRoots.append(<Bind nameStart=moduleId nameLen=0 fieldStart=pkgRootModule fieldLen=0 />)
+            }
             val src: String = readFileBytes(path)
             val sb: Array[U8] = src.bytes()
             if c.arena.bytes.count() > 0 {
@@ -640,6 +675,7 @@ export fn runFrontend() -> Comp {
                                 val tgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: childPath)
                                 if tgt != 4000000000U64 {
                                     c.modules.importEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)
+                                    c.recordImportOrigins(imp: imp, targetMod: tgt, reExport: false)
                                 }
                             }
                         }
@@ -681,6 +717,7 @@ export fn runFrontend() -> Comp {
                             val reTgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: rePath)
                             if reTgt != 4000000000U64 {
                                 c.modules.reExportEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=reTgt />)
+                                c.recordImportOrigins(imp: imp, targetMod: reTgt, reExport: true)
                             }
                         }
                     }
@@ -795,10 +832,8 @@ export fn runFrontend() -> Comp {
     // existential formation (spec/08): `any P` is supported only over a trait with
     // no type args / associated types in this increment (else loud-reject).
     c.checkAnyFormation()
-    // additional spec-fidelity checks (trait/generics audit): reject a generic vs
-    // another same-selector overload, methods on built-in types, and `move fn` on
-    // a copyable receiver.
-    c.checkOverloadCollisions()
+    // Candidate-table registration has already enforced declaration collisions
+    // while lowering. The remaining checks concern non-table semantic rules.
     c.checkDuplicateTraitReqs()
     c.checkImplOnBuiltin()
     c.checkImplOnNewtype()
@@ -811,6 +846,7 @@ export fn runFrontend() -> Comp {
     c.detectImportCycles()
     c.checkUseVisibility()
     c.checkTypeVisibility()
+    c.resolveTypeDeclIdentities()
     c.checkPublicApiClosure()
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to

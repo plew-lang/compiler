@@ -28,7 +28,7 @@ pub impl Comp {
                     pj += 1
                 }
             }
-            self.arena.funcs.append(self.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
+            self.registerDeclaredFunc(f: self.lowerSigToFunc(sig: e.fns[fi], isExtern: true, isCExtern: e.abiC))
             fi += 1
         }
         mut val si: U64 = 0
@@ -177,7 +177,7 @@ pub impl Comp {
                 }
                 mut val xj: U64 = xsB
                 while xj < self.arena.structs.count() {
-                    self.recordExport(nameStart: self.arena.structs[xj].nameStart, nameLen: self.arena.structs[xj].nameLen)
+                    self.recordExportFrom(nameStart: self.arena.structs[xj].nameStart, nameLen: self.arena.structs[xj].nameLen, moduleOffset: self.arena.structs[xj].defOffset)
                     xj += 1
                 }
             }
@@ -187,8 +187,8 @@ pub impl Comp {
                 val fB: U64 = self.arena.funcs.count()
                 self.lowerDecl(d: d)
                 match d.kind {
-                    DeclKind.Struct => { self.recordExport(nameStart: self.arena.structs[sB].nameStart, nameLen: self.arena.structs[sB].nameLen) }
-                    DeclKind.Enum => { self.recordExport(nameStart: self.arena.enums[eB].nameStart, nameLen: self.arena.enums[eB].nameLen) }
+                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structs[sB].nameStart, nameLen: self.arena.structs[sB].nameLen, moduleOffset: self.arena.structs[sB].defOffset) }
+                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enums[eB].nameStart, nameLen: self.arena.enums[eB].nameLen, moduleOffset: self.arena.enums[eB].defOffset) }
                     DeclKind.Func => { self.recordExport(nameStart: self.arena.funcs[fB].nameStart, nameLen: self.arena.funcs[fB].nameLen) }
                 }
             }
@@ -210,7 +210,7 @@ pub impl Comp {
                 val ntB: U64 = self.arena.newtypes.count()
                 self.lowerNewtype(name: name, ty: ty, defOffset: span.start)
                 if self.arena.newtypes.count() > ntB {
-                    self.recordExport(nameStart: self.arena.newtypes[ntB].nameStart, nameLen: self.arena.newtypes[ntB].nameLen)
+                    self.recordExportFrom(nameStart: self.arena.newtypes[ntB].nameStart, nameLen: self.arena.newtypes[ntB].nameLen, moduleOffset: self.arena.newtypes[ntB].defOffset)
                 }
             }
             _ => { self.lowerTopItem(item: inner) }

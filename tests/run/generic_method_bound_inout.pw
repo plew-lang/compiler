@@ -7,7 +7,7 @@ import @Std/Io with { print }
 // (2) a generic method on a *primitive* receiver (`U64.absorb`), and (3) a
 // struct conformance that threads the same `inout H` into each field's call.
 
-trait Sink {
+export trait Sink {
     inout fn put(n: U64)
     fn total() -> U64
 }
@@ -19,7 +19,7 @@ pub impl Bag as Sink {
     fn total() -> U64 { return self.sum }
 }
 
-trait Absorb {
+export trait Absorb {
     fn absorb[S](sink: inout S) where S: Sink
 }
 

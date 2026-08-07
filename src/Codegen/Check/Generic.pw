@@ -351,7 +351,7 @@ pub impl Comp {
                         // generic-receiver method's grounded param types are handled by the
                         // backend; here we check the non-generic-receiver case.
                         if !(self.isGenericInst(ref: rt.ref)) {
-                            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                             if mi != self.arena.funcs.count() {
                                 val mps: Array[Param] = self.arena.funcs[mi].params
                                 mut val mk: U64 = 0

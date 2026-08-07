@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+import / with { get }
+
+fn main() {
+    print(get().n)
+}

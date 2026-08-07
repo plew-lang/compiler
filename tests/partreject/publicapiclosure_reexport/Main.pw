@@ -1,3 +1,0 @@
-import ./Barrel with { Box }
-
-fn main() {}

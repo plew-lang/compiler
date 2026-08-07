@@ -1,0 +1,11 @@
+// One extension name is the finest conformance source selector. Repeating the
+// same subject and target trait inside it is therefore unresolvable (spec/09).
+trait Convert[T] {}
+struct Box { pub val value: I64 }
+
+extension Extra {
+    impl Box as Convert[I64] {}
+    impl Box as Convert[I64] {}
+}
+
+fn main() {}

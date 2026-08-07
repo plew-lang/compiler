@@ -1,0 +1,7 @@
+import ./Lib with { Subject }
+
+extension Extra {
+    pub impl Subject {
+        fn value() -> I64 { return self.n + 1I64 }
+    }
+}

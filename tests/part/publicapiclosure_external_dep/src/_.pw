@@ -1,0 +1,5 @@
+import @Dep with { External }
+
+export fn get() -> External {
+    return <External n=7I64 />
+}

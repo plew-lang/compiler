@@ -1,0 +1,5 @@
+import /Internal with { Token as Lexeme }
+
+export fn parse() -> Lexeme {
+    return <Lexeme n=1I64 />
+}

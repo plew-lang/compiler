@@ -1,0 +1,4 @@
+name = "publicapiclosure-same-name"
+
+[dependencies]
+Dep = { path = "dep" }
