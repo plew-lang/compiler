@@ -615,6 +615,8 @@ pub impl Comp {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
+        mut val typeMatchEntry: U64 = self.decls.callables.count()
+        mut val typeMatch2Entry: U64 = self.decls.callables.count()
         mut val i: U64 = 0
         while i < self.decls.callables.count() {
             val cand: Callable = self.decls.callables[i]
@@ -635,8 +637,10 @@ pub impl Comp {
                                     if self.paramsTypesMatch(params: f.params, args: args) {
                                         if typeMatch == self.arena.funcs.count() {
                                             typeMatch = cand.funcIdx
+                                            typeMatchEntry = i
                                         } else if typeMatch2 == self.arena.funcs.count() {
                                             typeMatch2 = cand.funcIdx
+                                            typeMatch2Entry = i
                                         }
                                     }
                                 }
@@ -650,7 +654,12 @@ pub impl Comp {
         if typeMatch != self.arena.funcs.count() {
             self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             if typeMatch2 != self.arena.funcs.count() {
-                self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: this `#` source provides more than one matching method")
+                if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
+                    if !(self.sameCallableSource(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
+                        self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: this `#` name resolves to multiple declaration sources")
+                    }
+                }
+                self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: this declaration source provides more than one matching method")
             }
             return typeMatch
         }

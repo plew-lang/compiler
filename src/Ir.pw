@@ -787,7 +787,16 @@ export struct Func {
 export struct Callable {
     pub val funcIdx: U64
     pub val sourceKind: U64
+    // Source spelling is retained only to resolve a written `#X`. It is not the
+    // identity used once a candidate has been selected.
     pub val sourceId: U64
+    // Resolved source identity. Extension bundles are globally named, so their
+    // bundle id is their identity; trait sources use the defining trait's real
+    // declaration offset. 0 denotes the bare surface.
+    pub val sourceOwner: U64 = 0
+    // Distinguishes same-spelled traits such as `Sub` and `Sub[Rhs]` before
+    // declaration identity is recovered at a call site.
+    pub val sourceArity: U64 = 0
     // A name is not an extension identity across modules. Keep the defining
     // module so a source-qualified query can reject an ambiguous same-spelled
     // source rather than choosing whichever Func happened to be appended first.

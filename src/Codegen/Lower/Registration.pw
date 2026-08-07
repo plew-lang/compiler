@@ -276,14 +276,21 @@ pub impl Comp {
         }
         mut val sourceKind: U64 = 0U64
         mut val sourceId: U64 = 0U64
+        mut val sourceOwner: U64 = 0U64
+        mut val sourceArity: U64 = 0U64
         if f.extId != 0U64 {
             sourceKind = 1U64
             sourceId = f.extId
+            // An extension name is one bundle across loaded modules (and is
+            // collision-checked as such), so its interned bundle id is stable.
+            sourceOwner = f.extId
         } else if f.srcTraitId != 0U64 {
             sourceKind = 2U64
             sourceId = f.srcTraitId
+            sourceArity = f.provTraitArity
+            sourceOwner = self.traitDeclOffsetByIdArity(traitId: sourceId, arity: sourceArity)
         }
-        self.decls.callables.append(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceModule=self.funcDeclModule(f: f) />)
+        self.decls.callables.append(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity sourceModule=self.funcDeclModule(f: f) />)
     }
 
     inout fn callableIsBare(c: Callable) -> Bool {
@@ -292,6 +299,10 @@ pub impl Comp {
 
     inout fn callableMatchesSource(c: Callable, sourceId: U64) -> Bool {
         return c.sourceKind != 0U64 && c.sourceId == sourceId
+    }
+
+    inout fn sameCallableSource(a: Callable, b: Callable) -> Bool {
+        return a.sourceKind == b.sourceKind && a.sourceOwner == b.sourceOwner && a.sourceArity == b.sourceArity
     }
 
     // Match a call receiver against the declaration's complete receiver pattern.

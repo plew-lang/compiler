@@ -42,6 +42,18 @@ pub impl Comp {
         return 4000000000U64
     }
 
+    inout fn traitDeclOffsetByIdArity(traitId: U64, arity: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.traits.count() {
+            val t: TraitDef = self.decls.traits[i]
+            if t.nameId == traitId && t.typeParams.count() == arity {
+                return t.nameStart
+            }
+            i += 1U64
+        }
+        return 0U64
+    }
+
     inout fn traitArityMatches(actual: U64, expected: U64) -> Bool {
         if expected == 4000000000U64 {
             return true
