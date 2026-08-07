@@ -166,7 +166,10 @@ pub impl Comp {
         return false
     }
 
-    inout fn unifyPatterns(a: U64, aSide: U64, b: U64, bSide: U64, aParams: Array[Bind], bParams: Array[Bind], binds: inout Array[UnifyBind]) -> Bool {
+    // `ignoreTopView` is used only for receiver dispatch. A view chooses the
+    // callable source; it does not replace the receiver's base type pattern.
+    // Nested views remain ordinary type identity and must still match exactly.
+    inout fn unifyPatterns(a: U64, aSide: U64, b: U64, bSide: U64, aParams: Array[Bind], bParams: Array[Bind], binds: inout Array[UnifyBind], ignoreTopView: Bool = false) -> Bool {
         mut val aScope: Array[Bind] = aParams
         if aSide != 0U64 { aScope = bParams }
         mut val bScope: Array[Bind] = aParams
@@ -179,19 +182,19 @@ pub impl Comp {
         if av < aScope.count() {
             val found: U64 = self.unificationBindingIndex(binds: binds, side: aSide, nameId: aScope[av].nameId)
             if found < binds.count() {
-                return self.unifyPatterns(a: binds[found].ref, aSide: binds[found].refSide, b: b, bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)
+                return self.unifyPatterns(a: binds[found].ref, aSide: binds[found].refSide, b: b, bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
             }
             if self.occursInPattern(side: aSide, nameId: aScope[av].nameId, ref: b, refSide: bSide, aParams: aParams, bParams: bParams, binds: binds) { return false }
             binds.append(<UnifyBind side=aSide nameId=aScope[av].nameId ref=b refSide=bSide />)
             return true
         }
         if bv < bScope.count() {
-            return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds)
+            return self.unifyPatterns(a: b, aSide: bSide, b: a, bSide: aSide, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: ignoreTopView)
         }
         if a == 0U64 || b == 0U64 || a >= self.arena.types.count() || b >= self.arena.types.count() { return a == b }
         val ta: TypeRef = self.arena.types[a]
         val tb: TypeRef = self.arena.types[b]
-        if ta.nameId != tb.nameId || ta.viewExtId != tb.viewExtId || ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return false }
+        if ta.nameId != tb.nameId || (!ignoreTopView && ta.viewExtId != tb.viewExtId) || ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return false }
         mut val i: U64 = 0U64
         while i < ta.args.count() {
             if !(self.unifyPatterns(a: ta.args[i], aSide: aSide, b: tb.args[i], bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
@@ -298,12 +301,8 @@ pub impl Comp {
         if f.recvId != recvId { return false }
         if recvRef == 0U64 || f.recvTy == 0U64 { return true }
         if recvRef >= self.arena.types.count() || f.recvTy >= self.arena.types.count() { return true }
-        // A view selects source; it does not rewrite the extension declaration's
-        // subject pattern. Keep the legacy receiver-head match for viewed values
-        // until view stacking receives its own normalized TypePattern.
-        if self.arena.types[recvRef].viewExtId != 0U64 { return true }
         mut val binds: Array[UnifyBind] = []
-        return self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: f.typeParams, bParams: [], binds: inout binds)
+        return self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: f.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
     }
 
     inout fn sameTypeRefListAlphaEq(a: Array[U64], b: Array[U64], aParams: Array[Bind], bParams: Array[Bind]) -> Bool {
