@@ -77,17 +77,20 @@ pub impl Comp {
         if rt.nameLen == 0U64 {
             return
         }
-        if self.isTraitName(start: srcStart, len: srcLen) {
-            if !(self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)) {
-                self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
-            }
-            return
+        // `#X` names a source, not a syntactic category. A trait and an
+        // extension may have the same spelling; accept the view when either
+        // source is applicable and let callable lookup select (or loudly reject
+        // an ambiguity between) the concrete source candidates.
+        val traitNamed: Bool = self.isTraitName(start: srcStart, len: srcLen)
+        val traitApplies: Bool = traitNamed && self.typeConformsTo(typeStart: rt.nameStart, typeLen: rt.nameLen, traitStart: srcStart, traitLen: srcLen)
+        val extNamed: Bool = self.isExtName(start: srcStart, len: srcLen)
+        val extApplies: Bool = extNamed && self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)
+        if traitApplies || extApplies { return }
+        if traitNamed {
+            self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
         }
-        if self.isExtName(start: srcStart, len: srcLen) {
-            if !(self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: rt.nameStart, typeLen: rt.nameLen)) {
-                self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
-            }
-            return
+        if extNamed {
+            self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
         }
         self.errorAt(offset: self.exprOffset(id: recv), msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
     }

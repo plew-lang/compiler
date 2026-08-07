@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+trait Extra {}
+
+struct Box { pub val value: I64 }
+pub impl Box { factory }
+
+extension Extra {
+    pub impl Box {
+        fn doubled() -> I64 { return self.value * 2I64 }
+    }
+}
+
+fn main() {
+    val box: Box = <Box value=6I64 />
+    print(box#Extra.doubled())
+}
