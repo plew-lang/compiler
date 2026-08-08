@@ -578,6 +578,33 @@ pub impl Comp {
         return self.findExtMethodById(recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
     }
 
+    // Resolve a written `#Name` to one semantic source key before method
+    // lookup. The spelling is only an input to this conversion: candidates
+    // thereafter compare kind + declaration/bundle owner + arity.
+    inout fn resolveViewSourceKey(recvStart: U64, recvLen: U64, recvRef: U64, sourceId: U64) -> ViewSource {
+        mut val found: ViewSource = <ViewSource />
+        if self.extAppliesToType(extStart: self.interner.starts[sourceId - 1U64], extLen: self.interner.lens[sourceId - 1U64], typeStart: recvStart, typeLen: recvLen, typeRef: recvRef) {
+            found = <ViewSource kind=1U64 id=sourceId owner=sourceId arity=0U64 />
+        }
+        val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
+        mut val i: U64 = 0U64
+        while i < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[i]
+            if cf.extId == 0U64 && cf.typeId == recvId && cf.traitId == sourceId {
+                if self.conformanceSubjectMatches(cf: cf, typeRef: recvRef) {
+                    val key: ViewSource = <ViewSource kind=2U64 id=sourceId owner=self.traitDeclOffsetByIdArity(traitId: sourceId, arity: cf.traitArgs.count()) arity=cf.traitArgs.count() />
+                    if found.kind == 0U64 {
+                        found = key
+                    } else if !(self.sameViewSource(a: found, b: key)) {
+                        return <ViewSource />
+                    }
+                }
+            }
+            i += 1U64
+        }
+        return found
+    }
+
     // The one resolver for a source-selected method call. A `#` view is
     // additive: after its named source, dispatch may continue through nested
     // views, the receiver's static view, and finally the bare surface. Type
@@ -663,9 +690,15 @@ pub impl Comp {
     }
 
     inout fn findExtMethodById(recvStart: U64, recvLen: U64, srcId: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+        if srcId == 0U64 || srcId > self.interner.count { return self.arena.funcs.count() }
+        val source: ViewSource = self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: srcId)
+        return self.findExtMethodBySource(recvStart: recvStart, recvLen: recvLen, source: source, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
+    }
+
+    inout fn findExtMethodBySource(recvStart: U64, recvLen: U64, source: ViewSource, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+        if source.kind == 0U64 { return self.arena.funcs.count() }
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val qSrcId: U64 = srcId
         val useMod: U64 = self.moduleOf(offset: nameStart)
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
@@ -682,7 +715,7 @@ pub impl Comp {
                     visibleHere = f.providedOwnerMod == useMod
                 }
                 if visibleHere {
-                    if self.callableMatchesSource(c: cand, sourceId: qSrcId) {
+                    if self.callableMatchesSource(c: cand, source: source) {
                         if f.nameId == qNameId {
                             if self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
                                 val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)

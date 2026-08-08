@@ -784,6 +784,14 @@ export struct Func {
 // A callable surface entry. Func is an implementation/body record; this table is
 // the semantic call namespace consumed by every resolver query. sourceKind is
 // 0=bare/inherent, 1=named extension, 2=trait-provided/path surface.
+export struct ViewSource {
+    pub val kind: U64 = 0
+    pub val id: U64 = 0
+    pub val owner: U64 = 0
+    pub val arity: U64 = 0
+}
+pub impl ViewSource { factory }
+
 export struct Callable {
     pub val funcIdx: U64
     pub val sourceKind: U64

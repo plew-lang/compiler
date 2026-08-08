@@ -370,8 +370,16 @@ pub impl Comp {
         return c.sourceKind == 0U64
     }
 
-    inout fn callableMatchesSource(c: Callable, sourceId: U64) -> Bool {
-        return c.sourceKind != 0U64 && c.sourceId == sourceId
+    inout fn callableSourceKey(c: Callable) -> ViewSource {
+        return <ViewSource kind=c.sourceKind id=c.sourceId owner=c.sourceOwner arity=c.sourceArity />
+    }
+
+    inout fn sameViewSource(a: ViewSource, b: ViewSource) -> Bool {
+        return a.kind == b.kind && a.id == b.id && a.owner == b.owner && a.arity == b.arity
+    }
+
+    inout fn callableMatchesSource(c: Callable, source: ViewSource) -> Bool {
+        return source.kind != 0U64 && self.sameViewSource(a: self.callableSourceKey(c: c), b: source)
     }
 
     inout fn sameCallableSource(a: Callable, b: Callable) -> Bool {
