@@ -1085,6 +1085,9 @@ export struct TypeCache {
     pub mut val start: Array[U64] = []
     pub mut val len: Array[U64] = []
     pub mut val ref: Array[U64] = []
+    // `#Source` is part of a type's static identity. It must survive the
+    // typed-AST cache just like the structured TypeRef does.
+    pub mut val viewId: Array[U64] = []
     pub mut val intCtx: Array[U64] = []
     // resolved free-function callee per call-expr id (the `findFunc` result), the
     // first step of pre-resolving the IR so the backend reads decisions instead of

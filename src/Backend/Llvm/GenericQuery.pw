@@ -70,6 +70,8 @@ pub impl LlvmCtx {
         if ref >= c.arena.types.count() {
             return c.arena.structs.count()
         }
+        val runtimeRef: U64 = c.runtimeTypeRef(ref: ref)
+        if runtimeRef != ref { return self.structIdxOfRef(c: inout c, ref: runtimeRef) }
         val t: TypeRef = c.arena.types[ref]
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             return c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
@@ -99,6 +101,18 @@ pub impl LlvmCtx {
     // (The `inCollection` guard is vestigial — exprStructIdx is only reachable during emission,
     // where inCollection is always false; kept as a cheap invariant marker.)
     inout fn exprStructIdx(c: inout Comp, id: U64) -> U64 {
+        // Method bodies already carry their concrete receiver instance in the
+        // body cursor. Prefer it for `self`: re-deriving an identifier's type can
+        // lose a view-erased generic instance and make field lookup disagree with
+        // the method ABI.
+        match c.arena.exprs[id] {
+            Expr.Ident(start: val selfStart, len: val selfLen) => {
+                if rangeEquals(bytes: c.arena.bytes, start: selfStart, len: selfLen, kw: "self") && c.cur.selfRef != 0U64 {
+                    return self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: c.cur.selfRef))
+                }
+            }
+            _ => {}
+        }
         if !(c.inCollection) {
             val nw: U64 = self.structIdxOfRef(c: inout c, ref: self.exprTypeRef(c: inout c, id: id))
             if nw < c.arena.structs.count() {

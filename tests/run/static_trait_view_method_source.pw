@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+trait Celsius {}
+pub impl Celsius { fn temp() -> I64 { return 100I64 } }
+trait Fahrenheit {}
+pub impl Fahrenheit { fn temp() -> I64 { return 212I64 } }
+
+struct Reading { pub val raw: I64 }
+pub impl Reading { factory }
+pub impl Reading as Celsius {}
+pub impl Reading as Fahrenheit {}
+
+fn main() {
+    val reading: Reading = <Reading raw=0I64 />
+    val selected: Reading#Celsius = reading#Celsius
+    print(selected.temp())
+}

@@ -663,7 +663,7 @@ pub impl Comp {
                 // so resolution falls through X → the receiver's remaining view chain →
                 // bare (which also covers `#P` naming a trait: its witnesses/provided
                 // copies live on the type and resolve bare).
-                val mfi: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mfi: U64 = self.resolvedCallee(id: id)
                 if mfi < self.arena.funcs.count() {
                     val mf: Func = self.arena.funcs[mfi]
                     if mf.hasRet {
@@ -795,15 +795,7 @@ pub impl Comp {
                             }
                         }
                     }
-                    mut val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
-                    // a viewed binding (`val sa = s#A; sa.a()`): a bare call resolves
-                    // through the value's static view too (additive, spec/09) — the
-                    // extension's method is reachable without re-viewing.
-                    if mi == self.arena.funcs.count() && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
-                        if self.arena.types[rt.ref].viewExtId != 0U64 {
-                            mi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
-                        }
-                    }
+                    val mi: U64 = self.resolvedCallee(id: id)
                     if mi == self.arena.funcs.count() {
                         // not a method — but it may be a closure-typed FIELD called
                         // indirectly (`h.run()`); recover the fn type's return.

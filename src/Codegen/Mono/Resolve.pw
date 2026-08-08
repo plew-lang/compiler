@@ -4,6 +4,16 @@
 // Is `ref` a concrete generic *enum* instantiation specifically?
 
 pub impl Comp {
+    // A `#` view selects a callable source but never changes a value's runtime
+    // representation. Every layout / receiver-instance consumer canonicalizes
+    // through this one boundary; nested argument views remain type identity.
+    inout fn runtimeTypeRef(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val t: TypeRef = self.arena.types[ref]
+        if t.viewExtId == 0U64 { return ref }
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+    }
+
     inout fn plainRefOfProjection(t: TypeRef) -> U64 {
         return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable />)
     }

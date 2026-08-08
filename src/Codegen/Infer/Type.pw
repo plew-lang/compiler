@@ -326,7 +326,7 @@ pub impl Comp {
                 // width-less int form, so this matches exprType.)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 if rt.kind == 2 {
-                    val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+                    val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                     if mi != self.arena.funcs.count() {
                         return !self.arena.funcs[mi].hasRet
                     }

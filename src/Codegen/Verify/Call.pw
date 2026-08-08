@@ -67,6 +67,21 @@ pub impl Comp {
         }
     }
 
+    inout fn checkResolvedMethodArgs(mf: U64, args: Array[Arg]) {
+        if mf >= self.arena.funcs.count() { return }
+        val cf: Func = self.arena.funcs[mf]
+        if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
+        mut val ai: U64 = 0U64
+        while ai < args.count() {
+            val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
+            if pIdx < cf.params.count() {
+                self.checkArgInoutMode(p: cf.params[pIdx], arg: args[ai])
+            }
+            ai += 1U64
+        }
+        self.checkResolvedMethodArgCategories(mf: mf, args: args)
+    }
+
     inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
         val rt: TypeInfo = self.typeOf(id: recv)
         if rt.kind != 2 {

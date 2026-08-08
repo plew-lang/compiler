@@ -380,10 +380,10 @@ pub impl LlvmCtx {
                 return self.genLlvmCall(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                return self.genLlvmMethod(c: inout c, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                return self.genLlvmMethod(c: inout c, callId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-                return self.genLlvmExtMethod(c: inout c, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                return self.genLlvmExtMethod(c: inout c, callId: id, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
                 // a value re-view is zero-cost: the value is unchanged (the view only

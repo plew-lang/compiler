@@ -339,7 +339,7 @@ pub impl Comp {
             return
         }
         val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
-        val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+        val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         if mi == self.arena.funcs.count() {
             return
         }

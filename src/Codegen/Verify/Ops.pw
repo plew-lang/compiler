@@ -395,7 +395,7 @@ pub impl Comp {
         if rt.kind == 2 {
             // Resolve once, then validate the resolved callable. `#` methods
             // use the same final validation entry point below.
-            val mi: U64 = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+            val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mi, args: args)
         }
         // a mutating built-in array method (`append`) on an immutable / non-place array.

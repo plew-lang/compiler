@@ -166,7 +166,11 @@ pub impl LlvmCtx {
         // method-own args inferred at the call (`fold[B]`: receiver [I,F,B] + own [B]).
         // A still-mismatched count means own params we couldn't infer — leave undeclared.
         val mf: Func = c.arena.funcs[mfi]
-        if mf.typeParams.count() != c.arena.types[instRef].args.count() + ownArgs.count() {
+        // A concrete impl on a generic receiver (`impl Box[I64]`) has no
+        // binders of its own, yet its self ABI is still the concrete Box[I64]
+        // instance. It belongs in the same receiver-instance table; only a
+        // non-empty binder list must account for the receiver and own args.
+        if mf.typeParams.count() != 0U64 && mf.typeParams.count() != c.arena.types[instRef].args.count() + ownArgs.count() {
             return self.genMethK.count()
         }
         self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs)

@@ -88,15 +88,18 @@ pub impl Comp {
                 self.verifyMethodVis(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 self.verifyRecv(recv: recv)
                 self.verifyArgs(args: args)
-                self.checkMethodArgCategories(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mf: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                self.recordResolvedMethodCallee(id: id, callee: mf)
+                self.checkResolvedMethodArgs(mf: mf, args: args)
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
                 self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                self.recordResolvedMethodCallee(id: id, callee: mf)
                 if rt.nameLen != 0U64 {
                     self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
-                    self.checkResolvedMethodArgCategories(mf: mf, args: args)
+                    self.checkResolvedMethodArgs(mf: mf, args: args)
                 }
                 self.verifyExpr(id: recv)
                 self.verifyArgs(args: args)

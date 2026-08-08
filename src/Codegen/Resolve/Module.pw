@@ -610,7 +610,7 @@ pub impl Comp {
     // views, the receiver's static view, and finally the bare surface. Type
     // recovery, verifier, and backend must consume this exact final Func.
     inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-        val rt: TypeInfo = self.exprType(id: recv)
+        val rt: TypeInfo = self.typeOf(id: recv)
         if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.funcs.count()
         }
@@ -640,6 +640,48 @@ pub impl Comp {
                     mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                 }
             }
+        }
+        if mfi >= self.arena.funcs.count() {
+            mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+        }
+        return mfi
+    }
+
+    // Ordinary syntax still carries a view when its receiver was declared as
+    // `T#Source`. Resolve that static source before the additive bare surface;
+    // this is the same final-callable contract as explicit `value#Source.m()`.
+    inout fn resolveMethodFinal(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+        val rt: TypeInfo = self.exprType(id: recv)
+        if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
+            return self.arena.funcs.count()
+        }
+        mut val mfi: U64 = self.arena.funcs.count()
+        mut val viewId: U64 = rt.viewExtId
+        if rt.ref != 0U64 && rt.ref < self.arena.types.count() {
+            if viewId == 0U64 { viewId = self.arena.types[rt.ref].viewExtId }
+        }
+        // An identifier's declared view is authoritative even when an earlier
+        // context-free recovery filled its expression cache before this body's
+        // locals were installed. Keep this repair at the resolver boundary rather
+        // than teaching each caller a separate static-view special case.
+        if viewId == 0U64 {
+            match self.arena.exprs[recv] {
+                Expr.Ident(start: val localStart, len: val localLen) => {
+                    val localId: U64 = intern(c: inout self, start: localStart, len: localLen)
+                    mut val li: U64 = self.cur.locals.count()
+                    while li > 0U64 && viewId == 0U64 {
+                        li -= 1U64
+                        val lo: Local = self.cur.locals[li]
+                        if lo.nameId == localId && lo.ty != 0U64 && lo.ty < self.arena.types.count() {
+                            viewId = self.arena.types[lo.ty].viewExtId
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if viewId != 0U64 {
+            mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: viewId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
         }
         if mfi >= self.arena.funcs.count() {
             mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)

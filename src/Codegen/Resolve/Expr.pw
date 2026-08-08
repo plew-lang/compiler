@@ -12,6 +12,7 @@ pub impl Comp {
             self.typeCache.start.append(0)
             self.typeCache.len.append(0)
             self.typeCache.ref.append(0)
+            self.typeCache.viewId.append(0)
             self.typeCache.intCtx.append(0)
             self.typeCache.callee.append(calleeUnfilled())
             self.typeCache.identBind.append(identUnfilledCode())
@@ -23,15 +24,9 @@ pub impl Comp {
 
 pub impl Comp {
 
-    // Pre-resolved free-function callee for the call expression `id`: the `findFunc`
-    // result (`funcs.count()` if it resolves to no declared function), memoized in
-    // `typeCache.callee`. The single choke point through which every pass reads call
-    // resolution — the first pass to ask fills the slot, the rest read it, so the
-    // backend stops re-running overload resolution during emission. The result is
-    // stable per call-expr id (overloads can't be selected via opaque type-parameter
-    // args, spec/06), so the memo is sound and never cleared. A non-call id (or an id
-    // past the table, i.e. a node synthesized after buildExprTyTable) resolves directly
-    // without caching.
+    // Pre-resolved final callable for Call / Method / ExtMethod expression `id`.
+    // The AST node owns the decision, including a `#` source key; verification,
+    // type recovery and codegen therefore cannot drift by looking it up again.
     inout fn resolvedCallee(id: U64) -> U64 {
         if id < self.typeCache.callee.count() {
             if self.typeCache.callee[id] != calleeUnfilled() {
@@ -43,12 +38,32 @@ pub impl Comp {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 r = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
             }
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                r = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+            }
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                r = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            }
             _ => {}
         }
-        if id < self.typeCache.callee.count() {
-            self.typeCache.callee.set(i: id, value: r)
+        // A free call is lexical and stable immediately. A method's receiver may
+        // need the body-local environment, so only verification records its final
+        // decision after that environment has been installed.
+        match self.arena.exprs[id] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                if id < self.typeCache.callee.count() {
+                    self.typeCache.callee.set(i: id, value: r)
+                }
+            }
+            _ => {}
         }
         return r
+    }
+
+    inout fn recordResolvedMethodCallee(id: U64, callee: U64) {
+        if id < self.typeCache.callee.count() {
+            self.typeCache.callee.set(i: id, value: callee)
+        }
     }
 }
 
@@ -124,9 +139,10 @@ pub impl Comp {
                     self.typeCache.start[id] = t.nameStart
                     self.typeCache.len[id] = t.nameLen
                     self.typeCache.ref[id] = t.ref
+                    self.typeCache.viewId[id] = t.viewExtId
                 }
             } else {
-                t = <TypeInfo kind=self.typeCache.kind[id] nameStart=self.typeCache.start[id] nameLen=self.typeCache.len[id] ref=self.typeCache.ref[id] />
+                t = <TypeInfo kind=self.typeCache.kind[id] nameStart=self.typeCache.start[id] nameLen=self.typeCache.len[id] ref=self.typeCache.ref[id] viewExtId=self.typeCache.viewId[id] />
             }
         } else {
             t = self.exprType(id: id)

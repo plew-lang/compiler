@@ -169,7 +169,7 @@ pub impl Comp {
                     mrL = mar.nameLen
                 }
                 if mrL > 0U64 {
-                    val mmi: U64 = self.findMethod(recvStart: mrS, recvLen: mrL, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val mmi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                     if mmi < self.arena.funcs.count() {
                         val mps: Array[Param] = self.arena.funcs[mmi].params
                         mut val mk: U64 = 0
