@@ -49,6 +49,10 @@ pub impl LlvmCtx {
                 return self.llvmScalarTy(c: inout c, tyStart: typeStart, tyLen: typeLen)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                val resolved: U64 = c.resolvedCallee(id: id)
+                if resolved < c.arena.funcs.count() {
+                    return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[resolved])
+                }
                 // an `any P` receiver: the result LLVM type is the requirement's return,
                 // grounded under the existential's bindings.
                 val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
@@ -68,6 +72,10 @@ pub impl LlvmCtx {
                 return self.i64ty
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                val resolved: U64 = c.resolvedCallee(id: id)
+                if resolved < c.arena.funcs.count() {
+                    return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[resolved])
+                }
                 val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
                 if rsidx < c.arena.structs.count() {
                     val mfi: U64 = c.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)

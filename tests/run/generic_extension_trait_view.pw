@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+
+extension Extra {
+    pub impl[T] Box[T] {
+        fn value() -> T { return self.value }
+    }
+}
+
+fn main() {
+    val box: Box[I64] = <Box[I64] value=42I64 />
+    val viewed: Box[I64]#Extra = box#Extra
+    print(viewed.value())
+    val direct: I64 = box#Extra.value()
+    print(direct)
+}

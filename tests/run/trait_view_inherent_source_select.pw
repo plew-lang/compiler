@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+trait Pick {}
+pub impl Pick { fn pick() -> I64 { return 77I64 } }
+
+struct Sample {}
+pub impl Sample {
+    factory
+    fn pick() -> Bool { return false }
+}
+pub impl Sample as Pick {}
+
+fn main() {
+    val sample: Sample = <Sample />
+    print(sample#Pick.pick())
+}

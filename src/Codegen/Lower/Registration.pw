@@ -351,6 +351,12 @@ pub impl Comp {
         mut val sourceId: U64 = 0U64
         mut val sourceOwner: U64 = 0U64
         mut val sourceArity: U64 = 0U64
+        mut val traitId: U64 = f.srcTraitId
+        mut val traitOwner: U64 = 0U64
+        mut val traitArity: U64 = f.provTraitArity
+        if traitId != 0U64 {
+            traitOwner = self.traitDeclOffsetByIdArity(traitId: traitId, arity: traitArity)
+        }
         if f.extId != 0U64 {
             sourceKind = 1U64
             sourceId = f.extId
@@ -363,7 +369,7 @@ pub impl Comp {
             sourceArity = f.provTraitArity
             sourceOwner = self.traitDeclOffsetByIdArity(traitId: sourceId, arity: sourceArity)
         }
-        self.decls.callables.append(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity sourceModule=self.funcDeclModule(f: f) />)
+        self.decls.callables.append(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=self.funcDeclModule(f: f) />)
     }
 
     inout fn callableIsBare(c: Callable) -> Bool {
@@ -380,6 +386,14 @@ pub impl Comp {
 
     inout fn callableMatchesSource(c: Callable, source: ViewSource) -> Bool {
         return source.kind != 0U64 && self.sameViewSource(a: self.callableSourceKey(c: c), b: source)
+    }
+
+    inout fn callableTraitKey(c: Callable) -> ViewSource {
+        return <ViewSource kind=2U64 id=c.traitId owner=c.traitOwner arity=c.traitArity />
+    }
+
+    inout fn callableMatchesTrait(c: Callable, source: ViewSource) -> Bool {
+        return c.traitId != 0U64 && source.kind == 2U64 && self.sameViewSource(a: self.callableTraitKey(c: c), b: source)
     }
 
     inout fn sameCallableSource(a: Callable, b: Callable) -> Bool {

@@ -805,6 +805,13 @@ export struct Callable {
     // Distinguishes same-spelled traits such as `Sub` and `Sub[Rhs]` before
     // declaration identity is recovered at a call site.
     pub val sourceArity: U64 = 0
+    // Trait provenance is independent from the source that made a callable
+    // visible.  In particular, `extension E { impl A { ... } }` has source E
+    // and trait provenance A, so `value#E#A.method()` can select it without
+    // making the order of `#E` / `#A` meaningful.
+    pub val traitId: U64 = 0
+    pub val traitOwner: U64 = 0
+    pub val traitArity: U64 = 0
     // A name is not an extension identity across modules. Keep the defining
     // module so a source-qualified query can reject an ambiguous same-spelled
     // source rather than choosing whichever Func happened to be appended first.

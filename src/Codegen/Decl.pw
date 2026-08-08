@@ -457,13 +457,12 @@ pub impl Comp {
                     // operator `Sub[Rhs]`). Without the arity gate a provided method on the
                     // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
                     if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() {
-                        // shadowing/collision (spec/08): an inherent method of the same
-                        // name on the type wins (skip the provided copy). Two conformed
-                        // traits providing the same name both copy here, each tagged with
+                        // Two conformed traits providing the same name both copy here, each tagged with
                         // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
                         // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
-                        // the source trait (findExtMethod). spec/08,09.
-                        if !(self.methodInRange(lo: 0, hi: nFuncs, recvStart: cf.typeStart, recvLen: cf.typeLen, nameStart: f.nameStart, nameLen: f.nameLen)) {
+                        // the source trait (findExtMethod). An inherent same-name method is
+                        // the bare default, but must not erase this explicit `#P` candidate.
+                        // spec/08,09.
                             // a provided method copied onto a *generic* conformer inherits
                             // the conformer's type params (prepended), so methodMatchesInst
                             // emits it per receiver instantiation (`MapIter[Counter,…]`) like
@@ -480,7 +479,6 @@ pub impl Comp {
                             val copyIdx: U64 = self.arena.funcs.count()
                             self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId providedOwnerMod=providedOwnerMod extId=f.extId provTraitArity=f.provTraitArity defOffset=f.defOffset />)
                             self.registerCallable(funcIdx: copyIdx)
-                        }
                     }
                 }
                 fi += 1

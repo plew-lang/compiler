@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+struct Sample {}
+pub impl Sample {
+    factory
+    fn pick() -> Bool { return false }
+}
+
+extension Extra {
+    pub impl Sample {
+        fn pick() -> I64 { return 77I64 }
+    }
+}
+
+fn main() {
+    val plain: Sample = <Sample />
+    val selected: Sample#Extra = plain#Extra
+    val values = [selected.pick()]
+    print(values[0U64])
+}

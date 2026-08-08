@@ -129,6 +129,67 @@ pub impl Comp {
         return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
     }
 
+    // Ground a final method callable through its receiver instance.  `a.m()` and
+    // `a#Source.m()` have already converged to the same `Func`; they must therefore
+    // derive `T` in `impl[T] Box[T]` from the same receiver TypeRef as well.  Keeping
+    // this here (rather than in either syntax arm) makes source qualification a pure
+    // selection concern, never a second generic-inference mechanism.
+    inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: Array[Arg]) -> U64 {
+        if f.retTy == 0U64 || !(self.isGenericInst(ref: recvTy.ref)) {
+            return 0U64
+        }
+        val inst: TypeRef = self.arena.types[recvTy.ref]
+        mut val rcount: U64 = 0U64
+        val gsi: U64 = self.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
+        if gsi < self.arena.structs.count() {
+            rcount = self.arena.structs[gsi].typeParams.count()
+        } else {
+            val gei: U64 = self.genericEnumIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
+            if gei >= self.arena.enums.count() {
+                return 0U64
+            }
+            rcount = self.arena.enums[gei].typeParams.count()
+        }
+        if rcount == 0U64 || f.typeParams.count() < rcount || inst.args.count() < rcount {
+            return 0U64
+        }
+        mut val fullArgs: Array[U64] = []
+        mut val ri: U64 = 0U64
+        while ri < rcount {
+            fullArgs.append(inst.args[ri])
+            ri += 1U64
+        }
+        if f.typeParams.count() > rcount {
+            // Infer only method-owned parameters. The receiver-owned prefix is
+            // supplied by `inst`, including for an argless `box#E.value()` call.
+            val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
+            mut val oi: U64 = rcount
+            while oi < inferred.count() {
+                fullArgs.append(inferred[oi])
+                oi += 1U64
+            }
+        }
+        if fullArgs.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: fullArgs)) {
+            return 0U64
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedSelf: U64 = self.cur.selfRef
+        val savedItem: U64 = self.cur.itemRef
+        self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: recvTy.ref)
+        self.cur.typeParams = f.typeParams
+        self.cur.typeArgs = fullArgs
+        val grounded: U64 = self.groundTypeRef(ref: f.retTy)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedSelf
+        self.cur.itemRef = savedItem
+        if grounded != 0U64 && self.tyRefIsGround(ref: grounded) {
+            return grounded
+        }
+        return 0U64
+    }
+
     inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {
         if !(f.hasRet) {
             return scalarInfo()
@@ -667,6 +728,10 @@ pub impl Comp {
                 if mfi < self.arena.funcs.count() {
                     val mf: Func = self.arena.funcs[mfi]
                     if mf.hasRet {
+                        val grounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: self.exprType(id: recv), args: args)
+                        if grounded != 0U64 {
+                            return self.typeInfoOfRef(ref: grounded)
+                        }
                         return self.declaredRetInfo(f: mf)
                     }
                 }
@@ -803,66 +868,9 @@ pub impl Comp {
                     }
                     val mf: Func = self.arena.funcs[mi]
                     if mf.hasRet {
-                        // a generic method (`impl[T] Box[T] { fn get() -> T }`) returning
-                        // a type parameter: substitute it with the receiver's concrete
-                        // instantiation argument (else `box.get()` types as the bare `T`).
-                        if self.isGenericInst(ref: rt.ref) {
-                            val gt: TypeRef = self.arena.types[rt.ref]
-                            val gsi: U64 = self.genericStructIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
-                            if gsi < self.arena.structs.count() {
-                                // ground the return type through the receiver's instantiation
-                                // AND the method's own type params (a combinator on a generic
-                                // receiver: `filterIter.map(f) -> MapIter[Self, …, B]`). The
-                                // env is the receiver's args (first rcount) plus the method-own
-                                // args inferred from the call; Self/Item resolve to the receiver
-                                // inst and its element (else the chain's loop var types as the
-                                // literal `Item`/`B`).
-                                val gSavedSelf: U64 = self.cur.selfRef
-                                val gSavedItem: U64 = self.cur.itemRef
-                                self.setSelfItemEnv(recvStart: gt.nameStart, recvLen: gt.nameLen, recvInstRef: rt.ref)
-                                val gSavedP: Array[Bind] = self.cur.typeParams
-                                val gSavedA: Array[U64] = self.cur.typeArgs
-                                val rcount: U64 = self.arena.structs[gsi].typeParams.count()
-                                mut val gfa: Array[U64] = []
-                                mut val gri: U64 = 0
-                                while gri < rcount {
-                                    if gri < gt.args.count() {
-                                        gfa.append(gt.args[gri])
-                                    }
-                                    gri += 1
-                                }
-                                if mf.typeParams.count() > rcount {
-                                    val ginf: Array[U64] = self.inferFnArgs(f: mf, args: args)
-                                    mut val goi: U64 = rcount
-                                    while goi < ginf.count() {
-                                        gfa.append(ginf[goi])
-                                        goi += 1
-                                    }
-                                }
-                                self.cur.typeParams = mf.typeParams
-                                self.cur.typeArgs = gfa
-                                val gr: U64 = self.groundTypeRef(ref: mf.retTy)
-                                self.cur.typeParams = gSavedP
-                                self.cur.typeArgs = gSavedA
-                                self.cur.selfRef = gSavedSelf
-                                self.cur.itemRef = gSavedItem
-                                return self.typeInfoOfRef(ref: gr)
-                            }
-                            val gei: U64 = self.genericEnumIndex(nameStart: gt.nameStart, nameLen: gt.nameLen)
-                            if gei < self.arena.enums.count() {
-                                // FULL grounding under the receiver's env (substTypeInfo only
-                                // substitutes a bare param / an array element, so a compound
-                                // return `Optional[T]` on `Loaded[Box].chain()` stayed the
-                                // raw template and poisoned every downstream consumer).
-                                val eSavedP: Array[Bind] = self.cur.typeParams
-                                val eSavedA: Array[U64] = self.cur.typeArgs
-                                self.cur.typeParams = self.arena.enums[gei].typeParams
-                                self.cur.typeArgs = gt.args
-                                val ger: U64 = self.groundTypeRef(ref: mf.retTy)
-                                self.cur.typeParams = eSavedP
-                                self.cur.typeArgs = eSavedA
-                                return self.typeInfoOfRef(ref: ger)
-                            }
+                        val receiverGrounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: rt, args: args)
+                        if receiverGrounded != 0U64 {
+                            return self.typeInfoOfRef(ref: receiverGrounded)
                         }
                         // a non-generic receiver whose method returns a generic instantiation
                         // (`Counter.next() -> Optional[I64]`): keep the full ref so the caller

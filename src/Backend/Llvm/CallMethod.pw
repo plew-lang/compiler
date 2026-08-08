@@ -57,6 +57,11 @@ pub impl LlvmCtx {
     }
 
     inout fn genLlvmExtMethod(c: inout Comp, callId: U64, recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+        // Source qualification chooses the final callable in the frontend cache;
+        // emission is otherwise exactly an ordinary method call.  Reuse that one
+        // path so direct `value#E.m()` cannot lose generic receiver information that
+        // a statically-viewed `value: T#E; value.m()` retains.
+        return self.genLlvmMethod(c: inout c, callId: callId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
         mut val recvNameStart: U64 = 0
         mut val recvNameLen: U64 = 0
         val mfi: U64 = self.resolveExtMethodMfi(c: inout c, callId: callId, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvNameStart: inout recvNameStart, recvNameLen: inout recvNameLen, report: true)
@@ -311,7 +316,16 @@ pub impl LlvmCtx {
             // the reference-cell intrinsics, lowered by name in genLlvmCall).
             if c.isGenericInst(ref: recvRef) || c.isStrongRefInst(ref: recvRef) || c.isWeakRefLikeInst(ref: recvRef) {
                 val grt: TypeRef = c.arena.types[recvRef]
-                val gmfi: U64 = c.findMethod(recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                // The verifier has already recorded the source-aware decision for this
+                // exact AST call.  Consume that table directly: a bare re-query drops a
+                // static `#Ext` / `#Trait` view before generic emission.
+                mut val gmfi: U64 = c.arena.funcs.count()
+                if callId < c.typeCache.callee.count() {
+                    gmfi = c.typeCache.callee[callId]
+                }
+                if gmfi >= c.arena.funcs.count() {
+                    gmfi = c.findMethod(recvStart: grt.nameStart, recvLen: grt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
                 if gmfi < c.arena.funcs.count() {
                     // a provided terminal with method-own type params (`fold[B]` on a lazy
                     // adapter receiver): infer the own args from the call so the slot is

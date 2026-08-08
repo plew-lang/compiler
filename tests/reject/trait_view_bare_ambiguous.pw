@@ -1,0 +1,14 @@
+trait A {}
+pub impl A { fn same() -> I64 { return 1I64 } }
+trait B {}
+pub impl B { fn same() -> I64 { return 2I64 } }
+
+struct Sample {}
+pub impl Sample { factory }
+pub impl Sample as A {}
+pub impl Sample as B {}
+
+fn main() {
+    val sample: Sample = <Sample />
+    sample.same()
+}
