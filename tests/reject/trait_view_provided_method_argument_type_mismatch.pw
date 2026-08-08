@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+
+trait P {}
+pub impl P {
+    fn take(value: I64) -> I64 { return value }
+}
+
+struct S {}
+pub impl S { factory }
+pub impl S as P {}
+
+fn main() {
+    val value: S = <S />
+    print(value#P.take(value: "bad"))
+}

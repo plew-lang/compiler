@@ -55,7 +55,7 @@ pub impl Comp {
         // this conservative non-generic category checker can compare values.
         // Preserve the ordinary-method boundary; this helper only removes the
         // source-selection split, it does not invent a second generic checker.
-        if cf.typeParams.count() > 0U64 || cf.isProvided { return }
+        if cf.typeParams.count() > 0U64 { return }
         if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
         mut val ai: U64 = 0U64
         while ai < args.count() {

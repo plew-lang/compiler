@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+import ./Lib with { Box }
+
+extension Extra {
+    pub impl Box {
+        fn marker() -> I64 { return self.value }
+    }
+}
+
+fn main() {
+    val box: Box = <Box value=7I64 />
+    print(box#Extra.secret())
+}

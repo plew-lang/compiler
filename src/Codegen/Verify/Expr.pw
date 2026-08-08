@@ -93,8 +93,8 @@ pub impl Comp {
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
                 self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
+                val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if rt.nameLen != 0U64 {
-                    val mf: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
                     self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)
                     self.checkResolvedMethodArgCategories(mf: mf, args: args)
                 }

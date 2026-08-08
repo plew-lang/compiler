@@ -578,6 +578,48 @@ pub impl Comp {
         return self.findExtMethodById(recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
     }
 
+    // The one resolver for a source-selected method call. A `#` view is
+    // additive: after its named source, dispatch may continue through nested
+    // views, the receiver's static view, and finally the bare surface. Type
+    // recovery, verifier, and backend must consume this exact final Func.
+    inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+        val rt: TypeInfo = self.exprType(id: recv)
+        if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
+            return self.arena.funcs.count()
+        }
+        mut val mfi: U64 = self.findExtMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+        if mfi >= self.arena.funcs.count() {
+            // Re-view nodes contribute their sources in nearest-first order;
+            // a strip deliberately ends this additive chain.
+            mut val cvr: U64 = recv
+            mut val go: Bool = true
+            while go {
+                match self.arena.exprs[cvr] {
+                    Expr.ExtView(recv: val vr, srcStart: val vs, srcLen: val vl, strip: val vstrip) => {
+                        if vstrip {
+                            go = false
+                        } else {
+                            if mfi >= self.arena.funcs.count() {
+                                mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: intern(c: inout self, start: vs, len: vl), nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+                            }
+                            cvr = vr
+                        }
+                    }
+                    _ => { go = false }
+                }
+            }
+            if mfi >= self.arena.funcs.count() && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
+                if self.arena.types[rt.ref].viewExtId != 0U64 {
+                    mfi = self.findExtMethodById(recvStart: rt.nameStart, recvLen: rt.nameLen, srcId: self.arena.types[rt.ref].viewExtId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+                }
+            }
+        }
+        if mfi >= self.arena.funcs.count() {
+            mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+        }
+        return mfi
+    }
+
     inout fn extMethodNameExists(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bool {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
