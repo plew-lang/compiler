@@ -136,12 +136,22 @@ pub impl Comp {
         return binds.count()
     }
 
+    // `viewExtId` is only the one-selector compatibility mirror.  Every
+    // registration rule must ask this shared question so `T#E#P` cannot be
+    // mistaken for bare `T` merely because its normal-form source set lives
+    // in `viewIds`.
+    inout fn hasTopLevelView(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.types.count() { return false }
+        val t: TypeRef = self.arena.types[ref]
+        return t.viewExtId != 0U64 || t.viewIds.count() != 0U64
+    }
+
     // A type parameter is a free unification variable only in its bare form;
     // `T#P` / projections retain their structural view/projection constraints.
     inout fn plainBinder(ref: U64, params: Array[Bind]) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return params.count() }
         val t: TypeRef = self.arena.types[ref]
-        if t.viewExtId != 0U64 || t.assocTraitId != 0U64 || t.args.count() != 0U64 { return params.count() }
+        if self.hasTopLevelView(ref: ref) || t.assocTraitId != 0U64 || t.args.count() != 0U64 { return params.count() }
         return self.binderIndex(params: params, nameId: t.nameId)
     }
 

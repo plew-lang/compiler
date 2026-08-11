@@ -84,6 +84,14 @@ pub impl LlvmCtx {
                 return self.exprLlvmType(c: inout c, id: recv)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
+                // The final callable result is already grounded by Mono.  Do
+                // not recover a generic free/associated return from the
+                // backend's ambient environment: that is a different source
+                // of truth from the call LLVM will emit.
+                val resultRef: U64 = self.exprTypeRef(c: inout c, id: id)
+                if resultRef != 0U64 {
+                    return self.llvmTypeOfRef(c: inout c, ref: resultRef)
+                }
                 val cfi: U64 = c.bodyCallee(exprId: id)
                 if cfi < c.arena.funcs.count() {
                     return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[cfi])
@@ -91,12 +99,23 @@ pub impl LlvmCtx {
                 return self.i64ty
             }
             Expr.Binary(val op, val lhs, rhs: _) => {
+                // Operators are associated calls. `Add[Rhs].Output` need not
+                // be the lhs type, so using lhs here can allocate an array
+                // with a layout different from the selected witness result.
+                val resultRef: U64 = self.exprTypeRef(c: inout c, id: id)
+                if resultRef != 0U64 {
+                    return self.llvmTypeOfRef(c: inout c, ref: resultRef)
+                }
                 if op == opEq() || op == opNe() || op == opLt() || op == opLe() || op == opGt() || op == opGe() {
                     return self.i1ty
                 }
                 return self.exprLlvmType(c: inout c, id: lhs)
             }
             Expr.Unary(val op, val operand) => {
+                val resultRef: U64 = self.exprTypeRef(c: inout c, id: id)
+                if resultRef != 0U64 {
+                    return self.llvmTypeOfRef(c: inout c, ref: resultRef)
+                }
                 if op == opNot() { return self.i1ty }
                 return self.exprLlvmType(c: inout c, id: operand)
             }
