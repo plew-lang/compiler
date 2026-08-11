@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+struct Pair { pub val first: I64  pub val second: I64 }
+pub impl Pair { factory }
+
+fn main() {
+    val makePair: fn() -> Pair = fn() -> Pair { return <Pair first=7 second=9 /> }
+    val values: Array[Pair] = [makePair(), makePair()]
+    print(values[0U64].first)
+    print(values[1U64].second)
+}

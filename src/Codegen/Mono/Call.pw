@@ -1125,6 +1125,10 @@ pub impl Comp {
                     val fnRef: U64 = self.groundTypeRef(ref: self.cur.locals[li].ty)
                     if fnRef != 0U64 && self.isFnType(ref: fnRef) {
                         self.setBodyCalleeTarget(exprId: exprId, targetKind: 2U64, targetTraitIdx: 0U64, targetSlot: 0U64, targetTypeRef: fnRef, targetNameStart: ns, targetNameLen: nl)
+                        val fnTy: TypeRef = self.arena.types[fnRef]
+                        if fnTy.args.count() > 0U64 {
+                            self.setBodyCalleeResultRef(exprId: exprId, resultRef: fnTy.args[0])
+                        }
                     }
                 }
             }
@@ -1153,6 +1157,10 @@ pub impl Comp {
         val fnRef: U64 = self.groundTypeRef(ref: self.arena.structs[sidx].fields[fi].ty)
         if fnRef != 0U64 && self.isFnType(ref: fnRef) {
             self.setBodyCalleeTarget(exprId: exprId, targetKind: 3U64, targetTraitIdx: 0U64, targetSlot: fi, targetTypeRef: fnRef)
+            val fnTy: TypeRef = self.arena.types[fnRef]
+            if fnTy.args.count() > 0U64 {
+                self.setBodyCalleeResultRef(exprId: exprId, resultRef: fnTy.args[0])
+            }
         }
     }
 
