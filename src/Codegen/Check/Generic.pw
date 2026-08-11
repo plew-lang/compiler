@@ -205,6 +205,11 @@ pub impl Comp {
     // type-parameter receiver separately). Any other receiver is an ordinary value and is
     // walked normally (its Ident arm runs the value check).
     inout fn checkBoundsRecv(recv: U64, tpFn: U64) {
+        // A type-qualified associated call may carry a `#` view. It remains a
+        // qualifier, never a value use of the base type identifier.
+        if self.assocRecvName(recv: recv).nameLen != 0U64 {
+            return
+        }
         match self.arena.exprs[recv] {
             Expr.Ident(val start, val len) => {
                 if !(self.identIsTypeQualifier(start: start, len: len, tpFn: tpFn)) {
@@ -320,6 +325,9 @@ pub impl Comp {
                 }
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+                if self.assocRecvName(recv: exprId).nameLen != 0U64 {
+                    return
+                }
                 self.checkBoundsExpr(exprId: recv)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {

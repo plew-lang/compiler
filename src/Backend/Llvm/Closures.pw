@@ -385,6 +385,10 @@ pub impl LlvmCtx {
                     self.locOwned = []
                     self.locMoved = []
                     self.locCellHome = []
+                    val savedBodyFn: U64 = c.cur.bodyFnIdx
+                    val savedBodyRecv: U64 = c.cur.bodyRecvInstRef
+                    c.cur.bodyFnIdx = c.closureBodyKey(closureId: cid)
+                    c.cur.bodyRecvInstRef = 0U64
                     // module-level variables (spec/15) are visible inside closures too.
                     self.seedGlobals(c: inout c)
                     // bind captures from the env pointer (param 0): each capture loads
@@ -504,6 +508,8 @@ pub impl LlvmCtx {
                             LLVMBuildUnreachable(self.b)
                         }
                     }
+                    c.cur.bodyFnIdx = savedBodyFn
+                    c.cur.bodyRecvInstRef = savedBodyRecv
                 }
                 _ => {}
             }

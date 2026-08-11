@@ -135,7 +135,7 @@ pub impl LlvmCtx {
         if mf.isProvided || mf.typeParams.count() == 0U64 {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
-        self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot])
+        self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot], bodyArgs: c.cur.typeArgs, bodyRecvInstRef: instRef)
         c.cur.selfRef = s4
         c.cur.itemRef = si4
         c.cur.typeParams = savedP
@@ -241,7 +241,7 @@ pub impl LlvmCtx {
         // a `Type#Ext`-viewed param (a plain struct otherwise): track its viewed
         // TypeRef so a bare `x.m()` in the body resolves the extension (spec/09).
         if p.ty != 0U64 {
-            if c.arena.types[p.ty].viewExtId != 0U64 {
+            if c.arena.types[p.ty].viewExtId != 0U64 || c.arena.types[p.ty].viewIds.count() > 0U64 {
                 pRef = p.ty
             }
         }
@@ -256,9 +256,13 @@ pub impl LlvmCtx {
                     val pgv: U64 = c.groundTypeRef(ref: p.ty)
                     if pgv != p.ty {
                         if pgv < c.arena.types.count() {
-                            if c.arena.types[pgv].viewExtId != 0U64 {
-                                pRef = pgv
-                            }
+                            // Preserve the fully grounded receiver ref, not only a
+                            // view-bearing one.  The final callable is source-aware,
+                            // and primitive / provided generic receivers need the
+                            // concrete ref too (`T: Format` -> I64.format).  Keeping
+                            // only `#` facets made bare generic calls disappear in
+                            // LLVM after the front end had resolved them correctly.
+                            pRef = pgv
                         }
                     }
                 }

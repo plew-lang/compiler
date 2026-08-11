@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+fn answer() -> I64 { return 42I64 }
+
+struct Box {
+    pub val value: I64 = answer()
+}
+pub impl Box { factory }
+
+fn main() {
+    val box: Box = <Box />
+    print(box.value)
+}

@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+struct Sample {}
+pub impl Sample {
+    factory
+    assoc fn ping() -> I64 { return 1I64 }
+    fn ping() -> I64 { return 2I64 }
+}
+
+fn ping() -> I64 { return 3I64 }
+
+fn main() {
+    val sample: Sample = <Sample />
+    print(ping())
+    print(Sample.ping())
+    print(sample.ping())
+}

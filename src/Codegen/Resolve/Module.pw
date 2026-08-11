@@ -484,7 +484,11 @@ pub impl Comp {
         return scalarInfo()
     }
 
-    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    // `nameStart` identifies the selector spelling, but lowering may intern a
+    // selector for a synthetic call (`[]` -> `index`).  Visibility belongs to
+    // the source call-site, not that interned helper span, so callers can pass
+    // the real AST offset explicitly.
+    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64, useOffset: U64 = 0U64) -> U64 {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
@@ -494,7 +498,9 @@ pub impl Comp {
         mut val inherentMatch2: U64 = self.arena.funcs.count()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val useMod: U64 = self.moduleOf(offset: nameStart)
+        mut val useSite: U64 = nameStart
+        if useOffset != 0U64 { useSite = useOffset }
+        val useMod: U64 = self.moduleOf(offset: useSite)
         mut val i: U64 = 0
         while i < self.decls.callables.count() {
             val cand: Callable = self.decls.callables[i]
@@ -514,7 +520,7 @@ pub impl Comp {
                 if !(f.viewOnly) {
                 if f.nameId == qNameId {
                     if self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
-                        val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)
+                        val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
                         if matchRank != 0U64 {
                             if firstLabel == self.arena.funcs.count() {
                                 firstLabel = cand.funcIdx
@@ -562,7 +568,7 @@ pub impl Comp {
             if typeMatch2 != self.arena.funcs.count() {
                 if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
                     if self.decls.callables[typeMatchEntry].sourceKind == 2U64 && self.decls.callables[typeMatch2Entry].sourceKind == 2U64 {
-                        if !(self.sameCallableSource(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
+                        if !(self.sameCallableSemanticOrigin(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
                             self.errorAt(offset: nameStart, msg: "ambiguous bare call: two conformed traits provide this method; select the source with `a#P.method()`")
                         }
                     }
@@ -642,10 +648,12 @@ pub impl Comp {
         }
         mut val cur: U64 = recv
         mut val go: Bool = true
+        mut val stripped: Bool = false
         while go {
             match self.arena.exprs[cur] {
                 Expr.ExtView(recv: val base, srcStart: val vs, srcLen: val vl, strip: val strip) => {
                     if strip {
+                        stripped = true
                         go = false
                     } else {
                         self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: intern(c: inout self, start: vs, len: vl)))
@@ -655,10 +663,30 @@ pub impl Comp {
                 _ => { go = false }
             }
         }
-        if recvRef != 0U64 && recvRef < self.arena.types.count() {
-            val staticView: U64 = self.arena.types[recvRef].viewExtId
-            if staticView != 0U64 {
-                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: staticView))
+        // During verification of an extension template, `self` has not yet
+        // been materialized as a view-bearing TypeRef (that happens again for
+        // each backend instance). Its source is nevertheless lexical and must
+        // join the same source set as an explicit `self#Ext`.
+        if !stripped {
+            match self.arena.exprs[cur] {
+                Expr.Ident(start: val selfStart, len: val selfLen) => {
+                    if self.isSelfRef(start: selfStart, len: selfLen) && self.cur.extId != 0U64 {
+                        self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: self.cur.extId))
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !stripped && recvRef != 0U64 && recvRef < self.arena.types.count() {
+            val staticTy: TypeRef = self.arena.types[recvRef]
+            mut val si: U64 = 0U64
+            while si < staticTy.viewIds.count() {
+                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: staticTy.viewIds[si]))
+                si += 1U64
+            }
+            // Compatibility for synthetic refs that predate viewIds.
+            if staticTy.viewIds.count() == 0U64 && staticTy.viewExtId != 0U64 {
+                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: staticTy.viewExtId))
             }
         }
         return sources
@@ -695,7 +723,12 @@ pub impl Comp {
     // Resolve one final callable from an unordered set of active views. An
     // extension source shadows the bare surface; a trait source narrows the
     // extension candidates (or, if none exist, the bare trait candidates).
-    inout fn findMethodInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    // `associated` is deliberately a resolver dimension, rather than a
+    // separate lookup implementation.  `Type#E.make()` and `value#E.make()`
+    // differ only in the receiver surface they address; their active source
+    // set, provenance narrowing, overload ranking, and ambiguity rule are
+    // identical.
+    inout fn findCallableInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: Array[Arg], associated: Bool, recvRef: U64 = 0U64) -> U64 {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val useMod: U64 = self.moduleOf(offset: nameStart)
@@ -714,19 +747,23 @@ pub impl Comp {
                 mut val sourceMatches: Bool = false
                 if pass == 0U64 {
                     sourceMatches = self.callableMatchesAnyExtension(c: cand, sources: sources)
-                    if sourceMatches && hasTrait {
+                    // Direct extension members have no trait provenance and
+                    // remain visible under an additional `#Trait`. Extension
+                    // copies contributed through a trait subject, however,
+                    // are narrowed by that one selected trait.
+                    if sourceMatches && hasTrait && cand.traitId != 0U64 {
                         sourceMatches = self.callableMatchesAnyTrait(c: cand, sources: sources)
                     }
                 } else {
                     sourceMatches = cand.sourceKind == 2U64 && self.callableMatchesAnyTrait(c: cand, sources: sources)
                 }
-                if sourceMatches && f.hasRecv {
+                if sourceMatches && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
                     mut val visibleHere: Bool = true
                     if f.isProvided && !(f.isPub) && f.providedOwnerMod != 4000000000U64 {
                         visibleHere = f.providedOwnerMod == useMod
                     }
                     if visibleHere && f.nameId == qNameId && self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
-                        val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)
+                        val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
                         if matchRank != 0U64 {
                             if firstLabel == self.arena.funcs.count() { firstLabel = cand.funcIdx }
                             if matchRank == 2U64 {
@@ -747,9 +784,14 @@ pub impl Comp {
                 self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
                 if typeMatch2 != self.arena.funcs.count() {
                     if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
-                        if !(self.sameCallableSource(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
+                        if !(self.sameCallableSemanticOrigin(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
                             self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: active views provide multiple matching methods")
                         }
+                        // A direct conformance and a single trait-to-trait
+                        // propagation can materialize the same selected source
+                        // twice. It is one semantic callable surface, not an
+                        // ambiguity the caller can observe.
+                        return typeMatch
                     }
                     self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: this source provides more than one matching method")
                 }
@@ -761,11 +803,30 @@ pub impl Comp {
         return self.arena.funcs.count()
     }
 
+    inout fn findMethodInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+        return self.findCallableInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: recvRef)
+    }
+
+    inout fn findAssocInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+        return self.findCallableInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: true, recvRef: recvRef)
+    }
+
     // The one resolver for a source-selected method call. A `#` view is
     // additive: active extension candidates shadow the base surface, selected
     // traits narrow those candidates, then the bare surface is the fallback.
     // Type recovery, verifier, and backend consume this exact final Func.
     inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+        // `Type#Source.member()` is the associated counterpart of a value
+        // view.  It has no value TypeInfo, so select its source from the type
+        // qualifier before entering the ordinary receiver path.
+        val assoc: Bind = self.assocRecvName(recv: recv)
+        if assoc.nameLen != 0U64 {
+            val recvRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
+            val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen))
+            val selected: U64 = self.findAssocInViewSet(recvStart: assoc.nameStart, recvLen: assoc.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
+            if selected < self.arena.funcs.count() { return selected }
+            return self.findAssoc(recvStart: assoc.nameStart, recvLen: assoc.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
         val rt: TypeInfo = self.typeOf(id: recv)
         if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.funcs.count()
@@ -782,44 +843,58 @@ pub impl Comp {
     // `T#Source`. Resolve that static source before the additive bare surface;
     // this is the same final-callable contract as explicit `value#Source.m()`.
     inout fn resolveMethodFinal(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-        val rt: TypeInfo = self.exprType(id: recv)
-        if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
+        val rt: TypeInfo = self.typeOf(id: recv)
+        if !(rt.kind == 2 || rt.kind == 3 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.funcs.count()
         }
-        mut val mfi: U64 = self.arena.funcs.count()
-        mut val viewId: U64 = rt.viewExtId
-        if rt.ref != 0U64 && rt.ref < self.arena.types.count() {
-            if viewId == 0U64 { viewId = self.arena.types[rt.ref].viewExtId }
+        // Array values carry their element name in TypeInfo, while the method
+        // namespace is the structured `Array[E]` TypeRef head.  Keep this
+        // recovery in the final resolver so Mono, validation, and backend use
+        // the same callable decision rather than a backend-only Array lookup.
+        mut val recvStart: U64 = rt.nameStart
+        mut val recvLen: U64 = rt.nameLen
+        if rt.kind == 3 && rt.ref != 0U64 && rt.ref < self.arena.types.count() {
+            recvStart = self.arena.types[rt.ref].nameStart
+            recvLen = self.arena.types[rt.ref].nameLen
         }
+        mut val mfi: U64 = self.arena.funcs.count()
+        // Always start from the complete view set.  A multi-view TypeRef deliberately
+        // has no legacy `viewExtId`, so using that scalar as the gate would silently
+        // turn `T#E#F` back into a bare `T` at this one call-site shape.
+        mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: recvStart, recvLen: recvLen, recvRef: rt.ref)
         // An identifier's declared view is authoritative even when an earlier
         // context-free recovery filled its expression cache before this body's
         // locals were installed. Keep this repair at the resolver boundary rather
         // than teaching each caller a separate static-view special case.
-        if viewId == 0U64 {
+        if sources.count() == 0U64 {
             match self.arena.exprs[recv] {
                 Expr.Ident(start: val localStart, len: val localLen) => {
                     val localId: U64 = intern(c: inout self, start: localStart, len: localLen)
                     mut val li: U64 = self.cur.locals.count()
-                    while li > 0U64 && viewId == 0U64 {
+                    while li > 0U64 && sources.count() == 0U64 {
                         li -= 1U64
                         val lo: Local = self.cur.locals[li]
                         if lo.nameId == localId && lo.ty != 0U64 && lo.ty < self.arena.types.count() {
-                            viewId = self.arena.types[lo.ty].viewExtId
+                            val localTy: TypeRef = self.arena.types[lo.ty]
+                            mut val vi: U64 = 0U64
+                            while vi < localTy.viewIds.count() {
+                                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: lo.ty, sourceId: localTy.viewIds[vi]))
+                                vi += 1U64
+                            }
+                            if localTy.viewIds.count() == 0U64 && localTy.viewExtId != 0U64 {
+                                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: lo.ty, sourceId: localTy.viewExtId))
+                            }
                         }
                     }
                 }
                 _ => {}
             }
         }
-        if viewId != 0U64 {
-            mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref)
-            if sources.count() == 0U64 {
-                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: viewId))
-            }
-            mfi = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+        if sources.count() > 0U64 {
+            mfi = self.findMethodInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
         }
         if mfi >= self.arena.funcs.count() {
-            mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
+            mfi = self.findMethod(recvStart: recvStart, recvLen: recvLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
         }
         return mfi
     }
@@ -895,7 +970,7 @@ pub impl Comp {
                     if self.callableMatchesSource(c: cand, source: source) {
                         if f.nameId == qNameId {
                             if self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
-                                val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)
+                                val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
                                 if matchRank != 0U64 {
                                     if firstLabel == self.arena.funcs.count() {
                                         firstLabel = cand.funcIdx
@@ -921,7 +996,7 @@ pub impl Comp {
             self.checkOverloadAmbiguity(a: typeMatch, b: typeMatch2, args: args)
             if typeMatch2 != self.arena.funcs.count() {
                 if typeMatchEntry < self.decls.callables.count() && typeMatch2Entry < self.decls.callables.count() {
-                    if !(self.sameCallableSource(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
+                    if !(self.sameCallableSemanticOrigin(a: self.decls.callables[typeMatchEntry], b: self.decls.callables[typeMatch2Entry])) {
                         self.errorAt(offset: nameStart, msg: "ambiguous source-qualified call: this `#` name resolves to multiple declaration sources")
                     }
                 }
@@ -945,7 +1020,7 @@ pub impl Comp {
         while i < self.decls.callables.count() {
             val cand: Callable = self.decls.callables[i]
             val f: Func = self.arena.funcs[cand.funcIdx]
-            if f.isAssoc {
+            if f.isAssoc && self.callableIsBare(c: cand) {
                 if f.nameId == qNameId {
                     if f.recvId == qRecvId {
                         val matchRank: U64 = self.callableArgMatchRank(f: f, args: args)

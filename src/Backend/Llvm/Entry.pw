@@ -27,6 +27,13 @@ pub impl LlvmCtx {
         self.curIsMain = false
         self.curRetVoid = true
         self.curAsync = false
+        val savedBodyFn: U64 = c.cur.bodyFnIdx
+        val savedBodyRecv: U64 = c.cur.bodyRecvInstRef
+        val savedBodyArgs: Array[U64] = c.cur.bodyTypeArgs
+        val noBodyArgs: Array[U64] = []
+        c.cur.bodyFnIdx = 18446744073709551615U64
+        c.cur.bodyRecvInstRef = 0U64
+        c.cur.bodyTypeArgs = noBodyArgs
         self.beginFnBody(fv: fv)
         self.nLocals = 0
         self.locStart = []
@@ -64,6 +71,9 @@ pub impl LlvmCtx {
             gi += 1
         }
         LLVMBuildRetVoid(self.b)
+        c.cur.bodyFnIdx = savedBodyFn
+        c.cur.bodyRecvInstRef = savedBodyRecv
+        c.cur.bodyTypeArgs = savedBodyArgs
     }
 }
 
@@ -131,12 +141,22 @@ pub impl LlvmCtx {
         self.locMoved = []
         self.locCellHome = []
         self.seedGlobals(c: inout c)
+        val savedBodyFn: U64 = c.cur.bodyFnIdx
+        val savedBodyRecv: U64 = c.cur.bodyRecvInstRef
+        val savedBodyArgs: Array[U64] = c.cur.bodyTypeArgs
+        val noBodyArgs: Array[U64] = []
+        c.cur.bodyFnIdx = fi
+        c.cur.bodyRecvInstRef = 0U64
+        c.cur.bodyTypeArgs = noBodyArgs
         // body locals (declared from here) are released at scope exit; seeded globals are not.
         self.curBodyMark = self.nLocals
         self.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
         if !(self.terminated) {
             LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32))
         }
+        c.cur.bodyFnIdx = savedBodyFn
+        c.cur.bodyRecvInstRef = savedBodyRecv
+        c.cur.bodyTypeArgs = savedBodyArgs
     }
 
     // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).

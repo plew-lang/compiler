@@ -1,0 +1,5 @@
+import @Std/Io with { fileExists, print }
+
+fn main() {
+    print(fileExists(path: "tests/run/final_callable_extern_call.pw".bytes()))
+}

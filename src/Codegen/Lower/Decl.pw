@@ -90,7 +90,7 @@ pub impl Comp {
                 projectionTrait = self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits)
             }
         }
-        return <TypeAst name=t.name args=args span=t.span extView=t.extView projectionTrait=projectionTrait projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord />
+        return <TypeAst name=t.name args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord />
     }
 
     inout fn normalizeProjectionTypeActive(t: TypeAst) -> TypeAst {

@@ -228,27 +228,30 @@ pub impl Comp {
             // rebuild with the identity facets preserved: the view (`P#Ext`) and the
             // existential (`any P`) are part of type identity — grounding the args
             // must not strip them.
-            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
         }
         return ref
     }
 
     inout fn groundUnderInst(instRef: U64, tyRef: U64) -> U64 {
-        if !(self.isGenericInst(ref: instRef)) {
-            return tyRef
-        }
+        if instRef == 0U64 || instRef >= self.arena.types.count() { return tyRef }
         val inst: TypeRef = self.arena.types[instRef]
         val si: U64 = self.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
-        if si >= self.arena.structs.count() {
-            return tyRef
+        mut val params: Array[Bind] = []
+        if si < self.arena.structs.count() {
+            params = self.arena.structs[si].typeParams
+        } else {
+            val ei: U64 = self.genericEnumIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
+            if ei < self.arena.enums.count() {
+                params = self.arena.enums[ei].typeParams
+            }
         }
-        val sd: StructDef = self.arena.structs[si]
-        if sd.typeParams.count() != inst.args.count() {
+        if params.count() == 0U64 || params.count() != inst.args.count() {
             return tyRef
         }
         val savedP: Array[Bind] = self.cur.typeParams
         val savedA: Array[U64] = self.cur.typeArgs
-        self.cur.typeParams = sd.typeParams
+        self.cur.typeParams = params
         self.cur.typeArgs = inst.args
         val g: U64 = self.groundTypeRef(ref: tyRef)
         self.cur.typeParams = savedP

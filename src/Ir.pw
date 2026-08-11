@@ -47,6 +47,11 @@ export struct TypeRef {
     // extension's methods resolve on a value of this type. Part of type identity
     // (an invariant refinement), so `Person` and `Person#Ext` are distinct types.
     pub val viewExtId: U64 = 0
+    // Raw source spellings attached to a type-level view.  After declaration
+    // resolution these normalize to an unordered extension set plus one optional
+    // trait selector; retaining the list here makes the full source condition part
+    // of type identity rather than collapsing it to the last `#Name`.
+    pub val viewIds: Array[U64] = []
     // `any P` (spec/08): this TypeRef is the existential over trait `name`, not the
     // trait used as a plain (non-value) name. The runtime value is a fat pointer
     // `{ data, vtable }`; part of type identity. nameStart/nameLen/nameId name the
@@ -664,6 +669,66 @@ export struct FnInst {
     pub val recvInstRef: U64 = 0
 }
 
+// The selected callable for one semantic call site while compiling one concrete
+// function body instance.  A site can be a written expression or an implicit
+// call introduced by a control construct (for example `for`'s iterator/next
+// protocol); `siteIsStmt` and `slot` distinguish those without inventing a
+// second resolution table.  An AST node may be shared by many generic
+// instances, so the enclosing function, its substitution arguments, and its
+// receiver instance are also part of the decision context.  Mono owns these
+// records; backend only consumes them.
+export struct BodyCallee {
+    pub val fnIdx: U64
+    pub val args: Array[U64]
+    pub val recvInstRef: U64 = 0
+    pub val exprId: U64
+    pub val siteIsStmt: Bool = false
+    pub val slot: U64 = 0U64
+    pub val callee: U64
+    // Fully-grounded type arguments for this invocation, in the selected
+    // Func's parameter order (receiver arguments first for a method).  Keeping
+    // them with the target prevents LLVM from running a second generic
+    // inference pass over the AST.
+    pub val calleeTypeArgs: Array[U64] = []
+    // Concrete receiver identity at source selection.  0 for an ordinary
+    // free call; association/operator calls retain their subject type here.
+    // Backend consumes this rather than reconstructing it from the shared AST.
+    pub val recvTypeRef: U64 = 0U64
+    // The selected callable's fully-grounded result identity.  This is needed
+    // when a method owns type parameters (for example Iterator.map[B]): LLVM
+    // must consume the concrete adapter result selected by Mono, never infer it
+    // again from the receiver expression or method spelling.
+    pub val resultTypeRef: U64 = 0U64
+    // Non-static call targets use the same final-callee record.  kind 0 is a
+    // Func (or an explicit no-callable sentinel); kind 1 is an existential
+    // requirement, whose trait table index and 1-based vtable slot are fixed
+    // by Mono.  LLVM must not re-select either from source spellings.
+    pub val targetKind: U64 = 0U64
+    pub val targetTraitIdx: U64 = 0U64
+    pub val targetSlot: U64 = 0U64
+    // A closure-local target is a lexical binding, not a Mono-local array
+    // position: lowering may introduce backend-only storage before it.  Keep
+    // the binding identity with the final descriptor so LLVM has no reason to
+    // inspect the call AST when materializing the selected closure value.
+    pub val targetNameStart: U64 = 0U64
+    pub val targetNameLen: U64 = 0U64
+    // Dynamic target's already-grounded callable value type.  For a closure
+    // local/field this is its `fn(...) -> R` TypeRef; no LLVM-side recovery is
+    // permitted from the call spelling.
+    pub val targetTypeRef: U64 = 0U64
+}
+
+// A concrete body that code generation may emit.  This is the reachability
+// worklist paired with BodyCallee: resolving a call enqueues its callee body,
+// and the frontend drains the list before LLVM begins.  `recvInstRef` is kept
+// even for an argless receiver so a shared provided body can substitute Self
+// to the actual conformer.
+export struct BodyInstance {
+    pub val fnIdx: U64
+    pub val args: Array[U64]
+    pub val recvInstRef: U64 = 0U64
+}
+
 export struct EnumDef {
     pub val nameStart: U64
     pub val nameLen: U64
@@ -750,6 +815,13 @@ export struct Func {
     // the trait it came from, so `a#P.foo()` can select the source trait when two
     // conformed traits provide the same-name method (spec/08,09). 0 otherwise.
     pub val srcTraitId: U64 = 0
+    // The trait conformance a concrete witness was declared for.  Unlike
+    // srcTraitId this does not choose a `#Trait` source surface: an inherent
+    // witness remains bare-callable.  It preserves the generic trait-argument
+    // substitution that produced this implementation for final-callable
+    // monomorphization.
+    pub val originTraitId: U64 = 0
+    pub val originTraitArity: U64 = 0
     // for a non-public provided-method copy (`impl Trait { ... }`, not
     // `pub impl Trait`): the trait owner's module id. Such helper copies are
     // callable only from that module. The sentinel means "no module-only gate"
@@ -889,6 +961,13 @@ export struct Arena {
     pub mut val types: Array[TypeRef] = []
     pub mut val globals: Array[Global] = []
     pub mut val newtypes: Array[NewtypeDef] = []
+    // Final static call selections belong to the analyzed program, not to
+    // MonoWork's transient discovery queues.  LLVM consumes this immutable
+    // semantic result after frontend finalization.
+    pub mut val finalCallees: Array[BodyCallee] = []
+    // Instance-invariant final callable per expression.  Kept as a scalar
+    // parallel array so a plain free call does not depend on a body worklist.
+    pub mut val finalExprCallee: Array[U64] = []
 }
 pub impl Arena { factory }
 
@@ -1071,6 +1150,10 @@ export struct MonoWork {
     pub mut val captures: Array[CaptureEntry] = []
     pub mut val arrayElems: Array[Bind] = []
     pub mut val boxedFields: Array[U64] = []
+    // Concrete bodies reachable from program roots.  The frontend closes this
+    // worklist before backend emission, so backend never has to resolve a call
+    // merely to discover or prepare another body.
+    pub mut val bodyInstances: Array[BodyInstance] = []
     // transient: the expected type ref of the binding currently being scanned (a `let`
     // annotation), so an assoc-fn constructor whose type param comes only from context
     // (`Set.new()` / `Set.from([])`) registers its instance. Mirrors the backend's
@@ -1196,6 +1279,10 @@ export struct Cursor {
     pub mut val bodyTypeArgs: Array[U64] = []
     pub mut val bodySelfRef: U64 = 0
     pub mut val bodyItemRef: U64 = 0
+    // The body currently being scanned/emitted.  Together with bodyTypeArgs
+    // and recvInstRef it identifies an Arena.finalCallees entry.
+    pub mut val bodyFnIdx: U64 = 18446744073709551615U64
+    pub mut val bodyRecvInstRef: U64 = 0U64
     pub mut val closureId: U64 = 0
     pub mut val inClosure: Bool = false
     pub mut val captureMark: U64 = 0
@@ -1242,6 +1329,8 @@ pub impl Conform { factory }
 pub impl MethodAlias { factory }
 pub impl FuncBound { factory }
 pub impl FnInst { factory }
+pub impl BodyCallee { factory }
+pub impl BodyInstance { factory }
 pub impl EnumDef { factory }
 pub impl Func { factory }
 pub impl Global { factory }

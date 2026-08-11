@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+
+fn choose() -> I64 { return 1I64 }
+
+fn main() {
+    val choose: fn() -> I64 = fn() -> I64 { return 2I64 }
+    print(choose())
+}

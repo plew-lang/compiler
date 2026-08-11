@@ -1,0 +1,12 @@
+trait A {}
+trait B {}
+
+struct Sample {}
+pub impl Sample { factory }
+pub impl Sample as A {}
+pub impl Sample as B {}
+
+fn main() {
+    val sample: Sample = <Sample />
+    sample#A#B
+}

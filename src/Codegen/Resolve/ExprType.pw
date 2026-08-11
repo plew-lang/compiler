@@ -190,6 +190,37 @@ pub impl Comp {
         return 0U64
     }
 
+    // The non-generic receiver half of the same final-callable calculation.  `Self`
+    // and `Item` are receiver-relative even when the receiver itself has no type
+    // arguments; method-owned parameters are inferred from the call arguments.
+    inout fn groundConcreteFinalMethodReturn(f: Func, recvTy: TypeInfo, args: Array[Arg]) -> U64 {
+        if f.retTy == 0U64 || recvTy.nameLen == 0U64 || self.isGenericInst(ref: recvTy.ref) {
+            return 0U64
+        }
+        val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
+        if f.typeParams.count() > 0U64 {
+            if inferred.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: inferred)) {
+                return 0U64
+            }
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedSelf: U64 = self.cur.selfRef
+        val savedItem: U64 = self.cur.itemRef
+        self.setSelfItemEnv(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, recvInstRef: 0U64)
+        self.cur.typeParams = f.typeParams
+        self.cur.typeArgs = inferred
+        val grounded: U64 = self.groundTypeRef(ref: f.retTy)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedSelf
+        self.cur.itemRef = savedItem
+        if grounded != 0U64 && self.tyRefIsGround(ref: grounded) {
+            return grounded
+        }
+        return 0U64
+    }
+
     inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {
         if !(f.hasRet) {
             return scalarInfo()
@@ -395,7 +426,12 @@ pub impl Comp {
                             val ab: TypeInfo = self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: true)
                             return <TypeInfo kind=3 nameStart=ab.nameStart nameLen=ab.nameLen ref=lo.ty />
                         }
-                        if self.isGenericInst(ref: lo.ty) {
+                        // Preserve every generic instance's complete TypeRef.
+                        // Generic enums are not `isGenericInst` (that predicate
+                        // names generic structs), yet a match payload such as
+                        // `Optional[I64].Some(v)` needs its concrete enum
+                        // subject to type `v` and infer `print(v)`.
+                        if self.isGenericInst(ref: lo.ty) || self.isGenericEnumInst(ref: lo.ty) {
                             val lt: TypeRef = self.arena.types[lo.ty]
                             return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
                         }
@@ -437,10 +473,12 @@ pub impl Comp {
                                 if self.arena.types[lo.ty].isAny {
                                     return <TypeInfo kind=2 nameStart=self.arena.types[lo.ty].nameStart nameLen=self.arena.types[lo.ty].nameLen ref=lo.ty />
                                 }
-                                // a view-typed local/param (`a: P#Ext`, `val v = p#Ext`): keep
-                                // the declared ref — the view (viewExtId, spec/09) is a static
-                                // type facet the name-only form loses.
-                                if self.arena.types[lo.ty].viewExtId != 0U64 {
+                                // A view-typed local/param keeps its declared ref.  The
+                                // source set is a static type facet: reducing it to a name-only
+                                // TypeInfo here would make `T#E#F` bare only in ordinary `.`
+                                // syntax.  `viewExtId` is the legacy one-source spelling;
+                                // `viewIds` is the multi-source normal form.
+                                if self.arena.types[lo.ty].viewExtId != 0U64 || self.arena.types[lo.ty].viewIds.count() > 0U64 {
                                     val vb: TypeInfo = self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
                                     return <TypeInfo kind=vb.kind nameStart=vb.nameStart nameLen=vb.nameLen ref=lo.ty viewExtId=self.arena.types[lo.ty].viewExtId />
                                 }
@@ -711,8 +749,29 @@ pub impl Comp {
                 val br: U64 = self.typedIrRefOfInfo(ti: bt)
                 if br != 0U64 {
                     val brt: TypeRef = self.arena.types[br]
-                    val vr: U64 = self.pushType(t: <TypeRef nameStart=brt.nameStart nameLen=brt.nameLen args=brt.args viewExtId=vid />)
-                    return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=vr viewExtId=vid />
+                    mut val ids: Array[U64] = brt.viewIds
+                    // Lift the legacy one-source representation into the same
+                    // source-set before extending it.  Without this, `T#E` then
+                    // `#F` would retain only F in its type while expression lookup
+                    // happened to see both nodes syntactically.
+                    if ids.count() == 0U64 && brt.viewExtId != 0U64 {
+                        ids.append(brt.viewExtId)
+                    }
+                    if strip {
+                        ids = []
+                    } else {
+                        mut val present: Bool = false
+                        mut val ii: U64 = 0U64
+                        while ii < ids.count() {
+                            if ids[ii] == vid { present = true }
+                            ii += 1U64
+                        }
+                        if !(present) { ids.append(vid) }
+                    }
+                    mut val legacy: U64 = 0U64
+                    if ids.count() == 1U64 { legacy = ids[0] }
+                    val vr: U64 = self.pushType(t: <TypeRef nameStart=brt.nameStart nameLen=brt.nameLen args=brt.args viewExtId=legacy viewIds=ids />)
+                    return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=vr viewExtId=legacy />
                 }
                 return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=bt.ref viewExtId=vid />
             }
@@ -731,6 +790,10 @@ pub impl Comp {
                         val grounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: self.exprType(id: recv), args: args)
                         if grounded != 0U64 {
                             return self.typeInfoOfRef(ref: grounded)
+                        }
+                        val concreteGrounded: U64 = self.groundConcreteFinalMethodReturn(f: mf, recvTy: self.exprType(id: recv), args: args)
+                        if concreteGrounded != 0U64 {
+                            return self.typeInfoOfRef(ref: concreteGrounded)
                         }
                         return self.declaredRetInfo(f: mf)
                     }
@@ -871,6 +934,10 @@ pub impl Comp {
                         val receiverGrounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: rt, args: args)
                         if receiverGrounded != 0U64 {
                             return self.typeInfoOfRef(ref: receiverGrounded)
+                        }
+                        val concreteReceiverGrounded: U64 = self.groundConcreteFinalMethodReturn(f: mf, recvTy: rt, args: args)
+                        if concreteReceiverGrounded != 0U64 {
+                            return self.typeInfoOfRef(ref: concreteReceiverGrounded)
                         }
                         // a non-generic receiver whose method returns a generic instantiation
                         // (`Counter.next() -> Optional[I64]`): keep the full ref so the caller

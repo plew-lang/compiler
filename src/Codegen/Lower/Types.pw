@@ -167,10 +167,25 @@ pub impl Comp {
             i += 1
         }
         mut val viewExtId: U64 = 0
+        mut val viewIds: Array[U64] = []
+        // Every authored selector enters the source-set normal form, including
+        // the one-source case. `viewExtId` remains a compatibility mirror while
+        // scalar consumers are migrated, but never carries the only source fact.
+        if t.viewNames.count() > 0U64 {
+            mut val vi: U64 = 0U64
+            while vi < t.viewNames.count() {
+                val vn: Bind = self.internBytes(s: t.viewNames[vi])
+                viewIds.append(intern(c: inout self, start: vn.nameStart, len: vn.nameLen))
+                vi += 1U64
+            }
+        }
         if t.extView.bytes().count() > 0 {
             val evN: Bind = self.internBytes(s: t.extView)
             viewExtId = intern(c: inout self, start: evN.nameStart, len: evN.nameLen)
         }
+        // `viewExtId` is a legacy compatibility mirror.
+        // A multi-selector type must never silently mean just its last spelling.
+        if viewIds.count() > 1U64 { viewExtId = 0U64 }
         mut val assocTraitStart: U64 = 0
         mut val assocTraitLen: U64 = 0
         mut val assocTraitId: U64 = 0
@@ -215,7 +230,7 @@ pub impl Comp {
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId viewIds=viewIds isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
@@ -442,6 +457,38 @@ pub impl Comp {
 
 pub impl Comp {
 
+    // Materialize memberwise-factory defaults as ordinary Make fields.  A field
+    // default is evaluated at this construction site, not in a backend-only
+    // implicit path.  Keeping it in the Make expression means Verify, Mono's
+    // final-callee walk, and LLVM all consume one identical expression tree.
+    inout fn appendOmittedMakeDefaults(out: inout Array[MakeField], typeName: String, isEnum: Bool) {
+        if isEnum || typeName.bytes().count() == 0U64 { return }
+        val tn: Bind = self.internBytes(s: typeName)
+        val si: U64 = self.structDefByNameAny(start: tn.nameStart, len: tn.nameLen)
+        if si >= self.arena.structs.count() { return }
+        val declared: Array[FieldDef] = self.arena.structs[si].fields
+        mut val fi: U64 = 0U64
+        while fi < declared.count() {
+            val fld: FieldDef = declared[fi]
+            if fld.hasDefault {
+                mut val supplied: Bool = false
+                mut val mi: U64 = 0U64
+                while mi < out.count() {
+                    if spansEqual(c: inout self, aStart: out[mi].nameStart, aLen: out[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
+                        supplied = true
+                        mi = out.count()
+                    } else {
+                        mi += 1U64
+                    }
+                }
+                if !supplied {
+                    out.append(<MakeField nameStart=fld.nameStart nameLen=fld.nameLen value=fld.defaultVal offset=fld.nameStart />)
+                }
+            }
+            fi += 1U64
+        }
+    }
+
     inout fn lowerMakeFields(fields: Array[MakeFieldAst], typeName: String, variant: String, isEnum: Bool) -> Array[MakeField] {
         mut val out: Array[MakeField] = []
         mut val i: U64 = 0
@@ -461,6 +508,7 @@ pub impl Comp {
             out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
             i += 1
         }
+        self.appendOmittedMakeDefaults(out: inout out, typeName: typeName, isEnum: isEnum)
         return out
     }
 

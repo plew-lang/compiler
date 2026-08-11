@@ -17,7 +17,7 @@ pub impl Comp {
             val base: TypeInfo = self.typeInfoOfName(start: t.nameStart, len: t.nameLen, isArray: false)
             // carry the view (`Person#Ext` has no args but a viewExtId) so recovery is
             // not lossy; the `ref`-shape is unchanged so downstream behavior is identical.
-            if t.viewExtId != 0U64 {
+            if t.viewExtId != 0U64 || t.viewIds.count() > 0U64 {
                 return <TypeInfo kind=base.kind nameStart=base.nameStart nameLen=base.nameLen ref=base.ref viewExtId=t.viewExtId />
             }
             return base
@@ -210,22 +210,11 @@ pub impl Comp {
                 while fi < fs.count() {
                     val fd: FieldDef = fs[fi]
                     if fd.nameId == qField {
-                        val ftr: TypeRef = self.arena.types[fd.ty]
-                        mut val pi: U64 = 0
-                        while pi < e.typeParams.count() {
-                            val p: Bind = e.typeParams[pi]
-                            if ftr.nameId == p.nameId {
-                                return self.typeInfoOfRef(ref: t.args[pi])
-                            }
-                            pi += 1
-                        }
-                        // an `Array[E]` variant field: ground E through the instance env.
-                        if ftr.args.count() > 0 {
-                            if rangeEquals(bytes: self.arena.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") {
-                                return self.groundedArrayFieldInfo(params: e.typeParams, instArgs: t.args, arrayTyRef: fd.ty)
-                            }
-                        }
-                        return self.typeInfoOfRef(ref: fd.ty)
+                        // Variant fields use the same declaration-to-instance
+                        // substitution as struct fields.  Keeping a separate
+                        // `nameId` loop here made reconstructed `T` refs (whose
+                        // cache id is 0) escape only through match bindings.
+                        return self.typeInfoOfRef(ref: self.groundUnderInst(instRef: instRef, tyRef: fd.ty))
                     }
                     fi += 1
                 }

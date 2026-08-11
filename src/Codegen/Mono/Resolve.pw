@@ -10,12 +10,12 @@ pub impl Comp {
     inout fn runtimeTypeRef(ref: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
-        if t.viewExtId == 0U64 { return ref }
+        if t.viewExtId == 0U64 && t.viewIds.count() == 0U64 { return ref }
         return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
     }
 
     inout fn plainRefOfProjection(t: TypeRef) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args viewExtId=t.viewExtId isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable />)
     }
 
     inout fn assocBindingFor(baseRef: U64, traitId: U64, assocId: U64) -> U64 {
@@ -108,13 +108,23 @@ pub impl Comp {
         }
         val ta: TypeRef = self.arena.types[a]
         val tb: TypeRef = self.arena.types[b]
-        if ta.nameId != tb.nameId || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable {
+        // `nameId == 0` is an unfilled interning cache, not a real type name.
+        // Reconstructed scalar refs commonly carry it, so comparing two zero
+        // ids as equal merged unrelated concrete instances (I64 and String)
+        // in final-callable/body keys. Use ids only when both exist; spelling
+        // is the canonical fallback used by runtime receiver identity too.
+        if ta.nameId != 0U64 && tb.nameId != 0U64 {
+            if ta.nameId != tb.nameId { return false }
+        } else {
+            if !(spansEqual(c: inout self, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen)) { return false }
+        }
+        if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable {
             return false
         }
         // a `#`-view is part of type identity (spec/09): `S`, `S#P`, `S#Q` are distinct
         // types, so two generic instantiations differing only by the view argument are
         // distinct instances (`useR[S#P]` vs `useR[S#Q]` get separate bodies/dispatch).
-        if ta.viewExtId != tb.viewExtId {
+        if ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) {
             return false
         }
         if ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId {
@@ -217,11 +227,21 @@ pub impl Comp {
             // method-own `B` (the accumulator) must shadow the conformer's `B` (the item).
             // With all-distinct names first-match and last-match agree, so this only changes
             // the collision case, resolving it the way lexical shadowing requires.
+            // TypeRef's nameId is an interning cache, not semantic state.  A
+            // TypeRef reconstructed by a later frontend phase may legitimately
+            // retain 0, while the active generic binder always has its interned
+            // id.  Compare the canonical spelling in that case, just as the
+            // final-callable/body keys do; otherwise a concrete print[I64]
+            // instance can leave a nested receiver as literal `T`.
+            mut val typeNameId: U64 = t.nameId
+            if typeNameId == 0U64 {
+                typeNameId = intern(c: inout self, start: t.nameStart, len: t.nameLen)
+            }
             mut val i: U64 = self.cur.typeParams.count()
             while i > 0U64 {
                 i -= 1
                 val p: Bind = self.cur.typeParams[i]
-                if t.nameId == p.nameId {
+                if typeNameId == p.nameId {
                     if i < self.cur.typeArgs.count() {
                         return self.cur.typeArgs[i]
                     }

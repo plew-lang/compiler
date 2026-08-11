@@ -24,7 +24,7 @@ pub impl Comp {
                 // a bare NAME lookup must not alias a facet-carrying ref: `P#Ext`
                 // (viewExtId) and `any P` (isAny) are distinct types from plain `P`
                 // (spec/08,09) — returning one for the other leaks the facet.
-                if t.nameId == q && t.viewExtId == 0U64 && !(t.isAny) && !(t.isSendable) {
+                if t.nameId == q && t.viewExtId == 0U64 && t.viewIds.count() == 0U64 && !(t.isAny) && !(t.isSendable) {
                     return i
                 }
             }
@@ -52,7 +52,14 @@ pub impl Comp {
         }
         val pt: TypeRef = self.arena.types[paramRef]
         if pt.args.count() == 0 {
-            if pt.nameId == intern(c: inout self, start: tpStart, len: tpLen) {
+            // TypeRef.nameId is a cache; parameter refs rebuilt after parsing
+            // may carry 0.  Generic unification must use the same canonical
+            // spelling identity as grounding and final-callee keys.
+            mut val paramNameId: U64 = pt.nameId
+            if paramNameId == 0U64 {
+                paramNameId = intern(c: inout self, start: pt.nameStart, len: pt.nameLen)
+            }
+            if paramNameId == intern(c: inout self, start: tpStart, len: tpLen) {
                 return argRef
             }
             return 0
@@ -125,7 +132,18 @@ pub impl Comp {
                 }
                 val vid: U64 = intern(c: inout self, start: srcStart, len: srcLen)
                 val bt: TypeRef = self.arena.types[baseRef]
-                return self.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=vid />)
+                mut val ids: Array[U64] = bt.viewIds
+                if ids.count() == 0U64 && bt.viewExtId != 0U64 { ids.append(bt.viewExtId) }
+                mut val present: Bool = false
+                mut val i: U64 = 0U64
+                while i < ids.count() {
+                    if ids[i] == vid { present = true }
+                    i += 1U64
+                }
+                if !present { ids.append(vid) }
+                mut val legacy: U64 = 0U64
+                if ids.count() == 1U64 { legacy = ids[0] }
+                return self.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=legacy viewIds=ids />)
             }
             _ => {
                 return baseRef
@@ -157,8 +175,61 @@ pub impl Comp {
                     // nested in it (`f: fn(x: Item) -> T`).
                     val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
                     if ai < args.count() {
-                        val at: TypeInfo = self.typeOf(id: args[ai].expr)
-                        val argRef: U64 = self.argViewRef(argExpr: args[ai].expr, baseRef: self.tyRefOfInfo(ti: at))
+                        // This runs while scanning one concrete body instance.
+                        // `typeOf` is deliberately AST-global and can only
+                        // report the pre-binding shape of a match payload;
+                        // `exprType` sees the current local environment, which
+                        // is where `Optional[I64].Some(v)` gives `v: I64`.
+                        // Generic inference must use that same concrete type
+                        // authority as final-callable resolution.
+                        val at: TypeInfo = self.exprType(id: args[ai].expr)
+                        mut val baseRef: U64 = self.tyRefOfInfo(ti: at)
+                        // A final body instance owns the concrete type of a
+                        // local/receiver.  It takes precedence even when the
+                        // AST-global cache happens to contain another *ground*
+                        // instantiation of the same generic template (for
+                        // example Optional[I64] before Optional[String] in one
+                        // loop body); a ground-looking cache entry is not proof
+                        // that it belongs to this body instance.
+                        // A suffix on a literal is explicit source meaning
+                        // (`0I64`, `1U8`), stronger than a surrounding
+                        // match/expected-type projection stored in parametric
+                        // IR.  Locals and compound expressions, on the other
+                        // hand, take their exact body-local identity below.
+                        mut val literalIsExplicit: Bool = false
+                        match self.arena.exprs[args[ai].expr] {
+                            Expr.Int(value: _, offset: _, isBool: _, val tyStart, val tyLen, isNeg: _) => {
+                                literalIsExplicit = tyLen != 0U64
+                                if literalIsExplicit {
+                                    baseRef = self.findOrAddTypeRef(nameStart: tyStart, nameLen: tyLen)
+                                }
+                            }
+                            Expr.Str(start: _, len: _) => {
+                                literalIsExplicit = true
+                                val stringName: Bind = self.kwSpan(kw: "String", kwLen: 6U64)
+                                baseRef = self.findOrAddTypeRef(nameStart: stringName.nameStart, nameLen: stringName.nameLen)
+                            }
+                            _ => {}
+                        }
+                        if !literalIsExplicit {
+                            val grounded: U64 = self.groundedBodyReceiverRef(exprId: args[ai].expr)
+                            if grounded != 0U64 { baseRef = grounded }
+                        }
+                        // A nested operator's selected result can be more
+                        // precise than the legacy expression-type cache (for
+                        // example `b + 2 * 3`, where the inner literal form is
+                        // contextless).  Mono has already finalized that child;
+                        // consume its result record instead of asking backend
+                        // inference to rediscover it later.
+                        if baseRef == 0U64 {
+                            baseRef = self.bodyCalleeResultRef(exprId: args[ai].expr)
+                        }
+                        // A generic body is shared by all instances, so the
+                        // AST-global TypeInfo for `self`/a local can still be
+                        // the parameter spelling (`T`).  Mono owns its concrete
+                        // body environment: use that exact receiver identity
+                        // before attempting inference, never defer it to LLVM.
+                        val argRef: U64 = self.argViewRef(argExpr: args[ai].expr, baseRef: baseRef)
                         cand = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
                     }
                 }
@@ -209,11 +280,17 @@ pub impl Comp {
         return true
     }
 
-    inout fn fnInstExists(fnIdx: U64, args: Array[U64]) -> Bool {
+    // Code-generation instances are identified by the selected callable, its
+    // complete substitutions, and its concrete receiver subject.  The latter
+    // is empty for ordinary free functions, but is essential for associated
+    // callables and provided bodies: their `Self` environment is part of the
+    // emitted body.  Keeping this key here makes every registration path use
+    // the same identity as final-body discovery and LLVM's function cache.
+    inout fn fnInstExists(fnIdx: U64, args: Array[U64], recvInstRef: U64 = 0U64) -> Bool {
         mut val i: U64 = 0
         while i < self.monoWork.fnInsts.count() {
             val fin: FnInst = self.monoWork.fnInsts[i]
-            if fin.fnIdx == fnIdx {
+            if fin.fnIdx == fnIdx && self.sameBodyReceiver(a: fin.recvInstRef, b: recvInstRef) {
                 if fin.args.count() == args.count() {
                     mut val same: Bool = true
                     mut val j: U64 = 0
@@ -233,8 +310,8 @@ pub impl Comp {
         return false
     }
 
-    inout fn registerCallInst(id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
-        val fi: U64 = self.resolvedCallee(id: id)
+    inout fn registerCallInst(id: U64, nameStart: U64, nameLen: U64, args: Array[Arg], finalIdx: U64) {
+        val fi: U64 = finalIdx
         if fi < self.arena.funcs.count() {
             if self.arena.funcs[fi].isExtern {
                 // a generic `extern(plewIntrinsic)` (e.g. `arrayPush[T]`, `arrayGet[T]`):
@@ -243,18 +320,24 @@ pub impl Comp {
                 // type leaks out).
             } else {
             if self.isGenericFreeFn(fi: fi) {
-                val inferred: Array[U64] = self.inferFnArgs(f: self.arena.funcs[fi], args: args)
-                if self.fnArgsAllGround(args: inferred) {
-                    if !(self.fnInstExists(fnIdx: fi, args: inferred)) {
+                // Finalization has already selected the callable and grounded
+                // its substitutions for this exact body instance.  Re-inferring
+                // from the shared AST here creates a second `fn[T]` instance
+                // beside `fn[I64]`/`fn[String]`; that stale template then has
+                // no concrete receiver for its nested calls.  Instance demand
+                // is therefore a pure consumer of the final descriptor.
+                val finalArgs: Array[U64] = self.bodyCalleeTypeArgs(exprId: id)
+                if finalArgs.count() == self.arena.funcs[fi].typeParams.count() && self.fnArgsAllGround(args: finalArgs) {
+                    if !(self.fnInstExists(fnIdx: fi, args: finalArgs)) {
                         // polymorphic-recursion ceiling: an ever-deepening type argument
                         // (`deep(v: (v, v))` through an anonymous record) grows fn instances
                         // without a matching genInst — gate here too, not only in scanType.
                         mut val di: U64 = 0
-                        while di < inferred.count() {
-                            self.checkInstDepth(ref: inferred[di])
+                        while di < finalArgs.count() {
+                            self.checkInstDepth(ref: finalArgs[di])
                             di += 1
                         }
-                        self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=inferred />)
+                        self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=finalArgs />)
                     }
                 }
             }
@@ -262,35 +345,6 @@ pub impl Comp {
         }
     }
 
-    inout fn registerAssocInst(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg], resultRef: U64) {
-        val arn: Bind = self.assocRecvName(recv: recv)
-        if arn.nameLen == 0U64 {
-            return
-        }
-        val afi: U64 = self.findAssoc(recvStart: arn.nameStart, recvLen: arn.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-        if afi >= self.arena.funcs.count() {
-            return
-        }
-        if self.arena.funcs[afi].isExtern {
-            return
-        }
-        if self.isGenericFreeFn(fi: afi) {
-            mut val inferred: Array[U64] = self.inferFnArgs(f: self.arena.funcs[afi], args: args)
-            // ground params the arguments didn't determine — a constructor whose type
-            // param comes only from the expected result type (`Set.new()`, or
-            // `Set.from([])` whose element type the empty literal can't supply). A
-            // constructor returns `Recv[params]`, so when the call's result type is a
-            // same-head generic instance, its args ARE the params. Mirrors the backend's
-            // groundAssocFromExpected, at the mono-registration layer (else the instance
-            // is never registered and the backend rejects the call as un-emittable).
-            self.groundAssocFromResult(resultRef: resultRef, recvStart: arn.nameStart, recvLen: arn.nameLen, inferred: inout inferred)
-            if self.fnArgsAllGround(args: inferred) {
-                if !(self.fnInstExists(fnIdx: afi, args: inferred)) {
-                    self.monoWork.fnInsts.append(<FnInst fnIdx=afi args=inferred />)
-                }
-            }
-        }
-    }
     // Ground unfound (or name-less) inferred type args from the call's result type when
     // it is a generic instance of the assoc fn's receiver head (the type params line up
     // 1:1 with the receiver's args for a `Type[params]` constructor). A no-op when the
@@ -324,26 +378,50 @@ pub impl Comp {
         }
     }
 
-    inout fn registerMethodInst(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    // Register a method instance from the final callable chosen by resolution.  The
+    // optional index lets every call spelling (`.` and `#`) share demand discovery
+    // without a second source-selection query in Mono.
+    inout fn registerMethodInst(callId: U64 = 4000000000U64, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg], finalIdx: U64 = 4000000000U64) {
         val rt0: TypeInfo = self.typeOf(id: recv)
         // recover the receiver type-name span: a struct/enum (kind 2) carries it; a
         // String value (kind 1) recovers "String"; a primitive (kind 0, e.g. `U64`)
         // already carries its name. A generic method on a primitive (`u64.hash[H]`)
         // must register its instance too, so we no longer bail on non-struct kinds —
         // only arrays (kind 3, handled per element type) and nameless values are skipped.
-        val rt: TypeInfo = rt0
+        mut val rt: TypeInfo = rt0
+        val concreteRecvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+        if concreteRecvRef != 0U64 && concreteRecvRef < self.arena.types.count() {
+            rt = self.typeInfoOfRef(ref: concreteRecvRef)
+        }
+        // A method body can be the first use that exposes a nested generic
+        // receiver (`self.data.append` => Buffer[T]).  Register that concrete
+        // receiver before resolving its call so the final-callee body walk is
+        // complete before backend starts emitting lazy generic methods.
+        if concreteRecvRef != 0U64 {
+            self.scanType(ref: concreteRecvRef)
+        } else if rt.ref != 0U64 {
+            self.scanType(ref: rt.ref)
+        }
         if rt.kind == 3 {
             return
         }
         if rt.nameLen == 0 {
             return
         }
-        val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
-        val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+        val genericRecv: Bool = self.isGenericInst(ref: concreteRecvRef)
+        mut val mi: U64 = finalIdx
+        if mi == 4000000000U64 {
+            mi = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
         if mi == self.arena.funcs.count() {
             return
         }
         val mf: Func = self.arena.funcs[mi]
+        // Associated functions have no value receiver.  Their instance is
+        // registered from the completed final-callee table, where the selected
+        // subject is explicit; treating the type-name AST as a method receiver
+        // here creates a competing (often receiver-less) FnInst.
+        if mf.isAssoc { return }
         if mf.typeParams.count() == 0 {
             return
         }
@@ -355,39 +433,22 @@ pub impl Comp {
         mut val recvInst: U64 = 0
         if genericRecv {
             rcount = self.recvParamCount(nameStart: rt.nameStart, nameLen: rt.nameLen)
-            recvInst = rt.ref
+            recvInst = concreteRecvRef
             if mf.typeParams.count() <= rcount {
                 return
             }
         }
         self.setSelfItemEnv(recvStart: rt.nameStart, recvLen: rt.nameLen, recvInstRef: recvInst)
-        val inferred: Array[U64] = self.inferFnArgs(f: mf, args: args)
-        // build the full type-arg vector: the receiver's args fill the first `rcount`
-        // slots (not inferrable from the call), the method-own args the rest.
+        // As for free calls, a method-own instance is keyed by the resolved
+        // callable descriptor.  Its receiver substitutions and own generic
+        // substitutions are one vector selected by Mono, never a second
+        // inference from this method AST.
         mut val fullArgs: Array[U64] = []
-        if genericRecv {
-            val inst: TypeRef = self.arena.types[recvInst]
-            mut val ri: U64 = 0
-            while ri < rcount {
-                if ri < inst.args.count() {
-                    fullArgs.append(inst.args[ri])
-                }
-                ri += 1
-            }
-            mut val oi: U64 = rcount
-            while oi < inferred.count() {
-                fullArgs.append(inferred[oi])
-                oi += 1
-            }
-        } else {
-            mut val ai: U64 = 0
-            while ai < inferred.count() {
-                fullArgs.append(inferred[ai])
-                ai += 1
-            }
+        if callId != 4000000000U64 {
+            fullArgs = self.bodyCalleeTypeArgs(exprId: callId)
         }
         if self.fnArgsAllGround(args: fullArgs) {
-            if !(self.fnInstExists(fnIdx: mi, args: fullArgs)) {
+            if !(self.fnInstExists(fnIdx: mi, args: fullArgs, recvInstRef: recvInst)) {
                 self.monoWork.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
             }
             // register the grounded return adapter (`MapIter[…,I64]`) + its transitive
@@ -398,6 +459,10 @@ pub impl Comp {
             self.cur.typeParams = mf.typeParams
             self.cur.typeArgs = fullArgs
             if mf.hasRet {
+                val finalResult: U64 = self.groundTypeRef(ref: mf.retTy)
+                if callId != 4000000000U64 {
+                    self.setBodyCalleeResultRef(exprId: callId, resultRef: finalResult)
+                }
                 self.scanType(ref: mf.retTy)
             }
             self.cur.typeParams = savedP

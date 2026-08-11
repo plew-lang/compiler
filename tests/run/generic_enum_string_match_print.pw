@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+import @Std/Core
+
+fn main() {
+    val values = [<Optional[String].Some v="alpha" />, <Optional[String].None />]
+    for val value in values {
+        match value {
+            Optional.Some(v: val item) => { print(item) }
+            Optional.None => { print("n") }
+        }
+    }
+}

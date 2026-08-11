@@ -52,30 +52,38 @@ pub impl LlvmCtx {
 
     // `arr[i]` read: bounds-checked element load.
     inout fn genLlvmIndex(c: inout Comp, base: U64, index: U64) -> LLVMValueRef {
+        // Array's value representation is a buffer pointer plus count.  Keep
+        // `Expr.Index` through Mono/Verify for an addressable place, then read
+        // the element here from the already-resolved Array instance — no method
+        // lookup or source reconstruction is performed in LLVM.
+        if self.exprIsArray(c: inout c, id: base) {
+            val elemTy: LLVMTypeRef = self.arrElemTyOf(c: inout c, id: base)
+            val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: base)
+            val arr: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: base)
+            val data: LLVMValueRef = self.arrValData(c: inout c, arr: arr)
+            val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
+            val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
+            self.emitBoundsCheck(c: inout c, idx: idx, count: count)
+            val elem: LLVMValueRef = LLVMBuildLoad2(self.b, elemTy, self.arrElemPtr(elemTy: elemTy, data: data, idx: idx), anon())
+            // An index read is a fresh value under value semantics.  Retain the
+            // ARC-bearing element before returning it, matching Buffer.get.
+            if c.arcNeedsRelease(ref: elemRef) {
+                self.valueArc(c: inout c, v: elem, typeRef: elemRef, retain: true)
+            }
+            return elem
+        }
         // `buf[i]` on the Buffer floor is the compiler-recognised subscript = the value-
         // return `get` (retains an ARC element; buffer-floor.md §4). Special-cased like
         // Array's `[]` rather than routed through an `index` witness.
         if self.exprIsBuffer(c: inout c, id: base) {
             return self.genLlvmBufferGet(c: inout c, recv: base, indexExpr: index)
         }
-        // `recv[i]` (read) desugars to the `Index` witness `recv.index(key: i)` (spec/12) —
-        // uniform across Array and user `Index` types (collections.md E3: no Array type-name
-        // branch). Every array value — a local, a struct field, a call/method result, a
-        // literal — resolves to the `Array` generic def (exprStructIdx), which carries the
-        // `index` witness, so all route here. A Dictionary subscript `d[k]` lowers to the
-        // panicking accessor `d.at(key:k)` (spec/02).
-        val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
-        if bsi < c.arena.structs.count() {
-            if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[bsi].nameStart, len: c.arena.structs[bsi].nameLen, kw: "Dictionary") {
-                val m: U64 = c.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                return self.genLlvmExpr(c: inout c, id: m)
-            }
-            if c.typeHasMethodNamed(typeStart: c.arena.structs[bsi].nameStart, typeLen: c.arena.structs[bsi].nameLen, name: "index") {
-                val m: U64 = c.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0)
-                return self.genLlvmExpr(c: inout c, id: m)
-            }
-        }
-        c.errorAt(offset: c.exprOffset(id: base), msg: "LLVM backend: user Index subscript needs an `index` method")
+        // All non-floor subscripts are lowered by Mono into their selected
+        // `index`/`at` Method expression before LLVM starts.  Reconstructing a
+        // method expression here used to re-enter overload resolution after the
+        // final-callee table had closed; keep this as an invariant failure rather
+        // than a second resolver.
+        c.errorAt(offset: c.exprOffset(id: base), msg: "internal error: subscript reached LLVM without its final callable")
         return LLVMConstInt(self.i64ty, 0U64, 0I32)
     }
 

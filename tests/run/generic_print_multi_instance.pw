@@ -1,0 +1,6 @@
+import @Std/Io with { print }
+
+fn main() {
+    print(7I64)
+    print("alpha")
+}

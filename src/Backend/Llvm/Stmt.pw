@@ -72,7 +72,8 @@ pub impl LlvmCtx {
                 // application/drop of a view.
                 if ty != 0U64 {
                     if tyLen > 0U64 {
-                        if c.arena.types[ty].viewExtId != self.exprViewExtId(c: inout c, id: init) {
+                        val sameView: Bool = c.sameViewIdSet(a: self.typeViewIds(c: inout c, ref: ty), b: self.collectViewChain(c: inout c, id: init))
+                        if !(sameView) {
                             c.errorAt(offset: c.exprOffset(id: init), msg: "extension view mismatch: the binding's `#Ext` view must match its initializer — apply or drop the view explicitly (`value#Ext` / `value#!Ext`)")
                         }
                     }
@@ -397,7 +398,7 @@ pub impl LlvmCtx {
                 // un-annotated binding, the initializer's own view (`val v = p#Ext`).
                 if tref == 0U64 {
                     if ty != 0U64 {
-                        if c.arena.types[ty].viewExtId != 0U64 {
+                        if c.arena.types[ty].viewExtId != 0U64 || c.arena.types[ty].viewIds.count() > 0U64 {
                             tref = ty
                         }
                     }
@@ -405,7 +406,7 @@ pub impl LlvmCtx {
                 if tref == 0U64 {
                     val ir: U64 = self.exprTypeRef(c: inout c, id: init)
                     if ir != 0U64 {
-                        if c.arena.types[ir].viewExtId != 0U64 {
+                        if c.arena.types[ir].viewExtId != 0U64 || c.arena.types[ir].viewIds.count() > 0U64 {
                             tref = ir
                         }
                     }
@@ -506,7 +507,7 @@ pub impl LlvmCtx {
             Stmt.Assign(val target, val value) => {
                 // extension-view invariance (spec/09): an assignment must not implicitly
                 // change a value's view — the target's and value's views must match.
-                if self.exprViewExtId(c: inout c, id: target) != self.exprViewExtId(c: inout c, id: value) {
+                if !(c.sameViewIdSet(a: self.collectViewChain(c: inout c, id: target), b: self.collectViewChain(c: inout c, id: value))) {
                     c.errorAt(offset: c.exprOffset(id: value), msg: "extension view mismatch: assignment must not implicitly apply or drop a `#Ext` view — adjust it explicitly (`value#Ext` / `value#!Ext`)")
                 }
                 // compound assign is desugared upstream in the Lower pass to `place = place OP
@@ -559,35 +560,10 @@ pub impl LlvmCtx {
                         }
                     }
                     Expr.Index(base: val ibase, index: val iindex) => {
-                        // whole-element write `g[i] = v` (collections.md E3): route through the
-                        // `IndexSet` witness uniformly — a Dictionary `d[k]=v` lowers to
-                        // `d.insert(key:, value:)`; any type with an `indexSet` method (incl.
-                        // Array, whose `indexSet` forwards to the Buffer floor) lowers to
-                        // `g.indexSet(key: i, value: v)`. A compound `g[i] OP= v` arrives already
-                        // desugared by Lower to `g[i] = g[i] OP v` with `i` bound to a temp (so it
-                        // is evaluated once) — `value` here is that binary. The receiver is
-                        // `inout`, so its place gateway runs the CoW privatization. (Place-based
-                        // element mutation `arr[i].field = v` / `inout arr[i]` is handled elsewhere
-                        // and keeps the place model, which addresses the backing directly.)
-                        val ibsi: U64 = self.exprStructIdx(c: inout c, id: ibase)
-                        if ibsi < c.arena.structs.count() {
-                            if rangeEquals(bytes: c.arena.bytes, start: c.arena.structs[ibsi].nameStart, len: c.arena.structs[ibsi].nameLen, kw: "Dictionary") {
-                                val m: U64 = c.synthDictMethod(recv: ibase, name: "insert", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: value)
-                                self.genLlvmExpr(c: inout c, id: m)
-                                return
-                            }
-                            if c.typeHasMethodNamed(typeStart: c.arena.structs[ibsi].nameStart, typeLen: c.arena.structs[ibsi].nameLen, name: "indexSet") {
-                                val m: U64 = c.synthDictMethod(recv: ibase, name: "indexSet", arg0Label: "key", arg0: iindex, hasArg1: true, arg1Label: "value", arg1: value)
-                                self.genLlvmExpr(c: inout c, id: m)
-                                return
-                            }
-                        }
-                        // every subscript-assign now resolves through the `IndexSet` witness
-                        // above (Array included, since E3 binds arrays as generic-struct locals
-                        // and `exprStructIdx` recovers the Array struct for any array place) —
-                        // there is no built-in array element-store path and no `exprIsArray`
-                        // type-name dispatch here. A base with no `indexSet` witness is an error.
-                        c.errorAt(offset: c.exprOffset(id: ibase), msg: "LLVM backend: subscript assignment requires an `indexSet` method")
+                        // Mono rewrites every whole-element subscript assignment
+                        // to its selected `indexSet`/`insert` call.  LLVM cannot
+                        // synthesize and resolve a second call after finalization.
+                        c.errorAt(offset: c.exprOffset(id: ibase), msg: "internal error: subscript assignment reached LLVM without its final callable")
                         return
                     }
                     Expr.Field(base: val fbase, nameStart: val fnameStart, nameLen: val fnameLen) => {
@@ -782,7 +758,10 @@ pub impl LlvmCtx {
                         // extension-view invariance (spec/09): a returned value's view
                         // must match the declared return type's view.
                         if self.curRetRef != 0U64 {
-                            if c.arena.types[self.curRetRef].viewExtId != self.exprViewExtId(c: inout c, id: value) {
+                            val retTy: TypeRef = c.arena.types[self.curRetRef]
+                            mut val retIds: Array[U64] = retTy.viewIds
+                            if retIds.count() == 0U64 && retTy.viewExtId != 0U64 { retIds.append(retTy.viewExtId) }
+                            if !(c.sameViewIdSet(a: retIds, b: self.collectViewChain(c: inout c, id: value))) {
                                 c.errorAt(offset: c.exprOffset(id: value), msg: "extension view mismatch: the returned value's `#Ext` view must match the declared return type — apply or drop the view explicitly")
                             }
                         }
@@ -977,7 +956,7 @@ pub impl LlvmCtx {
             }
             Stmt.For(val varStart, val varLen, val varTyStart, val varTyLen, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patStart, val patLen, val binds) => {
                 if isStruct {
-                    self.genLlvmForArrayStruct(c: inout c, patStart: patStart, patLen: patLen, iter: iter, binds: binds, body: body)
+                    self.genLlvmForArrayStruct(c: inout c, stmtId: id, patStart: patStart, patLen: patLen, iter: iter, binds: binds, body: body)
                 } else {
                     if isRange {
                         self.genLlvmForRange(c: inout c, varStart: varStart, varLen: varLen, varTyStart: varTyStart, varTyLen: varTyLen, inclusive: inclusive, lo: iter, hi: rangeHi, body: body)
@@ -987,7 +966,7 @@ pub impl LlvmCtx {
                         // `recvRef = Array[E]`, so genLlvmForIterable -> genLlvmForGenIterable
                         // calls Array's `iterator()` witness and drives `next()`).
                         val noBinds: Array[Bind] = []
-                        self.genLlvmForIterable(c: inout c, varStart: varStart, varLen: varLen, patStart: 0U64, patLen: 0U64, binds: noBinds, iter: iter, body: body)
+                        self.genLlvmForIterable(c: inout c, stmtId: id, varStart: varStart, varLen: varLen, patStart: 0U64, patLen: 0U64, binds: noBinds, iter: iter, body: body)
                     }
                 }
             }

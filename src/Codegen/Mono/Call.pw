@@ -12,6 +12,1486 @@
 // function-typed capture are not supported yet.
 
 pub impl Comp {
+    // BodyCallee keys share one U64 namespace for ordinary Func bodies and
+    // closure bodies.  Arena expression ids occupy the low range, so reserve
+    // the high bit for a closure body.  This lets a closure's static calls be
+    // finalized and emitted under its own lexical environment instead of
+    // accidentally inheriting the surrounding function's table entries.
+    inout fn closureBodyKey(closureId: U64) -> U64 {
+        return 9223372036854775808U64 + closureId
+    }
+
+    // TypeRef indices are arena allocation identities, not semantic identities:
+    // a plain `I64` can be reconstructed in more than one frontend phase.
+    // A body is additionally selected by its Func identity, so a caller view is
+    // not another receiver identity here: the selected Func already carries its
+    // extension/trait provenance.  Body-instance keys compare the structural
+    // runtime receiver (head plus arguments) and deliberately erase views.
+    inout fn sameBodyRuntimeRef(a: U64, b: U64) -> Bool {
+        if a == b { return true }
+        if a >= self.arena.types.count() || b >= self.arena.types.count() { return false }
+        val left: TypeRef = self.arena.types[a]
+        val right: TypeRef = self.arena.types[b]
+        // Source facets (view, capability, associated-type spelling) are
+        // resolved before this point.  The emitted receiver representation is
+        // determined solely by its runtime head/arguments and existential bit.
+        // A few bootstrap-era TypeRef construction paths predate nameId and
+        // legitimately carry 0.  Interned ids are a fast path, not part of the
+        // runtime type contract; fall back to the head spelling for those
+        // legacy nodes rather than splitting one emitted body in two.
+        // A zero nameId is an absent cache entry, not an identifier.  Comparing
+        // two such legacy refs as equal merged unrelated runtime receivers
+        // (for example Counter and Two) in final-callable/body keys.  Use ids
+        // only when BOTH exist; otherwise compare the authoritative spelling.
+        if left.nameId == 0U64 || right.nameId == 0U64 {
+            if !(spansEqual(c: inout self, aStart: left.nameStart, aLen: left.nameLen, bStart: right.nameStart, bLen: right.nameLen)) {
+                return false
+            }
+        } else if left.nameId != right.nameId {
+            return false
+        }
+        if left.isAny != right.isAny || left.args.count() != right.args.count() {
+            return false
+        }
+        mut val i: U64 = 0U64
+        while i < left.args.count() {
+            if !(self.sameBodyRuntimeRef(a: left.args[i], b: right.args[i])) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn sameBodyReceiver(a: U64, b: U64) -> Bool {
+        if a == 0U64 || b == 0U64 { return a == b }
+        return self.sameBodyRuntimeRef(a: a, b: b)
+    }
+
+    // Canonical semantic receiver for a body instance.  `BodyInstance` is the
+    // hand-off boundary between finalization and LLVM: both sides ask this one
+    // helper for the key, never reconstruct it from incidental `self` state.
+    //
+    // A caller's view chooses *which Func* reaches this point, but is not by
+    // itself part of that Func body's identity.  For example `String#Hash.hash`
+    // selects String's Hash implementation; its body still has the ordinary
+    // String receiver surface unless the Func explicitly carries a source view.
+    // Retaining the caller's view made Mono record `String#Hash` while backend
+    // emitted the same Func for `String`, producing two keys for one body.
+    // Normalize to the runtime receiver first, then reapply only the selected
+    // Func's own extension/trait surface below.
+    inout fn canonicalBodyReceiverRef(fnIdx: U64, recvInstRef: U64) -> U64 {
+        if fnIdx >= self.arena.funcs.count() { return recvInstRef }
+        val f: Func = self.arena.funcs[fnIdx]
+        mut val out: U64 = recvInstRef
+        if out == 0U64 && (f.hasRecv || f.isAssoc) {
+            out = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+        }
+        if out == 0U64 || out >= self.arena.types.count() { return out }
+        val base: TypeRef = self.arena.types[out]
+        if base.viewExtId != 0U64 || base.viewIds.count() != 0U64 {
+            out = self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen args=base.args />)
+        }
+        if f.extId != 0U64 {
+            out = self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=self.arena.types[out].args viewExtId=f.extId />)
+        } else if f.selfViewId != 0U64 {
+            out = self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=self.arena.types[out].args viewExtId=f.selfViewId />)
+        }
+        return out
+    }
+
+    // Recover an expression's concrete receiver TypeRef under the body instance
+    // being scanned.  The parametric table normally supplies this directly.  A
+    // plain scalar type parameter is deliberately representation-free in a few
+    // older AST paths, so rebuild its named TypeRef before applying the same
+    // body substitution.  This remains frontend resolution; backend never uses
+    // this recovery.
+    inout fn groundedBodyReceiverRef(exprId: U64) -> U64 {
+        mut val out: U64 = 0U64
+        // A nested call's concrete result is already part of its final
+        // descriptor.  Consult it before the AST-wide type projection: that
+        // projection is deliberately parametric and can lose a cast/view's
+        // concrete surface, whereas the descriptor is the exact receiver for
+        // the enclosing method (`(back as UserId).bytes().count()`).
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                out = self.bodyCalleeResultRef(exprId: exprId)
+            }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                out = self.bodyCalleeResultRef(exprId: exprId)
+            }
+            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+                out = self.bodyCalleeResultRef(exprId: exprId)
+            }
+            _ => {}
+        }
+        if out != 0U64 { return out }
+        // Locals retain their declared structured type even when the generic
+        // type-recovery projection exposes an Array through its element view.
+        // Prefer that declaration for source selection.
+        match self.arena.exprs[exprId] {
+            Expr.Ident(val start, val len) => {
+                if self.cur.hasRecv {
+                    val selfName: Bind = self.kwSpan(kw: "self", kwLen: 4U64)
+                    if spansEqual(c: inout self, aStart: start, aLen: len, bStart: selfName.nameStart, bLen: selfName.nameLen) {
+                        // The body-instance receiver is the semantic identity
+                        // that selected this callable.  Prefer it over the
+                        // mutable Self/Item convenience environment: provided
+                        // trait bodies are shared, and that ambient environment
+                        // may still describe another conformer after a nested
+                        // resolution query.
+                        if self.cur.bodyRecvInstRef != 0U64 { return self.cur.bodyRecvInstRef }
+                        if self.cur.bodySelfRef != 0U64 { return self.cur.bodySelfRef }
+                    }
+                }
+                val li: U64 = self.localIndexByName(start: start, len: len)
+                if li < self.cur.locals.count() {
+                    val lo: Local = self.cur.locals[li]
+                    out = lo.ty
+                    if lo.isArray {
+                        if out == 0U64 || out >= self.arena.types.count() || !(rangeEquals(bytes: self.arena.bytes, start: self.arena.types[out].nameStart, len: self.arena.types[out].nameLen, kw: "Array")) {
+                            val elem: U64 = out
+                            if elem != 0U64 { out = self.arrayRefOfElem(elemRef: elem) }
+                        }
+                    }
+                    if out != 0U64 {
+                        val savedP: Array[Bind] = self.cur.typeParams
+                        val savedA: Array[U64] = self.cur.typeArgs
+                        val savedS: U64 = self.cur.selfRef
+                        val savedI: U64 = self.cur.itemRef
+                        self.cur.typeParams = self.cur.bodyTypeParams
+                        self.cur.typeArgs = self.cur.bodyTypeArgs
+                        self.cur.selfRef = self.cur.bodySelfRef
+                        self.cur.itemRef = self.cur.bodyItemRef
+                        out = self.groundTypeRef(ref: out)
+                        self.cur.typeParams = savedP
+                        self.cur.typeArgs = savedA
+                        self.cur.selfRef = savedS
+                        self.cur.itemRef = savedI
+                        return out
+                    }
+                }
+            }
+            _ => {}
+        }
+        // TypeInfo's legacy array projection is just its element type.  It is
+        // useful for scalar typing, but not for a method receiver: an
+        // `Array[U8]` local must retain the full instance identity selected at
+        // the call site.  Ident locals above therefore win; non-local
+        // expressions can use the ordinary typed-IR recovery.
+        out = self.groundedTypeOf(id: exprId)
+        if out != 0U64 {
+            return out
+        }
+        val ti: TypeInfo = self.typeOf(id: exprId)
+        if ti.nameLen == 0U64 {
+            return 0U64
+        }
+        // Preserve a structured recovery such as Array[E] before falling back
+        // to a bare head.  Rebuilding only `E` here was enough to make an
+        // Array method's final Func known while losing the receiver instance
+        // required to emit that very Func.
+        out = self.typedIrRefOfInfo(ti: ti)
+        if out == 0U64 {
+            out = self.findOrAddTypeRef(nameStart: ti.nameStart, nameLen: ti.nameLen)
+        }
+        if out == 0U64 {
+            return 0U64
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedS: U64 = self.cur.selfRef
+        val savedI: U64 = self.cur.itemRef
+        self.cur.typeParams = self.cur.bodyTypeParams
+        self.cur.typeArgs = self.cur.bodyTypeArgs
+        self.cur.selfRef = self.cur.bodySelfRef
+        self.cur.itemRef = self.cur.bodyItemRef
+        out = self.groundTypeRef(ref: out)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedS
+        self.cur.itemRef = savedI
+        return out
+    }
+
+    // Resolve a method from the concrete receiver identity of the body instance.
+    // `resolveMethodFinal(recv: ...)` is intentionally syntax-facing and starts
+    // from `typeOf(recv)`; in a shared generic body that value is still the
+    // parameter spelling (`T`).  Mono owns the one post-substitution resolution,
+    // so it starts from the grounded TypeRef and retains the resulting callable.
+    inout fn resolveBodyMethodForRef(recv: U64, recvRef: U64, sourceId: U64, nameStart: U64, nameLen: U64, args: Array[Arg], useOffset: U64) -> U64 {
+        if recvRef == 0U64 || recvRef >= self.arena.types.count() {
+            return self.arena.funcs.count()
+        }
+        // A newtype is a distinct source type but inherits the underlying
+        // callable surface and representation.  Normalize at the one resolver
+        // that constructs final method callables, so generic bodies (`print[T]`
+        // with T=UserId) use the same String witness as direct source calls.
+        mut val resolvedRef: U64 = recvRef
+        val original: TypeRef = self.arena.types[recvRef]
+        val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
+        if underlying != 0U64 && underlying < self.arena.types.count() {
+            resolvedRef = underlying
+        }
+        val rt: TypeRef = self.arena.types[resolvedRef]
+        mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: recvRef, finalSourceId: sourceId)
+        mut val callee: U64 = self.arena.funcs.count()
+        if sources.count() > 0U64 {
+            callee = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef)
+        }
+        if callee >= self.arena.funcs.count() {
+            callee = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, useOffset: useOffset)
+        }
+        return callee
+    }
+
+    // Ground a selected method's result under the same concrete receiver that
+    // selected it.  Control-flow desugars such as `for` have no explicit AST
+    // Method node for their iterator result, so this keeps that intermediate
+    // type recovery in Mono instead of asking LLVM to rediscover it.
+    inout fn groundedCalleeReturn(callee: U64, recvRef: U64) -> U64 {
+        if callee >= self.arena.funcs.count() { return 0U64 }
+        val f: Func = self.arena.funcs[callee]
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedS: U64 = self.cur.selfRef
+        val savedI: U64 = self.cur.itemRef
+        self.cur.typeParams = f.typeParams
+        if recvRef != 0U64 && recvRef < self.arena.types.count() {
+            self.cur.typeArgs = self.arena.types[recvRef].args
+            self.setSelfItemEnv(recvStart: self.arena.types[recvRef].nameStart, recvLen: self.arena.types[recvRef].nameLen, recvInstRef: recvRef)
+        } else {
+            self.cur.typeArgs = []
+        }
+        val out: U64 = self.groundTypeRef(ref: f.retTy)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedS
+        self.cur.itemRef = savedI
+        return out
+    }
+
+    // The final descriptor carries the *complete* callable substitution
+    // vector, including method-owned arguments.  Use it for every result
+    // projection so later backend consumers never have to ground a declaration
+    // under their own incidental environment.
+    inout fn groundedSelectedCalleeReturn(callee: U64, recvRef: U64, calleeArgs: Array[U64]) -> U64 {
+        if callee >= self.arena.funcs.count() { return 0U64 }
+        val f: Func = self.arena.funcs[callee]
+        if !(f.hasRet) { return 0U64 }
+        if f.retTy == 0U64 {
+            if f.retStart != 0U64 && f.retLen != 0U64 && !(f.retIsArray) {
+                return self.simpleTypeRef(nameStart: f.retStart, nameLen: f.retLen)
+            }
+            return 0U64
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedS: U64 = self.cur.selfRef
+        val savedI: U64 = self.cur.itemRef
+        self.cur.typeParams = f.typeParams
+        self.cur.typeArgs = calleeArgs
+        if recvRef != 0U64 && recvRef < self.arena.types.count() {
+            self.setSelfItemEnv(recvStart: self.arena.types[recvRef].nameStart, recvLen: self.arena.types[recvRef].nameLen, recvInstRef: recvRef)
+        }
+        val out: U64 = self.groundTypeRef(ref: f.retTy)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedS
+        self.cur.itemRef = savedI
+        return out
+    }
+
+    // Queue a concrete callable body before LLVM starts.  This is deliberately
+    // separate from FnInst: FnInst is a code-generation/mangling detail, while
+    // this list is the semantic reachability closure whose bodies must have all
+    // final call selections recorded.
+    inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64) {
+        if fnIdx >= self.arena.funcs.count() { return }
+        val f: Func = self.arena.funcs[fnIdx]
+        if f.isExtern || f.body == 0U64 { return }
+        val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
+        mut val i: U64 = 0U64
+        while i < self.monoWork.bodyInstances.count() {
+            val prior: BodyInstance = self.monoWork.bodyInstances[i]
+            if prior.fnIdx == fnIdx && self.sameBodyReceiver(a: prior.recvInstRef, b: canonicalRecv) && prior.args.count() == args.count() {
+                mut val same: Bool = true
+                mut val ai: U64 = 0U64
+                while ai < args.count() {
+                    if !(self.typeRefEq(a: prior.args[ai], b: args[ai])) { same = false }
+                    ai += 1U64
+                }
+                if same { return }
+            }
+            i += 1U64
+        }
+        self.monoWork.bodyInstances.append(<BodyInstance fnIdx=fnIdx args=args recvInstRef=canonicalRecv />)
+    }
+
+    // An associated callable uses the generic-function ABI path even when it
+    // has no type parameters.  Register that code-generation instance exactly
+    // where Mono has the final callable descriptor, so explicit calls, implicit
+    // protocol calls (`for`), and lowered operators cannot drift into separate
+    // registration rules.
+    inout fn enqueueSelectedAssocInstance(callee: U64, args: Array[U64], recvInstRef: U64) {
+        if callee >= self.arena.funcs.count() { return }
+        val f: Func = self.arena.funcs[callee]
+        if f.isExtern || !(f.isAssoc) { return }
+        if f.typeParams.count() > 0U64 {
+            if args.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: args)) { return }
+        }
+        if !(self.fnInstExists(fnIdx: callee, args: args, recvInstRef: recvInstRef)) {
+            self.monoWork.fnInsts.append(<FnInst fnIdx=callee args=args recvInstRef=recvInstRef />)
+        }
+    }
+
+    // Free-function instances (including the zero-type-argument case) use the
+    // same final substitutions as any other selected callable.  Registering
+    // them here removes the old second inference pass in `registerCallInst`,
+    // which could see a shared generic AST without the concrete caller
+    // environment.
+    inout fn enqueueSelectedFreeInstance(callee: U64, args: Array[U64]) {
+        if callee >= self.arena.funcs.count() { return }
+        val f: Func = self.arena.funcs[callee]
+        // Async functions have their own entry/resume declaration and emission
+        // path.  They are final callables like any other call, but are never a
+        // `gf` body instance: registering them here opens the async body under
+        // the ordinary emitter, where `await` is intentionally not an Expr.
+        if f.isExtern || f.hasRecv || f.isAssoc || f.isAsync { return }
+        if f.typeParams.count() > 0U64 {
+            if args.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: args)) { return }
+        }
+        if !(self.fnInstExists(fnIdx: callee, args: args)) {
+            self.monoWork.fnInsts.append(<FnInst fnIdx=callee args=args />)
+        }
+    }
+
+    // A copied trait-provided callable inherits the conformance subject's
+    // parameters followed by the trait requirement's parameters.  InferFnArgs
+    // can recover the latter from ordinary arguments, but a contextless literal
+    // (and `Self`-only requirement) must still receive the concrete trait
+    // arguments recorded by the conformance.  Resolve that substitution once
+    // here, at final-callee construction time.
+    inout fn providedTraitArgsForFinalCallee(callee: U64, recvRef: U64) -> Array[U64] {
+        mut val out: Array[U64] = []
+        if callee >= self.arena.funcs.count() || recvRef == 0U64 { return out }
+        val f: Func = self.arena.funcs[callee]
+        mut val traitId: U64 = f.originTraitId
+        mut val traitArity: U64 = f.originTraitArity
+        if traitId == 0U64 {
+            traitId = f.srcTraitId
+            traitArity = f.provTraitArity
+        }
+        if traitId == 0U64 || traitArity == 0U64 { return out }
+        mut val ci: U64 = 0U64
+        while ci < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[ci]
+            if cf.traitId == traitId && cf.traitArgs.count() == traitArity {
+                if self.conformanceSubjectMatches(cf: cf, typeRef: recvRef) {
+                    mut val binds: Array[UnifyBind] = []
+                    // Some primitive/lang-item conformances still use the
+                    // legacy zero subject sentinel.  It is an already concrete
+                    // subject (conformanceSubjectMatches accepted it), so no
+                    // structural binder map is needed to ground its trait args.
+                    if cf.subjectTy == 0U64 || self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds, ignoreTopView: true) {
+                        mut val subst: Array[U64] = []
+                        mut val pi: U64 = 0U64
+                        while pi < cf.typeParams.count() {
+                            val bi: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, nameId: cf.typeParams[pi].nameId)
+                            if bi < binds.count() { subst.append(binds[bi].ref) }
+                            else { subst.append(0U64) }
+                            pi += 1U64
+                        }
+                        val savedP: Array[Bind] = self.cur.typeParams
+                        val savedA: Array[U64] = self.cur.typeArgs
+                        self.cur.typeParams = cf.typeParams
+                        self.cur.typeArgs = subst
+                        mut val ai: U64 = 0U64
+                        while ai < cf.traitArgs.count() {
+                            out.append(self.groundTypeRef(ref: cf.traitArgs[ai]))
+                            ai += 1U64
+                        }
+                        self.cur.typeParams = savedP
+                        self.cur.typeArgs = savedA
+                        return out
+                    }
+                }
+            }
+            ci += 1U64
+        }
+        return out
+    }
+
+    // Default arguments are evaluated at the CALL SITE, not inside the callee
+    // body.  Their AST belongs to the parameter declaration, so a body-only
+    // walk misses its nested calls (`fn f(x: T = make())`; `f()`).  Scan every
+    // omitted default under the active caller body instance, recording those
+    // calls in the same final-callee table that LLVM will consult while it
+    // materializes the ABI argument list.
+    inout fn scanOmittedDefaultArgs(f: Func, args: Array[Arg]) {
+        mut val pi: U64 = 0U64
+        while pi < f.params.count() {
+            val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+            if ai >= args.count() {
+                val def: U64 = f.params[pi].defaultExpr
+                if def != 0U64 {
+                    self.scanExprInsts(exprId: def)
+                }
+            }
+            pi += 1U64
+        }
+    }
+
+    // Derive the concrete environment of a selected source-level call and add
+    // its callee body to the semantic worklist.  Resolution already happened;
+    // this function only preserves that decision and its substitutions.
+    inout fn enqueueSelectedCallee(exprId: U64, callee: U64, recvOverride: U64 = 0U64, implicit: Bool = false, recvInstOverride: U64 = 0U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
+        if callee >= self.arena.funcs.count() { return }
+        val f: Func = self.arena.funcs[callee]
+        mut val finalArgs: Array[U64] = []
+        mut val recvInst: U64 = 0U64
+        mut val callArgs: Array[Arg] = []
+        if !implicit {
+            match self.arena.exprs[exprId] {
+                Expr.Call(nameStart: _, nameLen: _, val args) => { callArgs = args }
+                Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
+                    callArgs = args
+                    recvInst = self.groundedBodyReceiverRef(exprId: recv)
+                }
+                Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+                    callArgs = args
+                    recvInst = self.groundedBodyReceiverRef(exprId: recv)
+                }
+                Expr.Binary(op: _, val lhs, val rhs) => {
+                    val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+                    callArgs.append(<Arg expr=lhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                    callArgs.append(<Arg expr=rhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                    recvInst = self.groundedBodyReceiverRef(exprId: lhs)
+                }
+                Expr.Unary(op: _, val operand) => {
+                    val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+                    callArgs.append(<Arg expr=operand isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                    recvInst = self.groundedBodyReceiverRef(exprId: operand)
+                }
+                _ => { return }
+            }
+        }
+        if recvInstOverride != 0U64 {
+            recvInst = recvInstOverride
+        } else if recvOverride != 0U64 {
+            recvInst = self.groundedBodyReceiverRef(exprId: recvOverride)
+        }
+        if f.hasRecv && recvInst == 0U64 {
+            recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+        }
+        if f.hasRecv && recvInst != 0U64 && recvInst < self.arena.types.count() {
+            val actual: TypeRef = self.arena.types[recvInst]
+            val underlying: U64 = self.newtypeUnderRef(start: actual.nameStart, len: actual.nameLen)
+            if underlying != 0U64 && underlying < self.arena.types.count() {
+                val underTy: TypeRef = self.arena.types[underlying]
+                if spansEqual(c: inout self, aStart: underTy.nameStart, aLen: underTy.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    recvInst = underlying
+                }
+            }
+        }
+        if f.isAssoc && recvInst == 0U64 {
+            recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+        }
+        // A context-grounded associated factory (`val r: MutableRef[Cell] =
+        // <MutableRef value=.../>`) has no value receiver.  The scan's
+        // expected result is therefore the authoritative concrete subject for
+        // both its final callable and emitted body instance.
+        if f.isAssoc && self.monoWork.scanExpectedTy != 0U64 && self.monoWork.scanExpectedTy < self.arena.types.count() {
+            val expected: U64 = self.groundTypeRef(ref: self.monoWork.scanExpectedTy)
+            if expected != 0U64 && expected < self.arena.types.count() {
+                val et: TypeRef = self.arena.types[expected]
+                if spansEqual(c: inout self, aStart: et.nameStart, aLen: et.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    recvInst = expected
+                }
+            }
+        }
+        // A type-qualified generic associated call has no value receiver to
+        // carry the subject arguments (`Optional.empty()` is parsed as a
+        // Method whose receiver is the bare type name).  Its already-grounded
+        // result supplies that same subject instance.  Preserve it here rather
+        // than asking LLVM to infer type arguments from the spelling again.
+        if f.isAssoc && f.typeParams.count() > 0U64 {
+            val resultInst: U64 = self.groundedTypeOf(id: exprId)
+            if resultInst != 0U64 && resultInst < self.arena.types.count() {
+                val resultTy: TypeRef = self.arena.types[resultInst]
+                if spansEqual(c: inout self, aStart: resultTy.nameStart, aLen: resultTy.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    recvInst = resultInst
+                }
+            }
+        }
+        // The receiver instance is part of every selected member callable,
+        // not only an associated factory.  Keeping it solely for assoc calls
+        // forced LLVM to recover an instance-method receiver from the shared
+        // AST; a generic `print[T]` body then lost `T=I64` at `value.format()`.
+        // Record the selected subject uniformly for instance and associated
+        // members so all later stages consume the same final descriptor.
+        if (f.hasRecv || f.isAssoc) && recvInst != 0U64 {
+            self.setBodyCalleeReceiverRef(exprId: exprId, recvRef: recvInst, siteIsStmt: siteIsStmt, slot: slot)
+        }
+        self.scanOmittedDefaultArgs(f: f, args: callArgs)
+        if f.typeParams.count() > 0U64 {
+            // An associated callable whose complete generic signature is its
+            // receiver subject (`Optional[T].empty()` and
+            // `Optional[T].fromValue(value:)`) takes T from that selected
+            // receiver, not from an independent inference pass.  This holds
+            // equally for zero- and value-argument factories.
+            if f.isAssoc && recvInst != 0U64 && recvInst < self.arena.types.count() {
+                val recvArgs: Array[U64] = self.arena.types[recvInst].args
+                if recvArgs.count() == f.typeParams.count() && self.fnArgsAllGround(args: recvArgs) {
+                    self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: recvArgs, siteIsStmt: siteIsStmt, slot: slot)
+                    val directResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvInst, calleeArgs: recvArgs)
+                    self.setBodyCalleeResultRef(exprId: exprId, resultRef: directResult, siteIsStmt: siteIsStmt, slot: slot)
+                    self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst)
+                    self.enqueueSelectedAssocInstance(callee: callee, args: recvArgs, recvInstRef: recvInst)
+                    self.enqueueSelectedFreeInstance(callee: callee, args: recvArgs)
+                    return
+                }
+            }
+            val inferred: Array[U64] = self.inferFnArgs(f: f, args: callArgs)
+            mut val recvCount: U64 = 0U64
+            // Associated callables carry their generic subject exactly like
+            // instance methods: `impl[T] Box[T] as Eq { fn eq… }` has no value
+            // self, yet `T` is fixed by the selected Box instance.  Preserve
+            // those leading substitutions here so LLVM never reconstructs them
+            // from an operand or expected type.
+            if (f.hasRecv || f.isAssoc) && recvInst != 0U64 && recvInst < self.arena.types.count() {
+                recvCount = self.recvParamCount(nameStart: self.arena.types[recvInst].nameStart, nameLen: self.arena.types[recvInst].nameLen)
+                // `Pair.of(...)` is written against the generic head `Pair`,
+                // whose source TypeRef has no actual arguments.  In that form
+                // the call arguments (or expected result) determine *all*
+                // parameters; consume only substitutions the receiver actually
+                // carries.
+                if recvCount > self.arena.types[recvInst].args.count() {
+                    recvCount = self.arena.types[recvInst].args.count()
+                }
+                mut val ri: U64 = 0U64
+                while ri < recvCount {
+                    if ri < self.arena.types[recvInst].args.count() {
+                        finalArgs.append(self.arena.types[recvInst].args[ri])
+                    }
+                    ri += 1U64
+                }
+            }
+            mut val ai: U64 = recvCount
+            while ai < inferred.count() {
+                finalArgs.append(inferred[ai])
+                ai += 1U64
+            }
+            // Keep the vector positional even when a legacy inference path did
+            // not materialize an unconstrained slot.  The conformance binding
+            // below fills such slots by declaration identity; leaving the slot
+            // absent would make that information impossible to apply.
+            while finalArgs.count() < f.typeParams.count() {
+                finalArgs.append(0U64)
+            }
+            // Conformance-declared trait arguments are semantic call inputs,
+            // not a backend inference fallback.  They complete a provided
+            // requirement whose type variable appears only as `Self` or under
+            // a contextless literal.
+            val traitArgs: Array[U64] = self.providedTraitArgsForFinalCallee(callee: callee, recvRef: recvInst)
+            mut val tai: U64 = 0U64
+            while tai < traitArgs.count() {
+                val target: U64 = recvCount + tai
+                if target < finalArgs.count() {
+                    if finalArgs[target] == 0U64 || !(self.tyRefIsGround(ref: finalArgs[target])) { finalArgs[target] = traitArgs[tai] }
+                }
+                tai += 1U64
+            }
+            if finalArgs.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: finalArgs)) {
+                // An incomplete generic call has no emittable final instance.
+                return
+            }
+        }
+        self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: finalArgs, siteIsStmt: siteIsStmt, slot: slot)
+        val finalResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvInst, calleeArgs: finalArgs)
+        self.setBodyCalleeResultRef(exprId: exprId, resultRef: finalResult, siteIsStmt: siteIsStmt, slot: slot)
+        self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst)
+        self.enqueueSelectedAssocInstance(callee: callee, args: finalArgs, recvInstRef: recvInst)
+        self.enqueueSelectedFreeInstance(callee: callee, args: finalArgs)
+    }
+
+    // Operators are source-level calls to their selected associated witnesses.
+    // They do not have an Expr.Call node, but must enter the same semantic
+    // reachability closure before LLVM lowers the operator syntax.
+    inout fn recordBodyOperatorCallee(exprId: U64) {
+        // Concrete bodies already have the verifier's one canonical witness
+        // selection.  Retain it rather than repeating argument matching here;
+        // in particular a nested contextless literal has no independent AST
+        // type to re-derive (`b + 2 * 3`).  Generic/provided bodies deliberately
+        // resolve below under their concrete BodyInstance environment.
+        // A trait-provided body's AST is shared by every concrete conformer.
+        // Even a non-generic copy therefore has instance-dependent `self` calls:
+        // caching `self.step()` globally lets the last copied conformer (say
+        // `Two`) overwrite the callable used while emitting another (`Counter`).
+        // Only a body with neither substitutions nor provided provenance owns an
+        // AST-invariant selection.
+        mut val canUseInvariantCache: Bool = self.cur.bodyTypeParams.count() == 0U64
+        if self.cur.bodyFnIdx < self.arena.funcs.count() {
+            if self.arena.funcs[self.cur.bodyFnIdx].isProvided {
+                canUseInvariantCache = false
+            }
+        }
+        if canUseInvariantCache && exprId < self.typeCache.callee.count() {
+            val cached: U64 = self.typeCache.callee[exprId]
+            if cached != calleeUnfilled() && cached < self.arena.funcs.count() {
+                self.recordBodyCallee(exprId: exprId, callee: cached)
+                self.enqueueSelectedCallee(exprId: exprId, callee: cached)
+                return
+            }
+        }
+        mut val callee: U64 = self.arena.funcs.count()
+        match self.arena.exprs[exprId] {
+            Expr.Binary(val op, val lhs, val rhs) => {
+                if !(op == opAnd() || op == opOr()) {
+                    mut val method: String = ""
+                    if op == opEq() || op == opNe() { method = "eq" }
+                    else if op == opLt() || op == opLe() || op == opGt() || op == opGe() { method = "compare" }
+                    else if isBinTraitOp(op: op) { method = binTraitMethodName(op: op) }
+                    if method.bytes().count() > 0U64 {
+                        val recvRef: U64 = self.groundedBodyReceiverRef(exprId: lhs)
+                        if recvRef != 0U64 && recvRef < self.arena.types.count() {
+                            val rt: TypeRef = self.arena.types[recvRef]
+                            val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+                            mut val args: Array[Arg] = []
+                            args.append(<Arg expr=lhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                            args.append(<Arg expr=rhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                            // Every binary trait operation — including Eq.eq
+                            // and Ord.compare — uses the same witness selector
+                            // as checking.  Calling the generic callable
+                            // matcher here loses the operator's shared-RHS
+                            // rule and, notably, failed to retain String's
+                            // `Eq.eq` in the final table.  The selected Func is
+                            // the only operator-resolution fact LLVM receives.
+                            callee = self.findBinTraitWitness(typeStart: rt.nameStart, typeLen: rt.nameLen, name: method, rhs: rhs)
+                        }
+                    }
+                }
+            }
+            Expr.Unary(val op, val operand) => {
+                val recvRef: U64 = self.groundedBodyReceiverRef(exprId: operand)
+                if recvRef != 0U64 && recvRef < self.arena.types.count() {
+                    val rt: TypeRef = self.arena.types[recvRef]
+                    val method: String = unaryMethodName(op: op)
+                    // Unary trait witnesses have exactly one source operand.
+                    // The generic declaration is often `not(value: Self)`, so
+                    // generic parameter matching against the concrete operand
+                    // would incorrectly reject it. The concrete witness table
+                    // already has one selector per receiver; use the same
+                    // selector lookup as Eq/Ord operator checking.
+                    callee = self.findAssocByName(typeStart: rt.nameStart, typeLen: rt.nameLen, name: method)
+                }
+            }
+            _ => {}
+        }
+        // A primitive/floor operator legitimately has no user callable.  It is
+        // still a resolved semantic outcome: record the sentinel so LLVM does
+        // not mistake it for a missing finalization entry and re-query syntax.
+        self.recordBodyCallee(exprId: exprId, callee: callee)
+        if callee < self.arena.funcs.count() {
+            self.enqueueSelectedCallee(exprId: exprId, callee: callee)
+        } else {
+            // The primitive fallback's result is its grounded left/sole
+            // operand.  Record it as part of the same final descriptor so an
+            // enclosing generic call can use the exact child result without a
+            // second type-recovery pass.
+            match self.arena.exprs[exprId] {
+                Expr.Binary(op: _, val lhs, rhs: _) => {
+                    val resultRef: U64 = self.groundedBodyReceiverRef(exprId: lhs)
+                    self.setBodyCalleeResultRef(exprId: exprId, resultRef: resultRef)
+                    if exprId < self.parametricRef.count() && resultRef != 0U64 {
+                        self.parametricRef.set(i: exprId, value: resultRef)
+                    }
+                }
+                Expr.Unary(op: _, val operand) => {
+                    val resultRef: U64 = self.groundedBodyReceiverRef(exprId: operand)
+                    self.setBodyCalleeResultRef(exprId: exprId, resultRef: resultRef)
+                    if exprId < self.parametricRef.count() && resultRef != 0U64 {
+                        self.parametricRef.set(i: exprId, value: resultRef)
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Record the one final callable selected for `exprId` in the concrete body
+    // currently being scanned.  Generic templates share their AST, so this
+    // cannot live in the AST-global TypeCache (which is intentionally only for
+    // instance-invariant decisions).
+    inout fn finalCalleeCount() -> U64 { return self.arena.finalCallees.count() }
+
+    inout fn finalCalleeBodyArgsEqual(entry: U64) -> Bool {
+        val e: BodyCallee = self.arena.finalCallees[entry]
+        if e.args.count() != self.cur.bodyTypeArgs.count() { return false }
+        mut val j: U64 = 0U64
+        while j < self.cur.bodyTypeArgs.count() {
+            if !(self.typeRefEq(a: e.args[j], b: self.cur.bodyTypeArgs[j])) { return false }
+            j += 1U64
+        }
+        return true
+    }
+
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64) {
+        self.arena.finalCallees.append(<BodyCallee fnIdx=self.cur.bodyFnIdx args=self.cur.bodyTypeArgs recvInstRef=self.cur.bodyRecvInstRef exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef />)
+    }
+
+    inout fn recordBodyCallee(exprId: U64, callee: U64, siteIsStmt: Bool = false, slot: U64 = 0U64, recvOverride: U64 = 0U64, recvTypeOverride: U64 = 0U64) {
+        // Persist an instance-invariant final decision in the AST-owned cache.
+        // This is not a backend lookup fallback: it is the canonical storage
+        // for calls whose body key has no substitutions or receiver instance.
+        if !siteIsStmt && slot == 0U64 && self.cur.bodyTypeArgs.count() == 0U64 {
+            while self.arena.finalExprCallee.count() <= exprId {
+                self.arena.finalExprCallee.append(calleeUnfilled())
+            }
+            self.arena.finalExprCallee.set(i: exprId, value: callee)
+            if exprId < self.typeCache.callee.count() {
+                self.typeCache.callee.set(i: exprId, value: callee)
+            }
+        }
+        val priorIdx: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        mut val recvTypeRef: U64 = 0U64
+        if recvTypeOverride != 0U64 {
+            recvTypeRef = recvTypeOverride
+        } else if recvOverride != 0U64 {
+            recvTypeRef = self.groundedBodyReceiverRef(exprId: recvOverride)
+        } else {
+            match self.arena.exprs[exprId] {
+                Expr.Method(val recv, nameStart: _, nameLen: _, args: _) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: recv) }
+                Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: recv) }
+                Expr.Binary(op: _, val lhs, rhs: _) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: lhs) }
+                Expr.Unary(op: _, val operand) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: operand) }
+                _ => {}
+            }
+        }
+        if recvTypeRef == 0U64 && callee < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[callee]
+            if f.hasRecv {
+                recvTypeRef = f.recvTy
+                if recvTypeRef == 0U64 {
+                    recvTypeRef = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+                }
+            }
+            if f.isAssoc {
+                recvTypeRef = f.recvTy
+                if recvTypeRef == 0U64 {
+                    recvTypeRef = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+                }
+            }
+        }
+        // An argument-less generic associated factory has no value receiver
+        // from which a later phase can infer its subject.  When the enclosing
+        // declaration supplies `Set[String]` (or any other expected result),
+        // make that subject part of the descriptor at construction time rather
+        // than recording an incomplete call and hoping a backend path repairs
+        // it.
+        if callee < self.arena.funcs.count() {
+            val assoc: Func = self.arena.funcs[callee]
+            if assoc.isAssoc && self.monoWork.scanExpectedTy != 0U64 && self.monoWork.scanExpectedTy < self.arena.types.count() {
+                val expected: U64 = self.groundTypeRef(ref: self.monoWork.scanExpectedTy)
+                if expected != 0U64 && expected < self.arena.types.count() {
+                    val et: TypeRef = self.arena.types[expected]
+                    if spansEqual(c: inout self, aStart: et.nameStart, aLen: et.nameLen, bStart: assoc.recvStart, bLen: assoc.recvLen) {
+                        recvTypeRef = expected
+                    }
+                }
+            }
+        }
+        // A few legacy typed-IR projections expose a field receiver as its
+        // element/type-parameter component (for example `self.data` in an
+        // `Array[T]` method).  The selected non-trait method declaration is
+        // the authoritative structural receiver shape in that case.  Repair
+        // the projection here, while we still own resolution and substitutions;
+        // never make LLVM rediscover it from the expression.
+        if recvTypeRef != 0U64 && callee < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[callee]
+            if f.hasRecv && !(self.methodRecvIsTrait(f: f)) && f.recvTy != 0U64 {
+                val actual: TypeRef = self.arena.types[recvTypeRef]
+                if !spansEqual(c: inout self, aStart: actual.nameStart, aLen: actual.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
+                    val declared: U64 = self.groundTypeRef(ref: f.recvTy)
+                    if declared != 0U64 {
+                        recvTypeRef = declared
+                    }
+                }
+            }
+        }
+        mut val resultTypeRef: U64 = 0U64
+        mut val calleeTypeArgs: Array[U64] = []
+        if callee < self.arena.funcs.count() {
+            val resultFn: Func = self.arena.funcs[callee]
+            if resultFn.hasRet && recvTypeRef != 0U64 {
+                // Covers ordinary `-> Self`/associated-type returns immediately.
+                // A method-own generic result is completed below by
+                // registerMethodInst once its call-site arguments are inferred.
+                resultTypeRef = self.groundedCalleeReturn(callee: callee, recvRef: recvTypeRef)
+            }
+            if resultFn.isAssoc && resultFn.typeParams.count() > 0U64 && recvTypeRef != 0U64 && recvTypeRef < self.arena.types.count() {
+                val recvArgs: Array[U64] = self.arena.types[recvTypeRef].args
+                if recvArgs.count() == resultFn.typeParams.count() && self.fnArgsAllGround(args: recvArgs) {
+                    calleeTypeArgs = recvArgs
+                    resultTypeRef = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvTypeRef, calleeArgs: calleeTypeArgs)
+                }
+            }
+        }
+        // The ordinary collection walk can encounter a template before this
+        // finalization pass reaches its concrete instance.  Keep one entry per
+        // body key, but replace that provisional result with the resolved
+        // callable/receiver rather than silently preserving a zero sentinel.
+        if priorIdx < self.finalCalleeCount() {
+            val prior: BodyCallee = self.arena.finalCallees[priorIdx]
+            mut val finalCallee: U64 = prior.callee
+            if callee < self.arena.funcs.count() { finalCallee = callee }
+            mut val finalRecv: U64 = prior.recvTypeRef
+            if recvTypeRef != 0U64 { finalRecv = recvTypeRef }
+            mut val finalResult: U64 = prior.resultTypeRef
+            if resultTypeRef != 0U64 { finalResult = resultTypeRef }
+            mut val finalArgs: Array[U64] = prior.calleeTypeArgs
+            if calleeTypeArgs.count() > 0U64 { finalArgs = calleeTypeArgs }
+            self.arena.finalCallees.set(i: priorIdx, value: <BodyCallee fnIdx=prior.fnIdx args=prior.args recvInstRef=prior.recvInstRef exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetNameStart=prior.targetNameStart targetNameLen=prior.targetNameLen targetTypeRef=prior.targetTypeRef />)
+            return
+        }
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef)
+        if calleeTypeArgs.count() > 0U64 {
+            self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: calleeTypeArgs, siteIsStmt: siteIsStmt, slot: slot)
+        }
+    }
+
+    // `BodyCallee` is keyed by the concrete body instance rather than AST alone:
+    // generic templates share AST nodes, while their selected callees need not.
+    // Keep the key comparison here, rather than duplicating it in every table
+    // accessor.  Mono writes and LLVM reads the same one key definition.
+    inout fn bodyCalleeIndex(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        mut val i: U64 = 0
+        while i < self.finalCalleeCount() {
+            val e: BodyCallee = self.arena.finalCallees[i]
+            if e.fnIdx == self.cur.bodyFnIdx && e.siteIsStmt == siteIsStmt && e.slot == slot && self.sameBodyReceiver(a: e.recvInstRef, b: self.cur.bodyRecvInstRef) && e.exprId == exprId && self.finalCalleeBodyArgsEqual(entry: i) { return i }
+            i += 1
+        }
+        return self.finalCalleeCount()
+    }
+
+    // A call in a body without substitutions is instance-invariant.  Its
+    // verifier/Mono decision is retained in the AST cache itself, while a
+    // generic body uses the BodyCallee table above.  Both are final records;
+    // this helper deliberately performs no name, overload, or source lookup.
+    inout fn cachedInvariantCallee(exprId: U64, siteIsStmt: Bool, slot: U64) -> U64 {
+        if siteIsStmt || slot != 0U64 || self.cur.bodyTypeArgs.count() != 0U64 {
+            return self.arena.funcs.count()
+        }
+        if exprId < self.typeCache.callee.count() {
+            val cached: U64 = self.typeCache.callee[exprId]
+            if cached != calleeUnfilled() { return cached }
+        }
+        if exprId < self.arena.finalExprCallee.count() {
+            val cached: U64 = self.arena.finalExprCallee[exprId]
+            if cached != calleeUnfilled() { return cached }
+        }
+        return self.arena.funcs.count()
+    }
+
+    // The Mono-owned final-callee table is the only call-resolution input that
+    // reaches code generation.  A missing entry is an internal pipeline error:
+    // backend must never paper it over by re-running overload/source lookup.
+    inout fn bodyCallee(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        val found: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if found < self.finalCalleeCount() {
+            return self.arena.finalCallees[found].callee
+        }
+        // No AST-global fallback here.  A final callable is the boundary
+        // between semantic resolution and LLVM; accepting a cache hit after a
+        // descriptor-key miss reintroduces a second resolver and is observably
+        // wrong for shared provided bodies.  Missing entries are reported below
+        // so the Mono walk is completed at the true source of the omission.
+        mut val i: U64 = 0U64
+        mut val mismatchedReceiver: Bool = false
+        mut val mismatchedArgs: Bool = false
+        mut val missingBodyArgs: Bool = false
+        while i < self.finalCalleeCount() {
+            val e: BodyCallee = self.arena.finalCallees[i]
+            if e.fnIdx == self.cur.bodyFnIdx && e.siteIsStmt == siteIsStmt && e.slot == slot && e.exprId == exprId {
+                if !(self.sameBodyReceiver(a: e.recvInstRef, b: self.cur.bodyRecvInstRef)) {
+                    mismatchedReceiver = true
+                } else {
+                    mismatchedArgs = true
+                    if e.args.count() > 0U64 && self.cur.bodyTypeArgs.count() == 0U64 {
+                        missingBodyArgs = true
+                    }
+                }
+            }
+            i += 1U64
+        }
+        if mismatchedReceiver || mismatchedArgs {
+            if siteIsStmt {
+                if mismatchedReceiver {
+                    self.errorAt(offset: 0U64, msg: "internal diagnostic: final callable receiver key differs between Mono and backend")
+                } else if missingBodyArgs {
+                    self.errorAt(offset: 0U64, msg: "internal diagnostic: backend opened a generic body without final type arguments")
+                } else {
+                    self.errorAt(offset: 0U64, msg: "internal diagnostic: final callable type-argument key differs between Mono and backend")
+                }
+            } else {
+                if mismatchedReceiver {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: final callable receiver key differs between Mono and backend")
+                } else if missingBodyArgs {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: backend opened a generic body without final type arguments")
+                } else {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: final callable type-argument key differs between Mono and backend")
+                }
+            }
+            return self.arena.funcs.count()
+        }
+        if siteIsStmt {
+            self.errorAt(offset: 0U64, msg: "internal error: final callable was not recorded for this control-flow call site")
+        } else {
+            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: final callable was not recorded for this body instance")
+        }
+        return self.arena.funcs.count()
+    }
+
+    // The receiver identity selected with a final callable.  This is a table
+    // read, never a backend type-recovery query.
+    inout fn bodyCalleeReceiverRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].recvTypeRef }
+        return 0U64
+    }
+
+    inout fn setBodyCalleeReceiverRef(exprId: U64, recvRef: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() {
+            val e: BodyCallee = self.arena.finalCallees[i]
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=recvRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+        }
+    }
+
+    // Complete a previously-recorded final callable with the concrete return
+    // type discovered while registering its method instance.  Target selection
+    // and result grounding are both Mono work; backend sees only this finished
+    // descriptor.
+    inout fn setBodyCalleeResultRef(exprId: U64, resultRef: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
+        if resultRef == 0U64 { return }
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() {
+            val e: BodyCallee = self.arena.finalCallees[i]
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+        }
+    }
+
+    inout fn bodyCalleeResultRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].resultTypeRef }
+        return 0U64
+    }
+
+    inout fn setBodyCalleeTypeArgs(exprId: U64, calleeTypeArgs: Array[U64], siteIsStmt: Bool = false, slot: U64 = 0U64) {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() {
+            val e: BodyCallee = self.arena.finalCallees[i]
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+        }
+    }
+
+    inout fn bodyCalleeTypeArgs(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> Array[U64] {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].calleeTypeArgs }
+        return []
+    }
+
+    // Dynamic calls are selected in Mono just like ordinary Func calls.  The
+    // target descriptor is deliberately stored beside the static callee rather
+    // than reconstructed from a method spelling in LLVM.
+    inout fn setBodyCalleeTarget(exprId: U64, targetKind: U64, targetTraitIdx: U64, targetSlot: U64, targetTypeRef: U64 = 0U64, targetNameStart: U64 = 0U64, targetNameLen: U64 = 0U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() {
+            val e: BodyCallee = self.arena.finalCallees[i]
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetNameStart=targetNameStart targetNameLen=targetNameLen targetTypeRef=targetTypeRef />)
+        }
+    }
+
+    inout fn bodyCalleeTargetKind(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        return self.bodyCalleeTargetPart(exprId: exprId, part: 0U64, siteIsStmt: siteIsStmt, slot: slot)
+    }
+
+    inout fn bodyCalleeTargetTraitIdx(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        return self.bodyCalleeTargetPart(exprId: exprId, part: 1U64, siteIsStmt: siteIsStmt, slot: slot)
+    }
+
+    inout fn bodyCalleeTargetSlot(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        return self.bodyCalleeTargetPart(exprId: exprId, part: 2U64, siteIsStmt: siteIsStmt, slot: slot)
+    }
+
+    inout fn bodyCalleeTargetTypeRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        return self.bodyCalleeTargetPart(exprId: exprId, part: 3U64, siteIsStmt: siteIsStmt, slot: slot)
+    }
+
+    inout fn bodyCalleeTargetNameStart(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].targetNameStart }
+        return 0U64
+    }
+
+    inout fn bodyCalleeTargetNameLen(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].targetNameLen }
+        return 0U64
+    }
+
+    inout fn bodyCalleeTargetPart(exprId: U64, part: U64, siteIsStmt: Bool, slot: U64) -> U64 {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() {
+            val e: BodyCallee = self.arena.finalCallees[i]
+            if part == 0U64 { return e.targetKind }
+            if part == 1U64 { return e.targetTraitIdx }
+            if part == 2U64 { return e.targetSlot }
+            return e.targetTypeRef
+        }
+        return 0U64
+    }
+
+    // Same selector rule as witness-table construction: labels choose a trait
+    // requirement; verification has already established its argument types.
+    // Keeping it in Mono makes that choice part of the final-callable record.
+    inout fn finalAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+        if anyRef == 0U64 || anyRef >= self.arena.types.count() { return 0U64 }
+        val t: TypeRef = self.arena.types[anyRef]
+        if !(t.isAny) { return 0U64 }
+        val traitIdx: U64 = self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
+        if traitIdx >= self.decls.traits.count() { return 0U64 }
+        val nameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val tr: TraitDef = self.decls.traits[traitIdx]
+        mut val ri: U64 = 0U64
+        while ri < tr.reqs.count() {
+            if tr.reqs[ri].nameId == nameId && self.paramsLabelsOk(params: tr.reqs[ri].params, args: args) {
+                return ri + 1U64
+            }
+            ri += 1U64
+        }
+        return 0U64
+    }
+
+    inout fn finalAnyTraitIdx(anyRef: U64) -> U64 {
+        if anyRef == 0U64 || anyRef >= self.arena.types.count() { return self.decls.traits.count() }
+        val t: TypeRef = self.arena.types[anyRef]
+        if !(t.isAny) { return self.decls.traits.count() }
+        return self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
+    }
+
+    inout fn recordBodyAnyTarget(exprId: U64) {
+        mut val recv: U64 = self.arena.exprs.count()
+        mut val nameStart: U64 = 0U64
+        mut val nameLen: U64 = 0U64
+        mut val args: Array[Arg] = []
+        match self.arena.exprs[exprId] {
+            Expr.Method(recv: val r, nameStart: val ns, nameLen: val nl, args: val callArgs) => {
+                recv = r
+                nameStart = ns
+                nameLen = nl
+                args = callArgs
+            }
+            Expr.ExtMethod(recv: val r, srcStart: _, srcLen: _, nameStart: val ns, nameLen: val nl, args: val callArgs) => {
+                recv = r
+                nameStart = ns
+                nameLen = nl
+                args = callArgs
+            }
+            _ => { return }
+        }
+        val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+        if recvRef == 0U64 || recvRef >= self.arena.types.count() || !(self.arena.types[recvRef].isAny) { return }
+        val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
+        val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args)
+        if traitIdx >= self.decls.traits.count() || reqSlot == 0U64 {
+            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized")
+            return
+        }
+        self.setBodyCalleeTarget(exprId: exprId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: reqSlot)
+        // Ground the selected requirement here, while the any binding context is
+        // still frontend-owned. The descriptor therefore includes both target
+        // and result, rather than asking LLVM to inspect the requirement again.
+        val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
+        self.setBodyCalleeResultRef(exprId: exprId, resultRef: self.anyMemberRetInfo(anyRef: recvRef, req: req).ref)
+    }
+
+    // A closure value is a dynamic call target too. Mono fixes both the
+    // binding/field and its grounded `fn` TypeRef; LLVM later only materializes
+    // that already-selected value.
+    inout fn recordBodyClosureTarget(exprId: U64, callee: U64) {
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: val ns, nameLen: val nl, args: _) => {
+                val li: U64 = self.localIndexByName(start: ns, len: nl)
+                if li < self.cur.locals.count() {
+                    val fnRef: U64 = self.groundTypeRef(ref: self.cur.locals[li].ty)
+                    if fnRef != 0U64 && self.isFnType(ref: fnRef) {
+                        self.setBodyCalleeTarget(exprId: exprId, targetKind: 2U64, targetTraitIdx: 0U64, targetSlot: 0U64, targetTypeRef: fnRef, targetNameStart: ns, targetNameLen: nl)
+                    }
+                }
+            }
+            Expr.Method(recv: _, nameStart: val ns, nameLen: val nl, args: _) => {
+                self.recordBodyClosureFieldTarget(exprId: exprId, recvRef: self.bodyCalleeReceiverRef(exprId: exprId), nameStart: ns, nameLen: nl)
+            }
+            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: val ns, nameLen: val nl, args: _) => {
+                self.recordBodyClosureFieldTarget(exprId: exprId, recvRef: self.bodyCalleeReceiverRef(exprId: exprId), nameStart: ns, nameLen: nl)
+            }
+            _ => {}
+        }
+    }
+
+    inout fn recordBodyClosureFieldTarget(exprId: U64, recvRef: U64, nameStart: U64, nameLen: U64) {
+        if recvRef == 0U64 || recvRef >= self.arena.types.count() { return }
+        val rt: TypeRef = self.arena.types[recvRef]
+        val sidx: U64 = self.structDefByNameAny(start: rt.nameStart, len: rt.nameLen)
+        if sidx >= self.arena.structs.count() { return }
+        val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val fi: U64 = 0U64
+        while fi < self.arena.structs[sidx].fields.count() {
+            if self.arena.structs[sidx].fields[fi].nameId == fieldName { break }
+            fi += 1U64
+        }
+        if fi >= self.arena.structs[sidx].fields.count() { return }
+        val fnRef: U64 = self.groundTypeRef(ref: self.arena.structs[sidx].fields[fi].ty)
+        if fnRef != 0U64 && self.isFnType(ref: fnRef) {
+            self.setBodyCalleeTarget(exprId: exprId, targetKind: 3U64, targetTraitIdx: 0U64, targetSlot: fi, targetTypeRef: fnRef)
+        }
+    }
+
+    // Resolve once under Mono's concrete body environment, then retain that
+    // decision for every downstream consumer (instance registration, type
+    // recovery, and LLVM emission).
+    inout fn resolveBodyCallee(exprId: U64) -> U64 {
+        // Non-generic verification may provide an instance-invariant final
+        // callable, including generic free-call substitutions.  Keep that
+        // descriptor: it is the call-site authority consumed by Mono and LLVM.
+        // Its view choice is safe to reuse because overload matching itself
+        // compares an explicit argument `#` source set before filling this
+        // cache (rather than relying on a backend-only mismatch check).
+        // Generic/provided bodies still resolve under their concrete instance
+        // environment below.
+        mut val bodyIsProvided: Bool = false
+        if self.cur.bodyFnIdx < self.arena.funcs.count() {
+            bodyIsProvided = self.arena.funcs[self.cur.bodyFnIdx].isProvided
+        }
+        if !bodyIsProvided && self.cur.bodyTypeParams.count() == 0U64 && exprId < self.typeCache.callee.count() {
+            if self.typeCache.callee[exprId] != calleeUnfilled() && self.typeCache.callee[exprId] < self.arena.funcs.count() {
+                self.recordBodyCallee(exprId: exprId, callee: self.typeCache.callee[exprId])
+                self.recordBodyAnyTarget(exprId: exprId)
+                self.recordBodyClosureTarget(exprId: exprId, callee: self.typeCache.callee[exprId])
+                self.enqueueSelectedCallee(exprId: exprId, callee: self.typeCache.callee[exprId])
+                return self.typeCache.callee[exprId]
+            }
+        }
+        mut val callee: U64 = self.arena.funcs.count()
+        match self.arena.exprs[exprId] {
+            Expr.Call(val nameStart, val nameLen, val args) => {
+                val localIdx: U64 = self.localIndexByName(start: nameStart, len: nameLen)
+                if localIdx >= self.cur.locals.count() || !(self.isFnType(ref: self.groundTypeRef(ref: self.cur.locals[localIdx].ty))) {
+                    callee = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
+                }
+                // `pow(base:, exp:)` is source sugar for the selected Pow
+                // associated callable.  Select it here with every other call;
+                // LLVM must never rediscover it from the base expression.
+                if callee >= self.arena.funcs.count() {
+                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "pow") && args.count() == 2U64 {
+                        val baseRef: U64 = self.groundedBodyReceiverRef(exprId: args[0].expr)
+                        if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                            val baseTy: TypeRef = self.arena.types[baseRef]
+                            callee = self.findAssoc(recvStart: baseTy.nameStart, recvLen: baseTy.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                        }
+                    }
+                }
+            }
+            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                // Factories (`<Type.name …/>`) are rewritten to Expr.Method so
+                // they share the AST surface with value methods.  They are still
+                // associated callables: decide that here, while source scope and
+                // type-name identity are available, then retain the Func in the
+                // same final-callable table as every other call.
+                val assocRecv: Bind = self.assocRecvName(recv: recv)
+                if assocRecv.nameLen != 0U64 {
+                    callee = self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                } else {
+                    val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+                    if recvRef != 0U64 && recvRef < self.arena.types.count() {
+                        if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[recvRef].nameStart, len: self.arena.types[recvRef].nameLen, kw: "Self") {
+                            self.errorAt(offset: nameStart, msg: "internal diagnostic: final method receiver remained Self after body substitution")
+                        }
+                    }
+                    // A provided trait body speaks about that trait's surface:
+                    // `self.step()` is the selected trait requirement/witness,
+                    // not an ambient bare lookup that may choose an unrelated
+                    // conformer's copy from the shared AST.  Concrete copies
+                    // retain the originating source precisely for this lookup.
+                    mut val lexicalSource: U64 = 0U64
+                    if self.cur.bodyFnIdx < self.arena.funcs.count() {
+                        val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
+                        if bodyFn.isProvided {
+                            match self.arena.exprs[recv] {
+                                Expr.Ident(start: val selfStart, len: val selfLen) => {
+                                    if self.isSelfRef(start: selfStart, len: selfLen) {
+                                        lexicalSource = bodyFn.originTraitId
+                                        if lexicalSource == 0U64 { lexicalSource = bodyFn.srcTraitId }
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: lexicalSource, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                    if callee >= self.arena.funcs.count() {
+                        callee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                    }
+                    // Some compiler-internal aggregate fields expose their precise
+                    // `Array[E]` ref only through the parametric type table.  This
+                    // is still Mono resolution (never backend recovery): use that
+                    // concrete receiver to finish the same final-callable query.
+                    if callee >= self.arena.funcs.count() {
+                        val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+                        if recvRef != 0U64 && recvRef < self.arena.types.count() {
+                            val recvTy: TypeRef = self.arena.types[recvRef]
+                            callee = self.findMethod(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, useOffset: self.exprOffset(id: exprId))
+                        }
+                    }
+                }
+            }
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+                val sourceId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
+                callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: sourceId, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                if callee >= self.arena.funcs.count() {
+                    callee = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
+            }
+            _ => {}
+        }
+        match self.arena.exprs[exprId] {
+            Expr.Method(recv: _, val nameStart, val nameLen, args: _) => {
+                if callee >= self.arena.funcs.count() {
+                    if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "compare") {
+                        self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit compare was not resolved during finalization")
+                    }
+                }
+            }
+            _ => {}
+        }
+        self.recordBodyCallee(exprId: exprId, callee: callee)
+        self.recordBodyAnyTarget(exprId: exprId)
+        self.recordBodyClosureTarget(exprId: exprId, callee: callee)
+        self.enqueueSelectedCallee(exprId: exprId, callee: callee)
+        return callee
+    }
+
+    // Walk one already-selected concrete body instance.  It is the frontend
+    // analogue of genLlvmFuncBody's environment setup: the same function args,
+    // receiver instance, and Self/Item binding are installed before resolving
+    // nested calls.  This is the only place generic bodies acquire their
+    // instance-specific final-callable entries.
+    inout fn scanFinalBodyInstance(instance: BodyInstance) {
+        val f: Func = self.arena.funcs[instance.fnIdx]
+        self.cur.locals = []
+        self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
+        self.cur.hasRecv = f.hasRecv
+        self.cur.recvStart = f.recvStart
+        self.cur.recvLen = f.recvLen
+        self.cur.extId = f.extId
+        self.cur.selfInout = f.selfInout
+        self.cur.recvInstRef = instance.recvInstRef
+        self.cur.typeParams = f.typeParams
+        self.cur.typeArgs = instance.args
+        self.cur.bodyFnIdx = instance.fnIdx
+        self.cur.bodyTypeParams = f.typeParams
+        self.cur.bodyTypeArgs = instance.args
+        // Associated callables have no value `self`, but their bodies may name
+        // `Self`/associated types and their final-callable key is the concrete
+        // subject selected at the call.  Mirror emitOneGenFn's assoc environment
+        // here so Mono and LLVM use the same body-instance identity.
+        if f.hasRecv || f.isAssoc {
+            if instance.recvInstRef != 0U64 && instance.recvInstRef < self.arena.types.count() {
+                self.setSelfItemEnv(recvStart: self.arena.types[instance.recvInstRef].nameStart, recvLen: self.arena.types[instance.recvInstRef].nameLen, recvInstRef: instance.recvInstRef)
+            } else {
+                self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+            }
+        } else {
+            self.clearSelfItemEnv()
+        }
+        // The worklist already carries the canonical receiver key.  Do not
+        // rebuild it from `self` here: that would make finalization and backend
+        // emission independently responsible for preserving source views.
+        self.cur.bodyRecvInstRef = instance.recvInstRef
+        if self.cur.bodyRecvInstRef != 0U64 { self.cur.selfRef = self.cur.bodyRecvInstRef }
+        self.cur.bodySelfRef = self.cur.selfRef
+        self.cur.bodyItemRef = self.cur.itemRef
+        mut val pi: U64 = 0U64
+        while pi < f.params.count() {
+            val p: Param = f.params[pi]
+            self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+            pi += 1U64
+        }
+        self.scanBlockInsts(blkId: f.body)
+        if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
+    }
+
+    // Close the semantic call graph before backend emission.  The existing
+    // Mono discovery lists still decide which generic layouts are required; this
+    // pass adds the missing invariant: every emitted body instance has resolved
+    // every static call exactly once in its own concrete environment.
+    inout fn finalizeCallables() {
+        self.arena.finalCallees = []
+        self.monoWork.bodyInstances = []
+        // `collectFnInsts` predates final-callable construction and may have
+        // registered a generic body from an AST-global / parametric type
+        // projection.  Keeping that provisional worklist lets (for example)
+        // a loop's `print[I64]` call leave an obsolete `print[Optional[…]]`
+        // instance for LLVM to emit.  Final descriptors are the one authority
+        // for call-driven instances, so rebuild this worklist from the roots
+        // and descriptor closure below rather than mixing the two phases.
+        // `collectFnInsts` predates final-callable construction and may have
+        // registered a generic body from an AST-global / parametric type
+        // projection.  Keeping that provisional worklist lets (for example)
+        // a loop's `print[I64]` call leave an obsolete `print[Optional[…]]`
+        // instance for LLVM to emit.  Final descriptors are the one authority
+        // for call-driven instances, so rebuild this worklist from the roots
+        // and descriptor closure below rather than mixing the two phases.
+        self.monoWork.fnInsts = []
+        val noParams: Array[Bind] = []
+        val noArgs: Array[U64] = []
+        // Global initializers are an anonymous body instance.  They can reach
+        // ordinary functions and therefore seed the same queue as main.
+        self.cur.locals = []
+        self.cur.hasRecv = false
+        self.cur.extId = 0U64
+        self.cur.recvInstRef = 0U64
+        self.cur.typeParams = noParams
+        self.cur.typeArgs = noArgs
+        self.cur.bodyFnIdx = 18446744073709551615U64
+        self.cur.bodyRecvInstRef = 0U64
+        self.cur.bodyTypeParams = noParams
+        self.cur.bodyTypeArgs = noArgs
+        self.cur.bodySelfRef = 0U64
+        self.cur.bodyItemRef = 0U64
+        mut val gi: U64 = 0U64
+        while gi < self.arena.globals.count() {
+            self.scanStmtInsts(stmtId: self.arena.globals[gi].letStmt)
+            gi += 1U64
+        }
+        // Main is the normal synchronous root.  Async declarations are emitted
+        // as state machines by the current backend, so include their bodies too.
+        mut val fi: U64 = 0U64
+        while fi < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[fi]
+            if !(f.isExtern) && f.body != 0U64 {
+                // Backend declaration is deliberately lazy for provided/lang-item
+                // methods, but lazy *emission* must not be lazy semantic
+                // resolution.  Every concrete, non-generic body is therefore a
+                // finalization root. Generic templates still enter only through
+                // their concrete FnInst/body-instance substitutions.
+                if f.typeParams.count() == 0U64 && !(self.methodRecvIsTrait(f: f)) {
+                    // A method body is emitted with its receiver instance even
+                    // when that receiver has no generic arguments.  Give Mono
+                    // that same identity at the root: recording it as `0` then
+                    // emitting it as `Counter` made BodyCallee miss and fall
+                    // back to the AST-global cache (where a shared provided
+                    // body could inherit `Two`'s selection).
+                    mut val rootRecv: U64 = 0U64
+                    if f.hasRecv || f.isAssoc {
+                        rootRecv = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+                    }
+                    self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: rootRecv)
+                }
+                if self.nameIsMain(f: f) || f.isAsync {
+                    self.enqueueFinalBody(fnIdx: fi, args: [], recvInstRef: 0U64)
+                }
+            }
+            fi += 1U64
+        }
+        // `genInsts` determines not only LLVM layouts but also the concrete
+        // method bodies that LLVM may emit on demand.  Register each receiver-
+        // generic, non-provided body here before code generation.  Previously
+        // `emitOneGenMethod` could first reach (for example) MapIter.next after
+        // finalization, leaving its nested calls without BodyCallee entries and
+        // tempting backend-local resolution.  Method-own generic parameters are
+        // represented by an explicit FnInst at their call site, so this root set
+        // includes only the exact receiver-argument arity.
+        mut val gi2: U64 = 0U64
+        while gi2 < self.monoWork.genInsts.count() {
+            val instRef: U64 = self.monoWork.genInsts[gi2]
+            if instRef < self.arena.types.count() {
+                val inst: TypeRef = self.arena.types[instRef]
+                mut val mfi: U64 = 0U64
+                while mfi < self.arena.funcs.count() {
+                    val mf: Func = self.arena.funcs[mfi]
+                    if !(mf.isProvided) && !(mf.isExtern) && mf.body != 0U64 {
+                        if mf.hasRecv && mf.typeParams.count() == inst.args.count() {
+                            if self.methodMatchesInst(f: mf, instRef: instRef) {
+                                self.enqueueFinalBody(fnIdx: mfi, args: inst.args, recvInstRef: instRef)
+                            }
+                        }
+                    }
+                    mfi += 1U64
+                }
+            }
+            gi2 += 1U64
+        }
+        mut val bodyI: U64 = 0U64
+        mut val fnI: U64 = 0U64
+        while bodyI < self.monoWork.bodyInstances.count() || fnI < self.monoWork.fnInsts.count() {
+            while fnI < self.monoWork.fnInsts.count() {
+                val fin: FnInst = self.monoWork.fnInsts[fnI]
+                self.enqueueFinalBody(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef)
+                fnI += 1U64
+            }
+            if bodyI < self.monoWork.bodyInstances.count() {
+                self.scanFinalBodyInstance(instance: self.monoWork.bodyInstances[bodyI])
+                bodyI += 1U64
+            }
+        }
+        // Materializing a code-generation instance from a final descriptor can
+        // reveal a new generic body.  That body must itself be finalized before
+        // LLVM sees it; otherwise a later instance of the same AST observes an
+        // older descriptor key.  Close descriptor→instance registration and
+        // body scanning together as one worklist fixpoint.
+        mut val callI: U64 = 0U64
+        mut val closingFinalCalls: Bool = true
+        while closingFinalCalls {
+            while callI < self.finalCalleeCount() {
+                val selected: BodyCallee = self.arena.finalCallees[callI]
+                self.enqueueSelectedAssocInstance(callee: selected.callee, args: selected.calleeTypeArgs, recvInstRef: selected.recvTypeRef)
+                self.enqueueSelectedFreeInstance(callee: selected.callee, args: selected.calleeTypeArgs)
+                callI += 1U64
+            }
+            while fnI < self.monoWork.fnInsts.count() {
+                val fin: FnInst = self.monoWork.fnInsts[fnI]
+                self.enqueueFinalBody(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef)
+                fnI += 1U64
+            }
+            while bodyI < self.monoWork.bodyInstances.count() {
+                self.scanFinalBodyInstance(instance: self.monoWork.bodyInstances[bodyI])
+                bodyI += 1U64
+            }
+            if callI >= self.finalCalleeCount() && fnI >= self.monoWork.fnInsts.count() && bodyI >= self.monoWork.bodyInstances.count() {
+                closingFinalCalls = false
+            }
+        }
+        // Do not leak the last scanned generic body's substitution environment
+        // into backend pass setup.  Each emitter establishes its own instance;
+        // leaving this ambient state live would make an otherwise argless
+        // provided body look up a different BodyCallee key.
+        self.cur.locals = []
+        self.cur.hasRecv = false
+        self.cur.extId = 0U64
+        self.cur.recvInstRef = 0U64
+        self.cur.typeParams = noParams
+        self.cur.typeArgs = noArgs
+        self.cur.selfRef = 0U64
+        self.cur.itemRef = 0U64
+        self.cur.bodyFnIdx = 18446744073709551615U64
+        self.cur.bodyRecvInstRef = 0U64
+        self.cur.bodyTypeParams = noParams
+        self.cur.bodyTypeArgs = noArgs
+        self.cur.bodySelfRef = 0U64
+        self.cur.bodyItemRef = 0U64
+    }
+
     inout fn captureSupported(lo: Local) -> Bool {
         if lo.isArray {
             return true
@@ -90,7 +1570,48 @@ pub impl Comp {
         }
     }
 
-    inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, cont: U64, memberStart: U64, headStart: U64, headLen: U64) {
+    // Synthetic desugar expressions are introduced after the ordinary typed-IR
+    // table is populated.  Give them the same parametric type authority as
+    // lowered expressions so later Mono resolution never has to recover a
+    // generic receiver from its bare source spelling.
+    inout fn recordSyntheticExprType(exprId: U64, ref: U64) {
+        while self.parametricRef.count() <= exprId {
+            self.parametricRef.append(0U64)
+        }
+        self.parametricRef.set(i: exprId, value: ref)
+    }
+
+    // A rewritten chain MatchExpr has exactly two Give arms, each containing
+    // one synthesized associated Method.  Retag both the call and its type
+    // qualifier with the grounded stage type for the active body instance.
+    inout fn recordChainDesugarStageType(exprId: U64, stageRef: U64) {
+        match self.arena.exprs[exprId] {
+            Expr.MatchExpr(scrut: _, val arms) => {
+                mut val ai: U64 = 0U64
+                while ai < arms.count() {
+                    val stmts: Array[U64] = self.arena.blocks[arms[ai].body].stmts
+                    if stmts.count() > 0U64 {
+                        match self.arena.stmts[stmts[0]] {
+                            Stmt.Give(val value) => {
+                                self.recordSyntheticExprType(exprId: value, ref: stageRef)
+                                match self.arena.exprs[value] {
+                                    Expr.Method(val recv, nameStart: _, nameLen: _, args: _) => {
+                                        self.recordSyntheticExprType(exprId: recv, ref: stageRef)
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    ai += 1U64
+                }
+            }
+            _ => {}
+        }
+    }
+
+    inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, cont: U64, memberStart: U64, headStart: U64, headLen: U64, stageRef: U64) {
         val chainN: Bind = self.internBytes(s: "chain")
         val fromValueN: Bind = self.internBytes(s: "fromValue")
         val emptyN: Bind = self.internBytes(s: "empty")
@@ -105,6 +1626,7 @@ pub impl Comp {
         val scrut: U64 = self.pushExpr(e: <Expr.Method recv=base nameStart=chainN.nameStart nameLen=chainN.nameLen args=noArgs />)
         // Some(v: val __chainVal) => <Head.fromValue value=(cont with hole -> __chainVal) />
         val fromRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
+        self.recordSyntheticExprType(exprId: fromRecv, ref: stageRef)
         self.retargetChainHole(exprId: cont, cvStart: cvN.nameStart, cvLen: cvN.nameLen, anchor: memberStart)
         // the synthesized nodes anchor at the `?.member` source token: their own name
         // spans are interned (`chain`/`fromValue`/`__chainVal`), so a diagnostic on the
@@ -115,6 +1637,7 @@ pub impl Comp {
         mut val fromArgs: Array[Arg] = []
         fromArgs.append(<Arg expr=cont isInout=false labelStart=valueN.nameStart labelLen=valueN.nameLen hasLabel=true />)
         val fromCall: U64 = self.pushExpr(e: <Expr.Method recv=fromRecv nameStart=fromValueN.nameStart nameLen=fromValueN.nameLen args=fromArgs />)
+        self.recordSyntheticExprType(exprId: fromCall, ref: stageRef)
         self.arena.exprSpanStart[fromCall] = memberStart
         mut val someStmts: Array[U64] = []
         someStmts.append(self.pushStmt(s: <Stmt.Give value=fromCall />))
@@ -125,7 +1648,9 @@ pub impl Comp {
         val someArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=someN.nameStart variantLen=someN.nameLen binds=someBinds body=someBlk isStruct=false isDiverge=false />
         // None => <Head.empty />
         val emptyRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
+        self.recordSyntheticExprType(exprId: emptyRecv, ref: stageRef)
         val emptyCall: U64 = self.pushExpr(e: <Expr.Method recv=emptyRecv nameStart=emptyN.nameStart nameLen=emptyN.nameLen args=noArgs />)
+        self.recordSyntheticExprType(exprId: emptyCall, ref: stageRef)
         self.arena.exprSpanStart[emptyRecv] = memberStart
         self.arena.exprSpanStart[emptyCall] = memberStart
         mut val noneStmts: Array[U64] = []
@@ -250,6 +1775,10 @@ pub impl Comp {
         }
         val uRef: U64 = ot.args[vi]
         val vRef: U64 = self.groundTypeRef(ref: site.valueRef)
+        // The desugar tree is shared by generic body instances.  Re-stamp its
+        // two synthetic factory calls with THIS instance's grounded stage
+        // type before they enter ordinary call finalization.
+        self.recordChainDesugarStageType(exprId: exprId, stageRef: oRef)
         self.scanType(ref: oRef)
         // the chain() result `Optional[V]` (V = the receiver's chain Value = its first
         // type arg): register the concrete instance so the desugar's `match base.chain()`
@@ -405,10 +1934,14 @@ pub impl Comp {
                 val savedId: U64 = self.cur.closureId
                 val savedIn: Bool = self.cur.inClosure
                 val savedMark: U64 = self.cur.captureMark
+                val savedBodyFn: U64 = self.cur.bodyFnIdx
+                val savedBodyRecv: U64 = self.cur.bodyRecvInstRef
                 val enclMark: U64 = self.scopeMark()
                 self.cur.closureId = exprId
                 self.cur.inClosure = true
                 self.cur.captureMark = enclMark
+                self.cur.bodyFnIdx = self.closureBodyKey(closureId: exprId)
+                self.cur.bodyRecvInstRef = 0U64
                 mut val pi: U64 = 0
                 while pi < params.count() {
                     val p: Param = params[pi]
@@ -420,11 +1953,21 @@ pub impl Comp {
                 self.cur.closureId = savedId
                 self.cur.inClosure = savedIn
                 self.cur.captureMark = savedMark
+                self.cur.bodyFnIdx = savedBodyFn
+                self.cur.bodyRecvInstRef = savedBodyRecv
             }
-            Expr.Unary(val op, val operand) => { self.scanExprInsts(exprId: operand) }
+            Expr.Unary(val op, val operand) => {
+                self.scanExprInsts(exprId: operand)
+                // Unary syntax is a source-level call just like binary syntax.
+                // `!` is a primitive Bool operation, but Mono must still record
+                // its explicit no-user-callable result so LLVM never confuses it
+                // with an absent finalization entry.
+                self.recordBodyOperatorCallee(exprId: exprId)
+            }
             Expr.Binary(val op, val lhs, val rhs) => {
                 self.scanExprInsts(exprId: lhs)
                 self.scanExprInsts(exprId: rhs)
+                self.recordBodyOperatorCallee(exprId: exprId)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val i: U64 = 0
@@ -432,15 +1975,16 @@ pub impl Comp {
                     self.scanExprInsts(exprId: args[i].expr)
                     i += 1
                 }
-                self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: args)
+                self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
             }
-            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, val nameStart, val nameLen, val args) => {
                 self.scanExprInsts(exprId: recv)
                 mut val i: U64 = 0
                 while i < args.count() {
                     self.scanExprInsts(exprId: args[i].expr)
                     i += 1
                 }
+                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
                 self.scanExprInsts(exprId: recv)
@@ -452,15 +1996,7 @@ pub impl Comp {
                     self.scanExprInsts(exprId: args[i].expr)
                     i += 1
                 }
-                self.registerMethodInst(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-                // an assoc-fn call `Type.make(args)` (type-name receiver): register its
-                // monomorphized instance through the free-fn machinery (no self). The
-                // result type grounds any param the args alone don't (`Set.new()`).
-                mut val assocResultRef: U64 = self.monoWork.scanExpectedTy
-                if assocResultRef == 0U64 {
-                    assocResultRef = self.tyRefOfInfo(ti: self.typeOf(id: exprId))
-                }
-                self.registerAssocInst(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, resultRef: assocResultRef)
+                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
                 // register the call's result type: a combinator on a generic receiver
                 // (`mapIter.filter(p)`) yields a new adapter instantiation
                 // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so
@@ -473,6 +2009,46 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => { self.scanExprInsts(exprId: base) }
             Expr.Index(val base, val index) => {
+                // Subscript syntax is a frontend desugar: ordinary collection
+                // reads become the same resolved `index`/`at` method call that
+                // source spelling would create.  Keeping this out of LLVM is
+                // essential: backend must consume a final callable, not create
+                // a fresh call AST and resolve it after Mono has finished.
+                val bt: TypeInfo = self.typeOf(id: base)
+                mut val headStart: U64 = bt.nameStart
+                mut val headLen: U64 = bt.nameLen
+                mut val baseRef: U64 = self.groundedTypeOf(id: base)
+                if baseRef == 0U64 {
+                    baseRef = bt.ref
+                }
+                if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                    headStart = self.arena.types[baseRef].nameStart
+                    headLen = self.arena.types[baseRef].nameLen
+                }
+                if !(self.isBufferType(ti: bt)) {
+                    // Array indexing has a direct, final-type-driven LLVM
+                    // lowering. Keep its AST as an addressable Index so the
+                    // same expression can be an `inout` receiver / assignment
+                    // place; rewriting it to `index(...)` destroys that place
+                    // identity before Verify runs.
+                    if rangeEquals(bytes: self.arena.bytes, start: headStart, len: headLen, kw: "Array") {
+                        self.scanExprInsts(exprId: base)
+                        self.scanExprInsts(exprId: index)
+                        return
+                    }
+                    if rangeEquals(bytes: self.arena.bytes, start: headStart, len: headLen, kw: "Dictionary") {
+                        val m: U64 = self.synthDictMethod(recv: base, name: "at", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0U64)
+                        self.arena.exprs.set(i: exprId, value: self.arena.exprs[m])
+                        self.scanExprInsts(exprId: exprId)
+                        return
+                    }
+                    if self.typeHasMethodNamed(typeStart: headStart, typeLen: headLen, name: "index") {
+                        val m: U64 = self.synthDictMethod(recv: base, name: "index", arg0Label: "key", arg0: index, hasArg1: false, arg1Label: "", arg1: 0U64)
+                        self.arena.exprs.set(i: exprId, value: self.arena.exprs[m])
+                        self.scanExprInsts(exprId: exprId)
+                        return
+                    }
+                }
                 self.scanExprInsts(exprId: base)
                 self.scanExprInsts(exprId: index)
             }
@@ -554,7 +2130,7 @@ pub impl Comp {
                         }
                         self.cur.typeParams = savedCP
                         self.cur.typeArgs = savedCA
-                        self.rewriteOptChainToChainMatch(exprId: exprId, base: base, cont: cont, memberStart: self.exprOffset(id: exprId), headStart: bt.nameStart, headLen: bt.nameLen)
+                        self.rewriteOptChainToChainMatch(exprId: exprId, base: base, cont: cont, memberStart: self.exprOffset(id: exprId), headStart: bt.nameStart, headLen: bt.nameLen, stageRef: stageRef)
                         self.scanExprInsts(exprId: exprId)
                         return
                     }
@@ -579,17 +2155,49 @@ pub impl Comp {
                 // AST rewrite is shared; the groundings are not).
                 self.registerChainSiteInsts(exprId: exprId)
                 self.scanExprInsts(exprId: scrut)
+                mut val scrutTi: TypeInfo = self.typeOf(id: scrut)
+                val groundedScrut: U64 = self.groundedTypeOf(id: scrut)
+                if groundedScrut != 0U64 {
+                    scrutTi = self.typeInfoOfRef(ref: groundedScrut)
+                }
                 mut val ai: U64 = 0
                 while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: scrutTi)
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
                 }
             }
             Expr.Move(val operand, val isBorrow) => { self.scanExprInsts(exprId: operand) }
+            // `await` changes control flow at LLVM lowering, but its operand is an
+            // ordinary source call in the enclosing async body's semantic surface.
+            // Finalization must visit it before the resume emitter consumes the
+            // completed descriptor; skipping it made `await sleep(...)` look like
+            // an unrecorded call solely because it crossed the async lowering seam.
+            Expr.Await(val operand) => { self.scanExprInsts(exprId: operand) }
+            _ => {}
+        }
+    }
+
+    // Assignment targets are places, not value reads.  In particular an Index
+    // nested below a field (`xs[i].field = …`) must remain an Index so LLVM can
+    // take its storage address; scanExprInsts intentionally rewrites value
+    // indexes to their resolved `index` method.  Walk only the navigation path
+    // here, while still scanning an index key as an ordinary value expression.
+    inout fn scanPlaceInsts(exprId: U64) {
+        match self.arena.exprs[exprId] {
+            Expr.Field(val base, nameStart: _, nameLen: _) => {
+                self.scanPlaceInsts(exprId: base)
+            }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => {
+                self.scanPlaceInsts(exprId: base)
+            }
+            Expr.Index(val base, val index) => {
+                self.scanPlaceInsts(exprId: base)
+                self.scanExprInsts(exprId: index)
+            }
             _ => {}
         }
     }
@@ -659,7 +2267,37 @@ pub impl Comp {
                 }
             }
             Stmt.Assign(val target, val value) => {
-                self.scanExprInsts(exprId: target)
+                match self.arena.exprs[target] {
+                    Expr.Index(base: val base, index: val index) => {
+                        val bt: TypeInfo = self.typeOf(id: base)
+                        mut val headStart: U64 = bt.nameStart
+                        mut val headLen: U64 = bt.nameLen
+                        mut val baseRef: U64 = self.groundedTypeOf(id: base)
+                        if baseRef == 0U64 {
+                            baseRef = bt.ref
+                        }
+                        if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                            headStart = self.arena.types[baseRef].nameStart
+                            headLen = self.arena.types[baseRef].nameLen
+                        }
+                        if !(self.isBufferType(ti: bt)) {
+                            if rangeEquals(bytes: self.arena.bytes, start: headStart, len: headLen, kw: "Dictionary") {
+                                val m: U64 = self.synthDictMethod(recv: base, name: "insert", arg0Label: "key", arg0: index, hasArg1: true, arg1Label: "value", arg1: value)
+                                self.arena.stmts.set(i: stmtId, value: <Stmt.ExprStmt expr=m />)
+                                self.scanExprInsts(exprId: m)
+                                return
+                            }
+                            if self.typeHasMethodNamed(typeStart: headStart, typeLen: headLen, name: "indexSet") {
+                                val m: U64 = self.synthDictMethod(recv: base, name: "indexSet", arg0Label: "key", arg0: index, hasArg1: true, arg1Label: "value", arg1: value)
+                                self.arena.stmts.set(i: stmtId, value: <Stmt.ExprStmt expr=m />)
+                                self.scanExprInsts(exprId: m)
+                                return
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                self.scanPlaceInsts(exprId: target)
                 self.scanExprInsts(exprId: value)
             }
             Stmt.ExprStmt(val expr) => { self.scanExprInsts(exprId: expr) }
@@ -697,12 +2335,86 @@ pub impl Comp {
                     }
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: rtS, tyLen: rtL, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
+                    // `for` is syntax for the Iterable/Iterator protocol.  It
+                    // has no written Method AST nodes, so select both implicit
+                    // calls here and retain them under the statement site. LLVM
+                    // subsequently receives only these Func identities.
+                    mut val initialRef: U64 = self.groundedBodyReceiverRef(exprId: iter)
+                    if initialRef == 0U64 {
+                        initialRef = self.bodyCalleeResultRef(exprId: iter)
+                    }
+                    if initialRef != 0U64 && initialRef < self.arena.types.count() && !(self.arena.types[initialRef].isAny) {
+                        val noArgs: Array[Arg] = []
+                        val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
+                        mut val iteratorFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: noArgs, useOffset: 0U64)
+                        mut val iteratorRef: U64 = initialRef
+                        // Record the iterator slot even when this value is already
+                        // an Iterator.  The sentinel tells LLVM that there is no
+                        // iterator() call; it must not rediscover that fact from
+                        // the receiver spelling.
+                        self.recordBodyCallee(exprId: stmtId, callee: iteratorFn, siteIsStmt: true, slot: 1U64, recvTypeOverride: initialRef)
+                        if iteratorFn < self.arena.funcs.count() {
+                            self.enqueueSelectedCallee(exprId: stmtId, callee: iteratorFn, implicit: true, recvInstOverride: initialRef, siteIsStmt: true, slot: 1U64)
+                            val returned: U64 = self.groundedCalleeReturn(callee: iteratorFn, recvRef: initialRef)
+                            if returned != 0U64 { iteratorRef = returned }
+                        }
+                        val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
+                        val nextFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs, useOffset: 0U64)
+                        self.recordBodyCallee(exprId: stmtId, callee: nextFn, siteIsStmt: true, slot: 2U64, recvTypeOverride: iteratorRef)
+                        if nextFn < self.arena.funcs.count() {
+                            self.enqueueSelectedCallee(exprId: stmtId, callee: nextFn, implicit: true, recvInstOverride: iteratorRef, siteIsStmt: true, slot: 2U64)
+                        }
+                    } else if initialRef != 0U64 {
+                        // Dynamic existential protocol calls have no static Func
+                        // body to enqueue, but their concrete `any P` receiver is
+                        // still part of the final call-site contract.  Retain both
+                        // slots so LLVM consumes the same source type rather than
+                        // recovering it from the expression tree.
+                        val none: U64 = self.arena.funcs.count()
+                        self.recordBodyCallee(exprId: stmtId, callee: none, siteIsStmt: true, slot: 1U64, recvTypeOverride: initialRef)
+                        self.recordBodyCallee(exprId: stmtId, callee: none, siteIsStmt: true, slot: 2U64, recvTypeOverride: initialRef)
+                        val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
+                        val noArgs: Array[Arg] = []
+                        val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: initialRef)
+                        val nextSlot: U64 = self.finalAnyRequirementSlot(anyRef: initialRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs)
+                        if traitIdx >= self.decls.traits.count() || nextSlot == 0U64 {
+                            self.errorAt(offset: 0U64, msg: "internal diagnostic: final existential iterator target was not finalized")
+                        } else {
+                            self.setBodyCalleeTarget(exprId: stmtId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: nextSlot, siteIsStmt: true, slot: 2U64)
+                            val nextReq: Func = self.decls.traits[traitIdx].reqs[nextSlot - 1U64]
+                            self.setBodyCalleeResultRef(exprId: stmtId, resultRef: self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref, siteIsStmt: true, slot: 2U64)
+                        }
+                    }
                     val et: TypeInfo = self.typeOf(id: iter)
                     if isStruct {
                         self.addForStructBinds(et: et, binds: binds)
                     } else {
                         if et.kind == 3 {
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
+                            // A loop variable over Array[E] has E's full
+                            // structured type.  In particular E may be a
+                            // closure `fn(...) -> R`; dropping its TypeRef
+                            // here made `for f in fs { f() }` look like an
+                            // unresolved free-function call downstream.
+                            // `initialRef` is the final, body-grounded iterable
+                            // identity.  Prefer its Array element over the
+                            // legacy TypeInfo name projection: the latter loses
+                            // `Optional[I64]` versus `Optional[String]` when
+                            // two generic enum arrays occur in one body.
+                            mut val elemRef: U64 = 0U64
+                            if initialRef != 0U64 && initialRef < self.arena.types.count() {
+                                val initialTy: TypeRef = self.arena.types[initialRef]
+                                if rangeEquals(bytes: self.arena.bytes, start: initialTy.nameStart, len: initialTy.nameLen, kw: "Array") && initialTy.args.count() > 0U64 {
+                                    elemRef = initialTy.args[0]
+                                }
+                            }
+                            if elemRef == 0U64 {
+                                elemRef = self.arrayElemRef(start: et.nameStart, len: et.nameLen)
+                            }
+                            if elemRef == 0U64 && et.ref != 0U64 && et.ref < self.arena.types.count() {
+                                val arrRef: TypeRef = self.arena.types[et.ref]
+                                if arrRef.args.count() > 0U64 { elemRef = arrRef.args[0] }
+                            }
+                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: elemRef, isInout: false, isMut: false, owned: false)
                         } else {
                             val elemTi: TypeInfo = self.iterableItemInfo(et: et)
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
@@ -714,11 +2426,26 @@ pub impl Comp {
             }
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprInsts(exprId: scrut)
+                // Match-arm bindings are typed from the concrete scrutinee
+                // instance.  `typeOf` is AST-global and loses `Optional[I64]`
+                // for a local loop item; use the body-local/grounded recovery
+                // just as Expr.MatchExpr does above.
+                mut val scrutTi: TypeInfo = self.exprType(id: scrut)
+                // A match scrutinee is often a local introduced by `for` or a
+                // prior arm.  Its exact instance lives in the body-local
+                // environment; AST-global type recovery is only the fallback.
+                mut val groundedScrut: U64 = self.groundedBodyReceiverRef(exprId: scrut)
+                if groundedScrut == 0U64 {
+                    groundedScrut = self.groundedTypeOf(id: scrut)
+                }
+                if groundedScrut != 0U64 {
+                    scrutTi = self.typeInfoOfRef(ref: groundedScrut)
+                }
                 mut val ai: U64 = 0
                 while ai < arms.count() {
                     val a: MatchArm = arms[ai]
                     val mark: U64 = self.scopeMark()
-                    self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
+                    self.scanAddArmBinds(a: a, scrutTi: scrutTi)
                     self.scanBlockInsts(blkId: a.body)
                     self.popLocals(mark: mark)
                     ai += 1
@@ -767,7 +2494,13 @@ pub impl Comp {
                             self.cur.recvInstRef = instRef
                             self.cur.typeParams = mf.typeParams
                             self.cur.typeArgs = inst.args
+                            self.cur.bodyFnIdx = mfi
+                            self.cur.bodyRecvInstRef = instRef
+                            self.cur.bodyTypeArgs = inst.args
                             self.setSelfItemEnv(recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
+                            self.cur.bodyTypeParams = mf.typeParams
+                            self.cur.bodySelfRef = self.cur.selfRef
+                            self.cur.bodyItemRef = self.cur.itemRef
                             mut val pi: U64 = 0
                             while pi < mf.params.count() {
                                 val p: Param = mf.params[pi]
@@ -795,5 +2528,11 @@ pub impl Comp {
         self.cur.recvInstRef = 0
         self.cur.typeParams = noP
         self.cur.typeArgs = noA
+        self.cur.bodyFnIdx = 18446744073709551615U64
+        self.cur.bodyRecvInstRef = 0U64
+        self.cur.bodyTypeArgs = noA
+        self.cur.bodyTypeParams = noP
+        self.cur.bodySelfRef = 0U64
+        self.cur.bodyItemRef = 0U64
     }
 }

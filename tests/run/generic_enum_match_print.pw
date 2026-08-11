@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+import @Std/Core
+
+fn main() {
+    val value: Optional[I64] = <Optional.Some v=7I64 />
+    match value {
+        Optional.Some(v: val item) => { print(item) }
+        Optional.None => { print(0I64) }
+    }
+}

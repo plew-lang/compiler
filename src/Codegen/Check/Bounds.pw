@@ -6,6 +6,24 @@
 // or the input name unchanged when it is not an associated type / has no binding.
 
 pub impl Comp {
+    // A view is an unordered source set.  Bounds may use any active extension
+    // source to establish the requested conformance; the trait selector itself
+    // is already validated as singular when the TypeRef/value view is formed.
+    inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64) -> Bool {
+        if ref >= self.arena.types.count() { return false }
+        val t: TypeRef = self.arena.types[ref]
+        if self.conformsInstance(ref: ref, traitStart: traitStart, traitLen: traitLen) { return true }
+        mut val i: U64 = 0U64
+        while i < t.viewIds.count() {
+            if self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewIds[i], traitStart: traitStart, traitLen: traitLen) { return true }
+            i += 1U64
+        }
+        if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 {
+            return self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewExtId, traitStart: traitStart, traitLen: traitLen)
+        }
+        return false
+    }
+
     inout fn assocBindingSpan(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64) -> Bind {
         val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
@@ -399,6 +417,16 @@ pub impl Comp {
         if t.assocNameId != 0U64 {
             return false
         }
+        // Newtypes inherit the underlying type's conformance surface.  This
+        // must happen before the full-subject candidate scan below: the scan is
+        // deliberately exact for generic subjects, but a newtype has no copied
+        // `Conform` entry of its own.  Delegating through the underlying
+        // TypeRef keeps direct bounds, generic bounds, and method bounds on the
+        // same `conformsInstance` authority.
+        val underlying: U64 = self.newtypeUnderRef(start: t.nameStart, len: t.nameLen)
+        if underlying != 0U64 && underlying != ref {
+            return self.conformsInstance(ref: underlying, traitStart: traitStart, traitLen: traitLen)
+        }
         // Candidate existence is not conformance.  Match the full subject
         // pattern here, so `impl Box[I64] as P` never grants P to Box[String].
         val qTrait: U64 = intern(c: inout self, start: traitStart, len: traitLen)
@@ -518,10 +546,7 @@ pub impl Comp {
                     self.cur.typeArgs = savedA
                     if lhs < self.arena.types.count() {
                         val at: TypeRef = self.arena.types[lhs]
-                        mut val ok: Bool = self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
-                        if !ok && at.viewExtId != 0U64 {
-                            ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, typeRef: lhs, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
-                        }
+                        val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
                         if !ok {
                             self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
                         }
@@ -540,10 +565,7 @@ pub impl Comp {
                             // conformsInstance checks CONDITIONAL conformance against the
                             // arg's full ref (`Array[NoEq]` ⟹ false here, at this bound's
                             // location — no deferral to a deeper monomorphization level).
-                            mut val ok: Bool = self.conformsInstance(ref: fin.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen)
-                            if !ok && at.viewExtId != 0U64 {
-                                ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, typeRef: fin.args[pi], viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
-                            }
+                            val ok: Bool = self.viewedTypeConforms(ref: fin.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen)
                             if !ok {
                                 self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
                             }
@@ -591,10 +613,7 @@ pub impl Comp {
                                 self.cur.typeArgs = savedA
                                 if lhs < self.arena.types.count() {
                                     val at: TypeRef = self.arena.types[lhs]
-                                    mut val ok: Bool = self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
-                                    if !ok && at.viewExtId != 0U64 {
-                                        ok = self.viewConformsTo(typeStart: at.nameStart, typeLen: at.nameLen, typeRef: lhs, viewId: at.viewExtId, traitStart: fb.traitStart, traitLen: fb.traitLen)
-                                    }
+                                    val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
                                     if !ok {
                                         self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                     }

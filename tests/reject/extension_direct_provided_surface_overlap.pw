@@ -1,0 +1,13 @@
+trait A {}
+pub impl A { fn same() -> I64 { return 1I64 } }
+
+struct Sample {}
+pub impl Sample { factory }
+pub impl Sample as A {}
+
+extension E {
+    pub impl Sample { fn same() -> I64 { return 2I64 } }
+    pub impl A { fn same() -> I64 { return 3I64 } }
+}
+
+fn main() {}

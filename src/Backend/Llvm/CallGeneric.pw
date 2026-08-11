@@ -10,9 +10,21 @@
 // args can't be inferred / the instance can't be declared.
 
 pub impl LlvmCtx {
-    inout fn genMethodOwnTypeParamCall(c: inout Comp, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    inout fn genMethodOwnTypeParamCall(c: inout Comp, callId: U64, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
         val mf: Func = c.arena.funcs[mfi]
-        val margs: Array[U64] = self.llvmInferFnArgs(c: inout c, f: mf, args: args)
+        val allArgs: Array[U64] = c.bodyCalleeTypeArgs(exprId: callId)
+        mut val margs: Array[U64] = []
+        mut val ai: U64 = 0U64
+        // A generic receiver owns the leading parameters.  The method's own
+        // substitutions are the suffix, already fixed by Mono.
+        val recvCount: U64 = c.recvParamCount(nameStart: recvStart, nameLen: recvLen)
+        while ai < allArgs.count() {
+            if ai >= recvCount { margs.append(allArgs[ai]) }
+            ai += 1U64
+        }
+        if margs.count() != mf.typeParams.count() - recvCount {
+            return LLVMConstNull(self.ptrty)
+        }
         mut val mi: U64 = 0
         while mi < margs.count() {
             if margs[mi] == 0U64 {
@@ -20,13 +32,19 @@ pub impl LlvmCtx {
             }
             mi += 1
         }
-        // a pseudo instance ref: the receiver type name + the method type args, so the
-        // body emits with curTypeParams = mf.typeParams -> curTypeArgs = margs while the
-        // self type still resolves from the receiver name.
-        val pinst: U64 = c.pushType(t: <TypeRef nameStart=recvStart nameLen=recvLen args=margs />)
-        val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: pinst, ownArgs: [])
+        // The final descriptor owns the split between receiver arguments and
+        // method-owned arguments.  Do not manufacture `Receiver[ownArgs]` here:
+        // that pseudo instance has a different body key from Mono's selected
+        // callable (e.g. `String.hash[H]` is String + H, never `String[H]`).
+        // Reuse the final receiver identity and keep `margs` in the dedicated
+        // own-argument lane used by generic-method declaration/emission.
+        mut val instRef: U64 = c.bodyCalleeReceiverRef(exprId: callId)
+        if instRef == 0U64 {
+            instRef = c.simpleTypeRef(nameStart: recvStart, nameLen: recvLen)
+        }
+        val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: instRef, ownArgs: margs)
         if gslot < self.genMethK.count() {
-            return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gslot, instRef: pinst, args: args)
+            return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gslot, instRef: instRef, args: args)
         }
         return LLVMConstNull(self.ptrty)
     }
@@ -118,7 +136,18 @@ pub impl LlvmCtx {
                 match c.arena.exprs[base] {
                     Expr.Ident(start: val bs, len: val bl) => {
                         val bli: U64 = self.findLocal(c: inout c, start: bs, len: bl)
-                        val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
+                        // The backend local table is the authority for an
+                        // addressable receiver.  In a generic body `self` can
+                        // carry a concrete Array/Box instance while the shared
+                        // AST still exposes only its template spelling; asking
+                        // exprStructIdx first then turns `self.data` into a
+                        // non-place.  Use the exact storage type, with the
+                        // expression recovery only as a legacy fallback.
+                        mut val bsi: U64 = c.arena.structs.count()
+                        if bli < self.nLocals { bsi = self.locStructIdx[bli] }
+                        if bsi >= c.arena.structs.count() {
+                            bsi = self.exprStructIdx(c: inout c, id: base)
+                        }
                         if bli < self.nLocals && bsi < c.arena.structs.count() {
                             val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
                             if fidx < c.arena.structs[bsi].fields.count() {
@@ -438,15 +467,13 @@ pub impl LlvmCtx {
         // (`value#Ext` / `value#!Ext`). Plain code (no views) has both sides 0. A generic
         // type-parameter param absorbs the view (it binds to `S#P` via inference), so the
         // check applies only to a concrete param type.
-        mut val pView: U64 = 0
         mut val pConcrete: Bool = true
         if p.ty != 0U64 {
-            pView = c.arena.types[p.ty].viewExtId
             pConcrete = tyNameConcrete(c: inout c, start: c.arena.types[p.ty].nameStart, len: c.arena.types[p.ty].nameLen)
         }
         if checkView {
             if pConcrete {
-                if pView != self.exprViewExtId(c: inout c, id: argExpr) {
+                if !(c.sameViewIdSet(a: self.typeViewIds(c: inout c, ref: p.ty), b: self.collectViewChain(c: inout c, id: argExpr))) {
                     c.errorAt(offset: c.exprOffset(id: argExpr), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
                 }
             }
@@ -668,86 +695,22 @@ pub impl LlvmCtx {
     // queued (genFnEmit) for the pass-2 drain. Returns st.genFnK.count() if not declarable
     // (extern / main / a method — those stay on their own paths). Idempotent via genFnSlotFor.
     inout fn ensureFnInst(c: inout Comp, fnIdx: U64, args: Array[U64], recvInstRef: U64) -> U64 {
-        val existing: U64 = genFnSlotFor(c: inout c, fnIdx: fnIdx, args: args, st: inout self)
+        val existing: U64 = genFnSlotFor(c: inout c, fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, st: inout self)
         if existing < self.genFnK.count() {
             return existing
         }
         val f: Func = c.arena.funcs[fnIdx]
-        if f.isExtern { return self.genFnK.count() }
-        if c.nameIsMain(f: f) { return self.genFnK.count() }
-        if f.hasRecv { return self.genFnK.count() }
-        if f.isAsync { return self.genFnK.count() }
-        // a generic instance must arrive COMPLETE and GROUND: a hole (an uninferred 0,
-        // or a still-parametric ref) would register a bogus instance whose body emits
-        // under a broken env — resolveTy substitutes nothing for the hole and the
-        // params/fields default to i64, a silent miscompile. The frontend's inference
-        // gates catch this at the call site; this is the registration-side invariant.
-        // (The line points at the generic function's declaration: the emission path
-        // has no call offset here.)
-        if f.typeParams.count() > 0U64 {
-            if args.count() != f.typeParams.count() || !(c.fnArgsAllGround(args: args)) {
-                c.errorAt(offset: f.nameStart, msg: "cannot infer the type arguments of a call to this generic function — annotate the arguments or the receiving binding so every type parameter is pinned (spec/06)")
-            }
-            // polymorphic-recursion ceiling on the demand side too: the emission drain
-            // (emitOneGenFn -> ensureFnInst) is its own fixpoint and would otherwise
-            // queue ever-deeper instances forever (mirrors registerCallInst's gate).
-            mut val di: U64 = 0
-            while di < args.count() {
-                c.checkInstDepth(ref: args[di])
-                di += 1
-            }
-        }
-        val k: U64 = c.monoWork.fnInsts.count()
-        // recvInstRef: the operand instance for an `assoc fn` witness (`impl[T] Array[T]
-        // as Eq` -> Array[I64]), so emitOneGenFn can bind `Self`/`Item` to the receiver
-        // (its `Self` params/field access ground). 0 for a free-function witness.
-        // ⚠ genFnSlotFor keys the instance cache on (fnIdx, args) ONLY, not recvInstRef —
-        // sound today because each `impl T as Eq` has a distinct `eq` fnIdx, so (fnIdx, args)
-        // determines the receiver. A trait-provided DEFAULT `assoc fn` shared across receiver
-        // types (same fnIdx, args=[], differing recvInstRef) would alias to the first-seen
-        // `Self` — add recvInstRef to the key if that lands.
-        c.monoWork.fnInsts.append(<FnInst fnIdx=fnIdx args=args recvInstRef=recvInstRef />)
-        // a DEMAND-registered instance postdates the collection-time checkFnBounds
-        // sweep — run the same per-instance `where` check here so it cannot escape
-        // the soundness gate (audit-5 M).
-        c.checkOneFnInstBounds(fin: c.monoWork.fnInsts[k])
-        val savedP: Array[Bind] = c.cur.typeParams
-        val savedA: Array[U64] = c.cur.typeArgs
-        val savedSelf: U64 = c.cur.selfRef
-        val savedItem: U64 = c.cur.itemRef
-        c.cur.typeParams = f.typeParams
-        c.cur.typeArgs = args
-        // bind `Self`/`Item` for an assoc-fn witness so its SIGNATURE grounds — a `Self`
-        // param / `-> Self` return must get the receiver's real LLVM type here, else the
-        // declared signature (i64 default for an ungrounded `Self`) mismatches the struct
-        // the caller passes. Mirrors the env emitOneGenFn sets for the body (they must agree).
+        // Mono owns instance discovery and final-body construction.  LLVM may
+        // declare the already-recorded instance, but must never append a new
+        // one from an AST-shaped fallback: doing so opens a body under a key
+        // which final-callable construction never scanned.
         if f.isAssoc {
-            if recvInstRef != 0U64 {
-                c.setSelfItemEnv(recvStart: c.arena.types[recvInstRef].nameStart, recvLen: c.arena.types[recvInstRef].nameLen, recvInstRef: recvInstRef)
-            } else {
-                c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
-            }
+            c.errorAt(offset: f.nameStart, msg: "internal error: Mono did not register the final associated callable instance required by LLVM")
+        } else if f.hasRecv {
+            c.errorAt(offset: f.nameStart, msg: "internal error: Mono did not register the final method instance required by LLVM")
+        } else {
+            c.errorAt(offset: f.nameStart, msg: "internal error: Mono did not register the final free-function instance required by LLVM")
         }
-        mut val ptys: Array[LLVMTypeRef] = []
-        mut val pi: U64 = 0
-        while pi < f.params.count() {
-            ptys.append(self.paramLlvmTy(c: inout c, p: f.params[pi]))
-            pi += 1
-        }
-        val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: f), arrayCPtr(ptys), ptys.count(), 0I32)
-        c.cur.typeParams = savedP
-        c.cur.typeArgs = savedA
-        c.cur.selfRef = savedSelf
-        c.cur.itemRef = savedItem
-        mut val nm: Array[U8] = []
-        appendBytes(into: inout nm, from: "gf".bytes())
-        appendU64Dec(into: inout nm, n: k)
-        nm.append(0)
-        val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
-        self.genFnK.append(k)
-        self.genFnVal.append(fv)
-        self.genFnTy.append(fty)
-        self.genFnEmit.append(self.genFnK.count() - 1U64)
-        return self.genFnK.count() - 1U64
+        return self.genFnK.count()
     }
 }

@@ -18,6 +18,12 @@ pub impl LlvmCtx {
         if f.typeParams.count() > 0U64 {
             return self.fnIdx.count()
         }
+        // Associated callables have the generic-function ABI and are keyed by
+        // their final receiver subject.  They must never enter this legacy
+        // per-Func cache, whose key cannot represent `Self` instantiation.
+        if f.isAssoc {
+            return self.fnIdx.count()
+        }
         if !(f.hasRecv) {
             return self.fnIdx.count()
         }
@@ -78,17 +84,32 @@ pub impl LlvmCtx {
         mut val k: U64 = 0
         while k < c.monoWork.fnInsts.count() {
             val fin: FnInst = c.monoWork.fnInsts[k]
-            // free-function instances only (recvInstRef == 0); methods are a later step.
-            // restrict to the entry module: a std generic fn (print[T] etc.) has a body
-            // full of not-yet-supported constructs and shouldn't be emitted (print is
-            // special-cased at the call site, so its instance is never called).
-            if fin.recvInstRef == 0U64 && c.moduleOf(offset: c.arena.funcs[fin.fnIdx].nameStart) == 0U64 {
-                if c.isGenericFreeFn(fi: fin.fnIdx) {
+            // Value-receiver methods are emitted by the generic-method path.  An
+            // associated callable is still a free-function ABI body, even when
+            // its selected `Self` subject is concrete: `recvInstRef` supplies
+            // that semantic environment and must not decide which emitter owns
+            // the function.
+            // Every Mono-recorded generic free function and associated callable
+            // is emitted from its final instance, independent of module.  The
+            // former entry-module restriction forced LLVM to manufacture std
+            // instances lazily, reopening the same body under a second key.
+            if !(c.arena.funcs[fin.fnIdx].hasRecv) {
+                val f0: Func = c.arena.funcs[fin.fnIdx]
+                if f0.isAssoc || !(f0.isExtern) {
                     val f: Func = c.arena.funcs[fin.fnIdx]
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
                     c.cur.typeParams = f.typeParams
                     c.cur.typeArgs = fin.args
+                    val savedSelf: U64 = c.cur.selfRef
+                    val savedItem: U64 = c.cur.itemRef
+                    if f.isAssoc {
+                        if fin.recvInstRef != 0U64 {
+                            c.setSelfItemEnv(recvStart: c.arena.types[fin.recvInstRef].nameStart, recvLen: c.arena.types[fin.recvInstRef].nameLen, recvInstRef: fin.recvInstRef)
+                        } else {
+                            c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
+                        }
+                    }
                     mut val ptys: Array[LLVMTypeRef] = []
                     mut val pi: U64 = 0
                     while pi < f.params.count() {
@@ -103,6 +124,8 @@ pub impl LlvmCtx {
                     val fv: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(nm), fty)
                     c.cur.typeParams = savedP
                     c.cur.typeArgs = savedA
+                    c.cur.selfRef = savedSelf
+                    c.cur.itemRef = savedItem
                     self.genFnK.append(k)
                     self.genFnVal.append(fv)
                     self.genFnTy.append(fty)
@@ -141,7 +164,7 @@ pub impl LlvmCtx {
                 c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
             }
         }
-        self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot])
+        self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot], bodyArgs: fin.args, bodyRecvInstRef: fin.recvInstRef)
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
         self.curRecvInstRef = savedR
@@ -149,79 +172,4 @@ pub impl LlvmCtx {
         c.cur.itemRef = savedItem
     }
 
-
-    // Infer a generic free function's type arguments from a call's arguments, mirroring
-    // the front-end `inferFnArgs` but reading each argument's type from the parametric
-    // store (exprTypeRef), grounded under the current instance env.
-    inout fn llvmInferFnArgs(c: inout Comp, f: Func, args: Array[Arg]) -> Array[U64] {
-        mut val out: Array[U64] = []
-        mut val ti: U64 = 0
-        while ti < f.typeParams.count() {
-            val tp: Bind = f.typeParams[ti]
-            mut val found: U64 = 0
-            mut val pi: U64 = 0
-            while pi < f.params.count() {
-                val p: Param = f.params[pi]
-                if p.tyIsArray {
-                    if p.tyNameId == tp.nameId {
-                        val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-                        if ai < args.count() {
-                            if found == 0U64 {
-                                found = self.arrayExprElemRef(c: inout c, arrayExpr: args[ai].expr)
-                            }
-                        }
-                    }
-                } else {
-                    val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-                    if ai < args.count() {
-                        if found == 0U64 {
-                            val argRef: U64 = self.exprTypeRef(c: inout c, id: args[ai].expr)
-                            found = c.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
-                        }
-                    }
-                }
-                pi += 1
-            }
-            out.append(found)
-            ti += 1
-        }
-        return out
-    }
-
-    // Fill a generic factory's type params left unfound by argument inference (a no-arg
-    // factory like `Head.empty()`) from the expected type. A factory returns `Self =
-    // Head[typeParams]`, so when the call's context wants a same-head generic instance
-    // (`st.expectedTy = Head[U]`), its type args line up with the params positionally.
-    // Only touches unfound (0) slots; an arg-inferred param wins.
-    inout fn groundAssocFromExpected(c: inout Comp, recvStart: U64, recvLen: U64, fi: U64, inferred: inout Array[U64]) {
-        if self.expectedTy == 0U64 {
-            return
-        }
-        if !(c.isGenericInst(ref: self.expectedTy)) {
-            return
-        }
-        val et: TypeRef = c.arena.types[self.expectedTy]
-        if !(spansEqual(c: inout c, aStart: et.nameStart, aLen: et.nameLen, bStart: recvStart, bLen: recvLen)) {
-            return
-        }
-        if et.args.count() != inferred.count() {
-            return
-        }
-        mut val i: U64 = 0
-        while i < inferred.count() {
-            // unfound (0) OR a width-less recovery (a nameless ref, e.g. an integer field
-            // whose width the structural pass couldn't name): the expected type's arg is
-            // the authoritative ground for this param, so override.
-            mut val needsGround: Bool = inferred[i] == 0U64
-            if !(needsGround) {
-                if c.arena.types[inferred[i]].nameLen == 0U64 {
-                    needsGround = true
-                }
-            }
-            if needsGround {
-                inferred[i] = et.args[i]
-            }
-            i += 1
-        }
-    }
 }

@@ -24,6 +24,7 @@ fn main() {
             return
         }
     }
-    mut val c: Comp = runFrontend()
+    mut val c: Comp = <Comp />
+    runFrontend(c: inout c)
     emitLlvm(c: inout c)
 }

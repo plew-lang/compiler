@@ -1,0 +1,12 @@
+struct Sample {}
+pub impl Sample { factory }
+
+extension Extra {
+    pub impl Sample {
+        assoc fn value() -> I64 { return 7I64 }
+    }
+}
+
+fn main() {
+    Sample.value()
+}

@@ -84,23 +84,22 @@ pub impl LlvmCtx {
                 // enum to the tag-compare path; a non-`@[Eq]` struct field inside a synthesized
                 // `eq` to the inline structural path below.
                 if op == opEq() || op == opNe() {
-                    val eqFi: U64 = self.eqWitnessFn(c: inout c, lhs: lhs)
+                    val eqFi: U64 = self.eqWitnessFn(c: inout c, callId: id)
                     if eqFi < c.arena.funcs.count() {
-                        val wv: LLVMValueRef = self.emitWitnessCall(c: inout c, fi: eqFi, lhs: lhs, rhs: rhs, binary: true)
+                        val wv: LLVMValueRef = self.emitWitnessCall(c: inout c, callId: id, fi: eqFi, lhs: lhs, rhs: rhs, binary: true)
                         if op == opNe() {
                             return LLVMBuildNot(self.b, wv, anon())
                         }
                         return wv
                     }
                 }
-                // struct/enum arithmetic / bitwise / shift: dispatch to the user's
-                // operator-trait witness assoc fn (`money + money` -> `Money.add`),
-                // mirroring the C backend's emitBinTraitCall. A primitive lhs has no
-                // aggregate witness (binWitnessFn -> none) and falls through.
+                // Arithmetic / bitwise / shift dispatch to the operator witness
+                // selected while finalizing this concrete body.  A primitive with
+                // no witness keeps the built-in LLVM operation below.
                 if isBinTraitOp(op: op) {
-                    val wfi: U64 = self.binWitnessFn(c: inout c, op: op, lhs: lhs, rhs: rhs)
+                    val wfi: U64 = self.binWitnessFn(c: inout c, callId: id)
                     if wfi < c.arena.funcs.count() {
-                        return self.emitWitnessCall(c: inout c, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
+                        return self.emitWitnessCall(c: inout c, callId: id, fi: wfi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
                 // `< <= > >=` : dispatch to the operand type's `Ord` compare witness (spec/12
@@ -109,9 +108,9 @@ pub impl LlvmCtx {
                 // or a struct/enum with a compare witness); a type carrying no compare witness
                 // falls through to the structural / built-in `icmp` ordering below.
                 if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
-                    val ordFi: U64 = self.ordWitnessFn(c: inout c, lhs: lhs)
+                    val ordFi: U64 = self.ordWitnessFn(c: inout c, callId: id)
                     if ordFi < c.arena.funcs.count() {
-                        return self.emitOrdViaCompare(c: inout c, op: op, fi: ordFi, lhs: lhs, rhs: rhs)
+                        return self.emitOrdViaCompare(c: inout c, callId: id, op: op, fi: ordFi, lhs: lhs, rhs: rhs)
                     }
                 }
                 mut val l: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
@@ -377,13 +376,13 @@ pub impl LlvmCtx {
                 return self.loadRefPointee(c: inout c, base: base)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                return self.genLlvmCall(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
+                return self.genLlvmCall(c: inout c, callId: id, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 return self.genLlvmMethod(c: inout c, callId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             }
-            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-                return self.genLlvmExtMethod(c: inout c, callId: id, recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, val nameStart, val nameLen, val args) => {
+                return self.genLlvmMethod(c: inout c, callId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
                 // a value re-view is zero-cost: the value is unchanged (the view only
@@ -469,12 +468,12 @@ pub impl LlvmCtx {
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Unary(val op, val operand) => {
-                // a struct/enum operand dispatches to its unary operator-trait witness
-                // (`-money` -> `Money.neg(value:)`, `!switch` -> `Switch.not`). A
-                // primitive operand has no aggregate witness and keeps the LLVM op.
-                val uwfi: U64 = self.unaryWitnessFn(c: inout c, op: op, operand: operand)
+                // Unary operator witnesses are selected together with every other
+                // source-level call in Mono.  A primitive without a witness keeps
+                // the LLVM operation below.
+                val uwfi: U64 = self.unaryWitnessFn(c: inout c, callId: id)
                 if uwfi < c.arena.funcs.count() {
-                    return self.emitWitnessCall(c: inout c, fi: uwfi, lhs: operand, rhs: operand, binary: false)
+                    return self.emitWitnessCall(c: inout c, callId: id, fi: uwfi, lhs: operand, rhs: operand, binary: false)
                 }
                 if op == opSub() {
                     val ov: LLVMValueRef = self.genLlvmExpr(c: inout c, id: operand)

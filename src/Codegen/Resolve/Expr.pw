@@ -36,7 +36,13 @@ pub impl Comp {
         mut val r: U64 = self.arena.funcs.count()
         match self.arena.exprs[id] {
             Expr.Call(val nameStart, val nameLen, val args) => {
-                r = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
+                // A lexical closure binding shadows a same-spelled free
+                // function.  It has no static Func identity, so retain the
+                // sentinel here; Mono records the closure target in BodyCallee.
+                val li: U64 = self.localIndexByName(start: nameStart, len: nameLen)
+                if li >= self.cur.locals.count() || !(self.isFnType(ref: self.cur.locals[li].ty)) {
+                    r = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
+                }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 r = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)

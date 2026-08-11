@@ -151,8 +151,25 @@ pub impl Comp {
             val t: TypeRef = self.arena.types[i]
             // Synthetic TypeRefs and type-parameter heads have no authored
             // annotation site. Every user-written `Type#Name` does.
-            if t.viewExtId != 0U64 && t.siteOffset != 0U64 && t.viewExtId <= self.interner.count {
-                self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[t.viewExtId - 1U64], srcLen: self.interner.lens[t.viewExtId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)
+            if t.siteOffset != 0U64 {
+                mut val selectedCount: U64 = 0U64
+                mut val vi: U64 = 0U64
+                while vi < t.viewIds.count() {
+                    val viewId: U64 = t.viewIds[vi]
+                    if viewId != 0U64 && viewId <= self.interner.count {
+                        self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[viewId - 1U64], srcLen: self.interner.lens[viewId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)
+                        val source: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: viewId)
+                        if source.kind == 2U64 { selectedCount += 1U64 }
+                    }
+                    vi += 1U64
+                }
+                if selectedCount > 1U64 {
+                    self.errorAt(offset: t.siteOffset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
+                }
+                // Synthetic refs from older construction paths carry only viewExtId.
+                if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 && t.viewExtId <= self.interner.count {
+                    self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[t.viewExtId - 1U64], srcLen: self.interner.lens[t.viewExtId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)
+                }
             }
             i += 1U64
         }
@@ -163,6 +180,22 @@ pub impl Comp {
         val rt: TypeInfo = self.exprType(id: recv)
         if rt.nameLen == 0U64 { return }
         self.checkViewSourceValid(typeStart: rt.nameStart, typeLen: rt.nameLen, typeRef: rt.ref, srcStart: srcStart, srcLen: srcLen, offset: self.exprOffset(id: recv), allowMonomorphicFallback: rt.ref == 0U64 && self.recvOwnParamCount(rt: rt) == 0U64)
+        // Views are normalized as an unordered extension set plus one optional
+        // trait provenance selector.  Enforce the same cardinality rule for
+        // value re-views as `checkTypeViewSources` does for `Type#…`: otherwise
+        // only an expression chain could manufacture an unrepresentable
+        // two-trait state.
+        val selected: ViewSource = self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: intern(c: inout self, start: srcStart, len: srcLen))
+        if selected.kind == 2U64 {
+            val active: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref)
+            mut val i: U64 = 0U64
+            while i < active.count() {
+                if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
+                    self.errorAt(offset: self.exprOffset(id: recv), msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
+                }
+                i += 1U64
+            }
+        }
     }
 
     inout fn checkDeclShapes() {

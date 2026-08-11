@@ -13,6 +13,11 @@ pub impl LlvmCtx {
     // findTraitIdxByName is fine — the module is one compilation unit.)
     inout fn anyRecvTraitIdx(c: inout Comp, recv: U64) -> U64 {
         val r: U64 = self.exprTypeRef(c: inout c, id: recv)
+        return self.anyRecvTraitIdxForRef(c: inout c, ref: r)
+    }
+
+    inout fn anyRecvTraitIdxForRef(c: inout Comp, ref: U64) -> U64 {
+        val r: U64 = ref
         if refIsAny(c: inout c, ref: r) {
             return c.findTraitIdxByName(start: c.arena.types[r].nameStart, len: c.arena.types[r].nameLen)
         }
@@ -180,92 +185,12 @@ pub impl LlvmCtx {
         return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
     }
 
-    // The c.arena.funcs index of the binary operator-trait witness `T.<name>(lhs:, rhs:)`
-    // for a struct/enum lhs operand (so `money + money` dispatches to the user's
-    // `impl Money as Add`), or c.arena.funcs.count() when the lhs isn't a registered
-    // aggregate (a primitive — the caller keeps the built-in op). Mirrors the C
-    // backend's findBinTraitWitness, but recovers the rhs type via the LLVM env
-    // (typeOf can't see locals here), so `a + b` (rhs Vec2) picks `Add[Vec2]` over
-    // `Add[I64]` correctly.
-    inout fn binWitnessFn(c: inout Comp, op: I64, lhs: U64, rhs: U64) -> U64 {
-        mut val ownStart: U64 = 0
-        mut val ownLen: U64 = 0
-        val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
-        if sidx < c.arena.structs.count() {
-            ownStart = c.arena.structs[sidx].nameStart
-            ownLen = c.arena.structs[sidx].nameLen
-        } else {
-            val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-            if eid < c.arena.enums.count() {
-                ownStart = c.arena.enums[eid].nameStart
-                ownLen = c.arena.enums[eid].nameLen
-            } else {
-                // a primitive lhs (`3I8 + 4I8`, or a generic-body `a + b` at I8/F64): resolve
-                // its OWN operator-trait witness (`impl I8 as Add` / `impl F64 as Add` in
-                // std/Core/Num.pw) — the same path as an aggregate. The witness body bottoms
-                // out in the numeric intrinsic floor (genNumIntrinsic), so the std `impl` is the
-                // single source of truth for what `+` does (spec/12); no primitive open-code
-                // shortcut. (A String operand resolves as a registered struct via exprStructIdx
-                // above.)
-                val pnm: Bind = self.primOperandName(c: inout c, id: lhs)
-                if pnm.nameLen == 0U64 {
-                    return c.arena.funcs.count()
-                }
-                ownStart = pnm.nameStart
-                ownLen = pnm.nameLen
-            }
-        }
-        val qType: U64 = intern(c: inout c, start: ownStart, len: ownLen)
-        val name: String = binTraitMethodName(op: op)
-        // the rhs type id, recovered from the LLVM env: a known struct/enum has an
-        // exact name (-> exact overload); a primitive rhs is int-ish (-> int overload).
-        mut val rhsId: U64 = 0
-        mut val rhsKnown: Bool = false
-        val rsidx: U64 = self.exprStructIdx(c: inout c, id: rhs)
-        if rsidx < c.arena.structs.count() {
-            rhsId = intern(c: inout c, start: c.arena.structs[rsidx].nameStart, len: c.arena.structs[rsidx].nameLen)
-            rhsKnown = true
-        } else {
-            val reid: U64 = self.exprEnumIdx(c: inout c, id: rhs)
-            if reid < c.arena.enums.count() {
-                rhsId = intern(c: inout c, start: c.arena.enums[reid].nameStart, len: c.arena.enums[reid].nameLen)
-                rhsKnown = true
-            }
-        }
-        mut val firstMatch: U64 = c.arena.funcs.count()
-        mut val intMatch: U64 = c.arena.funcs.count()
-        mut val i: U64 = 0
-        while i < c.arena.funcs.count() {
-            val f: Func = c.arena.funcs[i]
-            if f.isAssoc {
-                if f.recvId == qType {
-                    if rangeEquals(bytes: c.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
-                        if firstMatch == c.arena.funcs.count() {
-                            firstMatch = i
-                        }
-                        if f.params.count() >= 2U64 {
-                            if rhsKnown {
-                                if f.params[1].tyNameId == rhsId {
-                                    return i
-                                }
-                            }
-                            if intMatch == c.arena.funcs.count() {
-                                if c.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
-                                    intMatch = i
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            i += 1
-        }
-        if !(rhsKnown) {
-            if intMatch < c.arena.funcs.count() {
-                return intMatch
-            }
-        }
-        return firstMatch
+    // Operator syntax has no AST Call node, but Mono records its selected
+    // associated witness under the Binary expression just like an ordinary
+    // final callable.  LLVM must not reconstruct overload selection from its
+    // local value environment.
+    inout fn binWitnessFn(c: inout Comp, callId: U64) -> U64 {
+        return c.bodyCallee(exprId: callId)
     }
 
     // The c.arena.funcs index of the `Eq` witness `T.eq(lhs:rhs:)` for the `==`/`!=`
@@ -274,37 +199,8 @@ pub impl LlvmCtx {
     // scalar — compared by `icmp` directly — or a non-`@[Eq]` enum — tag-compared).
     // Comparison is trait sugar like arithmetic (spec/12), but `Eq.eq` has a fixed
     // selector, so this resolves by name rather than via `binTraitMethodName`.
-    inout fn eqWitnessFn(c: inout Comp, lhs: U64) -> U64 {
-        val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
-        if sidx < c.arena.structs.count() {
-            return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: "eq")
-        }
-        val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-        if eid < c.arena.enums.count() {
-            return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "eq")
-        }
-        // a primitive lhs (`a == b`, a: I8 / F64, or a generic-body operand at I8/F64): resolve
-        // its own `Eq` witness (`impl I8 as Eq` / `impl F64 as Eq` in std/Core/Num.pw), so `==`
-        // reaches the `i8Eq` / `f64Eq` intrinsic through the witness body — the single source of
-        // truth, same as arithmetic (spec/12). (A String operand resolves as a registered struct
-        // via exprStructIdx above.)
-        val pnm: Bind = self.primOperandName(c: inout c, id: lhs)
-        if pnm.nameLen != 0U64 {
-            return c.findAssocByName(typeStart: pnm.nameStart, typeLen: pnm.nameLen, name: "eq")
-        }
-        // an opaque named type carrying an Eq witness but which is neither a registered
-        // struct/enum nor a scalar: the collection floor `Buffer[T]` is a bare-pointer
-        // primitive (buffer-floor.md §6), so `buf == buf` inside an Array/Dictionary witness
-        // resolves `impl[T] Buffer[T] as Eq` by the operand's type-ref head name. Gated on an
-        // actual `eq` assoc existing, so a witness-less type still falls through to `none`.
-        val tr: U64 = self.exprTypeRef(c: inout c, id: lhs)
-        if tr != 0U64 {
-            val hn: TypeRef = c.arena.types[tr]
-            if hn.nameLen != 0U64 {
-                return c.findAssocByName(typeStart: hn.nameStart, typeLen: hn.nameLen, name: "eq")
-            }
-        }
-        return c.arena.funcs.count()
+    inout fn eqWitnessFn(c: inout Comp, callId: U64) -> U64 {
+        return c.bodyCallee(exprId: callId)
     }
 
     // The c.arena.funcs index of the `Ord` witness `T.compare(lhs:rhs:)` for the ordering
@@ -312,28 +208,19 @@ pub impl LlvmCtx {
     // `impl I8 as Ord` lives in std/Core/Num.pw), or c.arena.funcs.count() when none — the
     // caller then keeps the structural/built-in ordering. `< <= > >=` are `Ord` sugar
     // (spec/12); routing through this witness honors a user/derived `compare`.
-    inout fn ordWitnessFn(c: inout Comp, lhs: U64) -> U64 {
-        val sidx: U64 = self.exprStructIdx(c: inout c, id: lhs)
-        if sidx < c.arena.structs.count() {
-            return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: "compare")
-        }
-        val eid: U64 = self.exprEnumIdx(c: inout c, id: lhs)
-        if eid < c.arena.enums.count() {
-            return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: "compare")
-        }
-        val pnm: Bind = self.primOperandName(c: inout c, id: lhs)
-        if pnm.nameLen != 0U64 {
-            return c.findAssocByName(typeStart: pnm.nameStart, typeLen: pnm.nameLen, name: "compare")
-        }
-        return c.arena.funcs.count()
+    inout fn ordWitnessFn(c: inout Comp, callId: U64) -> U64 {
+        // `<`/`<=`/`>`/`>=` are source-level calls to Ord.compare.  Mono records
+        // the selected witness under the containing Binary expression, so LLVM
+        // consumes that decision instead of rediscovering a receiver by shape.
+        return c.bodyCallee(exprId: callId)
     }
 
     // Emit `a <op> b` (op ∈ `< <= > >=`) via the resolved `Ord` compare witness `fi`
     // (spec/12: `< <= > >=` desugar to a match on `compare`). Call `compare(a,b)` ->
     // an `Ordering` value, extract its tag (Less=0, Equal=1, Greater=2, declaration
     // order in std/Core), and reduce to the boolean the match would yield.
-    inout fn emitOrdViaCompare(c: inout Comp, op: I64, fi: U64, lhs: U64, rhs: U64) -> LLVMValueRef {
-        val ordVal: LLVMValueRef = self.emitWitnessCall(c: inout c, fi: fi, lhs: lhs, rhs: rhs, binary: true)
+    inout fn emitOrdViaCompare(c: inout Comp, callId: U64, op: I64, fi: U64, lhs: U64, rhs: U64) -> LLVMValueRef {
+        val ordVal: LLVMValueRef = self.emitWitnessCall(c: inout c, callId: callId, fi: fi, lhs: lhs, rhs: rhs, binary: true)
         val tag: LLVMValueRef = LLVMBuildExtractValue(self.b, ordVal, 0U64, anon())
         val tagTy: LLVMTypeRef = LLVMTypeOf(tag)
         val less: LLVMValueRef = LLVMConstInt(tagTy, 0U64, 0I32)
@@ -345,36 +232,15 @@ pub impl LlvmCtx {
         return LLVMBuildICmp(self.b, llvmIntNe(), tag, less, anon())
     }
 
-    // The c.arena.funcs index of the prefix-unary operator-trait witness `T.<name>(value:)`
-    // for a struct/enum operand (`-money` -> `Money.neg(value:)`), or c.arena.funcs.count()
-    // when the operand isn't a registered aggregate.
-    inout fn unaryWitnessFn(c: inout Comp, op: I64, operand: U64) -> U64 {
-        val sidx: U64 = self.exprStructIdx(c: inout c, id: operand)
-        if sidx < c.arena.structs.count() {
-            return c.findAssocByName(typeStart: c.arena.structs[sidx].nameStart, typeLen: c.arena.structs[sidx].nameLen, name: unaryMethodName(op: op))
-        }
-        val eid: U64 = self.exprEnumIdx(c: inout c, id: operand)
-        if eid < c.arena.enums.count() {
-            return c.findAssocByName(typeStart: c.arena.enums[eid].nameStart, typeLen: c.arena.enums[eid].nameLen, name: unaryMethodName(op: op))
-        }
-        // a primitive int / float operand (`-x` -> `impl I8 as Neg` / `impl F64 as Neg`,
-        // `~x` -> `impl I8 as BitNot` in std/Core/Num.pw): route through the witness so
-        // `~`/`-` reach the intrinsic floor through the witness body. (Int Neg is signed-only,
-        // so `impl U8 as Neg` does not exist and this returns none for it — the built-in path
-        // rejects `-u`; floats are signed so `impl F64 as Neg` exists; `~` on a float names no
-        // BitNot witness and returns none. Bool `!` names a non-prim type and also returns
-        // none — it keeps the built-in op.)
-        val pnm: Bind = self.primOperandName(c: inout c, id: operand)
-        if pnm.nameLen != 0U64 {
-            return c.findAssocByName(typeStart: pnm.nameStart, typeLen: pnm.nameLen, name: unaryMethodName(op: op))
-        }
-        return c.arena.funcs.count()
+    // Unary syntax follows the same final-callable contract as Binary syntax.
+    inout fn unaryWitnessFn(c: inout Comp, callId: U64) -> U64 {
+        return c.bodyCallee(exprId: callId)
     }
 
     // Emit a call to a resolved operator-trait witness assoc fn (binary: lhs/rhs;
     // unary: just lhs). The witness is its own 0-type-arg `gf` instance, declared lazily
     // here on first reach (ensureFnInst); a missing slot is a loud not-yet-emittable error.
-    inout fn emitWitnessCall(c: inout Comp, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
+    inout fn emitWitnessCall(c: inout Comp, callId: U64, fi: U64, lhs: U64, rhs: U64, binary: Bool) -> LLVMValueRef {
         val af: Func = c.arena.funcs[fi]
         mut val av: Array[LLVMValueRef] = []
         // operator operands are view-blind (operators dispatch on the underlying type;
@@ -384,62 +250,16 @@ pub impl LlvmCtx {
         if binary {
             av.append(self.genArgValueV(c: inout c, argExpr: rhs, p: af.params[1], checkView: false))
         }
-        // a witness may be a pure free function (its 0-type-arg `gf` instance) or an assoc fn
-        // on a lang-item (`String.add` for `"a" + "b"` — still on `pf`, declared lazily like a
-        // provided method). A GENERIC witness (`impl[T] Array[T] as Eq`, `impl[T] Buffer[T] as
-        // Eq`) must be monomorphized for the operand's concrete element: infer its type args
-        // from the operand exprs (the same unification `genLlvmResolvedFreeCall` uses), so
-        // `Array[Pt] == Array[Pt]` reaches `Array.eq[Pt]` (which in turn rides `Buffer.eq[Pt]`,
-        // etc.). A non-generic witness keeps its 0-type-arg instance.
-        // the receiver instance for an `assoc fn` witness — the lhs operand's type
-        // (`Array[I64]` for `Array[I64] == …`) — so emitOneGenFn binds `Self` to it and a
-        // `Self` param / `.data` field access in the witness body grounds. A free-function
-        // witness (`pow`) has no receiver, so 0.
-        mut val recvInst: U64 = 0
-        if af.isAssoc {
-            recvInst = self.exprTypeRef(c: inout c, id: lhs)
-        }
-        mut val targs: Array[U64] = []
+        // Source-level operator syntax is no exception: Mono fixed both the
+        // witness subject and every generic substitution in its final-callee
+        // record.  Re-inferring from operands here used an identity-impl
+        // assumption and could silently choose a different instantiation.
+        val recvInst: U64 = c.bodyCalleeReceiverRef(exprId: callId)
+        val targs: Array[U64] = c.bodyCalleeTypeArgs(exprId: callId)
         if af.typeParams.count() > 0U64 {
-            mut val wargs: Array[Arg] = []
-            wargs.append(<Arg expr=lhs isInout=false labelStart=0 labelLen=0 hasLabel=false />)
-            if binary {
-                wargs.append(<Arg expr=rhs isInout=false labelStart=0 labelLen=0 hasLabel=false />)
-            }
-            targs = self.llvmInferFnArgs(c: inout c, f: af, args: wargs)
-            // a `Self`-param witness (`impl[T] Buffer[T] as Eq` — its params name `Self`, not
-            // `T`) leaves `T` uninferred, so the element type would default to i64 and a struct
-            // element would compare only its first word. Fill any uninferred (0) param from the
-            // receiver instance's args, which align 1:1 with the impl's type params (Buffer[T]
-            // -> T = element). This grounds the element so `get`/element-`==` see the real type.
-            // ⚠ ASSUMES an IDENTITY impl (`impl[P] Foo[P]` — witness type param i ↔ receiver
-            // arg i). All operator witnesses today are identity (Buffer[T]/Array[T]); a future
-            // non-identity witness (`impl[T] Foo[Pair[T]] as Eq`, a multi-param/reordered Eq)
-            // would fill the wrong arg here and must instead unify param types against recvInst.
-            if recvInst != 0U64 {
-                val ra: Array[U64] = c.arena.types[recvInst].args
-                mut val ti2: U64 = 0
-                while ti2 < targs.count() {
-                    if targs[ti2] == 0U64 {
-                        if ti2 < ra.count() {
-                            targs[ti2] = ra[ti2]
-                        }
-                    }
-                    ti2 += 1
-                }
-            }
-            // A witness type param still uninferred after the receiver-arg fill would ground
-            // its element to i64 and compare a multi-word struct by its first word only — a
-            // SILENT wrong result. Refuse loudly instead (hidden behavior is forbidden): this
-            // fires only if an operand's type couldn't be recovered with concrete args (an
-            // argless/ungrounded receiver ref), which no reachable operator-witness path hits
-            // today; the guard keeps a future one from miscompiling silently.
-            mut val ci: U64 = 0
-            while ci < targs.count() {
-                if targs[ci] == 0U64 {
-                    c.errorAt(offset: c.exprOffset(id: lhs), msg: "cannot ground a type argument of this operator's witness — the operand's element type is not statically recoverable here; annotate the operand's type or bind it to a typed local")
-                }
-                ci += 1
+            if targs.count() != af.typeParams.count() || !(c.fnArgsAllGround(args: targs)) {
+                c.errorAt(offset: c.exprOffset(id: lhs), msg: "internal error: final operator callable is missing grounded type arguments")
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
         val gslot: U64 = self.ensureFnInst(c: inout c, fnIdx: fi, args: targs, recvInstRef: recvInst)

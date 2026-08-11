@@ -110,6 +110,23 @@ pub impl LlvmCtx {
                 if rangeEquals(bytes: c.arena.bytes, start: selfStart, len: selfLen, kw: "self") && c.cur.selfRef != 0U64 {
                     return self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: c.cur.selfRef))
                 }
+                // LLVM's own local table is authoritative during emission:
+                // match payload binds are introduced here (not into Comp.cur).
+                val emittedLi: U64 = self.findLocal(c: inout c, start: selfStart, len: selfLen)
+                if emittedLi < self.nLocals && self.locTypeRef[emittedLi] != 0U64 {
+                    val emittedStruct: U64 = self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: self.locTypeRef[emittedLi]))
+                    if emittedStruct < c.arena.structs.count() { return emittedStruct }
+                }
+                // Match/destructure binds are locals too.  Their concrete
+                // payload type is installed by the active body environment;
+                // do not re-derive an Ident's shared AST type and lose a
+                // generic enum's substituted field instance.
+                val li: U64 = c.localIndexByName(start: selfStart, len: selfLen)
+                if li < c.cur.locals.count() {
+                    val localRef: U64 = c.groundTypeRef(ref: c.cur.locals[li].ty)
+                    val localStruct: U64 = self.structIdxOfRef(c: inout c, ref: c.runtimeTypeRef(ref: localRef))
+                    if localStruct < c.arena.structs.count() { return localStruct }
+                }
             }
             _ => {}
         }

@@ -660,24 +660,6 @@ fn reqReturnsSelf(c: inout Comp, req: Func) -> Bool {
 }
 
 
-// The slot index (into the vtable) of trait `traitIdx`'s requirement matching method
-// (nameStart,nameLen) with the call's argument labels, or 0 (the reserved drop slot
-// = "not found"). Slot = 1 + requirement-declaration-index.
-fn anyMethodSlot(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-    val qNameId: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-    val t: TraitDef = c.decls.traits[traitIdx]
-    mut val ri: U64 = 0
-    while ri < t.reqs.count() {
-        if t.reqs[ri].nameId == qNameId {
-            if c.paramsLabelsOk(params: t.reqs[ri].params, args: args) {
-                return ri + 1U64
-            }
-        }
-        ri += 1
-    }
-    return 0U64
-}
-
 // ---- checked arithmetic (overflow / divide-by-zero panic) ----
 //
 // add/sub/mul/div/rem route through the runtime `plew_<w><Op>` helpers (which
@@ -1096,12 +1078,17 @@ export fn emitLlvm(c: inout Comp) {
     // a std generic method, a generic body reaches a provided one), so drain to a
     // fixpoint: loop until neither queue advances.
     mut val provDone: U64 = 0
-    mut val genmDone: U64 = 0
+    // emitGenMethods above already emitted every slot that existed at that
+    // point, including on-demand slots queued while main/async bodies were
+    // emitted.  Start the incremental queue cursor after those entries: replaying
+    // them appended a second unreachable body to the same LLVM function and let
+    // a shared provided-method AST observe another instance's ambient state.
+    mut val genmDone: U64 = st.genMethEmit.count()
     mut val genfDone: U64 = 0
     mut val draining: Bool = true
     while draining {
         while provDone < st.provEmit.count() {
-            st.genLlvmFuncBody(c: inout c, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])])
+            st.genLlvmFuncBody(c: inout c, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])], bodyArgs: [], bodyRecvInstRef: 0U64)
             provDone += 1
         }
         while genmDone < st.genMethEmit.count() {
@@ -1378,18 +1365,6 @@ fn refIsAny(c: inout Comp, ref: U64) -> Bool {
     return false
 }
 
-// The requirement of trait `traitIdx` matching method (name,args), or a sentinel
-// Func with hasRet=false / retLen=0 when none — so callers reading its return span
-// get a no-result. Used by the type-recovery functions to type an `any P` method
-// call as the requirement's declared return.
-fn anyMethodReq(c: inout Comp, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Func {
-    val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-    if slot != 0U64 {
-        return c.decls.traits[traitIdx].reqs[slot - 1U64]
-    }
-    return <Func nameStart=0 nameLen=0 typeParams=[] params=[] hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />
-}
-
 // Build the substitution env for an `any P[bindings]` existential (spec/08,12): map
 // each of trait `traitIdx`'s type parameters and associated types to its binding
 // from the any TypeRef. Positional any-args (argLabels entry 0) fill the type
@@ -1485,43 +1460,6 @@ fn anyBindKey(c: inout Comp, args: Array[U64]) -> U64 {
         i += 1
     }
     return k
-}
-
-// The grounded return TypeRef of trait `traitIdx`'s requirement matching
-// (name,args) on an `any P` value (anyRef carries the bindings), or 0 for a void /
-// unmatched requirement. Used by type recovery so an `any` method returning an
-// associated / type-parameter type (`Output`, `Optional[Item]`) recovers concretely.
-fn anyMethodRetRef(c: inout Comp, anyRef: U64, traitIdx: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-    val req: Func = anyMethodReq(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-    if !(req.hasRet) {
-        return 0U64
-    }
-    // a `-> Self` requirement re-erases to the existential itself (`fn dup() -> Self`
-    // on `any P` returns `any P`).
-    if reqReturnsSelf(c: inout c, req: req) {
-        return anyRef
-    }
-    if req.retTy == 0U64 {
-        return 0U64
-    }
-    // ground the result under `Self` = the existential (a covariant `Optional[Self]` recovers
-    // as `Optional[any P]`) and the trait's bindings (`Output`/`Item` -> the bound concrete).
-    mut val params: Array[Bind] = []
-    mut val argz: Array[U64] = []
-    val haveEnv: Bool = anyBindingEnv(c: inout c, anyRef: anyRef, traitIdx: traitIdx, outParams: inout params, outArgs: inout argz)
-    val savedP: Array[Bind] = c.cur.typeParams
-    val savedA: Array[U64] = c.cur.typeArgs
-    val savedS: U64 = c.cur.selfRef
-    if haveEnv {
-        c.cur.typeParams = params
-        c.cur.typeArgs = argz
-    }
-    c.cur.selfRef = anyRef
-    val g: U64 = c.groundTypeRef(ref: req.retTy)
-    c.cur.selfRef = savedS
-    c.cur.typeParams = savedP
-    c.cur.typeArgs = savedA
-    return g
 }
 
 // Is this type name a fixed-width primitive integer (the operator-witness owners).
@@ -1637,11 +1575,11 @@ fn appendU64Le(into: inout Array[LLVMValueRef], n: U64, i8ty: LLVMTypeRef) {
 }
 
 // Find the registered generic-fn instance slot for (fnIdx, args), or count.
-fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], st: inout LlvmCtx) -> U64 {
+fn genFnSlotFor(c: inout Comp, fnIdx: U64, args: Array[U64], recvInstRef: U64, st: inout LlvmCtx) -> U64 {
     mut val slot: U64 = 0
     while slot < st.genFnK.count() {
         val fin: FnInst = c.monoWork.fnInsts[st.genFnK[slot]]
-        if fin.fnIdx == fnIdx {
+        if fin.fnIdx == fnIdx && c.sameBodyReceiver(a: fin.recvInstRef, b: recvInstRef) {
             if typeArgsEq(c: inout c, a: fin.args, b: args) {
                 return slot
             }

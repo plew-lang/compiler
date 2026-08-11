@@ -321,8 +321,34 @@ pub impl Comp {
     inout fn lowerCompoundAssignInto(op: I64, target: ExprAst, value: ExprAst, stmts: inout Array[U64]) {
         val pid: U64 = self.rebuildPlaceTemping(e: target, stmts: inout stmts)
         val vid: U64 = self.lowerExpr(e: value)
-        val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=pid rhs=vid />)
+        // Keep distinct AST nodes for the read and write facets of a compound
+        // place. Mono lowers an Index *read* to its selected method call, while
+        // the assignment target must remain an addressable Index place. Sharing
+        // one Expr id let the read rewrite turn the write target into a method
+        // result (`xs[i].field += v`), which then reached LLVM's inout path as a
+        // non-place. Index keys were already temp-bound by rebuildPlaceTemping,
+        // so cloning only the navigation nodes preserves place-once semantics.
+        val readPid: U64 = self.cloneLoweredPlace(id: pid)
+        val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=readPid rhs=vid />)
         stmts.append(self.pushStmt(s: <Stmt.Assign target=pid value=binE />))
+    }
+
+    // Clone a lowered addressable navigation path for its read facet.  Leaves
+    // (especially the already-temped index key) are deliberately shared: they
+    // are values, not navigation operations, and must not be evaluated again.
+    inout fn cloneLoweredPlace(id: U64) -> U64 {
+        match self.arena.exprs[id] {
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                return self.pushExpr(e: <Expr.Field base=self.cloneLoweredPlace(id: base) nameStart=nameStart nameLen=nameLen />)
+            }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                return self.pushExpr(e: <Expr.Arrow base=self.cloneLoweredPlace(id: base) nameStart=nameStart nameLen=nameLen />)
+            }
+            Expr.Index(val base, val index) => {
+                return self.pushExpr(e: <Expr.Index base=self.cloneLoweredPlace(id: base) index=index />)
+            }
+            _ => { return id }
+        }
     }
 
     // Lower a place ExprAst to an IR expr id, binding each side-effecting index key to a

@@ -55,13 +55,16 @@ pub impl LlvmCtx {
     // iterator protocol — `it = iterable.iterator(); loop { match it.next() { Some(v)
     // => { x = v; body }, None => break } }`. The iterator is stored in a mutable slot
     // (next() is `inout`); each next() yields an Optional[Item] matched by tag.
-    inout fn genLlvmForIterable(c: inout Comp, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64) {
+    inout fn genLlvmForIterable(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64) {
         // an existential iterator (`for x in (it: any Iter[Item=I64])`): each iteration
         // dynamically dispatches `next()` on the any value (spec/08). The box is shared
         // via the fat pointer's data field, so the iterator state advances across calls.
-        val recvRef: U64 = self.exprTypeRef(c: inout c, id: iter)
+        // Mono records the concrete protocol receiver together with the two
+        // implicit call sites.  LLVM must not recover it from the iter expression:
+        // generic substitution and static views are already fixed in that record.
+        val recvRef: U64 = c.bodyCalleeReceiverRef(exprId: stmtId, siteIsStmt: true, slot: 1U64)
         if refIsAny(c: inout c, ref: recvRef) {
-            self.genLlvmForAnyIter(c: inout c, varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, iter: iter, anyRef: recvRef, body: body)
+            self.genLlvmForAnyIter(c: inout c, stmtId: stmtId, varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, iter: iter, anyRef: recvRef, body: body)
             return
         }
         // Generic-instance iterable/iterator (`Box[I64]` / `BoxIter[I64]`): the
@@ -69,7 +72,7 @@ pub impl LlvmCtx {
         // so route through that path rather than the plain user-fn slots.
         if recvRef != 0U64 {
             if c.isGenericInst(ref: recvRef) {
-                self.genLlvmForGenIterable(c: inout c, varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, iter: iter, body: body, recvRef: recvRef)
+                self.genLlvmForGenIterable(c: inout c, stmtId: stmtId, varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, iter: iter, body: body, recvRef: recvRef)
                 return
             }
         }
@@ -79,15 +82,13 @@ pub impl LlvmCtx {
             return
         }
         val isd: StructDef = c.arena.structs[isidx]
-        val noArgs: Array[Arg] = []
         val iterableVal: LLVMValueRef = self.genLlvmExpr(c: inout c, id: iter)
         // acquire the iterator: an Iterable provides `iterator()`; an Iterator IS its own
         // iterator (it has `next()` directly). Resolve the iterator value + its struct.
         mut val iterVal: LLVMValueRef = iterableVal
         mut val iterStructStart: U64 = isd.nameStart
         mut val iterStructLen: U64 = isd.nameLen
-        val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
-        val itfi: U64 = c.findMethod(recvStart: isd.nameStart, recvLen: isd.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
+        val itfi: U64 = c.bodyCallee(exprId: stmtId, siteIsStmt: true, slot: 1U64)
         if itfi < c.arena.funcs.count() {
             // the iterator() method is the (non-generic) iterable's 0-type-arg `gm` instance.
             val itreg: U64 = self.structRegSlot(c: inout c, start: isd.nameStart, len: isd.nameLen)
@@ -108,8 +109,7 @@ pub impl LlvmCtx {
             iterStructLen = c.arena.funcs[itfi].retLen
         }
         // next() on the Iter struct -> Optional[Item]
-        val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
-        val nfi: U64 = c.findMethod(recvStart: iterStructStart, recvLen: iterStructLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+        val nfi: U64 = c.bodyCallee(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         if nfi >= c.arena.funcs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: Iterable for-loop needs a `next` method on the iterator")
             return
@@ -139,13 +139,12 @@ pub impl LlvmCtx {
     // instance ref is recovered by grounding iterator()'s return type under the
     // receiver's env, and the Optional[Item] return by grounding next()'s under the
     // iterator instance's env.
-    inout fn genLlvmForGenIterable(c: inout Comp, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64, recvRef: U64) {
+    inout fn genLlvmForGenIterable(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64, recvRef: U64) {
         val gt: TypeRef = c.arena.types[recvRef]
         val noArgs: Array[Arg] = []
         mut val iterVal: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
         mut val iterInstRef: U64 = recvRef
-        val itB: Bind = c.kwSpan(kw: "iterator", kwLen: 8U64)
-        val itfi: U64 = c.findMethod(recvStart: gt.nameStart, recvLen: gt.nameLen, nameStart: itB.nameStart, nameLen: itB.nameLen, args: noArgs)
+        val itfi: U64 = c.bodyCallee(exprId: stmtId, siteIsStmt: true, slot: 1U64)
         if itfi < c.arena.funcs.count() {
             // an Iterable: call iterator() and switch the instance ref to the iterator's.
             val itSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: itfi, instRef: recvRef, ownArgs: [])
@@ -154,21 +153,13 @@ pub impl LlvmCtx {
                 return
             }
             iterVal = self.genGenMethodCall(c: inout c, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: noArgs)
-            val itf: Func = c.arena.funcs[itfi]
-            val sP: Array[Bind] = c.cur.typeParams
-            val sA: Array[U64] = c.cur.typeArgs
-            c.cur.typeParams = itf.typeParams
-            c.cur.typeArgs = gt.args
-            iterInstRef = c.groundTypeRef(ref: itf.retTy)
-            c.cur.typeParams = sP
-            c.cur.typeArgs = sA
+            iterInstRef = c.bodyCalleeReceiverRef(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         } else {
             // the value IS its own Iterator (it has next() directly).
             iterVal = self.genLlvmExpr(c: inout c, id: iter)
         }
         val it: TypeRef = c.arena.types[iterInstRef]
-        val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
-        val nfi: U64 = c.findMethod(recvStart: it.nameStart, recvLen: it.nameLen, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+        val nfi: U64 = c.bodyCallee(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         if nfi >= c.arena.funcs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: generic Iterable for-loop needs a `next` method on the iterator")
             return
@@ -383,16 +374,18 @@ pub impl LlvmCtx {
     // `for x in anyIter` where the receiver is an existential `any Iter[Item=…]`: loop
     // dynamically dispatching `next()` on the any value (the box's iterator state
     // advances in place), binding `x` to each `Some` payload until `None`.
-    inout fn genLlvmForAnyIter(c: inout Comp, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, anyRef: U64, body: U64) {
-        val traitIdx: U64 = c.findTraitIdxByName(start: c.arena.types[anyRef].nameStart, len: c.arena.types[anyRef].nameLen)
-        if traitIdx >= c.decls.traits.count() {
-            compileErrorAt(line: 0, msg: "LLVM backend: for-loop over `any` needs a trait with a `next` method")
+    inout fn genLlvmForAnyIter(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, anyRef: U64, body: U64) {
+        if c.bodyCalleeTargetKind(exprId: stmtId, siteIsStmt: true, slot: 2U64) != 1U64 {
+            compileErrorAt(line: 0, msg: "internal error: final existential iterator callable was not recorded")
             return
         }
-        val nextB: Bind = c.kwSpan(kw: "next", kwLen: 4U64)
+        val traitIdx: U64 = c.bodyCalleeTargetTraitIdx(exprId: stmtId, siteIsStmt: true, slot: 2U64)
+        val nextSlot: U64 = c.bodyCalleeTargetSlot(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         val noArgs: Array[Arg] = []
-        // the grounded Optional[Item] the existential's next() returns.
-        val optRef: U64 = anyMethodRetRef(c: inout c, anyRef: anyRef, traitIdx: traitIdx, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+        // Mono recorded the fully-grounded Optional[Item] result together
+        // with this implicit final target. LLVM must not inspect/ground the
+        // requirement declaration again.
+        val optRef: U64 = c.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         if optRef == 0U64 {
             compileErrorAt(line: 0, msg: "LLVM backend: this `any` iterator has no `next() -> Optional[Item]` requirement")
             return
@@ -421,7 +414,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, condBB)
         // it.next() via dynamic dispatch (the loaded fat pointer's stable data ptr -> the
         // shared box, mutated in place).
-        val opt: LLVMValueRef = self.genLlvmAnyDispatch(c: inout c, recv: iter, anyRef: anyRef, nameStart: nextB.nameStart, nameLen: nextB.nameLen, args: noArgs)
+        val opt: LLVMValueRef = self.genLlvmAnyDispatch(c: inout c, recv: iter, anyRef: anyRef, traitIdx: traitIdx, slot: nextSlot, args: noArgs, callOffset: 0U64)
         val optSlot: LLVMValueRef = self.entryAlloca(ty: optTy)
         LLVMBuildStore(self.b, opt, optSlot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, optTy, optSlot, 0U64, anon()), anon())
@@ -485,7 +478,7 @@ pub impl LlvmCtx {
     // same iterator protocol as the single-variable form, but binds each element's
     // fields (per the struct pattern) directly — mirroring the match struct pattern —
     // rather than binding the whole element to one variable.
-    inout fn genLlvmForArrayStruct(c: inout Comp, patStart: U64, patLen: U64, iter: U64, binds: Array[Bind], body: U64) {
-        self.genLlvmForIterable(c: inout c, varStart: 0U64, varLen: 0U64, patStart: patStart, patLen: patLen, binds: binds, iter: iter, body: body)
+    inout fn genLlvmForArrayStruct(c: inout Comp, stmtId: U64, patStart: U64, patLen: U64, iter: U64, binds: Array[Bind], body: U64) {
+        self.genLlvmForIterable(c: inout c, stmtId: stmtId, varStart: 0U64, varLen: 0U64, patStart: patStart, patLen: patLen, binds: binds, iter: iter, body: body)
     }
 }

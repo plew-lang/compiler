@@ -665,20 +665,16 @@ pub impl LlvmCtx {
         return self.arrValMake(c: inout c, data: newData, count: count, aggTy: self.arrayInstTy(c: inout c, elemRef: dstElemRef))
     }
 
-    // Dynamic dispatch of `recv.name(args)` where `recv` is an existential `any P`
-    // (anyRef names the trait). Loads the data + vtable from the fat pointer, indexes
-    // the requirement's vtable slot, and calls the thunk with (data, args). Self-input
-    // requirements have no vtable slot (anyMethodSlot returns 0) and are rejected.
-    inout fn genLlvmAnyDispatch(c: inout Comp, recv: U64, anyRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
-        val tr: TypeRef = c.arena.types[anyRef]
-        val traitIdx: U64 = c.findTraitIdxByName(start: tr.nameStart, len: tr.nameLen)
+    // Dynamic dispatch of an existential requirement selected by Mono.  `traitIdx`
+    // and `slot` are final-callable data: LLVM deliberately receives no source
+    // selector and therefore cannot change the meaning by looking one up again.
+    inout fn genLlvmAnyDispatch(c: inout Comp, recv: U64, anyRef: U64, traitIdx: U64, slot: U64, args: Array[Arg], callOffset: U64) -> LLVMValueRef {
         if traitIdx >= c.decls.traits.count() {
-            c.errorAt(offset: nameStart, msg: "LLVM backend: `any` over an unknown trait")
+            c.errorAt(offset: callOffset, msg: "internal error: final existential trait target was not recorded")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val slot: U64 = anyMethodSlot(c: inout c, traitIdx: traitIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-        if slot == 0U64 {
-            c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: it takes `Self` in a non-receiver position, is an associated function, or is not a requirement of the trait (spec/08)")
+        if slot == 0U64 || slot > c.decls.traits[traitIdx].reqs.count() {
+            c.errorAt(offset: callOffset, msg: "internal error: final existential requirement target was not recorded")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val req: Func = c.decls.traits[traitIdx].reqs[slot - 1U64]
@@ -686,13 +682,13 @@ pub impl LlvmCtx {
         // through `any` (the erased concretes need not match, so a `Self` argument cannot
         // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.
         if reqUsesSelfInInput(c: inout c, req: req) {
-            c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
+            c.errorAt(offset: callOffset, msg: "this member is not callable through `any P`: `Self` appears in a non-receiver input — two `any P` values need not share a concrete type (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         // `Self` in the result nested under a head we cannot repack (`Dictionary`, tuple):
         // not callable through `any P` (spec/08). `Optional[Self]`/`Array[Self]` ARE erasable.
         if !(reqRetSelfErasable(c: inout c, req: req)) {
-            c.errorAt(offset: nameStart, msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot be covariantly erased (spec/08)")
+            c.errorAt(offset: callOffset, msg: "this member is not callable through `any P`: `Self` appears in the result nested in a container that cannot be covariantly erased (spec/08)")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
         val retsSelf: Bool = reqReturnsSelf(c: inout c, req: req)
@@ -723,7 +719,7 @@ pub impl LlvmCtx {
         val vtPtr: LLVMValueRef = LLVMBuildExtractValue(self.b, fat, 1U64, anon())
         // &vtable[slot+1] via flat ptr-element GEP (element type ptr), then load the fn
         // ptr — requirement thunks sit after the copy (0) and drop (1) slots, and `slot`
-        // is 1-based over the requirements (anyMethodSlot).
+        // is 1-based over the trait requirements.
         mut val gepIdx: Array[LLVMValueRef] = []
         gepIdx.append(LLVMConstInt(self.i64ty, slot + 1U64, 0I32))
         val slotPtr: LLVMValueRef = LLVMBuildGEP2(self.b, self.ptrty, vtPtr, arrayCPtr(gepIdx), 1U64, anon())
@@ -783,7 +779,7 @@ pub impl LlvmCtx {
 
     // Emit function `fi`'s body into the LLVM function value `fv` (under the active
     // substitution env, if any — used for both plain functions and generic instances).
-    inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef) {
+    inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef, bodyArgs: Array[U64], bodyRecvInstRef: U64 = 0U64) {
         val f: Func = c.arena.funcs[fi]
         // save the Self/Item env so this body fully restores it on exit — the body binds `self`
         // and sets cur.selfRef from the receiver ref (see the self-local binding below), which
@@ -907,7 +903,7 @@ pub impl LlvmCtx {
             // pf path) OR a no-view instance ref (B3-2: the gm path sets recvRef from
             // curRecvInstRef, so the view must be applied on top of it, preserving its args).
             if f.extId != 0U64 {
-                if recvRef == 0U64 || c.arena.types[recvRef].viewExtId == 0U64 {
+                if recvRef == 0U64 || (c.arena.types[recvRef].viewExtId == 0U64 && c.arena.types[recvRef].viewIds.count() == 0U64) {
                     mut val selfViewArgs: Array[U64] = []
                     if recvRef != 0U64 { selfViewArgs = c.arena.types[recvRef].args }
                     recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
@@ -917,7 +913,7 @@ pub impl LlvmCtx {
             // viewed as `Recv#root`, so an internal `self.m()` to a multi-path intermediate
             // resolves through the SAME root C (findExtMethodById via the view chain).
             if f.selfViewId != 0U64 {
-                if recvRef == 0U64 || c.arena.types[recvRef].viewExtId == 0U64 {
+                if recvRef == 0U64 || (c.arena.types[recvRef].viewExtId == 0U64 && c.arena.types[recvRef].viewIds.count() == 0U64) {
                     mut val selfRootArgs: Array[U64] = []
                     if recvRef != 0U64 { selfRootArgs = c.arena.types[recvRef].args }
                     recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfRootArgs viewExtId=f.selfViewId />)
@@ -952,16 +948,25 @@ pub impl LlvmCtx {
         val savedBodyA: Array[U64] = c.cur.bodyTypeArgs
         val savedBodyS: U64 = c.cur.bodySelfRef
         val savedBodyI: U64 = c.cur.bodyItemRef
-        c.cur.bodyTypeParams = c.cur.typeParams
-        c.cur.bodyTypeArgs = c.cur.typeArgs
+        val savedBodyFn: U64 = c.cur.bodyFnIdx
+        val savedBodyRecv: U64 = c.cur.bodyRecvInstRef
+        c.cur.bodyTypeParams = f.typeParams
+        c.cur.bodyTypeArgs = bodyArgs
         c.cur.bodySelfRef = c.cur.selfRef
         c.cur.bodyItemRef = c.cur.itemRef
+        c.cur.bodyFnIdx = fi
+        // Consume the same canonical body-instance receiver that Mono used to
+        // populate BodyCallee.  This is a key projection only; LLVM never
+        // resolves a call or infers a source from it.
+        c.cur.bodyRecvInstRef = c.canonicalBodyReceiverRef(fnIdx: fi, recvInstRef: bodyRecvInstRef)
         self.curBodyMark = self.nLocals
         self.genLlvmBlock(c: inout c, id: f.body)
         c.cur.bodyTypeParams = savedBodyP
         c.cur.bodyTypeArgs = savedBodyA
         c.cur.bodySelfRef = savedBodyS
         c.cur.bodyItemRef = savedBodyI
+        c.cur.bodyFnIdx = savedBodyFn
+        c.cur.bodyRecvInstRef = savedBodyRecv
         if !(self.terminated) {
             // fall-through: the body block dropped its body locals; now drop owned
             // params (a `move` param / `move fn` self the callee deinits).

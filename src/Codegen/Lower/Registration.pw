@@ -45,6 +45,43 @@ pub impl Comp {
         return params.count()
     }
 
+    // View source order is presentation only.  Compare the selector names as a
+    // duplicate-free set here; later verification classifies them as extensions
+    // plus the single permitted trait selector.
+    inout fn sameViewIdSet(a: Array[U64], b: Array[U64]) -> Bool {
+        mut val ai: U64 = 0U64
+        while ai < a.count() {
+            mut val seenA: Bool = false
+            mut val ap: U64 = 0U64
+            while ap < ai {
+                if a[ap] == a[ai] { seenA = true }
+                ap += 1U64
+            }
+            if !(seenA) {
+                mut val found: Bool = false
+                mut val bi: U64 = 0U64
+                while bi < b.count() {
+                    if b[bi] == a[ai] { found = true }
+                    bi += 1U64
+                }
+                if !(found) { return false }
+            }
+            ai += 1U64
+        }
+        mut val bi: U64 = 0U64
+        while bi < b.count() {
+            mut val found: Bool = false
+            mut val aj: U64 = 0U64
+            while aj < a.count() {
+                if a[aj] == b[bi] { found = true }
+                aj += 1U64
+            }
+            if !(found) { return false }
+            bi += 1U64
+        }
+        return true
+    }
+
     // Structural equality modulo the two declaration binder lists. This is the
     // declaration-key equality, not call-site type compatibility.
     inout fn typeRefsAlphaEq(a: U64, b: U64, aParams: Array[Bind], bParams: Array[Bind]) -> Bool {
@@ -57,7 +94,7 @@ pub impl Comp {
         if ai < aParams.count() || bi < bParams.count() {
             return ai == bi && ai < aParams.count() && bi < bParams.count()
         }
-        if ta.nameId != tb.nameId || ta.viewExtId != tb.viewExtId || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable { return false }
+        if ta.nameId != tb.nameId || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable { return false }
         if ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId { return false }
         if ta.args.count() != tb.args.count() { return false }
         mut val i: U64 = 0
@@ -165,7 +202,7 @@ pub impl Comp {
         if a == 0U64 || b == 0U64 || a >= self.arena.types.count() || b >= self.arena.types.count() { return a == b }
         val ta: TypeRef = self.arena.types[a]
         val tb: TypeRef = self.arena.types[b]
-        if ta.nameId != tb.nameId || (!ignoreTopView && ta.viewExtId != tb.viewExtId) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return false }
+        if ta.nameId != tb.nameId || (!ignoreTopView && (ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)))) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return false }
         mut val i: U64 = 0U64
         while i < ta.args.count() {
             if !(self.unifyPatterns(a: ta.args[i], aSide: aSide, b: tb.args[i], bSide: bSide, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
@@ -327,6 +364,29 @@ pub impl Comp {
         }
     }
 
+    // A trait-provided method is copied to each concrete conformer after source
+    // declarations have been registered.  In a named extension that copy shares the
+    // bundle's callable surface with direct members, whereas on the bare surface an
+    // inherent member is intentionally the default.  Check this *post-conformance*
+    // form: the original receivers (`Trait` and `Sample`) cannot reveal the collision.
+    inout fn checkProvidedExtensionSurfaceCollision(f: Func) {
+        if !(f.isProvided) || f.extId == 0U64 {
+            return
+        }
+        mut val i: U64 = 0U64
+        while i < self.decls.callables.count() {
+            val prior: Func = self.arena.funcs[self.decls.callables[i].funcIdx]
+            if !(prior.isProvided) && prior.extId == f.extId && prior.nameId == f.nameId {
+                if self.sameFuncCandidateBucket(a: prior, b: f) {
+                    if self.callableFormsMayOverlap(a: prior, b: f) {
+                        self.errorAt(offset: f.defOffset, msg: "direct and trait-provided members overlap on one extension surface; selectability cannot distinguish them (spec/09)")
+                    }
+                }
+            }
+            i += 1U64
+        }
+    }
+
     inout fn registerDeclaredFunc(f: Func) -> U64 {
         val idx: U64 = self.arena.funcs.count()
         self.arena.funcs.append(f)
@@ -347,6 +407,7 @@ pub impl Comp {
         if checkCollisions {
             self.checkFuncRegistration(f: f)
         }
+        self.checkProvidedExtensionSurfaceCollision(f: f)
         mut val sourceKind: U64 = 0U64
         mut val sourceId: U64 = 0U64
         mut val sourceOwner: U64 = 0U64
@@ -396,8 +457,13 @@ pub impl Comp {
         return c.traitId != 0U64 && source.kind == 2U64 && self.sameViewSource(a: self.callableTraitKey(c: c), b: source)
     }
 
-    inout fn sameCallableSource(a: Callable, b: Callable) -> Bool {
-        return a.sourceKind == b.sourceKind && a.sourceOwner == b.sourceOwner && a.sourceArity == b.sourceArity
+    // Candidate de-duplication is stricter than source selection.  `#E` names
+    // one extension bundle, but E may intentionally expose distinct A- and
+    // B-provided members that only `#E#A` / `#E#B` can distinguish.  They are
+    // two candidates under E, not duplicate witnesses.  Only copies of the
+    // same source *and* trait provenance denote one semantic callable.
+    inout fn sameCallableSemanticOrigin(a: Callable, b: Callable) -> Bool {
+        return self.sameViewSource(a: self.callableSourceKey(c: a), b: self.callableSourceKey(c: b)) && self.sameViewSource(a: self.callableTraitKey(c: a), b: self.callableTraitKey(c: b))
     }
 
     // Match a call receiver against the declaration's complete receiver pattern.

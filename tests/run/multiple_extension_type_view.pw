@@ -1,0 +1,12 @@
+struct Sample {}
+pub impl Sample { factory }
+
+extension E { pub impl Sample { fn e() -> I64 { return 1I64 } } }
+extension F { pub impl Sample { fn f() -> I64 { return 2I64 } } }
+
+fn main() {
+    val sample: Sample = <Sample />
+    val viewed: Sample#E#F = sample#F#E
+    viewed.e()
+    viewed.f()
+}

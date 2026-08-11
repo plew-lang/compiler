@@ -48,40 +48,35 @@ pub impl LlvmCtx {
                 }
                 return self.llvmScalarTy(c: inout c, tyStart: typeStart, tyLen: typeLen)
             }
-            Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                val resolved: U64 = c.resolvedCallee(id: id)
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                val resultRef: U64 = c.bodyCalleeResultRef(exprId: id)
+                if resultRef != 0U64 {
+                    return self.llvmTypeOfRef(c: inout c, ref: resultRef)
+                }
+                val resolved: U64 = c.bodyCallee(exprId: id)
                 if resolved < c.arena.funcs.count() {
                     return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[resolved])
                 }
-                // an `any P` receiver: the result LLVM type is the requirement's return,
-                // grounded under the existential's bindings.
-                val atIdx: U64 = self.anyRecvTraitIdx(c: inout c, recv: recv)
-                if atIdx < c.decls.traits.count() {
-                    val rr: U64 = anyMethodRetRef(c: inout c, anyRef: self.exprTypeRef(c: inout c, id: recv), traitIdx: atIdx, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if rr != 0U64 {
-                        return self.llvmTypeOfRef(c: inout c, ref: rr)
-                    }
-                }
-                val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
-                if rsidx < c.arena.structs.count() {
-                    val mfi: U64 = c.findMethod(recvStart: c.arena.structs[rsidx].nameStart, recvLen: c.arena.structs[rsidx].nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mfi < c.arena.funcs.count() {
-                        return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
-                    }
+                // An existential target has no static Func, but Mono records
+                // its concrete result in the same final descriptor. A missing
+                // result is a pipeline error, never a request to re-ground the
+                // trait requirement from the AST here.
+                if c.bodyCalleeTargetKind(exprId: id) == 1U64 {
+                    c.errorAt(offset: c.exprOffset(id: id), msg: "internal error: final existential callable is missing its result type")
                 }
                 return self.i64ty
             }
-            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-                val resolved: U64 = c.resolvedCallee(id: id)
+            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+                val resultRef: U64 = c.bodyCalleeResultRef(exprId: id)
+                if resultRef != 0U64 {
+                    return self.llvmTypeOfRef(c: inout c, ref: resultRef)
+                }
+                val resolved: U64 = c.bodyCallee(exprId: id)
                 if resolved < c.arena.funcs.count() {
                     return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[resolved])
                 }
-                val rsidx: U64 = self.exprStructIdx(c: inout c, id: recv)
-                if rsidx < c.arena.structs.count() {
-                    val mfi: U64 = c.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mfi < c.arena.funcs.count() {
-                        return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[mfi])
-                    }
+                if c.bodyCalleeTargetKind(exprId: id) == 1U64 {
+                    c.errorAt(offset: c.exprOffset(id: id), msg: "internal error: final existential callable is missing its result type")
                 }
                 return self.i64ty
             }
@@ -89,7 +84,7 @@ pub impl LlvmCtx {
                 return self.exprLlvmType(c: inout c, id: recv)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                val cfi: U64 = c.resolvedCallee(id: id)
+                val cfi: U64 = c.bodyCallee(exprId: id)
                 if cfi < c.arena.funcs.count() {
                     return self.llvmFnRetTy(c: inout c, f: c.arena.funcs[cfi])
                 }

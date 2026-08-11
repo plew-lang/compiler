@@ -251,6 +251,12 @@ pub impl Comp {
     // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
     inout fn assocRecvName(recv: U64) -> Bind {
         match self.arena.exprs[recv] {
+            // A type qualifier may carry the same static view set as a value
+            // (`Sample#Extra.value()`).  The caller obtains the source set
+            // separately; this helper owns only the lexical type head.
+            Expr.ExtView(recv: val base, srcStart: _, srcLen: _, strip: _) => {
+                return self.assocRecvName(recv: base)
+            }
             Expr.Ident(val start, val len) => {
                 if self.isSelfRef(start: start, len: len) {
                     return <Bind nameStart=0 nameLen=0 fieldStart=0 fieldLen=0 />

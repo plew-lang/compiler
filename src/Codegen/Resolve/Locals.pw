@@ -263,7 +263,7 @@ pub impl Comp {
                             // (spec/08,09) — name-only recovery would drop it and a
                             // method on the field couldn't dispatch through it.
                             if f.ty != 0U64 && f.ty < self.arena.types.count() {
-                                if self.arena.types[f.ty].isAny || self.arena.types[f.ty].viewExtId != 0U64 {
+                                if self.arena.types[f.ty].isAny || self.arena.types[f.ty].viewExtId != 0U64 || self.arena.types[f.ty].viewIds.count() > 0U64 {
                                     return self.typeInfoOfRef(ref: f.ty)
                                 }
                             }
@@ -375,6 +375,18 @@ pub impl Comp {
 
     inout fn checkMethodVis(ownerStart: U64, ownerLen: U64, mf: Func, offset: U64) {
         if !(mf.isPub) {
+            // A non-public extension member is private to the module that
+            // contributes it to the named bundle, not to an anonymous impl of
+            // the receiver type.  Source-qualified calls in that module are
+            // therefore valid; callers in other modules still require `pub impl`.
+            if mf.extId != 0U64 && mf.body != 0U64 {
+                val block: Block = self.arena.blocks[mf.body]
+                if block.stmts.count() > 0U64 {
+                    if self.moduleOf(offset: offset) == self.moduleOf(offset: self.stmtPrincipalOffset(sid: block.stmts[0])) {
+                        return
+                    }
+                }
+            }
             if mf.isProvided && mf.providedOwnerMod != 4000000000U64 {
                 if self.moduleOf(offset: offset) == mf.providedOwnerMod {
                     return
@@ -466,6 +478,12 @@ pub impl Comp {
             Expr.Index(val base, index: _) => { return self.exprIsPlace(id: base) }
             Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
             Expr.Deref(base: _) => { return true }
+            // A cast or source view changes neither storage nor mutability
+            // capability.  Treating `place#Ext` as a temporary made a valid
+            // mutating call through an indexed/view-selected element fail
+            // before the backend could take that element's address.
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.exprIsPlace(id: operand) }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.exprIsPlace(id: recv) }
             _ => { return false }
         }
     }
@@ -488,6 +506,12 @@ pub impl Comp {
             }
             Expr.Index(val base, val index) => {
                 return self.placeIsMutable(id: base)
+            }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => {
+                return self.placeIsMutable(id: operand)
+            }
+            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+                return self.placeIsMutable(id: recv)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 // A MutableRef's pointee is writable through a `val` MutableRef BINDING — the

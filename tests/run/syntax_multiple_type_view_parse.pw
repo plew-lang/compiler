@@ -1,0 +1,10 @@
+import @Plew/Syntax with { parseItem, TopItemAst }
+import @Std/Io with { print }
+
+fn main() {
+    val item = parseItem(source: "fn use(value: Sample#E#F) {}", start: 0U64, end: 28U64)
+    match item {
+        TopItemAst.Decl(val d) => { print(d.params[0].ty.viewNames.count()) }
+        _ => { print(0U64) }
+    }
+}

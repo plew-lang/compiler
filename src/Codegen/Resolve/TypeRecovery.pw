@@ -6,6 +6,75 @@
 // ones). This is also the shared mapping used by type-checking and emission.
 
 pub impl Comp {
+    // The type resolver needs this before a body-local TypeInfo is available:
+    // `f(value: p#E)` is selected while `p` may still be name-only, but the
+    // written view is already a part of the argument's type identity.  Keep
+    // this source-set recovery here, next to overload matching, rather than
+    // letting a later backend check discover that the wrong overload won.
+    inout fn typeRefViewIds(ref: U64) -> Array[U64] {
+        mut val out: Array[U64] = []
+        if ref == 0U64 || ref >= self.arena.types.count() { return out }
+        val t: TypeRef = self.arena.types[ref]
+        out = t.viewIds
+        if out.count() == 0U64 && t.viewExtId != 0U64 { out.append(t.viewExtId) }
+        return out
+    }
+
+    inout fn appendDistinctViewId(ids: inout Array[U64], id: U64) {
+        if id == 0U64 { return }
+        mut val i: U64 = 0U64
+        while i < ids.count() {
+            if ids[i] == id { return }
+            i += 1U64
+        }
+        ids.append(id)
+    }
+
+    // Recover a value's static source set from both its declared TypeRef and
+    // explicit view syntax.  The latter is essential during first-pass free
+    // overload resolution, before a local `P` has been promoted to a typed
+    // local but after `p#E` has already made its provenance explicit.
+    inout fn argViewIds(argExpr: U64, ti: TypeInfo) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val cur: U64 = argExpr
+        mut val keepBase: Bool = true
+        mut val walking: Bool = true
+        while walking {
+            match self.arena.exprs[cur] {
+                Expr.ExtView(recv: val base, srcStart: val ss, srcLen: val sl, strip: val strip) => {
+                    if strip {
+                        out = []
+                        keepBase = false
+                        walking = false
+                    } else {
+                        self.appendDistinctViewId(ids: inout out, id: intern(c: inout self, start: ss, len: sl))
+                        cur = base
+                    }
+                }
+                _ => { walking = false }
+            }
+        }
+        if keepBase {
+            val base: TypeInfo = self.exprType(id: cur)
+            val baseIds: Array[U64] = self.typeRefViewIds(ref: base.ref)
+            mut val i: U64 = 0U64
+            while i < baseIds.count() {
+                self.appendDistinctViewId(ids: inout out, id: baseIds[i])
+                i += 1U64
+            }
+            // A non-view expression can still carry a fully recovered ref.
+            if cur == argExpr {
+                val tiIds: Array[U64] = self.typeRefViewIds(ref: ti.ref)
+                i = 0U64
+                while i < tiIds.count() {
+                    self.appendDistinctViewId(ids: inout out, id: tiIds[i])
+                    i += 1U64
+                }
+            }
+        }
+        return out
+    }
+
     inout fn argMatchesParamLabel(param: Param, arg: Arg) -> Bool {
         if param.noLabel {
             return !(arg.hasLabel)
@@ -132,15 +201,14 @@ pub impl Comp {
             return false
         }
         if ti.kind == 2 {
-            // A # view is part of ordinary named-type identity too.  The older
-            // generic-instance-only comparison accidentally treated A and A#P as
-            // the same concrete argument type during overload resolution.
-            if ti.ref != 0U64 && p.ty != 0U64 {
-                if ti.ref < self.arena.types.count() && p.ty < self.arena.types.count() {
-                    if self.arena.types[ti.ref].viewExtId != self.arena.types[p.ty].viewExtId {
-                        return false
-                    }
-                }
+            // A source set is ordinary named-type identity.  Compare it even
+            // when the base local has not acquired a TypeRef yet: `p#E` must
+            // select `f(P#E)` rather than falling through to first-declared
+            // `f(P)` and failing only in backend validation.
+            val actualViews: Array[U64] = self.argViewIds(argExpr: argExpr, ti: ti)
+            val paramViews: Array[U64] = self.typeRefViewIds(ref: p.ty)
+            if !(self.sameViewIdSet(a: actualViews, b: paramViews)) {
+                return false
             }
             // generic-instance discrimination (spec/07: distinguish at concrete argument
             // positions): `f(b: Box[I64])` vs `f(b: Box[String])` share a head name but
@@ -200,6 +268,59 @@ pub impl Comp {
     inout fn callableArgMatchRank(f: Func, args: Array[Arg]) -> U64 {
         if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
         if self.paramsTypesMatch(params: f.params, args: args) { return 2U64 }
+        return 1U64
+    }
+
+    // Method declarations carry the receiver's generic binders in their
+    // parameter types.  Overload selection must compare after substituting the
+    // concrete receiver (`Optional[I32].unwrapOr` has `fallback: I32`, not
+    // merely `fallback: T`); otherwise a closure can spuriously match the
+    // eager overload and reach LLVM as an integer.  This is resolver work, not
+    // a later validation repair.
+    inout fn groundedMethodArgMatchRank(f: Func, args: Array[Arg], recvRef: U64) -> U64 {
+        if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
+        if recvRef == 0U64 || recvRef >= self.arena.types.count() {
+            return self.callableArgMatchRank(f: f, args: args)
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedS: U64 = self.cur.selfRef
+        val savedI: U64 = self.cur.itemRef
+        self.cur.typeParams = f.typeParams
+        self.cur.typeArgs = self.arena.types[recvRef].args
+        self.setSelfItemEnv(recvStart: self.arena.types[recvRef].nameStart, recvLen: self.arena.types[recvRef].nameLen, recvInstRef: recvRef)
+        mut val allMatch: Bool = true
+        mut val ai: U64 = 0U64
+        while ai < args.count() {
+            val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
+            if pi >= f.params.count() {
+                allMatch = false
+            } else {
+                val expected: U64 = self.groundTypeRef(ref: f.params[pi].ty)
+                // A method-owned binder remains abstract at this stage.  It is
+                // intentionally inferred from the argument later; receiver
+                // binders, by contrast, were just made concrete above.
+                if expected != 0U64 && self.tyRefIsGround(ref: expected) {
+                    val actual: TypeInfo = self.argResolvedTypeInfo(argExpr: args[ai].expr)
+                    if actual.kind == 2I64 {
+                        if !(self.typeRefEq(a: actual.ref, b: expected)) {
+                            allMatch = false
+                        }
+                    } else {
+                        val et: TypeRef = self.arena.types[expected]
+                        if actual.nameLen == 0U64 || intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != et.nameId {
+                            allMatch = false
+                        }
+                    }
+                }
+            }
+            ai += 1U64
+        }
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedS
+        self.cur.itemRef = savedI
+        if allMatch { return 2U64 }
         return 1U64
     }
 

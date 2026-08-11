@@ -5,6 +5,18 @@
 // `CPtr[T]`) is an opaque pointer (spec/15).
 
 pub impl LlvmCtx {
+
+    // The runtime representation ignores a view, but all source-sensitive
+    // checks consume this complete unordered set.  Keep the scalar accessor
+    // below only for old one-source callers while migrating them.
+    inout fn typeViewIds(c: inout Comp, ref: U64) -> Array[U64] {
+        mut val out: Array[U64] = []
+        if ref == 0U64 || ref >= c.arena.types.count() { return out }
+        val t: TypeRef = c.arena.types[ref]
+        out = t.viewIds
+        if out.count() == 0U64 && t.viewExtId != 0U64 { out.append(t.viewExtId) }
+        return out
+    }
     inout fn ffiTyOf(c: inout Comp, tyStart: U64, tyLen: U64) -> LLVMTypeRef {
         if isPrimIntName(c: inout c, start: tyStart, len: tyLen) {
             return self.llvmScalarTy(c: inout c, tyStart: tyStart, tyLen: tyLen)
@@ -119,6 +131,21 @@ pub impl LlvmCtx {
     // own type view (a `Type#Ext` param/binding) is appended last. Empty = no view.
     inout fn collectViewChain(c: inout Comp, id: U64) -> Array[U64] {
         mut val out: Array[U64] = []
+        // A call result has no syntactic ExtView node to walk. Mono records its
+        // fully-grounded result ref with the final target; do not re-derive it
+        // from a declaration or AST form here.
+        match c.arena.exprs[id] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                return self.typeViewIds(c: inout c, ref: c.bodyCalleeResultRef(exprId: id))
+            }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                return self.typeViewIds(c: inout c, ref: c.bodyCalleeResultRef(exprId: id))
+            }
+            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+                return self.typeViewIds(c: inout c, ref: c.bodyCalleeResultRef(exprId: id))
+            }
+            _ => {}
+        }
         mut val cur: U64 = id
         mut val go: Bool = true
         while go {
@@ -136,104 +163,17 @@ pub impl LlvmCtx {
         }
         val r: U64 = self.exprTypeRef(c: inout c, id: cur)
         if r != 0U64 {
-            if c.arena.types[r].viewExtId != 0U64 {
-                out.append(c.arena.types[r].viewExtId)
+            val rt: TypeRef = c.arena.types[r]
+            mut val ri: U64 = 0U64
+            while ri < rt.viewIds.count() {
+                out.append(rt.viewIds[ri])
+                ri += 1U64
+            }
+            if rt.viewIds.count() == 0U64 && rt.viewExtId != 0U64 {
+                out.append(rt.viewExtId)
             }
         }
         return out
     }
 
-    // Whether function `fi`'s parameter views match the call's provided argument
-    // views — mapped through default-argument omission (spec/09).
-    inout fn funcViewsMatch(c: inout Comp, fi: U64, args: Array[Arg]) -> Bool {
-        val f: Func = c.arena.funcs[fi]
-        mut val i: U64 = 0
-        while i < args.count() {
-            val pi: U64 = c.paramIndexForArg(params: f.params, args: args, argIdx: i)
-            if pi < f.params.count() {
-                mut val pv: U64 = 0
-                if f.params[pi].ty != 0U64 {
-                    pv = c.arena.types[f.params[pi].ty].viewExtId
-                }
-                if pv != self.exprViewExtId(c: inout c, id: args[i].expr) {
-                    return false
-                }
-            }
-            i += 1
-        }
-        return true
-    }
-
-    // Resolve a free-function call, refining a view-blind match by parameter views so
-    // `f(a: P)` and `f(a: P#Ext)` coexist and select on the arguments' views (spec/09).
-    // Falls back to the view-blind result if no view-matching overload exists (the
-    // view-mismatch enforcement at genArgValue then reports it).
-    inout fn findFuncViewAware(c: inout Comp, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-        val base: U64 = c.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)
-        if base >= c.arena.funcs.count() {
-            return base
-        }
-        if self.funcViewsMatch(c: inout c, fi: base, args: args) {
-            return base
-        }
-        // the front-end type check (paramsTypesMatch) can't see a local argument's
-        // struct type (it falls back to a label-only match — so base is first-by-label).
-        // Among same-name, same-label, same-param-type-head candidates, pick the one
-        // whose views match the arguments (the backend can recover views). This is what
-        // makes `f(a: P)` / `f(a: P#Ext)` select on the call's views.
-        val qName: U64 = intern(c: inout c, start: nameStart, len: nameLen)
-        mut val i: U64 = 0
-        while i < c.arena.funcs.count() {
-            val f: Func = c.arena.funcs[i]
-            if !(f.hasRecv) {
-                if !(f.isAssoc) {
-                    if f.nameId == qName {
-                        if c.paramsLabelsOk(params: f.params, args: args) {
-                            if sameParamTypeHeads(c: inout c, a: c.arena.funcs[base].params, b: f.params) {
-                                if self.funcViewsMatch(c: inout c, fi: i, args: args) {
-                                    return i
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            i += 1
-        }
-        return base
-    }
-}
-
-pub impl LlvmCtx {
-
-    // The extension-view id active on an expression's value (spec/09): a direct
-    // `v#Ext` re-view node carries it; otherwise it comes from the value's static
-    // type (a param/binding typed `Type#Ext`). 0 = no view.
-    inout fn exprViewExtId(c: inout Comp, id: U64) -> U64 {
-        match c.arena.exprs[id] {
-            Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
-                // `#!Ext` strips the view → plain (bare) resolution; `#Ext` selects it.
-                if strip {
-                    return 0U64
-                }
-                return intern(c: inout c, start: srcStart, len: srcLen)
-            }
-            Expr.Call(val nameStart, val nameLen, val args) => {
-                // a call to a `-> Type#Ext` function yields a viewed value.
-                val fi: U64 = c.resolvedCallee(id: id)
-                if fi < c.arena.funcs.count() {
-                    if c.arena.funcs[fi].retTy != 0U64 {
-                        return c.arena.types[c.arena.funcs[fi].retTy].viewExtId
-                    }
-                }
-                return 0U64
-            }
-            _ => {}
-        }
-        val r: U64 = self.exprTypeRef(c: inout c, id: id)
-        if r != 0U64 {
-            return c.arena.types[r].viewExtId
-        }
-        return 0U64
-    }
 }

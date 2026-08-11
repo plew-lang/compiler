@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+trait A {}
+pub impl A { fn same() -> I64 { return 1I64 } }
+
+struct Sample {}
+pub impl Sample { factory }
+pub impl Sample as A {}
+
+extension E {
+    pub impl A { fn same() -> I64 { return 10I64 } }
+}
+
+fn main() {
+    val sample: Sample = <Sample />
+    // Extension sources compose unorderedly with the one trait provenance selector.
+    // The annotation and value spell the same normal form in opposite orders.
+    val selected: Sample#E#A = sample#A#E
+    print(selected.same())
+}

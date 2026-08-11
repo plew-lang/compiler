@@ -93,6 +93,19 @@ pub impl Comp {
                 self.checkResolvedMethodArgs(mf: mf, args: args)
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+                val assoc: Bind = self.assocRecvName(recv: recv)
+                if assoc.nameLen != 0U64 {
+                    val assocRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
+                    val source: ViewSource = self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: intern(c: inout self, start: srcStart, len: srcLen))
+                    if source.kind == 0U64 {
+                        self.errorAt(offset: srcStart, msg: "cannot apply this view to the associated-call type qualifier")
+                    }
+                    val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    self.recordResolvedMethodCallee(id: id, callee: mf)
+                    self.checkResolvedMethodArgs(mf: mf, args: args)
+                    self.verifyArgs(args: args)
+                    return
+                }
                 self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -105,6 +118,14 @@ pub impl Comp {
                 self.verifyArgs(args: args)
             }
             Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+                // When this node is the receiver of `Type#View.member()`, the
+                // parent Method verifies the type qualifier and its view
+                // source.  Descending here would turn the type name into an
+                // ordinary value read.  A standalone type view remains
+                // rejected by its enclosing expression's normal value checks.
+                if self.assocRecvName(recv: id).nameLen != 0U64 {
+                    return
+                }
                 self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
                 self.verifyExpr(id: recv)
             }
@@ -495,6 +516,12 @@ pub impl Comp {
     // Ident arm runs the value check). A non-generic body has no type parameters in scope,
     // so pass the funcs.count() sentinel to identIsTypeQualifier.
     inout fn verifyRecv(recv: U64) {
+        if self.assocRecvName(recv: recv).nameLen != 0U64 {
+            // A type-qualified associated call can carry `#` view selectors.
+            // It is not a value read, so descending into its base Ident would
+            // incorrectly demand a local named `Sample`.
+            return
+        }
         match self.arena.exprs[recv] {
             Expr.Ident(val start, val len) => {
                 if !(self.identIsTypeQualifier(start: start, len: len, tpFn: self.arena.funcs.count())) {

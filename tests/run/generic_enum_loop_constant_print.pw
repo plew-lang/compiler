@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+import @Std/Core
+
+fn main() {
+    val ints: Array[Optional[I64]] = [<Optional[I64].Some v=7I64 />, <Optional[I64].None />]
+    for val value in ints {
+        match value {
+            Optional.Some(v: val item) => { print(7I64) }
+            Optional.None => { print(0I64) }
+        }
+    }
+    val texts: Array[Optional[String]] = [<Optional[String].Some v="alpha" />, <Optional[String].None />]
+    for val value in texts {
+        match value {
+            Optional.Some(v: val item) => { print("alpha") }
+            Optional.None => { print("n") }
+        }
+    }
+}

@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+
+struct P { pub val n: I64 }
+pub impl P { factory }
+extension Ext { pub impl P { fn tag() -> I64 { return self.n * 100I64 } } }
+
+fn describe(a: P#Ext) -> I64 { return a.tag() }
+
+fn main() {
+    val p: P = <P n=7 />
+    print(describe(a: p#Ext))
+}
