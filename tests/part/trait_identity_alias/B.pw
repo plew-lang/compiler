@@ -1,0 +1,5 @@
+export trait P {}
+
+pub impl P {
+    fn value() -> String { return "B" }
+}

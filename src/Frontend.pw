@@ -16,9 +16,9 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
+export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -417,12 +417,10 @@ export fn runFrontend(c: inout Comp) {
     }
     // The caller creates the compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
     // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to
-    // `c.arena.bytes`, parsed by the shared @Plew/Syntax parser, its items lowered, and its
+    // `c.arena.bytes`, parsed by the shared @Plew/Syntax parser, its items retained, and its
     // `import`/`part` nodes followed to more files. There is no separate directive
-    // pre-scan: the parsed tree drives discovery. (`bytes` is built incrementally, so
-    // a file's source sits at `fileStart` before its items lower, and re-interned
-    // names land in between — harmless: writeSpan emits text, moduleOf uses the
-    // per-file ranges. `toks`/`pos` are unused now that all parsing is per-file.)
+    // pre-scan: the parsed tree drives discovery. Lowering waits until every file and import
+    // origin is known, so a source occurrence resolves one declaration identity everywhere.
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
     c.arena.types.append(<TypeRef nameStart=0 nameLen=0 args=[] />)
@@ -435,6 +433,7 @@ export fn runFrontend(c: inout Comp) {
     c.genMode = genMode
     c.tcLog = tcLog
     c.asan = asan
+    mut val pendingItems: Array[TopItemAst] = []
     mut val nextModuleId: U64 = 1
     if argCount() > entryArgIdx {
         // Module loader: a recursive, deduplicated worklist over local includes.
@@ -594,8 +593,14 @@ export fn runFrontend(c: inout Comp) {
             c.appendSrc(from: sb)
             c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count() - fileStart fieldStart=moduleId fieldLen=0 />)
             c.modules.rangePaths.append(stringFromBytesUnchecked(path))
-            // parse the file and lower its items; the returned tree drives discovery.
-            val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: sb, fileStart: fileStart)
+            // Parse now to discover edges; lower all retained items only after the complete
+            // graph (and therefore all import aliases and declarations) exists.
+            val items: Array[TopItemAst] = c.parseFile(fileBytes: sb, fileStart: fileStart)
+            mut val pendingIndex: U64 = 0U64
+            while pendingIndex < items.count() {
+                pendingItems.append(items[pendingIndex])
+                pendingIndex += 1U64
+            }
             // spec/15: a `part` file (a non-root file of an already-seen module) may
             // contain only `impl` blocks — reject any free fn / type / extern / val.
             if u64ArrayHas(a: rootSeen, v: moduleId) {
@@ -768,7 +773,22 @@ export fn runFrontend(c: inout Comp) {
         c.appendSrc(from: s.bytes())
         c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count() - fileStart fieldStart=0 fieldLen=0 />)
         c.modules.rangePaths.append("<stdin>")
-        val items: Array[TopItemAst] = c.parseAndLowerFile(fileBytes: s.bytes(), fileStart: fileStart)
+        val items: Array[TopItemAst] = c.parseFile(fileBytes: s.bytes(), fileStart: fileStart)
+        mut val pendingIndex: U64 = 0U64
+        while pendingIndex < items.count() {
+            pendingItems.append(items[pendingIndex])
+            pendingIndex += 1U64
+        }
+    }
+    mut val predeclareIndex: U64 = 0U64
+    while predeclareIndex < pendingItems.count() {
+        c.predeclareTraitItem(item: pendingItems[predeclareIndex])
+        predeclareIndex += 1U64
+    }
+    mut val lowerIndex: U64 = 0U64
+    while lowerIndex < pendingItems.count() {
+        c.lowerTopItem(item: pendingItems[lowerIndex])
+        lowerIndex += 1U64
     }
     // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried
     // — Array/Dictionary — now live in @Std/Lang, the single ambient module force-loaded

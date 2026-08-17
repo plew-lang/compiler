@@ -1,0 +1,16 @@
+// A trait-subject conformance carries the complete source trait instance, not
+// merely its name and arity. `P[String] as R` must not confer R on P[I64].
+trait P[Item] {}
+trait R {}
+
+struct S {}
+pub impl S { factory }
+pub impl S as P[I64] {}
+pub impl P[String] as R {}
+
+fn needR[T](value: T) where T: R {}
+
+fn main() {
+    val s: S = <S />
+    needR(value: s)
+}

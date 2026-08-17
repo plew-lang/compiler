@@ -11,8 +11,8 @@ pub impl Comp {
     inout fn isTraitName(start: U64, len: U64) -> Bool {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
-        while i < self.decls.traits.count() {
-            val t: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
             if t.nameId == qId {
                 return true
             }
@@ -30,10 +30,10 @@ pub impl Comp {
 
     inout fn traitModuleByIdArity(traitId: U64, arity: U64) -> U64 {
         mut val i: U64 = 0
-        while i < self.decls.traits.count() {
-            val t: TraitDef = self.decls.traits[i]
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
             if t.nameId == traitId {
-                if t.typeParams.count() == arity {
+                if t.arity == arity {
                     return self.moduleOf(offset: t.nameStart)
                 }
             }
@@ -44,14 +44,110 @@ pub impl Comp {
 
     inout fn traitDeclOffsetByIdArity(traitId: U64, arity: U64) -> U64 {
         mut val i: U64 = 0U64
-        while i < self.decls.traits.count() {
-            val t: TraitDef = self.decls.traits[i]
-            if t.nameId == traitId && t.typeParams.count() == arity {
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if t.nameId == traitId && t.arity == arity {
                 return t.nameStart
             }
             i += 1U64
         }
         return 0U64
+    }
+
+    inout fn traitNameLenByOwner(owner: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            if self.decls.traitOwners[i].nameStart == owner { return self.decls.traitOwners[i].nameLen }
+            i += 1U64
+        }
+        return 0U64
+    }
+
+    // Resolve a trait spelling at its authored use site once.  `importOrigins`
+    // is the missing last hop for `P as AP`: importAliases maps AP to the P
+    // spelling in the importing file, while importOrigins maps that spelling
+    // to A.pw/B.pw.  All later logic stores this declaration offset.
+    inout fn traitOwnerAtUse(start: U64, len: U64, arity: U64) -> U64 {
+        val useMod: U64 = self.moduleOf(offset: start)
+        val nameId: U64 = intern(c: inout self, start: start, len: len)
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if t.nameId == nameId && t.arity == arity {
+                if self.moduleOf(offset: t.nameStart) == useMod {
+                    return t.nameStart
+                }
+            }
+            i += 1U64
+        }
+        i = 0U64
+        while i < self.modules.importOrigins.count() {
+            val origin: Bind = self.modules.importOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == useMod {
+                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
+                    val realId: U64 = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
+                    mut val ti: U64 = 0U64
+                    while ti < self.decls.traitOwners.count() {
+                        val t: TraitOwner = self.decls.traitOwners[ti]
+                        if t.nameId == realId && t.arity == arity && self.moduleOf(offset: t.nameStart) == origin.fieldLen {
+                            return t.nameStart
+                        }
+                        ti += 1U64
+                    }
+                }
+            }
+            i += 1U64
+        }
+        // Some language-provided protocol traits (for example Iterator) are
+        // intentionally usable without an explicit import. Preserve that
+        // established surface without reintroducing name-based identity: only
+        // a globally unique declaration with this spelling and arity is a
+        // valid fallback. Same-spelled declarations remain unresolved until a
+        // local/import alias chooses one.
+        mut val uniqueOwner: U64 = 0U64
+        i = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if t.nameId == nameId && t.arity == arity {
+                if uniqueOwner != 0U64 && uniqueOwner != t.nameStart { return 0U64 }
+                uniqueOwner = t.nameStart
+            }
+            i += 1U64
+        }
+        return uniqueOwner
+    }
+
+    inout fn traitOwnerForSelector(siteOffset: U64, text: String) -> U64 {
+        val textLen: U64 = text.bytes().count()
+        val useMod: U64 = self.moduleOf(offset: siteOffset)
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if self.moduleOf(offset: t.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: text) {
+                return t.nameStart
+            }
+            i += 1U64
+        }
+        i = 0U64
+        while i < self.modules.importOrigins.count() {
+            val origin: Bind = self.modules.importOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: origin.nameStart, len: origin.nameLen, kw: text) {
+                val realId: U64 = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
+                mut val ti: U64 = 0U64
+                while ti < self.decls.traitOwners.count() {
+                    val t: TraitOwner = self.decls.traitOwners[ti]
+                    if t.nameId == realId && self.moduleOf(offset: t.nameStart) == origin.fieldLen { return t.nameStart }
+                    ti += 1U64
+                }
+            }
+            i += 1U64
+        }
+        return 0U64
+    }
+
+    inout fn traitModuleByOwner(owner: U64) -> U64 {
+        if owner == 0U64 { return 4000000000U64 }
+        return self.moduleOf(offset: owner)
     }
 
     inout fn traitArityMatches(actual: U64, expected: U64) -> Bool {
@@ -150,12 +246,12 @@ pub impl Comp {
         return false
     }
 
-    inout fn conformExistsArity(typeId: U64, traitId: U64, traitArity: U64) -> Bool {
+    inout fn conformExistsTraitInstance(typeId: U64, traitId: U64, traitArgs: Array[U64], patternParams: Array[Bind]) -> Bool {
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             if self.decls.conforms[i].typeId == typeId {
                 if self.decls.conforms[i].traitId == traitId {
-                    if self.decls.conforms[i].traitArgs.count() == traitArity {
+                    if self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: patternParams, actual: self.decls.conforms[i].traitArgs) {
                         if self.decls.conforms[i].viewRootId == 0U64 {
                             return true
                         }
@@ -168,7 +264,7 @@ pub impl Comp {
         while ni < self.arena.newtypes.count() {
             if self.arena.newtypes[ni].nameId == typeId {
                 val underId: U64 = intern(c: inout self, start: self.arena.newtypes[ni].underStart, len: self.arena.newtypes[ni].underLen)
-                return self.conformExistsArity(typeId: underId, traitId: traitId, traitArity: traitArity)
+                return self.conformExistsTraitInstance(typeId: underId, traitId: traitId, traitArgs: traitArgs, patternParams: patternParams)
             }
             ni += 1
         }
@@ -246,16 +342,16 @@ pub impl Comp {
         return false
     }
 
-    inout fn subjectPathCount(tId: U64, aTraitId: U64) -> U64 {
+    inout fn subjectPathCount(tId: U64, aTraitId: U64, aTraitArgs: Array[U64], patternParams: Array[Bind]) -> U64 {
         mut val count: U64 = 0
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) && cf.extId == 0U64 {
-                if cf.traitId == aTraitId {
+                if cf.traitId == aTraitId && self.traitInstanceArgsMatch(pattern: aTraitArgs, patternParams: patternParams, actual: cf.traitArgs) {
                     if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
                         // cf is `impl B as A`; does tId conform to the subject trait B?
-                        if self.conformExistsArity(typeId: tId, traitId: cf.typeId, traitArity: cf.subjectArgs.count()) {
+                        if self.conformExistsTraitInstance(typeId: tId, traitId: cf.typeId, traitArgs: cf.subjectArgs, patternParams: cf.typeParams) {
                             count += 1
                         }
                     }
@@ -282,7 +378,8 @@ pub impl Comp {
                     return true
                 }
             }
-            if cf.traitId == targetId && cf.traitArgs.count() == traitArgs.count() {
+            val noParams: Array[Bind] = []
+            if cf.traitId == targetId && self.traitInstanceArgsMatch(pattern: traitArgs, patternParams: noParams, actual: cf.traitArgs) {
                 // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
                 // a bare inter-trait conform whose subject trait is the view, or an
                 // extension conform whose extId is the view.
@@ -299,7 +396,7 @@ pub impl Comp {
                     }
                     if viaView {
                         // does the underlying type conform to the subject trait B?
-                        if self.conformExistsArity(typeId: typeId, traitId: cf.typeId, traitArity: cf.subjectArgs.count()) {
+                        if self.conformExistsTraitInstance(typeId: typeId, traitId: cf.typeId, traitArgs: cf.subjectArgs, patternParams: cf.typeParams) {
                             return true
                         }
                     }
@@ -331,7 +428,7 @@ pub impl Comp {
                     mut val cj: U64 = 0
                     while cj < self.decls.conforms.count() {
                         val cand: Conform = self.decls.conforms[cj]
-                        if cand.traitId == cf.typeId && cand.traitArgs.count() == cf.subjectArgs.count() {
+                        if cand.traitId == cf.typeId && self.traitInstanceArgsMatch(pattern: cf.subjectArgs, patternParams: cf.typeParams, actual: cand.traitArgs) {
                             if !(self.isTraitName(start: cand.typeStart, len: cand.typeLen)) {
                                 // the view-root under which we confer A on T via this impl
                                 // (spec/09 chain conflict). If the candidate conformance to B
@@ -342,7 +439,7 @@ pub impl Comp {
                                 // is THIS impl's subject. A single bare path → root 0 (bare).
                                 mut val vr: U64 = cand.viewRootId
                                 if vr == 0U64 {
-                                    if self.subjectPathCount(tId: cand.typeId, aTraitId: cf.traitId) > 1U64 {
+                                    if self.subjectPathCount(tId: cand.typeId, aTraitId: cf.traitId, aTraitArgs: cf.traitArgs, patternParams: cf.typeParams) > 1U64 {
                                         vr = cf.typeId
                                     }
                                 }
@@ -358,14 +455,14 @@ pub impl Comp {
         }
     }
 
-    inout fn conferredCopyExists(recvId: U64, nameId: U64, srcTraitId: U64) -> Bool {
+    inout fn conferredCopyExists(recvId: U64, nameId: U64, srcTraitId: U64, srcTraitOwner: U64) -> Bool {
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[i]
             if f.hasRecv {
                 if f.recvId == recvId {
                     if f.nameId == nameId {
-                        if f.srcTraitId == srcTraitId {
+                        if f.srcTraitId == srcTraitId && f.srcTraitOwner == srcTraitOwner {
                             return true
                         }
                     }
@@ -406,7 +503,7 @@ pub impl Comp {
                     // (inherent wins); sibling conferred copies (appended ≥ guardHi) do
                     // not block, so multiple paths' methods coexist. Also skip if this
                     // exact path was already conferred (idempotent fixpoint re-scan).
-                    if !(self.methodInRange(lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(self.conferredCopyExists(recvId: recvId, nameId: f.nameId, srcTraitId: srcTag)) {
+                    if !(self.methodInRange(lo: 0, hi: guardHi, recvStart: recvStart, recvLen: recvLen, nameStart: f.nameStart, nameLen: f.nameLen)) && !(self.conferredCopyExists(recvId: recvId, nameId: f.nameId, srcTraitId: srcTag, srcTraitOwner: f.provTraitOwner)) {
                         // drop the subject param from the method's type params (none for a
                         // trait subject), keep the method-own params.
                         mut val copiedTP: Array[Bind] = []
@@ -419,10 +516,10 @@ pub impl Comp {
                         }
                         mut val providedOwnerMod: U64 = f.providedOwnerMod
                         if !(f.isPub) {
-                            providedOwnerMod = self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity)
+                            providedOwnerMod = self.traitModuleByOwner(owner: f.provTraitOwner)
                         }
                         val copyIdx: U64 = self.arena.funcs.count()
-                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag originTraitId=srcTag originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
+                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=srcTag originTraitOwner=f.provTraitOwner originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
                         self.registerCallable(funcIdx: copyIdx)
                     }
                 }
@@ -451,12 +548,12 @@ pub impl Comp {
             while fi < nFuncs {
                 val f: Func = self.arena.funcs[fi]
                 if f.hasRecv {
-                    val copyOwnerMod: U64 = self.traitModuleByIdArity(traitId: cf.traitId, arity: cf.traitArgs.count())
+                    val copyOwnerMod: U64 = self.traitModuleByOwner(owner: cf.traitStart)
                     // match the conformance to the right same-name trait by arity (spec/08:
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
                     // operator `Sub[Rhs]`). Without the arity gate a provided method on the
                     // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
-                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() {
+                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart {
                         // Two conformed traits providing the same name both copy here, each tagged with
                         // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
                         // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
@@ -477,7 +574,7 @@ pub impl Comp {
                                 providedOwnerMod = copyOwnerMod
                             }
                             val copyIdx: U64 = self.arena.funcs.count()
-                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId originTraitId=cf.traitId originTraitArity=cf.traitArgs.count() providedOwnerMod=providedOwnerMod extId=f.extId provTraitArity=f.provTraitArity defOffset=f.defOffset />)
+                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=cf.traitId originTraitOwner=cf.traitStart originTraitArity=cf.traitArgs.count() providedOwnerMod=providedOwnerMod extId=f.extId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
                             self.registerCallable(funcIdx: copyIdx)
                     }
                 }

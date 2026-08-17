@@ -1,0 +1,15 @@
+// Same-spelling, same-arity traits remain distinct declarations. Import aliases
+// name their declaration identities in both conformance and `#` selection.
+import ./A with { P as AP }
+import ./B with { P as BP }
+
+struct S {}
+pub impl S { factory }
+pub impl S as AP {}
+pub impl S as BP {}
+
+fn main() {
+    val s: S = <S />
+    val a: I64 = s#AP.value()
+    val b: String = s#BP.value()
+}

@@ -12,11 +12,39 @@
 // visibility walk (siteOffset 0). Used to seed an impl/extension's lowering-time skip scope.
 
 pub impl Comp {
+    // Phase 1 of declaration lowering: reserve every trait declaration identity
+    // before lowering any implementation.  A trait use in an entry module may
+    // name a declaration imported from a module which is discovered later in
+    // the loader worklist; owner resolution must never depend on that order.
+    inout fn predeclareTrait(t: TraitAst) {
+        val nameStart: U64 = t.nameSpan.start
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            if self.decls.traitOwners[i].nameStart == nameStart { return }
+            i += 1U64
+        }
+        val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
+        self.decls.traitOwners.append(<TraitOwner nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=t.typeParams.count() />)
+    }
+
+    inout fn predeclareTraitItem(item: TopItemAst) {
+        match item {
+            TopItemAst.Trait(val t) => { self.predeclareTrait(t: t) }
+            TopItemAst.Export(val inner) => { self.predeclareTraitItem(item: inner) }
+            _ => {}
+        }
+    }
+
     // An `as` trait is a type-level use.  Resolve its import alias from the
     // original occurrence, rather than re-interning alias text after its
     // module identity has been lost.
     inout fn resolvedImplTraitBind(im: ImplAst) -> Bind {
         if im.traitNameSpan.end > im.traitNameSpan.start {
+            val owner: U64 = self.traitOwnerAtUse(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start, arity: im.traitArgs.count())
+            if owner != 0U64 {
+                val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
+                return <Bind nameStart=owner nameLen=ownerLen nameId=intern(c: inout self, start: owner, len: ownerLen) fieldStart=owner fieldLen=ownerLen />
+            }
             val resolved: Bind = self.aliasReal(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start)
             return <Bind nameStart=resolved.nameStart nameLen=resolved.nameLen nameId=intern(c: inout self, start: resolved.nameStart, len: resolved.nameLen) fieldStart=resolved.fieldStart fieldLen=resolved.fieldLen />
         }
@@ -60,7 +88,7 @@ pub impl Comp {
         }
     }
 
-    inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
+    inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
         mut val boundTraits: Array[String] = []
@@ -185,13 +213,15 @@ pub impl Comp {
             extId = intern(c: inout self, start: extN.nameStart, len: extN.nameLen)
         }
         mut val originTraitId: U64 = 0U64
+        mut val originTraitOwner: U64 = 0U64
         mut val originTraitArity: U64 = 0U64
         if im.isTraitImpl {
             val originTrait: Bind = self.resolvedImplTraitBind(im: im)
             originTraitId = originTrait.nameId
+            originTraitOwner = originTrait.nameStart
             originTraitArity = im.traitArgs.count()
         }
-        self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() originTraitId=originTraitId originTraitArity=originTraitArity defOffset=m.nameSpan.start />)
+        self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity defOffset=m.nameSpan.start />)
         self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes, traitTypes: m.whereTraitTypes)
         self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
         self.cur.typeParams = savedTP
@@ -200,7 +230,12 @@ pub impl Comp {
     }
 
     inout fn lowerImpl(im: ImplAst) {
-        val recvN: Bind = self.internBytes(s: im.recvType.name)
+        val rawRecvN: Bind = self.internBytes(s: im.recvType.name)
+        val recvTraitOwner: U64 = self.traitOwnerAtUse(start: im.recvType.span.start, len: rawRecvN.nameLen, arity: im.recvType.args.count())
+        mut val recvN: Bind = rawRecvN
+        if recvTraitOwner != 0U64 {
+            recvN = <Bind nameStart=recvTraitOwner nameLen=rawRecvN.nameLen nameId=intern(c: inout self, start: recvTraitOwner, len: rawRecvN.nameLen) fieldStart=recvTraitOwner fieldLen=rawRecvN.nameLen />
+        }
         val implParamBinds: Array[Bind] = self.lowerTypeParamNames(names: im.implParams, anchor: im.span.start, sendableFlags: im.implParamSendable)
         // the impl's lowering-time skip scope: its `[T]`, plus the associated types of the trait
         // it implements/extends — both a bare `impl Iterator` (recv IS the trait, its provided
@@ -249,10 +284,10 @@ pub impl Comp {
             val m: MemberAst = im.members[mi]
             match m.kind {
                 MemberKind.Method => {
-                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
+                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
                 }
                 MemberKind.AssocFn => {
-                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
+                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
                 }
                 MemberKind.Deinit => {
                     val deinitN: Bind = self.internBytes(s: "deinit")

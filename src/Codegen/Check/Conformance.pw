@@ -62,7 +62,7 @@ pub impl Comp {
             val f: Func = self.arena.funcs[i]
             if f.extId == 0U64 {
                 if self.methodRecvIsTrait(f: f) {
-                    val ownerMod: U64 = self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity)
+                    val ownerMod: U64 = self.traitModuleByOwner(owner: f.provTraitOwner)
                     if ownerMod != 4000000000U64 {
                         if self.moduleOf(offset: self.fnAnchor(f: f)) != ownerMod {
                             self.errorAt(offset: self.fnAnchor(f: f), msg: "provided methods for a trait must be declared in the trait owner's module; use a named extension for third-party additions (spec/08,15)")

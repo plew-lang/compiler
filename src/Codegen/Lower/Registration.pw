@@ -241,6 +241,22 @@ pub impl Comp {
         return self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
     }
 
+    // The trait-argument part of a conformance key.  A trait subject such as
+    // `P[String]` is a pattern over a concrete conformance's instance
+    // arguments, not merely an arity marker.  Keep this as the one instance
+    // matcher so closure propagation, bounds, and views cannot each regress
+    // to a count-only comparison.
+    inout fn traitInstanceArgsMatch(pattern: Array[U64], patternParams: Array[Bind], actual: Array[U64]) -> Bool {
+        if pattern.count() != actual.count() { return false }
+        mut val binds: Array[UnifyBind] = []
+        mut val i: U64 = 0U64
+        while i < pattern.count() {
+            if !(self.unifyPatterns(a: pattern[i], aSide: 0U64, b: actual[i], bSide: 1U64, aParams: patternParams, bParams: [], binds: inout binds)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
     // Instance-side counterpart of the registration overlap predicate.  A
     // conformance is selected only when both its receiver pattern and its
     // trait arguments unify with the requested trait instance; comparing just
@@ -464,10 +480,10 @@ pub impl Comp {
         mut val sourceOwner: U64 = 0U64
         mut val sourceArity: U64 = 0U64
         mut val traitId: U64 = f.srcTraitId
-        mut val traitOwner: U64 = 0U64
+        mut val traitOwner: U64 = f.srcTraitOwner
         mut val traitArity: U64 = f.provTraitArity
-        if traitId != 0U64 {
-            traitOwner = self.traitDeclOffsetByIdArity(traitId: traitId, arity: traitArity)
+        if traitId != 0U64 && traitOwner == 0U64 {
+            traitOwner = f.provTraitOwner
         }
         if f.extId != 0U64 {
             sourceKind = 1U64
@@ -479,7 +495,8 @@ pub impl Comp {
             sourceKind = 2U64
             sourceId = f.srcTraitId
             sourceArity = f.provTraitArity
-            sourceOwner = self.traitDeclOffsetByIdArity(traitId: sourceId, arity: sourceArity)
+            sourceOwner = f.srcTraitOwner
+            if sourceOwner == 0U64 { sourceOwner = f.provTraitOwner }
         }
         self.decls.callables.append(<Callable funcIdx=funcIdx sourceKind=sourceKind sourceId=sourceId sourceOwner=sourceOwner sourceArity=sourceArity traitId=traitId traitOwner=traitOwner traitArity=traitArity sourceModule=self.funcDeclModule(f: f) />)
     }
@@ -548,7 +565,7 @@ pub impl Comp {
                 // key must therefore be unique across all of its parts.
                 val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == cf.extId) || self.moduleOf(offset: prior.defOffset) == self.moduleOf(offset: cf.defOffset)
                 if sameNamespace {
-                    if prior.extId == cf.extId && prior.traitId == cf.traitId && prior.typeId == cf.typeId && prior.subjectArgs.count() == cf.subjectArgs.count() {
+                    if prior.extId == cf.extId && prior.traitId == cf.traitId && prior.traitStart == cf.traitStart && prior.typeId == cf.typeId && prior.subjectArgs.count() == cf.subjectArgs.count() {
                         // A conformance is a callable-like source surface: its
                         // subject and trait arguments share one substitution.
                         // Alpha equality is insufficient (`Box[T]` overlaps

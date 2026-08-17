@@ -269,7 +269,7 @@ pub impl Comp {
     // from `typeOf(recv)`; in a shared generic body that value is still the
     // parameter spelling (`T`).  Mono owns the one post-substitution resolution,
     // so it starts from the grounded TypeRef and retains the resulting callable.
-    inout fn resolveBodyMethodForRef(recv: U64, recvRef: U64, sourceId: U64, nameStart: U64, nameLen: U64, args: Array[Arg], useOffset: U64) -> U64 {
+    inout fn resolveBodyMethodForRef(recv: U64, recvRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: Array[Arg], useOffset: U64) -> U64 {
         // The receiver argument is normally `groundedBodyReceiverRef(recv)`,
         // but callers that arrived through an older TypeInfo recovery can hand
         // us its bare runtime head.  The body-local ref is authoritative: it
@@ -298,7 +298,7 @@ pub impl Comp {
             resolvedRef = underlying
         }
         val rt: TypeRef = self.arena.types[resolvedRef]
-        mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId)
+        mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner)
         mut val callee: U64 = self.arena.funcs.count()
         if sources.count() > 0U64 {
             callee = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef)
@@ -441,16 +441,18 @@ pub impl Comp {
         if callee >= self.arena.funcs.count() || recvRef == 0U64 { return out }
         val f: Func = self.arena.funcs[callee]
         mut val traitId: U64 = f.originTraitId
+        mut val traitOwner: U64 = f.originTraitOwner
         mut val traitArity: U64 = f.originTraitArity
         if traitId == 0U64 {
             traitId = f.srcTraitId
+            traitOwner = f.srcTraitOwner
             traitArity = f.provTraitArity
         }
         if traitId == 0U64 || traitArity == 0U64 { return out }
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
-            if cf.traitId == traitId && cf.traitArgs.count() == traitArity {
+            if cf.traitId == traitId && cf.traitStart == traitOwner && cf.traitArgs.count() == traitArity {
                 if self.conformanceSubjectMatches(cf: cf, typeRef: recvRef) {
                     mut val binds: Array[UnifyBind] = []
                     // Some primitive/lang-item conformances still use the
@@ -1320,7 +1322,7 @@ pub impl Comp {
                     // shared witness body. Resolve `self.m()` from the body's
                     // lexical receiver surface; multiple concrete witnesses are
                     // therefore an ordinary ambiguity at this source call.
-                    callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                    callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                     if callee >= self.arena.funcs.count() {
                         callee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                     }
@@ -1340,7 +1342,7 @@ pub impl Comp {
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
                 val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
                 val sourceId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
-                callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: sourceId, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: sourceId, sourceOwner: srcStart, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                 if callee >= self.arena.funcs.count() {
                     callee = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
@@ -2440,7 +2442,7 @@ pub impl Comp {
                     if initialRef != 0U64 && initialRef < self.arena.types.count() && !(self.arena.types[initialRef].isAny) {
                         val noArgs: Array[Arg] = []
                         val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
-                        mut val iteratorFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: noArgs, useOffset: 0U64)
+                        mut val iteratorFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: noArgs, useOffset: 0U64)
                         mut val iteratorRef: U64 = initialRef
                         // Record the iterator slot even when this value is already
                         // an Iterator.  The sentinel tells LLVM that there is no
@@ -2453,7 +2455,7 @@ pub impl Comp {
                             if returned != 0U64 { iteratorRef = returned }
                         }
                         val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
-                        val nextFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs, useOffset: 0U64)
+                        val nextFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs, useOffset: 0U64)
                         self.recordBodyCallee(exprId: stmtId, callee: nextFn, siteIsStmt: true, slot: 2U64, recvTypeOverride: iteratorRef)
                         if nextFn < self.arena.funcs.count() {
                             self.enqueueSelectedCallee(exprId: stmtId, callee: nextFn, implicit: true, recvInstOverride: iteratorRef, siteIsStmt: true, slot: 2U64)

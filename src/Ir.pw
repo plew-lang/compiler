@@ -512,6 +512,16 @@ export struct TraitDef {
     pub val assocTypes: Array[Bind] = []
 }
 
+// Parsed declaration identity, deliberately separate from the completed
+// TraitDef table used by semantic checks.
+export struct TraitOwner {
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val nameId: U64
+    pub val arity: U64
+}
+pub impl TraitOwner { factory }
+
 // A recorded conformance `impl Type as Trait { ... }` (spec/08: conformance is
 // explicit, never implicit). `witnessed` lists the requirement names this impl
 // satisfied (via a body method or a `via` alias), so the completeness check can
@@ -823,12 +833,16 @@ export struct Func {
     // the trait it came from, so `a#P.foo()` can select the source trait when two
     // conformed traits provide the same-name method (spec/08,09). 0 otherwise.
     pub val srcTraitId: U64 = 0
+    // Resolved declaration owner of srcTraitId.  Name + arity is not a trait
+    // identity: imported modules may each declare `trait P` with the same arity.
+    pub val srcTraitOwner: U64 = 0
     // The trait conformance a concrete witness was declared for.  Unlike
     // srcTraitId this does not choose a `#Trait` source surface: an inherent
     // witness remains bare-callable.  It preserves the generic trait-argument
     // substitution that produced this implementation for final-callable
     // monomorphization.
     pub val originTraitId: U64 = 0
+    pub val originTraitOwner: U64 = 0
     pub val originTraitArity: U64 = 0
     // for a non-public provided-method copy (`impl Trait { ... }`, not
     // `pub impl Trait`): the trait owner's module id. Such helper copies are
@@ -842,6 +856,8 @@ export struct Func {
     // the right same-name trait by arity — without this, a provided method on the
     // 0-ary `Sub` would be copied onto every integer (conforming to Core `Sub[Rhs]`).
     pub val provTraitArity: U64 = 0
+    // Declaring trait owner for a provided-method template (`impl Trait {}`).
+    pub val provTraitOwner: U64 = 0
     // a multi-path inter-trait conformance witness (`impl P as R` / `impl Q as R`
     // both reaching R, copied onto a type conforming to P and Q): the type does NOT
     // conform to R bare (spec/09), so this copy is excluded from bare resolution (like
@@ -1068,6 +1084,7 @@ pub impl DestructureSite { factory }
 // (see DestructureSite). `kwCache`: cached built-in name spans (O(1) kwSpan).
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
+    pub mut val traitOwners: Array[TraitOwner] = []
     pub mut val callables: Array[Callable] = []
     pub mut val conforms: Array[Conform] = []
     pub mut val methodAliases: Array[MethodAlias] = []

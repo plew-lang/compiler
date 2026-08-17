@@ -588,13 +588,13 @@ pub impl Comp {
 
     inout fn findExtMethod(recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
         val qSrcId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
-        return self.findExtMethodById(recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
+        return self.findExtMethodById(recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, sourceOwner: srcStart, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
     }
 
     // Resolve a written `#Name` to one semantic source key before method
     // lookup. The spelling is only an input to this conversion: candidates
     // thereafter compare kind + declaration/bundle owner + arity.
-    inout fn resolveViewSourceKey(recvStart: U64, recvLen: U64, recvRef: U64, sourceId: U64) -> ViewSource {
+    inout fn resolveViewSourceKey(recvStart: U64, recvLen: U64, recvRef: U64, sourceId: U64, sourceOwner: U64 = 0U64) -> ViewSource {
         mut val found: ViewSource = <ViewSource />
         if self.extAppliesToType(extStart: self.interner.starts[sourceId - 1U64], extLen: self.interner.lens[sourceId - 1U64], typeStart: recvStart, typeLen: recvLen, typeRef: recvRef) {
             found = <ViewSource kind=1U64 id=sourceId owner=sourceId arity=0U64 />
@@ -603,9 +603,9 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
-            if cf.extId == 0U64 && cf.typeId == recvId && cf.traitId == sourceId {
+            if cf.extId == 0U64 && cf.typeId == recvId && cf.traitId == sourceId && (sourceOwner == 0U64 || cf.traitStart == sourceOwner) {
                 if self.conformanceSubjectMatches(cf: cf, typeRef: recvRef) {
-                    val key: ViewSource = <ViewSource kind=2U64 id=sourceId owner=self.traitDeclOffsetByIdArity(traitId: sourceId, arity: cf.traitArgs.count()) arity=cf.traitArgs.count() />
+                    val key: ViewSource = <ViewSource kind=2U64 id=sourceId owner=cf.traitStart arity=cf.traitArgs.count() />
                     if found.kind == 0U64 {
                         found = key
                     } else if !(self.sameViewSource(a: found, b: key)) {
@@ -632,10 +632,10 @@ pub impl Comp {
     // `value#E#A` and `value#A#E` therefore carry the same extension source E
     // and trait selector A. A strip ends the inherited chain but not the call's
     // own trailing source.
-    inout fn collectViewSources(recv: U64, recvStart: U64, recvLen: U64, recvRef: U64, finalSourceId: U64 = 0U64) -> Array[ViewSource] {
+    inout fn collectViewSources(recv: U64, recvStart: U64, recvLen: U64, recvRef: U64, finalSourceId: U64 = 0U64, finalSourceOwner: U64 = 0U64) -> Array[ViewSource] {
         mut val sources: Array[ViewSource] = []
         if finalSourceId != 0U64 {
-            self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: finalSourceId))
+            self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: finalSourceId, sourceOwner: finalSourceOwner))
         }
         mut val cur: U64 = recv
         mut val go: Bool = true
@@ -809,7 +809,7 @@ pub impl Comp {
         val assoc: Bind = self.assocRecvName(recv: recv)
         if assoc.nameLen != 0U64 {
             val recvRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
-            val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen))
+            val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: srcStart)
             val selected: U64 = self.findAssocInViewSet(recvStart: assoc.nameStart, recvLen: assoc.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
             if selected < self.arena.funcs.count() { return selected }
             return self.findAssoc(recvStart: assoc.nameStart, recvLen: assoc.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -818,7 +818,7 @@ pub impl Comp {
         if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.funcs.count()
         }
-        val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen))
+        val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: srcStart)
         mut val mfi: U64 = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
         if mfi >= self.arena.funcs.count() {
             mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
@@ -928,9 +928,9 @@ pub impl Comp {
         return false
     }
 
-    inout fn findExtMethodById(recvStart: U64, recvLen: U64, srcId: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    inout fn findExtMethodById(recvStart: U64, recvLen: U64, srcId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
         if srcId == 0U64 || srcId > self.interner.count { return self.arena.funcs.count() }
-        val source: ViewSource = self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: srcId)
+        val source: ViewSource = self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: srcId, sourceOwner: sourceOwner)
         return self.findExtMethodBySource(recvStart: recvStart, recvLen: recvLen, source: source, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
     }
 

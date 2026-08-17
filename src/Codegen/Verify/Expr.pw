@@ -124,7 +124,7 @@ pub impl Comp {
                 val assoc: Bind = self.assocRecvName(recv: recv)
                 if assoc.nameLen != 0U64 {
                     val assocRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
-                    val source: ViewSource = self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: intern(c: inout self, start: srcStart, len: srcLen))
+                    val source: ViewSource = self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: intern(c: inout self, start: srcStart, len: srcLen), sourceOwner: srcStart)
                     if source.kind == 0U64 {
                         self.errorAt(offset: srcStart, msg: "cannot apply this view to the associated-call type qualifier")
                     }

@@ -179,13 +179,13 @@ pub impl Comp {
             ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
                 val a: Array[Arg] = self.lowerArgs(args: args, fnName: "")
-                val srcN: Bind = self.internBytes(s: src)
+                val srcN: Bind = self.aliasRealTextInModule(siteOffset: span.start, text: src)
                 val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen nameStart=nm.nameStart nameLen=nm.nameLen args=a />)
             }
             ExprAst.ExtView(val recv, val src, val strip, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
-                val srcN: Bind = self.internBytes(s: src)
+                val srcN: Bind = self.aliasRealTextInModule(siteOffset: span.start, text: src)
                 result = self.pushExpr(e: <Expr.ExtView recv=r srcStart=srcN.nameStart srcLen=srcN.nameLen strip=strip />)
             }
             ExprAst.Index(val base, val index, val span) => {
