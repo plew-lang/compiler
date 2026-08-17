@@ -1,10 +1,8 @@
 import @Std/Io with { print }
 
 // `where T: Trait[Args]` (spec/08): a where-clause trait bound may carry the
-// trait's type arguments (`Into[I64]`, `Seq[I64]`). The bound pipeline records
-// the trait by name (conformance matches by name + arity), so the args are
-// parsed and currently discarded — they don't yet disambiguate multiple
-// conformances — but the clause parses and dispatches the trait's members.
+// trait's type arguments (`Into[I64]`, `Seq[I64]`). The complete trait key is
+// preserved through bound checking: `Into[I64]` is not merely `Into`.
 trait Into[U] { fn into() -> U }
 trait Tag { fn tag() -> I64 }
 

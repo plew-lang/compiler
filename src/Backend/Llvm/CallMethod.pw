@@ -315,8 +315,8 @@ pub impl LlvmCtx {
             }
         }
         // a non-generic method declared on this struct (recvId names the struct — inherent OR
-        // a frontend-specialized conformance witness like `s#C.a()`, whose self view is layered
-        // on in genLlvmFuncBody via f.selfViewId) is its receiver's 0-type-arg `gm` instance
+        // a frontend-specialized conformance witness like `s#C.a()`) is its receiver's
+        // 0-type-arg `gm` instance
         // (B3-2): route through the unified generic-method path (its empty env is a no-op).
         if mf.recvId == intern(c: inout c, start: sd.nameStart, len: sd.nameLen) {
             val rslot: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)

@@ -44,15 +44,10 @@ pub impl Comp {
             val sb: Bind = self.kwSpan(kw: "Self", kwLen: 4)
             return self.simpleTypeRef(nameStart: sb.nameStart, nameLen: sb.nameLen)
         }
-        // an extension method's self is viewed as `Recv#Ext` (spec/09), and a
-        // view-rooted conferred witness's as `Recv#root` — the same view layering
-        // genLlvmFuncBody applies to the self local, so a bare `self.m()` records
-        // the view-refined receiver (it resolves the extension's sibling method,
-        // not a shadowed bare one).
-        mut val vid: U64 = f.extId
-        if vid == 0U64 {
-            vid = f.selfViewId
-        }
+        // An extension method's lexical `self` is `Recv#Ext`.  A conferred
+        // witness does not inherit a caller's conformance-path view: its shared
+        // body is checked against the surface written at its declaration.
+        val vid: U64 = f.extId
         mut val rcount: U64 = 0
         val si: U64 = self.anyStructIndex(nameStart: f.recvStart, nameLen: f.recvLen)
         if si < self.arena.structs.count() {
@@ -168,7 +163,7 @@ pub impl Comp {
                     mrS = mar.nameStart
                     mrL = mar.nameLen
                 }
-                if mrL > 0U64 {
+                if mrL > 0U64 && !(self.isTypeParamOf(fnIdx: self.cur.checkFn, start: mrt.nameStart, len: mrt.nameLen)) {
                     val mmi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                     if mmi < self.arena.funcs.count() {
                         val mps: Array[Param] = self.arena.funcs[mmi].params

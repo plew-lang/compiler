@@ -12,6 +12,17 @@
 // visibility walk (siteOffset 0). Used to seed an impl/extension's lowering-time skip scope.
 
 pub impl Comp {
+    // An `as` trait is a type-level use.  Resolve its import alias from the
+    // original occurrence, rather than re-interning alias text after its
+    // module identity has been lost.
+    inout fn resolvedImplTraitBind(im: ImplAst) -> Bind {
+        if im.traitNameSpan.end > im.traitNameSpan.start {
+            val resolved: Bind = self.aliasReal(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start)
+            return <Bind nameStart=resolved.nameStart nameLen=resolved.nameLen nameId=intern(c: inout self, start: resolved.nameStart, len: resolved.nameLen) fieldStart=resolved.fieldStart fieldLen=resolved.fieldLen />
+        }
+        return self.internBytes(s: im.traitName)
+    }
+
     inout fn checkPubMemberwiseFactory(recvN: Bind, offset: U64) {
         mut val sidx: U64 = self.structIndexByName(start: recvN.nameStart, len: recvN.nameLen)
         if sidx >= self.arena.structs.count() {
@@ -176,13 +187,13 @@ pub impl Comp {
         mut val originTraitId: U64 = 0U64
         mut val originTraitArity: U64 = 0U64
         if im.isTraitImpl {
-            val originTrait: Bind = self.internBytes(s: im.traitName)
+            val originTrait: Bind = self.resolvedImplTraitBind(im: im)
             originTraitId = originTrait.nameId
             originTraitArity = im.traitArgs.count()
         }
         self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() originTraitId=originTraitId originTraitArity=originTraitArity defOffset=m.nameSpan.start />)
-        self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes)
-        self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes)
+        self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes, traitTypes: m.whereTraitTypes)
+        self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
         self.lowerWhereTraits = savedWTr
@@ -204,7 +215,7 @@ pub impl Comp {
         }
         self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
         if im.isTraitImpl {
-            val trN: Bind = self.internBytes(s: im.traitName)
+            val trN: Bind = self.resolvedImplTraitBind(im: im)
             self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: trN.nameStart, len: trN.nameLen))
         }
         val savedTP: Array[Bind] = self.cur.typeParams
@@ -225,6 +236,12 @@ pub impl Comp {
         while subjectArgIdx < im.recvType.args.count() {
             subjectArgs.append(self.lowerType(t: im.recvType.args[subjectArgIdx]).ref)
             subjectArgIdx += 1U64
+        }
+        mut val conformanceTraitArgs: Array[U64] = []
+        mut val traitArgIdx: U64 = 0U64
+        while traitArgIdx < im.traitArgs.count() {
+            conformanceTraitArgs.append(self.lowerType(t: im.traitArgs[traitArgIdx]).ref)
+            traitArgIdx += 1U64
         }
         mut val witnessed: Array[Func] = []
         mut val mi: U64 = 0
@@ -250,10 +267,10 @@ pub impl Comp {
                     val atN: Bind = self.internBytes(s: m.name)
                     mut val trId: U64 = 0
                     if im.traitName.bytes().count() > 0 {
-                        val trN: Bind = self.internBytes(s: im.traitName)
+                        val trN: Bind = self.resolvedImplTraitBind(im: im)
                         trId = trN.nameId
                     }
-                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId implOffset=im.span.start tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
+                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId implOffset=im.span.start subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds traitArgs=conformanceTraitArgs tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
                 }
                 MemberKind.Factory => {
                     // `factory` in a `pub impl T` publishes T's default memberwise factory
@@ -268,20 +285,13 @@ pub impl Comp {
             mi += 1
         }
         if im.isTraitImpl {
-            val traitN: Bind = self.internBytes(s: im.traitName)
-            mut val traitArgs: Array[U64] = []
-            mut val ti: U64 = 0
-            while ti < im.traitArgs.count() {
-                val pt: PType = self.lowerType(t: im.traitArgs[ti])
-                traitArgs.append(pt.ref)
-                ti += 1
-            }
+            val traitN: Bind = self.resolvedImplTraitBind(im: im)
             mut val cfExtId: U64 = 0
             if im.extName.bytes().count() > 0 {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
-            self.registerDeclaredConformance(cf: <Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=traitArgs derived=false isPub=im.isPub witnessed=witnessed extId=cfExtId defOffset=im.span.start />)
+            self.registerDeclaredConformance(cf: <Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=conformanceTraitArgs derived=false isPub=im.isPub witnessed=witnessed extId=cfExtId defOffset=im.span.start />)
         }
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.

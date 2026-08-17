@@ -94,6 +94,7 @@ pub impl Comp {
                     // implicit), so the return-context check uses f.retStart as-is. `await`
                     // expressions infer as unknown (0) and are left to the conservative
                     // pass-through. (The retired C emitter used to be the only check here.)
+                    self.cur.checkFn = fi
                     self.verifyFunc(f: f)
                 }
                 }

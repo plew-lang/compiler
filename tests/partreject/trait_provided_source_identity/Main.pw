@@ -1,10 +1,10 @@
-import ./Zero with { Clash }
-import ./One with { Clash }
+import ./Zero with { Clash as ZeroClash }
+import ./One with { Clash as OneClash }
 
 struct S {}
 pub impl S { factory }
-pub impl S as Clash {}
-pub impl S as Clash[I64] {}
+pub impl S as ZeroClash {}
+pub impl S as OneClash[I64] {}
 
 // Source spelling alone cannot merge the two provided surfaces.
 fn main() {

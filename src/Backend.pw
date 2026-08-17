@@ -1069,6 +1069,12 @@ export fn emitLlvm(c: inout Comp) {
     // generic-method instance bodies. (Free-function instance bodies — eager `gf` plus any
     // lazily declared via ensureFnInst — drain through genFnEmit in the fixpoint loop below.)
     st.emitGenMethods(c: inout c)
+    // `emitGenMethods` has consumed every slot available through main/async
+    // emission. Closure bodies are emitted next and may enqueue additional
+    // methods; remember this boundary before they run so the fixpoint drains
+    // precisely those new slots rather than either skipping them or replaying
+    // an already-emitted LLVM body.
+    mut val genmDone: U64 = st.genMethEmit.count()
     // lambda-lifted closure bodies. Named-function-value thunks stay empty in v1 because
     // named declarations are not first-class values.
     st.emitClosures(c: inout c)
@@ -1083,7 +1089,6 @@ export fn emitLlvm(c: inout Comp) {
     // emitted.  Start the incremental queue cursor after those entries: replaying
     // them appended a second unreachable body to the same LLVM function and let
     // a shared provided-method AST observe another instance's ambient state.
-    mut val genmDone: U64 = st.genMethEmit.count()
     mut val genfDone: U64 = 0
     mut val draining: Bool = true
     while draining {

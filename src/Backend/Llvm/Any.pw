@@ -54,7 +54,7 @@ pub impl LlvmCtx {
             return LLVMConstNull(self.ptrty)
         }
         // the witness is a method on the concrete struct — its receiver's 0-type-arg `gm`
-        // instance (B3-2; any view it carries is layered in via the func's selfViewId/extId).
+        // instance (B3-2; an extension's lexical view is layered via its extId).
         val wInstRef: U64 = self.genStructRefs[regSlot]
         val wslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: wfi, instRef: wInstRef, ownArgs: [])
         if wslot >= self.genMethK.count() {
@@ -907,16 +907,6 @@ pub impl LlvmCtx {
                     mut val selfViewArgs: Array[U64] = []
                     if recvRef != 0U64 { selfViewArgs = c.arena.types[recvRef].args }
                     recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
-                }
-            }
-            // a view-rooted conferred witness (spec/09 chain conflict, `s#C.a()`): self is
-            // viewed as `Recv#root`, so an internal `self.m()` to a multi-path intermediate
-            // resolves through the SAME root C (findExtMethodById via the view chain).
-            if f.selfViewId != 0U64 {
-                if recvRef == 0U64 || (c.arena.types[recvRef].viewExtId == 0U64 && c.arena.types[recvRef].viewIds.count() == 0U64) {
-                    mut val selfRootArgs: Array[U64] = []
-                    if recvRef != 0U64 { selfRootArgs = c.arena.types[recvRef].args }
-                    recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfRootArgs viewExtId=f.selfViewId />)
                 }
             }
             self.pushLocalR(nameStart: self.selfStart, nameLen: self.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)

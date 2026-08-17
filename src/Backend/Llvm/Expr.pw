@@ -409,7 +409,7 @@ pub impl LlvmCtx {
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
             Expr.Try(val expr) => {
-                return self.genLlvmTry(c: inout c, expr: expr)
+                return self.genLlvmTry(c: inout c, tryId: id, expr: expr)
             }
             Expr.Move(val operand, val isBorrow) => {
                 // `move x` / `borrow x` lower to the operand's value; `move` additionally

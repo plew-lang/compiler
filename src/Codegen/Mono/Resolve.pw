@@ -30,6 +30,10 @@ pub impl Comp {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.recvId == base.nameId && ab.nameId == assocId {
                 if traitId == 0U64 || ab.traitId == traitId {
+                    if !(self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: ab.subjectArgs, typeParams: ab.typeParams, declaredTraitArgs: ab.traitArgs, typeRef: baseRef, traitArgs: ab.traitArgs)) {
+                        i += 1U64
+                        continue
+                    }
                     found = i + 1U64
                     count += 1U64
                 }
@@ -77,10 +81,6 @@ pub impl Comp {
         }
         if t.assocTraitId == 0U64 {
             self.errorAt(offset: t.siteOffset, msg: "associated-type short projection was not resolved from a unique `where` source — write `T#Trait.Item` (spec/08)")
-            return tyRef
-        }
-        if !(self.conformsInstance(ref: baseRef, traitStart: t.assocTraitStart, traitLen: t.assocTraitLen)) {
-            self.errorAt(offset: t.siteOffset, msg: "associated-type projection source does not conform to the selected trait (spec/08)")
             return tyRef
         }
         val bound: U64 = self.assocBindingFor(baseRef: baseRef, traitId: t.assocTraitId, assocId: t.assocNameId)

@@ -7,32 +7,54 @@ pub impl Comp {
     // operator whose left operand's type declares `type Output = X` on the matching
     // operator trait (`Output != Self`, e.g. `Point - Point -> Vector`), return X;
     // otherwise the operands' shared type.
-    inout fn operatorOutputType(lt: TypeInfo, op: I64) -> TypeInfo {
+    // An operator result is its declared `Output`, not a continuation of the
+    // receiver's source view.  `#Ext` selects members on the operand only; a
+    // newly produced value is bare unless its declared result type says
+    // otherwise.
+    inout fn bareOperatorResult(t: TypeInfo) -> TypeInfo {
+        if t.ref != 0U64 {
+            return self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: t.ref))
+        }
+        return <TypeInfo kind=t.kind nameStart=t.nameStart nameLen=t.nameLen ref=0 />
+    }
+
+    inout fn operatorTypeRef(t: TypeInfo) -> U64 {
+        if t.ref != 0U64 { return self.runtimeTypeRef(ref: t.ref) }
+        if t.nameLen == 0U64 { return 0U64 }
+        return self.simpleTypeRef(nameStart: t.nameStart, nameLen: t.nameLen)
+    }
+
+    inout fn operatorOutputType(lt: TypeInfo, rt: TypeInfo, op: I64) -> TypeInfo {
         if !(isBinTraitOp(op: op)) {
-            return lt
+            return self.bareOperatorResult(t: lt)
         }
         if lt.nameLen == 0U64 {
-            return lt
+            return self.bareOperatorResult(t: lt)
         }
         val trN: Bind = self.internBytes(s: binTraitName(op: op))
+        val leftRef: U64 = self.operatorTypeRef(t: lt)
+        val rightRef: U64 = self.operatorTypeRef(t: rt)
+        if leftRef == 0U64 || rightRef == 0U64 {
+            return self.bareOperatorResult(t: lt)
+        }
+        mut val requestedArgs: Array[U64] = []
+        requestedArgs.append(rightRef)
         mut val i: U64 = 0
         while i < self.decls.assocBindings.count() {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.traitId == trN.nameId {
-                if spansEqual(c: inout self, aStart: ab.recvStart, aLen: ab.recvLen, bStart: lt.nameStart, bLen: lt.nameLen) {
-                    if rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
-                        if ab.ty < self.arena.types.count() {
-                            if ab.ty != 0U64 {
-                                return self.typeInfoOfRef(ref: ab.ty)
-                            }
+                if ab.nameId != 0U64 && rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
+                    if self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: ab.subjectArgs, typeParams: ab.typeParams, declaredTraitArgs: ab.traitArgs, typeRef: leftRef, traitArgs: requestedArgs) {
+                        if ab.ty != 0U64 && ab.ty < self.arena.types.count() {
+                            return self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: ab.ty))
                         }
-                        return self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray)
+                        return self.bareOperatorResult(t: self.typeInfoOfName(start: ab.tyStart, len: ab.tyLen, isArray: ab.tyIsArray))
                     }
                 }
             }
             i += 1
         }
-        return lt
+        return self.bareOperatorResult(t: lt)
     }
 
     // The result type of a binary: the operands share a type, so use whichever side
@@ -40,12 +62,13 @@ pub impl Comp {
     // operand. Lets a chained `0 - big - 1` recover I32 from `big` not the untyped `0`.
     inout fn binResultTypeInfo(lhs: U64, rhs: U64, op: I64) -> TypeInfo {
         mut val lt: TypeInfo = self.exprType(id: lhs)
+        val rt: TypeInfo = self.exprType(id: rhs)
         if lt.kind != 0 {
-            return self.operatorOutputType(lt: lt, op: op)
+            return self.operatorOutputType(lt: lt, rt: rt, op: op)
         }
         if lt.nameLen > 0 {
-            return self.operatorOutputType(lt: lt, op: op)
+            return self.operatorOutputType(lt: lt, rt: rt, op: op)
         }
-        return self.operatorOutputType(lt: self.exprType(id: rhs), op: op)
+        return self.operatorOutputType(lt: rt, rt: lt, op: op)
     }
 }

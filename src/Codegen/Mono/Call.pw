@@ -92,8 +92,6 @@ pub impl Comp {
         }
         if f.extId != 0U64 {
             out = self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=self.arena.types[out].args viewExtId=f.extId />)
-        } else if f.selfViewId != 0U64 {
-            out = self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=self.arena.types[out].args viewExtId=f.selfViewId />)
         }
         return out
     }
@@ -152,7 +150,28 @@ pub impl Comp {
                             if elem != 0U64 { out = self.arrayRefOfElem(elemRef: elem) }
                         }
                     }
+                    // A free generic parameter can have no standalone `ty`
+                    // ref in an older lowered body, but its declaration span
+                    // still identifies the binder. Consult the body-instance
+                    // substitution before relying on that optional cache.
+                    if !lo.isArray {
+                        mut val binderI: U64 = 0U64
+                        while binderI < self.cur.bodyTypeParams.count() {
+                            if spansEqual(c: inout self, aStart: lo.tyStart, aLen: lo.tyLen, bStart: self.cur.bodyTypeParams[binderI].nameStart, bLen: self.cur.bodyTypeParams[binderI].nameLen) {
+                                if binderI < self.cur.bodyTypeArgs.count() && self.cur.bodyTypeArgs[binderI] != 0U64 {
+                                    return self.cur.bodyTypeArgs[binderI]
+                                }
+                            }
+                            binderI += 1U64
+                        }
+                    }
                     if out != 0U64 {
+                        // A free generic parameter is represented by the
+                        // parameter's bare TypeRef in the shared body.  Its
+                        // body-instance argument is the semantic identity,
+                        // including a `#Trait` / extension view; return that
+                        // entry directly rather than reconstructing through a
+                        // cache that may retain only the unviewed head.
                         val savedP: Array[Bind] = self.cur.typeParams
                         val savedA: Array[U64] = self.cur.typeArgs
                         val savedS: U64 = self.cur.selfRef
@@ -167,6 +186,39 @@ pub impl Comp {
                         self.cur.selfRef = savedS
                         self.cur.itemRef = savedI
                         return out
+                    }
+                }
+            }
+            _ => {}
+        }
+        // The final body instance is also usable before a caller has rebuilt
+        // the lexical-local table (some layout/discovery walks intentionally
+        // do not).  Recover a parameter `x: T` directly from the owning
+        // function's declaration in that case.  This is not a second type
+        // inference path: it reads the same body-instance substitution used
+        // for locals above, including its view facets.
+        match self.arena.exprs[exprId] {
+            Expr.Ident(start: val identStart, len: val identLen) => {
+                if self.cur.bodyFnIdx < self.arena.funcs.count() {
+                    val owner: Func = self.arena.funcs[self.cur.bodyFnIdx]
+                    mut val pi: U64 = 0U64
+                    while pi < owner.params.count() {
+                        val param: Param = owner.params[pi]
+                        if spansEqual(c: inout self, aStart: identStart, aLen: identLen, bStart: param.nameStart, bLen: param.nameLen) {
+                            mut val ti: U64 = 0U64
+                            while ti < self.cur.bodyTypeParams.count() {
+                                if spansEqual(c: inout self, aStart: param.tyStart, aLen: param.tyLen, bStart: self.cur.bodyTypeParams[ti].nameStart, bLen: self.cur.bodyTypeParams[ti].nameLen) {
+                                    if ti < self.cur.bodyTypeArgs.count() && self.cur.bodyTypeArgs[ti] != 0U64 {
+                                        if param.tyIsArray {
+                                            return self.arrayRefOfElem(elemRef: self.cur.bodyTypeArgs[ti])
+                                        }
+                                        return self.cur.bodyTypeArgs[ti]
+                                    }
+                                }
+                                ti += 1U64
+                            }
+                        }
+                        pi += 1U64
                     }
                 }
             }
@@ -218,21 +270,35 @@ pub impl Comp {
     // parameter spelling (`T`).  Mono owns the one post-substitution resolution,
     // so it starts from the grounded TypeRef and retains the resulting callable.
     inout fn resolveBodyMethodForRef(recv: U64, recvRef: U64, sourceId: U64, nameStart: U64, nameLen: U64, args: Array[Arg], useOffset: U64) -> U64 {
-        if recvRef == 0U64 || recvRef >= self.arena.types.count() {
+        // The receiver argument is normally `groundedBodyReceiverRef(recv)`,
+        // but callers that arrived through an older TypeInfo recovery can hand
+        // us its bare runtime head.  The body-local ref is authoritative: it
+        // retains the caller's selected view (`S#P`) as part of the generic
+        // substitution, whereas the head does not.  Normalize once at the
+        // final resolver boundary so every Mono caller shares the same surface.
+        mut val surfaceRef: U64 = recvRef
+        val bodyRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+        if bodyRef != 0U64 && bodyRef < self.arena.types.count() {
+            val bodyTy: TypeRef = self.arena.types[bodyRef]
+            if bodyTy.viewExtId != 0U64 || bodyTy.viewIds.count() != 0U64 {
+                surfaceRef = bodyRef
+            }
+        }
+        if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
             return self.arena.funcs.count()
         }
         // A newtype is a distinct source type but inherits the underlying
         // callable surface and representation.  Normalize at the one resolver
         // that constructs final method callables, so generic bodies (`print[T]`
         // with T=UserId) use the same String witness as direct source calls.
-        mut val resolvedRef: U64 = recvRef
-        val original: TypeRef = self.arena.types[recvRef]
+        mut val resolvedRef: U64 = surfaceRef
+        val original: TypeRef = self.arena.types[surfaceRef]
         val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
         if underlying != 0U64 && underlying < self.arena.types.count() {
             resolvedRef = underlying
         }
         val rt: TypeRef = self.arena.types[resolvedRef]
-        mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: recvRef, finalSourceId: sourceId)
+        mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId)
         mut val callee: U64 = self.arena.funcs.count()
         if sources.count() > 0U64 {
             callee = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef)
@@ -611,6 +677,31 @@ pub impl Comp {
         self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst)
         self.enqueueSelectedAssocInstance(callee: callee, args: finalArgs, recvInstRef: recvInst)
         self.enqueueSelectedFreeInstance(callee: callee, args: finalArgs)
+    }
+
+    // `try`'s error conversion is an implicit associated call.  It must enter
+    // the same final-callable table as written syntax: LLVM may only consume
+    // the selected factory and its concrete substitutions, never rediscover a
+    // `from` factory from the two Result spellings.
+    inout fn registerTryConversion(exprId: U64, operand: U64) {
+        val operandRef: U64 = self.groundedTypeOf(id: operand)
+        mut val returnRef: U64 = 0U64
+        if self.cur.bodyFnIdx < self.arena.funcs.count() {
+            returnRef = self.groundTypeRef(ref: self.arena.funcs[self.cur.bodyFnIdx].retTy)
+        }
+        val operandErr: U64 = self.resultErrArgRef(ref: operandRef)
+        val returnErr: U64 = self.resultErrArgRef(ref: returnRef)
+        if operandErr == 0U64 || returnErr == 0U64 || self.typeRefEq(a: operandErr, b: returnErr) {
+            return
+        }
+        val factory: U64 = self.typeRefFromFactoryIdx(errRef: returnErr, srcRef: operandErr)
+        if factory >= self.arena.funcs.count() {
+            // Verify owns the user diagnostic for a missing conversion. Mono
+            // deliberately does not invent a fallback callable.
+            return
+        }
+        self.recordBodyCallee(exprId: exprId, callee: factory, recvTypeOverride: returnErr)
+        self.enqueueSelectedCallee(exprId: exprId, callee: factory, implicit: true, recvInstOverride: returnErr)
     }
 
     // Operators are source-level calls to their selected associated witnesses.
@@ -1225,27 +1316,11 @@ pub impl Comp {
                             self.errorAt(offset: nameStart, msg: "internal diagnostic: final method receiver remained Self after body substitution")
                         }
                     }
-                    // A provided trait body speaks about that trait's surface:
-                    // `self.step()` is the selected trait requirement/witness,
-                    // not an ambient bare lookup that may choose an unrelated
-                    // conformer's copy from the shared AST.  Concrete copies
-                    // retain the originating source precisely for this lookup.
-                    mut val lexicalSource: U64 = 0U64
-                    if self.cur.bodyFnIdx < self.arena.funcs.count() {
-                        val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
-                        if bodyFn.isProvided {
-                            match self.arena.exprs[recv] {
-                                Expr.Ident(start: val selfStart, len: val selfLen) => {
-                                    if self.isSelfRef(start: selfStart, len: selfLen) {
-                                        lexicalSource = bodyFn.originTraitId
-                                        if lexicalSource == 0U64 { lexicalSource = bodyFn.srcTraitId }
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: lexicalSource, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                    // A selected outer conformance path does not flow into a
+                    // shared witness body. Resolve `self.m()` from the body's
+                    // lexical receiver surface; multiple concrete witnesses are
+                    // therefore an ordinary ambiguity at this source call.
+                    callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                     if callee >= self.arena.funcs.count() {
                         callee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                     }
@@ -2149,7 +2224,10 @@ pub impl Comp {
                     self.scanType(ref: rr)
                 }
             }
-            Expr.Try(val expr) => { self.scanExprInsts(exprId: expr) }
+            Expr.Try(val expr) => {
+                self.scanExprInsts(exprId: expr)
+                self.registerTryConversion(exprId: exprId, operand: expr)
+            }
             Expr.Arrow(val base, val nameStart, val nameLen) => { self.scanExprInsts(exprId: base) }
             Expr.Deref(val base) => { self.scanExprInsts(exprId: base) }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
@@ -2277,6 +2355,14 @@ pub impl Comp {
             Stmt.Assign(val target, val value) => {
                 match self.arena.exprs[target] {
                     Expr.Index(base: val base, index: val index) => {
+                        // `indexSet` / `insert` is an implementation rewrite, not a
+                        // different source construct.  Validate the original assignment
+                        // while its place and RHS context still exist; after replacing the
+                        // statement with a call, the later whole-program verifier validates
+                        // that selected call's visibility, inout and argument contract.
+                        // This deliberately reuses the one assignment authority rather
+                        // than duplicating mutability/range rules in Mono.
+                        self.verifyAssign(target: target, value: value)
                         val bt: TypeInfo = self.typeOf(id: base)
                         mut val headStart: U64 = bt.nameStart
                         mut val headLen: U64 = bt.nameLen

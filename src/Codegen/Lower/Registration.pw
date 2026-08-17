@@ -241,6 +241,47 @@ pub impl Comp {
         return self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
     }
 
+    // Instance-side counterpart of the registration overlap predicate.  A
+    // conformance is selected only when both its receiver pattern and its
+    // trait arguments unify with the requested trait instance; comparing just
+    // the trait spelling would conflate `Sub` and `Sub[I64]`.
+    // The concrete-query form of a conformance key.  Keep this independent of
+    // `Conform`: associated-type bindings carry the same key, and must select
+    // a witness by precisely the same rule as ordinary conformance lookup.
+    inout fn conformancePatternMatchesTraitInstance(subjectId: U64, subjectTy: U64, subjectArgs: Array[U64], typeParams: Array[Bind], declaredTraitArgs: Array[U64], typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Bool {
+        if !traitArgsOpen && declaredTraitArgs.count() != traitArgs.count() { return false }
+        mut val binds: Array[UnifyBind] = []
+        if subjectTy != 0U64 {
+            if !(self.unifyPatterns(a: subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: typeParams, bParams: [], binds: inout binds, ignoreTopView: true)) { return false }
+        } else {
+            // A trait subject (`impl Sub as Marker`) has no nominal TypeRef
+            // body in the receiver table.  That is not a wildcard subject:
+            // preserve the same head-and-arguments match used by a structured
+            // receiver, or the blanket declaration would incorrectly apply to
+            // every concrete type before trait-subject conferral materializes it.
+            if typeRef >= self.arena.types.count() { return false }
+            val actual: TypeRef = self.arena.types[typeRef]
+            if subjectId != actual.nameId || subjectArgs.count() != actual.args.count() { return false }
+            mut val si: U64 = 0U64
+            while si < subjectArgs.count() {
+                if !(self.unifyPatterns(a: subjectArgs[si], aSide: 0U64, b: actual.args[si], bSide: 1U64, aParams: typeParams, bParams: [], binds: inout binds)) { return false }
+                si += 1U64
+            }
+        }
+        if !traitArgsOpen {
+            mut val i: U64 = 0U64
+            while i < declaredTraitArgs.count() {
+                if !(self.unifyPatterns(a: declaredTraitArgs[i], aSide: 0U64, b: traitArgs[i], bSide: 1U64, aParams: typeParams, bParams: [], binds: inout binds)) { return false }
+                i += 1U64
+            }
+        }
+        return true
+    }
+
+    inout fn conformanceMatchesTraitInstance(cf: Conform, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Bool {
+        return self.conformancePatternMatchesTraitInstance(subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: cf.subjectArgs, typeParams: cf.typeParams, declaredTraitArgs: cf.traitArgs, typeRef: typeRef, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
+    }
+
     // Registration-side counterpart of `conformanceSubjectMatches`: two
     // declarations collide exactly when one substitution satisfies both their
     // subject and trait-argument patterns.
@@ -264,7 +305,7 @@ pub impl Comp {
     // `Pair[U, V]`.
     inout fn conformanceSubjectCovers(provider: Conform, subject: Conform) -> Bool {
         if provider.subjectTy == 0U64 || subject.subjectTy == 0U64 {
-            return provider.typeId == subject.typeId && provider.typeArity == subject.typeArity
+            return provider.typeId == subject.typeId && provider.subjectArgs.count() == subject.subjectArgs.count()
         }
         mut val binds: Array[UnifyBind] = []
         return self.unifyPatterns(a: provider.subjectTy, aSide: 0U64, b: subject.subjectTy, bSide: 1U64, aParams: provider.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
@@ -507,7 +548,7 @@ pub impl Comp {
                 // key must therefore be unique across all of its parts.
                 val sameNamespace: Bool = (prior.extId != 0U64 && prior.extId == cf.extId) || self.moduleOf(offset: prior.defOffset) == self.moduleOf(offset: cf.defOffset)
                 if sameNamespace {
-                    if prior.extId == cf.extId && prior.traitId == cf.traitId && prior.typeId == cf.typeId && prior.typeArity == cf.typeArity {
+                    if prior.extId == cf.extId && prior.traitId == cf.traitId && prior.typeId == cf.typeId && prior.subjectArgs.count() == cf.subjectArgs.count() {
                         // A conformance is a callable-like source surface: its
                         // subject and trait arguments share one substitution.
                         // Alpha equality is insufficient (`Box[T]` overlaps

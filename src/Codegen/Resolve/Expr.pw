@@ -45,7 +45,24 @@ pub impl Comp {
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                r = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                // A generic body has an abstract requirement surface here. Its
+                // concrete witness is intentionally selected by Mono under the
+                // instantiated receiver, not cached from whatever conformers
+                // happen to be loaded while lowering the template.
+                mut val abstractBound: Bool = false
+                match self.arena.exprs[recv] {
+                    Expr.Ident(start: val rs, len: val rl) => {
+                        val li: U64 = self.localIndexByName(start: rs, len: rl)
+                        if li < self.cur.locals.count() {
+                            val lo: Local = self.cur.locals[li]
+                            abstractBound = self.isTypeParamOf(fnIdx: self.cur.checkFn, start: lo.tyStart, len: lo.tyLen)
+                        }
+                    }
+                    _ => {}
+                }
+                if !abstractBound {
+                    r = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
             }
             Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
                 r = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)

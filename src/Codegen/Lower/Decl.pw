@@ -246,13 +246,13 @@ pub impl Comp {
         self.lowerWhereTypes = savedWT
         self.lowerWhereTraits = savedWTr
         val fnIdx: U64 = self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=nameStart />)
-        self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes)
+        self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes, traitTypes: d.whereTraitTypes)
         // attach pending `@[...]` directives to this fn (a macro on a free function);
         // declStart/declEnd = the fn's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
     }
 
-    inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = []) {
+    inout fn appendFuncBounds(fnIdx: U64, params: Array[String], traits: Array[String], types: Array[TypeAst] = [], traitTypes: Array[TypeAst] = []) {
         mut val i: U64 = 0
         while i < params.count() {
             val pn: Bind = self.internBytes(s: params[i])
@@ -263,7 +263,15 @@ pub impl Comp {
             } else {
                 pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen)
             }
-            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen />)
+            mut val boundArgs: Array[U64] = []
+            if i < traitTypes.count() {
+                mut val ai: U64 = 0U64
+                while ai < traitTypes[i].args.count() {
+                    boundArgs.append(self.lowerType(t: self.normalizeProjectionType(t: traitTypes[i].args[ai], whereTypes: types, whereTraits: traits)).ref)
+                    ai += 1U64
+                }
+            }
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen traitArgs=boundArgs />)
             i += 1
         }
     }

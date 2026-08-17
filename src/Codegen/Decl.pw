@@ -255,7 +255,7 @@ pub impl Comp {
                 if cf.traitId == aTraitId {
                     if self.isTraitName(start: cf.typeStart, len: cf.typeLen) {
                         // cf is `impl B as A`; does tId conform to the subject trait B?
-                        if self.conformExistsArity(typeId: tId, traitId: cf.typeId, traitArity: cf.typeArity) {
+                        if self.conformExistsArity(typeId: tId, traitId: cf.typeId, traitArity: cf.subjectArgs.count()) {
                             count += 1
                         }
                     }
@@ -266,7 +266,7 @@ pub impl Comp {
         return count
     }
 
-    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64) -> Bool {
+    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = []) -> Bool {
         if viewId == 0U64 {
             return false
         }
@@ -277,12 +277,12 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             // Direct `extension Ext { impl T as P }` conformances are view
             // facts too (not only trait-subject `impl B as A` edges).
-            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && self.conformanceSubjectMatches(cf: cf, typeRef: typeRef) {
+            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && self.conformanceMatchesTraitInstance(cf: cf, typeRef: typeRef, traitArgs: traitArgs) {
                 if !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) {
                     return true
                 }
             }
-            if cf.traitId == targetId {
+            if cf.traitId == targetId && cf.traitArgs.count() == traitArgs.count() {
                 // cf must be a trait-subject conform (`impl B as A`) reachable via viewId:
                 // a bare inter-trait conform whose subject trait is the view, or an
                 // extension conform whose extId is the view.
@@ -299,7 +299,7 @@ pub impl Comp {
                     }
                     if viaView {
                         // does the underlying type conform to the subject trait B?
-                        if self.conformExistsArity(typeId: typeId, traitId: cf.typeId, traitArity: cf.typeArity) {
+                        if self.conformExistsArity(typeId: typeId, traitId: cf.typeId, traitArity: cf.subjectArgs.count()) {
                             return true
                         }
                     }
@@ -331,7 +331,7 @@ pub impl Comp {
                     mut val cj: U64 = 0
                     while cj < self.decls.conforms.count() {
                         val cand: Conform = self.decls.conforms[cj]
-                        if cand.traitId == cf.typeId && cand.traitArgs.count() == cf.typeArity {
+                        if cand.traitId == cf.typeId && cand.traitArgs.count() == cf.subjectArgs.count() {
                             if !(self.isTraitName(start: cand.typeStart, len: cand.typeLen)) {
                                 // the view-root under which we confer A on T via this impl
                                 // (spec/09 chain conflict). If the candidate conformance to B
@@ -422,7 +422,7 @@ pub impl Comp {
                             providedOwnerMod = self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity)
                         }
                         val copyIdx: U64 = self.arena.funcs.count()
-                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag originTraitId=srcTag originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity viewOnly=(viewRoot != 0U64) selfViewId=viewRoot defOffset=f.defOffset />)
+                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag originTraitId=srcTag originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
                         self.registerCallable(funcIdx: copyIdx)
                     }
                 }

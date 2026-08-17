@@ -250,7 +250,7 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
                 val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
-                val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, traitArity: 4000000000U64, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
+                val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, traitArity: fb.traitArgs.count(), qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
                 if r.nameLen != 0U64 {
                     return r
                 }
@@ -801,6 +801,24 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
+                // Mono has already selected this call under the concrete body
+                // instance.  Its final result is the type authority for a
+                // shared generic AST (`T` may carry an S#P view); asking the
+                // syntax resolver again would erase that substitution and turn
+                // the same call into a bare lookup.  The descriptor key includes
+                // the current body instance, so this is safe for every phase.
+                val finalResult: U64 = self.bodyCalleeResultRef(exprId: id)
+                val finalRecv: U64 = self.groundedBodyReceiverRef(exprId: recv)
+                if finalResult != 0U64 && finalResult < self.arena.types.count() && finalRecv != 0U64 && finalRecv < self.arena.types.count() {
+                    val finalRecvTy: TypeRef = self.arena.types[finalRecv]
+                    // The ordinary generic return-recovery below remains the
+                    // authority for an unviewed receiver. The final descriptor
+                    // is required specifically when the receiver's `#` facet
+                    // would otherwise be erased by shared-AST recovery.
+                    if finalRecvTy.viewExtId != 0U64 || finalRecvTy.viewIds.count() != 0U64 {
+                        return self.typeInfoOfRef(ref: finalResult)
+                    }
+                }
                 // `Type.name(args)` assoc-fn call: return type from the assoc fn.
                 val arn: Bind = self.assocRecvName(recv: recv)
                 if arn.nameLen != 0 {

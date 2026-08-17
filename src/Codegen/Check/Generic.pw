@@ -172,7 +172,7 @@ pub impl Comp {
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
                     val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
-                    if self.traitProvidesMember(traitNameId: qTrait, traitArity: 4000000000U64, qName: qName, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart)) {
+                    if self.traitProvidesMember(traitNameId: qTrait, traitArity: fb.traitArgs.count(), qName: qName, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart)) {
                         return true
                     }
                 }

@@ -332,6 +332,13 @@ pub impl Comp {
             }
         }
         if rt.kind == 2 {
+            // The abstract checker validates a bound receiver against its
+            // requirement signature.  Concrete witness selection belongs to
+            // Mono after T is instantiated; querying the global conformance
+            // table here makes unrelated paths falsely ambiguous.
+            if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
+                return
+            }
             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
             if mi != self.arena.funcs.count() {
                 val mf: Func = self.arena.funcs[mi]

@@ -13,6 +13,59 @@
 // LLVMValueRef null as an LLVMTypeRef "none" sentinel).
 
 pub impl Comp {
+    // Generic bodies are verified against their declared trait bounds.  This
+    // deliberately returns a requirement signature, never a concrete witness:
+    // the latter belongs to Mono after T is instantiated.  Keeping the two
+    // phases distinct prevents unrelated concrete conformance paths from
+    // changing whether `fn f[T](x: T) where T: R { x.r() }` is well formed.
+    inout fn verifyBoundMethodCall(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+        val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
+        val methodId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val found: Bool = false
+        mut val chosenTrait: U64 = self.decls.traits.count()
+        mut val chosenReq: U64 = 0U64
+        mut val bi: U64 = 0U64
+        while bi < self.decls.funcBounds.count() {
+            val bound: FuncBound = self.decls.funcBounds[bi]
+            if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
+                val traitId: U64 = intern(c: inout self, start: bound.traitStart, len: bound.traitLen)
+                mut val ti: U64 = 0U64
+                while ti < self.decls.traits.count() {
+                    val traitDef: TraitDef = self.decls.traits[ti]
+                    if traitDef.nameId == traitId {
+                        mut val ri: U64 = 0U64
+                        while ri < traitDef.reqs.count() {
+                            val req: Func = traitDef.reqs[ri]
+                            if req.nameId == methodId && self.paramsLabelsOk(params: req.params, args: args) {
+                                if found {
+                                    self.errorAt(offset: nameStart, msg: "ambiguous method in generic bounds; select one trait source with `x#Trait.method()`")
+                                }
+                                found = true
+                                chosenTrait = ti
+                                chosenReq = ri
+                            }
+                            ri += 1U64
+                        }
+                    }
+                    ti += 1U64
+                }
+            }
+            bi += 1U64
+        }
+        if !found { return false }
+        val chosen: Func = self.decls.traits[chosenTrait].reqs[chosenReq]
+        mut val ai: U64 = 0U64
+        while ai < args.count() {
+            val pi: U64 = self.paramIndexForArg(params: chosen.params, args: args, argIdx: ai)
+            if pi < chosen.params.count() {
+                self.checkArgInoutMode(p: chosen.params[pi], arg: args[ai])
+                self.tcCheckValue(expectedRef: chosen.params[pi].ty, valueExpr: args[ai].expr, pos: "arg")
+            }
+            ai += 1U64
+        }
+        return true
+    }
+
     inout fn knownNamedTypeId(start: U64, len: U64) -> U64 {
         // an import alias (`with { Real as Alias }`) denotes the same type identity as
         // `Real`: resolve so a value typed via its alias and one via the real name compare

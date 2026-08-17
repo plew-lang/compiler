@@ -85,10 +85,38 @@ pub impl Comp {
                 self.verifyExpr(id: base)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                self.verifyMethodVis(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 self.verifyRecv(recv: recv)
                 self.verifyArgs(args: args)
+                // Do not recover the receiver through `typeOf` here: during
+                // abstract checking that cache can already carry a concrete
+                // instantiation from another phase.  The installed local
+                // declaration is the authority for whether this is `T` in the
+                // current generic body.
+                mut val boundStart: U64 = 0U64
+                mut val boundLen: U64 = 0U64
+                match self.arena.exprs[recv] {
+                    Expr.Ident(start: val localStart, len: val localLen) => {
+                        val localId: U64 = intern(c: inout self, start: localStart, len: localLen)
+                        mut val li: U64 = self.cur.locals.count()
+                        while li > 0U64 && boundLen == 0U64 {
+                            li -= 1U64
+                            val local: Local = self.cur.locals[li]
+                            if local.nameId == localId && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: local.tyStart, len: local.tyLen) {
+                                boundStart = local.tyStart
+                                boundLen = local.tyLen
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                if boundLen != 0U64 {
+                    if self.verifyBoundMethodCall(fnIdx: self.cur.checkFn, tpStart: boundStart, tpLen: boundLen, nameStart: nameStart, nameLen: nameLen, args: args) {
+                        return
+                    }
+                }
                 val mf: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                val rt: TypeInfo = self.typeOf(id: recv)
+                if rt.nameLen != 0U64 { self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args) }
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 self.checkResolvedMethodArgs(mf: mf, args: args)
             }

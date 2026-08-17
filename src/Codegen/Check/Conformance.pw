@@ -79,7 +79,7 @@ pub impl Comp {
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
             if !(cf.derived) && cf.extId == 0U64 && !(self.isMacrointerfaceCompatConform(cf: cf)) {
-                val ownerMod: U64 = self.traitModuleByIdArity(traitId: cf.typeId, arity: cf.typeArity)
+                val ownerMod: U64 = self.traitModuleByIdArity(traitId: cf.typeId, arity: cf.subjectArgs.count())
                 if ownerMod != 4000000000U64 {
                     if self.moduleOf(offset: cf.defOffset) != ownerMod {
                         self.errorAt(offset: cf.defOffset, msg: "bare inter-trait conformance `impl B as A` must be declared in the subject trait's owner module; use a named extension for third-party additions (spec/08,09)")

@@ -556,6 +556,12 @@ export struct AssocBinding {
     // Source impl identity. Receiver and trait text are not sufficient when a type
     // has multiple parameterized conformances to the same trait.
     pub val implOffset: U64 = 0
+    // Full receiver pattern and trait instance key of the owning conformance.
+    // Associated-type projection is a conformance lookup, not a head-name lookup.
+    pub val subjectTy: U64 = 0
+    pub val subjectArgs: Array[U64] = []
+    pub val typeParams: Array[Bind] = []
+    pub val traitArgs: Array[U64] = []
     // bound concrete type (head span + structured ref + array flag).
     pub val tyStart: U64
     pub val tyLen: U64
@@ -633,11 +639,12 @@ export struct MethodAlias {
     pub val realId: U64 = 0
 }
 
-// A trait bound `where T: Trait` on a function (spec/08). `fnIdx` indexes
+// A trait bound `where T: Trait[Args]` on a function (spec/08). `fnIdx` indexes
 // c.arena.funcs; (paramStart,paramLen) names the bounded type parameter; (traitStart,
-// traitLen) the required trait. `where T: A + B` and `where T: A, U: B` expand to
-// one FuncBound per atom. Enforced at instantiation: the concrete type bound to
-// the parameter must conform to the trait, else a loud error.
+// traitLen,traitArgs) are the complete required trait key. `where T: A + B` and
+// `where T: A, U: B` expand to one FuncBound per atom. Enforced at instantiation:
+// the concrete type bound to the parameter must conform to that exact trait
+// instance, else a loud error.
 export struct FuncBound {
     pub val fnIdx: U64
     pub val paramStart: U64
@@ -653,6 +660,7 @@ export struct FuncBound {
     pub val traitNameId: U64 = 0
     pub val traitStart: U64
     pub val traitLen: U64
+    pub val traitArgs: Array[U64] = []
 }
 
 // A concrete instantiation of a generic free function (`fn f[T](x: T)` called
@@ -840,12 +848,6 @@ export struct Func {
     // an extension method) and reachable only through the conformance-path view
     // `value#P` (findExtMethodById, via srcTraitId). Default false = bare-callable.
     pub val viewOnly: Bool = false
-    // the conformance-path view-root under which this witness was conferred (spec/09
-    // chain conflict): for a chained multi-path witness reached via `s#C`, self is
-    // bound with viewExtId = selfViewId in the body so internal `self.m()` calls
-    // resolve through the SAME root C (e.g. an intermediate multi-path method). 0 =
-    // no rooted self view (bare or single-path). Equals srcTraitId for the witness.
-    pub val selfViewId: U64 = 0
     // original source offset of the declaration's NAME token (see StructDef.defOffset):
     // an impl method's nameStart is re-interned (maps to no source file), so a
     // declaration-anchored diagnostic reads fnAnchor (defOffset, nameStart fallback).

@@ -6,20 +6,39 @@
 // or the input name unchanged when it is not an associated type / has no binding.
 
 pub impl Comp {
+    // Ground the full trait key of a bound in the function/method instance that
+    // owns it.  Trait arguments belong to the bound, not to a later resolver
+    // fallback: `where T: Add[T]` becomes `Add[I64]` for T=I64 here.
+    inout fn groundedBoundTraitArgs(fb: FuncBound, params: Array[Bind], args: Array[U64]) -> Array[U64] {
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        self.cur.typeParams = params
+        self.cur.typeArgs = args
+        mut val out: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < fb.traitArgs.count() {
+            out.append(self.groundTypeRef(ref: fb.traitArgs[i]))
+            i += 1U64
+        }
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        return out
+    }
+
     // A view is an unordered source set.  Bounds may use any active extension
     // source to establish the requested conformance; the trait selector itself
     // is already validated as singular when the TypeRef/value view is formed.
-    inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64) -> Bool {
+    inout fn viewedTypeConforms(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false) -> Bool {
         if ref >= self.arena.types.count() { return false }
         val t: TypeRef = self.arena.types[ref]
-        if self.conformsInstance(ref: ref, traitStart: traitStart, traitLen: traitLen) { return true }
+        if self.conformsInstance(ref: ref, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen) { return true }
         mut val i: U64 = 0U64
         while i < t.viewIds.count() {
-            if self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewIds[i], traitStart: traitStart, traitLen: traitLen) { return true }
+            if self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewIds[i], traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs) { return true }
             i += 1U64
         }
         if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 {
-            return self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewExtId, traitStart: traitStart, traitLen: traitLen)
+            return self.viewConformsTo(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: ref, viewId: t.viewExtId, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs)
         }
         return false
     }
@@ -355,7 +374,9 @@ pub impl Comp {
             // explicit view.  Letting it satisfy a bare bound leaks opt-in
             // meaning from `value#Ext` into plain `value`.
             if cf.extId == 0U64 && cf.typeId == qType {
-                if cf.traitId == qTrait {
+                // An unparameterized spelling is the arity-zero instance,
+                // never a shorthand for `Trait[...]`.
+                if cf.traitId == qTrait && cf.traitArgs.count() == 0U64 {
                     return true
                 }
             }
@@ -405,13 +426,13 @@ pub impl Comp {
     // `typeConformsTo`; the recursion terminates on finite type depth. Both the operator gate
     // (hasCompareWitness) and the `where` bound-check consult this, so acceptance == the
     // reality of instantiation and the diagnostic lands where the type is written.
-    inout fn conformsInstance(ref: U64, traitStart: U64, traitLen: U64) -> Bool {
+    inout fn conformsInstance(ref: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], traitArgsOpen: Bool = false) -> Bool {
         if ref >= self.arena.types.count() {
             return false
         }
         val rr: U64 = self.resolveTy(tyRef: ref)
         if rr != ref {
-            return self.conformsInstance(ref: rr, traitStart: traitStart, traitLen: traitLen)
+            return self.conformsInstance(ref: rr, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
         }
         val t: TypeRef = self.arena.types[ref]
         if t.assocNameId != 0U64 {
@@ -425,7 +446,7 @@ pub impl Comp {
         // same `conformsInstance` authority.
         val underlying: U64 = self.newtypeUnderRef(start: t.nameStart, len: t.nameLen)
         if underlying != 0U64 && underlying != ref {
-            return self.conformsInstance(ref: underlying, traitStart: traitStart, traitLen: traitLen)
+            return self.conformsInstance(ref: underlying, traitStart: traitStart, traitLen: traitLen, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
         }
         // Candidate existence is not conformance.  Match the full subject
         // pattern here, so `impl Box[I64] as P` never grants P to Box[String].
@@ -435,7 +456,7 @@ pub impl Comp {
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
             if cf.extId == 0U64 && cf.traitId == qTrait {
-                if self.conformanceSubjectMatches(cf: cf, typeRef: ref) {
+                if self.conformanceMatchesTraitInstance(cf: cf, typeRef: ref, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen) {
                     applies = true
                 }
             }
@@ -472,6 +493,7 @@ pub impl Comp {
                     self.cur.typeParams = wf.typeParams
                     self.cur.typeArgs = t.args
                     val lhs: U64 = self.groundTypeRef(ref: fb.paramTy)
+                    val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: wf.typeParams, args: t.args)
                     self.cur.typeParams = savedP
                     self.cur.typeArgs = savedA
                     if lhs >= self.arena.types.count() {
@@ -480,7 +502,7 @@ pub impl Comp {
                     if !(self.tyRefIsGround(ref: lhs)) {
                         return false
                     }
-                    if !(self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                    if !(self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64)) {
                         return false
                     }
                     bi += 1
@@ -498,7 +520,8 @@ pub impl Comp {
                     k += 1
                 }
                 if pos < t.args.count() {
-                    if !(self.conformsInstance(ref: t.args[pos], traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                    val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: wf.typeParams, args: t.args)
+                    if !(self.conformsInstance(ref: t.args[pos], traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64)) {
                         return false
                     }
                 }
@@ -536,6 +559,7 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fin.fnIdx {
+                val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: f.typeParams, args: fin.args)
                 if fb.paramTy != 0U64 {
                     val savedP: Array[Bind] = self.cur.typeParams
                     val savedA: Array[U64] = self.cur.typeArgs
@@ -546,7 +570,7 @@ pub impl Comp {
                     self.cur.typeArgs = savedA
                     if lhs < self.arena.types.count() {
                         val at: TypeRef = self.arena.types[lhs]
-                        val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                        val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64)
                         if !ok {
                             self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
                         }
@@ -565,7 +589,7 @@ pub impl Comp {
                             // conformsInstance checks CONDITIONAL conformance against the
                             // arg's full ref (`Array[NoEq]` ⟹ false here, at this bound's
                             // location — no deferral to a deeper monomorphization level).
-                            val ok: Bool = self.viewedTypeConforms(ref: fin.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen)
+                            val ok: Bool = self.viewedTypeConforms(ref: fin.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64)
                             if !ok {
                                 self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
                             }
@@ -603,6 +627,7 @@ pub impl Comp {
                     while bi < self.decls.funcBounds.count() {
                         val fb: FuncBound = self.decls.funcBounds[bi]
                         if fb.fnIdx == mfi {
+                            val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: f.typeParams, args: inst.args)
                             if fb.paramTy != 0U64 {
                                 val savedP: Array[Bind] = self.cur.typeParams
                                 val savedA: Array[U64] = self.cur.typeArgs
@@ -613,7 +638,7 @@ pub impl Comp {
                                 self.cur.typeArgs = savedA
                                 if lhs < self.arena.types.count() {
                                     val at: TypeRef = self.arena.types[lhs]
-                                    val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen)
+                                    val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64)
                                     if !ok {
                                         self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                     }
@@ -624,7 +649,7 @@ pub impl Comp {
                                 val tp: Bind = f.typeParams[pi]
                                 if tp.nameId == fb.paramNameId {
                                     if pi < inst.args.count() {
-                                        if !(self.conformsInstance(ref: inst.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen)) {
+                                        if !(self.conformsInstance(ref: inst.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64)) {
                                             self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                         }
                                     }

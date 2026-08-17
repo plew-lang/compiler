@@ -2,6 +2,22 @@
 // and type compatibility.
 
 pub impl Comp {
+    // `any P[Out, Item=I64]` carries both the trait's positional parameters
+    // and associated-type bindings in TypeRef.args.  Only the former identify
+    // the conformance instance; named associated bindings constrain dispatch
+    // after that witness is selected.
+    inout fn positionalTraitArgs(t: TypeRef) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            mut val label: U64 = 0U64
+            if i < t.argLabels.count() { label = t.argLabels[i] }
+            if label == 0U64 { out.append(t.args[i]) }
+            i += 1U64
+        }
+        return out
+    }
+
     inout fn inferType(id: U64) -> U64 {
         // an un-suffixed integer literal has no intrinsic type — it adapts to its context
         // (`u64var + 5`, `val x: I32 = 5`). typeOf may attach an emission-context width to
@@ -78,9 +94,19 @@ pub impl Comp {
                     }
                     val srcId: U64 = self.knownNamedTypeId(start: tin.nameStart, len: tin.nameLen)
                     if srcId != 0U64 {
-                        val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
-                        if !(self.conformExists(typeId: srcId, traitId: traitId)) {
-                            return false
+                        // Existential formation uses the same complete trait
+                        // instance query as `where`: a witness for `P[I64]`
+                        // does not construct an `any P[String]` box.
+                        val traitArgs: Array[U64] = self.positionalTraitArgs(t: te)
+                        if inferred != 0U64 {
+                            if !(self.conformsInstance(ref: inferred, traitStart: te.nameStart, traitLen: te.nameLen, traitArgs: traitArgs)) {
+                                return false
+                            }
+                        } else {
+                            val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
+                            if traitArgs.count() != 0U64 || !(self.conformExists(typeId: srcId, traitId: traitId)) {
+                                return false
+                            }
                         }
                     }
                 }
@@ -290,8 +316,20 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == self.cur.checkFn {
                 if fb.paramNameId == qTp {
-                    if fb.traitNameId == qTrait {
-                        return true
+                    val traitArgs: Array[U64] = self.positionalTraitArgs(t: trait)
+                    if fb.traitNameId == qTrait && fb.traitArgs.count() == traitArgs.count() {
+                        mut val binds: Array[UnifyBind] = []
+                        mut val ai: U64 = 0U64
+                        mut val matches: Bool = true
+                        while ai < fb.traitArgs.count() {
+                            if !(self.unifyPatterns(a: fb.traitArgs[ai], aSide: 0U64, b: traitArgs[ai], bSide: 1U64, aParams: self.cur.typeParams, bParams: [], binds: inout binds)) {
+                                matches = false
+                            }
+                            ai += 1U64
+                        }
+                        if matches {
+                            return true
+                        }
                     }
                 }
             }

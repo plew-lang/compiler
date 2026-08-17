@@ -498,19 +498,11 @@ pub impl Comp {
         mut val inherentMatch2: U64 = self.arena.funcs.count()
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        mut val useSite: U64 = nameStart
-        if useOffset != 0U64 { useSite = useOffset }
-        val useMod: U64 = self.moduleOf(offset: useSite)
         mut val i: U64 = 0
         while i < self.decls.callables.count() {
             val cand: Callable = self.decls.callables[i]
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.hasRecv {
-                mut val visibleHere: Bool = true
-                if f.isProvided && !(f.isPub) && f.providedOwnerMod != 4000000000U64 {
-                    visibleHere = f.providedOwnerMod == useMod
-                }
-                if visibleHere {
                 // an extension method does not join bare resolution (spec/09): it is
                 // reachable only through a `value#Ext.m()` view (findExtMethod).
                 if cand.sourceKind != 1U64 {
@@ -545,7 +537,6 @@ pub impl Comp {
                             }
                         }
                     }
-                }
                 }
                 }
                 }
@@ -758,11 +749,7 @@ pub impl Comp {
                     sourceMatches = cand.sourceKind == 2U64 && self.callableMatchesAnyTrait(c: cand, sources: sources)
                 }
                 if sourceMatches && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
-                    mut val visibleHere: Bool = true
-                    if f.isProvided && !(f.isPub) && f.providedOwnerMod != 4000000000U64 {
-                        visibleHere = f.providedOwnerMod == useMod
-                    }
-                    if visibleHere && f.nameId == qNameId && self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
+                    if f.nameId == qNameId && self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
                         val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
                         if matchRank != 0U64 {
                             if firstLabel == self.arena.funcs.count() { firstLabel = cand.funcIdx }
@@ -951,7 +938,6 @@ pub impl Comp {
         if source.kind == 0U64 { return self.arena.funcs.count() }
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        val useMod: U64 = self.moduleOf(offset: nameStart)
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
@@ -962,12 +948,7 @@ pub impl Comp {
             val cand: Callable = self.decls.callables[i]
             val f: Func = self.arena.funcs[cand.funcIdx]
             if f.hasRecv {
-                mut val visibleHere: Bool = true
-                if f.isProvided && !(f.isPub) && f.providedOwnerMod != 4000000000U64 {
-                    visibleHere = f.providedOwnerMod == useMod
-                }
-                if visibleHere {
-                    if self.callableMatchesSource(c: cand, source: source) {
+                if self.callableMatchesSource(c: cand, source: source) {
                         if f.nameId == qNameId {
                             if self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
                                 val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
@@ -987,7 +968,6 @@ pub impl Comp {
                                 }
                             }
                         }
-                    }
                 }
             }
             i += 1

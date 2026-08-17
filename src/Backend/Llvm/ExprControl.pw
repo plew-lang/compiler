@@ -264,7 +264,7 @@ pub impl LlvmCtx {
     // enclosing function's own Result with that error — converting E' -> E through E's
     // `from` factory when the error types differ; on `Ok(v)` yield `v` and continue. Couples
     // to @Std/Core Result (Ok / Err). Only valid in a fn returning a Result.
-    inout fn genLlvmTry(c: inout Comp, expr: U64) -> LLVMValueRef {
+    inout fn genLlvmTry(c: inout Comp, tryId: U64, expr: U64) -> LLVMValueRef {
         val exprRef: U64 = self.exprTypeRef(c: inout c, id: expr)
         val ege: U64 = self.genEnumSlot(c: inout c, ref: exprRef)
         val rge: U64 = self.genEnumSlot(c: inout c, ref: self.curRetRef)
@@ -328,15 +328,15 @@ pub impl LlvmCtx {
                     // (`C` "compatible with" `any P`), skipping a required conversion. The
                     // frontend already rejects a missing `from`, so the error below is a
                     // defensive backstop.
-                    val ffi: U64 = c.typeRefFromFactoryIdx(errRef: fnErrRef, srcRef: opErrRef)
+                    val ffi: U64 = c.bodyCallee(exprId: tryId)
                     if ffi >= c.arena.funcs.count() {
-                        c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` cannot convert the operand's error type to the function's error type — define a `from` factory on the function's error type that takes the operand's error (spec/13)")
+                        c.errorAt(offset: c.exprOffset(id: expr), msg: "internal error: Mono did not finalize the `try` error-conversion factory")
                     }
                     mut val cav: Array[LLVMValueRef] = []
                     cav.append(errVal)
-                    // the error-conversion factory (free fn or assoc fn — no self) is its
-                    // own 0-type-arg `gf` instance (B4-1).
-                    val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: [], recvInstRef: 0U64)
+                    val factoryArgs: Array[U64] = c.bodyCalleeTypeArgs(exprId: tryId)
+                    val factoryRecv: U64 = c.bodyCalleeReceiverRef(exprId: tryId)
+                    val fgslot: U64 = self.ensureFnInst(c: inout c, fnIdx: ffi, args: factoryArgs, recvInstRef: factoryRecv)
                     if fgslot >= self.genFnK.count() {
                         c.errorAt(offset: c.exprOffset(id: expr), msg: "`try` error conversion failed to instantiate the `from` factory (internal: ensureFnInst returned no slot)")
                     }

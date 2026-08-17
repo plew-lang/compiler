@@ -1,8 +1,8 @@
 import @Std/Io with { print }
 
-// Bare `s.a()` must be rejected: `a` reaches its dependency `b` through both
-// C and D (multi-path intermediate), so no single conformance path is implied.
-// Must select with `s#C.a()` / `s#D.a()` (see trait_subject_chain_conflict run test).
+// The program is rejected at the shared `self.b()` body call: B has distinct
+// C/D witnesses, and an outer call cannot select one for that body.  This
+// particular use site is bare as well, but `s#C.a()` would be rejected too.
 trait C { fn cv() -> I64 }
 trait D { fn dv() -> I64 }
 trait B { fn b() -> I64 }

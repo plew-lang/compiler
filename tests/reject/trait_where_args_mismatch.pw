@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+trait Into[U] { fn into() -> U }
+
+struct S { pub val n: I64 }
+pub impl S { factory }
+pub impl S as Into[I64] { fn into() -> I64 { return self.n } }
+
+fn requireString[T](value: T) -> String where T: Into[String] {
+    return value.into()
+}
+
+fn main() {
+    val s: S = <S n=42I64 />
+    print(requireString(value: s))
+}

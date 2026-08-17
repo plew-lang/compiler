@@ -103,12 +103,10 @@ pub impl Comp {
         // generic call (`key.hash[H]` -> `String.hash[SipHasher]`) registers its instance
         // before the transitive worklist below scans it.
         self.scanGenInstMethodBodies()
-        // transitive instantiation: walk each generic free function instance's body
-        // with its type-parameter env active (so type-parameter-typed args resolve to
-        // concrete types), registering the instances it calls. The loop re-reads
-        // self.monoWork.fnInsts.count() each step, so newly appended instances are scanned too — a
-        // worklist that runs to fixpoint (a generic fn calling another generic fn).
-        mut val si: U64 = 0
+        // Transitive instantiation discovers generic layouts before final-callable
+        // closure. Its call selection is provisional only; finalization below
+        // replaces every callable identity under the concrete body instance.
+        mut val si: U64 = 0U64
         while si < self.monoWork.fnInsts.count() {
             val fin: FnInst = self.monoWork.fnInsts[si]
             val gf: Func = self.arena.funcs[fin.fnIdx]
