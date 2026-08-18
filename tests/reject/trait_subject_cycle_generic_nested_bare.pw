@@ -1,0 +1,9 @@
+// The substitution crosses a nested type constructor. The return to B[U]
+// closes a real instance cycle, not merely a same-owner head cycle.
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[Array[T]] as B[T] {}
+impl[U] B[U] as A[Array[U]] {}
+
+fn main() {}

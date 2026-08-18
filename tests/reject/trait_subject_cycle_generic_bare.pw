@@ -1,0 +1,9 @@
+// Alpha-renamed generic binders still denote the same instance transition:
+// A[T] -> B[T] -> A[T].
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T] as B[T] {}
+impl[U] B[U] as A[U] {}
+
+fn main() {}

@@ -1,0 +1,9 @@
+// A generic edge may compose with a specialized edge. The cycle exists for
+// the concrete instance A[I64], even though it is not a declaration-text loop.
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T] as B[T] {}
+impl B[I64] as A[I64] {}
+
+fn main() {}

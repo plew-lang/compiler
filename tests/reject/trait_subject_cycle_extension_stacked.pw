@@ -1,0 +1,23 @@
+// Neither extension alone forms a cycle. The cycle becomes active only when
+// the caller explicitly composes both source bundles.
+trait A {}
+trait B {}
+
+struct S {}
+pub impl S { factory }
+pub impl S as A {}
+pub impl S as B {}
+
+extension E {
+    impl S as A {}
+    impl A as B {}
+}
+extension F {
+    impl S as B {}
+    impl B as A {}
+}
+
+fn main() {
+    val s: S = <S />
+    val viewed = s#E#F
+}

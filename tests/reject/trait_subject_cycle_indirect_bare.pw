@@ -1,0 +1,11 @@
+// A cycle may be longer than one reciprocal pair. Every bare edge is active,
+// so the declaration graph A -> B -> C -> A is invalid.
+trait A {}
+trait B {}
+trait C {}
+
+impl A as B {}
+impl B as C {}
+impl C as A {}
+
+fn main() {}

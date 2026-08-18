@@ -1,0 +1,22 @@
+// An extension edge is inactive at its declaration. Applying #E activates it
+// alongside the bare A -> B edge, exposing A -> B -> A at the view site.
+trait A {}
+trait B {}
+
+impl A as B {}
+
+struct S {}
+pub impl S { factory }
+pub impl S as A {}
+
+extension E {
+    // This direct conformance makes #E a valid view for S independently of
+    // the separate P1 gap around trait-subject-derived view activation.
+    impl S as A {}
+    impl B as A {}
+}
+
+fn main() {
+    val s: S = <S />
+    val viewed = s#E
+}
