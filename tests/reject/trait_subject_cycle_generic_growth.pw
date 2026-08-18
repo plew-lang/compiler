@@ -1,0 +1,10 @@
+// Repeating this owner cycle requires T = Array[T].  It would derive an
+// unbounded A[T], A[Array[T]], A[Array[Array[T]]] ... closure, so it is a
+// declaration-time instance-growth cycle rather than a deferred solver issue.
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T] as B[Array[T]] {}
+impl[T] B[T] as A[T] {}
+
+fn main() {}

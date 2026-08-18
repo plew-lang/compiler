@@ -201,6 +201,7 @@ pub impl Comp {
 
     inout fn boundAllowsExtension(fnIdx: U64, tpStart: U64, tpLen: U64, extStart: U64, extLen: U64) -> Bool {
         val extId: U64 = intern(c: inout self, start: extStart, len: extLen)
+        val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val fi: U64 = 0U64
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
@@ -208,13 +209,37 @@ pub impl Comp {
                 mut val bi: U64 = 0U64
                 while bi < self.decls.funcBounds.count() {
                     val bound: FuncBound = self.decls.funcBounds[bi]
-                    if bound.fnIdx == fnIdx && bound.paramNameId == intern(c: inout self, start: tpStart, len: tpLen) {
+                    if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         if spansEqual(c: inout self, aStart: bound.traitStart, aLen: bound.traitLen, bStart: f.recvStart, bLen: f.recvLen) { return true }
                     }
                     bi += 1U64
                 }
             }
             fi += 1U64
+        }
+        // An extension can be justified by a trait-subject conformance even
+        // when it contributes no methods.  The abstract checker must ask the
+        // same source question as normal view formation, not infer it from a
+        // callable witness that happens to exist in the extension.
+        mut val ci: U64 = 0U64
+        while ci < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[ci]
+            if cf.extId == extId {
+                val subjectOwner: U64 = self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen)
+                mut val bi: U64 = 0U64
+                while bi < self.decls.funcBounds.count() {
+                    val bound: FuncBound = self.decls.funcBounds[bi]
+                    if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
+                        // Both ids are resolved during lowering.  Compare them rather
+                        // than their source spans: a bound may use an imported alias.
+                        if subjectOwner != 0U64 && cf.typeId == bound.traitNameId {
+                            if self.sameTypeRefListAlphaEq(a: cf.subjectArgs, b: bound.traitArgs, aParams: cf.typeParams, bParams: self.arena.funcs[fnIdx].typeParams) { return true }
+                        }
+                    }
+                    bi += 1U64
+                }
+            }
+            ci += 1U64
         }
         return false
     }

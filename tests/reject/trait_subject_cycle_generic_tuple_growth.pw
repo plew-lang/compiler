@@ -1,0 +1,9 @@
+// Growth is structural, not an Array special case: T = (T, T) is also an
+// occurs-check failure and must be rejected.
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T] as B[(left: T, right: T)] {}
+impl[T] B[T] as A[T] {}
+
+fn main() {}
