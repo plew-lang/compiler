@@ -90,48 +90,158 @@ pub impl Comp {
         }
     }
 
-    // The concrete-conformance fixpoint is deliberately idempotent: it must not
-    // append `S as A` again when an acyclic transitive path reaches an already-known
-    // fact. That deduplication is not a validity check for the declaration graph,
-    // however. Before the fixpoint runs, reject a cycle among the always-active bare
-    // trait-subject edges themselves (spec/09). Closed instances compare their complete
-    // owner + argument key; open generic patterns need path-local substitutions and are
-    // intentionally handled by the next increment.
-    inout fn bareClosedTraitSubjectEdge(cf: Conform) -> Bool {
-        if cf.derived || cf.extId != 0U64 || self.isMacrointerfaceCompatConform(cf: cf) {
-            return false
-        }
-        if cf.typeParams.count() != 0U64 {
-            return false
-        }
-        if self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != cf.typeStart {
-            return false
-        }
-        return self.canonicalTraitOwner(start: cf.traitStart, len: cf.traitLen) == cf.traitStart
+    // Trait-subject conformances are directed instance edges.  The concrete
+    // conformance fixpoint is intentionally idempotent, but its fact
+    // deduplication is not declaration-graph validation: a cycle is invalid
+    // even if the fixpoint happens to stop adding duplicate facts.
+    //
+    // Every term carries the index of the declaration that introduced its
+    // binders.  This lets one DFS compose `impl[T]` substitutions across an
+    // arbitrary path instead of conflating same-spelled variables from two
+    // declarations (or merely comparing generic patterns pairwise).
+    inout fn traitCycleBinder(ref: U64, scope: U64) -> U64 {
+        if scope >= self.decls.conforms.count() { return 4000000000U64 }
+        return self.plainBinder(ref: ref, params: self.decls.conforms[scope].typeParams)
     }
 
-    inout fn sameClosedTraitInstance(aStart: U64, aArgs: Array[U64], bStart: U64, bArgs: Array[U64]) -> Bool {
-        if aStart != bStart { return false }
-        val noParams: Array[Bind] = []
-        return self.sameTypeRefListAlphaEq(a: aArgs, b: bArgs, aParams: noParams, bParams: noParams)
+    inout fn traitCycleBindIndex(binds: Array[TraitCycleBind], scope: U64, nameId: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < binds.count() {
+            if binds[i].scope == scope && binds[i].nameId == nameId { return i }
+            i += 1U64
+        }
+        return binds.count()
     }
 
-    inout fn bareClosedTraitPathReaches(fromStart: U64, fromArgs: Array[U64], targetStart: U64, targetArgs: Array[U64], depth: U64) -> Bool {
-        if self.sameClosedTraitInstance(aStart: fromStart, aArgs: fromArgs, bStart: targetStart, bArgs: targetArgs) {
+    inout fn traitCycleOccurs(term: TraitCycleTerm, scope: U64, nameId: U64, binds: Array[TraitCycleBind]) -> Bool {
+        val binder: U64 = self.traitCycleBinder(ref: term.ref, scope: term.scope)
+        if term.scope < self.decls.conforms.count() && binder < self.decls.conforms[term.scope].typeParams.count() {
+            val bound: U64 = self.traitCycleBindIndex(binds: binds, scope: term.scope, nameId: self.decls.conforms[term.scope].typeParams[binder].nameId)
+            if bound < binds.count() {
+                return self.traitCycleOccurs(term: <TraitCycleTerm ref=binds[bound].ref scope=binds[bound].refScope />, scope: scope, nameId: nameId, binds: binds)
+            }
+            return term.scope == scope && self.decls.conforms[term.scope].typeParams[binder].nameId == nameId
+        }
+        if term.ref == 0U64 || term.ref >= self.arena.types.count() { return false }
+        val t: TypeRef = self.arena.types[term.ref]
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            if self.traitCycleOccurs(term: <TraitCycleTerm ref=t.args[i] scope=term.scope />, scope: scope, nameId: nameId, binds: binds) { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn unifyTraitCycleTerms(a: TraitCycleTerm, b: TraitCycleTerm, binds: inout Array[TraitCycleBind]) -> Bool {
+        val ab: U64 = self.traitCycleBinder(ref: a.ref, scope: a.scope)
+        val bb: U64 = self.traitCycleBinder(ref: b.ref, scope: b.scope)
+        val aIsBinder: Bool = a.scope < self.decls.conforms.count() && ab < self.decls.conforms[a.scope].typeParams.count()
+        val bIsBinder: Bool = b.scope < self.decls.conforms.count() && bb < self.decls.conforms[b.scope].typeParams.count()
+        // Follow either existing substitution before deciding which free binder
+        // to bind.  In particular, after `T = U`, comparing free `U` with `T`
+        // must succeed as the same instance; binding U back to its own alias
+        // would instead trip the occurs check and hide a generic cycle.
+        if aIsBinder {
+            val aName: U64 = self.decls.conforms[a.scope].typeParams[ab].nameId
+            val aFound: U64 = self.traitCycleBindIndex(binds: binds, scope: a.scope, nameId: aName)
+            if aFound < binds.count() {
+                return self.unifyTraitCycleTerms(a: <TraitCycleTerm ref=binds[aFound].ref scope=binds[aFound].refScope />, b: b, binds: inout binds)
+            }
+        }
+        if bIsBinder {
+            val bName: U64 = self.decls.conforms[b.scope].typeParams[bb].nameId
+            val bFound: U64 = self.traitCycleBindIndex(binds: binds, scope: b.scope, nameId: bName)
+            if bFound < binds.count() {
+                return self.unifyTraitCycleTerms(a: a, b: <TraitCycleTerm ref=binds[bFound].ref scope=binds[bFound].refScope />, binds: inout binds)
+            }
+        }
+        if aIsBinder && bIsBinder && a.scope == b.scope && ab == bb { return true }
+        if aIsBinder {
+            val nameId: U64 = self.decls.conforms[a.scope].typeParams[ab].nameId
+            if self.traitCycleOccurs(term: b, scope: a.scope, nameId: nameId, binds: binds) { return false }
+            binds.append(<TraitCycleBind scope=a.scope nameId=nameId ref=b.ref refScope=b.scope />)
             return true
         }
-        // Every useful simple path contains at most one occurrence of each declared
-        // edge. The bound makes this validator total even while reporting a different
-        // cycle elsewhere in the graph.
-        if depth >= self.decls.conforms.count() { return false }
+        if bIsBinder { return self.unifyTraitCycleTerms(a: b, b: a, binds: inout binds) }
+        if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.types.count() || b.ref >= self.arena.types.count() { return a.ref == b.ref }
+        val ta: TypeRef = self.arena.types[a.ref]
+        val tb: TypeRef = self.arena.types[b.ref]
+        if ta.nameId != tb.nameId || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return false }
+        mut val i: U64 = 0U64
+        while i < ta.args.count() {
+            if !(self.unifyTraitCycleTerms(a: <TraitCycleTerm ref=ta.args[i] scope=a.scope />, b: <TraitCycleTerm ref=tb.args[i] scope=b.scope />, binds: inout binds)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn copyTraitCycleBinds(binds: Array[TraitCycleBind]) -> Array[TraitCycleBind] {
+        mut val copied: Array[TraitCycleBind] = []
+        mut val i: U64 = 0U64
+        while i < binds.count() {
+            copied.append(binds[i])
+            i += 1U64
+        }
+        return copied
+    }
+
+    inout fn traitCycleNodeMatches(a: TraitCycleNode, b: TraitCycleNode, binds: inout Array[TraitCycleBind]) -> Bool {
+        if a.owner != b.owner || a.args.count() != b.args.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.args.count() {
+            if !(self.unifyTraitCycleTerms(a: <TraitCycleTerm ref=a.args[i] scope=a.scope />, b: <TraitCycleTerm ref=b.args[i] scope=b.scope />, binds: inout binds)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn traitCycleEdgeActive(cf: Conform, activeExtIds: Array[U64]) -> Bool {
+        if cf.derived || self.isMacrointerfaceCompatConform(cf: cf) { return false }
+        if self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != cf.typeStart { return false }
+        if self.canonicalTraitOwner(start: cf.traitStart, len: cf.traitLen) != cf.traitStart { return false }
+        if cf.extId == 0U64 { return true }
+        mut val i: U64 = 0U64
+        while i < activeExtIds.count() {
+            if activeExtIds[i] == cf.extId { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn traitCycleUsesEdge(used: Array[U64], edge: U64) -> Bool {
+        mut val i: U64 = 0U64
+        while i < used.count() {
+            if used[i] == edge { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn traitCyclePathCloses(node: TraitCycleNode, stack: Array[TraitCycleNode], binds: inout Array[TraitCycleBind]) -> Bool {
+        mut val i: U64 = 0U64
+        while i < stack.count() {
+            if self.traitCycleNodeMatches(a: node, b: stack[i], binds: inout binds) { return true }
+            i += 1U64
+        }
+        return false
+    }
+
+    inout fn traitCyclePathReaches(node: TraitCycleNode, stack: Array[TraitCycleNode], used: Array[U64], binds: Array[TraitCycleBind], activeExtIds: Array[U64]) -> Bool {
+        mut val closedBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: binds)
+        if self.traitCyclePathCloses(node: node, stack: stack, binds: inout closedBinds) { return true }
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val edge: Conform = self.decls.conforms[ci]
-            if self.bareClosedTraitSubjectEdge(cf: edge) {
-                if self.sameClosedTraitInstance(aStart: edge.typeStart, aArgs: edge.subjectArgs, bStart: fromStart, bArgs: fromArgs) {
-                    if self.bareClosedTraitPathReaches(fromStart: edge.traitStart, fromArgs: edge.traitArgs, targetStart: targetStart, targetArgs: targetArgs, depth: depth + 1U64) {
-                        return true
-                    }
+            if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) && !(self.traitCycleUsesEdge(used: used, edge: ci)) {
+                mut val nextBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: binds)
+                val subject: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=edge.subjectArgs scope=ci />
+                if self.traitCycleNodeMatches(a: node, b: subject, binds: inout nextBinds) {
+                    mut val nextStack: Array[TraitCycleNode] = stack
+                    nextStack.append(node)
+                    mut val nextUsed: Array[U64] = used
+                    nextUsed.append(ci)
+                    val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=edge.traitArgs scope=ci />
+                    if self.traitCyclePathReaches(node: target, stack: nextStack, used: nextUsed, binds: nextBinds, activeExtIds: activeExtIds) { return true }
                 }
             }
             ci += 1U64
@@ -139,13 +249,23 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkBareClosedTraitSubjectCycles() {
+    // `activeExtIds` is empty for the declaration-time bare graph.  A view
+    // passes its complete extension-source set, making extensions edge-active
+    // only when the programmer explicitly selected them.
+    inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) {
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val edge: Conform = self.decls.conforms[ci]
-            if self.bareClosedTraitSubjectEdge(cf: edge) {
-                if self.bareClosedTraitPathReaches(fromStart: edge.traitStart, fromArgs: edge.traitArgs, targetStart: edge.typeStart, targetArgs: edge.subjectArgs, depth: 0U64) {
-                    self.errorAt(offset: edge.defOffset, msg: "trait-to-trait conformance cycle")
+            if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
+                val source: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=edge.subjectArgs scope=ci />
+                val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=edge.traitArgs scope=ci />
+                val stack: Array[TraitCycleNode] = [source]
+                val used: Array[U64] = [ci]
+                val binds: Array[TraitCycleBind] = []
+                if self.traitCyclePathReaches(node: target, stack: stack, used: used, binds: binds, activeExtIds: activeExtIds) {
+                    mut val report: U64 = edge.defOffset
+                    if offset != 0U64 { report = offset }
+                    self.errorAt(offset: report, msg: "trait-to-trait conformance cycle")
                 }
             }
             ci += 1U64

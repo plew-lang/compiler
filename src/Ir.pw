@@ -920,6 +920,32 @@ export struct UnifyBind {
 }
 pub impl UnifyBind { factory }
 
+// A path-local substitution used by the trait-subject cycle validator.  Unlike
+// `UnifyBind`, binders here can come from any number of conformance edges, so a
+// declaration-local `scope` (the Conform table index) is part of their identity.
+// This stays in IR rather than overloading `UnifyBind`'s two-side protocol: the
+// validator composes substitutions along an arbitrary graph path.
+export struct TraitCycleTerm {
+    pub val ref: U64
+    pub val scope: U64
+}
+pub impl TraitCycleTerm { factory }
+
+export struct TraitCycleNode {
+    pub val owner: U64
+    pub val args: Array[U64]
+    pub val scope: U64
+}
+pub impl TraitCycleNode { factory }
+
+export struct TraitCycleBind {
+    pub val scope: U64
+    pub val nameId: U64
+    pub val ref: U64
+    pub val refScope: U64
+}
+pub impl TraitCycleBind { factory }
+
 // A module-level variable (spec/15): `val x = e` / `mut val x = e`. `letStmt` is
 // the arena `Stmt.Let` the shared parser produced (name / optional type /
 // initializer); the backend emits an LLVM global, runs every global's init once in
