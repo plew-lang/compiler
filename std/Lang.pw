@@ -15,7 +15,7 @@
 // (spec/15): its `K: Hash` bound and `SipHasher` resolve from @Std/Hash. `Array`'s
 // storage floor `Buffer` is a non-ambient primitive imported from @Std/Core.
 import @Std/Hash with { Hash, Hasher, SipHasher }
-import @Std/Core with { Buffer, Index, IndexSet, Iterator, Iterable }
+import @Std/Core with { Buffer, Eq, Index, IndexSet, Iterator, Iterable }
 
 // Re-export the primitive scalar types from @Std/Core (where they are DEFINED, with
 // their operator/conversion witnesses — coherent). The re-export makes them ambient:

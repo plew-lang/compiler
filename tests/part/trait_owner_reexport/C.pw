@@ -1,0 +1,5 @@
+export trait Leaked {}
+
+pub impl Leaked {
+    fn source() -> String { return "other" }
+}

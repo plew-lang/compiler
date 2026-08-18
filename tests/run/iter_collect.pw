@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { Iterator }
 
 // `collect()` — a provided Iterator terminal returning `Array[Item]` (the return-type
 // grounding extends to arrays: `Array[Item]` declares as `Array[I64]`). Works on a bare

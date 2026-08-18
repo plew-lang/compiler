@@ -198,21 +198,17 @@ pub impl Comp {
     }
 
     inout fn resolveTraitDef(cf: Conform) -> U64 {
-        mut val firstCandidate: U64 = self.decls.traits.count()
         mut val ti: U64 = 0
         while ti < self.decls.traits.count() {
             val t: TraitDef = self.decls.traits[ti]
-            if t.nameId == cf.traitId && t.typeParams.count() == cf.traitArgs.count() {
-                if firstCandidate == self.decls.traits.count() {
-                    firstCandidate = ti
-                }
-                if self.confWitnessesAll(cf: cf, t: t) {
-                    return ti
-                }
-            }
+            // `Conform.traitStart` is the declaration owner selected while
+            // lowering the authored `as Trait` occurrence.  Do not recover a
+            // trait from spelling/arity here: same-spelling declarations may
+            // have different requirements.
+            if t.nameStart == cf.traitStart { return ti }
             ti += 1
         }
-        return firstCandidate
+        return self.decls.traits.count()
     }
 
     inout fn checkAnyFormation() {
@@ -292,9 +288,7 @@ pub impl Comp {
             val ti: U64 = self.resolveTraitDef(cf: cf)
             if ti < self.decls.traits.count() {
                 val t: TraitDef = self.decls.traits[ti]
-                // re-check reqs on the resolved def: a fully-witnessed def passes; if
-                // resolveTraitDef fell back to the first candidate (none satisfied),
-                // this reports which requirement is missing.
+                // Re-check the requirements of the exact declaration owner.
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
                     val r: Func = t.reqs[ri]

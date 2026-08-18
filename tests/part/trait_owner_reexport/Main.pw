@@ -1,0 +1,13 @@
+// Re-export binding preserves A.Leaked's declaration identity even when a
+// separately loaded module declares a same-spelling trait.
+import ./B with { Leaked }
+import ./C
+
+struct S {}
+pub impl S { factory }
+pub impl S as Leaked {}
+
+fn main() {
+    val s: S = <S />
+    val fromA: I64 = s#Leaked.source()
+}

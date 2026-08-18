@@ -1,0 +1,8 @@
+// A trait selector is a named source selection, not an implicit method use.
+// Importing S alone does not bind P for `#P`.
+import ./A with { S }
+
+fn main() {
+    val s: S = <S />
+    s#P.chosen()
+}

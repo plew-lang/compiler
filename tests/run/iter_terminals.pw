@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { Iterator }
 
 // Terminal Iterator combinators (spec/08): count / fold / any / all consume an
 // iterator by driving `next()` to exhaustion. Shown on a direct (concrete)

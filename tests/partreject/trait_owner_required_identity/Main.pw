@@ -1,0 +1,10 @@
+// Same spelling and arity do not make A.P and B.P the same trait.  The
+// conformance below names B.P, whose requirement must be checked.
+import ./A with { P as AP }
+import ./B with { P as BP }
+
+struct S {}
+pub impl S { factory }
+pub impl S as BP[I64] {}
+
+fn main() {}

@@ -1,0 +1,9 @@
+export trait P {}
+
+pub impl P {
+    fn chosen() -> I64 { return 1I64 }
+}
+
+export struct S {}
+pub impl S { factory }
+pub impl S as P {}

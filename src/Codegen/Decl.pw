@@ -63,86 +63,141 @@ pub impl Comp {
         return 0U64
     }
 
-    // Resolve a trait spelling at its authored use site once.  `importOrigins`
-    // is the missing last hop for `P as AP`: importAliases maps AP to the P
-    // spelling in the importing file, while importOrigins maps that spelling
-    // to A.pw/B.pw.  All later logic stores this declaration offset.
-    inout fn traitOwnerAtUse(start: U64, len: U64, arity: U64) -> U64 {
-        val useMod: U64 = self.moduleOf(offset: start)
+    // A selector reaches later passes as an interned span.  Only the canonical
+    // declaration span is a trait identity there: an unresolved spelling must
+    // never become a trait merely because another module happens to declare
+    // the same text.
+    inout fn canonicalTraitOwner(start: U64, len: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val owner: TraitOwner = self.decls.traitOwners[i]
+            if owner.nameStart == start && owner.nameLen == len { return owner.nameStart }
+            i += 1U64
+        }
+        return 0U64
+    }
+
+    // Resolve a trait declaration inside one module.  TraitOwner is available
+    // before trait bodies are lowered, so this is safe during impl lowering.
+    inout fn traitOwnerInModule(mod: U64, start: U64, len: U64, arity: U64) -> U64 {
         val nameId: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0U64
         while i < self.decls.traitOwners.count() {
             val t: TraitOwner = self.decls.traitOwners[i]
-            if t.nameId == nameId && t.arity == arity {
-                if self.moduleOf(offset: t.nameStart) == useMod {
-                    return t.nameStart
-                }
-            }
-            i += 1U64
-        }
-        i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == useMod {
-                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                    val realId: U64 = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
-                    mut val ti: U64 = 0U64
-                    while ti < self.decls.traitOwners.count() {
-                        val t: TraitOwner = self.decls.traitOwners[ti]
-                        if t.nameId == realId && t.arity == arity && self.moduleOf(offset: t.nameStart) == origin.fieldLen {
-                            return t.nameStart
-                        }
-                        ti += 1U64
-                    }
-                }
-            }
-            i += 1U64
-        }
-        // Some language-provided protocol traits (for example Iterator) are
-        // intentionally usable without an explicit import. Preserve that
-        // established surface without reintroducing name-based identity: only
-        // a globally unique declaration with this spelling and arity is a
-        // valid fallback. Same-spelled declarations remain unresolved until a
-        // local/import alias chooses one.
-        mut val uniqueOwner: U64 = 0U64
-        i = 0U64
-        while i < self.decls.traitOwners.count() {
-            val t: TraitOwner = self.decls.traitOwners[i]
-            if t.nameId == nameId && t.arity == arity {
-                if uniqueOwner != 0U64 && uniqueOwner != t.nameStart { return 0U64 }
-                uniqueOwner = t.nameStart
-            }
-            i += 1U64
-        }
-        return uniqueOwner
-    }
-
-    inout fn traitOwnerForSelector(siteOffset: U64, text: String) -> U64 {
-        val textLen: U64 = text.bytes().count()
-        val useMod: U64 = self.moduleOf(offset: siteOffset)
-        mut val i: U64 = 0U64
-        while i < self.decls.traitOwners.count() {
-            val t: TraitOwner = self.decls.traitOwners[i]
-            if self.moduleOf(offset: t.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: text) {
+            if t.nameId == nameId && t.arity == arity && self.moduleOf(offset: t.nameStart) == mod {
                 return t.nameStart
             }
             i += 1U64
         }
-        i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: origin.nameStart, len: origin.nameLen, kw: text) {
-                val realId: U64 = intern(c: inout self, start: origin.fieldStart, len: origin.nameId)
-                mut val ti: U64 = 0U64
-                while ti < self.decls.traitOwners.count() {
-                    val t: TraitOwner = self.decls.traitOwners[ti]
-                    if t.nameId == realId && self.moduleOf(offset: t.nameStart) == origin.fieldLen { return t.nameStart }
-                    ti += 1U64
+        return 0U64
+    }
+
+    // A public surface may forward a trait through any number of re-exports.
+    // Resolve that forwarding before returning the declaration owner; a barrel
+    // is never a new trait identity.
+    inout fn traitOwnerFromSurface(surfaceMod: U64, start: U64, len: U64, arity: U64) -> U64 {
+        val local: U64 = self.traitOwnerInModule(mod: surfaceMod, start: start, len: len, arity: arity)
+        if local != 0U64 { return local }
+        mut val i: U64 = 0U64
+        while i < self.modules.reExportOrigins.count() {
+            val origin: Bind = self.modules.reExportOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == surfaceMod {
+                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
+                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
                 }
             }
             i += 1U64
         }
         return 0U64
+    }
+
+    // Resolve a trait spelling at its authored use site once: lexical local
+    // declaration, then the import surface (which may be a barrel), then its
+    // declaration owner.  Traits are not ambient; absence of such a binding is
+    // intentionally unresolved.
+    inout fn traitOwnerAtUse(start: U64, len: U64, arity: U64) -> U64 {
+        val useMod: U64 = self.moduleOf(offset: start)
+        val local: U64 = self.traitOwnerInModule(mod: useMod, start: start, len: len, arity: arity)
+        if local != 0U64 { return local }
+        mut val i: U64 = 0U64
+        i = 0U64
+        while i < self.modules.importOrigins.count() {
+            val origin: Bind = self.modules.importOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == useMod {
+                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
+                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
+                }
+            }
+            i += 1U64
+        }
+        return 0U64
+    }
+
+    // A selector has no written type arguments.  It may therefore name any
+    // arity, but only when its visible surface identifies one declaration;
+    // otherwise later source selection must diagnose the ambiguity.
+    inout fn traitOwnerInModuleForSelector(mod: U64, start: U64, len: U64) -> U64 {
+        val textId: U64 = intern(c: inout self, start: start, len: len)
+        mut val found: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if self.moduleOf(offset: t.nameStart) == mod && t.nameId == textId {
+                if found != 0U64 && found != t.nameStart { return 0U64 }
+                found = t.nameStart
+            }
+            i += 1U64
+        }
+        return found
+    }
+
+    inout fn traitOwnerFromSurfaceForSelector(surfaceMod: U64, start: U64, len: U64) -> U64 {
+        val local: U64 = self.traitOwnerInModuleForSelector(mod: surfaceMod, start: start, len: len)
+        if local != 0U64 { return local }
+        mut val found: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < self.modules.reExportOrigins.count() {
+            val origin: Bind = self.modules.reExportOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == surfaceMod {
+                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
+                    val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+                    if owner != 0U64 {
+                        if found != 0U64 && found != owner { return 0U64 }
+                        found = owner
+                    }
+                }
+            }
+            i += 1U64
+        }
+        return found
+    }
+
+    inout fn traitOwnerForSelector(siteOffset: U64, text: String) -> U64 {
+        val useMod: U64 = self.moduleOf(offset: siteOffset)
+        mut val found: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if self.moduleOf(offset: t.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: text) {
+                if found != 0U64 && found != t.nameStart { return 0U64 }
+                found = t.nameStart
+            }
+            i += 1U64
+        }
+        if found != 0U64 { return found }
+        i = 0U64
+        while i < self.modules.importOrigins.count() {
+            val origin: Bind = self.modules.importOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == useMod && rangeEquals(bytes: self.arena.bytes, start: origin.nameStart, len: origin.nameLen, kw: text) {
+                val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+                if owner != 0U64 {
+                    if found != 0U64 && found != owner { return 0U64 }
+                    found = owner
+                }
+            }
+            i += 1U64
+        }
+        return found
     }
 
     inout fn traitModuleByOwner(owner: U64) -> U64 {

@@ -1,0 +1,3 @@
+export trait P[Item] {
+    fn required()
+}

@@ -10,8 +10,8 @@ pub impl Comp {
     // to source identities before member lookup; candidate type matching must
     // never silently choose one source for the user.
     inout fn viewSourceCount(typeStart: U64, typeLen: U64, typeRef: U64, srcStart: U64, srcLen: U64) -> U64 {
-        val srcId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
         val typeId: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        val traitOwner: U64 = self.canonicalTraitOwner(start: srcStart, len: srcLen)
         mut val count: U64 = 0U64
         if self.extAppliesToType(extStart: srcStart, extLen: srcLen, typeStart: typeStart, typeLen: typeLen, typeRef: typeRef) { count = 1U64 }
         mut val firstTraitOwner: U64 = 0U64
@@ -19,11 +19,11 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
-            if cf.extId == 0U64 && cf.typeId == typeId && cf.traitId == srcId {
+            if traitOwner != 0U64 && cf.extId == 0U64 && cf.typeId == typeId && cf.traitStart == traitOwner {
                 val applies: Bool = self.conformanceSubjectMatches(cf: cf, typeRef: typeRef)
                 if applies {
                     val arity: U64 = cf.traitArgs.count()
-                    val owner: U64 = self.traitDeclOffsetByIdArity(traitId: srcId, arity: arity)
+                    val owner: U64 = cf.traitStart
                     if firstTraitOwner == 0U64 {
                         firstTraitOwner = owner
                         firstTraitArity = arity
@@ -112,7 +112,7 @@ pub impl Comp {
         // extension may have the same spelling; accept the view when either
         // source is applicable and let callable lookup select (or loudly reject
         // an ambiguity between) the concrete source candidates.
-        val traitNamed: Bool = self.isTraitName(start: srcStart, len: srcLen)
+        val traitNamed: Bool = self.canonicalTraitOwner(start: srcStart, len: srcLen) != 0U64
         // A trait view is an application of a concrete conformance, not a
         // name-level statement about the receiver head.  This is deliberately
         // the same query used by `where`: `Box[I64] as P` must not make

@@ -1,6 +1,7 @@
 // operator trait Output != Self (spec/12): an operator's result type is the impl's
 // `type Output` binding, not Self — e.g. `Point - Point` yields a `Vector`.
 import @Std/Io with { print }
+import @Std/Core with { Add, Sub }
 
 struct Point { pub val x: I64  pub val y: I64 }
 pub impl Point { factory }

@@ -599,11 +599,15 @@ pub impl Comp {
         if self.extAppliesToType(extStart: self.interner.starts[sourceId - 1U64], extLen: self.interner.lens[sourceId - 1U64], typeStart: recvStart, typeLen: recvLen, typeRef: recvRef) {
             found = <ViewSource kind=1U64 id=sourceId owner=sourceId arity=0U64 />
         }
+        mut val traitOwner: U64 = sourceOwner
+        if self.canonicalTraitOwner(start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) == 0U64 {
+            traitOwner = self.canonicalTraitOwner(start: self.interner.starts[sourceId - 1U64], len: self.interner.lens[sourceId - 1U64])
+        }
         val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0U64
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
-            if cf.extId == 0U64 && cf.typeId == recvId && cf.traitId == sourceId && (sourceOwner == 0U64 || cf.traitStart == sourceOwner) {
+            if traitOwner != 0U64 && cf.extId == 0U64 && cf.typeId == recvId && cf.traitStart == traitOwner {
                 if self.conformanceSubjectMatches(cf: cf, typeRef: recvRef) {
                     val key: ViewSource = <ViewSource kind=2U64 id=sourceId owner=cf.traitStart arity=cf.traitArgs.count() />
                     if found.kind == 0U64 {

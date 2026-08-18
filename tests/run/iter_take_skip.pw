@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { Iterator }
 
 // Lazy Iterator adapters `take(count:)` (a prefix) and `skip(count:)` (drop a prefix).
 // Each builds a one-field-plus-count adapter struct (TakeIter / SkipIter) wired through

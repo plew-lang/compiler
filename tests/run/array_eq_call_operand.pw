@@ -1,4 +1,5 @@
 import @Std/Io with { print }
+import @Std/Core with { Eq }
 
 // An array `==` desugars to `Array.eq` regardless of the OPERAND FORM. exprStructIdx
 // must recognise an array-RETURNING call/method as an Array value (not the element

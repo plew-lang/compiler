@@ -1,0 +1,8 @@
+// Loading a module through one export does not bind its other trait names.
+import ./A with { marker }
+
+struct S {}
+pub impl S { factory }
+pub impl S as Leaked {}
+
+fn main() {}
