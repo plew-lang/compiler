@@ -1,0 +1,3 @@
+// This trait intentionally has no requirements. It shares both spelling and
+// arity with B.P, but is a distinct declaration.
+export trait P {}

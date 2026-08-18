@@ -1,0 +1,10 @@
+// A bare trait-to-trait conformance cycle is always active and must be
+// diagnosed at declaration checking, rather than being deferred to a solver
+// recursion when a conforming value is used.
+trait A {}
+trait B {}
+
+impl A as B {}
+impl B as A {}
+
+fn main() {}

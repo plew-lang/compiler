@@ -90,6 +90,67 @@ pub impl Comp {
         }
     }
 
+    // The concrete-conformance fixpoint is deliberately idempotent: it must not
+    // append `S as A` again when an acyclic transitive path reaches an already-known
+    // fact. That deduplication is not a validity check for the declaration graph,
+    // however. Before the fixpoint runs, reject a cycle among the always-active bare
+    // trait-subject edges themselves (spec/09). This first slice is restricted to
+    // zero-argument trait instances; parameterized instances need the full instance
+    // key rather than owner identity alone.
+    inout fn bareZeroArityTraitSubjectEdge(cf: Conform) -> Bool {
+        if cf.derived || cf.extId != 0U64 || self.isMacrointerfaceCompatConform(cf: cf) {
+            return false
+        }
+        if cf.subjectArgs.count() != 0U64 || cf.traitArgs.count() != 0U64 {
+            return false
+        }
+        if self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != cf.typeStart {
+            return false
+        }
+        return self.canonicalTraitOwner(start: cf.traitStart, len: cf.traitLen) == cf.traitStart
+    }
+
+    inout fn bareZeroArityTraitPathReaches(from: U64, target: U64, seen: inout Array[U64]) -> Bool {
+        if from == target {
+            return true
+        }
+        mut val si: U64 = 0U64
+        while si < seen.count() {
+            if seen[si] == from {
+                return false
+            }
+            si += 1U64
+        }
+        seen.append(from)
+        mut val ci: U64 = 0U64
+        while ci < self.decls.conforms.count() {
+            val edge: Conform = self.decls.conforms[ci]
+            if self.bareZeroArityTraitSubjectEdge(cf: edge) {
+                if edge.typeStart == from {
+                    if self.bareZeroArityTraitPathReaches(from: edge.traitStart, target: target, seen: inout seen) {
+                        return true
+                    }
+                }
+            }
+            ci += 1U64
+        }
+        return false
+    }
+
+    inout fn checkBareZeroArityTraitSubjectCycles() {
+        mut val ci: U64 = 0U64
+        while ci < self.decls.conforms.count() {
+            val edge: Conform = self.decls.conforms[ci]
+            if self.bareZeroArityTraitSubjectEdge(cf: edge) {
+                mut val seen: Array[U64] = []
+                if self.bareZeroArityTraitPathReaches(from: edge.traitStart, target: edge.typeStart, seen: inout seen) {
+                    self.errorAt(offset: edge.defOffset, msg: "trait-to-trait conformance cycle")
+                }
+            }
+            ci += 1U64
+        }
+    }
+
     inout fn isMacrointerfaceCompatConform(cf: Conform) -> Bool {
         // Compatibility shim until spec/16's `macro Foo as Derive` surface is lowered
         // to a dedicated macro-provider IR. The current M1 dogfood represents built-in
