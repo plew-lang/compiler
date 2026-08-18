@@ -1,0 +1,9 @@
+// Cycle identity includes trait arguments. This is a cycle for A[I64], even
+// though its two declarations use different trait heads.
+trait A[Item] {}
+trait B {}
+
+impl A[I64] as B {}
+impl B as A[I64] {}
+
+fn main() {}

@@ -94,14 +94,14 @@ pub impl Comp {
     // append `S as A` again when an acyclic transitive path reaches an already-known
     // fact. That deduplication is not a validity check for the declaration graph,
     // however. Before the fixpoint runs, reject a cycle among the always-active bare
-    // trait-subject edges themselves (spec/09). This first slice is restricted to
-    // zero-argument trait instances; parameterized instances need the full instance
-    // key rather than owner identity alone.
-    inout fn bareZeroArityTraitSubjectEdge(cf: Conform) -> Bool {
+    // trait-subject edges themselves (spec/09). Closed instances compare their complete
+    // owner + argument key; open generic patterns need path-local substitutions and are
+    // intentionally handled by the next increment.
+    inout fn bareClosedTraitSubjectEdge(cf: Conform) -> Bool {
         if cf.derived || cf.extId != 0U64 || self.isMacrointerfaceCompatConform(cf: cf) {
             return false
         }
-        if cf.subjectArgs.count() != 0U64 || cf.traitArgs.count() != 0U64 {
+        if cf.typeParams.count() != 0U64 {
             return false
         }
         if self.canonicalTraitOwner(start: cf.typeStart, len: cf.typeLen) != cf.typeStart {
@@ -110,24 +110,26 @@ pub impl Comp {
         return self.canonicalTraitOwner(start: cf.traitStart, len: cf.traitLen) == cf.traitStart
     }
 
-    inout fn bareZeroArityTraitPathReaches(from: U64, target: U64, seen: inout Array[U64]) -> Bool {
-        if from == target {
+    inout fn sameClosedTraitInstance(aStart: U64, aArgs: Array[U64], bStart: U64, bArgs: Array[U64]) -> Bool {
+        if aStart != bStart { return false }
+        val noParams: Array[Bind] = []
+        return self.sameTypeRefListAlphaEq(a: aArgs, b: bArgs, aParams: noParams, bParams: noParams)
+    }
+
+    inout fn bareClosedTraitPathReaches(fromStart: U64, fromArgs: Array[U64], targetStart: U64, targetArgs: Array[U64], depth: U64) -> Bool {
+        if self.sameClosedTraitInstance(aStart: fromStart, aArgs: fromArgs, bStart: targetStart, bArgs: targetArgs) {
             return true
         }
-        mut val si: U64 = 0U64
-        while si < seen.count() {
-            if seen[si] == from {
-                return false
-            }
-            si += 1U64
-        }
-        seen.append(from)
+        // Every useful simple path contains at most one occurrence of each declared
+        // edge. The bound makes this validator total even while reporting a different
+        // cycle elsewhere in the graph.
+        if depth >= self.decls.conforms.count() { return false }
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val edge: Conform = self.decls.conforms[ci]
-            if self.bareZeroArityTraitSubjectEdge(cf: edge) {
-                if edge.typeStart == from {
-                    if self.bareZeroArityTraitPathReaches(from: edge.traitStart, target: target, seen: inout seen) {
+            if self.bareClosedTraitSubjectEdge(cf: edge) {
+                if self.sameClosedTraitInstance(aStart: edge.typeStart, aArgs: edge.subjectArgs, bStart: fromStart, bArgs: fromArgs) {
+                    if self.bareClosedTraitPathReaches(fromStart: edge.traitStart, fromArgs: edge.traitArgs, targetStart: targetStart, targetArgs: targetArgs, depth: depth + 1U64) {
                         return true
                     }
                 }
@@ -137,13 +139,12 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkBareZeroArityTraitSubjectCycles() {
+    inout fn checkBareClosedTraitSubjectCycles() {
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val edge: Conform = self.decls.conforms[ci]
-            if self.bareZeroArityTraitSubjectEdge(cf: edge) {
-                mut val seen: Array[U64] = []
-                if self.bareZeroArityTraitPathReaches(from: edge.traitStart, target: edge.typeStart, seen: inout seen) {
+            if self.bareClosedTraitSubjectEdge(cf: edge) {
+                if self.bareClosedTraitPathReaches(fromStart: edge.traitStart, fromArgs: edge.traitArgs, targetStart: edge.typeStart, targetArgs: edge.subjectArgs, depth: 0U64) {
                     self.errorAt(offset: edge.defOffset, msg: "trait-to-trait conformance cycle")
                 }
             }
