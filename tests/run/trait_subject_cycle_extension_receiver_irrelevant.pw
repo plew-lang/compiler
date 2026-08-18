@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// #E activates only the portions of E for which the receiver has a
+// conformance. S has A, but not B or C, so E's B <-> C cycle is inert here.
+trait A {}
+trait B {}
+trait C {}
+
+struct S {}
+pub impl S { factory }
+pub impl S as A {}
+
+extension E {
+    impl S as A {}
+    impl B as C {}
+    impl C as B {}
+}
+
+fn main() {
+    val s: S = <S />
+    val viewed = s#E
+    print(1I64)
+}

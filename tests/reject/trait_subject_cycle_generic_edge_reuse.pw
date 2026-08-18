@@ -1,0 +1,10 @@
+// A declaration edge may be traversed more than once at different instances.
+// This finite exact-instance cycle must not be hidden by an edge-used guard.
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T] as B[T] {}
+impl B[I64] as A[String] {}
+impl B[String] as A[I64] {}
+
+fn main() {}
