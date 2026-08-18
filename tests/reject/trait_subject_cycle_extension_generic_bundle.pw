@@ -1,0 +1,11 @@
+// Generic exact-instance cycles in a bundle are declaration errors even when
+// the bundle is unused.
+trait A[Item] {}
+trait B[Item] {}
+
+extension E {
+    impl[T] A[T] as B[T] {}
+    impl[U] B[U] as A[U] {}
+}
+
+fn main() {}

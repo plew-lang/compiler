@@ -1,0 +1,6 @@
+// A self-loop is a cycle even though it does not require a second edge.
+trait A {}
+
+impl A as A {}
+
+fn main() {}

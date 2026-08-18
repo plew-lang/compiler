@@ -1,0 +1,2 @@
+export trait A {}
+export trait B {}

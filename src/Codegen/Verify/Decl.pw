@@ -167,14 +167,7 @@ pub impl Comp {
                 if selectedCount > 1U64 {
                     self.errorAt(offset: t.siteOffset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
                 }
-                mut val activeExtIds: Array[U64] = []
-                vi = 0U64
-                while vi < t.viewIds.count() {
-                    val source: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: t.viewIds[vi])
-                    if source.kind == 1U64 { activeExtIds.append(source.id) }
-                    vi += 1U64
-                }
-                self.checkTraitSubjectCycles(activeExtIds: activeExtIds, offset: t.siteOffset)
+                self.checkTraitSubjectViewCycles(viewIds: t.viewIds, offset: t.siteOffset)
                 // Synthetic refs from older construction paths carry only viewExtId.
                 if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 && t.viewExtId <= self.interner.count {
                     self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[t.viewExtId - 1U64], srcLen: self.interner.lens[t.viewExtId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)

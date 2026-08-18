@@ -1,0 +1,11 @@
+// A bundle is checked with every bare edge even when no value selects it.
+trait A {}
+trait B {}
+
+impl A as B {}
+
+extension E {
+    impl B as A {}
+}
+
+fn main() {}

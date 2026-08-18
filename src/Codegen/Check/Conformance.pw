@@ -272,6 +272,58 @@ pub impl Comp {
         }
     }
 
+    // A named extension is one module-crossing bundle.  Validate every
+    // bundle only after registration has collected all of its declaration
+    // parts and every bare edge, so the outcome cannot depend on load or
+    // declaration order.  `checkTraitSubjectCycles` already treats bare
+    // edges as present for every source-set; supplying one bundle id gives
+    // exactly `bare ∪ bundle`.
+    inout fn checkTraitSubjectCycleBundles() {
+        mut val ci: U64 = 0U64
+        while ci < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[ci]
+            if cf.extId != 0U64 {
+                mut val seen: Bool = false
+                mut val earlier: U64 = 0U64
+                while earlier < ci {
+                    if self.decls.conforms[earlier].extId == cf.extId {
+                        seen = true
+                    }
+                    earlier += 1U64
+                }
+                if !seen {
+                    self.checkTraitSubjectCycles(activeExtIds: [cf.extId], offset: cf.defOffset)
+                }
+            }
+            ci += 1U64
+        }
+    }
+
+    // View cycle validity is structural too: once syntax has normalized a
+    // source-set, extension names select their registered bundles regardless
+    // of whether a particular receiver can use every member.  Applicability is
+    // checked separately by the view validator.
+    inout fn checkTraitSubjectViewCycles(viewIds: Array[U64], offset: U64) {
+        mut val extIds: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < viewIds.count() {
+            val id: U64 = viewIds[i]
+            if id != 0U64 && id <= self.interner.count {
+                if self.isExtName(start: self.interner.starts[id - 1U64], len: self.interner.lens[id - 1U64]) {
+                    mut val duplicate: Bool = false
+                    mut val j: U64 = 0U64
+                    while j < extIds.count() {
+                        if extIds[j] == id { duplicate = true }
+                        j += 1U64
+                    }
+                    if !duplicate { extIds.append(id) }
+                }
+            }
+            i += 1U64
+        }
+        self.checkTraitSubjectCycles(activeExtIds: extIds, offset: offset)
+    }
+
     inout fn isMacrointerfaceCompatConform(cf: Conform) -> Bool {
         // Compatibility shim until spec/16's `macro Foo as Derive` surface is lowered
         // to a dedicated macro-provider IR. The current M1 dogfood represents built-in

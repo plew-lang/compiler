@@ -1,7 +1,5 @@
-import @Std/Io with { print }
-
-// #E activates only the portions of E for which the receiver has a
-// conformance. S has A, but not B or C, so E's B <-> C cycle is inert here.
+// Bundle validity is independent of receiver reachability.  S can only use
+// E's S -> A portion, but E's B <-> C declaration cycle rejects the bundle.
 trait A {}
 trait B {}
 trait C {}
@@ -19,5 +17,4 @@ extension E {
 fn main() {
     val s: S = <S />
     val viewed = s#E
-    print(1I64)
 }

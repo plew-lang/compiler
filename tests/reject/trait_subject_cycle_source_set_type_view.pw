@@ -1,0 +1,15 @@
+// Two valid bundles become invalid only in the final extension set of a type
+// view.  No receiver value or concrete instantiation is needed.
+trait A {}
+trait B {}
+
+extension E {
+    impl A as B {}
+}
+extension F {
+    impl B as A {}
+}
+
+fn invalid[T](value: T#E#F) where T: A {}
+
+fn main() {}

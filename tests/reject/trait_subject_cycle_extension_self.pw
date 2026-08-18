@@ -1,0 +1,8 @@
+// A self-loop inside a named bundle is rejected without selecting the bundle.
+trait A {}
+
+extension E {
+    impl A as A {}
+}
+
+fn main() {}

@@ -818,6 +818,7 @@ export fn runFrontend(c: inout Comp) {
     // the concrete-conformance fixpoint, whose idempotent fact deduplication is
     // intentionally not a substitute for this diagnostic.
     c.checkTraitSubjectCycles(activeExtIds: [])
+    c.checkTraitSubjectCycleBundles()
     // inter-trait conformance (spec/08,09): `impl B as A` makes every type
     // conforming to subject trait B also conform to A; copy the methods onto each
     // conforming concrete type (before provided methods, so A's own provided

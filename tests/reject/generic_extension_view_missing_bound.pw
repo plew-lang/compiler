@@ -1,0 +1,13 @@
+// Generic bodies must validate an extension view from their declared bounds;
+// concrete callers cannot make this unbounded T satisfy E's B-only part.
+trait B {}
+
+extension E {
+    impl B {}
+}
+
+fn invalid[T](value: T) {
+    val viewed = value#E
+}
+
+fn main() {}

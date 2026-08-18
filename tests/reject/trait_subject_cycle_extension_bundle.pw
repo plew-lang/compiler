@@ -1,0 +1,11 @@
+// An unused extension bundle is still structurally invalid when its own
+// trait-subject edges form a cycle.
+trait A {}
+trait B {}
+
+extension E {
+    impl A as B {}
+    impl B as A {}
+}
+
+fn main() {}

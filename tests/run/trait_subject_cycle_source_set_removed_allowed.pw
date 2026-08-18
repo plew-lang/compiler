@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// Cycle checks observe the final normalized set, not transient parser steps:
+// E + F would cycle, but #!F resets to the base view and the trailing #E
+// makes the final normalized set {E}.
+trait A {}
+trait B {}
+
+struct S {}
+pub impl S { factory }
+pub impl S as A {}
+
+extension E {
+    impl S as A {}
+    impl A as B {}
+}
+extension F {
+    impl S as A {}
+    impl B as A {}
+}
+
+fn main() {
+    val s: S = <S />
+    val viewed = s#E#F#!F#E
+    print(1I64)
+}
