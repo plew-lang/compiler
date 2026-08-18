@@ -1,0 +1,17 @@
+// spec/09: a generic body is checked at its declaration, not only after a
+// concrete instance is emitted. `where T: B` makes the B -> A portion of E
+// applicable to x; together with bare A -> B, x#E activates A -> B -> A.
+trait A {}
+trait B {}
+
+impl A as B {}
+
+extension E {
+    impl B as A {}
+}
+
+fn use[T](x: T) where T: B {
+    val viewed = x#E
+}
+
+fn main() {}

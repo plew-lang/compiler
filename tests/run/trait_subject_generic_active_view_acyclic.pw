@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// A generic #E view is valid when the bound makes its B -> C portion
+// applicable and the active trait-subject graph is acyclic.
+trait B {}
+trait C {}
+
+extension E {
+    impl B as C {}
+}
+
+fn use[T](x: T) where T: B {
+    val viewed = x#E
+}
+
+struct S {}
+pub impl S { factory }
+pub impl S as B {}
+
+fn main() {
+    val s: S = <S />
+    use(x: s)
+    print(1I64)
+}
