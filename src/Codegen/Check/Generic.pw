@@ -199,6 +199,26 @@ pub impl Comp {
         return false
     }
 
+    inout fn boundAllowsExtension(fnIdx: U64, tpStart: U64, tpLen: U64, extStart: U64, extLen: U64) -> Bool {
+        val extId: U64 = intern(c: inout self, start: extStart, len: extLen)
+        mut val fi: U64 = 0U64
+        while fi < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[fi]
+            if f.extId == extId && self.methodRecvIsTrait(f: f) {
+                mut val bi: U64 = 0U64
+                while bi < self.decls.funcBounds.count() {
+                    val bound: FuncBound = self.decls.funcBounds[bi]
+                    if bound.fnIdx == fnIdx && bound.paramNameId == intern(c: inout self, start: tpStart, len: tpLen) {
+                        if spansEqual(c: inout self, aStart: bound.traitStart, aLen: bound.traitLen, bStart: f.recvStart, bLen: f.recvLen) { return true }
+                    }
+                    bi += 1U64
+                }
+            }
+            fi += 1U64
+        }
+        return false
+    }
+
     // Walk a method/assoc receiver in a generic body. A bare type / primitive / type-
     // parameter name here is a valid assoc-fn qualifier (`T.make()`, `Buffer.new()`),
     // not a value read — so it needs no value check (the parent Method arm bound-checks a
@@ -324,11 +344,19 @@ pub impl Comp {
                     i += 1
                 }
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+            Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
                 if self.assocRecvName(recv: exprId).nameLen != 0U64 {
                     return
                 }
                 self.checkBoundsExpr(exprId: recv)
+                if !strip {
+                    val rt: TypeInfo = self.typeOf(id: recv)
+                    if self.isExtName(start: srcStart, len: srcLen) && rt.kind == 2 && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
+                        if !(self.boundAllowsExtension(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, extStart: srcStart, extLen: srcLen)) {
+                            self.errorAt(offset: srcStart, msg: "extension view is not justified by this type parameter's bounds")
+                        }
+                    }
+                }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.checkBoundsRecv(recv: recv, tpFn: self.cur.checkFn)
@@ -701,6 +729,21 @@ pub impl Comp {
                 shouldCheck = false
             }
             if shouldCheck && !f.isExtern {
+                // Generic signature views are authored source-sets even though
+                // their TypeRefs carry siteOffset=0 (the general verifier uses
+                // that sentinel to skip concrete receiver checks).  Validate
+                // their structural cycle rule here, once per declaration.
+                mut val pi: U64 = 0U64
+                while pi < f.params.count() {
+                    val param: Param = f.params[pi]
+                    if param.ty < self.arena.types.count() {
+                        self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: param.ty), offset: param.tyStart)
+                    }
+                    pi += 1U64
+                }
+                if f.retTy < self.arena.types.count() {
+                    self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: f.retTy), offset: f.retStart)
+                }
                 val noParams: Array[Bind] = []
                 val noArgs: Array[U64] = []
                 self.cur.locals = []

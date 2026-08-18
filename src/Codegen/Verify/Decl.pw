@@ -153,6 +153,7 @@ pub impl Comp {
             // Synthetic TypeRefs and type-parameter heads have no authored
             // annotation site. Every user-written `Type#Name` does.
             if t.siteOffset != 0U64 {
+                self.checkTraitSubjectViewCycles(viewIds: t.viewIds, offset: t.siteOffset)
                 mut val selectedCount: U64 = 0U64
                 mut val vi: U64 = 0U64
                 while vi < t.viewIds.count() {
@@ -167,7 +168,6 @@ pub impl Comp {
                 if selectedCount > 1U64 {
                     self.errorAt(offset: t.siteOffset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
                 }
-                self.checkTraitSubjectViewCycles(viewIds: t.viewIds, offset: t.siteOffset)
                 // Synthetic refs from older construction paths carry only viewExtId.
                 if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 && t.viewExtId <= self.interner.count {
                     self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[t.viewExtId - 1U64], srcLen: self.interner.lens[t.viewExtId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)
@@ -198,14 +198,22 @@ pub impl Comp {
                 i += 1U64
             }
         }
-        val allSources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen))
-        mut val activeExtIds: Array[U64] = []
-        mut val ai: U64 = 0U64
-        while ai < allSources.count() {
-            if allSources[ai].kind == 1U64 { activeExtIds.append(allSources[ai].id) }
-            ai += 1U64
+    }
+
+    // A chain of `Expr.ExtView` nodes represents one normalized view, not a
+    // succession of observable intermediate source-sets.  Its outermost node
+    // is the only point that may run structural source-set validation.
+    inout fn exprFeedsAnotherView(id: U64) -> Bool {
+        mut val idx: U64 = 0U64
+        while idx < self.arena.exprs.count() {
+            match self.arena.exprs[idx] {
+                Expr.ExtView(recv: val recv, srcStart: _, srcLen: _, strip: _) => { if recv == id { return true } }
+                Expr.ExtMethod(recv: val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => { if recv == id { return true } }
+                _ => {}
+            }
+            idx += 1U64
         }
-        self.checkTraitSubjectCycles(activeExtIds: activeExtIds, offset: self.exprOffset(id: recv))
+        return false
     }
 
     inout fn checkDeclShapes() {

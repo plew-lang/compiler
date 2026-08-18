@@ -3,7 +3,7 @@
 trait B {}
 
 extension E {
-    impl B {}
+    impl B { fn marker() {} }
 }
 
 fn invalid[T](value: T) {

@@ -155,6 +155,10 @@ pub impl Comp {
                     return
                 }
                 self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
+                if !(self.exprFeedsAnotherView(id: id)) {
+                    val finalType: TypeInfo = self.typeOf(id: id)
+                    self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: finalType.ref), offset: srcStart)
+                }
                 self.verifyExpr(id: recv)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {

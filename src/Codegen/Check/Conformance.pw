@@ -220,7 +220,13 @@ pub impl Comp {
     inout fn traitCyclePathCloses(node: TraitCycleNode, stack: Array[TraitCycleNode], binds: inout Array[TraitCycleBind]) -> Bool {
         mut val i: U64 = 0U64
         while i < stack.count() {
-            if self.traitCycleNodeMatches(a: node, b: stack[i], binds: inout binds) { return true }
+            // Unification is speculative per candidate.  A partial binding
+            // from one non-matching stack node must not constrain the next.
+            mut val candidateBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: binds)
+            if self.traitCycleNodeMatches(a: node, b: stack[i], binds: inout candidateBinds) {
+                binds = candidateBinds
+                return true
+            }
             i += 1U64
         }
         return false
