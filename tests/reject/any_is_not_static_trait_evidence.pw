@@ -1,0 +1,26 @@
+// An existential carries runtime dispatch evidence, not the static guarantee
+// required to instantiate one concrete T for a generic T: Same call.
+trait Same {
+    fn same(other: Self) -> Bool
+}
+
+struct Left {}
+struct Right {}
+pub impl Left { factory }
+pub impl Right { factory }
+pub impl Left as Same {
+    fn same(other: Self) -> Bool { return true }
+}
+pub impl Right as Same {
+    fn same(other: Self) -> Bool { return true }
+}
+
+fn compare[T](first: T, second: T) -> Bool where T: Same {
+    return first.same(other: second)
+}
+
+fn main() {
+    val first: any Same = <Left />
+    val second: any Same = <Right />
+    compare(first: first, second: second)
+}

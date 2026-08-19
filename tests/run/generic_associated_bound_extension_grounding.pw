@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+// A view selects E as the source set, but its proof is still the generic
+// witness inside E. The witness substitution must ground Item=T before the
+// generic bound compares it with Item=I64.
+trait Iter { type Item }
+
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+
+extension E {
+    pub impl[T] Box[T] as Iter {
+        type Item = T
+    }
+}
+
+fn requireI64[X](value: X) where X: Iter[Item=I64] {}
+
+fn main() {
+    requireI64(value: <Box[I64] value=7I64 />#E)
+    print(1I64)
+}
