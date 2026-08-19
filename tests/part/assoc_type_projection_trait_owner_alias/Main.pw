@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import ./A with { Convert as TextConvert }
+import ./B with { Convert as BytesConvert }
+
+// The aliases resolve distinct trait declarations with the same spelling and
+// arity.  Their projection sources must select distinct instance witnesses.
+struct Parser {}
+pub impl Parser { factory }
+pub impl Parser as TextConvert[String] {
+    type Output = I64
+}
+pub impl Parser as BytesConvert[String] {
+    type Output = Bool
+}
+
+fn main() {
+    val text: Parser#TextConvert[String].Output = 7I64
+    val bytes: Parser#BytesConvert[String].Output = true
+    print(text)
+    print(bytes)
+}

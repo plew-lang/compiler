@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+// The selected generic witness must ground Item=T using Box[I64]'s instance.
+trait Iter { type Item }
+
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+pub impl[T] Box[T] as Iter {
+    type Item = T
+}
+
+fn requireI64[X](value: X) where X: Iter[Item=I64] {}
+
+fn main() {
+    requireI64(value: <Box[I64] value=7I64 />)
+    print(1I64)
+}

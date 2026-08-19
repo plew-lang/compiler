@@ -1,0 +1,10 @@
+// Projection trait arguments are children of the type term.  The first edge
+// grows T to Array[T] inside an owner SCC and must be rejected eagerly.
+trait Projection[Kind] { type Item }
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T#Projection[T].Item] as B[T#Projection[Array[T]].Item] {}
+impl[T] B[T#Projection[Array[T]].Item] as A[T#Projection[T].Item] {}
+
+fn main() {}

@@ -1,0 +1,10 @@
+// A projection receiver is a recursive term, not an opaque name.  Fresh
+// binders T/U therefore describe the same exact trait-instance rewrite.
+trait Projection { type Item }
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T#Projection.Item] as B[T#Projection.Item] where T: Projection {}
+impl[U] B[U#Projection.Item] as A[U#Projection.Item] where U: Projection {}
+
+fn main() {}

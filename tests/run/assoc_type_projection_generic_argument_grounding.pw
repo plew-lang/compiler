@@ -1,0 +1,25 @@
+import @Std/Io with { print }
+
+// The projection's trait argument is a generic variable in the declaration and
+// must be grounded to String before Convert[String]'s witness is selected.
+trait Convert[From] {
+    type Output
+    fn convert(value: From) -> Output
+}
+
+struct Parser {}
+pub impl Parser { factory }
+pub impl Parser as Convert[String] {
+    type Output = I64
+    fn convert(value: String) -> I64 {
+        return 7I64
+    }
+}
+
+fn parse[T](parser: Parser, value: T) -> Parser#Convert[T].Output where Parser: Convert[T] {
+    return parser.convert(value: value)
+}
+
+fn main() {
+    print(parse(parser: <Parser />, value: "seven"))
+}

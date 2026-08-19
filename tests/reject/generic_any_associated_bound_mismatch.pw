@@ -1,0 +1,8 @@
+// A generic bound with Item=String cannot be erased to any Iter[Item=I64].
+trait Iter { type Item }
+
+fn erase[T](value: T) -> any Iter[Item=I64] where T: Iter[Item=String] {
+    return value
+}
+
+fn main() {}
