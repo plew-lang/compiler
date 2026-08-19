@@ -206,11 +206,15 @@ pub impl Comp {
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
             if f.extId == extId && self.methodRecvIsTrait(f: f) {
+                val recvArgs: Array[U64] = self.positionalTraitArgs(t: self.arena.types[f.recvTy])
                 mut val bi: U64 = 0U64
                 while bi < self.decls.funcBounds.count() {
                     val bound: FuncBound = self.decls.funcBounds[bi]
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
-                        if spansEqual(c: inout self, aStart: bound.traitStart, aLen: bound.traitLen, bStart: f.recvStart, bLen: f.recvLen) { return true }
+                        val boundOwner: U64 = self.canonicalTraitOwner(start: bound.traitStart, len: bound.traitLen)
+                        if boundOwner == f.provTraitOwner {
+                            if self.sameTypeRefListAlphaEq(a: recvArgs, b: bound.traitArgs, aParams: f.typeParams, bParams: self.arena.funcs[fnIdx].typeParams) { return true }
+                        }
                     }
                     bi += 1U64
                 }
@@ -376,8 +380,14 @@ pub impl Comp {
                     }
                 }
             }
-            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, val srcStart, val srcLen, nameStart: _, nameLen: _, val args) => {
                 self.checkBoundsExpr(exprId: recv)
+                val rt: TypeInfo = self.typeOf(id: recv)
+                if self.isExtName(start: srcStart, len: srcLen) && rt.kind == 2 && self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
+                    if !(self.boundAllowsExtension(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, extStart: srcStart, extLen: srcLen)) {
+                        self.errorAt(offset: srcStart, msg: "extension does not apply to this trait instance")
+                    }
+                }
                 mut val i: U64 = 0
                 while i < args.count() {
                     self.checkBoundsExpr(exprId: args[i].expr)
