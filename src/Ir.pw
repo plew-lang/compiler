@@ -955,12 +955,12 @@ export struct TraitCycleBind {
 }
 pub impl TraitCycleBind { factory }
 
-// One pending symbolic path in declaration-time trait-cycle validation.  The
-// checker owns the worklist explicitly so source input size cannot consume the
-// compiler's call stack.
+// One pending symbolic rewrite state in declaration-time trait-cycle
+// validation.  `binds` is its path-local substitution; predecessor/path data
+// is deliberately not retained here, because cycle detection is reachability
+// back to the seeded instance and canonical-state saturation owns termination.
 export struct TraitCycleSearch {
     pub val node: TraitCycleNode
-    pub val stack: Array[TraitCycleNode]
     pub val binds: Array[TraitCycleBind]
 }
 pub impl TraitCycleSearch { factory }
