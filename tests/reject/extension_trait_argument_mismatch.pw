@@ -1,0 +1,14 @@
+trait B[Item] {}
+
+struct S {}
+pub impl S { factory }
+pub impl S as B[String] {}
+
+extension E {
+    impl B[I64] { fn marker() -> I64 { return 1I64 } }
+}
+
+fn main() {
+    val s: S = <S />
+    s#E.marker()
+}

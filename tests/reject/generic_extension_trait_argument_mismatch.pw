@@ -1,0 +1,11 @@
+trait B[Item] {}
+
+extension E {
+    impl B[I64] { fn marker() -> I64 { return 1I64 } }
+}
+
+fn invalid[T](value: T) -> I64 where T: B[String] {
+    return value#E.marker()
+}
+
+fn main() {}

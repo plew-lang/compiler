@@ -1,0 +1,8 @@
+// A finite-looking argument rewrite still grows an SCC edge and is forbidden.
+trait A[Item] {}
+trait B {}
+
+impl A[I64] as B {}
+impl B as A[String] {}
+
+fn main() {}

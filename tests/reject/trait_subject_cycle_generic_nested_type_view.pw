@@ -1,0 +1,9 @@
+// A source-set cycle in a nested generic argument is as invalid as a top-level view.
+trait A {}
+trait B {}
+
+extension E { impl A as B {} }
+extension F { impl B as A {} }
+
+fn invalid[T](values: Array[T#E#F]) where T: A {}
+fn main() {}

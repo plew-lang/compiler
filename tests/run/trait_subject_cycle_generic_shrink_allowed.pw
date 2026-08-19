@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+
+// The SCC path removes one Array layer per round and therefore terminates.
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[T] as B[T] {}
+impl[T] B[Array[T]] as A[T] {}
+
+fn main() { print(1I64) }

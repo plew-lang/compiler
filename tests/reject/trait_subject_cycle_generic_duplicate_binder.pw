@@ -1,0 +1,9 @@
+// An SCC edge may not duplicate a subject binder, even if a later edge could
+// make every concrete path finite.
+trait A[Left, Right] {}
+trait B[Item] {}
+
+impl[T] A[Array[T], String] as B[T] {}
+impl[T] B[T] as A[T, T] {}
+
+fn main() {}
