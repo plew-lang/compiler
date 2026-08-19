@@ -251,47 +251,155 @@ pub impl Comp {
         return false
     }
 
-    inout fn traitCyclePathGrows(node: TraitCycleNode, stack: Array[TraitCycleNode], binds: Array[TraitCycleBind]) -> Bool {
+    // A recurrence that would require X = Context[X] cannot close at any
+    // finite instance.  It is not itself an error: local edge validation has
+    // already decided whether the SCC may grow.  Here it only cuts off this
+    // symbolic branch, preventing repeated fresh binders from turning a
+    // finite shrinking path into an infinite compiler recursion.
+    inout fn traitCyclePathSelfEmbeds(node: TraitCycleNode, stack: Array[TraitCycleNode], binds: Array[TraitCycleBind]) -> Bool {
         mut val i: U64 = 0U64
         while i < stack.count() {
             if node.owner == stack[i].owner && node.args.count() == stack[i].args.count() {
                 mut val candidateBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: binds)
-                mut val grows: Bool = false
+                mut val selfEmbeds: Bool = false
                 mut val j: U64 = 0U64
                 while j < node.args.count() {
                     val relation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=node.args[j] scope=node.scope />, b: <TraitCycleTerm ref=stack[i].args[j] scope=stack[i].scope />, binds: inout candidateBinds)
                     if relation == 0U64 { break }
-                    if relation == 2U64 { grows = true }
+                    if relation == 2U64 { selfEmbeds = true }
                     j += 1U64
                 }
-                if j == node.args.count() && grows { return true }
+                if j == node.args.count() && selfEmbeds { return true }
             }
             i += 1U64
         }
         return false
     }
 
-    inout fn traitCyclePathReaches(node: TraitCycleNode, stack: Array[TraitCycleNode], binds: Array[TraitCycleBind], activeExtIds: Array[U64], depth: U64) -> Bool {
-        mut val closedBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: binds)
-        if self.traitCyclePathCloses(node: node, stack: stack, binds: inout closedBinds) { return true }
-        if self.traitCyclePathGrows(node: node, stack: stack, binds: binds) { return true }
-        mut val ci: U64 = 0U64
-        while ci < self.decls.conforms.count() {
-            val edge: Conform = self.decls.conforms[ci]
-            if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
-                mut val nextBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: binds)
-                val scope: U64 = (depth + 1U64) * self.decls.conforms.count() + ci
-                val subject: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=edge.subjectArgs scope=scope />
-                if self.traitCycleNodeMatches(a: node, b: subject, binds: inout nextBinds) {
-                    mut val nextStack: Array[TraitCycleNode] = stack
-                    nextStack.append(node)
-                    val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=edge.traitArgs scope=scope />
-                    if self.traitCyclePathReaches(node: target, stack: nextStack, binds: nextBinds, activeExtIds: activeExtIds, depth: depth + 1U64) { return true }
+    inout fn traitCyclePathReaches(node: TraitCycleNode, stack: Array[TraitCycleNode], binds: Array[TraitCycleBind], activeExtIds: Array[U64]) -> Bool {
+        mut val pending: Array[TraitCycleSearch] = [<TraitCycleSearch node=node stack=stack binds=binds />]
+        mut val cursor: U64 = 0U64
+        while cursor < pending.count() {
+            val current: TraitCycleSearch = pending[cursor]
+            cursor += 1U64
+            mut val closedBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: current.binds)
+            if self.traitCyclePathCloses(node: current.node, stack: current.stack, binds: inout closedBinds) { return true }
+            if self.traitCyclePathSelfEmbeds(node: current.node, stack: current.stack, binds: current.binds) { continue }
+            mut val ci: U64 = 0U64
+            while ci < self.decls.conforms.count() {
+                val edge: Conform = self.decls.conforms[ci]
+                if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
+                    mut val nextBinds: Array[TraitCycleBind] = self.copyTraitCycleBinds(binds: current.binds)
+                    val scope: U64 = (cursor + 1U64) * self.decls.conforms.count() + ci
+                    val subject: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=edge.subjectArgs scope=scope />
+                    if self.traitCycleNodeMatches(a: current.node, b: subject, binds: inout nextBinds) {
+                        mut val nextStack: Array[TraitCycleNode] = current.stack
+                        nextStack.append(current.node)
+                        val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=edge.traitArgs scope=scope />
+                        pending.append(<TraitCycleSearch node=target stack=nextStack binds=nextBinds />)
+                    }
                 }
+                ci += 1U64
             }
-            ci += 1U64
         }
         return false
+    }
+
+    // The graph used for the declaration-time termination rule deliberately
+    // forgets type arguments: it only decides which *owners* participate in
+    // an SCC. Exact instance equality is checked separately below.  This is a
+    // finite, iterative reachability query; it is not the instance solver.
+    inout fn traitCycleOwnerReaches(from: U64, target: U64, activeExtIds: Array[U64]) -> Bool {
+        if from == target { return true }
+        mut val pending: Array[U64] = [from]
+        mut val cursor: U64 = 0U64
+        while cursor < pending.count() {
+            val owner: U64 = pending[cursor]
+            cursor += 1U64
+            mut val ci: U64 = 0U64
+            while ci < self.decls.conforms.count() {
+                val edge: Conform = self.decls.conforms[ci]
+                if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) && edge.typeStart == owner {
+                    if edge.traitStart == target { return true }
+                    mut val seen: Bool = false
+                    mut val pi: U64 = 0U64
+                    while pi < pending.count() {
+                        if pending[pi] == edge.traitStart { seen = true }
+                        pi += 1U64
+                    }
+                    if !seen { pending.append(edge.traitStart) }
+                }
+                ci += 1U64
+            }
+        }
+        return false
+    }
+
+    inout fn traitCycleConstructorCount(ref: U64, params: Array[Bind]) -> U64 {
+        if self.plainBinder(ref: ref, params: params) < params.count() { return 0U64 }
+        if ref == 0U64 || ref >= self.arena.types.count() { return 1U64 }
+        val t: TypeRef = self.arena.types[ref]
+        mut val count: U64 = 1U64
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            count += self.traitCycleConstructorCount(ref: t.args[i], params: params)
+            i += 1U64
+        }
+        return count
+    }
+
+    inout fn traitCycleBinderOccurrences(ref: U64, params: Array[Bind], binder: U64) -> U64 {
+        if self.plainBinder(ref: ref, params: params) == binder { return 1U64 }
+        if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
+        val t: TypeRef = self.arena.types[ref]
+        mut val count: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            count += self.traitCycleBinderOccurrences(ref: t.args[i], params: params, binder: binder)
+            i += 1U64
+        }
+        return count
+    }
+
+    // An edge inside an owner SCC may only preserve or shrink the finite
+    // term carried by its positional trait arguments.  Compare the product of
+    // all arguments: target constructors may not outnumber subject
+    // constructors, and no subject binder may be introduced or duplicated.
+    // This local ranking rule admits Array[T] -> T while rejecting T ->
+    // Array[T] and T -> (T, T), without mistaking a shrinking path for an
+    // occurs-check cycle.
+    inout fn traitCycleEdgeIsNonIncreasing(cf: Conform) -> Bool {
+        mut val subjectConstructors: U64 = 0U64
+        mut val targetConstructors: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < cf.subjectArgs.count() {
+            subjectConstructors += self.traitCycleConstructorCount(ref: cf.subjectArgs[i], params: cf.typeParams)
+            i += 1U64
+        }
+        i = 0U64
+        while i < cf.traitArgs.count() {
+            targetConstructors += self.traitCycleConstructorCount(ref: cf.traitArgs[i], params: cf.typeParams)
+            i += 1U64
+        }
+        if targetConstructors > subjectConstructors { return false }
+        mut val binder: U64 = 0U64
+        while binder < cf.typeParams.count() {
+            mut val subjectUses: U64 = 0U64
+            mut val targetUses: U64 = 0U64
+            i = 0U64
+            while i < cf.subjectArgs.count() {
+                subjectUses += self.traitCycleBinderOccurrences(ref: cf.subjectArgs[i], params: cf.typeParams, binder: binder)
+                i += 1U64
+            }
+            i = 0U64
+            while i < cf.traitArgs.count() {
+                targetUses += self.traitCycleBinderOccurrences(ref: cf.traitArgs[i], params: cf.typeParams, binder: binder)
+                i += 1U64
+            }
+            if targetUses > subjectUses { return false }
+            binder += 1U64
+        }
+        return true
     }
 
     // `activeExtIds` is empty for the declaration-time bare graph.  A view
@@ -302,11 +410,18 @@ pub impl Comp {
         while ci < self.decls.conforms.count() {
             val edge: Conform = self.decls.conforms[ci]
             if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
+                if self.traitCycleOwnerReaches(from: edge.traitStart, target: edge.typeStart, activeExtIds: activeExtIds) {
+                    if !(self.traitCycleEdgeIsNonIncreasing(cf: edge)) {
+                        mut val report: U64 = edge.defOffset
+                        if offset != 0U64 { report = offset }
+                        self.errorAt(offset: report, msg: "trait-to-trait conformance edge grows within a cycle")
+                    }
+                }
                 val source: TraitCycleNode = <TraitCycleNode owner=edge.typeStart args=edge.subjectArgs scope=ci />
                 val target: TraitCycleNode = <TraitCycleNode owner=edge.traitStart args=edge.traitArgs scope=ci />
                 val stack: Array[TraitCycleNode] = [source]
                 val binds: Array[TraitCycleBind] = []
-                if self.traitCyclePathReaches(node: target, stack: stack, binds: binds, activeExtIds: activeExtIds, depth: 1U64) {
+                if self.traitCyclePathReaches(node: target, stack: stack, binds: binds, activeExtIds: activeExtIds) {
                     mut val report: U64 = edge.defOffset
                     if offset != 0U64 { report = offset }
                     self.errorAt(offset: report, msg: "trait-to-trait conformance cycle")

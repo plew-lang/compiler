@@ -1,7 +1,0 @@
-trait A[Item] {}
-trait B[Item] {}
-
-impl[T] A[T] as B[T] {}
-impl B[I64] as A[String] {}
-
-fn main() {}
