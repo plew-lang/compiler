@@ -22,6 +22,16 @@ pub impl Comp {
         return false
     }
 
+    inout fn traitPositionalArity(traitId: U64) -> U64 {
+        mut val ti: U64 = 0U64
+        while ti < self.decls.traits.count() {
+            val tr: TraitDef = self.decls.traits[ti]
+            if tr.nameId == traitId { return tr.typeParams.count() }
+            ti += 1U64
+        }
+        return 0U64
+    }
+
     inout fn boundLhsMatchesType(lhs: TypeAst, t: TypeAst) -> Bool {
         if lhs.projectionAssoc.bytes().count() > 0 {
             return false
@@ -88,9 +98,28 @@ pub impl Comp {
         if t.projectionAssoc.bytes().count() > 0 {
             if projectionTrait.bytes().count() == 0 {
                 projectionTrait = self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits)
+            } else {
+                val traitN: Bind = self.internBytes(s: projectionTrait)
+                val arity: U64 = self.traitPositionalArity(traitId: traitN.nameId)
+                if arity != t.projectionTraitArgs.count() {
+                    self.errorAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments")
+                }
+                mut val pi: U64 = 0U64
+                while pi < t.projectionTraitArgLabels.count() {
+                    if t.projectionTraitArgLabels[pi].bytes().count() > 0U64 {
+                        self.errorAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only")
+                    }
+                    pi += 1U64
+                }
             }
         }
-        return <TypeAst name=t.name args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord />
+        mut val projectionTraitArgs: Array[TypeAst] = []
+        i = 0U64
+        while i < t.projectionTraitArgs.count() {
+            projectionTraitArgs.append(self.normalizeProjectionType(t: t.projectionTraitArgs[i], whereTypes: whereTypes, whereTraits: whereTraits))
+            i += 1U64
+        }
+        return <TypeAst name=t.name args=args span=t.span extView=t.extView viewNames=t.viewNames projectionTrait=projectionTrait projectionTraitArgs=projectionTraitArgs projectionTraitArgLabels=t.projectionTraitArgLabels projectionAssoc=t.projectionAssoc isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable isRecord=t.isRecord />
     }
 
     inout fn normalizeProjectionTypeActive(t: TypeAst) -> TypeAst {

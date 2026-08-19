@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+trait Convert[From] {
+    type Output
+}
+
+struct Parser {}
+pub impl Parser as Convert[String] {
+    type Output = I64
+}
+pub impl Parser as Convert[Array[U8]] {
+    type Output = Bool
+}
+
+fn main() {
+    val number: Parser#Convert[String].Output = 7I64
+    val flag: Parser#Convert[Array[U8]].Output = true
+    print(number)
+    print(flag)
+}

@@ -195,6 +195,19 @@ pub impl Comp {
             assocTraitLen = atn.nameLen
             assocTraitId = intern(c: inout self, start: atn.nameStart, len: atn.nameLen)
         }
+        mut val assocTraitArgs: Array[U64] = []
+        mut val assocTraitArgLabels: Array[U64] = []
+        mut val ati: U64 = 0U64
+        while ati < t.projectionTraitArgs.count() {
+            assocTraitArgs.append(self.lowerType(t: t.projectionTraitArgs[ati]).ref)
+            if ati < t.projectionTraitArgLabels.count() && t.projectionTraitArgLabels[ati].bytes().count() > 0U64 {
+                val label: Bind = self.internBytes(s: t.projectionTraitArgLabels[ati])
+                assocTraitArgLabels.append(intern(c: inout self, start: label.nameStart, len: label.nameLen))
+            } else {
+                assocTraitArgLabels.append(0U64)
+            }
+            ati += 1U64
+        }
         mut val assocNameStart: U64 = 0
         mut val assocNameLen: U64 = 0
         mut val assocNameId: U64 = 0
@@ -230,7 +243,7 @@ pub impl Comp {
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId viewIds=viewIds isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId viewIds=viewIds isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

@@ -11,14 +11,14 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
         if t.viewExtId == 0U64 && t.viewIds.count() == 0U64 { return ref }
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
     }
 
     inout fn plainRefOfProjection(t: TypeRef) -> U64 {
         return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable />)
     }
 
-    inout fn assocBindingFor(baseRef: U64, traitId: U64, assocId: U64) -> U64 {
+    inout fn assocBindingFor(baseRef: U64, traitId: U64, traitArgs: Array[U64], assocId: U64) -> U64 {
         if baseRef >= self.arena.types.count() {
             return 0
         }
@@ -30,7 +30,7 @@ pub impl Comp {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.recvId == base.nameId && ab.nameId == assocId {
                 if traitId == 0U64 || ab.traitId == traitId {
-                    if !(self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: ab.subjectArgs, typeParams: ab.typeParams, declaredTraitArgs: ab.traitArgs, typeRef: baseRef, traitArgs: ab.traitArgs)) {
+                    if !(self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: ab.subjectArgs, typeParams: ab.typeParams, declaredTraitArgs: ab.traitArgs, typeRef: baseRef, traitArgs: traitArgs)) {
                         i += 1U64
                         continue
                     }
@@ -83,7 +83,7 @@ pub impl Comp {
             self.errorAt(offset: t.siteOffset, msg: "associated-type short projection was not resolved from a unique `where` source — write `T#Trait.Item` (spec/08)")
             return tyRef
         }
-        val bound: U64 = self.assocBindingFor(baseRef: baseRef, traitId: t.assocTraitId, assocId: t.assocNameId)
+        val bound: U64 = self.assocBindingFor(baseRef: baseRef, traitId: t.assocTraitId, traitArgs: t.assocTraitArgs, assocId: t.assocNameId)
         if bound != 0U64 {
             return self.groundTypeRef(ref: bound)
         }

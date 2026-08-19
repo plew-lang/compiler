@@ -62,12 +62,14 @@ export struct TypeRef {
     // (spec/08,12). Empty for ordinary generic args. Resolved against the trait's
     // type params + associated types when building the existential's dispatch thunks.
     pub val argLabels: Array[U64] = []
-    // Associated-type projection (spec/08): `T#Trait.Item` / `T.Item`. The head
-    // name/args above name the projected-from type; assocTrait* is 0 for the short
-    // form whose source trait must be inferred uniquely from bounds.
+    // Associated-type projection (spec/08): `T#Trait[Args].Item` / `T.Item`. The
+    // head name/args above name the projected-from type; assocTraitArgs select
+    // the parameterized trait instance and never contain output bindings.
     pub val assocTraitStart: U64 = 0
     pub val assocTraitLen: U64 = 0
     pub val assocTraitId: U64 = 0
+    pub val assocTraitArgs: Array[U64] = []
+    pub val assocTraitArgLabels: Array[U64] = []
     pub val assocNameStart: U64 = 0
     pub val assocNameLen: U64 = 0
     pub val assocNameId: U64 = 0

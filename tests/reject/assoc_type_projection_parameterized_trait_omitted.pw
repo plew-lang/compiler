@@ -1,0 +1,12 @@
+trait Convert[From] {
+    type Output
+}
+
+struct Parser {}
+pub impl Parser as Convert[String] {
+    type Output = I64
+}
+
+fn main() {
+    val result: Parser#Convert.Output = 7I64
+}

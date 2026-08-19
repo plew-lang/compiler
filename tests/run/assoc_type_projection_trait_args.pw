@@ -3,6 +3,7 @@ trait Add[Rhs] {
     fn add(rhs: Rhs) -> Output
 }
 
+// A parameterized projection names the same full instance as the where bound.
 fn addOne[T](value: T) -> T#Add[I64].Output where T: Add[I64] {
     return value.add(rhs: 1I64)
 }
