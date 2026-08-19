@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// Two paths repeatedly reconverge.  The declaration graph has no SCC, and
+// symbolic cycle validation must saturate shared states instead of retaining
+// one full path per route.
+trait A {}
+trait L {}
+trait R {}
+trait B {}
+trait C {}
+trait D {}
+
+impl A as L {}
+impl A as R {}
+impl L as B {}
+impl R as B {}
+impl B as C {}
+impl B as D {}
+
+fn main() { print(1I64) }

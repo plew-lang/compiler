@@ -343,34 +343,106 @@ pub impl Comp {
         return false
     }
 
-    // The graph used for the declaration-time termination rule deliberately
-    // forgets type arguments: it only decides which *owners* participate in
-    // an SCC. Exact instance equality is checked separately below.  This is a
-    // finite, iterative reachability query; it is not the instance solver.
-    inout fn traitCycleOwnerReaches(from: U64, target: U64, activeExtIds: Array[U64]) -> Bool {
-        if from == target { return true }
-        mut val pending: Array[U64] = [from]
-        mut val cursor: U64 = 0U64
-        while cursor < pending.count() {
-            val owner: U64 = pending[cursor]
-            cursor += 1U64
-            mut val ci: U64 = 0U64
-            while ci < self.decls.conforms.count() {
-                val edge: Conform = self.decls.conforms[ci]
-                if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) && edge.typeStart == owner {
-                    if edge.traitStart == target { return true }
-                    mut val seen: Bool = false
-                    mut val pi: U64 = 0U64
-                    while pi < pending.count() {
-                        if pending[pi] == edge.traitStart { seen = true }
-                        pi += 1U64
+    // The owner graph decides only SCC membership; exact trait instances are
+    // handled by the symbolic automaton.  Build components once per active
+    // source-set with iterative Kosaraju, keeping compiler-stack use bounded.
+    inout fn traitCycleOwnerIndex(owners: Array[U64], owner: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < owners.count() {
+            if owners[i] == owner { return i }
+            i += 1U64
+        }
+        return owners.count()
+    }
+
+    inout fn traitCycleOwners(activeExtIds: Array[U64]) -> Array[U64] {
+        mut val owners: Array[U64] = []
+        mut val ci: U64 = 0U64
+        while ci < self.decls.conforms.count() {
+            val edge: Conform = self.decls.conforms[ci]
+            if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
+                if self.traitCycleOwnerIndex(owners: owners, owner: edge.typeStart) == owners.count() { owners.append(edge.typeStart) }
+                if self.traitCycleOwnerIndex(owners: owners, owner: edge.traitStart) == owners.count() { owners.append(edge.traitStart) }
+            }
+            ci += 1U64
+        }
+        return owners
+    }
+
+    inout fn traitCycleOwnerComponents(owners: Array[U64], activeExtIds: Array[U64]) -> Array[U64] {
+        mut val visited: Array[Bool] = []
+        mut val components: Array[U64] = []
+        mut val oi: U64 = 0U64
+        while oi < owners.count() {
+            visited.append(false)
+            components.append(0U64)
+            oi += 1U64
+        }
+        mut val finish: Array[U64] = []
+        oi = 0U64
+        while oi < owners.count() {
+            if !(visited[oi]) {
+                mut val nodes: Array[U64] = [owners[oi]]
+                mut val nextEdges: Array[U64] = [0U64]
+                visited[oi] = true
+                while nodes.count() > 0U64 {
+                    val top: U64 = nodes.count() - 1U64
+                    val owner: U64 = nodes[top]
+                    mut val ci: U64 = nextEdges[top]
+                    mut val advanced: Bool = false
+                    while ci < self.decls.conforms.count() && !(advanced) {
+                        nextEdges[top] = ci + 1U64
+                        val edge: Conform = self.decls.conforms[ci]
+                        if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) && edge.typeStart == owner {
+                            val ni: U64 = self.traitCycleOwnerIndex(owners: owners, owner: edge.traitStart)
+                            if ni < owners.count() && !(visited[ni]) {
+                                visited[ni] = true
+                                nodes.append(edge.traitStart)
+                                nextEdges.append(0U64)
+                                advanced = true
+                            }
+                        }
+                        ci += 1U64
                     }
-                    if !seen { pending.append(edge.traitStart) }
+                    if !(advanced) {
+                        finish.append(owner)
+                        nodes.removeLast()
+                        nextEdges.removeLast()
+                    }
                 }
-                ci += 1U64
+            }
+            oi += 1U64
+        }
+        mut val component: U64 = 1U64
+        mut val fi: U64 = finish.count()
+        while fi > 0U64 {
+            fi -= 1U64
+            val root: U64 = finish[fi]
+            val ri: U64 = self.traitCycleOwnerIndex(owners: owners, owner: root)
+            if ri < owners.count() && components[ri] == 0U64 {
+                mut val pending: Array[U64] = [root]
+                components[ri] = component
+                mut val pi: U64 = 0U64
+                while pi < pending.count() {
+                    val owner: U64 = pending[pi]
+                    pi += 1U64
+                    mut val ci: U64 = 0U64
+                    while ci < self.decls.conforms.count() {
+                        val edge: Conform = self.decls.conforms[ci]
+                        if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) && edge.traitStart == owner {
+                            val ni: U64 = self.traitCycleOwnerIndex(owners: owners, owner: edge.typeStart)
+                            if ni < owners.count() && components[ni] == 0U64 {
+                                components[ni] = component
+                                pending.append(edge.typeStart)
+                            }
+                        }
+                        ci += 1U64
+                    }
+                }
+                component += 1U64
             }
         }
-        return false
+        return components
     }
 
     inout fn traitCycleConstructorCount(ref: U64, params: Array[Bind]) -> U64 {
@@ -447,11 +519,15 @@ pub impl Comp {
     // passes its complete extension-source set, making extensions edge-active
     // only when the programmer explicitly selected them.
     inout fn checkTraitSubjectCycles(activeExtIds: Array[U64], offset: U64 = 0U64) {
+        val owners: Array[U64] = self.traitCycleOwners(activeExtIds: activeExtIds)
+        val components: Array[U64] = self.traitCycleOwnerComponents(owners: owners, activeExtIds: activeExtIds)
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val edge: Conform = self.decls.conforms[ci]
             if self.traitCycleEdgeActive(cf: edge, activeExtIds: activeExtIds) {
-                if self.traitCycleOwnerReaches(from: edge.traitStart, target: edge.typeStart, activeExtIds: activeExtIds) {
+                val sourceOwner: U64 = self.traitCycleOwnerIndex(owners: owners, owner: edge.typeStart)
+                val targetOwner: U64 = self.traitCycleOwnerIndex(owners: owners, owner: edge.traitStart)
+                if sourceOwner < owners.count() && targetOwner < owners.count() && components[sourceOwner] == components[targetOwner] {
                     if !(self.traitCycleEdgeIsNonIncreasing(cf: edge)) {
                         mut val report: U64 = edge.defOffset
                         if offset != 0U64 { report = offset }
