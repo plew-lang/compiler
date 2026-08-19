@@ -427,7 +427,7 @@ pub impl Comp {
         return count
     }
 
-    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = []) -> Bool {
+    inout fn viewConformsTo(typeStart: U64, typeLen: U64, typeRef: U64, viewId: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64] = [], assocNames: Array[U64] = [], assocValues: Array[U64] = []) -> Bool {
         if viewId == 0U64 {
             return false
         }
@@ -438,7 +438,7 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             // Direct `extension Ext { impl T as P }` conformances are view
             // facts too (not only trait-subject `impl B as A` edges).
-            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && self.conformanceMatchesTraitInstance(cf: cf, typeRef: typeRef, traitArgs: traitArgs) {
+            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && self.conformanceMatchesTraitInstance(cf: cf, typeRef: typeRef, traitArgs: traitArgs) && self.traitAssocOutputsMatch(cf: cf, assocNames: assocNames, assocValues: assocValues) {
                 if !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) {
                     return true
                 }

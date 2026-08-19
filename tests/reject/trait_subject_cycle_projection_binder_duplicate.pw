@@ -1,0 +1,13 @@
+// `T` occurs as the receiver of both projections in the target.  The
+// constructor total shrinks, so only a representation-aware binder traversal
+// can reject this SCC edge.
+trait Projection {
+    type Item
+}
+trait A[Left, Right] {}
+trait B[Left, Right] {}
+
+impl[T, U] A[T#Projection.Item, Array[Array[U]]] as B[T#Projection.Item, T#Projection.Item] {}
+impl[T] B[T#Projection.Item, T#Projection.Item] as A[T#Projection.Item, T#Projection.Item] {}
+
+fn main() {}

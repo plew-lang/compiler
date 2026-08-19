@@ -186,10 +186,15 @@ pub impl Comp {
         }
         val ta: TypeRef = self.arena.types[a.ref]
         val tb: TypeRef = self.arena.types[b.ref]
-        if ta.nameId != tb.nameId || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return 0U64 }
+        if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return 0U64 }
         mut val i: U64 = 0U64
         mut val grows: Bool = false
         while i < ta.args.count() {
+            mut val aLabel: U64 = 0U64
+            mut val bLabel: U64 = 0U64
+            if i < ta.argLabels.count() { aLabel = ta.argLabels[i] }
+            if i < tb.argLabels.count() { bLabel = tb.argLabels[i] }
+            if aLabel != bLabel { return 0U64 }
             val relation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=ta.args[i] scope=a.scope />, b: <TraitCycleTerm ref=tb.args[i] scope=b.scope />, binds: inout binds)
             if relation == 0U64 { return 0U64 }
             if relation == 2U64 { grows = true }
@@ -352,7 +357,10 @@ pub impl Comp {
         if self.plainBinder(ref: ref, params: params) == binder { return 1U64 }
         if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
         val t: TypeRef = self.arena.types[ref]
+        // A projection such as `T#P.Item` is not a bare binder for unification,
+        // but its receiver still contains T for the SCC non-increase ranking.
         mut val count: U64 = 0U64
+        if t.assocTraitId != 0U64 && binder < params.count() && t.nameId == params[binder].nameId { count = 1U64 }
         mut val i: U64 = 0U64
         while i < t.args.count() {
             count += self.traitCycleBinderOccurrences(ref: t.args[i], params: params, binder: binder)
