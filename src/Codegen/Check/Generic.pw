@@ -244,6 +244,21 @@ pub impl Comp {
         return false
     }
 
+    // Signature TypeRefs are synthetic (siteOffset == 0) in generic bodies,
+    // so Verify's authored-type walk intentionally skips them.  Visit the
+    // complete type tree here: a view source-set nested in Array[T#E#F], a
+    // tuple, or a function type is no less structural than a top-level view.
+    inout fn checkGenericTypeViewCycles(ref: U64, offset: U64) {
+        if ref == 0U64 || ref >= self.arena.types.count() { return }
+        self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: ref), offset: offset)
+        val t: TypeRef = self.arena.types[ref]
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            self.checkGenericTypeViewCycles(ref: t.args[i], offset: offset)
+            i += 1U64
+        }
+    }
+
     // Walk a method/assoc receiver in a generic body. A bare type / primitive / type-
     // parameter name here is a valid assoc-fn qualifier (`T.make()`, `Buffer.new()`),
     // not a value read — so it needs no value check (the parent Method arm bound-checks a
@@ -761,14 +776,10 @@ pub impl Comp {
                 mut val pi: U64 = 0U64
                 while pi < f.params.count() {
                     val param: Param = f.params[pi]
-                    if param.ty < self.arena.types.count() {
-                        self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: param.ty), offset: param.tyStart)
-                    }
+                    self.checkGenericTypeViewCycles(ref: param.ty, offset: param.tyStart)
                     pi += 1U64
                 }
-                if f.retTy < self.arena.types.count() {
-                    self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: f.retTy), offset: f.retStart)
-                }
+                self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
                 val noParams: Array[Bind] = []
                 val noArgs: Array[U64] = []
                 self.cur.locals = []
