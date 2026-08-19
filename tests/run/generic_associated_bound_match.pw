@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// `Item=I64` constrains the selected Iter witness output; it is not a
+// positional argument of Iter.
+trait Iter {
+    type Item
+}
+
+struct Numbers {}
+pub impl Numbers { factory }
+pub impl Numbers as Iter {
+    type Item = I64
+}
+
+fn requireI64[T](value: T) where T: Iter[Item=I64] {}
+
+fn main() {
+    requireI64(value: <Numbers />)
+    print(1I64)
+}

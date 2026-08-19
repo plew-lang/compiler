@@ -671,6 +671,10 @@ export struct FuncBound {
     pub val traitStart: U64
     pub val traitLen: U64
     pub val traitArgs: Array[U64] = []
+    // Named arguments constrain associated-type outputs of the witness selected
+    // by the positional trait instance key; they are never positional inputs.
+    pub val traitAssocNames: Array[U64] = []
+    pub val traitAssocValues: Array[U64] = []
 }
 
 // A concrete instantiation of a generic free function (`fn f[T](x: T)` called

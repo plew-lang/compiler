@@ -264,14 +264,26 @@ pub impl Comp {
                 pty = self.simpleTypeRef(nameStart: pn.nameStart, nameLen: pn.nameLen)
             }
             mut val boundArgs: Array[U64] = []
+            mut val boundAssocNames: Array[U64] = []
+            mut val boundAssocValues: Array[U64] = []
             if i < traitTypes.count() {
                 mut val ai: U64 = 0U64
                 while ai < traitTypes[i].args.count() {
-                    boundArgs.append(self.lowerType(t: self.normalizeProjectionType(t: traitTypes[i].args[ai], whereTypes: types, whereTraits: traits)).ref)
+                    val boundRef: U64 = self.lowerType(t: self.normalizeProjectionType(t: traitTypes[i].args[ai], whereTypes: types, whereTraits: traits)).ref
+                    mut val label: U64 = 0U64
+                    if ai < traitTypes[i].argLabels.count() && traitTypes[i].argLabels[ai].bytes().count() > 0U64 {
+                        val labelBind: Bind = self.internBytes(s: traitTypes[i].argLabels[ai])
+                        label = labelBind.nameId
+                    }
+                    if label == 0U64 { boundArgs.append(boundRef) }
+                    else {
+                        boundAssocNames.append(label)
+                        boundAssocValues.append(boundRef)
+                    }
                     ai += 1U64
                 }
             }
-            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen traitArgs=boundArgs />)
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen traitArgs=boundArgs traitAssocNames=boundAssocNames traitAssocValues=boundAssocValues />)
             i += 1
         }
     }

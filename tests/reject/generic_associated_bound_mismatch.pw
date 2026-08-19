@@ -1,0 +1,17 @@
+// The same Iter instance exists, but its associated output is String rather
+// than the required I64.
+trait Iter {
+    type Item
+}
+
+struct Words {}
+pub impl Words { factory }
+pub impl Words as Iter {
+    type Item = String
+}
+
+fn requireI64[T](value: T) where T: Iter[Item=I64] {}
+
+fn main() {
+    requireI64(value: <Words />)
+}

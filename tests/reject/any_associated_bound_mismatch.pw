@@ -1,0 +1,13 @@
+trait Iter {
+    type Item
+}
+
+struct Words {}
+pub impl Words { factory }
+pub impl Words as Iter {
+    type Item = String
+}
+
+fn main() {
+    val values: any Iter[Item=I64] = <Words />
+}

@@ -18,6 +18,26 @@ pub impl Comp {
         return out
     }
 
+    inout fn traitAssocArgNames(t: TypeRef) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            if i < t.argLabels.count() && t.argLabels[i] != 0U64 { out.append(t.argLabels[i]) }
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn traitAssocArgValues(t: TypeRef) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            if i < t.argLabels.count() && t.argLabels[i] != 0U64 { out.append(t.args[i]) }
+            i += 1U64
+        }
+        return out
+    }
+
     inout fn inferType(id: U64) -> U64 {
         // an un-suffixed integer literal has no intrinsic type — it adapts to its context
         // (`u64var + 5`, `val x: I32 = 5`). typeOf may attach an emission-context width to
@@ -98,8 +118,10 @@ pub impl Comp {
                         // instance query as `where`: a witness for `P[I64]`
                         // does not construct an `any P[String]` box.
                         val traitArgs: Array[U64] = self.positionalTraitArgs(t: te)
+                        val assocNames: Array[U64] = self.traitAssocArgNames(t: te)
+                        val assocValues: Array[U64] = self.traitAssocArgValues(t: te)
                         if inferred != 0U64 {
-                            if !(self.conformsInstance(ref: inferred, traitStart: te.nameStart, traitLen: te.nameLen, traitArgs: traitArgs)) {
+                            if !(self.conformsInstance(ref: inferred, traitStart: te.nameStart, traitLen: te.nameLen, traitArgs: traitArgs, assocNames: assocNames, assocValues: assocValues)) {
                                 return false
                             }
                         } else {
