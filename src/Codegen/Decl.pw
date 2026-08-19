@@ -357,13 +357,23 @@ pub impl Comp {
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {
-            if self.arena.funcs[i].extId == qExt {
-                if self.arena.funcs[i].recvId == qType {
-                    if typeRef == 0U64 || self.arena.funcs[i].recvTy == 0U64 {
+            val f: Func = self.arena.funcs[i]
+            if f.extId == qExt {
+                // A trait-receiver extension applies through a concrete value
+                // only when that value conforms to the full trait instance.
+                // Head-name equality (`B`) is not enough for B[I64] vs
+                // B[String].
+                if self.methodRecvIsTrait(f: f) && typeRef != 0U64 {
+                    if self.conformsInstance(ref: typeRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: f.recvTraitArgs) {
+                        return true
+                    }
+                }
+                if f.recvId == qType {
+                    if typeRef == 0U64 || f.recvTy == 0U64 {
                         return true
                     }
                     mut val binds: Array[UnifyBind] = []
-                    if self.unifyPatterns(a: self.arena.funcs[i].recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: self.arena.funcs[i].typeParams, bParams: [], binds: inout binds, ignoreTopView: true) {
+                    if self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: f.typeParams, bParams: [], binds: inout binds, ignoreTopView: true) {
                         return true
                     }
                 }
@@ -574,7 +584,7 @@ pub impl Comp {
                             providedOwnerMod = self.traitModuleByOwner(owner: f.provTraitOwner)
                         }
                         val copyIdx: U64 = self.arena.funcs.count()
-                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=srcTag originTraitOwner=f.provTraitOwner originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
+                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=srcTag originTraitOwner=f.provTraitOwner originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
                         self.registerCallable(funcIdx: copyIdx)
                     }
                 }
@@ -608,7 +618,7 @@ pub impl Comp {
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
                     // operator `Sub[Rhs]`). Without the arity gate a provided method on the
                     // 0-ary `Sub` would copy onto every type conforming to `Sub[Rhs]`.
-                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart {
+                    if f.recvId == cf.traitId && f.provTraitArity == cf.traitArgs.count() && f.provTraitOwner == cf.traitStart && self.traitInstanceArgsMatch(pattern: f.recvTraitArgs, patternParams: f.typeParams, actual: cf.traitArgs) {
                         // Two conformed traits providing the same name both copy here, each tagged with
                         // its source trait (srcTraitId) — they coexist; bare `a.foo()` is
                         // then a use-site ambiguity (findMethod), while `a#P.foo()` selects
@@ -629,7 +639,7 @@ pub impl Comp {
                                 providedOwnerMod = copyOwnerMod
                             }
                             val copyIdx: U64 = self.arena.funcs.count()
-                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=cf.traitId originTraitOwner=cf.traitStart originTraitArity=cf.traitArgs.count() providedOwnerMod=providedOwnerMod extId=f.extId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
+                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=cf.traitId originTraitOwner=cf.traitStart originTraitArity=cf.traitArgs.count() providedOwnerMod=providedOwnerMod extId=f.extId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
                             self.registerCallable(funcIdx: copyIdx)
                     }
                 }

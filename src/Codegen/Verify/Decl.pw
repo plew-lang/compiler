@@ -141,7 +141,7 @@ pub impl Comp {
             self.errorAt(offset: offset, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
         }
         if extNamed {
-            self.errorAt(offset: offset, msg: "cannot view this value through that extension (`value#Ext`): the extension declares no `impl` for this type (spec/09)")
+            self.errorAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)")
         }
         self.errorAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
     }

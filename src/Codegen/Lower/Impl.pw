@@ -88,7 +88,7 @@ pub impl Comp {
         }
     }
 
-    inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
+    inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
         mut val boundTraits: Array[String] = []
@@ -221,7 +221,7 @@ pub impl Comp {
             originTraitOwner = originTrait.nameStart
             originTraitArity = im.traitArgs.count()
         }
-        self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity defOffset=m.nameSpan.start />)
+        self.registerDeclaredFunc(f: <Func nameStart=nameN.nameStart nameLen=nameN.nameLen nameId=intern(c: inout self, start: nameN.nameStart, len: nameN.nameLen) recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) recvTy=recvTy recvTraitArgs=recvTraitArgs typeParams=typeParams params=params hasRet=effHasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=hasRecv recvStart=recvN.nameStart recvLen=recvN.nameLen selfInout=m.selfInout selfMove=m.selfMove isAssoc=isAssoc isAsync=m.isAsync isExtern=false isPub=im.isPub extId=extId provTraitArity=im.recvType.args.count() provTraitOwner=recvTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity defOffset=m.nameSpan.start />)
         self.appendFuncBounds(fnIdx: fnIdx, params: m.whereParams, traits: m.whereTraits, types: m.whereTypes, traitTypes: m.whereTraitTypes)
         self.appendFuncBounds(fnIdx: fnIdx, params: im.whereParams, traits: im.whereTraits, types: im.whereTypes, traitTypes: im.whereTraitTypes)
         self.cur.typeParams = savedTP
@@ -284,10 +284,10 @@ pub impl Comp {
             val m: MemberAst = im.members[mi]
             match m.kind {
                 MemberKind.Method => {
-                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
+                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: true, isAssoc: false, witnessed: inout witnessed)
                 }
                 MemberKind.AssocFn => {
-                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
+                    self.lowerMethodMember(im: im, m: m, recvN: recvN, recvTy: recvTy, recvTraitArgs: subjectArgs, recvTraitOwner: recvTraitOwner, implParamBinds: implParamBinds, hasRecv: false, isAssoc: true, witnessed: inout witnessed)
                 }
                 MemberKind.Deinit => {
                     val deinitN: Bind = self.internBytes(s: "deinit")

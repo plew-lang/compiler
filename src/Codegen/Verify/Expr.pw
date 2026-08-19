@@ -137,6 +137,17 @@ pub impl Comp {
                 self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
                 val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                if mf < self.arena.funcs.count() {
+                    val selectedFn: Func = self.arena.funcs[mf]
+                    if self.methodRecvIsTrait(f: selectedFn) {
+                        if rt.nameLen != 0U64 {
+                            val recvId: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
+                            if !(self.conformExistsTraitInstance(typeId: recvId, traitId: selectedFn.recvId, traitArgs: selectedFn.recvTraitArgs, patternParams: selectedFn.typeParams)) {
+                                self.errorAt(offset: srcStart, msg: "extension does not apply to this trait instance")
+                            }
+                        }
+                    }
+                }
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 if rt.nameLen != 0U64 {
                     self.verifyResolvedMethodCall(recv: recv, ownerStart: rt.nameStart, ownerLen: rt.nameLen, nameStart: nameStart, mf: mf, args: args)

@@ -774,6 +774,11 @@ export struct Func {
     // head-name fast path; this preserves the generic arguments and # view that
     // are part of the declaration namespace.
     pub val recvTy: U64 = 0
+    // Positional arguments of a trait receiver. `recvTy` is deliberately 0 for
+    // trait subjects (they are not value types), so this is the complete trait
+    // instance key for `impl P[Arg] { ... }`. Associated-type bindings are
+    // outputs constrained after selecting that key and do not belong here.
+    pub val recvTraitArgs: Array[U64] = []
     // generic type parameters `fn id[T](...)` (name spans; empty if not
     // generic). For a method, an `impl[T] Type[T]`-introduced parameter also
     // lands here. Consumed by G3 monomorphization.
