@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+trait Iterator {
+    type Item
+    fn next() -> Item
+}
+
+struct Box[T] {
+    pub val value: T
+}
+
+pub impl[T] Box[T] { factory }
+
+pub impl[T] Box[T] as Iterator {
+    type Item = T
+    fn next() -> T {
+        return self.value
+    }
+}
+
+fn readI64[T](value: T) -> I64 where T: Iterator[Item = I64] {
+    return value.next()
+}
+
+fn main() {
+    print(readI64(value: <Box[I64] value=7I64 />))
+}
