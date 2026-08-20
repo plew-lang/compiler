@@ -645,9 +645,10 @@ pub impl Comp {
                 // field on Array and rejects, per "Plew has no computed properties".)
                 // `buf.count()` / `buf.capacity()` are ordinary methods now (collections.md
                 // §3-付録4), resolved through normal method typing below — no property branch.
-                // a generic struct instantiation's field type is substituted.
-                if self.isGenericInst(ref: bt.ref) {
-                    return self.genericFieldTypeInfo(instRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
+                // A structured receiver carries its full semantic type term; its
+                // field result is always recovered through the one receiver query.
+                if bt.ref != 0U64 {
+                    return self.fieldTypeOfReceiver(receiverRef: bt.ref, fieldStart: nameStart, fieldLen: nameLen)
                 }
                 if bt.kind == 2 {
                     return self.fieldType(structStart: bt.nameStart, structLen: bt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
@@ -1205,10 +1206,7 @@ pub impl Comp {
                 val bt: TypeInfo = self.exprType(id: base)
                 if self.isStrongRefInst(ref: bt.ref) {
                     val inst: TypeRef = self.arena.types[bt.ref]
-                    val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
-                    if pt.kind == 2 {
-                        return self.fieldType(structStart: pt.nameStart, structLen: pt.nameLen, fieldStart: nameStart, fieldLen: nameLen)
-                    }
+                    return self.fieldTypeOfReceiver(receiverRef: inst.args[0], fieldStart: nameStart, fieldLen: nameLen)
                 }
                 return scalarInfo()
             }

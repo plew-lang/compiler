@@ -241,8 +241,8 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val baseRef: U64 = self.groundedTypeOf(id: base)
-                if baseRef != 0U64 && baseRef < self.arena.types.count() && self.isGenericInst(ref: baseRef) {
-                    val fieldInfo: TypeInfo = self.genericFieldTypeInfo(instRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
+                if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                    val fieldInfo: TypeInfo = self.fieldTypeOfReceiver(receiverRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
                     if fieldInfo.ref != 0U64 { return fieldInfo.ref }
                 }
             }

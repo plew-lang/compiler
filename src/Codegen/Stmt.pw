@@ -334,8 +334,8 @@ pub impl Comp {
         // a kind-3 `et` names its ELEMENT (the destructured struct); its ref — when
         // carried — is the `Array[E]` instance, NOT the element, so the generic-inst
         // route must not key off it (it would look the field up on Array).
-        if et.kind != 3 && self.isGenericInst(ref: et.ref) {
-            return self.genericFieldTypeInfo(instRef: et.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+        if et.kind != 3 && et.ref != 0U64 {
+            return self.fieldTypeOfReceiver(receiverRef: et.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
         }
         return self.fieldType(structStart: et.nameStart, structLen: et.nameLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
     }

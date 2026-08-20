@@ -1849,7 +1849,7 @@ pub impl Comp {
         }
         val vRef: U64 = gt.args[vi]
         // type `cont` under ChainHole = V. exprType's Field/Method arms ground member
-        // types through V's instance (genericFieldTypeInfo for a generic chain Value),
+        // types through V's instance (fieldTypeOfReceiver for every chain Value),
         // so U comes back concrete — no separate groundUnderInst needed.
         val savedHole: U64 = self.cur.chainHoleRef
         self.cur.chainHoleRef = vRef

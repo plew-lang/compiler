@@ -788,7 +788,6 @@ pub impl Comp {
             return
         }
         val st: TypeInfo = self.typeOf(id: scrut)
-        val generic: Bool = self.isGenericInst(ref: st.ref)
         mut val bi: U64 = 0
         if a.isStruct {
             while bi < a.binds.count() {
@@ -798,8 +797,8 @@ pub impl Comp {
                     continue
                 }
                 mut val ft: TypeInfo = scalarInfo()
-                if generic {
-                    ft = self.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                if st.ref != 0U64 {
+                    ft = self.fieldTypeOfReceiver(receiverRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 } else {
                     ft = self.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 }
