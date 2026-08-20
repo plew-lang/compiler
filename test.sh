@@ -15,12 +15,6 @@
 set -e
 cd "$(dirname "$0")"
 
-# A Codex Desktop code-mode wrapper may yield after about 30 seconds while
-# this foreground test process continues under a live shell session.  Treat a
-# returned session id as authoritative: keep polling it through its final exit
-# status before calling this suite hung or incomplete.
-printf '%s\n' 'plewc: note: in Codex, a ~30s yield may leave this test running; continue its shell session until the final exit status.' >&2
-
 LC="${LLVM_CONFIG:-llvm-config}"
 command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
