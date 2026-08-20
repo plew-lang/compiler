@@ -13,6 +13,61 @@
 // c.monoWork.arrayElems and its runtime is defined before the dependent one.
 
 pub impl Comp {
+    // Rebuild one semantic type term while preserving every identity facet.
+    // This is the only construction path used by term substitution: projection
+    // trait arguments are children just like nominal arguments.
+    inout fn rebuildTypeTerm(t: TypeRef, args: Array[U64], assocTraitArgs: Array[U64]) -> U64 {
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+    }
+
+    // The legacy arena represents a projection receiver through the same head
+    // and arguments as the projection itself. Expose it as an explicit term so
+    // all structural operations can recurse into it.
+    inout fn typeTermProjectionReceiver(t: TypeRef) -> U64 {
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
+    }
+
+    // Apply exactly one concrete witness's impl-binder substitution. Query
+    // terms stay rigid: an unmatched binder remains symbolic.
+    inout fn groundWitnessTypeTerm(ref: U64, params: Array[Bind], matchResult: WitnessMatch) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val binder: U64 = self.plainBinder(ref: ref, params: params)
+        if binder < params.count() {
+            val found: U64 = self.witnessBindIndex(binds: matchResult.binds, binder: binder)
+            if found < matchResult.binds.count() { return matchResult.binds[found].term }
+            return ref
+        }
+        val t: TypeRef = self.arena.types[ref]
+        mut val args: Array[U64] = []
+        mut val assocArgs: Array[U64] = []
+        mut val changed: Bool = false
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            val next: U64 = self.groundWitnessTypeTerm(ref: t.args[i], params: params, matchResult: matchResult)
+            if next != t.args[i] { changed = true }
+            args.append(next)
+            i += 1U64
+        }
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            val next: U64 = self.groundWitnessTypeTerm(ref: t.assocTraitArgs[i], params: params, matchResult: matchResult)
+            if next != t.assocTraitArgs[i] { changed = true }
+            assocArgs.append(next)
+            i += 1U64
+        }
+        if t.assocNameId != 0U64 {
+            val receiver: U64 = self.typeTermProjectionReceiver(t: t)
+            val groundedReceiver: U64 = self.groundWitnessTypeTerm(ref: receiver, params: params, matchResult: matchResult)
+            if groundedReceiver != receiver {
+                if groundedReceiver >= self.arena.types.count() { return ref }
+                val base: TypeRef = self.arena.types[groundedReceiver]
+                return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen args=base.args viewExtId=base.viewExtId viewIds=base.viewIds isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+            }
+        }
+        if changed { return self.rebuildTypeTerm(t: t, args: args, assocTraitArgs: assocArgs) }
+        return ref
+    }
+
     inout fn ensureArrayElemDeps(elemRef: U64) {
         if elemRef == 0 {
             return
@@ -228,7 +283,7 @@ pub impl Comp {
             // rebuild with the identity facets preserved: the view (`P#Ext`) and the
             // existential (`any P`) are part of type identity — grounding the args
             // must not strip them.
-            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=newArgs viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
         }
         return ref
     }
@@ -251,8 +306,21 @@ pub impl Comp {
         }
         val savedP: Array[Bind] = self.cur.typeParams
         val savedA: Array[U64] = self.cur.typeArgs
-        self.cur.typeParams = params
-        self.cur.typeArgs = inst.args
+        // `tyRef` belongs to the receiver declaration (`struct Box[E]`), but
+        // `inst.args` may itself contain an enclosing impl/method binder
+        // (`impl[E] Box[E]`).  Replacing the ambient pair loses the latter
+        // edge, leaving `E_struct` only half-ground.  Compose both binder maps;
+        // ParamId makes this unambiguous even when their spellings are equal.
+        mut val composedP: Array[Bind] = savedP
+        mut val composedA: Array[U64] = savedA
+        mut val pi: U64 = 0U64
+        while pi < params.count() {
+            composedP.append(params[pi])
+            if pi < inst.args.count() { composedA.append(inst.args[pi]) }
+            pi += 1U64
+        }
+        self.cur.typeParams = composedP
+        self.cur.typeArgs = composedA
         val g: U64 = self.groundTypeRef(ref: tyRef)
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA

@@ -158,8 +158,9 @@ pub impl Comp {
                 mut val vi: U64 = 0U64
                 while vi < t.viewIds.count() {
                     val viewId: U64 = t.viewIds[vi]
-                    if viewId != 0U64 && viewId <= self.interner.count {
-                        self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[viewId - 1U64], srcLen: self.interner.lens[viewId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)
+                    if viewId != 0U64 && viewId <= self.interner.entries.count() {
+                        val entry: InternedSpan = self.interner.entries[viewId - 1U64]
+                        self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: entry.start, srcLen: entry.len, offset: t.siteOffset, allowMonomorphicFallback: false)
                         val source: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: viewId)
                         if source.kind == 2U64 { selectedCount += 1U64 }
                     }
@@ -169,8 +170,9 @@ pub impl Comp {
                     self.errorAt(offset: t.siteOffset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
                 }
                 // Synthetic refs from older construction paths carry only viewExtId.
-                if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 && t.viewExtId <= self.interner.count {
-                    self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: self.interner.starts[t.viewExtId - 1U64], srcLen: self.interner.lens[t.viewExtId - 1U64], offset: t.siteOffset, allowMonomorphicFallback: false)
+                if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 && t.viewExtId <= self.interner.entries.count() {
+                    val entry: InternedSpan = self.interner.entries[t.viewExtId - 1U64]
+                    self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: entry.start, srcLen: entry.len, offset: t.siteOffset, allowMonomorphicFallback: false)
                 }
             }
             i += 1U64

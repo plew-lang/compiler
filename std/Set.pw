@@ -7,7 +7,7 @@
 // (to resolve collisions). Linear probing, growing at load 0.75 — the same floor as
 // `Dictionary`, minus the value column.
 import @Std/Hash with { Hash, SipHasher }
-import @Std/Core with { Buffer }
+import @Std/Core with { Buffer, Eq }
 export @Std/Hash with { Hash }
 export @Std/Core with { Eq }
 

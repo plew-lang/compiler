@@ -100,8 +100,11 @@ pub impl Comp {
                 projectionTrait = self.uniqueProjectionTrait(t: t, whereTypes: whereTypes, whereTraits: whereTraits)
             } else {
                 val traitN: Bind = self.internBytes(s: projectionTrait)
-                val arity: U64 = self.traitPositionalArity(traitId: traitN.nameId)
-                if arity != t.projectionTraitArgs.count() {
+                // The spelling may be an import alias.  Resolve it at this
+                // authored type site before comparing arity; a global
+                // name-id scan would pick an unrelated same-spelled trait.
+                val owner: U64 = self.traitOwnerAtUse(start: traitN.nameStart, len: traitN.nameLen, arity: t.projectionTraitArgs.count())
+                if owner == 0U64 {
                     self.errorAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments")
                 }
                 mut val pi: U64 = 0U64
@@ -159,7 +162,9 @@ pub impl Comp {
             if i < sendableFlags.count() {
                 isSendable = sendableFlags[i]
             }
-            out.append(<Bind nameStart=b.nameStart nameLen=b.nameLen nameId=b.nameId fieldStart=b.fieldStart fieldLen=b.fieldLen offset=b.offset isSendable=isSendable />)
+            val paramId: U64 = self.nextParamId
+            self.nextParamId += 1U64
+            out.append(<Bind nameStart=b.nameStart nameLen=b.nameLen nameId=b.nameId paramId=paramId fieldStart=b.fieldStart fieldLen=b.fieldLen offset=b.offset isSendable=isSendable />)
             i += 1
         }
         return out
@@ -312,7 +317,46 @@ pub impl Comp {
                     ai += 1U64
                 }
             }
-            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=tn.nameId traitStart=tn.nameStart traitLen=tn.nameLen traitArgs=boundArgs traitAssocNames=boundAssocNames traitAssocValues=boundAssocValues />)
+            // Resolve the trait spelling at its authored use once.  An import
+            // alias is a surface name, not the semantic trait identity stored
+            // in a bound: every later proof/query must see the declaration
+            // owner just as `impl … as Trait` does.
+            mut val traitStart: U64 = tn.nameStart
+            mut val traitLen: U64 = tn.nameLen
+            mut val traitNameId: U64 = tn.nameId
+            // `traits[i]` is a convenience spelling and may have been
+            // re-interned away from the authored `where` clause.  Trait
+            // identity is resolved at that use site: `where T: BP` must
+            // retain B.P rather than some same-spelled imported P.
+            mut val traitUseStart: U64 = tn.nameStart
+            mut val traitUseLen: U64 = tn.nameLen
+            // Some synthesized bounds carry the semantic TypeAst but no
+            // source span.  A zero/empty span is not an authored lookup site;
+            // keep the caller's spelling in that case rather than resolving
+            // offset 0 in the entry module.
+            if i < traitTypes.count() && traitTypes[i].span.end > traitTypes[i].span.start {
+                traitUseStart = traitTypes[i].span.start
+                traitUseLen = traitTypes[i].name.bytes().count()
+            }
+            val owner: U64 = self.traitOwnerAtUse(start: traitUseStart, len: traitUseLen, arity: boundArgs.count())
+            mut val resolvedOwner: U64 = owner
+            if resolvedOwner == 0U64 && fnIdx < self.arena.funcs.count() {
+                resolvedOwner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.funcs[fnIdx].defOffset), nameId: tn.nameId, arity: boundArgs.count())
+            }
+            // A bound with no written positional arguments is open, not
+            // necessarily an arity-zero trait (`where T: Add` means an
+            // unspecified `Add[Rhs]`).  Resolve its lexical declaration only
+            // when that surface is unique; a same-spelled ambiguity remains a
+            // source error rather than silently picking an arity.
+            if resolvedOwner == 0U64 && boundArgs.count() == 0U64 && fnIdx < self.arena.funcs.count() {
+                resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.funcs[fnIdx].defOffset), nameId: tn.nameId)
+            }
+            if resolvedOwner != 0U64 {
+                traitStart = resolvedOwner
+                traitLen = self.traitNameLenByOwner(owner: resolvedOwner)
+                traitNameId = intern(c: inout self, start: traitStart, len: traitLen)
+            }
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=traitNameId traitStart=traitStart traitLen=traitLen traitArgs=boundArgs traitAssocNames=boundAssocNames traitAssocValues=boundAssocValues />)
             i += 1
         }
     }

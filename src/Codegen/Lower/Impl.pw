@@ -48,7 +48,13 @@ pub impl Comp {
             val resolved: Bind = self.aliasReal(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start)
             return <Bind nameStart=resolved.nameStart nameLen=resolved.nameLen nameId=intern(c: inout self, start: resolved.nameStart, len: resolved.nameLen) fieldStart=resolved.fieldStart fieldLen=resolved.fieldLen />
         }
-        return self.internBytes(s: im.traitName)
+        val raw: Bind = self.internBytes(s: im.traitName)
+        val owner: U64 = self.traitOwnerInScopeById(mod: self.moduleOf(offset: im.span.start), nameId: raw.nameId, arity: im.traitArgs.count())
+        if owner != 0U64 {
+            val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
+            return <Bind nameStart=owner nameLen=ownerLen nameId=intern(c: inout self, start: owner, len: ownerLen) fieldStart=owner fieldLen=ownerLen />
+        }
+        return raw
     }
 
     inout fn checkPubMemberwiseFactory(recvN: Bind, offset: U64) {
@@ -301,11 +307,13 @@ pub impl Comp {
                     val pt: PType = self.lowerType(t: m.assocTy)
                     val atN: Bind = self.internBytes(s: m.name)
                     mut val trId: U64 = 0
+                    mut val trOwner: U64 = 0
                     if im.traitName.bytes().count() > 0 {
                         val trN: Bind = self.resolvedImplTraitBind(im: im)
                         trId = trN.nameId
+                        trOwner = trN.nameStart
                     }
-                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId implOffset=im.span.start subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds traitArgs=conformanceTraitArgs tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
+                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId traitOwner=trOwner implOffset=im.span.start subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds traitArgs=conformanceTraitArgs tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
                 }
                 MemberKind.Factory => {
                     // `factory` in a `pub impl T` publishes T's default memberwise factory

@@ -15,6 +15,12 @@
 set -e
 cd "$(dirname "$0")"
 
+# A Codex Desktop code-mode wrapper may yield after about 30 seconds while
+# this foreground test process continues under a live shell session.  Treat a
+# returned session id as authoritative: keep polling it through its final exit
+# status before calling this suite hung or incomplete.
+printf '%s\n' 'plewc: note: in Codex, a ~30s yield may leave this test running; continue its shell session until the final exit status.' >&2
+
 LC="${LLVM_CONFIG:-llvm-config}"
 command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config
@@ -29,6 +35,41 @@ JOBS="${PLEW_TEST_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || 
 PLEW_RT="$RT"
 PLEW_LD="$("$LC" --ldflags)"
 export PLEW_RT PLEW_LD
+
+# Test results are collected on stdout so each phase can calculate its final
+# summary deterministically.  Mirror bounded progress to stderr instead of
+# making a long, healthy parallel phase indistinguishable from a hang.
+# Set PLEW_TEST_PROGRESS=0 for the old quiet behaviour.
+PLEW_TEST_PROGRESS="${PLEW_TEST_PROGRESS:-1}"
+progress_start() {
+    [ "$PLEW_TEST_PROGRESS" = 0 ] && return
+    printf 'plewc: %s started (%s cases; %s workers)\n' "$1" "$2" "$JOBS" >&2
+}
+progress_stream() {
+    phase="$1" total="$2"
+    if [ "$PLEW_TEST_PROGRESS" = 0 ]; then
+        cat
+        return
+    fi
+    awk -v phase="$phase" -v total="$total" '
+        {
+            print
+            done += 1
+            if ($1 == "FAIL" || done % 25 == 0 || done == total) {
+                suffix = ""
+                if ($1 == "FAIL") suffix = " (failure)"
+                printf "plewc: %s %d/%d complete%s\n", phase, done, total, suffix > "/dev/stderr"
+            }
+        }
+    '
+}
+count_cases() {
+    count=0
+    for case_file in "$@"; do
+        [ -f "$case_file" ] && count=$((count + 1))
+    done
+    printf '%s\n' "$count"
+}
 
 # --- suite hygiene: every companion file must pair with a .pw and vice versa.
 #     A rename/delete that leaves an orphan .out (or a .pw without its golden)
@@ -51,6 +92,8 @@ for pw in tests/panic/*.pw; do
 done
 
 # --- run/ : compile, link, run, compare stdout to the golden .out ---
+run_total=$(count_cases tests/run/*.pw)
+progress_start run "$run_total"
 run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     f="$1"; name=$(basename "$f" .pw); out="tests/run/$name.out"
     [ -f "$out" ] || exit 0
@@ -63,7 +106,7 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     if [ -f "$infile" ]; then got=$("$bin" < "$infile" 2>/dev/null) || true
     else got=$("$bin" 2>/dev/null) || true; fi
     if [ "$got" = "$(cat "$out")" ]; then echo "PASS $name"; else echo "FAIL $name"; fi
-' sh)
+' sh | progress_stream run "$run_total")
 pass=$(printf '%s\n' "$run_results" | grep -c '^PASS' || true)
 fail=0; failed=""
 for n in $hygiene; do
@@ -78,6 +121,8 @@ skip=0
 #     (panic = abort, spec/11) with the expected panic text on stderr
 #     (overflow / div-by-zero / OOB / assert). The checked-arithmetic floor
 #     (plew_<w><Op>) is held to loud behaviour. 134 = 128 + SIGABRT. ---
+panic_total=$(count_cases tests/panic/*.pw)
+progress_start panic "$panic_total"
 panic_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     pw="$1"; [ -f "$pw" ] || exit 0
     name=$(basename "$pw" .pw)
@@ -91,7 +136,7 @@ panic_results=$(printf '%s\n' tests/panic/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     # without touching the binary own stderr capture ($perr).
     sh -c "\"\$1\" >/dev/null 2>\"\$2\"" sh "$bin" "$perr" 2>/dev/null || code=$?
     if [ "$code" -eq 134 ] && grep -qF "$want" "$perr"; then echo "PASS panic/$name"; else echo "FAIL panic/$name(exit=$code)"; fi
-' sh)
+' sh | progress_stream panic "$panic_total")
 ppass=$(printf '%s\n' "$panic_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$panic_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
@@ -101,6 +146,8 @@ done
 #     (clean nonzero exit). The shared frontend (incl. the backend-independent
 #     acceptance pass verifyProgram) rejects these. A compiler death by signal
 #     (>= 128, e.g. its own panic/abort) is a crash, not a rejection — FAIL. ---
+reject_total=$(count_cases tests/reject/*.pw)
+progress_start reject "$reject_total"
 reject_results=$(printf '%s\n' tests/reject/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     pw="$1"; [ -f "$pw" ] || exit 0
     name=$(basename "$pw" .pw)
@@ -112,7 +159,7 @@ reject_results=$(printf '%s\n' tests/reject/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     elif [ "$code" -ge 128 ]; then echo "FAIL reject/$name(crash=$code)"
     elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL reject/$name(diagnostic)"
     else echo "PASS reject/$name"; fi
-' sh)
+' sh | progress_stream reject "$reject_total")
 rpass=$(printf '%s\n' "$reject_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$reject_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
@@ -120,6 +167,8 @@ done
 
 # --- part/ : multi-file modules (each subdir's Main.pw stitches siblings via
 #     `part`). Compile the root, run, compare to Main.out. ---
+part_total=$(count_cases tests/part/*/Main.pw tests/part/Main.pw)
+progress_start part "$part_total"
 part_results=$(printf '%s\n' tests/part/*/Main.pw tests/part/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
     main="$1"; [ -f "$main" ] || exit 0
     dir=$(dirname "$main")
@@ -129,7 +178,7 @@ part_results=$(printf '%s\n' tests/part/*/Main.pw tests/part/Main.pw | xargs -P 
     if ! clang -w "$ll" "$PLEW_RT" $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL part/$name(link)"; exit 0; fi
     got=$("$bin" 2>/dev/null) || true
     if [ "$got" = "$(cat "$dir/Main.out")" ]; then echo "PASS part/$name"; else echo "FAIL part/$name"; fi
-' sh)
+' sh | progress_stream part "$part_total")
 qpass=$(printf '%s\n' "$part_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$part_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
@@ -138,6 +187,8 @@ done
 # --- partreject/ : multi-file modules whose Main.pw the FRONT-END must reject —
 #     cross-module rules that need real loaded sibling modules (e.g. a circular
 #     import, which a single file cannot express). ---
+partreject_total=$(count_cases tests/partreject/*/Main.pw)
+progress_start partreject "$partreject_total"
 pr_results=$(printf '%s\n' tests/partreject/*/Main.pw | xargs -P "$JOBS" -n 1 sh -c '
     main="$1"; [ -f "$main" ] || exit 0
     name=$(basename "$(dirname "$main")")
@@ -149,7 +200,7 @@ pr_results=$(printf '%s\n' tests/partreject/*/Main.pw | xargs -P "$JOBS" -n 1 sh
     elif [ "$code" -ge 128 ]; then echo "FAIL partreject/$name(crash=$code)"
     elif [ -f "$want" ] && ! grep -qF "$(cat "$want")" "$perr"; then echo "FAIL partreject/$name(diagnostic)"
     else echo "PASS partreject/$name"; fi
-' sh)
+' sh | progress_stream partreject "$partreject_total")
 prpass=$(printf '%s\n' "$pr_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$pr_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"

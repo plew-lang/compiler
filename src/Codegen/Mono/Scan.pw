@@ -8,6 +8,13 @@
 pub impl Comp {
     inout fn typeInfoOfRef(ref: U64) -> TypeInfo {
         val t: TypeRef = self.arena.types[ref]
+        // A projection is a structured semantic term even when its receiver
+        // has no ordinary type arguments.  Do not collapse
+        // `Parser#Convert[T].Output` to a bare Parser TypeInfo: generic-body
+        // compatibility must retain the trait instance and associated member.
+        if t.assocNameId != 0U64 {
+            return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
+        }
         if t.args.count() == 0 {
             // an argless existential (`any Dup`): the isAny ref IS the type identity —
             // name-only recovery would degrade it to the plain trait name.
@@ -15,6 +22,13 @@ pub impl Comp {
                 return <TypeInfo kind=2 nameStart=t.nameStart nameLen=t.nameLen ref=ref viewExtId=t.viewExtId />
             }
             val base: TypeInfo = self.typeInfoOfName(start: t.nameStart, len: t.nameLen, isArray: false)
+            // A lexical type parameter is a semantic term, not merely a spelling.
+            // Keep its ref even though its scalar TypeInfo has no runtime shape:
+            // otherwise `Buffer[E][i]` reconstructs a fresh name-only `E`, losing
+            // ParamId before the enclosing generic body can substitute it.
+            if t.paramId != 0U64 {
+                return <TypeInfo kind=base.kind nameStart=base.nameStart nameLen=base.nameLen ref=ref viewExtId=t.viewExtId />
+            }
             // carry the view (`Person#Ext` has no args but a viewExtId) so recovery is
             // not lossy; the `ref`-shape is unchanged so downstream behavior is identical.
             if t.viewExtId != 0U64 || t.viewIds.count() > 0U64 {

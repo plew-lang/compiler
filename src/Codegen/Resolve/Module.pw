@@ -596,12 +596,13 @@ pub impl Comp {
     // thereafter compare kind + declaration/bundle owner + arity.
     inout fn resolveViewSourceKey(recvStart: U64, recvLen: U64, recvRef: U64, sourceId: U64, sourceOwner: U64 = 0U64) -> ViewSource {
         mut val found: ViewSource = <ViewSource />
-        if self.extAppliesToType(extStart: self.interner.starts[sourceId - 1U64], extLen: self.interner.lens[sourceId - 1U64], typeStart: recvStart, typeLen: recvLen, typeRef: recvRef) {
+        val entry: InternedSpan = self.interner.entries[sourceId - 1U64]
+        if self.extAppliesToType(extStart: entry.start, extLen: entry.len, typeStart: recvStart, typeLen: recvLen, typeRef: recvRef) {
             found = <ViewSource kind=1U64 id=sourceId owner=sourceId arity=0U64 />
         }
         mut val traitOwner: U64 = sourceOwner
         if self.canonicalTraitOwner(start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) == 0U64 {
-            traitOwner = self.canonicalTraitOwner(start: self.interner.starts[sourceId - 1U64], len: self.interner.lens[sourceId - 1U64])
+            traitOwner = self.canonicalTraitOwner(start: entry.start, len: entry.len)
         }
         val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0U64
@@ -933,7 +934,7 @@ pub impl Comp {
     }
 
     inout fn findExtMethodById(recvStart: U64, recvLen: U64, srcId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
-        if srcId == 0U64 || srcId > self.interner.count { return self.arena.funcs.count() }
+        if srcId == 0U64 || srcId > self.interner.entries.count() { return self.arena.funcs.count() }
         val source: ViewSource = self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: srcId, sourceOwner: sourceOwner)
         return self.findExtMethodBySource(recvStart: recvStart, recvLen: recvLen, source: source, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
     }

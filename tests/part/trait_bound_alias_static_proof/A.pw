@@ -1,0 +1,4 @@
+export trait Convert[From] {
+    type Output
+    fn convert(value: From) -> Output
+}

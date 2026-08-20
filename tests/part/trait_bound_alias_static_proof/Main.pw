@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+import ./A with { Convert as TextConvert }
+import ./B with { Convert as OtherConvert }
+
+struct Parser {}
+pub impl Parser { factory }
+pub impl Parser as TextConvert[String] {
+    type Output = I64
+    fn convert(value: String) -> I64 { return 7I64 }
+}
+
+// The bound's alias must retain A.Convert's declaration identity.  Selecting
+// B.Convert merely because both declarations spell `Convert` is incorrect.
+fn parse[T](parser: Parser, value: T) -> I64 where Parser: TextConvert[T, Output=I64] {
+    return parser.convert(value: value)
+}
+
+fn main() {
+    print(parse(parser: <Parser />, value: "seven"))
+}

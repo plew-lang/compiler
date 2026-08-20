@@ -54,6 +54,22 @@ pub impl Comp {
         return 0U64
     }
 
+    // Operator syntax has a fixed semantic source: @Std/Core.  Do not recover
+    // it by a bare spelling at an arbitrary later checker site, where a user
+    // trait of the same name or an import alias would change the meaning.
+    inout fn coreTraitOwner(name: String, arity: U64 = 0U64) -> U64 {
+        val id: U64 = self.internBytes(s: name).nameId
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val owner: TraitOwner = self.decls.traitOwners[i]
+            if owner.nameId == id && owner.arity == arity && self.moduleOf(offset: owner.nameStart) == self.modules.coreModule {
+                return owner.nameStart
+            }
+            i += 1U64
+        }
+        return 0U64
+    }
+
     inout fn traitNameLenByOwner(owner: U64) -> U64 {
         mut val i: U64 = 0U64
         while i < self.decls.traitOwners.count() {
@@ -92,6 +108,102 @@ pub impl Comp {
         return 0U64
     }
 
+    // The source parser normally supplies a trait-use span.  A generated or
+    // synthesized declaration can legitimately carry only the spelling, but
+    // it still has a lexical module.  Resolve that spelling through the same
+    // local/import/re-export scope as an authored use — never through a
+    // process-wide name scan.  This is also the correct fallback for `part`
+    // declarations, which share their root module's lexical scope.
+    inout fn traitOwnerInScopeById(mod: U64, nameId: U64, arity: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if t.nameId == nameId && t.arity == arity && self.moduleOf(offset: t.nameStart) == mod {
+                return t.nameStart
+            }
+            i += 1U64
+        }
+        i = 0U64
+        while i < self.modules.importOrigins.count() {
+            val origin: Bind = self.modules.importOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == mod {
+                val surfaceId: U64 = intern(c: inout self, start: origin.nameStart, len: origin.nameLen)
+                if surfaceId == nameId {
+                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
+                }
+            }
+            i += 1U64
+        }
+        i = 0U64
+        while i < self.modules.reExportOrigins.count() {
+            val origin: Bind = self.modules.reExportOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == mod {
+                val surfaceId: U64 = intern(c: inout self, start: origin.nameStart, len: origin.nameLen)
+                if surfaceId == nameId {
+                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
+                }
+            }
+            i += 1U64
+        }
+        return 0U64
+    }
+
+    // `where T: Add` is an open constraint: `Add` may have positional
+    // parameters whose values are intentionally left open by the bound.  The
+    // declaration is still selected lexically, not by a global name lookup.
+    // Return 0 for an ambiguous same-spelled surface rather than choosing an
+    // arity by accident.
+    inout fn traitOwnerInScopeOpenById(mod: U64, nameId: U64) -> U64 {
+        mut val found: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if t.nameId == nameId && self.moduleOf(offset: t.nameStart) == mod {
+                if found != 0U64 && found != t.nameStart { return 0U64 }
+                found = t.nameStart
+            }
+            i += 1U64
+        }
+        if found != 0U64 { return found }
+        i = 0U64
+        while i < self.modules.importOrigins.count() {
+            val origin: Bind = self.modules.importOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == mod {
+                if intern(c: inout self, start: origin.nameStart, len: origin.nameLen) == nameId {
+                    mut val oi: U64 = 0U64
+                    while oi < self.decls.traitOwners.count() {
+                        val candidate: TraitOwner = self.decls.traitOwners[oi]
+                        if candidate.nameId == intern(c: inout self, start: origin.fieldStart, len: origin.nameId) && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
+                            if found != 0U64 && found != candidate.nameStart { return 0U64 }
+                            found = candidate.nameStart
+                        }
+                        oi += 1U64
+                    }
+                }
+            }
+            i += 1U64
+        }
+        i = 0U64
+        while i < self.modules.reExportOrigins.count() {
+            val origin: Bind = self.modules.reExportOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == mod {
+                if intern(c: inout self, start: origin.nameStart, len: origin.nameLen) == nameId {
+                    mut val oi: U64 = 0U64
+                    while oi < self.decls.traitOwners.count() {
+                        val candidate: TraitOwner = self.decls.traitOwners[oi]
+                        if candidate.nameId == intern(c: inout self, start: origin.fieldStart, len: origin.nameId) && self.moduleOf(offset: candidate.nameStart) == origin.fieldLen {
+                            if found != 0U64 && found != candidate.nameStart { return 0U64 }
+                            found = candidate.nameStart
+                        }
+                        oi += 1U64
+                    }
+                }
+            }
+            i += 1U64
+        }
+        return found
+    }
+
     // A public surface may forward a trait through any number of re-exports.
     // Resolve that forwarding before returning the declaration owner; a barrel
     // is never a new trait identity.
@@ -117,20 +229,7 @@ pub impl Comp {
     // intentionally unresolved.
     inout fn traitOwnerAtUse(start: U64, len: U64, arity: U64) -> U64 {
         val useMod: U64 = self.moduleOf(offset: start)
-        val local: U64 = self.traitOwnerInModule(mod: useMod, start: start, len: len, arity: arity)
-        if local != 0U64 { return local }
-        mut val i: U64 = 0U64
-        i = 0U64
-        while i < self.modules.importOrigins.count() {
-            val origin: Bind = self.modules.importOrigins[i]
-            if self.moduleOf(offset: origin.nameStart) == useMod {
-                if spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
-                    return self.traitOwnerFromSurface(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId, arity: arity)
-                }
-            }
-            i += 1U64
-        }
-        return 0U64
+        return self.traitOwnerInScopeById(mod: useMod, nameId: intern(c: inout self, start: start, len: len), arity: arity)
     }
 
     // A selector has no written type arguments.  It may therefore name any
@@ -438,7 +537,8 @@ pub impl Comp {
             val cf: Conform = self.decls.conforms[i]
             // Direct `extension Ext { impl T as P }` conformances are view
             // facts too (not only trait-subject `impl B as A` edges).
-            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && self.conformanceMatchesTraitInstance(cf: cf, typeRef: typeRef, traitArgs: traitArgs) && self.traitAssocOutputsMatch(cf: cf, assocNames: assocNames, assocValues: assocValues) {
+            val matchResult: WitnessMatch = self.conformanceWitnessMatch(conformIdx: i, typeRef: typeRef, traitArgs: traitArgs)
+            if cf.extId == viewId && cf.typeId == typeId && cf.traitId == targetId && matchResult.conformIdx != 0U64 && self.traitAssocOutputsMatch(cf: cf, matchResult: matchResult, assocNames: assocNames, assocValues: assocValues) {
                 if !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) {
                     return true
                 }

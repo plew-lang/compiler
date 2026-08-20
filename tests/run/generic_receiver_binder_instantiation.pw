@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import @Std/Core with { Eq }
+
+// The `E` in the struct declaration and the `E` in its impl deliberately
+// occupy distinct lexical binders.  A concrete receiver must compose them:
+// Box[I64]'s field is I64, so the where E: Eq witness is available.
+struct Box[E] {
+    pub val value: E
+}
+
+pub impl[E] Box[E] {
+    factory
+    fn same(other: E) -> Bool where E: Eq {
+        return self.value == other
+    }
+}
+
+fn main() {
+    val box: Box[I64] = <Box value=1I64 />
+    print(box.same(other: 1I64))
+}

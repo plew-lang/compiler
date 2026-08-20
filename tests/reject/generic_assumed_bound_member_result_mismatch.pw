@@ -1,0 +1,19 @@
+// Convert[T].Output is symbolic in the template.  It cannot be silently
+// treated as Bool merely because a concrete Convert[String] happens to exist.
+trait Convert[From] {
+    type Output
+    fn convert(value: From) -> Output
+}
+
+struct Parser {}
+pub impl Parser { factory }
+pub impl Parser as Convert[String] {
+    type Output = I64
+    fn convert(value: String) -> I64 { return 7I64 }
+}
+
+fn invalid[T](parser: Parser, value: T) -> Bool where Parser: Convert[T] {
+    return parser.convert(value: value)
+}
+
+fn main() {}

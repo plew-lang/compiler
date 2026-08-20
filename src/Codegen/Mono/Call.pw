@@ -176,15 +176,18 @@ pub impl Comp {
                         val savedA: Array[U64] = self.cur.typeArgs
                         val savedS: U64 = self.cur.selfRef
                         val savedI: U64 = self.cur.itemRef
+                        val savedR: U64 = self.cur.recvInstRef
                         self.cur.typeParams = self.cur.bodyTypeParams
                         self.cur.typeArgs = self.cur.bodyTypeArgs
                         self.cur.selfRef = self.cur.bodySelfRef
                         self.cur.itemRef = self.cur.bodyItemRef
+                        self.cur.recvInstRef = self.cur.bodyRecvInstRef
                         out = self.groundTypeRef(ref: out)
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
                         self.cur.selfRef = savedS
                         self.cur.itemRef = savedI
+                        self.cur.recvInstRef = savedR
                         return out
                     }
                 }
@@ -463,7 +466,7 @@ pub impl Comp {
                         mut val subst: Array[U64] = []
                         mut val pi: U64 = 0U64
                         while pi < cf.typeParams.count() {
-                            val bi: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, nameId: cf.typeParams[pi].nameId)
+                            val bi: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, binderId: self.binderIdentity(b: cf.typeParams[pi]))
                             if bi < binds.count() { subst.append(binds[bi].ref) }
                             else { subst.append(0U64) }
                             pi += 1U64

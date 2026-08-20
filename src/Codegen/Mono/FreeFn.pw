@@ -51,6 +51,16 @@ pub impl Comp {
             return 0
         }
         val pt: TypeRef = self.arena.types[paramRef]
+        // A projection is not invertible.  From an argument of type
+        // `T#Parser.Output` we cannot infer `T`: unrelated conformers may
+        // expose the same output type.  Inference must first obtain T from an
+        // injective occurrence (for example `x: T`), then ground the whole
+        // projection and validate the argument against that result.  Treating
+        // the legacy projection head as a bare T falsely inferred `T = I64`
+        // from `out: T#Parser.Output` and conflicted with `x: P`.
+        if pt.assocNameId != 0U64 {
+            return 0
+        }
         if pt.args.count() == 0 {
             // TypeRef.nameId is a cache; parameter refs rebuilt after parsing
             // may carry 0.  Generic unification must use the same canonical

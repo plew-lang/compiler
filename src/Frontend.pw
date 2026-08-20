@@ -16,9 +16,9 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
+export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, StaticMemberResolution, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -40,6 +40,9 @@ export struct Comp {
     pub mut val parseScratch: ParseScratch = <ParseScratch />
     // the per-body codegen / lowering / verify cursor (see `Cursor`).
     pub mut val cur: Cursor = <Cursor />
+    // Monotonic identity allocator for lexical generic binders. It is separate
+    // from the name interner because same-spelled binders are not one term.
+    pub mut val nextParamId: U64 = 1
     // lowering-time where constraints for associated-type short projection
     // normalization (`T.Item` -> `T#Trait.Item`). Kept on Comp rather than Cursor
     // because it uses Syntax-layer TypeAst and must not leak into Ir.pw.
@@ -179,7 +182,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
         return id
     }
 
@@ -208,6 +211,14 @@ pub impl Comp {
 
 // Compare two name spans for byte equality against the shared source buffer.
 export fn spansEqual(c: inout Comp, aStart: U64, aLen: U64, bStart: U64, bLen: U64) -> Bool {
+    // Every interner key is a slice of the shared source buffer.  Keep this
+    // boundary total: a malformed stored span used to turn the byte loop below
+    // into an effectively unbounded read, which presented as a compiler hang.
+    // This is an internal invariant, not a source-program diagnostic.
+    val byteCount: U64 = c.arena.bytes.count()
+    if aStart > byteCount || aLen > byteCount - aStart || bStart > byteCount || bLen > byteCount - bStart {
+        panic "compiler bug: interner stored a span outside the source buffer"
+    }
     if aLen != bLen {
         return false
     }
@@ -234,7 +245,7 @@ fn internHash(c: inout Comp, start: U64, len: U64) -> U64 {
 }
 
 // Grow the bucket index (double, or 8 from empty), re-placing every interned span
-// by re-hashing. The dense interner.starts/lens arrays are untouched (ids stay
+// by re-hashing. The dense interner.entries array is untouched (ids stay
 // stable). Capacity is a power of two so the slot index is a bitmask (& cap-1).
 fn internGrow(c: inout Comp) {
     mut val newCap: U64 = 8
@@ -248,8 +259,9 @@ fn internGrow(c: inout Comp) {
         k += 1
     }
     mut val i: U64 = 0
-    while i < c.interner.count {
-        val code: U64 = internHash(c: inout c, start: c.interner.starts[i], len: c.interner.lens[i])
+    while i < c.interner.entries.count() {
+        val entry: InternedSpan = c.interner.entries[i]
+        val code: U64 = internHash(c: inout c, start: entry.start, len: entry.len)
         mut val slot: U64 = code & (newCap - 1)
         while nb[slot] != 0 {
             slot = (slot + 1) & (newCap - 1)
@@ -266,7 +278,7 @@ export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     if c.interner.buckets.count() == 0 {
         internGrow(c: inout c)
     } else {
-        if (c.interner.count + 1) * 4 > c.interner.buckets.count() * 3 {
+        if (c.interner.entries.count() + 1) * 4 > c.interner.buckets.count() * 3 {
             internGrow(c: inout c)
         }
     }
@@ -276,13 +288,13 @@ export fn intern(c: inout Comp, start: U64, len: U64) -> U64 {
     while true {
         val b: U64 = c.interner.buckets[slot]
         if b == 0 {
-            c.interner.starts.append(start)
-            c.interner.lens.append(len)
-            c.interner.count += 1
-            c.interner.buckets.set(i: slot, value: c.interner.count)
-            return c.interner.count
+            c.interner.entries.append(<InternedSpan start=start len=len />)
+            val id: U64 = c.interner.entries.count()
+            c.interner.buckets.set(i: slot, value: id)
+            return id
         }
-        if spansEqual(c: inout c, aStart: c.interner.starts[b - 1], aLen: c.interner.lens[b - 1], bStart: start, bLen: len) {
+        val entry: InternedSpan = c.interner.entries[b - 1]
+        if spansEqual(c: inout c, aStart: entry.start, aLen: entry.len, bStart: start, bLen: len) {
             return b
         }
         slot = (slot + 1) & (cap - 1)
@@ -501,6 +513,7 @@ export fn runFrontend(c: inout Comp) {
             val cps: U64 = pathBuf.count()
             appendBytes(into: inout pathBuf, from: corePath)
             loaded.append(<Bind nameStart=cps nameLen=corePath.count() fieldStart=nextModuleId fieldLen=corePath.count() />)
+            c.modules.coreModule = nextModuleId
             nextModuleId = nextModuleId + 1
         }
         // Force-load @Std/Hash: the implicit prelude's `Dictionary` lang item is built on

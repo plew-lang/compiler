@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+
+struct Item { pub val value: I64 }
+pub impl Item { factory }
+
+fn main() {
+    mut val items: Array[Item] = []
+    items.append(<Item value=7I64 />)
+    print(items[0].value)
+}

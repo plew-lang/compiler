@@ -1,0 +1,39 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, Eq }
+import @Std/Hash with { Hash, SipHasher }
+
+struct Pair[E] {
+    mut val values: Buffer[E]
+}
+
+pub impl[E] Pair[E] {
+    assoc fn singleton(value: E) -> Pair[E] {
+        mut val values: Buffer[E] = Buffer.new()
+        values.append(value)
+        return <Pair values=values />
+    }
+
+    fn hashOf(value: E) -> U64 where E: Hash {
+        mut val hasher: SipHasher = SipHasher.new()
+        value.hash(hasher: inout hasher)
+        return hasher.finish()
+    }
+
+    inout fn firstIs(value: E) -> Bool where E: Hash, E: Eq {
+        val count: U64 = self.values.count()
+        if count == 0U64 { return false }
+        val code: U64 = self.hashOf(value: value)
+        if code != code { return false }
+        self.values.append(value)
+        val last: U64 = self.values.count() - 1U64
+        return self.values[last] == value
+    }
+}
+
+fn main() {
+    mut val pair: Pair[I64] = Pair.singleton(value: 7I64)
+    print(pair.firstIs(value: 7I64))
+
+    mut val words: Pair[String] = Pair.singleton(value: "plew")
+    print(words.firstIs(value: "plew"))
+}

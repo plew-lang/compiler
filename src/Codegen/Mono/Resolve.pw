@@ -11,14 +11,14 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
         if t.viewExtId == 0U64 && t.viewIds.count() == 0U64 { return ref }
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
     }
 
     inout fn plainRefOfProjection(t: TypeRef) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable />)
+        return self.typeTermProjectionReceiver(t: t)
     }
 
-    inout fn assocBindingFor(baseRef: U64, traitId: U64, traitArgs: Array[U64], assocId: U64) -> U64 {
+    inout fn assocBindingFor(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], assocId: U64) -> U64 {
         if baseRef >= self.arena.types.count() {
             return 0
         }
@@ -29,7 +29,7 @@ pub impl Comp {
         while i < self.decls.assocBindings.count() {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.recvId == base.nameId && ab.nameId == assocId {
-                if traitId == 0U64 || ab.traitId == traitId {
+                if (traitId == 0U64 || ab.traitId == traitId) && (traitOwner == 0U64 || ab.traitOwner == traitOwner) {
                     if !(self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: ab.subjectArgs, typeParams: ab.typeParams, declaredTraitArgs: ab.traitArgs, typeRef: baseRef, traitArgs: traitArgs)) {
                         i += 1U64
                         continue
@@ -76,14 +76,44 @@ pub impl Comp {
         if baseRef >= self.arena.types.count() {
             return tyRef
         }
-        if !(self.tyRefIsGround(ref: baseRef)) {
+        // A projection is a semantic term during declaration checking.  Its
+        // receiver may be an impl binder (`T#P.Item`) with no concrete
+        // nominal declaration yet; resolving it here would turn structural
+        // cycle validation into a failed witness lookup.  Concrete receivers
+        // are annotated by the visibility pass before projection resolution.
+        val base: TypeRef = self.arena.types[baseRef]
+        // A lexical Param is a symbolic term even if an unrelated ambient
+        // Mono context happens to bind the same spelling.  Projection
+        // resolution is deferred until THIS ParamId is substituted.
+        if base.paramId != 0U64 { return tyRef }
+        if !base.hasDecl && !(base.isAny) && !(self.isPrimType(start: base.nameStart, len: base.nameLen)) {
             return tyRef
+        }
+        // Projection trait arguments are ordinary children of the type term.
+        // Ground them under the active generic environment before selecting a
+        // witness: `Parser#Convert[T].Output` in a `T = String` instance must
+        // query Convert[String], never the template spelling `T`.
+        mut val traitArgs: Array[U64] = []
+        mut val ai: U64 = 0U64
+        while ai < t.assocTraitArgs.count() {
+            val arg: U64 = self.groundTypeRef(ref: t.assocTraitArgs[ai])
+            if !(self.tyRefIsGround(ref: arg)) {
+                return tyRef
+            }
+            traitArgs.append(arg)
+            ai += 1U64
         }
         if t.assocTraitId == 0U64 {
             self.errorAt(offset: t.siteOffset, msg: "associated-type short projection was not resolved from a unique `where` source — write `T#Trait.Item` (spec/08)")
             return tyRef
         }
-        val bound: U64 = self.assocBindingFor(baseRef: baseRef, traitId: t.assocTraitId, traitArgs: t.assocTraitArgs, assocId: t.assocNameId)
+        // Lowering already records the canonical source owner; the later
+        // visibility pass refines the same fact.  Synthetic/legacy terms may
+        // not have passed that refinement, so keep the resolved lowering
+        // owner rather than dropping identity back to text.
+        mut val traitOwner: U64 = t.assocTraitDeclOffset
+        if traitOwner == 0U64 { traitOwner = t.assocTraitStart }
+        val bound: U64 = self.assocBindingFor(baseRef: baseRef, traitId: t.assocTraitId, traitOwner: traitOwner, traitArgs: traitArgs, assocId: t.assocNameId)
         if bound != 0U64 {
             return self.groundTypeRef(ref: bound)
         }
@@ -127,7 +157,7 @@ pub impl Comp {
         if ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) {
             return false
         }
-        if ta.assocTraitId != tb.assocTraitId || ta.assocNameId != tb.assocNameId {
+        if (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId {
             return false
         }
         if ta.args.count() != tb.args.count() {
@@ -139,6 +169,20 @@ pub impl Comp {
                 return false
             }
             i += 1
+        }
+        if ta.assocTraitArgs.count() != tb.assocTraitArgs.count() {
+            return false
+        }
+        i = 0U64
+        while i < ta.assocTraitArgs.count() {
+            mut val al: U64 = 0U64
+            mut val bl: U64 = 0U64
+            if i < ta.assocTraitArgLabels.count() { al = ta.assocTraitArgLabels[i] }
+            if i < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[i] }
+            if al != bl || !(self.typeRefEq(a: ta.assocTraitArgs[i], b: tb.assocTraitArgs[i])) {
+                return false
+            }
+            i += 1U64
         }
         return true
     }
@@ -200,6 +244,76 @@ pub impl Comp {
         return self.arena.types[r].args.count() > 0
     }
 
+    // Resolve a term that is a binder in the current method's receiver pattern
+    // against the selected receiver instance.  This deliberately uses the
+    // receiver pattern's lexical scope — not the ambient generic scope and not
+    // a global name lookup — so it also forms the safe bridge for legacy terms
+    // that have not yet been stamped with a ParamId.
+    inout fn receiverPatternArgument(termRef: U64) -> U64 {
+        mut val ref: U64 = self.cur.recvInstRef
+        if ref == 0U64 { ref = self.cur.bodyRecvInstRef }
+        if ref == 0U64 { ref = self.cur.selfRef }
+        if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
+        if self.cur.bodyFnIdx >= self.arena.funcs.count() { return 0U64 }
+        val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
+        if bodyFn.recvTy == 0U64 { return 0U64 }
+        val binder: U64 = self.plainBinder(ref: termRef, params: bodyFn.typeParams)
+        if binder >= bodyFn.typeParams.count() { return 0U64 }
+        mut val binds: Array[UnifyBind] = []
+        val matches: Bool = self.unifyPatterns(a: bodyFn.recvTy, aSide: 0U64, b: ref, bSide: 1U64, aParams: bodyFn.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
+        if !(matches) { return 0U64 }
+        val binderId: U64 = self.binderIdentity(b: bodyFn.typeParams[binder])
+        val found: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, binderId: binderId)
+        if found < binds.count() { return binds[found].ref }
+        return 0U64
+    }
+
+    // A method on `Set[I64]` may refer to the `E` bound by the *struct*
+    // declaration, while its own impl/method binder is a distinct ParamId.
+    // Recover that declaration-binder substitution from the selected receiver
+    // instance. This is an explicit instance edge, never a spelling fallback.
+    inout fn receiverParamArgument(paramId: U64) -> U64 {
+        mut val ref: U64 = self.cur.recvInstRef
+        if ref == 0U64 { ref = self.cur.bodyRecvInstRef }
+        if ref == 0U64 { ref = self.cur.selfRef }
+        if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
+        val recv: TypeRef = self.arena.types[ref]
+        // A method's `impl[E] Set[E]` binder is distinct from the declaration
+        // binder on `struct Set[E]`.  Its lexical ParamId therefore cannot be
+        // recovered by merely pairing the nominal declaration's parameters with
+        // the selected `Set[I64]`.  Match the method's full receiver pattern
+        // against that selected instance through the shared structural unifier;
+        // this is the same semantic instance relation used by conformance and
+        // callable selection, and handles nested receiver patterns as well.
+        if self.cur.bodyFnIdx < self.arena.funcs.count() {
+            val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
+            mut val pi: U64 = 0U64
+            while pi < bodyFn.typeParams.count() {
+                if bodyFn.typeParams[pi].paramId == paramId {
+                    val term: U64 = self.pushType(t: <TypeRef nameStart=bodyFn.typeParams[pi].nameStart nameLen=bodyFn.typeParams[pi].nameLen paramId=paramId args=[] />)
+                    val matched: U64 = self.receiverPatternArgument(termRef: term)
+                    if matched != 0U64 { return matched }
+                }
+                pi += 1U64
+            }
+        }
+        mut val params: Array[Bind] = []
+        val si: U64 = self.genericStructIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+        if si < self.arena.structs.count() {
+            params = self.arena.structs[si].typeParams
+        } else {
+            val ei: U64 = self.genericEnumIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+            if ei < self.arena.enums.count() { params = self.arena.enums[ei].typeParams }
+        }
+        if params.count() != recv.args.count() { return 0U64 }
+        mut val i: U64 = 0U64
+        while i < params.count() {
+            if params[i].paramId == paramId { return recv.args[i] }
+            i += 1U64
+        }
+        return 0U64
+    }
+
     inout fn resolveTy(tyRef: U64) -> U64 {
         if tyRef >= self.arena.types.count() {
             return tyRef
@@ -207,6 +321,40 @@ pub impl Comp {
         val t: TypeRef = self.arena.types[tyRef]
         if t.assocNameId != 0U64 {
             return self.resolveAssocProjection(tyRef: tyRef)
+        }
+        if t.paramId != 0U64 {
+            mut val pi: U64 = 0U64
+            while pi < self.cur.typeParams.count() {
+                if self.cur.typeParams[pi].paramId == t.paramId {
+                    if pi < self.cur.typeArgs.count() {
+                        val arg: U64 = self.cur.typeArgs[pi]
+                        // An instance may be symbolic relative to an enclosing
+                        // instance: the receiver declaration's `E_struct` maps
+                        // to the impl binder `E_impl`, which then maps to I64.
+                        // Normalize the substitution value through the same
+                        // ParamId lookup instead of treating one ambient pair as
+                        // the whole environment.
+                        if arg != tyRef { return self.resolveTy(tyRef: arg) }
+                    }
+                    return tyRef
+                }
+                pi += 1U64
+            }
+            val receiverArg: U64 = self.receiverParamArgument(paramId: t.paramId)
+            if receiverArg != 0U64 && receiverArg != tyRef {
+                return self.resolveTy(tyRef: receiverArg)
+            }
+            return tyRef
+        }
+        // The ParamId migration is intentionally incremental.  A legacy bare
+        // term may still have paramId=0, but if it is a binder in this method's
+        // receiver pattern its meaning is fully determined by that pattern and
+        // the already-selected receiver instance.  Resolve only through that
+        // structural relation; the textual fallback below remains for unrelated
+        // old terms until TypeTerm construction is wholly unified.
+        val receiverPatternArg: U64 = self.receiverPatternArgument(termRef: tyRef)
+        if receiverPatternArg != 0U64 && receiverPatternArg != tyRef {
+            return self.resolveTy(tyRef: receiverPatternArg)
         }
         if t.args.count() == 0 {
             // `Self`/`Item` as types (provided methods on a trait): resolve to the
@@ -319,6 +467,7 @@ pub impl Comp {
             return true
         }
         val t: TypeRef = self.arena.types[ref]
+        if t.paramId != 0U64 { return false }
         // an existential `any P` is a concrete ground type — its `P` names a TRAIT, never a
         // type parameter (a single-letter trait name like `P` would otherwise be misread as a
         // type-param name by the check below, poisoning `Array[any P]` registration).

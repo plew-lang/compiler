@@ -24,6 +24,8 @@
 set -e
 cd "$(dirname "$0")"
 
+printf '%s\n' 'plewc: note: in Codex, a ~30s yield may leave this build running; continue its shell session until the final exit status.' >&2
+
 LC="${LLVM_CONFIG:-llvm-config}"
 command -v "$LC" >/dev/null 2>&1 || {
     [ -x /opt/homebrew/opt/llvm/bin/llvm-config ] && LC=/opt/homebrew/opt/llvm/bin/llvm-config

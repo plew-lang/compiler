@@ -1,0 +1,18 @@
+// `any Marker` carries runtime dispatch evidence for its own receiver.  It is
+// not evidence that one statically known concrete T satisfies `T: Marker`:
+// the erased value's hidden Self cannot be recovered as a generic argument.
+// Keep this separate from `any_nested_self_input`, which tests a dynamic member
+// call whose non-receiver parameter contains Self.
+trait Marker {}
+
+struct S {}
+pub impl S as Marker {}
+
+fn needsStaticProof[T](value: T) -> I64 where T: Marker {
+    return 1I64
+}
+
+fn main() {
+    val erased: any Marker = <S />
+    val result: I64 = needsStaticProof(value: erased)
+}

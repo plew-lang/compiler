@@ -453,7 +453,17 @@ pub impl Comp {
                             while k < self.cur.typeParams.count() {
                                 val tp: Bind = self.cur.typeParams[k]
                                 if lo.tyNameId == tp.nameId {
-                                    return self.typeInfoOfRef(ref: self.cur.typeArgs[k])
+                                    // A generic template is checked in a symbolic
+                                    // environment: its binders are in scope, but it
+                                    // deliberately has no monomorphization arguments.
+                                    // Keep the declared TypeRef in that case.  Indexing
+                                    // typeArgs here conflated abstract checking with a
+                                    // concrete instantiation and caused the self-hosted
+                                    // compiler to read past the empty argument list.
+                                    if k < self.cur.typeArgs.count() {
+                                        return self.typeInfoOfRef(ref: self.cur.typeArgs[k])
+                                    }
+                                    return <TypeInfo kind=2 nameStart=lo.tyStart nameLen=lo.tyLen ref=lo.ty />
                                 }
                                 k += 1
                             }
@@ -897,6 +907,21 @@ pub impl Comp {
                     // result (rustc-style bound-based method typing).
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
                         return self.boundMethodRetInfo(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    }
+                    // Keep the return of a requirement selected through an
+                    // assumed bound symbolic during generic-body validation.
+                    // Reusing a concrete implementation's return here would
+                    // prematurely instantiate a rigid type parameter.
+                    if self.cur.checkFn < self.arena.funcs.count() {
+                        val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: self.inferType(id: recv), nameStart: nameStart, nameLen: nameLen, args: args)
+                        match staticResolution {
+                            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                                val result: U64 = self.staticRequirementResultType(resolution: staticResolution)
+                                if result != 0U64 { return self.typeInfoOfRef(ref: result) }
+                                return scalarInfo()
+                            }
+                            _ => {}
+                        }
                     }
                     // a method call on `self` (Self) in a trait provided-method body being
                     // abstract-checked: resolve the result from the trait requirement's

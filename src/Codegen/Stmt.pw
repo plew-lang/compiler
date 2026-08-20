@@ -150,8 +150,8 @@ pub impl Comp {
                 // at the operator, not deferred to a mislocated deep diagnostic.
                 val er: U64 = self.arrayElemRef(start: lt.nameStart, len: lt.nameLen)
                 if er != 0U64 {
-                    val eqB: Bind = self.internBytes(s: "Eq")
-                    elemOk = self.conformsInstance(ref: er, traitStart: eqB.nameStart, traitLen: eqB.nameLen)
+                    val eqOwner: U64 = self.coreTraitOwner(name: "Eq")
+                    elemOk = eqOwner != 0U64 && self.conformsInstance(ref: er, traitStart: eqOwner, traitLen: self.traitNameLenByOwner(owner: eqOwner))
                 } else {
                     // a bare scalar/named element with no registered structured ref
                     // (no type args to constrain): the name-based Eq check suffices.

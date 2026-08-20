@@ -17,11 +17,12 @@ fn parseOne[T](x: T) -> T.Output where T: Parser {
     return x.parse()
 }
 
-fn acceptOutput[T](x: T, out: T.Output) -> I64 where T: Parser {
+fn preserveOutput[T](x: T, out: T.Output) -> T.Output where T: Parser {
     val local: T.Output = out
-    return x.parse() + local
+    return local
 }
 
 fn main() {
-    print(parseOne(x: <P />) + 1I64)
+    val parser: P = <P />
+    print(preserveOutput(x: parser, out: parseOne(x: parser)) + 1I64)
 }

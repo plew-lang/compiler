@@ -41,6 +41,13 @@ export struct TypeRef {
     // gets the same id as the StructDef "Foo" (content-keyed), so type-vs-decl scans
     // unify too. 0 only for the index-0 dummy sentinel.
     pub val nameId: U64 = 0
+    // Lexical generic binder identity.  0 means this is not a Param term.
+    // A binder is identified by its lowering-time Bind allocation, never by
+    // its spelling: unrelated `T`s must not be substituted through an
+    // ambient Mono environment.  The final semantic TypeTerm represents this
+    // as `Param { binder: ParamId }`; keeping it here is the migration carrier
+    // while legacy consumers still read the flat arena shape.
+    pub val paramId: U64 = 0
     pub val args: Array[U64]
     // `Person#Ext` (spec/09): the interned id of the extension view refining this
     // type, 0 for a plain type. A zero-cost view (same layout); it selects which
@@ -193,6 +200,10 @@ export struct Bind {
     // not set it (non-type uses: kwCache, deinits, moduleRanges, imports/exports) —
     // those are not compared by nameId.
     pub val nameId: U64 = 0
+    // Lexical identity of a generic binder. Unlike nameId/nameStart this is
+    // never content-interned: independently written `T`s are distinct.
+    // 0 marks a non-generic Bind.
+    pub val paramId: U64 = 0
     pub val fieldStart: U64
     pub val fieldLen: U64
     // original-source byte offset of the bound field name (for diagnostics):
@@ -565,6 +576,9 @@ export struct AssocBinding {
     // the trait whose associated type this binds (e.g. `Sub`), so a type with several
     // operator conformances can bind `Output` differently per trait. 0 if none.
     pub val traitId: U64 = 0
+    // Canonical declaration owner of `traitId`.  Text is insufficient: two
+    // imported traits may both spell `Convert` and both declare `Output`.
+    pub val traitOwner: U64 = 0
     // Source impl identity. Receiver and trait text are not sufficient when a type
     // has multiple parameterized conformances to the same trait.
     pub val implOffset: U64 = 0
@@ -931,6 +945,71 @@ export struct UnifyBind {
 }
 pub impl UnifyBind { factory }
 
+// The semantic input of every trait query.  `owner` is the resolved trait
+// declaration offset, never an interned spelling; `positionalArgs` are the
+// instance inputs. Associated outputs deliberately do not belong here: they
+// constrain the witness selected by this key.
+export struct TraitInstanceKey {
+    pub val owner: U64
+    pub val positionalArgs: Array[U64]
+}
+pub impl TraitInstanceKey { factory }
+
+// One associated-output predicate on a trait constraint. `span` is retained
+// solely for diagnostics and must never participate in semantic equality,
+// hashing, or a query cache key.
+export struct TraitAssocPredicate {
+    pub val member: U64
+    pub val value: U64
+    pub val span: U64 = 0U64
+}
+pub impl TraitAssocPredicate { factory }
+
+// `where T: P[Item=X]` / `any P[Item=X]`: select one witness by `key`, then
+// verify these output predicates against that selected witness.
+export struct TraitConstraint {
+    pub val key: TraitInstanceKey
+    pub val assocPredicates: Array[TraitAssocPredicate]
+}
+pub impl TraitConstraint { factory }
+
+// The substitution produced by matching one concrete conformance. A binder is
+// its declaration-order slot in that conformance's `impl[...]` list, so source
+// spelling and an unrelated query's generic binders cannot leak into it.
+export struct WitnessBind {
+    pub val binder: U64
+    pub val term: U64
+}
+pub impl WitnessBind { factory }
+
+// A direct selected witness. `conformIdx` is one-based (0 means no match), and
+// its bindings map only that witness's impl-binder slots to semantic TypeRefs.
+export struct WitnessMatch {
+    pub val conformIdx: U64 = 0U64
+    pub val binds: Array[WitnessBind] = []
+}
+pub impl WitnessMatch { factory }
+
+// Static conformance evidence is deliberately richer than a direct impl
+// match.  A generic declaration may rely on an assumed `where` bound before
+// any concrete witness exists; trait-to-trait entailment retains every edge
+// instantiation as a predecessor DAG.  Runtime existential evidence is not a
+// member of this enum (it cannot prove a generic static bound).
+export enum StaticConformanceProof {
+    Missing
+    ConcreteWitness(WitnessMatch)
+    AssumedBound(boundIdx: U64)
+    TraitPath(edges: Array[WitnessMatch], terminal: U64)
+}
+
+// A declaration-time trait member selected from static evidence.  It is kept
+// separate from the eventual CallResolution because generic template checking
+// needs a symbolic requirement before a concrete dispatch target exists.
+export enum StaticMemberResolution {
+    Missing
+    Requirement(proof: StaticConformanceProof, traitIdx: U64, reqIdx: U64)
+}
+
 // A path-local substitution used by the trait-subject cycle validator.  Unlike
 // `UnifyBind`, binders here can come from any number of conformance edges, so a
 // declaration-local `scope` (the Conform table index) is part of their identity.
@@ -1192,6 +1271,10 @@ export struct Modules {
     // everywhere without an `import`. Type visibility (Check/Visibility.pw) treats a type
     // defined in this module as ambient. Captured when the driver force-loads Lang.
     pub mut val langModule: U64 = 4000000000U64
+    // The module defining language operator traits (`@Std/Core`).  Operator
+    // sugar is specified in terms of these declarations, not whichever trait
+    // named `Eq`/`Add` happened to be visible at a later checker site.
+    pub mut val coreModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 
@@ -1273,11 +1356,20 @@ export struct TypeCache {
 }
 pub impl TypeCache { factory }
 
+// Stable payload of a nonzero interner id.  The slice is always into
+// `Arena.bytes`; `intern` validates that invariant at the boundary.
+export struct InternedSpan {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl InternedSpan { factory }
+
 export struct Interner {
-    pub mut val starts: Array[U64] = []
-    pub mut val lens: Array[U64] = []
+    // One entry owns both ends of an interned source slice.  Keeping these as
+    // parallel arrays made it possible for an id's start, length, and count to
+    // diverge at mutation boundaries.
+    pub mut val entries: Array[InternedSpan] = []
     pub mut val buckets: Array[U64] = []
-    pub mut val count: U64 = 0
 }
 pub impl Interner { factory }
 

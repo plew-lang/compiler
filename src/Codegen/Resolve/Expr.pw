@@ -224,6 +224,41 @@ pub impl Comp {
     // caller. Falls back to the instance-independent typeCache/typeOf projection (a
     // node the record pass could not reach).
     inout fn groundedTypeOf(id: U64) -> U64 {
+        // A shared generic body cannot take a field/index result from the
+        // AST-global parametric cache: `self.items[i]` in `Set[E]` is stored
+        // there as the lexical `E`, while this concrete body may be
+        // `Set[String]`.  Derive the term through the selected body receiver
+        // first.  This is a semantic type query, not a Mono/backend recovery:
+        // every edge below is an explicit child of the TypeRef tree.
+        match self.arena.exprs[id] {
+            Expr.Ident(val start, val len) => {
+                if self.cur.hasRecv && self.cur.bodyRecvInstRef != 0U64 {
+                    val selfName: Bind = self.kwSpan(kw: "self", kwLen: 4U64)
+                    if spansEqual(c: inout self, aStart: start, aLen: len, bStart: selfName.nameStart, bLen: selfName.nameLen) {
+                        return self.cur.bodyRecvInstRef
+                    }
+                }
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                val baseRef: U64 = self.groundedTypeOf(id: base)
+                if baseRef != 0U64 && baseRef < self.arena.types.count() && self.isGenericInst(ref: baseRef) {
+                    val fieldInfo: TypeInfo = self.genericFieldTypeInfo(instRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
+                    if fieldInfo.ref != 0U64 { return fieldInfo.ref }
+                }
+            }
+            Expr.Index(val base, index: _) => {
+                val baseRef: U64 = self.groundedTypeOf(id: base)
+                if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                    val baseTy: TypeRef = self.arena.types[baseRef]
+                    if baseTy.args.count() == 1U64 {
+                        if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
+                            return baseTy.args[0]
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
         mut val pr: U64 = 0
         if id < self.parametricRef.count() {
             pr = self.parametricRef[id]
@@ -240,15 +275,18 @@ pub impl Comp {
             val savedA: Array[U64] = self.cur.typeArgs
             val savedS: U64 = self.cur.selfRef
             val savedI: U64 = self.cur.itemRef
+            val savedR: U64 = self.cur.recvInstRef
             self.cur.typeParams = self.cur.bodyTypeParams
             self.cur.typeArgs = self.cur.bodyTypeArgs
             self.cur.selfRef = self.cur.bodySelfRef
             self.cur.itemRef = self.cur.bodyItemRef
+            self.cur.recvInstRef = self.cur.bodyRecvInstRef
             val g: U64 = self.groundTypeRef(ref: pr)
             self.cur.typeParams = savedP
             self.cur.typeArgs = savedA
             self.cur.selfRef = savedS
             self.cur.itemRef = savedI
+            self.cur.recvInstRef = savedR
             return g
         }
         return self.typedIrRefOfInfo(ti: self.typeOf(id: id))

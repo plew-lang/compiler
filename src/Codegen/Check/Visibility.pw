@@ -534,7 +534,7 @@ pub impl Comp {
                 if t.assocTraitLen != 0U64 {
                     assoc = self.typeDeclIdentityAt(useMod: useMod, start: t.assocTraitStart, len: t.assocTraitLen)
                 }
-                self.arena.types[i] = <TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=decl.nameLen != 0U64 declOffset=decl.nameStart hasAssocTraitDecl=assoc.nameLen != 0U64 assocTraitDeclOffset=assoc.nameStart siteOffset=t.siteOffset />
+                self.arena.types[i] = <TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=t.nameId paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=decl.nameLen != 0U64 declOffset=decl.nameStart hasAssocTraitDecl=assoc.nameLen != 0U64 assocTraitDeclOffset=assoc.nameStart siteOffset=t.siteOffset />
             }
             i += 1
         }
@@ -565,6 +565,23 @@ pub impl Comp {
         val declRoot: U64 = self.packageRootModuleOf(mod: self.moduleOf(offset: identity.nameStart))
         mut val requiredSurface: U64 = declRoot
         if declRoot == surfaceRoot { requiredSurface = surfaceRoot }
+        if !(self.publicSurfaceProvidesDecl(surfaceMod: requiredSurface, identity: identity)) {
+            self.errorAt(offset: offset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)")
+        }
+    }
+
+    // A lowered trait constraint already carries its declaration owner.  Do
+    // not feed that owner span back through the exporting module's import
+    // surface: `PrivateMarker as Marker` would otherwise look unresolved and
+    // escape public-API closure.  The canonical identity is the thing whose
+    // reachability must be checked.
+    inout fn checkSurfaceTraitOwner(surfaceMod: U64, owner: U64, offset: U64) {
+        if owner == 0U64 { return }
+        val identity: Bind = <Bind nameStart=owner nameLen=1 fieldStart=0 fieldLen=0 />
+        val surfaceRoot: U64 = self.packageRootModuleOf(mod: surfaceMod)
+        val traitRoot: U64 = self.packageRootModuleOf(mod: self.moduleOf(offset: owner))
+        mut val requiredSurface: U64 = traitRoot
+        if traitRoot == surfaceRoot { requiredSurface = surfaceRoot }
         if !(self.publicSurfaceProvidesDecl(surfaceMod: requiredSurface, identity: identity)) {
             self.errorAt(offset: offset, msg: "public API signature mentions a package-local name that is not reachable from the package root public surface — export or re-export it from src/_.pw (spec/15 public API closure)")
         }
@@ -663,7 +680,7 @@ pub impl Comp {
             val b: FuncBound = self.decls.funcBounds[bi]
             if b.fnIdx == fnIdx {
                 self.checkSurfaceType(surfaceMod: surfaceMod, ref: b.paramTy, offset: offset)
-                self.checkSurfaceName(surfaceMod: surfaceMod, start: b.traitStart, len: b.traitLen, offset: offset)
+                self.checkSurfaceTraitOwner(surfaceMod: surfaceMod, owner: b.traitStart, offset: offset)
             }
             bi += 1
         }

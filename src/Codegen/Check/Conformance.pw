@@ -135,9 +135,27 @@ pub impl Comp {
         }
         if term.ref == 0U64 || term.ref >= self.arena.types.count() { return false }
         val t: TypeRef = self.arena.types[term.ref]
+        // A projection is a compound term: its receiver is not merely the
+        // projection's printed head.  `T#P.Item` must therefore expose T to
+        // occurs checking just as `Array[T]` does.
+        if t.assocNameId != 0U64 {
+            val receiver: U64 = self.typeTermProjectionReceiver(t: t)
+            if self.traitCycleOccurs(term: <TraitCycleTerm ref=receiver scope=term.scope />, scope: scope, nameId: nameId, binds: binds) { return true }
+            mut val pi: U64 = 0U64
+            while pi < t.assocTraitArgs.count() {
+                if self.traitCycleOccurs(term: <TraitCycleTerm ref=t.assocTraitArgs[pi] scope=term.scope />, scope: scope, nameId: nameId, binds: binds) { return true }
+                pi += 1U64
+            }
+            return false
+        }
         mut val i: U64 = 0U64
         while i < t.args.count() {
             if self.traitCycleOccurs(term: <TraitCycleTerm ref=t.args[i] scope=term.scope />, scope: scope, nameId: nameId, binds: binds) { return true }
+            i += 1U64
+        }
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            if self.traitCycleOccurs(term: <TraitCycleTerm ref=t.assocTraitArgs[i] scope=term.scope />, scope: scope, nameId: nameId, binds: binds) { return true }
             i += 1U64
         }
         return false
@@ -186,7 +204,31 @@ pub impl Comp {
         }
         val ta: TypeRef = self.arena.types[a.ref]
         val tb: TypeRef = self.arena.types[b.ref]
-        if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return 0U64 }
+        // Compare a projection through its semantic children.  In particular,
+        // the receiver may be a fresh binder on either edge (`T#P.Item` /
+        // `U#P.Item`); spelling it as the outer flat TypeRef head would make
+        // the two otherwise identical rewrites look unrelated.
+        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
+            if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId || ta.assocTraitArgs.count() != tb.assocTraitArgs.count() { return 0U64 }
+            val receiverRelation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=self.typeTermProjectionReceiver(t: ta) scope=a.scope />, b: <TraitCycleTerm ref=self.typeTermProjectionReceiver(t: tb) scope=b.scope />, binds: inout binds)
+            if receiverRelation == 0U64 { return 0U64 }
+            mut val projectionGrows: Bool = receiverRelation == 2U64
+            mut val pi: U64 = 0U64
+            while pi < ta.assocTraitArgs.count() {
+                mut val al: U64 = 0U64
+                mut val bl: U64 = 0U64
+                if pi < ta.assocTraitArgLabels.count() { al = ta.assocTraitArgLabels[pi] }
+                if pi < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[pi] }
+                if al != bl { return 0U64 }
+                val relation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=ta.assocTraitArgs[pi] scope=a.scope />, b: <TraitCycleTerm ref=tb.assocTraitArgs[pi] scope=b.scope />, binds: inout binds)
+                if relation == 0U64 { return 0U64 }
+                if relation == 2U64 { projectionGrows = true }
+                pi += 1U64
+            }
+            if projectionGrows { return 2U64 }
+            return 1U64
+        }
+        if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() || ta.assocTraitArgs.count() != tb.assocTraitArgs.count() { return 0U64 }
         mut val i: U64 = 0U64
         mut val grows: Bool = false
         while i < ta.args.count() {
@@ -196,6 +238,18 @@ pub impl Comp {
             if i < tb.argLabels.count() { bLabel = tb.argLabels[i] }
             if aLabel != bLabel { return 0U64 }
             val relation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=ta.args[i] scope=a.scope />, b: <TraitCycleTerm ref=tb.args[i] scope=b.scope />, binds: inout binds)
+            if relation == 0U64 { return 0U64 }
+            if relation == 2U64 { grows = true }
+            i += 1U64
+        }
+        i = 0U64
+        while i < ta.assocTraitArgs.count() {
+            mut val al: U64 = 0U64
+            mut val bl: U64 = 0U64
+            if i < ta.assocTraitArgLabels.count() { al = ta.assocTraitArgLabels[i] }
+            if i < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[i] }
+            if al != bl { return 0U64 }
+            val relation: U64 = self.traitCycleTermRelation(a: <TraitCycleTerm ref=ta.assocTraitArgs[i] scope=a.scope />, b: <TraitCycleTerm ref=tb.assocTraitArgs[i] scope=b.scope />, binds: inout binds)
             if relation == 0U64 { return 0U64 }
             if relation == 2U64 { grows = true }
             i += 1U64
@@ -283,7 +337,21 @@ pub impl Comp {
         if a.ref == 0U64 || b.ref == 0U64 || a.ref >= self.arena.types.count() || b.ref >= self.arena.types.count() { return a.ref == b.ref }
         val ta: TypeRef = self.arena.types[a.ref]
         val tb: TypeRef = self.arena.types[b.ref]
-        if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() { return false }
+        if ta.assocNameId != 0U64 || tb.assocNameId != 0U64 {
+            if ta.assocNameId == 0U64 || tb.assocNameId == 0U64 || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId || ta.assocTraitArgs.count() != tb.assocTraitArgs.count() { return false }
+            if !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=self.typeTermProjectionReceiver(t: ta) scope=a.scope />, b: <TraitCycleTerm ref=self.typeTermProjectionReceiver(t: tb) scope=b.scope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes)) { return false }
+            mut val pi: U64 = 0U64
+            while pi < ta.assocTraitArgs.count() {
+                mut val al: U64 = 0U64
+                mut val bl: U64 = 0U64
+                if pi < ta.assocTraitArgLabels.count() { al = ta.assocTraitArgLabels[pi] }
+                if pi < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[pi] }
+                if al != bl || !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=ta.assocTraitArgs[pi] scope=a.scope />, b: <TraitCycleTerm ref=tb.assocTraitArgs[pi] scope=b.scope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes)) { return false }
+                pi += 1U64
+            }
+            return true
+        }
+        if ta.nameId != tb.nameId || ta.hasDecl != tb.hasDecl || ta.declOffset != tb.declOffset || ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) || ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.assocTraitId != tb.assocTraitId || ta.hasAssocTraitDecl != tb.hasAssocTraitDecl || ta.assocTraitDeclOffset != tb.assocTraitDeclOffset || ta.assocNameId != tb.assocNameId || ta.args.count() != tb.args.count() || ta.assocTraitArgs.count() != tb.assocTraitArgs.count() { return false }
         mut val i: U64 = 0U64
         while i < ta.args.count() {
             mut val al: U64 = 0U64
@@ -291,6 +359,15 @@ pub impl Comp {
             if i < ta.argLabels.count() { al = ta.argLabels[i] }
             if i < tb.argLabels.count() { bl = tb.argLabels[i] }
             if al != bl || !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=ta.args[i] scope=a.scope />, b: <TraitCycleTerm ref=tb.args[i] scope=b.scope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes)) { return false }
+            i += 1U64
+        }
+        i = 0U64
+        while i < ta.assocTraitArgs.count() {
+            mut val al: U64 = 0U64
+            mut val bl: U64 = 0U64
+            if i < ta.assocTraitArgLabels.count() { al = ta.assocTraitArgLabels[i] }
+            if i < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[i] }
+            if al != bl || !(self.traitCycleTermsAlphaEqual(a: <TraitCycleTerm ref=ta.assocTraitArgs[i] scope=a.scope />, b: <TraitCycleTerm ref=tb.assocTraitArgs[i] scope=b.scope />, aBinds: aBinds, bBinds: bBinds, aScopes: inout aScopes, bScopes: inout bScopes)) { return false }
             i += 1U64
         }
         return true
@@ -449,10 +526,25 @@ pub impl Comp {
         if self.plainBinder(ref: ref, params: params) < params.count() { return 0U64 }
         if ref == 0U64 || ref >= self.arena.types.count() { return 1U64 }
         val t: TypeRef = self.arena.types[ref]
+        if t.assocNameId != 0U64 {
+            mut val projectionCount: U64 = 1U64
+            projectionCount += self.traitCycleConstructorCount(ref: self.typeTermProjectionReceiver(t: t), params: params)
+            mut val pi: U64 = 0U64
+            while pi < t.assocTraitArgs.count() {
+                projectionCount += self.traitCycleConstructorCount(ref: t.assocTraitArgs[pi], params: params)
+                pi += 1U64
+            }
+            return projectionCount
+        }
         mut val count: U64 = 1U64
         mut val i: U64 = 0U64
         while i < t.args.count() {
             count += self.traitCycleConstructorCount(ref: t.args[i], params: params)
+            i += 1U64
+        }
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            count += self.traitCycleConstructorCount(ref: t.assocTraitArgs[i], params: params)
             i += 1U64
         }
         return count
@@ -463,12 +555,25 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
         val t: TypeRef = self.arena.types[ref]
         // A projection such as `T#P.Item` is not a bare binder for unification,
-        // but its receiver still contains T for the SCC non-increase ranking.
+        // but its receiver is a normal recursive child for the SCC rank.
         mut val count: U64 = 0U64
-        if t.assocTraitId != 0U64 && binder < params.count() && t.nameId == params[binder].nameId { count = 1U64 }
+        if t.assocNameId != 0U64 {
+            count += self.traitCycleBinderOccurrences(ref: self.typeTermProjectionReceiver(t: t), params: params, binder: binder)
+            mut val pi: U64 = 0U64
+            while pi < t.assocTraitArgs.count() {
+                count += self.traitCycleBinderOccurrences(ref: t.assocTraitArgs[pi], params: params, binder: binder)
+                pi += 1U64
+            }
+            return count
+        }
         mut val i: U64 = 0U64
         while i < t.args.count() {
             count += self.traitCycleBinderOccurrences(ref: t.args[i], params: params, binder: binder)
+            i += 1U64
+        }
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            count += self.traitCycleBinderOccurrences(ref: t.assocTraitArgs[i], params: params, binder: binder)
             i += 1U64
         }
         return count
@@ -583,8 +688,9 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < viewIds.count() {
             val id: U64 = viewIds[i]
-            if id != 0U64 && id <= self.interner.count {
-                if self.isExtName(start: self.interner.starts[id - 1U64], len: self.interner.lens[id - 1U64]) {
+            if id != 0U64 && id <= self.interner.entries.count() {
+                val entry: InternedSpan = self.interner.entries[id - 1U64]
+                if self.isExtName(start: entry.start, len: entry.len) {
                     mut val duplicate: Bool = false
                     mut val j: U64 = 0U64
                     while j < extIds.count() {

@@ -79,23 +79,23 @@ pub impl Comp {
         }
         mut val tpi: U64 = 0
         while tpi < f.typeParams.count() {
-            val tpId: U64 = f.typeParams[tpi].nameId
             mut val firstRef: U64 = 0
             mut val ai: U64 = 0
             while ai < args.count() {
                 val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
                 if pi < f.params.count() {
                     val p: Param = f.params[pi]
-                    if p.tyLen > 0U64 {
-                        if intern(c: inout self, start: p.tyStart, len: p.tyLen) == tpId {
-                            val ar: U64 = self.inferType(id: args[ai].expr)
-                            if ar != 0U64 {
-                                if firstRef == 0U64 {
-                                    firstRef = ar
-                                } else {
-                                    if !(self.typesCompatible(expected: firstRef, inferred: ar)) {
-                                        self.errorAt(offset: self.exprOffset(id: args[ai].expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
-                                    }
+                    // Only a bare parameter position contributes an inverse
+                    // binding.  A projection such as `T#Parser.Output` has
+                    // the same legacy head spelling but cannot determine T.
+                    if self.plainBinder(ref: p.ty, params: f.typeParams) == tpi {
+                        val ar: U64 = self.inferType(id: args[ai].expr)
+                        if ar != 0U64 {
+                            if firstRef == 0U64 {
+                                firstRef = ar
+                            } else {
+                                if !(self.typesCompatible(expected: firstRef, inferred: ar)) {
+                                    self.errorAt(offset: self.exprOffset(id: args[ai].expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
                                 }
                             }
                         }

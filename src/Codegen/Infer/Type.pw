@@ -117,16 +117,14 @@ pub impl Comp {
                         // Existential formation uses the same complete trait
                         // instance query as `where`: a witness for `P[I64]`
                         // does not construct an `any P[String]` box.
-                        val traitArgs: Array[U64] = self.positionalTraitArgs(t: te)
-                        val assocNames: Array[U64] = self.traitAssocArgNames(t: te)
-                        val assocValues: Array[U64] = self.traitAssocArgValues(t: te)
+                        val constraint: TraitConstraint = self.existentialTraitConstraint(ref: exp)
                         if inferred != 0U64 {
-                            if !(self.conformsInstance(ref: inferred, traitStart: te.nameStart, traitLen: te.nameLen, traitArgs: traitArgs, assocNames: assocNames, assocValues: assocValues)) {
+                            if !(self.conformsTraitConstraint(ref: inferred, constraint: constraint)) {
                                 return false
                             }
                         } else {
                             val traitId: U64 = intern(c: inout self, start: te.nameStart, len: te.nameLen)
-                            if traitArgs.count() != 0U64 || !(self.conformExists(typeId: srcId, traitId: traitId)) {
+                            if constraint.key.positionalArgs.count() != 0U64 || !(self.conformExists(typeId: srcId, traitId: traitId)) {
                                 return false
                             }
                         }
@@ -332,22 +330,42 @@ pub impl Comp {
             return false
         }
         val qTp: U64 = source.nameId
-        val qTrait: U64 = trait.nameId
+        val constraint: TraitConstraint = self.existentialTraitConstraintFor(t: trait)
         mut val bi: U64 = 0
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == self.cur.checkFn {
                 if fb.paramNameId == qTp {
-                    val traitArgs: Array[U64] = self.positionalTraitArgs(t: trait)
-                    if fb.traitNameId == qTrait && fb.traitArgs.count() == traitArgs.count() {
+                    if constraint.key.owner != 0U64 && fb.traitStart == constraint.key.owner && fb.traitArgs.count() == constraint.key.positionalArgs.count() {
                         mut val binds: Array[UnifyBind] = []
                         mut val ai: U64 = 0U64
                         mut val matches: Bool = true
                         while ai < fb.traitArgs.count() {
-                            if !(self.unifyPatterns(a: fb.traitArgs[ai], aSide: 0U64, b: traitArgs[ai], bSide: 1U64, aParams: self.cur.typeParams, bParams: [], binds: inout binds)) {
+                            if !(self.unifyPatterns(a: fb.traitArgs[ai], aSide: 0U64, b: constraint.key.positionalArgs[ai], bSide: 1U64, aParams: self.cur.typeParams, bParams: [], binds: inout binds)) {
                                 matches = false
                             }
                             ai += 1U64
+                        }
+                        // Associated outputs are not positional trait inputs.
+                        // A generic bound entails an existential constraint only
+                        // when it promises the same selected-witness outputs;
+                        // `T: Iter[Item=String]` must not erase to
+                        // `any Iter[Item=I64]` merely because both share Iter.
+                        if fb.traitAssocNames.count() != constraint.assocPredicates.count() { matches = false }
+                        mut val need: U64 = 0U64
+                        while need < constraint.assocPredicates.count() {
+                            mut val found: Bool = false
+                            mut val bi: U64 = 0U64
+                            while bi < fb.traitAssocNames.count() {
+                                if fb.traitAssocNames[bi] == constraint.assocPredicates[need].member {
+                                    if bi < fb.traitAssocValues.count() {
+                                        if self.typeRefEq(a: fb.traitAssocValues[bi], b: constraint.assocPredicates[need].value) { found = true }
+                                    }
+                                }
+                                bi += 1U64
+                            }
+                            if !found { matches = false }
+                            need += 1U64
                         }
                         if matches {
                             return true

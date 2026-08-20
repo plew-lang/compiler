@@ -191,9 +191,20 @@ pub impl Comp {
         mut val assocTraitId: U64 = 0
         if t.projectionTrait.bytes().count() > 0 {
             val atn: Bind = self.internBytes(s: t.projectionTrait)
-            assocTraitStart = atn.nameStart
-            assocTraitLen = atn.nameLen
-            assocTraitId = intern(c: inout self, start: atn.nameStart, len: atn.nameLen)
+            // A projection source is a declaration identity, not its import
+            // alias spelling.  Preserve that owner in the lowered type so
+            // `TextConvert` and `BytesConvert` can select distinct same-name
+            // traits and their associated witnesses.
+            val owner: U64 = self.traitOwnerAtUse(start: atn.nameStart, len: atn.nameLen, arity: t.projectionTraitArgs.count())
+            if owner != 0U64 {
+                assocTraitStart = owner
+                assocTraitLen = self.traitNameLenByOwner(owner: owner)
+                assocTraitId = intern(c: inout self, start: assocTraitStart, len: assocTraitLen)
+            } else {
+                assocTraitStart = atn.nameStart
+                assocTraitLen = atn.nameLen
+                assocTraitId = intern(c: inout self, start: atn.nameStart, len: atn.nameLen)
+            }
         }
         mut val assocTraitArgs: Array[U64] = []
         mut val assocTraitArgLabels: Array[U64] = []
@@ -235,15 +246,21 @@ pub impl Comp {
         // a head naming an in-scope type parameter (self.cur.typeParams, set during lowering) is
         // a binder, not a module-scoped type — exclude it from the visibility walk.
         mut val site: U64 = t.span.start
+        mut val paramId: U64 = 0U64
         mut val tpi: U64 = 0
         while tpi < self.cur.typeParams.count() {
             val tp: Bind = self.cur.typeParams[tpi]
-            if t.projectionAssoc.bytes().count() == 0 && spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
+            // A projection's receiver is still a lexical type parameter.  Do
+            // not send `T#Trait.Item` through module type-name resolution just
+            // because the outer term is a projection: during declaration-time
+            // checks its receiver is a symbolic Param, not a concrete witness.
+            if spansEqual(c: inout self, aStart: tp.nameStart, aLen: tp.nameLen, bStart: nm.nameStart, bLen: nm.nameLen) {
                 site = 0U64
+                paramId = tp.paramId
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=args viewExtId=viewExtId viewIds=viewIds isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args viewExtId=viewExtId viewIds=viewIds isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

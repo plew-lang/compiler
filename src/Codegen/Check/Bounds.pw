@@ -6,6 +6,226 @@
 // or the input name unchanged when it is not an associated type / has no binding.
 
 pub impl Comp {
+    // Form the semantic constraint carried by an existential once, at the
+    // boundary from a lowered TypeRef.  `any Alias` must retain the resolved
+    // declaration selected at the authored use site: the spelling alone is
+    // neither a trait identity nor a safe conformance-query input.
+    //
+    // This is intentionally not a general TypeRef-to-constraint conversion.
+    // Only `any P[...]` owns associated-output predicates in the current
+    // surface syntax; ordinary trait uses are lowered by FuncBound/Conform
+    // with their owner already canonicalized.
+    inout fn existentialTraitConstraintFor(t: TypeRef) -> TraitConstraint {
+        if !(t.isAny) {
+            return <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> assocPredicates=[] />
+        }
+        mut val owner: U64 = 0U64
+        // Visibility resolution preserves the declaration selected by the
+        // authored type occurrence.  It is stronger than a later spelling
+        // lookup, which would lose aliases and same-name module identity.
+        if t.hasDecl { owner = t.declOffset }
+        if owner == 0U64 {
+            owner = self.traitOwnerAtUse(start: t.nameStart, len: t.nameLen, arity: self.positionalTraitArgs(t: t).count())
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        val names: Array[U64] = self.traitAssocArgNames(t: t)
+        val values: Array[U64] = self.traitAssocArgValues(t: t)
+        mut val i: U64 = 0U64
+        while i < names.count() && i < values.count() {
+            predicates.append(<TraitAssocPredicate member=names[i] value=values[i] span=t.siteOffset />)
+            i += 1U64
+        }
+        return <TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.positionalTraitArgs(t: t) /> assocPredicates=predicates />
+    }
+
+    inout fn existentialTraitConstraint(ref: U64) -> TraitConstraint {
+        if ref >= self.arena.types.count() {
+            return <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> assocPredicates=[] />
+        }
+        return self.existentialTraitConstraintFor(t: self.arena.types[ref])
+    }
+
+    // Compatibility projection for existing bool consumers.  The input is
+    // already canonical; this wrapper deliberately has no spelling fallback.
+    // It is the migration bridge until each consumer receives the selected
+    // ConformanceProof rather than only its truth value.
+    inout fn conformsTraitConstraint(ref: U64, constraint: TraitConstraint) -> Bool {
+        if constraint.key.owner == 0U64 { return false }
+        mut val names: Array[U64] = []
+        mut val values: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < constraint.assocPredicates.count() {
+            names.append(constraint.assocPredicates[i].member)
+            values.append(constraint.assocPredicates[i].value)
+            i += 1U64
+        }
+        return self.conformsInstance(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, assocNames: names, assocValues: values)
+    }
+
+    // Declaration-time evidence is a separate query from concrete
+    // conformance lookup.  In `where Parser: Convert[T]`, the receiver is
+    // not a type parameter, yet the bound is still the only static proof
+    // available while T is rigid.  Keep the complete receiver and positional
+    // trait instance in the match; textual trait names alone are insufficient.
+    inout fn assumedBoundProof(fnIdx: U64, receiverRef: U64, traitStart: U64, traitLen: U64, traitArgs: Array[U64]) -> StaticConformanceProof {
+        mut val i: U64 = 0U64
+        while i < self.decls.funcBounds.count() {
+            val bound: FuncBound = self.decls.funcBounds[i]
+            if bound.fnIdx == fnIdx && bound.traitStart == traitStart && bound.traitLen == traitLen && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: receiverRef) && bound.traitArgs.count() == traitArgs.count() {
+                mut val same: Bool = true
+                mut val ai: U64 = 0U64
+                while ai < traitArgs.count() {
+                    if !(self.typeRefEq(a: bound.traitArgs[ai], b: traitArgs[ai])) { same = false }
+                    ai += 1U64
+                }
+                if same { return <StaticConformanceProof.AssumedBound boundIdx=i /> }
+            }
+            i += 1U64
+        }
+        return <StaticConformanceProof.Missing />
+    }
+
+    // Resolve a requirement through declaration-time proof, without consulting
+    // a concrete impl that happens to be visible today.  This is deliberately
+    // separate from `resolveMethodFinal`: in
+    //
+    //   fn f[T](p: Parser, x: T) -> Parser#Convert[T].Output
+    //     where Parser: Convert[T] { p.convert(value: x) }
+    //
+    // `T` is rigid.  Selecting Parser's Convert[String] witness while checking
+    // the template would be unsound; the only evidence is the bound itself.
+    // The result carries both the proof and the selected declaration.  Its
+    // associated result stays symbolic until the type-term/proof consumer
+    // grounds the selected bound at an actual instantiation.
+    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> StaticMemberResolution {
+        val memberId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val i: U64 = 0U64
+        while i < self.decls.funcBounds.count() {
+            val bound: FuncBound = self.decls.funcBounds[i]
+            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
+                val proof: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, traitStart: bound.traitStart, traitLen: bound.traitLen, traitArgs: bound.traitArgs)
+                match proof {
+                    StaticConformanceProof.AssumedBound(boundIdx: _) => {
+                        mut val ti: U64 = 0U64
+                        while ti < self.decls.traits.count() {
+                            val traitDef: TraitDef = self.decls.traits[ti]
+                            // `traitStart` is the resolved declaration owner,
+                            // not merely the spelling at the `where` site.
+                            // Same-name/same-arity imported traits are distinct.
+                            if traitDef.nameStart == bound.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.traitArgs.count()) {
+                                mut val ri: U64 = 0U64
+                                while ri < traitDef.reqs.count() {
+                                    val req: Func = traitDef.reqs[ri]
+                                    if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
+                                        return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
+                                    }
+                                    ri += 1U64
+                                }
+                            }
+                            ti += 1U64
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            i += 1U64
+        }
+        return <StaticMemberResolution.Missing />
+    }
+
+    // The parameter type of one requirement selected by `resolution`.
+    // The trait's binders are substituted with the bound's positional instance
+    // arguments before returning to the enclosing function's symbolic scope.
+    // `0` means that the selected member is a provided method or otherwise has
+    // no direct requirement parameter at `argIdx`; its fuller CallResolution
+    // migration remains deliberately separate from this requirement slice.
+    inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: Array[Arg], argIdx: U64) -> U64 {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
+                match proof {
+                    StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
+                        val req: Func = traitDef.reqs[reqIdx]
+                        val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
+                        if paramIdx >= req.params.count() { return 0U64 }
+                        val bound: FuncBound = self.decls.funcBounds[boundIdx]
+                        val savedParams: Array[Bind] = self.cur.typeParams
+                        val savedArgs: Array[U64] = self.cur.typeArgs
+                        self.cur.typeParams = traitDef.typeParams
+                        self.cur.typeArgs = bound.traitArgs
+                        val out: U64 = self.groundTypeRef(ref: req.params[paramIdx].ty)
+                        self.cur.typeParams = savedParams
+                        self.cur.typeArgs = savedArgs
+                        return out
+                    }
+                    _ => { return 0U64 }
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
+    // Reify a requirement result under the selected static proof.  An
+    // associated output is not looked up in an arbitrary concrete impl: it is
+    // the symbolic projection `bound.receiver#Trait[bound.args].Member`.
+    // Ordinary trait parameter occurrences are substituted by the same bound
+    // environment used for requirement parameters.
+    inout fn staticRequirementResultType(resolution: StaticMemberResolution) -> U64 {
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
+                match proof {
+                    StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
+                        val req: Func = traitDef.reqs[reqIdx]
+                        if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.types.count() { return 0U64 }
+                        val bound: FuncBound = self.decls.funcBounds[boundIdx]
+                        val raw: TypeRef = self.arena.types[req.retTy]
+                        mut val rawName: U64 = raw.nameId
+                        if rawName == 0U64 { rawName = intern(c: inout self, start: raw.nameStart, len: raw.nameLen) }
+                        mut val ai: U64 = 0U64
+                        while ai < traitDef.assocTypes.count() {
+                            if traitDef.assocTypes[ai].nameId == rawName {
+                                // A bound may promise this exact associated
+                                // output (`where R: P[Item=I64]`).  It is a
+                                // post-key predicate, so use it only after the
+                                // requirement/member was selected through the
+                                // same proof.
+                                mut val pi: U64 = 0U64
+                                while pi < bound.traitAssocNames.count() {
+                                    if bound.traitAssocNames[pi] == rawName && pi < bound.traitAssocValues.count() {
+                                        return bound.traitAssocValues[pi]
+                                    }
+                                    pi += 1U64
+                                }
+                                if bound.paramTy >= self.arena.types.count() { return 0U64 }
+                                val receiver: TypeRef = self.arena.types[bound.paramTy]
+                                val noLabels: Array[U64] = []
+                                return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen args=receiver.args viewExtId=receiver.viewExtId viewIds=receiver.viewIds isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=bound.traitStart assocTraitLen=bound.traitLen assocTraitId=bound.traitNameId assocTraitArgs=bound.traitArgs assocTraitArgLabels=noLabels assocNameStart=traitDef.assocTypes[ai].nameStart assocNameLen=traitDef.assocTypes[ai].nameLen assocNameId=traitDef.assocTypes[ai].nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=bound.traitStart siteOffset=0U64 />)
+                            }
+                            ai += 1U64
+                        }
+                        val savedParams: Array[Bind] = self.cur.typeParams
+                        val savedArgs: Array[U64] = self.cur.typeArgs
+                        self.cur.typeParams = traitDef.typeParams
+                        self.cur.typeArgs = bound.traitArgs
+                        val out: U64 = self.groundTypeRef(ref: req.retTy)
+                        self.cur.typeParams = savedParams
+                        self.cur.typeArgs = savedArgs
+                        return out
+                    }
+                    _ => { return 0U64 }
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
     // Ground the full trait key of a bound in the function/method instance that
     // owns it.  Trait arguments belong to the bound, not to a later resolver
     // fallback: `where T: Add[T]` becomes `Add[I64]` for T=I64 here.
@@ -47,7 +267,7 @@ pub impl Comp {
     // associated output by receiver spelling: one receiver may implement the
     // same parameterized trait more than once, and an extension witness is
     // distinct from a bare one.  `implOffset` ties the output to that witness.
-    inout fn traitAssocOutputsMatch(cf: Conform, assocNames: Array[U64], assocValues: Array[U64]) -> Bool {
+    inout fn traitAssocOutputsMatch(cf: Conform, matchResult: WitnessMatch, assocNames: Array[U64], assocValues: Array[U64]) -> Bool {
         if assocNames.count() != assocValues.count() { return false }
         if assocNames.count() == 0U64 { return true }
         mut val need: U64 = 0U64
@@ -56,8 +276,9 @@ pub impl Comp {
             mut val i: U64 = 0U64
             while i < self.decls.assocBindings.count() {
                 val ab: AssocBinding = self.decls.assocBindings[i]
-                if ab.implOffset == cf.defOffset && ab.traitId == cf.traitId && ab.nameId == assocNames[need] {
-                    if self.typesCompatible(expected: assocValues[need], inferred: ab.ty) { found = true }
+                if ab.implOffset == cf.defOffset && ab.traitOwner == cf.traitStart && ab.nameId == assocNames[need] {
+                    val output: U64 = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: matchResult)
+                    if self.typesCompatible(expected: assocValues[need], inferred: output) { found = true }
                 }
                 i += 1U64
             }
@@ -402,7 +623,6 @@ pub impl Comp {
         // in decls.conforms below. A type with no witness (String/Bool have no `Ord`) correctly
         // fails the bound, the same clean reject a missing struct/enum witness gives.
         val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
-        val qTrait: U64 = intern(c: inout self, start: traitStart, len: traitLen)
         mut val i: U64 = 0
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
@@ -412,7 +632,7 @@ pub impl Comp {
             if cf.extId == 0U64 && cf.typeId == qType {
                 // An unparameterized spelling is the arity-zero instance,
                 // never a shorthand for `Trait[...]`.
-                if cf.traitId == qTrait && cf.traitArgs.count() == 0U64 {
+                if cf.traitStart == traitStart && cf.traitLen == traitLen && cf.traitArgs.count() == 0U64 {
                     return true
                 }
             }
@@ -486,14 +706,14 @@ pub impl Comp {
         }
         // Candidate existence is not conformance.  Match the full subject
         // pattern here, so `impl Box[I64] as P` never grants P to Box[String].
-        val qTrait: U64 = intern(c: inout self, start: traitStart, len: traitLen)
         mut val applies: Bool = false
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
-            if cf.extId == 0U64 && cf.traitId == qTrait {
-                if self.conformanceMatchesTraitInstance(cf: cf, typeRef: ref, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen) {
-                    if self.traitAssocOutputsMatch(cf: cf, assocNames: assocNames, assocValues: assocValues) {
+            if cf.extId == 0U64 && cf.traitStart == traitStart && cf.traitLen == traitLen {
+                val matchResult: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: ref, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
+                if matchResult.conformIdx != 0U64 {
+                    if self.traitAssocOutputsMatch(cf: cf, matchResult: matchResult, assocNames: assocNames, assocValues: assocValues) {
                         applies = true
                     }
                 }
@@ -506,7 +726,14 @@ pub impl Comp {
             return true
         }
         // conditional impl: check the impl-level `where` bounds against THIS instance's args.
-        val traitIdx: U64 = self.findTraitIdxByName(start: traitStart, len: traitLen)
+        mut val traitIdx: U64 = self.decls.traits.count()
+        mut val traitScan: U64 = 0U64
+        while traitScan < self.decls.traits.count() {
+            if self.decls.traits[traitScan].nameStart == traitStart && self.decls.traits[traitScan].nameLen == traitLen {
+                traitIdx = traitScan
+            }
+            traitScan += 1U64
+        }
         if traitIdx >= self.decls.traits.count() {
             return true
         }
@@ -613,7 +840,7 @@ pub impl Comp {
                         val at: TypeRef = self.arena.types[lhs]
                         val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)
                         if !ok {
-                            self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
+                            self.errorAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`")
                         }
                     }
                     bi += 1
@@ -632,7 +859,7 @@ pub impl Comp {
                             // location — no deferral to a deeper monomorphization level).
                             val ok: Bool = self.viewedTypeConforms(ref: fin.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)
                             if !ok {
-                                self.errorAt(offset: fb.paramStart, msg: "type argument does not conform to the trait required by `where`")
+                                self.errorAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`")
                             }
                         }
                     }
@@ -655,6 +882,18 @@ pub impl Comp {
         self.checkMethodBounds()
     }
 
+    // A generic method's substitutions are not positional aliases for the
+    // receiver declaration's substitutions.  Derive the method environment by
+    // matching its declared receiver pattern against this concrete instance;
+    // the resulting WitnessMatch is the same directional binder map used by
+    // conformance proofs.  This is the first concrete InstanceEnvironment
+    // consumer while the flat Cursor arrays are being retired.
+    inout fn methodReceiverEnvironment(f: Func, instRef: U64) -> WitnessMatch {
+        if f.recvTy == 0U64 || instRef == 0U64 { return <WitnessMatch /> }
+        val noArgs: Array[U64] = []
+        return self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: noArgs, typeParams: f.typeParams, declaredTraitArgs: noArgs, typeRef: instRef, traitArgs: noArgs)
+    }
+
     inout fn checkMethodBounds() {
         mut val gi: U64 = 0
         while gi < self.monoWork.genInsts.count() {
@@ -668,16 +907,36 @@ pub impl Comp {
                     while bi < self.decls.funcBounds.count() {
                         val fb: FuncBound = self.decls.funcBounds[bi]
                         if fb.fnIdx == mfi {
-                            val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: f.typeParams, args: inst.args)
-                            val boundAssocValues: Array[U64] = self.groundedBoundTraitAssocValues(fb: fb, params: f.typeParams, args: inst.args)
+                            val receiverEnv: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: instRef)
+                            mut val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: f.typeParams, args: inst.args)
+                            mut val boundAssocValues: Array[U64] = self.groundedBoundTraitAssocValues(fb: fb, params: f.typeParams, args: inst.args)
+                            if receiverEnv.conformIdx != 0U64 {
+                                boundArgs = []
+                                mut val bai: U64 = 0U64
+                                while bai < fb.traitArgs.count() {
+                                    boundArgs.append(self.groundWitnessTypeTerm(ref: fb.traitArgs[bai], params: f.typeParams, matchResult: receiverEnv))
+                                    bai += 1U64
+                                }
+                                boundAssocValues = []
+                                bai = 0U64
+                                while bai < fb.traitAssocValues.count() {
+                                    boundAssocValues.append(self.groundWitnessTypeTerm(ref: fb.traitAssocValues[bai], params: f.typeParams, matchResult: receiverEnv))
+                                    bai += 1U64
+                                }
+                            }
                             if fb.paramTy != 0U64 {
-                                val savedP: Array[Bind] = self.cur.typeParams
-                                val savedA: Array[U64] = self.cur.typeArgs
-                                self.cur.typeParams = f.typeParams
-                                self.cur.typeArgs = inst.args
-                                val lhs: U64 = self.groundTypeRef(ref: fb.paramTy)
-                                self.cur.typeParams = savedP
-                                self.cur.typeArgs = savedA
+                                mut val lhs: U64 = 0U64
+                                if receiverEnv.conformIdx != 0U64 {
+                                    lhs = self.groundWitnessTypeTerm(ref: fb.paramTy, params: f.typeParams, matchResult: receiverEnv)
+                                } else {
+                                    val savedP: Array[Bind] = self.cur.typeParams
+                                    val savedA: Array[U64] = self.cur.typeArgs
+                                    self.cur.typeParams = f.typeParams
+                                    self.cur.typeArgs = inst.args
+                                    lhs = self.groundTypeRef(ref: fb.paramTy)
+                                    self.cur.typeParams = savedP
+                                    self.cur.typeArgs = savedA
+                                }
                                 if lhs < self.arena.types.count() {
                                     val at: TypeRef = self.arena.types[lhs]
                                     val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)

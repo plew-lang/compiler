@@ -436,7 +436,29 @@ pub impl Comp {
                         // parameter is a type error (`s.set(x: a)` where a: T, x: I64). A
                         // generic-receiver method's grounded param types are handled by the
                         // backend; here we check the non-generic-receiver case.
-                        if !(self.isGenericInst(ref: rt.ref)) {
+                        // A generic template may call a requirement justified by
+                        // `where Concrete: Trait[T]`.  Do not instead select a
+                        // currently visible concrete witness (e.g. Trait[String])
+                        // and compare it to rigid T; the proof query owns that
+                        // distinction.  Monomorphization resolves the grounded
+                        // witness later.
+                        val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: self.inferType(id: recv), nameStart: nameStart, nameLen: nameLen, args: args)
+                        mut val staticBoundMember: Bool = false
+                        match staticResolution {
+                            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                                staticBoundMember = true
+                                mut val bk: U64 = 0U64
+                                while bk < args.count() {
+                                    val expected: U64 = self.staticRequirementParamType(resolution: staticResolution, args: args, argIdx: bk)
+                                    if expected != 0U64 {
+                                        self.checkGenericTypeMatch(expectedRef: expected, valueExpr: args[bk].expr)
+                                    }
+                                    bk += 1U64
+                                }
+                            }
+                            _ => {}
+                        }
+                        if !(staticBoundMember) && !(self.isGenericInst(ref: rt.ref)) {
                             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                             if mi != self.arena.funcs.count() {
                                 val mps: Array[Param] = self.arena.funcs[mi].params
@@ -790,7 +812,6 @@ pub impl Comp {
                     pi += 1U64
                 }
                 self.checkGenericTypeViewCycles(ref: f.retTy, offset: f.retStart)
-                val noParams: Array[Bind] = []
                 val noArgs: Array[U64] = []
                 self.cur.locals = []
                 self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
@@ -800,7 +821,11 @@ pub impl Comp {
                 self.cur.extId = f.extId
                 self.cur.selfInout = f.selfInout
                 self.cur.recvInstRef = 0
-                self.cur.typeParams = noParams
+                // This is a declaration-time symbolic environment: function
+                // binders are active but have no concrete arguments. Keeping
+                // them here lets every type query distinguish `T` from an
+                // unknown type and discharge `where T: P[...]` constraints.
+                self.cur.typeParams = f.typeParams
                 self.cur.typeArgs = noArgs
                 self.cur.checkFn = fi
                 mut val pi: U64 = 0

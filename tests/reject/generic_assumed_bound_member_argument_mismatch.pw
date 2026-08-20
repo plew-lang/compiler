@@ -1,0 +1,20 @@
+// A requirement selected through `where Parser: Convert[T]` has parameter
+// type T.  A concrete implementation visible elsewhere must not make I64
+// acceptable while T remains rigid in the generic declaration.
+trait Convert[From] {
+    type Output
+    fn convert(value: From) -> Output
+}
+
+struct Parser {}
+pub impl Parser { factory }
+pub impl Parser as Convert[String] {
+    type Output = I64
+    fn convert(value: String) -> I64 { return 7I64 }
+}
+
+fn invalid[T](parser: Parser) -> Parser#Convert[T].Output where Parser: Convert[T] {
+    return parser.convert(value: 1I64)
+}
+
+fn main() {}

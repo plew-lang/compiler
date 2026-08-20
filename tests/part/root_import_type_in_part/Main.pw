@@ -1,0 +1,10 @@
+import @Std/Io with { print }
+import ./Types with { Token }
+
+part ./Helper
+
+struct Producer {}
+
+fn main() {
+    print(Producer.make().value)
+}
