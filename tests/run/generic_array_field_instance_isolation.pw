@@ -1,0 +1,36 @@
+import @Std/Io with { print }
+
+// The declaration binder `T` and the impl binder `T` are distinct.  The same
+// `Bag.add` body is emitted twice, so both the nested field `Array[T]` and its
+// `append` call must ground under each selected receiver instance.  In
+// particular, the first emission for `Bag[Item]` must not leak into
+// `Bag[I64]`, nor may either body retain the abstract `Array[T]` receiver.
+struct Item {
+    pub val value: I64
+}
+pub impl Item { factory }
+
+struct Bag[T] {
+    pub mut val items: Array[T]
+}
+pub impl Bag { factory }
+
+pub impl[T] Bag[T] {
+    inout fn add(value: T) {
+        self.items.append(value)
+    }
+
+    fn first() -> T {
+        return self.items[0]
+    }
+}
+
+fn main() {
+    mut val itemBag: Bag[Item] = <Bag items=[] />
+    itemBag.add(value: <Item value=7I64 />)
+    print(itemBag.first().value)
+
+    mut val intBag: Bag[I64] = <Bag items=[] />
+    intBag.add(value: 42I64)
+    print(intBag.first())
+}
