@@ -60,6 +60,10 @@ export struct Comp {
     // rejecting, so its coverage can be developed/triaged against self-compile
     // without breaking the build. Off in a normal build (no behavior change yet).
     pub mut val tcLog: Bool = false
+    // Codegen trace mode (`plewc --trace-codegen <file>`): emit the generic-instance
+    // state transitions that lead to an LLVM body. This is observational only: it
+    // never changes collection, worklist ordering, or the generated module.
+    pub mut val traceCodegen: Bool = false
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
     // `opt -passes=asan` actually instruments loads/stores (a bare `.ll` has no
@@ -407,6 +411,7 @@ export fn runFrontend(c: inout Comp) {
     mut val genMode: Bool = false
     mut val tcLog: Bool = false
     mut val asan: Bool = false
+    mut val traceCodegen: Bool = false
     mut val entryArgIdx: I64 = 1
     if argCount() > 1 {
         if argAt(1) == "--gen" {
@@ -424,6 +429,10 @@ export fn runFrontend(c: inout Comp) {
         // defined function). See Comp.asan and Backend emitLlvm.
         if argAt(1) == "--asan" {
             asan = true
+            entryArgIdx = 2
+        }
+        if argAt(1) == "--trace-codegen" {
+            traceCodegen = true
             entryArgIdx = 2
         }
     }
@@ -445,6 +454,7 @@ export fn runFrontend(c: inout Comp) {
     c.genMode = genMode
     c.tcLog = tcLog
     c.asan = asan
+    c.traceCodegen = traceCodegen
     mut val pendingItems: Array[TopItemAst] = []
     mut val nextModuleId: U64 = 1
     if argCount() > entryArgIdx {
