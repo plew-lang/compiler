@@ -13,6 +13,86 @@
 // c.monoWork.arrayElems and its runtime is defined before the dependent one.
 
 pub impl Comp {
+    // Ground a semantic type term through an explicit immutable substitution
+    // map. This is intentionally separate from `groundTypeRef`, whose legacy
+    // ambient Cursor path still supports old declaration-time callers. A body
+    // instance must never infer its field type from that ambient state: its
+    // ParamId map is the authority.
+    inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64]) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val t: TypeRef = self.arena.types[ref]
+        if t.paramId != 0U64 {
+            mut val pi: U64 = 0U64
+            while pi < params.count() && pi < values.count() {
+                if params[pi].paramId == t.paramId {
+                    val replacement: U64 = values[pi]
+                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values) }
+                    return ref
+                }
+                pi += 1U64
+            }
+        }
+        mut val args: Array[U64] = []
+        mut val assocArgs: Array[U64] = []
+        mut val changed: Bool = false
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            val next: U64 = self.groundTermInEnvironment(ref: t.args[i], params: params, values: values)
+            if next != t.args[i] { changed = true }
+            args.append(next)
+            i += 1U64
+        }
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[i], params: params, values: values)
+            if next != t.assocTraitArgs[i] { changed = true }
+            assocArgs.append(next)
+            i += 1U64
+        }
+        if changed { return self.rebuildTypeTerm(t: t, args: args, assocTraitArgs: assocArgs) }
+        return ref
+    }
+
+    inout fn groundBodyTerm(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val t: TypeRef = self.arena.types[ref]
+        // Self/Item are derived projections of the selected receiver, not
+        // ParamId bindings. Preserve their established semantic meaning before
+        // consulting the explicit binder map.
+        if t.args.count() == 0U64 {
+            if self.cur.bodyEnvironment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+                return self.cur.bodyEnvironment.receiverRef
+            }
+            if self.cur.bodyItemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
+                return self.cur.bodyItemRef
+            }
+        }
+        val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: self.cur.bodyEnvironment.params, values: self.cur.bodyEnvironment.args)
+        if explicit != ref { return explicit }
+        // ParamId-stamped terms are fully decided by the immutable map above.
+        // Only old zero-ParamId terms retain the temporary compatibility path
+        // while lowering is migrated; it is entered under the same body env,
+        // never the incidental callee environment.
+        if t.paramId != 0U64 { return ref }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedS: U64 = self.cur.selfRef
+        val savedI: U64 = self.cur.itemRef
+        val savedR: U64 = self.cur.recvInstRef
+        self.cur.typeParams = self.cur.bodyEnvironment.params
+        self.cur.typeArgs = self.cur.bodyEnvironment.args
+        self.cur.selfRef = self.cur.bodySelfRef
+        self.cur.itemRef = self.cur.bodyItemRef
+        self.cur.recvInstRef = self.cur.bodyEnvironment.receiverRef
+        val legacy: U64 = self.groundTypeRef(ref: ref)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedS
+        self.cur.itemRef = savedI
+        self.cur.recvInstRef = savedR
+        return legacy
+    }
+
     // Rebuild one semantic type term while preserving every identity facet.
     // This is the only construction path used by term substitution: projection
     // trait arguments are children just like nominal arguments.
@@ -321,7 +401,7 @@ pub impl Comp {
         }
         self.cur.typeParams = composedP
         self.cur.typeArgs = composedA
-        val g: U64 = self.groundTypeRef(ref: tyRef)
+        val g: U64 = self.groundTermInEnvironment(ref: tyRef, params: composedP, values: composedA)
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
         return g

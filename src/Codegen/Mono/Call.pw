@@ -136,7 +136,7 @@ pub impl Comp {
                         // trait bodies are shared, and that ambient environment
                         // may still describe another conformer after a nested
                         // resolution query.
-                        if self.cur.bodyRecvInstRef != 0U64 { return self.cur.bodyRecvInstRef }
+                        if self.cur.bodyEnvironment.receiverRef != 0U64 { return self.cur.bodyEnvironment.receiverRef }
                         if self.cur.bodySelfRef != 0U64 { return self.cur.bodySelfRef }
                     }
                 }
@@ -156,10 +156,10 @@ pub impl Comp {
                     // substitution before relying on that optional cache.
                     if !lo.isArray {
                         mut val binderI: U64 = 0U64
-                        while binderI < self.cur.bodyTypeParams.count() {
-                            if spansEqual(c: inout self, aStart: lo.tyStart, aLen: lo.tyLen, bStart: self.cur.bodyTypeParams[binderI].nameStart, bLen: self.cur.bodyTypeParams[binderI].nameLen) {
-                                if binderI < self.cur.bodyTypeArgs.count() && self.cur.bodyTypeArgs[binderI] != 0U64 {
-                                    return self.cur.bodyTypeArgs[binderI]
+                        while binderI < self.cur.bodyEnvironment.params.count() {
+                            if spansEqual(c: inout self, aStart: lo.tyStart, aLen: lo.tyLen, bStart: self.cur.bodyEnvironment.params[binderI].nameStart, bLen: self.cur.bodyEnvironment.params[binderI].nameLen) {
+                                if binderI < self.cur.bodyEnvironment.args.count() && self.cur.bodyEnvironment.args[binderI] != 0U64 {
+                                    return self.cur.bodyEnvironment.args[binderI]
                                 }
                             }
                             binderI += 1U64
@@ -177,12 +177,12 @@ pub impl Comp {
                         val savedS: U64 = self.cur.selfRef
                         val savedI: U64 = self.cur.itemRef
                         val savedR: U64 = self.cur.recvInstRef
-                        self.cur.typeParams = self.cur.bodyTypeParams
-                        self.cur.typeArgs = self.cur.bodyTypeArgs
+                        self.cur.typeParams = self.cur.bodyEnvironment.params
+                        self.cur.typeArgs = self.cur.bodyEnvironment.args
                         self.cur.selfRef = self.cur.bodySelfRef
                         self.cur.itemRef = self.cur.bodyItemRef
-                        self.cur.recvInstRef = self.cur.bodyRecvInstRef
-                        out = self.groundTypeRef(ref: out)
+                        self.cur.recvInstRef = self.cur.bodyEnvironment.receiverRef
+                        out = self.groundBodyTerm(ref: out)
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
                         self.cur.selfRef = savedS
@@ -209,13 +209,13 @@ pub impl Comp {
                         val param: Param = owner.params[pi]
                         if spansEqual(c: inout self, aStart: identStart, aLen: identLen, bStart: param.nameStart, bLen: param.nameLen) {
                             mut val ti: U64 = 0U64
-                            while ti < self.cur.bodyTypeParams.count() {
-                                if spansEqual(c: inout self, aStart: param.tyStart, aLen: param.tyLen, bStart: self.cur.bodyTypeParams[ti].nameStart, bLen: self.cur.bodyTypeParams[ti].nameLen) {
-                                    if ti < self.cur.bodyTypeArgs.count() && self.cur.bodyTypeArgs[ti] != 0U64 {
+                            while ti < self.cur.bodyEnvironment.params.count() {
+                                if spansEqual(c: inout self, aStart: param.tyStart, aLen: param.tyLen, bStart: self.cur.bodyEnvironment.params[ti].nameStart, bLen: self.cur.bodyEnvironment.params[ti].nameLen) {
+                                    if ti < self.cur.bodyEnvironment.args.count() && self.cur.bodyEnvironment.args[ti] != 0U64 {
                                         if param.tyIsArray {
-                                            return self.arrayRefOfElem(elemRef: self.cur.bodyTypeArgs[ti])
+                                            return self.arrayRefOfElem(elemRef: self.cur.bodyEnvironment.args[ti])
                                         }
-                                        return self.cur.bodyTypeArgs[ti]
+                                        return self.cur.bodyEnvironment.args[ti]
                                     }
                                 }
                                 ti += 1U64
@@ -255,11 +255,11 @@ pub impl Comp {
         val savedA: Array[U64] = self.cur.typeArgs
         val savedS: U64 = self.cur.selfRef
         val savedI: U64 = self.cur.itemRef
-        self.cur.typeParams = self.cur.bodyTypeParams
-        self.cur.typeArgs = self.cur.bodyTypeArgs
+        self.cur.typeParams = self.cur.bodyEnvironment.params
+        self.cur.typeArgs = self.cur.bodyEnvironment.args
         self.cur.selfRef = self.cur.bodySelfRef
         self.cur.itemRef = self.cur.bodyItemRef
-        out = self.groundTypeRef(ref: out)
+        out = self.groundBodyTerm(ref: out)
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
         self.cur.selfRef = savedS
@@ -369,6 +369,63 @@ pub impl Comp {
         return out
     }
 
+    // Construct the only semantic environment for a concrete callable body.
+    // Function/impl binders arrive through `args`; nominal declaration binders
+    // are recovered from the selected receiver. Their ParamIds are distinct,
+    // including the common `struct Array[T]` / `impl[T] Array[T]` spelling.
+    // Every body key and body-entry uses this constructor rather than carrying
+    // parallel args/receiver projections.
+    inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64) -> InstanceEnvironment {
+        mut val params: Array[Bind] = []
+        mut val values: Array[U64] = []
+        val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
+        if fnIdx < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[fnIdx]
+            mut val i: U64 = 0U64
+            while i < f.typeParams.count() && i < args.count() {
+                params.append(f.typeParams[i])
+                values.append(args[i])
+                i += 1U64
+            }
+        }
+        if canonicalRecv != 0U64 && canonicalRecv < self.arena.types.count() {
+            val recv: TypeRef = self.arena.types[canonicalRecv]
+            val si: U64 = self.genericStructIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+            if si < self.arena.structs.count() {
+                val declared: Array[Bind] = self.arena.structs[si].typeParams
+                mut val i: U64 = 0U64
+                while i < declared.count() && i < recv.args.count() {
+                    params.append(declared[i])
+                    values.append(recv.args[i])
+                    i += 1U64
+                }
+            } else {
+                val ei: U64 = self.genericEnumIndex(nameStart: recv.nameStart, nameLen: recv.nameLen)
+                if ei < self.arena.enums.count() {
+                    val declared: Array[Bind] = self.arena.enums[ei].typeParams
+                    mut val i: U64 = 0U64
+                    while i < declared.count() && i < recv.args.count() {
+                        params.append(declared[i])
+                        values.append(recv.args[i])
+                        i += 1U64
+                    }
+                }
+            }
+        }
+        return <InstanceEnvironment params=params args=values receiverRef=canonicalRecv />
+    }
+
+    inout fn sameInstanceEnvironment(a: InstanceEnvironment, b: InstanceEnvironment) -> Bool {
+        if !(self.sameBodyReceiver(a: a.receiverRef, b: b.receiverRef)) { return false }
+        if a.params.count() != b.params.count() || a.args.count() != b.args.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.params.count() {
+            if a.params[i].paramId != b.params[i].paramId || !(self.typeRefEq(a: a.args[i], b: b.args[i])) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
     // Queue a concrete callable body before LLVM starts.  This is deliberately
     // separate from FnInst: FnInst is a code-generation/mangling detail, while
     // this list is the semantic reachability closure whose bodies must have all
@@ -377,22 +434,14 @@ pub impl Comp {
         if fnIdx >= self.arena.funcs.count() { return }
         val f: Func = self.arena.funcs[fnIdx]
         if f.isExtern || f.body == 0U64 { return }
-        val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
+        val environment: InstanceEnvironment = self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef)
         mut val i: U64 = 0U64
         while i < self.monoWork.bodyInstances.count() {
             val prior: BodyInstance = self.monoWork.bodyInstances[i]
-            if prior.fnIdx == fnIdx && self.sameBodyReceiver(a: prior.recvInstRef, b: canonicalRecv) && prior.args.count() == args.count() {
-                mut val same: Bool = true
-                mut val ai: U64 = 0U64
-                while ai < args.count() {
-                    if !(self.typeRefEq(a: prior.args[ai], b: args[ai])) { same = false }
-                    ai += 1U64
-                }
-                if same { return }
-            }
+            if prior.fnIdx == fnIdx && self.sameInstanceEnvironment(a: prior.environment, b: environment) { return }
             i += 1U64
         }
-        self.monoWork.bodyInstances.append(<BodyInstance fnIdx=fnIdx args=args recvInstRef=canonicalRecv />)
+        self.monoWork.bodyInstances.append(<BodyInstance fnIdx=fnIdx environment=environment />)
     }
 
     // An associated callable uses the generic-function ABI path even when it
@@ -724,7 +773,7 @@ pub impl Comp {
         // `Two`) overwrite the callable used while emitting another (`Counter`).
         // Only a body with neither substitutions nor provided provenance owns an
         // AST-invariant selection.
-        mut val canUseInvariantCache: Bool = self.cur.bodyTypeParams.count() == 0U64
+        mut val canUseInvariantCache: Bool = self.cur.bodyEnvironment.params.count() == 0U64
         if self.cur.bodyFnIdx < self.arena.funcs.count() {
             if self.arena.funcs[self.cur.bodyFnIdx].isProvided {
                 canUseInvariantCache = false
@@ -819,26 +868,20 @@ pub impl Comp {
     // instance-invariant decisions).
     inout fn finalCalleeCount() -> U64 { return self.arena.finalCallees.count() }
 
-    inout fn finalCalleeBodyArgsEqual(entry: U64) -> Bool {
+    inout fn finalCalleeBodyEnvironmentEqual(entry: U64) -> Bool {
         val e: BodyCallee = self.arena.finalCallees[entry]
-        if e.args.count() != self.cur.bodyTypeArgs.count() { return false }
-        mut val j: U64 = 0U64
-        while j < self.cur.bodyTypeArgs.count() {
-            if !(self.typeRefEq(a: e.args[j], b: self.cur.bodyTypeArgs[j])) { return false }
-            j += 1U64
-        }
-        return true
+        return self.sameInstanceEnvironment(a: e.environment, b: self.cur.bodyEnvironment)
     }
 
     inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64) {
-        self.arena.finalCallees.append(<BodyCallee fnIdx=self.cur.bodyFnIdx args=self.cur.bodyTypeArgs recvInstRef=self.cur.bodyRecvInstRef exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef />)
+        self.arena.finalCallees.append(<BodyCallee fnIdx=self.cur.bodyFnIdx environment=self.cur.bodyEnvironment exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef />)
     }
 
     inout fn recordBodyCallee(exprId: U64, callee: U64, siteIsStmt: Bool = false, slot: U64 = 0U64, recvOverride: U64 = 0U64, recvTypeOverride: U64 = 0U64) {
         // Persist an instance-invariant final decision in the AST-owned cache.
         // This is not a backend lookup fallback: it is the canonical storage
         // for calls whose body key has no substitutions or receiver instance.
-        if !siteIsStmt && slot == 0U64 && self.cur.bodyTypeArgs.count() == 0U64 {
+        if !siteIsStmt && slot == 0U64 && self.cur.bodyEnvironment.params.count() == 0U64 {
             while self.arena.finalExprCallee.count() <= exprId {
                 self.arena.finalExprCallee.append(calleeUnfilled())
             }
@@ -945,7 +988,7 @@ pub impl Comp {
             if resultTypeRef != 0U64 { finalResult = resultTypeRef }
             mut val finalArgs: Array[U64] = prior.calleeTypeArgs
             if calleeTypeArgs.count() > 0U64 { finalArgs = calleeTypeArgs }
-            self.arena.finalCallees.set(i: priorIdx, value: <BodyCallee fnIdx=prior.fnIdx args=prior.args recvInstRef=prior.recvInstRef exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetNameStart=prior.targetNameStart targetNameLen=prior.targetNameLen targetTypeRef=prior.targetTypeRef />)
+            self.arena.finalCallees.set(i: priorIdx, value: <BodyCallee fnIdx=prior.fnIdx environment=prior.environment exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetNameStart=prior.targetNameStart targetNameLen=prior.targetNameLen targetTypeRef=prior.targetTypeRef />)
             return
         }
         self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef)
@@ -962,7 +1005,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            if e.fnIdx == self.cur.bodyFnIdx && e.siteIsStmt == siteIsStmt && e.slot == slot && self.sameBodyReceiver(a: e.recvInstRef, b: self.cur.bodyRecvInstRef) && e.exprId == exprId && self.finalCalleeBodyArgsEqual(entry: i) { return i }
+            if e.fnIdx == self.cur.bodyFnIdx && e.siteIsStmt == siteIsStmt && e.slot == slot && e.exprId == exprId && self.finalCalleeBodyEnvironmentEqual(entry: i) { return i }
             i += 1
         }
         return self.finalCalleeCount()
@@ -973,7 +1016,7 @@ pub impl Comp {
     // generic body uses the BodyCallee table above.  Both are final records;
     // this helper deliberately performs no name, overload, or source lookup.
     inout fn cachedInvariantCallee(exprId: U64, siteIsStmt: Bool, slot: U64) -> U64 {
-        if siteIsStmt || slot != 0U64 || self.cur.bodyTypeArgs.count() != 0U64 {
+        if siteIsStmt || slot != 0U64 || self.cur.bodyEnvironment.params.count() != 0U64 {
             return self.arena.funcs.count()
         }
         if exprId < self.typeCache.callee.count() {
@@ -1007,11 +1050,11 @@ pub impl Comp {
         while i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
             if e.fnIdx == self.cur.bodyFnIdx && e.siteIsStmt == siteIsStmt && e.slot == slot && e.exprId == exprId {
-                if !(self.sameBodyReceiver(a: e.recvInstRef, b: self.cur.bodyRecvInstRef)) {
+                if !(self.sameBodyReceiver(a: e.environment.receiverRef, b: self.cur.bodyEnvironment.receiverRef)) {
                     mismatchedReceiver = true
                 } else {
                     mismatchedArgs = true
-                    if e.args.count() > 0U64 && self.cur.bodyTypeArgs.count() == 0U64 {
+                    if e.environment.params.count() > 0U64 && self.cur.bodyEnvironment.params.count() == 0U64 {
                         missingBodyArgs = true
                     }
                 }
@@ -1058,7 +1101,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=recvRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx environment=e.environment exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=recvRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1071,7 +1114,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx environment=e.environment exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1085,7 +1128,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx environment=e.environment exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1102,7 +1145,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx args=e.args recvInstRef=e.recvInstRef exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetNameStart=targetNameStart targetNameLen=targetNameLen targetTypeRef=targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee fnIdx=e.fnIdx environment=e.environment exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetNameStart=targetNameStart targetNameLen=targetNameLen targetTypeRef=targetTypeRef />)
         }
     }
 
@@ -1276,7 +1319,7 @@ pub impl Comp {
         if self.cur.bodyFnIdx < self.arena.funcs.count() {
             bodyIsProvided = self.arena.funcs[self.cur.bodyFnIdx].isProvided
         }
-        if !bodyIsProvided && self.cur.bodyTypeParams.count() == 0U64 && exprId < self.typeCache.callee.count() {
+        if !bodyIsProvided && self.cur.bodyEnvironment.params.count() == 0U64 && exprId < self.typeCache.callee.count() {
             if self.typeCache.callee[exprId] != calleeUnfilled() && self.typeCache.callee[exprId] < self.arena.funcs.count() {
                 self.recordBodyCallee(exprId: exprId, callee: self.typeCache.callee[exprId])
                 self.recordBodyAnyTarget(exprId: exprId)
@@ -1383,19 +1426,18 @@ pub impl Comp {
         self.cur.recvLen = f.recvLen
         self.cur.extId = f.extId
         self.cur.selfInout = f.selfInout
-        self.cur.recvInstRef = instance.recvInstRef
-        self.cur.typeParams = f.typeParams
-        self.cur.typeArgs = instance.args
+        self.cur.recvInstRef = instance.environment.receiverRef
+        self.cur.typeParams = instance.environment.params
+        self.cur.typeArgs = instance.environment.args
         self.cur.bodyFnIdx = instance.fnIdx
-        self.cur.bodyTypeParams = f.typeParams
-        self.cur.bodyTypeArgs = instance.args
+        self.cur.bodyEnvironment = instance.environment
         // Associated callables have no value `self`, but their bodies may name
         // `Self`/associated types and their final-callable key is the concrete
         // subject selected at the call.  Mirror emitOneGenFn's assoc environment
         // here so Mono and LLVM use the same body-instance identity.
         if f.hasRecv || f.isAssoc {
-            if instance.recvInstRef != 0U64 && instance.recvInstRef < self.arena.types.count() {
-                self.setSelfItemEnv(recvStart: self.arena.types[instance.recvInstRef].nameStart, recvLen: self.arena.types[instance.recvInstRef].nameLen, recvInstRef: instance.recvInstRef)
+            if instance.environment.receiverRef != 0U64 && instance.environment.receiverRef < self.arena.types.count() {
+                self.setSelfItemEnv(recvStart: self.arena.types[instance.environment.receiverRef].nameStart, recvLen: self.arena.types[instance.environment.receiverRef].nameLen, recvInstRef: instance.environment.receiverRef)
             } else {
                 self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
             }
@@ -1405,8 +1447,7 @@ pub impl Comp {
         // The worklist already carries the canonical receiver key.  Do not
         // rebuild it from `self` here: that would make finalization and backend
         // emission independently responsible for preserving source views.
-        self.cur.bodyRecvInstRef = instance.recvInstRef
-        if self.cur.bodyRecvInstRef != 0U64 { self.cur.selfRef = self.cur.bodyRecvInstRef }
+        if self.cur.bodyEnvironment.receiverRef != 0U64 { self.cur.selfRef = self.cur.bodyEnvironment.receiverRef }
         self.cur.bodySelfRef = self.cur.selfRef
         self.cur.bodyItemRef = self.cur.itemRef
         mut val pi: U64 = 0U64
@@ -1452,9 +1493,7 @@ pub impl Comp {
         self.cur.typeParams = noParams
         self.cur.typeArgs = noArgs
         self.cur.bodyFnIdx = 18446744073709551615U64
-        self.cur.bodyRecvInstRef = 0U64
-        self.cur.bodyTypeParams = noParams
-        self.cur.bodyTypeArgs = noArgs
+        self.cur.bodyEnvironment = <InstanceEnvironment />
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
         mut val gi: U64 = 0U64
@@ -1573,9 +1612,7 @@ pub impl Comp {
         self.cur.selfRef = 0U64
         self.cur.itemRef = 0U64
         self.cur.bodyFnIdx = 18446744073709551615U64
-        self.cur.bodyRecvInstRef = 0U64
-        self.cur.bodyTypeParams = noParams
-        self.cur.bodyTypeArgs = noArgs
+        self.cur.bodyEnvironment = <InstanceEnvironment />
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
     }
@@ -2023,13 +2060,13 @@ pub impl Comp {
                 val savedIn: Bool = self.cur.inClosure
                 val savedMark: U64 = self.cur.captureMark
                 val savedBodyFn: U64 = self.cur.bodyFnIdx
-                val savedBodyRecv: U64 = self.cur.bodyRecvInstRef
+                val savedBodyEnvironment: InstanceEnvironment = self.cur.bodyEnvironment
                 val enclMark: U64 = self.scopeMark()
                 self.cur.closureId = exprId
                 self.cur.inClosure = true
                 self.cur.captureMark = enclMark
                 self.cur.bodyFnIdx = self.closureBodyKey(closureId: exprId)
-                self.cur.bodyRecvInstRef = 0U64
+                self.cur.bodyEnvironment = <InstanceEnvironment />
                 mut val pi: U64 = 0
                 while pi < params.count() {
                     val p: Param = params[pi]
@@ -2042,7 +2079,7 @@ pub impl Comp {
                 self.cur.inClosure = savedIn
                 self.cur.captureMark = savedMark
                 self.cur.bodyFnIdx = savedBodyFn
-                self.cur.bodyRecvInstRef = savedBodyRecv
+                self.cur.bodyEnvironment = savedBodyEnvironment
             }
             Expr.Unary(val op, val operand) => {
                 self.scanExprInsts(exprId: operand)
@@ -2594,10 +2631,8 @@ pub impl Comp {
                             self.cur.typeParams = mf.typeParams
                             self.cur.typeArgs = inst.args
                             self.cur.bodyFnIdx = mfi
-                            self.cur.bodyRecvInstRef = instRef
-                            self.cur.bodyTypeArgs = inst.args
+                            self.cur.bodyEnvironment = self.bodyInstanceEnvironment(fnIdx: mfi, args: inst.args, recvInstRef: instRef)
                             self.setSelfItemEnv(recvStart: mf.recvStart, recvLen: mf.recvLen, recvInstRef: instRef)
-                            self.cur.bodyTypeParams = mf.typeParams
                             self.cur.bodySelfRef = self.cur.selfRef
                             self.cur.bodyItemRef = self.cur.itemRef
                             mut val pi: U64 = 0
@@ -2628,9 +2663,7 @@ pub impl Comp {
         self.cur.typeParams = noP
         self.cur.typeArgs = noA
         self.cur.bodyFnIdx = 18446744073709551615U64
-        self.cur.bodyRecvInstRef = 0U64
-        self.cur.bodyTypeArgs = noA
-        self.cur.bodyTypeParams = noP
+        self.cur.bodyEnvironment = <InstanceEnvironment />
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
     }

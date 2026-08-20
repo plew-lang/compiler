@@ -779,7 +779,7 @@ pub impl LlvmCtx {
 
     // Emit function `fi`'s body into the LLVM function value `fv` (under the active
     // substitution env, if any — used for both plain functions and generic instances).
-    inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef, bodyArgs: Array[U64], bodyRecvInstRef: U64 = 0U64) {
+    inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef, environment: InstanceEnvironment) {
         val f: Func = c.arena.funcs[fi]
         // save the Self/Item env so this body fully restores it on exit — the body binds `self`
         // and sets cur.selfRef from the receiver ref (see the self-local binding below), which
@@ -934,29 +934,23 @@ pub impl LlvmCtx {
         // typeParams/typeArgs and after the self-local bound cur.selfRef above, so a
         // read during this body grounds under THIS env even while call resolution
         // transiently swaps cur.typeParams/selfRef to a callee's.
-        val savedBodyP: Array[Bind] = c.cur.bodyTypeParams
-        val savedBodyA: Array[U64] = c.cur.bodyTypeArgs
+        val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
         val savedBodyS: U64 = c.cur.bodySelfRef
         val savedBodyI: U64 = c.cur.bodyItemRef
         val savedBodyFn: U64 = c.cur.bodyFnIdx
-        val savedBodyRecv: U64 = c.cur.bodyRecvInstRef
-        c.cur.bodyTypeParams = f.typeParams
-        c.cur.bodyTypeArgs = bodyArgs
+        c.cur.bodyEnvironment = environment
         c.cur.bodySelfRef = c.cur.selfRef
         c.cur.bodyItemRef = c.cur.itemRef
         c.cur.bodyFnIdx = fi
         // Consume the same canonical body-instance receiver that Mono used to
         // populate BodyCallee.  This is a key projection only; LLVM never
         // resolves a call or infers a source from it.
-        c.cur.bodyRecvInstRef = c.canonicalBodyReceiverRef(fnIdx: fi, recvInstRef: bodyRecvInstRef)
         self.curBodyMark = self.nLocals
         self.genLlvmBlock(c: inout c, id: f.body)
-        c.cur.bodyTypeParams = savedBodyP
-        c.cur.bodyTypeArgs = savedBodyA
+        c.cur.bodyEnvironment = savedBodyEnvironment
         c.cur.bodySelfRef = savedBodyS
         c.cur.bodyItemRef = savedBodyI
         c.cur.bodyFnIdx = savedBodyFn
-        c.cur.bodyRecvInstRef = savedBodyRecv
         if !(self.terminated) {
             // fall-through: the body block dropped its body locals; now drop owned
             // params (a `move` param / `move fn` self the callee deinits).

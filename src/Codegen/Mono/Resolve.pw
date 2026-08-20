@@ -251,7 +251,7 @@ pub impl Comp {
     // that have not yet been stamped with a ParamId.
     inout fn receiverPatternArgument(termRef: U64) -> U64 {
         mut val ref: U64 = self.cur.recvInstRef
-        if ref == 0U64 { ref = self.cur.bodyRecvInstRef }
+        if ref == 0U64 { ref = self.cur.bodyEnvironment.receiverRef }
         if ref == 0U64 { ref = self.cur.selfRef }
         if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
         if self.cur.bodyFnIdx >= self.arena.funcs.count() { return 0U64 }
@@ -274,7 +274,7 @@ pub impl Comp {
     // instance. This is an explicit instance edge, never a spelling fallback.
     inout fn receiverParamArgument(paramId: U64) -> U64 {
         mut val ref: U64 = self.cur.recvInstRef
-        if ref == 0U64 { ref = self.cur.bodyRecvInstRef }
+        if ref == 0U64 { ref = self.cur.bodyEnvironment.receiverRef }
         if ref == 0U64 { ref = self.cur.selfRef }
         if ref == 0U64 || ref >= self.arena.types.count() { return 0U64 }
         val recv: TypeRef = self.arena.types[ref]
@@ -334,7 +334,9 @@ pub impl Comp {
                         // Normalize the substitution value through the same
                         // ParamId lookup instead of treating one ambient pair as
                         // the whole environment.
-                        if arg != tyRef { return self.resolveTy(tyRef: arg) }
+                        if arg != tyRef {
+                            return self.resolveTy(tyRef: arg)
+                        }
                     }
                     return tyRef
                 }
@@ -389,7 +391,14 @@ pub impl Comp {
             while i > 0U64 {
                 i -= 1
                 val p: Bind = self.cur.typeParams[i]
-                if typeNameId == p.nameId {
+                // Some pre-ParamId TypeRefs/Binds in the checked-in std
+                // source legitimately have no interned id yet. `typeNameId`
+                // above is recovered from the term spelling, but comparing it
+                // to an absent binder id (0) can never substitute the term.
+                // Use the binder's lexical span only for that legacy case;
+                // stamped terms always use ParamId above, so equal spellings
+                // from distinct scopes are never conflated here.
+                if typeNameId == p.nameId || (p.nameId == 0U64 && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: p.nameStart, bLen: p.nameLen)) {
                     if i < self.cur.typeArgs.count() {
                         return self.cur.typeArgs[i]
                     }

@@ -209,7 +209,7 @@ pub impl LlvmCtx {
         if mf.isProvided || mf.typeParams.count() == 0U64 {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
-        self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot], bodyArgs: c.cur.typeArgs, bodyRecvInstRef: instRef)
+        self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot], environment: c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef))
         c.cur.selfRef = s4
         c.cur.itemRef = si4
         c.cur.typeParams = savedP

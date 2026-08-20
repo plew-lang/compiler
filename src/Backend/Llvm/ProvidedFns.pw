@@ -164,7 +164,7 @@ pub impl LlvmCtx {
                 c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
             }
         }
-        self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot], bodyArgs: fin.args, bodyRecvInstRef: fin.recvInstRef)
+        self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot], environment: c.bodyInstanceEnvironment(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef))
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
         self.curRecvInstRef = savedR

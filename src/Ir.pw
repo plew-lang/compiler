@@ -707,6 +707,19 @@ export struct FnInst {
     pub val recvInstRef: U64 = 0
 }
 
+// The complete semantic substitution context of one concrete callable body.
+// `params[i] -> args[i]` is an immutable ParamId-keyed substitution map.
+// Binder identity is lexical (`Bind.paramId`), so the declaration binder of
+// `struct Array[T]`, an impl/method binder also spelled `T`, and a witness
+// binder can coexist without textual shadowing. `receiverRef` is the selected
+// concrete receiver and is part of the same semantic key, never ambient cursor
+// state. TypeRef indices are the current TypeTerm migration carrier.
+export struct InstanceEnvironment {
+    pub val params: Array[Bind] = []
+    pub val args: Array[U64] = []
+    pub val receiverRef: U64 = 0U64
+}
+
 // The selected callable for one semantic call site while compiling one concrete
 // function body instance.  A site can be a written expression or an implicit
 // call introduced by a control construct (for example `for`'s iterator/next
@@ -717,8 +730,9 @@ export struct FnInst {
 // records; backend only consumes them.
 export struct BodyCallee {
     pub val fnIdx: U64
-    pub val args: Array[U64]
-    pub val recvInstRef: U64 = 0
+    // The complete enclosing-body key. Do not add parallel args/receiver
+    // fields: a final call is meaningful only under this environment.
+    pub val environment: InstanceEnvironment
     pub val exprId: U64
     pub val siteIsStmt: Bool = false
     pub val slot: U64 = 0U64
@@ -763,8 +777,7 @@ export struct BodyCallee {
 // to the actual conformer.
 export struct BodyInstance {
     pub val fnIdx: U64
-    pub val args: Array[U64]
-    pub val recvInstRef: U64 = 0U64
+    pub val environment: InstanceEnvironment
 }
 
 export struct EnumDef {
@@ -1426,21 +1439,18 @@ export struct Cursor {
     pub mut val chainHoleRef: U64 = 0
     pub mut val typeParams: Array[Bind] = []
     pub mut val typeArgs: Array[U64] = []
-    // the BODY-scoped instance env (typed-IR read path): a snapshot of
-    // typeParams/typeArgs/selfRef/itemRef taken at body-emission entry
-    // (genLlvmFuncBody), immune to the transient callee-env swaps the emission
-    // does while resolving calls (grounding a callee's param types clobbers
-    // cur.typeParams — reads of CALLER exprs must still ground under the
-    // caller's env). groundedTypeOf grounds against these. rustc analog: the
-    // Instance args of the body being compiled, not an ambient cursor.
-    pub mut val bodyTypeParams: Array[Bind] = []
-    pub mut val bodyTypeArgs: Array[U64] = []
+    // The immutable body-scoped substitution snapshot. It is distinct from
+    // the transient callee environment in `typeParams/typeArgs`; all reads of
+    // a shared generic AST use this one key.
+    pub mut val bodyEnvironment: InstanceEnvironment = <InstanceEnvironment />
+    // Derived conveniences of `bodyEnvironment.receiverRef`, kept only to
+    // avoid repeatedly resolving Self/Item projections. They are not part of
+    // a body/call key and must be rebuilt whenever the environment is entered.
     pub mut val bodySelfRef: U64 = 0
     pub mut val bodyItemRef: U64 = 0
-    // The body currently being scanned/emitted.  Together with bodyTypeArgs
-    // and recvInstRef it identifies an Arena.finalCallees entry.
+    // The body currently being scanned/emitted. Together with
+    // `bodyEnvironment` it identifies an Arena.finalCallees entry.
     pub mut val bodyFnIdx: U64 = 18446744073709551615U64
-    pub mut val bodyRecvInstRef: U64 = 0U64
     pub mut val closureId: U64 = 0
     pub mut val inClosure: Bool = false
     pub mut val captureMark: U64 = 0
@@ -1487,6 +1497,7 @@ pub impl Conform { factory }
 pub impl MethodAlias { factory }
 pub impl FuncBound { factory }
 pub impl FnInst { factory }
+pub impl InstanceEnvironment { factory }
 pub impl BodyCallee { factory }
 pub impl BodyInstance { factory }
 pub impl EnumDef { factory }

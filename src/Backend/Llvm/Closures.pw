@@ -386,9 +386,9 @@ pub impl LlvmCtx {
                     self.locMoved = []
                     self.locCellHome = []
                     val savedBodyFn: U64 = c.cur.bodyFnIdx
-                    val savedBodyRecv: U64 = c.cur.bodyRecvInstRef
+                    val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
                     c.cur.bodyFnIdx = c.closureBodyKey(closureId: cid)
-                    c.cur.bodyRecvInstRef = 0U64
+                    c.cur.bodyEnvironment = <InstanceEnvironment />
                     // module-level variables (spec/15) are visible inside closures too.
                     self.seedGlobals(c: inout c)
                     // bind captures from the env pointer (param 0): each capture loads
@@ -509,7 +509,7 @@ pub impl LlvmCtx {
                         }
                     }
                     c.cur.bodyFnIdx = savedBodyFn
-                    c.cur.bodyRecvInstRef = savedBodyRecv
+                    c.cur.bodyEnvironment = savedBodyEnvironment
                 }
                 _ => {}
             }

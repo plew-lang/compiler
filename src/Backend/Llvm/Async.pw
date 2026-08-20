@@ -568,16 +568,12 @@ pub impl LlvmCtx {
         // post-finalization key here made every ordinary call in an async body
         // look unrecorded and invited backend-local re-resolution.
         val savedBodyFn: U64 = c.cur.bodyFnIdx
-        val savedBodyRecv: U64 = c.cur.bodyRecvInstRef
-        val savedBodyParams: Array[Bind] = c.cur.bodyTypeParams
-        val savedBodyArgs: Array[U64] = c.cur.bodyTypeArgs
+        val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
         val savedBodySelf: U64 = c.cur.bodySelfRef
         val savedBodyItem: U64 = c.cur.bodyItemRef
         val noBodyArgs: Array[U64] = []
         c.cur.bodyFnIdx = fi
-        c.cur.bodyRecvInstRef = 0U64
-        c.cur.bodyTypeParams = f.typeParams
-        c.cur.bodyTypeArgs = noBodyArgs
+        c.cur.bodyEnvironment = <InstanceEnvironment />
         c.cur.bodySelfRef = 0U64
         c.cur.bodyItemRef = 0U64
         // module-level variables (spec/15): seed them as locals (pointing at the true
@@ -601,9 +597,7 @@ pub impl LlvmCtx {
             self.asyncResolveAndReturn(c: inout c, value: LLVMConstInt(self.i64ty, 0U64, 0I32))
         }
         c.cur.bodyFnIdx = savedBodyFn
-        c.cur.bodyRecvInstRef = savedBodyRecv
-        c.cur.bodyTypeParams = savedBodyParams
-        c.cur.bodyTypeArgs = savedBodyArgs
+        c.cur.bodyEnvironment = savedBodyEnvironment
         c.cur.bodySelfRef = savedBodySelf
         c.cur.bodyItemRef = savedBodyItem
         self.curAsync = false
