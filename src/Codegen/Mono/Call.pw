@@ -563,6 +563,85 @@ pub impl Comp {
     // Derive the concrete environment of a selected source-level call and add
     // its callee body to the semantic worklist.  Resolution already happened;
     // this function only preserves that decision and its substitutions.
+    inout fn traceMonoTypeHead(ref: U64) {
+        if ref == 0U64 || ref >= self.arena.types.count() {
+            eprint(text: "?")
+            return
+        }
+        val t: TypeRef = self.arena.types[ref]
+        mut val bytes: Array[U8] = []
+        mut val i: U64 = 0U64
+        while i < t.nameLen {
+            bytes.append(self.arena.bytes[t.nameStart + i])
+            i += 1U64
+        }
+        eprint(text: stringFromBytesUnchecked(bytes))
+        if t.assocNameId != 0U64 {
+            eprint(text: ".")
+            bytes = []
+            i = 0U64
+            while i < t.assocNameLen {
+                bytes.append(self.arena.bytes[t.assocNameStart + i])
+                i += 1U64
+            }
+            eprint(text: stringFromBytesUnchecked(bytes))
+        }
+        if t.args.count() > 0U64 {
+            eprint(text: "[")
+            i = 0U64
+            while i < t.args.count() {
+                if i > 0U64 { eprint(text: ",") }
+                self.traceMonoTypeHead(ref: t.args[i])
+                i += 1U64
+            }
+            eprint(text: "]")
+        }
+    }
+
+    inout fn traceIncompleteFinalCallee(f: Func, args: Array[U64], recvRef: U64) {
+        if !(self.traceCodegen) { return }
+        mut val name: Array[U8] = []
+        mut val i: U64 = 0U64
+        while i < f.nameLen {
+            name.append(self.arena.bytes[f.nameStart + i])
+            i += 1U64
+        }
+        eprint(text: "[trace-codegen] Mono incomplete callee name=")
+        eprint(text: stringFromBytesUnchecked(name))
+        eprint(text: " expected=")
+        eprint(text: digitStrU(d: f.typeParams.count()))
+        eprint(text: " actual=")
+        eprint(text: digitStrU(d: args.count()))
+        eprint(text: " receiverRef=")
+        eprint(text: digitStrU(d: recvRef))
+        eprint(text: " args=[")
+        i = 0U64
+        while i < args.count() {
+            if i > 0U64 { eprint(text: ",") }
+            self.traceMonoTypeHead(ref: args[i])
+            i += 1U64
+        }
+        eprint(text: "]")
+        eprint(text: "\n")
+    }
+
+    inout fn traceProvidedFinalCallee(f: Func, args: Array[U64], recvRef: U64, resultRef: U64) {
+        if !(self.traceCodegen) || !(f.isProvided) { return }
+        mut val name: Array[U8] = []
+        mut val i: U64 = 0U64
+        while i < f.nameLen {
+            name.append(self.arena.bytes[f.nameStart + i])
+            i += 1U64
+        }
+        eprint(text: "[trace-codegen] Mono provided callee name=")
+        eprint(text: stringFromBytesUnchecked(name))
+        eprint(text: " receiverRef=")
+        eprint(text: digitStrU(d: recvRef))
+        eprint(text: " result=")
+        self.traceMonoTypeHead(ref: resultRef)
+        eprint(text: "\n")
+    }
+
     inout fn enqueueSelectedCallee(exprId: U64, callee: U64, recvOverride: U64 = 0U64, implicit: Bool = false, recvInstOverride: U64 = 0U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
         if callee >= self.arena.funcs.count() { return }
         val f: Func = self.arena.funcs[callee]
@@ -722,12 +801,14 @@ pub impl Comp {
             }
             if finalArgs.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: finalArgs)) {
                 // An incomplete generic call has no emittable final instance.
+                self.traceIncompleteFinalCallee(f: f, args: finalArgs, recvRef: recvInst)
                 return
             }
         }
         self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: finalArgs, siteIsStmt: siteIsStmt, slot: slot)
         val finalResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvInst, calleeArgs: finalArgs)
         self.setBodyCalleeResultRef(exprId: exprId, resultRef: finalResult, siteIsStmt: siteIsStmt, slot: slot)
+        self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
         self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst)
         self.enqueueSelectedAssocInstance(callee: callee, args: finalArgs, recvInstRef: recvInst)
         self.enqueueSelectedFreeInstance(callee: callee, args: finalArgs)

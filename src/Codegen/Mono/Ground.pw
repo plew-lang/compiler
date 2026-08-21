@@ -445,19 +445,29 @@ pub impl Comp {
         return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
     }
 
-    inout fn assocItemRef(recvStart: U64, recvLen: U64) -> U64 {
-        val qRecv: U64 = intern(c: inout self, start: recvStart, len: recvLen)
-        mut val i: U64 = 0
-        while i < self.decls.assocBindings.count() {
-            val ab: AssocBinding = self.decls.assocBindings[i]
-            if ab.recvId == qRecv {
-                if rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Item") {
-                    return ab.ty
-                }
-            }
-            i += 1
+    inout fn assocItemRef(recvStart: U64, recvLen: U64, recvInstRef: U64) -> U64 {
+        val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+        mut val receiver: U64 = recvInstRef
+        if receiver == 0U64 {
+            receiver = self.simpleTypeRef(nameStart: recvStart, nameLen: recvLen)
         }
-        return 0
+        if receiver == 0U64 { return 0U64 }
+        // `Item` is a temporary spelling-level bridge for provided Iterator
+        // bodies.  The answer itself is selected through the complete concrete
+        // conformance witness, so generic impl binders and associated output
+        // substitutions cannot be confused with the receiver declaration's
+        // generic parameters.  A non-Iterator same-named output is ambiguous
+        // here and deliberately yields no Item environment rather than being
+        // selected by declaration order.
+        val out: U64 = self.assocBindingFor(baseRef: receiver, traitId: 0U64, traitOwner: 0U64, traitArgs: [], assocId: item.nameId)
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] Item receiver=")
+            self.traceMonoTypeHead(ref: receiver)
+            eprint(text: " output=")
+            self.traceMonoTypeHead(ref: out)
+            eprint(text: "\n")
+        }
+        return out
     }
 
     inout fn setSelfItemEnv(recvStart: U64, recvLen: U64, recvInstRef: U64) {
@@ -466,15 +476,11 @@ pub impl Comp {
         } else {
             self.cur.selfRef = self.simpleTypeRef(nameStart: recvStart, nameLen: recvLen)
         }
-        val itemR0: U64 = self.assocItemRef(recvStart: recvStart, recvLen: recvLen)
+        val itemR0: U64 = self.assocItemRef(recvStart: recvStart, recvLen: recvLen, recvInstRef: recvInstRef)
         if itemR0 == 0 {
             self.cur.itemRef = 0
         } else {
-            if recvInstRef != 0 {
-                self.cur.itemRef = self.groundUnderInst(instRef: recvInstRef, tyRef: itemR0)
-            } else {
-                self.cur.itemRef = itemR0
-            }
+            self.cur.itemRef = itemR0
         }
     }
 

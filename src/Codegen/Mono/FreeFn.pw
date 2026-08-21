@@ -225,14 +225,17 @@ pub impl Comp {
                             val grounded: U64 = self.groundedBodyReceiverRef(exprId: args[ai].expr)
                             if grounded != 0U64 { baseRef = grounded }
                         }
-                        // A nested operator's selected result can be more
-                        // precise than the legacy expression-type cache (for
-                        // example `b + 2 * 3`, where the inner literal form is
-                        // contextless).  Mono has already finalized that child;
-                        // consume its result record instead of asking backend
-                        // inference to rediscover it later.
-                        if baseRef == 0U64 {
-                            baseRef = self.bodyCalleeResultRef(exprId: args[ai].expr)
+                        // A nested call/operator's selected result is the
+                        // exact semantic type for this body instance.  The
+                        // AST-wide TypeInfo is only a template projection and
+                        // may be nonzero yet still retain an ungrounded
+                        // provided-method result (`Item`, `B`, …).  Prefer the
+                        // finalized descriptor whenever it exists; otherwise a
+                        // surrounding generic call can lose its own argument
+                        // despite the child having already been resolved.
+                        val selectedResult: U64 = self.bodyCalleeResultRef(exprId: args[ai].expr)
+                        if selectedResult != 0U64 {
+                            baseRef = selectedResult
                         }
                         // A generic body is shared by all instances, so the
                         // AST-global TypeInfo for `self`/a local can still be

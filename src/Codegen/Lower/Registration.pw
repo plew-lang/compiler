@@ -370,7 +370,18 @@ pub impl Comp {
             // every concrete type before trait-subject conferral materializes it.
             if typeRef >= self.arena.types.count() { return <WitnessMatch /> }
             val actual: TypeRef = self.arena.types[typeRef]
-            if subjectId != actual.nameId || subjectArgs.count() != actual.args.count() { return <WitnessMatch /> }
+            // `nameId` is an interning cache, not a semantic name. Synthetic
+            // TypeRefs (including the receiver used while finalizing a
+            // provided call) legitimately carry 0, so matching a legacy
+            // head-only conformance must canonicalize that cache before
+            // comparing declaration identity. Treating 0 as a distinct name
+            // made a concrete `Counter: Iterator` witness disappear and left
+            // its Item output symbolic in `MapIter`.
+            mut val actualId: U64 = actual.nameId
+            if actualId == 0U64 {
+                actualId = intern(c: inout self, start: actual.nameStart, len: actual.nameLen)
+            }
+            if subjectId != actualId || subjectArgs.count() != actual.args.count() { return <WitnessMatch /> }
             mut val si: U64 = 0U64
             while si < subjectArgs.count() {
                 if !(self.unifyPatterns(a: subjectArgs[si], aSide: 0U64, b: actual.args[si], bSide: 1U64, aParams: typeParams, bParams: [], binds: inout binds)) { return <WitnessMatch /> }

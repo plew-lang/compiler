@@ -22,48 +22,44 @@ pub impl Comp {
         if baseRef >= self.arena.types.count() {
             return 0
         }
-        val base: TypeRef = self.arena.types[baseRef]
         mut val found: U64 = 0
         mut val count: U64 = 0
-        mut val i: U64 = 0
-        while i < self.decls.assocBindings.count() {
-            val ab: AssocBinding = self.decls.assocBindings[i]
-            if ab.recvId == base.nameId && ab.nameId == assocId {
-                if (traitId == 0U64 || ab.traitId == traitId) && (traitOwner == 0U64 || ab.traitOwner == traitOwner) {
-                    if !(self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: ab.subjectArgs, typeParams: ab.typeParams, declaredTraitArgs: ab.traitArgs, typeRef: baseRef, traitArgs: traitArgs)) {
-                        i += 1U64
-                        continue
+        mut val ci: U64 = 0U64
+        while ci < self.decls.conforms.count() {
+            val cf: Conform = self.decls.conforms[ci]
+            if (traitId == 0U64 || cf.traitId == traitId) && (traitOwner == 0U64 || cf.traitStart == traitOwner) {
+                // A selected associated output belongs to a selected witness,
+                // not to the nominal receiver declaration.  In particular,
+                // `impl[T] Box[T] as Iterator { type Item = T }` must ground
+                // Item with the impl-binder match T -> the actual Box argument;
+                // grounding under Box's declaration binders is a different
+                // substitution and loses generic/trait-path proof identity.
+                val matchResult: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: traitArgs)
+                if matchResult.conformIdx != 0U64 {
+                    mut val ai: U64 = 0U64
+                    while ai < self.decls.assocBindings.count() {
+                        val ab: AssocBinding = self.decls.assocBindings[ai]
+                        if ab.implOffset == cf.defOffset && ab.traitOwner == cf.traitStart && ab.nameId == assocId {
+                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: matchResult)
+                            count += 1U64
+                        }
+                        ai += 1U64
                     }
-                    found = i + 1U64
-                    count += 1U64
                 }
             }
-            i += 1
+            ci += 1U64
         }
-        if count == 1U64 {
-            val ab: AssocBinding = self.decls.assocBindings[found - 1U64]
-            mut val params: Array[Bind] = []
-            val si: U64 = self.genericStructIndex(nameStart: base.nameStart, nameLen: base.nameLen)
-            if si < self.arena.structs.count() {
-                params = self.arena.structs[si].typeParams
-            } else {
-                val ei: U64 = self.genericEnumIndex(nameStart: base.nameStart, nameLen: base.nameLen)
-                if ei < self.arena.enums.count() {
-                    params = self.arena.enums[ei].typeParams
-                }
+        if self.traceCodegen && assocId != 0U64 {
+            val t: TypeRef = self.arena.types[baseRef]
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Counter") || rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MapIter") {
+                eprint(text: "[trace-codegen] assoc witness candidates=")
+                eprint(text: digitStrU(d: count))
+                eprint(text: " base=")
+                self.traceMonoTypeHead(ref: baseRef)
+                eprint(text: "\n")
             }
-            if params.count() > 0U64 && params.count() == base.args.count() {
-                val savedP: Array[Bind] = self.cur.typeParams
-                val savedA: Array[U64] = self.cur.typeArgs
-                self.cur.typeParams = params
-                self.cur.typeArgs = base.args
-                val g: U64 = self.groundTypeRef(ref: ab.ty)
-                self.cur.typeParams = savedP
-                self.cur.typeArgs = savedA
-                return g
-            }
-            return ab.ty
         }
+        if count == 1U64 { return found }
         return 0
     }
 

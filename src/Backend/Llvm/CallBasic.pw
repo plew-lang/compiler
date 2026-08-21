@@ -97,6 +97,21 @@ pub impl LlvmCtx {
             return LLVMConstNull(self.ptrty)
         }
         if c.isGenericFreeFn(fi: cfi) && (inferred.count() != cf0.typeParams.count() || !(c.fnArgsAllGround(args: inferred))) {
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] incomplete final callable name=")
+                self.traceCodegenName(c: inout c, start: cf0.nameStart, len: cf0.nameLen)
+                eprint(text: " expected=")
+                self.traceCodegenU64(n: cf0.typeParams.count())
+                eprint(text: " actual=")
+                self.traceCodegenU64(n: inferred.count())
+                eprint(text: " receiver=")
+                self.traceCodegenType(c: inout c, ref: recvInstRef, depth: 0U64)
+                if args.count() > 0U64 {
+                    eprint(text: " first-result=")
+                    self.traceCodegenType(c: inout c, ref: c.bodyCalleeResultRef(exprId: args[0].expr), depth: 0U64)
+                }
+                eprint(text: "\n")
+            }
             c.errorAt(offset: callOffset, msg: "internal error: final callable is missing grounded type arguments")
             return LLVMConstInt(self.i64ty, 1U64, 0I32)
         }

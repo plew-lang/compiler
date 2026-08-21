@@ -5,6 +5,8 @@
 // `Box_String`, ...) with the type parameters substituted in field types.
 // Instantiations are discovered from use-site TypeRefs after parsing.
 
+import ../Diag with { digitStrU }
+
 //
 // Split across `Mono/` for readability; all parts share the module scope.
 
