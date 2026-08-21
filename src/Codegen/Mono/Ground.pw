@@ -386,14 +386,14 @@ pub impl Comp {
         }
         val savedP: Array[Bind] = self.cur.typeParams
         val savedA: Array[U64] = self.cur.typeArgs
-        // `tyRef` belongs to the receiver declaration (`struct Box[E]`), but
-        // `inst.args` may itself contain an enclosing impl/method binder
-        // (`impl[E] Box[E]`).  Replacing the ambient pair loses the latter
-        // edge, leaving `E_struct` only half-ground.  Compose both binder maps;
-        // ParamId makes this unambiguous even when their spellings are equal.
-        // Receiver declaration bindings own the field template.  Put them first:
-        // an ambient body map can contain the same ParamId while resolving a nested
-        // instance, but must not shadow the receiver's selected instance.
+        // `tyRef` belongs to the selected receiver declaration (`struct Box[E]`).
+        // Evaluation under that receiver opens a lexical substitution frame: its
+        // declaration binders shadow an enclosing body frame with the same
+        // ParamId.  For example, in `Dist[Feet].from(d: Dist[Meters])`, grounding
+        // `d.v` must read the nested receiver's `Unit -> Meters`, not the body's
+        // `Unit -> Feet`.  The latter is not a contradictory binding; it belongs
+        // to a different receiver instance.  Keep receiver entries first and add
+        // only ambient binders that are not locally rebound.
         mut val composedP: Array[Bind] = []
         mut val composedA: Array[U64] = []
         mut val pi: U64 = 0U64
@@ -413,11 +413,7 @@ pub impl Comp {
                 }
                 ci += 1U64
             }
-            if found < composedP.count() {
-                if !self.typeRefEq(a: composedA[found], b: savedA[pi]) {
-                    self.errorAt(offset: inst.nameStart, msg: "internal error: incompatible substitutions for one generic binder")
-                }
-            } else {
+            if found >= composedP.count() {
                 composedP.append(savedP[pi])
                 composedA.append(savedA[pi])
             }

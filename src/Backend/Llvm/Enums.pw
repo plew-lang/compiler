@@ -250,7 +250,7 @@ pub impl LlvmCtx {
     }
 
     // The LLVM struct type of a variant's payload (its fields in declared order).
-    inout fn variantPayloadTy(c: inout Comp, eid: U64, vi: U64) -> LLVMTypeRef {
+    inout fn variantPayloadTy(c: inout Comp, eid: U64, vi: U64, instanceRef: U64 = 0U64) -> LLVMTypeRef {
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         mut val elems: Array[LLVMTypeRef] = []
         mut val i: U64 = 0
@@ -261,6 +261,15 @@ pub impl LlvmCtx {
             // buildEnumValue, so insertvalue types agree.
             if c.fieldIsBoxed(f: fs[i]) {
                 elems.append(self.ptrty)
+            } else if instanceRef != 0U64 {
+                // A payload belongs to one selected enum instance, not to the
+                // ambient body frame.  This matters for nested uses of the
+                // same generic declaration: `Optional[Optional[I32]]` has an
+                // outer `T -> Optional[I32]` and an inner `T -> I32`.  Ground
+                // through the instance so the inner payload is I32 in both its
+                // LLVM layout and the value built below.
+                val fieldRef: U64 = c.groundUnderInst(instRef: instanceRef, tyRef: fs[i].ty)
+                elems.append(self.llvmTypeOfRef(c: inout c, ref: fieldRef))
             } else {
                 elems.append(self.fieldLlvmTy(c: inout c, fd: fs[i]))
             }
@@ -831,16 +840,14 @@ pub impl LlvmCtx {
             if gslot < self.genEnumRefs.count() {
                 val savedP: Array[Bind] = c.cur.typeParams
                 val savedA: Array[U64] = c.cur.typeArgs
-                // MERGE the enum's env onto the outer one (don't replace) so a payload
-                // sub-expression referencing the enclosing method's type params still
-                // grounds (e.g. `self.f` in MapIter.next's `<Optional.Some v=self.f(x:v)/>`).
-                // The enum's OWN params go LAST (highest index): resolveTy is last-match, so a
-                // name collision (`Optional[Optional[I32]]` — both levels' param named `T`)
-                // must resolve to THIS instance's `T` (inner = I32), not the enclosing `T`
-                // (outer = Optional[I32]) — lexical shadowing, innermost wins.
+                // Keep the legacy ambient frame for payload expressions that still use
+                // it (`self.f` in MapIter.next), but do not use it as the identity
+                // of this enum's own fields. `buildEnumValue(instanceRef: ty)`
+                // obtains layout and field expectations from the selected instance;
+                // that is what makes nested `Optional[Optional[I32]]` unambiguous.
                 c.cur.typeParams = concatParams(add: savedP, base: c.arena.enums[self.genEnumDefs[gslot]].typeParams)
                 c.cur.typeArgs = concatArgs(add: savedA, base: c.arena.types[ty].args)
-                val v: LLVMValueRef = self.buildEnumValue(c: inout c, eid: self.genEnumDefs[gslot], ety: self.genEnumTys[gslot], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields)
+                val v: LLVMValueRef = self.buildEnumValue(c: inout c, eid: self.genEnumDefs[gslot], ety: self.genEnumTys[gslot], typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, fields: fields, instanceRef: ty)
                 c.cur.typeParams = savedP
                 c.cur.typeArgs = savedA
                 return v
@@ -856,7 +863,7 @@ pub impl LlvmCtx {
 
     // Build an enum value of LLVM type `ety` for def `eid`: store the tag + the
     // variant payload struct (under the active substitution env).
-    inout fn buildEnumValue(c: inout Comp, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    inout fn buildEnumValue(c: inout Comp, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField], instanceRef: U64 = 0U64) -> LLVMValueRef {
         val vi: U64 = c.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
         // zero the whole cell first (tag + payload) so unused payload words are
@@ -866,7 +873,7 @@ pub impl LlvmCtx {
         LLVMBuildStore(self.b, LLVMConstInt(self.i64ty, vi, 0I32), LLVMBuildStructGEP2(self.b, ety, slot, 0U64, anon()))
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         if fs.count() > 0U64 {
-            val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
+            val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi, instanceRef: instanceRef)
             // start ZERO (not undef) so an omitted field with no default is zero-init,
             // mirroring the C backend's designated initializer (any field the
             // construction doesn't name is C-zero — e.g. `<Expr.Int … />` without the
@@ -947,7 +954,9 @@ pub impl LlvmCtx {
                         // as the expected type so an un-suffixed nested JSX construction
                         // (`v=<Optional.Some v=42 />`) infers the instance's type args.
                         mut val gpf: U64 = fs[fj].ty
-                        if gpf != 0U64 {
+                        if instanceRef != 0U64 {
+                            gpf = c.groundUnderInst(instRef: instanceRef, tyRef: fs[fj].ty)
+                        } else if gpf != 0U64 {
                             if c.cur.typeParams.count() > 0U64 {
                                 gpf = c.groundTypeRef(ref: fs[fj].ty)
                             }
