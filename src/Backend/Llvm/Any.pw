@@ -939,10 +939,10 @@ pub impl LlvmCtx {
         val savedBodyS: U64 = c.cur.bodySelfRef
         val savedBodyI: U64 = c.cur.bodyItemRef
         val savedBodyFn: U64 = c.cur.bodyFnIdx
-        c.cur.bodyEnvironment = environment
+        val savedBodyId: U64 = c.cur.bodyId
         c.cur.bodySelfRef = c.cur.selfRef
         c.cur.bodyItemRef = c.cur.itemRef
-        c.cur.bodyFnIdx = fi
+        c.enterBodyInstance(fnIdx: fi, environment: environment)
         // Consume the same canonical body-instance receiver that Mono used to
         // populate BodyCallee.  This is a key projection only; LLVM never
         // resolves a call or infers a source from it.
@@ -952,6 +952,7 @@ pub impl LlvmCtx {
         c.cur.bodySelfRef = savedBodyS
         c.cur.bodyItemRef = savedBodyI
         c.cur.bodyFnIdx = savedBodyFn
+        c.cur.bodyId = savedBodyId
         if !(self.terminated) {
             // fall-through: the body block dropped its body locals; now drop owned
             // params (a `move` param / `move fn` self the callee deinits).

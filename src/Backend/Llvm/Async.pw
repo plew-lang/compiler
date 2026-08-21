@@ -574,6 +574,7 @@ pub impl LlvmCtx {
         val noBodyArgs: Array[U64] = []
         c.cur.bodyFnIdx = fi
         c.cur.bodyEnvironment = <InstanceEnvironment />
+        c.cur.bodyId = 0U64
         c.cur.bodySelfRef = 0U64
         c.cur.bodyItemRef = 0U64
         // module-level variables (spec/15): seed them as locals (pointing at the true
@@ -598,6 +599,7 @@ pub impl LlvmCtx {
         }
         c.cur.bodyFnIdx = savedBodyFn
         c.cur.bodyEnvironment = savedBodyEnvironment
+        c.cur.bodyId = 0U64
         c.cur.bodySelfRef = savedBodySelf
         c.cur.bodyItemRef = savedBodyItem
         self.curAsync = false

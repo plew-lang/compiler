@@ -28,6 +28,7 @@ pub impl Comp {
         self.cur.typeArgs = noArgsG
         self.cur.bodyFnIdx = 18446744073709551615U64
         self.cur.bodyEnvironment = <InstanceEnvironment />
+        self.cur.bodyId = 0U64
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
         mut val gvi: U64 = 0
@@ -67,6 +68,7 @@ pub impl Comp {
                 self.cur.typeArgs = noArgs
                 self.cur.bodyFnIdx = fi
                 self.cur.bodyEnvironment = <InstanceEnvironment />
+                self.cur.bodyId = 0U64
                 if f.hasRecv {
                     // A concrete provided-method copy still records its shared
                     // body through `Self`; give the Mono resolver the same
@@ -78,6 +80,7 @@ pub impl Comp {
                 self.cur.bodySelfRef = self.cur.selfRef
                 self.cur.bodyItemRef = self.cur.itemRef
                 self.cur.bodyEnvironment = self.bodyInstanceEnvironment(fnIdx: fi, args: noArgs, recvInstRef: self.cur.selfRef)
+                self.cur.bodyId = 0U64
                 mut val pi: U64 = 0
                 while pi < f.params.count() {
                     val p: Param = f.params[pi]
@@ -127,6 +130,7 @@ pub impl Comp {
             self.cur.typeArgs = self.bodyInstanceEnvironment(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef).args
             self.cur.bodyFnIdx = fin.fnIdx
             self.cur.bodyEnvironment = self.bodyInstanceEnvironment(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef)
+            self.cur.bodyId = 0U64
             self.cur.bodySelfRef = self.cur.selfRef
             self.cur.bodyItemRef = self.cur.itemRef
             mut val gpi: U64 = 0
@@ -161,6 +165,7 @@ pub impl Comp {
         self.cur.captureMark = 0
         self.cur.bodyFnIdx = 18446744073709551615U64
         self.cur.bodyEnvironment = <InstanceEnvironment />
+        self.cur.bodyId = 0U64
         self.cur.bodySelfRef = 0U64
         self.cur.bodyItemRef = 0U64
     }

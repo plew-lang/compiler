@@ -833,10 +833,10 @@ export struct InstanceEnvironment {
 // receiver instance are also part of the decision context.  Mono owns these
 // records; backend only consumes them.
 export struct BodyCallee {
-    pub val fnIdx: U64
-    // The complete enclosing-body key. Do not add parallel args/receiver
-    // fields: a final call is meaningful only under this environment.
-    pub val environment: InstanceEnvironment
+    // 1-based index into Arena.bodyInstances.  A final call belongs to one
+    // canonical semantic body instance; duplicating its function/environment
+    // here made every lookup re-compare the whole substitution map.
+    pub val bodyId: U64
     pub val exprId: U64
     pub val siteIsStmt: Bool = false
     pub val slot: U64 = 0U64
@@ -1177,6 +1177,13 @@ export struct Arena {
     // MonoWork's transient discovery queues.  LLVM consumes this immutable
     // semantic result after frontend finalization.
     pub mut val finalCallees: Array[BodyCallee] = []
+    // Canonical semantic body instances. Mono interns a complete body key here;
+    // the backend consumes the same id rather than reconstructing an enclosing
+    // substitution environment at every call site.
+    pub mut val bodyInstances: Array[BodyInstance] = []
+    // Derived open-addressed index for finalCallees. Slots hold a 1-based
+    // finalCallees index and are rebuilt from BodyCallee's semantic key only.
+    pub mut val finalCalleeIndexSlots: Array[U64] = []
     // Instance-invariant final callable per expression.  Kept as a scalar
     // parallel array so a plain free call does not depend on a body worklist.
     pub mut val finalExprCallee: Array[U64] = []
@@ -1370,7 +1377,10 @@ export struct MonoWork {
     // Concrete bodies reachable from program roots.  The frontend closes this
     // worklist before backend emission, so backend never has to resolve a call
     // merely to discover or prepare another body.
-    pub mut val bodyInstances: Array[BodyInstance] = []
+    // Worklist of 1-based Arena.bodyInstances ids. The body registry itself is
+    // semantic analysis output; this queue is only the transient reachability
+    // traversal used to populate it.
+    pub mut val bodyInstances: Array[U64] = []
     // transient: the expected type ref of the binding currently being scanned (a `let`
     // annotation), so an assoc-fn constructor whose type param comes only from context
     // (`Set.new()` / `Set.from([])`) registers its instance. Mirrors the backend's
@@ -1506,6 +1516,10 @@ export struct Cursor {
     // The body currently being scanned/emitted. Together with
     // `bodyEnvironment` it identifies an Arena.finalCallees entry.
     pub mut val bodyFnIdx: U64 = 18446744073709551615U64
+    // 1-based Arena.bodyInstances identity for the active semantic body.
+    // It is set whenever a body context is entered and lets final-callee lookup
+    // avoid re-comparing the complete InstanceEnvironment on every call.
+    pub mut val bodyId: U64 = 0U64
     pub mut val closureId: U64 = 0
     pub mut val inClosure: Bool = false
     pub mut val captureMark: U64 = 0

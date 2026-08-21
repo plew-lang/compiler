@@ -31,6 +31,7 @@ pub impl LlvmCtx {
         val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
         c.cur.bodyFnIdx = 18446744073709551615U64
         c.cur.bodyEnvironment = <InstanceEnvironment />
+        c.cur.bodyId = 0U64
         self.beginFnBody(fv: fv)
         self.nLocals = 0
         self.locStart = []
@@ -70,6 +71,7 @@ pub impl LlvmCtx {
         LLVMBuildRetVoid(self.b)
         c.cur.bodyFnIdx = savedBodyFn
         c.cur.bodyEnvironment = savedBodyEnvironment
+        c.cur.bodyId = 0U64
     }
 }
 
@@ -141,6 +143,7 @@ pub impl LlvmCtx {
         val savedBodyEnvironment: InstanceEnvironment = c.cur.bodyEnvironment
         c.cur.bodyFnIdx = fi
         c.cur.bodyEnvironment = <InstanceEnvironment />
+        c.cur.bodyId = 0U64
         // body locals (declared from here) are released at scope exit; seeded globals are not.
         self.curBodyMark = self.nLocals
         self.genLlvmBlock(c: inout c, id: c.arena.funcs[fi].body)
@@ -149,6 +152,7 @@ pub impl LlvmCtx {
         }
         c.cur.bodyFnIdx = savedBodyFn
         c.cur.bodyEnvironment = savedBodyEnvironment
+        c.cur.bodyId = 0U64
     }
 
     // Emit a call to `plew_init_globals` (a no-op when there are no module-level vars).
