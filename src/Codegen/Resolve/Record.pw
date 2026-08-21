@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): typed-IR parametric-type
 // recording (rustc writeback analog) — a DEDICATED, check-free walk over every
 // function body that stores each expression's PARAMETRIC type in
-// Comp.parametricRef (type params left as `T`, trait `self` left as `Self`).
+// Comp.semanticExprTypes (type params left as `T`, trait `self` left as `Self`).
 // The backend substitutes the instance's type args at read time (groundedTypeOf
 // -> groundTypeRef), so one recording serves every instantiation.
 //
@@ -75,21 +75,21 @@ pub impl Comp {
     // the context ref IS the literal's type. A no-op for any other node / an already
     // recorded literal / no context.
     inout fn recordArrayLitCtx(exprId: U64, ctxRef: U64) {
-        if ctxRef == 0U64 || exprId >= self.parametricRef.count() {
+        if ctxRef == 0U64 || exprId >= self.arena.semanticExprTypes.count() {
             return
         }
-        if self.parametricRef[exprId] != 0U64 {
+        if self.semanticExprTerm(exprId: exprId) != 0U64 {
             return
         }
         match self.arena.exprs[exprId] {
-            Expr.Array(elems: _) => { self.parametricRef.set(i: exprId, value: ctxRef) }
+            Expr.Array(elems: _) => { self.recordSemanticExprTerm(exprId: exprId, term: ctxRef) }
             _ => {}
         }
     }
 
     inout fn recordExpr(exprId: U64) {
-        if exprId < self.parametricRef.count() {
-            self.parametricRef.set(i: exprId, value: self.typedIrRefOfInfo(ti: self.exprType(id: exprId)))
+        if exprId < self.arena.semanticExprTypes.count() {
+            self.recordSemanticExprInfo(exprId: exprId, ti: self.exprType(id: exprId))
         }
         match self.arena.exprs[exprId] {
             Expr.Unary(op: _, val operand) => { self.recordExpr(exprId: operand) }
@@ -226,8 +226,8 @@ pub impl Comp {
                 if elems.count() > 0U64 {
                     val eRef: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
                     if eRef != 0U64 {
-                        if exprId < self.parametricRef.count() {
-                            self.parametricRef.set(i: exprId, value: self.arrayRefOfElem(elemRef: eRef))
+                        if exprId < self.arena.semanticExprTypes.count() {
+                            self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))
                         }
                     }
                 }

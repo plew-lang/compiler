@@ -986,16 +986,10 @@ pub impl Comp {
                 Expr.Binary(op: _, val lhs, rhs: _) => {
                     val resultRef: U64 = self.groundedBodyReceiverRef(exprId: lhs)
                     self.setBodyCalleeResultRef(exprId: exprId, resultRef: resultRef)
-                    if exprId < self.parametricRef.count() && resultRef != 0U64 {
-                        self.parametricRef.set(i: exprId, value: resultRef)
-                    }
                 }
                 Expr.Unary(op: _, val operand) => {
                     val resultRef: U64 = self.groundedBodyReceiverRef(exprId: operand)
                     self.setBodyCalleeResultRef(exprId: exprId, resultRef: resultRef)
-                    if exprId < self.parametricRef.count() && resultRef != 0U64 {
-                        self.parametricRef.set(i: exprId, value: resultRef)
-                    }
                 }
                 _ => {}
             }
@@ -1886,14 +1880,11 @@ pub impl Comp {
     }
 
     // Synthetic desugar expressions are introduced after the ordinary typed-IR
-    // table is populated.  Give them the same parametric type authority as
+    // table is populated.  Give them the same semantic type authority as
     // lowered expressions so later Mono resolution never has to recover a
     // generic receiver from its bare source spelling.
     inout fn recordSyntheticExprType(exprId: U64, ref: U64) {
-        while self.parametricRef.count() <= exprId {
-            self.parametricRef.append(0U64)
-        }
-        self.parametricRef.set(i: exprId, value: ref)
+        self.recordSemanticExprTerm(exprId: exprId, term: ref)
     }
 
     // A rewritten chain MatchExpr has exactly two Give arms, each containing

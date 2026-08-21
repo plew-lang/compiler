@@ -16,7 +16,7 @@ pub impl LlvmCtx {
                     ty = self.i1ty
                 } else {
                     // width from the literal's recovered type (typeOf folds in the
-                    // suffix and the checker-recorded context width typeCache.intCtx).
+                    // suffix and the checker-recorded semantic literal context).
                     val t: TypeInfo = c.typeOf(id: id)
                     if t.kind == 0 {
                         if c.isFloatType(start: t.nameStart, len: t.nameLen) {

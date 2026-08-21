@@ -196,6 +196,31 @@ export struct TypeInfo {
     pub val viewExtId: U64 = 0
 }
 
+// The semantic type recorded for one expression node. `term` is the complete
+// parametric TypeRef (and is grounded only by an explicit instance environment);
+// `shape` retains the value-level classification that a TypeRef alone cannot
+// express, most importantly an untyped numeric literal. `legacy*` is the
+// one-way adapter payload for the still-migrating TypeInfo consumers. It is not
+// an independent type source: every write enters through Comp's semantic-entry
+// helpers, and the adapter is reconstructed from this entry.
+//
+// Shapes: 0 unknown scalar, 1 scalar, 2 String, 3 nominal, 4 Array,
+// 5 function, 6 existential. Source locations stay on Expr/TypeRef and are
+// deliberately absent from semantic identity.
+export struct SemanticExprType {
+    pub val term: U64 = 0
+    pub val shape: U64 = 0
+    pub val legacyKind: I64 = 0
+    pub val legacyNameStart: U64 = 0
+    pub val legacyNameLen: U64 = 0
+    pub val legacyRef: U64 = 0
+    pub val legacyViewExtId: U64 = 0
+    // Integer/float context code. This is a semantic constraint recorded by
+    // checking, not a source span and not part of TypeTerm identity.
+    pub val literalContext: U64 = 0
+}
+pub impl SemanticExprType { factory }
+
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
 export struct MakeField {
     pub val nameStart: U64
@@ -1160,6 +1185,10 @@ export struct NewtypeDef {
 export struct Arena {
     pub mut val bytes: Array[U8] = []
     pub mut val exprs: Array[Expr] = []
+    // Complete semantic type entry per expression node. Kept with the expression
+    // arena rather than Comp so every public user of Comp depends only on Arena,
+    // and so the entry has the same lifetime/identity as its Expr.
+    pub mut val semanticExprTypes: Array[SemanticExprType] = []
     // Source byte offset of each expr (parallel to `exprs`; 0 = unknown). Lower
     // records the parsed ExprAst's span start (the AST carries a span on every
     // node); backend-synthesized exprs keep 0. THE diagnostic-position store:
@@ -1395,8 +1424,8 @@ pub impl MonoWork { factory }
 // expr id, allocated by buildExprTyTable, never cleared) and reads them back, so
 // codegen and the checker stop re-deriving via `exprType`. `kind == typeUnfilled`
 // marks an uncomputed slot; the fill path holds the recvInstRef==0 invariant (see
-// typeOf). `intCtx` is the checker-recorded integer CONTEXT type (code 1..8, 0 =
-// none), env-independent like the rest.
+// typeOf). Literal context is stored in SemanticExprType because it is part of
+// the complete semantic expression type, not merely an implementation cache.
 export struct TypeCache {
     pub mut val kind: Array[I64] = []
     pub mut val start: Array[U64] = []
@@ -1405,7 +1434,6 @@ export struct TypeCache {
     // `#Source` is part of a type's static identity. It must survive the
     // typed-AST cache just like the structured TypeRef does.
     pub mut val viewId: Array[U64] = []
-    pub mut val intCtx: Array[U64] = []
     // resolved free-function callee per call-expr id (the `findFunc` result), the
     // first step of pre-resolving the IR so the backend reads decisions instead of
     // re-running overload resolution at emit time. PERSISTENT (unlike kind/…, never

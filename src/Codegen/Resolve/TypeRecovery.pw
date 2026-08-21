@@ -176,8 +176,8 @@ pub impl Comp {
     // `T` argument does not discriminate overloads (spec/06), so it is left to the
     // exprType path unchanged.
     inout fn argResolvedTypeInfo(argExpr: U64) -> TypeInfo {
-        if argExpr < self.parametricRef.count() {
-            val sref: U64 = self.parametricRef[argExpr]
+        if argExpr < self.arena.semanticExprTypes.count() {
+            val sref: U64 = self.semanticExprTerm(exprId: argExpr)
             if sref != 0U64 {
                 if sref < self.arena.types.count() {
                     if self.tyRefIsGround(ref: sref) {

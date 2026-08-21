@@ -100,19 +100,16 @@ pub impl Comp {
 pub impl Comp {
 
     inout fn checkLitCtx(id: U64, eKind: U64, eBits: U64, eSgn: Bool) {
-        // record the int context so `typeOf` can recover an otherwise width-less form
-        // (`0-1` / `match{...}+1` typed only by its binding) — see typeCache.intCtx. eKind 1
+        // record the int context in the complete semantic expression entry so `typeOf`
+        // can recover an otherwise width-less form (`0-1` / `match{...}+1` typed only
+        // by its binding). eKind 1
         // means a definite int context (bits/sgn known); the recursion below propagates
         // the same context to operands, so the whole arith subtree is recorded.
         if eKind == 1 {
-            if id < self.typeCache.intCtx.count() {
-                self.typeCache.intCtx[id] = intCtxCode(bits: eBits, sgn: eSgn)
-            }
+            self.recordSemanticExprLiteralContext(exprId: id, context: intCtxCode(bits: eBits, sgn: eSgn))
         }
         if eKind == 2 {
-            if id < self.typeCache.intCtx.count() {
-                self.typeCache.intCtx[id] = floatCtxCode(bits: eBits)
-            }
+            self.recordSemanticExprLiteralContext(exprId: id, context: floatCtxCode(bits: eBits))
         }
         val e: Expr = self.arena.exprs[id]
         match e {

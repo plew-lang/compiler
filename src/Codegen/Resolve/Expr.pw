@@ -13,7 +13,6 @@ pub impl Comp {
             self.typeCache.len.append(0)
             self.typeCache.ref.append(0)
             self.typeCache.viewId.append(0)
-            self.typeCache.intCtx.append(0)
             self.typeCache.callee.append(calleeUnfilled())
             self.typeCache.identBind.append(identUnfilledCode())
             self.typeCache.identTarget.append(identNoTarget())
@@ -96,8 +95,8 @@ pub impl Comp {
     // The TypeInfo for `id`'s recorded int context (scalarInfo if none) — the fallback
     // `typeOf` uses for a width-less expression whose type came only from context.
     inout fn exprIntCtxTypeInfo(id: U64) -> TypeInfo {
-        if id < self.typeCache.intCtx.count() {
-            val code: U64 = self.typeCache.intCtx[id]
+        if id < self.arena.semanticExprTypes.count() {
+            val code: U64 = self.arena.semanticExprTypes[id].literalContext
             if code != 0 {
                 val kw: String = intCtxKw(code: code)
                 val b: Bind = self.kwSpan(kw: kw, kwLen: kw.bytes().count())
@@ -174,7 +173,7 @@ pub impl Comp {
         // width-less recovery: a form whose type came only from context (`0-1` in an
         // `I32` binding, `match{...}+1`) is type-less to the structural recovery but the
         // checker recorded its int context — use it so the op routes through the witness.
-        // Read fresh (not cached) since typeCache.intCtx is filled during emission.
+        // Read fresh (not cached) since semantic literal context is filled during checking.
         if t.kind == 0 {
             if t.nameLen == 0 {
                 val ctx: TypeInfo = self.exprIntCtxTypeInfo(id: id)
@@ -213,6 +212,69 @@ pub impl Comp {
             }
         }
         return self.tyRefOfInfo(ti: ti)
+    }
+
+    // The only write/read boundary for expression semantic types.  Legacy
+    // TypeInfo is deliberately carried as an adapter payload while its many
+    // consumers migrate; TypeTerm, shape and literal context nevertheless
+    // share one ExprId-keyed entry rather than parallel caches.
+    inout fn semanticExprShape(ti: TypeInfo) -> U64 {
+        if ti.ref != 0U64 && ti.ref < self.arena.types.count() {
+            val t: TypeRef = self.arena.types[ti.ref]
+            if t.isAny { return 6U64 }
+            if self.isFnType(ref: ti.ref) { return 5U64 }
+        }
+        if ti.kind == 3I64 { return 4U64 }
+        if ti.kind == 2I64 { return 3U64 }
+        if ti.kind == 1I64 { return 2U64 }
+        if ti.nameLen != 0U64 { return 1U64 }
+        return 0U64
+    }
+
+    inout fn ensureSemanticExprType(exprId: U64) {
+        while self.arena.semanticExprTypes.count() <= exprId {
+            self.arena.semanticExprTypes.append(<SemanticExprType />)
+        }
+    }
+
+    inout fn semanticExprTerm(exprId: U64) -> U64 {
+        if exprId < self.arena.semanticExprTypes.count() {
+            return self.arena.semanticExprTypes[exprId].term
+        }
+        return 0U64
+    }
+
+    inout fn semanticExprTypeInfo(exprId: U64) -> TypeInfo {
+        if exprId < self.arena.semanticExprTypes.count() {
+            val e: SemanticExprType = self.arena.semanticExprTypes[exprId]
+            return <TypeInfo kind=e.legacyKind nameStart=e.legacyNameStart nameLen=e.legacyNameLen ref=e.legacyRef viewExtId=e.legacyViewExtId />
+        }
+        return scalarInfo()
+    }
+
+    inout fn recordSemanticExprInfo(exprId: U64, ti: TypeInfo) {
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
+        val term: U64 = self.typedIrRefOfInfo(ti: ti)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />)
+    }
+
+    // A context or synthetic lowering can refine an already-recorded type term.
+    // Derive its legacy shape from the term at this single boundary instead of
+    // leaving array/chain/operator-specific caches behind.
+    inout fn recordSemanticExprTerm(exprId: U64, term: U64) {
+        if term == 0U64 || term >= self.arena.types.count() { return }
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
+        val ti: TypeInfo = self.typeInfoOfRef(ref: term)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />)
+    }
+
+    inout fn recordSemanticExprLiteralContext(exprId: U64, context: U64) {
+        if context == 0U64 { return }
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=context />)
     }
 
     // The grounded TypeRef of expression `id` under the BODY instance env — the typed-IR
@@ -273,10 +335,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        mut val pr: U64 = 0
-        if id < self.parametricRef.count() {
-            pr = self.parametricRef[id]
-        }
+        mut val pr: U64 = self.semanticExprTerm(exprId: id)
         // a Chain-desugar MatchExpr has no parametric store entry of its own — its
         // parametric result lives in the ChainSite side list (stageRef); ground it
         // through the same body-env substitution so every consumer of the typed IR

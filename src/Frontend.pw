@@ -16,9 +16,9 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -89,15 +89,6 @@ export struct Comp {
     // typed-AST cache (Phase B): each expression node's recovered type, keyed by
     // expr id (see `TypeCache`). Built by buildExprTyTable before emission.
     pub mut val typeCache: TypeCache = <TypeCache />
-    // typed-IR PARAMETRIC type store (rustc TypeckResults analog), keyed by expr id.
-    // Filled during a locals-populated front-end walk (checkGenericBodies /
-    // recordParametricTypes) with the expression's PARAMETRIC type (type params left as
-    // `T`); the backend reads it via groundedTypeOf and SUBSTITUTES the instance's type
-    // args (groundTypeRef) — the single type authority replacing the backend's per-form
-    // exprTypeRef re-derivation. 0 = not recorded (fall back to typeCache/typeOf). A
-    // SEPARATE array from typeCache.ref so it holds parametric `T` without violating
-    // typeCache's instance-independent gated-write invariant (generic-unification §33).
-    pub mut val parametricRef: Array[U64] = []
     // monomorphization work lists + derived tables (see `MonoWork`): generic
     // instantiations, fn instances / types / thunks, closure captures, Array
     // element types, and recursive-field boxing. Collected after parsing, used
@@ -503,7 +494,7 @@ fn addConst(na: Bool, a: U64, nb: Bool, b: U64) -> ConstInt {
     return mkConst(neg: nb, mag: b - a)
 }
 
-// Encode a float context as an typeCache.intCtx code (9 = F64, 10 = F32) so the backend
+// Encode a float context as a SemanticExprType literal-context code (9 = F64, 10 = F32) so the backend
 // emits an otherwise-untyped integer literal as a double constant in float context.
 fn floatCtxCode(bits: U64) -> U64 {
     if bits == 32 { return 10 }
@@ -1092,7 +1083,7 @@ export fn runFrontend(c: inout Comp) {
     // now while expr ids are stable. A separate array from typeCache (built later).
     mut val peI: U64 = 0
     while peI < c.arena.exprs.count() {
-        c.parametricRef.append(0U64)
+        c.arena.semanticExprTypes.append(<SemanticExprType />)
         peI += 1U64
     }
     // typed-IR recording (Resolve/Record): a dedicated check-free walk of every

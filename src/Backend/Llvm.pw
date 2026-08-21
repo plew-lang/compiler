@@ -8,7 +8,7 @@
 // COVERAGE: the entry module's `main` + plain free functions (params, returns,
 // recursion, default args, lexical scope/shadowing); width-accurate integers
 // (i8/i16/i32/i64 with sext/zext/trunc coercion at typed sinks — literal width
-// from the suffix or the checker's typeCache.intCtx; add/sub/mul/div/rem/neg are
+// from the suffix or the checker's semantic expression literal context; add/sub/mul/div/rem/neg are
 // overflow- and div-by-zero-checked via the `plew_<w><Op>` runtime floor, loud
 // (wrapping is opt-in via wrapping* methods); the
 // full operator set (arithmetic / bitwise / shift / unary / comparison; >> is
