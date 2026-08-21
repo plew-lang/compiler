@@ -64,6 +64,10 @@ export struct Comp {
     // state transitions that lead to an LLVM body. This is observational only: it
     // never changes collection, worklist ordering, or the generated module.
     pub mut val traceCodegen: Bool = false
+    // Frontend phase trace (`plewc --trace-phases <file>`). This deliberately emits
+    // only coarse boundaries, so an external timestamping wrapper can attribute a
+    // self-host build without the voluminous generic-codegen trace.
+    pub mut val tracePhases: Bool = false
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
     // `opt -passes=asan` actually instruments loads/stores (a bare `.ll` has no
@@ -540,6 +544,14 @@ fn idInSet(set: Array[U64], id: U64) -> Bool {
 // Sentinel for "no defining module found" (a value no real module id takes).
 fn importCycleSentinel() -> U64 { return 4000000000U64 }
 
+fn tracePhase(c: inout Comp, label: String) {
+    if c.tracePhases {
+        eprint(text: "[trace-phase] ")
+        eprint(text: label)
+        eprint(text: "\n")
+    }
+}
+
 // Fill the caller-owned compiler state through parsing, lowering, verification,
 // monomorphization, and final-callable closure.  The state is intentionally not
 // returned by value: `BodyCallee` is semantic analysis output consumed by LLVM,
@@ -551,6 +563,7 @@ export fn runFrontend(c: inout Comp) {
     mut val tcLog: Bool = false
     mut val asan: Bool = false
     mut val traceCodegen: Bool = false
+    mut val tracePhases: Bool = false
     mut val entryArgIdx: I64 = 1
     if argCount() > 1 {
         if argAt(1) == "--gen" {
@@ -574,6 +587,10 @@ export fn runFrontend(c: inout Comp) {
             traceCodegen = true
             entryArgIdx = 2
         }
+        if argAt(1) == "--trace-phases" {
+            tracePhases = true
+            entryArgIdx = 2
+        }
     }
     // The caller creates the compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
     // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to
@@ -594,6 +611,8 @@ export fn runFrontend(c: inout Comp) {
     c.tcLog = tcLog
     c.asan = asan
     c.traceCodegen = traceCodegen
+    c.tracePhases = tracePhases
+    tracePhase(c: inout c, label: "load:start")
     mut val pendingItems: Array[TopItemAst] = []
     mut val nextModuleId: U64 = 1
     if argCount() > entryArgIdx {
@@ -942,16 +961,22 @@ export fn runFrontend(c: inout Comp) {
             pendingIndex += 1U64
         }
     }
+    tracePhase(c: inout c, label: "load:done")
+    tracePhase(c: inout c, label: "predeclare:start")
     mut val predeclareIndex: U64 = 0U64
     while predeclareIndex < pendingItems.count() {
         c.predeclareTraitItem(item: pendingItems[predeclareIndex])
         predeclareIndex += 1U64
     }
+    tracePhase(c: inout c, label: "predeclare:done")
+    tracePhase(c: inout c, label: "lower:start")
     mut val lowerIndex: U64 = 0U64
     while lowerIndex < pendingItems.count() {
         c.lowerTopItem(item: pendingItems[lowerIndex])
         lowerIndex += 1U64
     }
+    tracePhase(c: inout c, label: "lower:done")
+    tracePhase(c: inout c, label: "declaration-checks:start")
     // (The former @Std/Prelude force-load is gone: the ambient lang items it once carried
     // — Array/Dictionary — now live in @Std/Lang, the single ambient module force-loaded
     // first above. There is no implicit prelude module anymore.)
@@ -1035,6 +1060,7 @@ export fn runFrontend(c: inout Comp) {
     c.checkTypeVisibility()
     c.resolveTypeDeclIdentities()
     c.checkPublicApiClosure()
+    tracePhase(c: inout c, label: "declaration-checks:done")
     // gen mode (spec/16): replace the program with the synthesized derive-runner
     // harness `main`. Added after the user-code checks (so its synthetic call to
     // `deriveFromSource`/`write` is exempt from import hygiene) and before
@@ -1049,6 +1075,7 @@ export fn runFrontend(c: inout Comp) {
     // construction `<Box v=1I32 />` from its field value types before instance discovery,
     // so collectGenInsts (which scans Make.ty) reaches the inferred instance. Runs after
     // top-down grounding (done during lowering) and before collection.
+    tracePhase(c: inout c, label: "instantiation-collection:start")
     c.inferConstructTypeArgs()
     c.inCollection = true
     c.collectGenInsts()
@@ -1056,8 +1083,10 @@ export fn runFrontend(c: inout Comp) {
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     c.collectFnInsts()
     c.inCollection = false
+    tracePhase(c: inout c, label: "instantiation-collection:done")
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.
+    tracePhase(c: inout c, label: "generic-checks:start")
     c.checkFnBounds()
     // typed-IR parametric store: one slot per expression node (0 = unrecorded), sized
     // now while expr ids are stable. A separate array from typeCache (built later).
@@ -1079,22 +1108,29 @@ export fn runFrontend(c: inout Comp) {
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
     c.checkGenericUniqueArgs()
+    tracePhase(c: inout c, label: "generic-checks:done")
     // typed-AST cache (Phase B): one type slot per expression node, filled lazily
     // by `typeOf` during non-generic emission. Built now — expr ids are stable.
+    tracePhase(c: inout c, label: "type-cache:start")
     c.buildExprTyTable()
+    tracePhase(c: inout c, label: "type-cache:done")
     // backend-independent acceptance pass (spec/15): run the per-expr/stmt checks
     // that were historically done inline during emission (rebuilding the local
     // symbol table as it walks), so acceptance soundness does not depend on how
     // emission works. Runs AFTER the typed-AST cache so the operator-witness /
     // visibility checks see recovered expression types.
+    tracePhase(c: inout c, label: "verify:start")
     c.verifyProgram()
+    tracePhase(c: inout c, label: "verify:done")
     // Close the per-instance final-callable table only after verification and
     // typed-IR recording are available.  This semantic worklist is independent
     // of LLVM's lazy declaration queues: all backend call emission consumes the
     // resulting entries and never runs overload/source resolution itself.
+    tracePhase(c: inout c, label: "finalize-callables:start")
     c.inCollection = true
     c.finalizeCallables()
     c.inCollection = false
+    tracePhase(c: inout c, label: "finalize-callables:done")
 }
 // Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
 // an integer type of the given width and signedness. Span-free core of

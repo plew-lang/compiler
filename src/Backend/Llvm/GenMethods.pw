@@ -64,6 +64,8 @@ pub impl LlvmCtx {
         val f: Func = c.arena.funcs[mfi]
         eprint(text: "[trace-codegen] ")
         eprint(text: event)
+        eprint(text: " index=")
+        self.traceCodegenU64(n: mfi)
         eprint(text: " method=")
         self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
         eprint(text: " offset=")
