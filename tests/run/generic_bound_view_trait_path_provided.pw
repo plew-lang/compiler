@@ -1,0 +1,31 @@
+// The B -> A conformance is supplied only by E. A generic bound supplies B,
+// while the use site explicitly supplies E; the selected path and A-provided
+// member must retain that view provenance through instantiation.
+import @Std/Io with { print }
+
+trait B { fn base() -> I64 }
+trait A { fn value() -> I64 }
+
+pub impl A {
+    fn double() -> I64 { return self.value() + self.value() }
+}
+
+extension E {
+    impl B as A {
+        fn value() -> I64 { return self.base() + 1I64 }
+    }
+}
+
+struct S { pub val n: I64 }
+pub impl S { factory }
+pub impl S as B {
+    fn base() -> I64 { return self.n }
+}
+
+fn doubled[T](value: T) -> I64 where T: B {
+    return value#E.double()
+}
+
+fn main() {
+    print(doubled(value: <S n=3I64 />))
+}

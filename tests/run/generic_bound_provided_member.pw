@@ -1,0 +1,26 @@
+// A generic body is checked against the assumed Iterator bound, but `count` is
+// a provided member whose body consumes the selected concrete witness at the
+// eventual call site. The final descriptor must therefore preserve the proof
+// across the generic template boundary instead of treating `Iterator`'s zero
+// positional arity as a complete environment.
+import @Std/Io with { print }
+import @Std/Core with { Iterator }
+
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.value >= 3 { return <Optional.None /> }
+        self.value = self.value + 1
+        return <Optional.Some v=self.value />
+    }
+}
+
+fn countAll[T](iterator: T) -> U64 where T: Iterator {
+    return iterator.count()
+}
+
+fn main() {
+    print(countAll(iterator: <Counter value=0 />))
+}

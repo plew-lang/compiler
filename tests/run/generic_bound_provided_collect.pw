@@ -1,0 +1,27 @@
+// `collect` is a provided Iterator member whose result contains Item. The
+// generic declaration must retain the symbolic assumed-bound projection, and
+// the concrete call must later project the selected witness output into the
+// same final callable environment.
+import @Std/Io with { print }
+import @Std/Core with { Iterator }
+
+struct Counter { pub mut val value: I64 }
+pub impl Counter { factory }
+pub impl Counter as Iterator {
+    type Item = I64
+    inout fn next() -> Optional[I64] {
+        if self.value >= 3 { return <Optional.None /> }
+        self.value = self.value + 1
+        return <Optional.Some v=self.value />
+    }
+}
+
+fn collectAll[T](iterator: T) -> Array[T#Iterator.Item] where T: Iterator {
+    return iterator.collect()
+}
+
+fn main() {
+    val values: Array[I64] = collectAll(iterator: <Counter value=0 />)
+    print(values.count())
+    print(values[2])
+}

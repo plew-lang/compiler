@@ -1,0 +1,29 @@
+// A generic T:B has static evidence for A only through the declared
+// trait-to-trait path B -> A. `double` is provided by A, so neither member
+// selection nor its body environment may rediscover a concrete S witness.
+import @Std/Io with { print }
+
+trait B { fn base() -> I64 }
+trait A { fn value() -> I64 }
+
+pub impl A {
+    fn double() -> I64 { return self.value() + self.value() }
+}
+
+pub impl B as A {
+    fn value() -> I64 { return self.base() + 1I64 }
+}
+
+struct S { pub val n: I64 }
+pub impl S { factory }
+pub impl S as B {
+    fn base() -> I64 { return self.n }
+}
+
+fn doubled[T](value: T) -> I64 where T: B {
+    return value.double()
+}
+
+fn main() {
+    print(doubled(value: <S n=3I64 />))
+}
