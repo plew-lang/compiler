@@ -53,21 +53,25 @@ pub impl Comp {
         return ref
     }
 
-    inout fn groundBodyTerm(ref: U64) -> U64 {
+    // Ground a body-owned semantic term through the caller-supplied immutable
+    // environment. `selfRef`/`itemRef` are derived conveniences rather than
+    // key fields, but are explicit here so a semantic read never silently
+    // consults whichever callee environment happens to be in Cursor.
+    inout fn groundTermForBody(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
         // consulting the explicit binder map.
         if t.args.count() == 0U64 {
-            if self.cur.bodyEnvironment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
-                return self.cur.bodyEnvironment.receiverRef
+            if environment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+                return environment.receiverRef
             }
-            if self.cur.bodyItemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
-                return self.cur.bodyItemRef
+            if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
+                return itemRef
             }
         }
-        val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: self.cur.bodyEnvironment.params, values: self.cur.bodyEnvironment.args)
+        val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args)
         if explicit != ref { return explicit }
         // ParamId-stamped terms are fully decided by the immutable map above.
         // Only old zero-ParamId terms retain the temporary compatibility path
@@ -79,11 +83,11 @@ pub impl Comp {
         val savedS: U64 = self.cur.selfRef
         val savedI: U64 = self.cur.itemRef
         val savedR: U64 = self.cur.recvInstRef
-        self.cur.typeParams = self.cur.bodyEnvironment.params
-        self.cur.typeArgs = self.cur.bodyEnvironment.args
-        self.cur.selfRef = self.cur.bodySelfRef
-        self.cur.itemRef = self.cur.bodyItemRef
-        self.cur.recvInstRef = self.cur.bodyEnvironment.receiverRef
+        self.cur.typeParams = environment.params
+        self.cur.typeArgs = environment.args
+        self.cur.selfRef = selfRef
+        self.cur.itemRef = itemRef
+        self.cur.recvInstRef = environment.receiverRef
         val legacy: U64 = self.groundTypeRef(ref: ref)
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
@@ -91,6 +95,12 @@ pub impl Comp {
         self.cur.itemRef = savedI
         self.cur.recvInstRef = savedR
         return legacy
+    }
+
+    // Compatibility wrapper for existing body consumers. New semantic queries
+    // take an environment explicitly through groundTermForBody.
+    inout fn groundBodyTerm(ref: U64) -> U64 {
+        return self.groundTermForBody(ref: ref, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
     }
 
     // Rebuild one semantic type term while preserving every identity facet.

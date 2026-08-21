@@ -252,6 +252,23 @@ pub impl Comp {
         return scalarInfo()
     }
 
+    // Read a recorded expression type under an explicit body environment. An
+    // unknown scalar intentionally keeps its recorded adapter: reconstructing
+    // it from a term would prematurely choose a concrete numeric type. Every
+    // other recorded shape derives its legacy projection from the grounded
+    // term, so `T`/views/projections cannot leak across sibling instances.
+    inout fn groundSemanticExprTypeInfo(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> TypeInfo {
+        val entry: TypeInfo = self.semanticExprTypeInfo(exprId: exprId)
+        if exprId >= self.arena.semanticExprTypes.count() { return entry }
+        val e: SemanticExprType = self.arena.semanticExprTypes[exprId]
+        if e.shape == 0U64 || e.term == 0U64 { return entry }
+        val grounded: U64 = self.groundTermForBody(ref: e.term, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        if grounded != 0U64 && grounded < self.arena.types.count() {
+            return self.typeInfoOfRef(ref: grounded)
+        }
+        return entry
+    }
+
     inout fn recordSemanticExprInfo(exprId: U64, ti: TypeInfo) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
@@ -343,25 +360,7 @@ pub impl Comp {
         if pr == 0U64 {
             pr = self.chainSiteFor(exprId: id).stageRef
         }
-        if pr != 0U64 {
-            val savedP: Array[Bind] = self.cur.typeParams
-            val savedA: Array[U64] = self.cur.typeArgs
-            val savedS: U64 = self.cur.selfRef
-            val savedI: U64 = self.cur.itemRef
-            val savedR: U64 = self.cur.recvInstRef
-            self.cur.typeParams = self.cur.bodyEnvironment.params
-            self.cur.typeArgs = self.cur.bodyEnvironment.args
-            self.cur.selfRef = self.cur.bodySelfRef
-            self.cur.itemRef = self.cur.bodyItemRef
-            self.cur.recvInstRef = self.cur.bodyEnvironment.receiverRef
-            val g: U64 = self.groundBodyTerm(ref: pr)
-            self.cur.typeParams = savedP
-            self.cur.typeArgs = savedA
-            self.cur.selfRef = savedS
-            self.cur.itemRef = savedI
-            self.cur.recvInstRef = savedR
-            return g
-        }
+        if pr != 0U64 { return self.groundTermForBody(ref: pr, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) }
         return self.typedIrRefOfInfo(ti: self.typeOf(id: id))
     }
 }

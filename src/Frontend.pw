@@ -1091,11 +1091,15 @@ export fn runFrontend(c: inout Comp) {
     // per instance at read (groundedTypeOf). Separate from checkGenericBodies on
     // purpose — recording needs an env (parametric self, non-generic coverage)
     // the check pass must not run under.
+    tracePhase(c: inout c, label: "semantic-expression-record:start")
     c.recordParametricTypes()
+    tracePhase(c: inout c, label: "semantic-expression-record:done")
     // eager generic type-check (#9): every generic template body is checked once
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").
+    tracePhase(c: inout c, label: "generic-body-check:start")
     c.checkGenericBodies()
+    tracePhase(c: inout c, label: "generic-body-check:done")
     // unique types cannot be generic type arguments (wrap in Ref[T]); checked
     // after instantiation discovery since it scans the concrete genInsts.
     c.checkGenericUniqueArgs()
