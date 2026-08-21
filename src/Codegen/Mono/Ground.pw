@@ -391,12 +391,36 @@ pub impl Comp {
         // (`impl[E] Box[E]`).  Replacing the ambient pair loses the latter
         // edge, leaving `E_struct` only half-ground.  Compose both binder maps;
         // ParamId makes this unambiguous even when their spellings are equal.
-        mut val composedP: Array[Bind] = savedP
-        mut val composedA: Array[U64] = savedA
+        // Receiver declaration bindings own the field template.  Put them first:
+        // an ambient body map can contain the same ParamId while resolving a nested
+        // instance, but must not shadow the receiver's selected instance.
+        mut val composedP: Array[Bind] = []
+        mut val composedA: Array[U64] = []
         mut val pi: U64 = 0U64
         while pi < params.count() {
             composedP.append(params[pi])
             if pi < inst.args.count() { composedA.append(inst.args[pi]) }
+            pi += 1U64
+        }
+        pi = 0U64
+        while pi < savedP.count() && pi < savedA.count() {
+            mut val found: U64 = composedP.count()
+            mut val ci: U64 = 0U64
+            while ci < composedP.count() {
+                if composedP[ci].paramId == savedP[pi].paramId {
+                    found = ci
+                    break
+                }
+                ci += 1U64
+            }
+            if found < composedP.count() {
+                if !self.typeRefEq(a: composedA[found], b: savedA[pi]) {
+                    self.errorAt(offset: inst.nameStart, msg: "internal error: incompatible substitutions for one generic binder")
+                }
+            } else {
+                composedP.append(savedP[pi])
+                composedA.append(savedA[pi])
+            }
             pi += 1U64
         }
         self.cur.typeParams = composedP
