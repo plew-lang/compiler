@@ -144,8 +144,46 @@ pub impl Comp {
                 return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen args=base.args viewExtId=base.viewExtId viewIds=base.viewIds isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
             }
         }
+        // The legacy arena stores an anonymous record's component terms in its
+        // StructDef rather than in TypeRef.args.  A witness substitution must
+        // nevertheless recurse into those components: `Item = (value: E)` in
+        // `EnumerateIter[I,E]` becomes `(value: I64)` for a selected witness.
+        // Keep this compatibility bridge here, at the sole witness-substitution
+        // boundary; the semantic TypeTerm record node will make these ordinary
+        // children and remove the scoped legacy representation.
+        if t.args.count() == 0U64 && t.nameLen > 0U64 && self.arena.bytes[t.nameStart] == 40U8 {
+            return self.groundWitnessRecordTerm(ref: ref, params: params, matchResult: matchResult)
+        }
         if changed { return self.rebuildTypeTerm(t: t, args: args, assocTraitArgs: assocArgs) }
         return ref
+    }
+
+    // Apply a concrete witness map to the field terms carried by one legacy
+    // anonymous-record StructDef.  `groundRecordStruct` is the existing,
+    // canonical record-instantiation routine; installing this *explicit*
+    // witness environment only adapts the old carrier representation, rather
+    // than re-selecting a witness or reading a caller's ambient body scope.
+    inout fn groundWitnessRecordTerm(ref: U64, params: Array[Bind], matchResult: WitnessMatch) -> U64 {
+        mut val values: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < params.count() {
+            val matchIdx: U64 = self.witnessBindIndex(binds: matchResult.binds, binder: i)
+            if matchIdx < matchResult.binds.count() {
+                values.append(matchResult.binds[matchIdx].term)
+            } else {
+                val p: Bind = params[i]
+                values.append(self.pushType(t: <TypeRef nameStart=p.nameStart nameLen=p.nameLen paramId=p.paramId args=[] />))
+            }
+            i += 1U64
+        }
+        val savedParams: Array[Bind] = self.cur.typeParams
+        val savedArgs: Array[U64] = self.cur.typeArgs
+        self.cur.typeParams = params
+        self.cur.typeArgs = values
+        val grounded: U64 = self.groundTypeRef(ref: ref)
+        self.cur.typeParams = savedParams
+        self.cur.typeArgs = savedArgs
+        return grounded
     }
 
     inout fn ensureArrayElemDeps(elemRef: U64) {

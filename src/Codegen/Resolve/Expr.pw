@@ -238,6 +238,19 @@ pub impl Comp {
                         return self.cur.bodyEnvironment.receiverRef
                     }
                 }
+                // A body-local is a resolved semantic binding. Its TypeRef is
+                // more precise than the shared AST cache: a `for` binding can
+                // carry a concrete witness output such as
+                // `(index: U64, value: I64)`, while the generic template at
+                // the same expression site only knows `E`. Read the local
+                // term first and ground it through this immutable body
+                // environment; re-deriving it from TypeInfo loses the selected
+                // proof and lets sibling instances contaminate one another.
+                val localIdx: U64 = self.localIndexByName(start: start, len: len)
+                if localIdx < self.cur.locals.count() {
+                    val local: Local = self.cur.locals[localIdx]
+                    if local.ty != 0U64 { return self.groundBodyTerm(ref: local.ty) }
+                }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val baseRef: U64 = self.groundedTypeOf(id: base)
