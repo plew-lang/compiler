@@ -737,8 +737,24 @@ export enum StaticConformanceProof {
     Missing
     ConcreteWitness(witness: WitnessMatch)
     AssumedBound(boundIdx: U64)
-    TraitPath(edges: Array[WitnessMatch], terminal: U64)
+    // Ordered direct witness and trait-subject edges. `terminalConformIdx` is
+    // one-based and names the edge that owns the selected trait instance's
+    // associated outputs; every edge retains its own impl-binder substitution.
+    TraitPath(edges: Array[WitnessMatch], terminalConformIdx: U64)
 }
+
+// One worklist state while resolving a concrete trait instance.  The current
+// trait key is ground; `edges` is the predecessor proof needed both for a
+// final callable and for associated-output grounding.  Keeping this state in
+// IR avoids parallel owner/args/path arrays and is the migration carrier for
+// the eventual canonical ConformanceProof DAG.
+export struct TraitProofState {
+    pub val traitOwner: U64
+    pub val traitId: U64
+    pub val traitArgs: Array[U64]
+    pub val edges: Array[WitnessMatch]
+}
+pub impl TraitProofState { factory }
 
 // The complete semantic substitution context of one concrete callable body.
 // `params[i] -> args[i]` is an immutable ParamId-keyed substitution map.

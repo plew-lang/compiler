@@ -544,6 +544,38 @@ pub impl Comp {
                 if count == 1U64 { return found }
                 return 0U64
             }
+            StaticConformanceProof.TraitPath(val edges, val terminalConformIdx) => {
+                if terminalConformIdx == 0U64 { return 0U64 }
+                val ci: U64 = terminalConformIdx - 1U64
+                if ci >= self.decls.conforms.count() { return 0U64 }
+                val cf: Conform = self.decls.conforms[ci]
+                if cf.traitStart != traitOwner { return 0U64 }
+                mut val edgeIdx: U64 = 0U64
+                mut val terminal: WitnessMatch = <WitnessMatch />
+                while edgeIdx < edges.count() {
+                    if edges[edgeIdx].conformIdx == terminalConformIdx {
+                        terminal = edges[edgeIdx]
+                    }
+                    edgeIdx += 1U64
+                }
+                if terminal.conformIdx == 0U64 { return 0U64 }
+                mut val found: U64 = 0U64
+                mut val count: U64 = 0U64
+                mut val ai: U64 = 0U64
+                while ai < cf.assocBindingIds.count() {
+                    val bindingId: U64 = cf.assocBindingIds[ai]
+                    if bindingId < self.decls.assocBindings.count() {
+                        val ab: AssocBinding = self.decls.assocBindings[bindingId]
+                        if ab.nameId == assocId {
+                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: terminal)
+                            count += 1U64
+                        }
+                    }
+                    ai += 1U64
+                }
+                if count == 1U64 { return found }
+                return 0U64
+            }
             _ => { return 0U64 }
         }
     }

@@ -1,0 +1,34 @@
+// The B -> A path and A.Output are supplied only by E.  A selected view must
+// carry both the callable path and its associated output through the generic
+// body to the concrete S instance.
+import @Std/Io with { print }
+
+trait B {}
+trait A {
+    type Output
+    fn value() -> Output
+}
+
+pub impl A {
+    fn pass() -> Output { return self.value() }
+}
+
+extension E {
+    pub impl B as A {
+        type Output = I64
+        fn value() -> I64 { return 8I64 }
+    }
+}
+
+struct S {}
+pub impl S { factory }
+pub impl S as B {}
+
+fn pass[T](value: T) -> T#E#A.Output where T: B {
+    return value#E.pass()
+}
+
+fn main() {
+    val result: I64 = pass(value: <S />)
+    print(result)
+}

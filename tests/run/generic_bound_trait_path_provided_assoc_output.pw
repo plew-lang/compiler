@@ -1,0 +1,32 @@
+// `Output` is supplied by the B -> A trait path, not by T's direct bound.
+// The provided A member and the generic function result must carry that same
+// path proof until S's concrete output is grounded.
+import @Std/Io with { print }
+
+trait B {}
+trait A {
+    type Output
+    fn value() -> Output
+}
+
+pub impl A {
+    fn pass() -> Output { return self.value() }
+}
+
+pub impl B as A {
+    type Output = I64
+    fn value() -> I64 { return 8I64 }
+}
+
+struct S {}
+pub impl S { factory }
+pub impl S as B {}
+
+fn pass[T](value: T) -> T#A.Output where T: B {
+    return value.pass()
+}
+
+fn main() {
+    val result: I64 = pass(value: <S />)
+    print(result)
+}

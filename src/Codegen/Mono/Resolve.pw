@@ -18,49 +18,130 @@ pub impl Comp {
         return self.typeTermProjectionReceiver(t: t)
     }
 
-    inout fn assocBindingFor(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], assocId: U64) -> U64 {
-        if baseRef >= self.arena.types.count() {
-            return 0
+    // Is one conformance source visible on this concrete type term?  A bare
+    // conformance is always present; an extension conformance participates
+    // only when the same extension occurs in the normalized view source set.
+    inout fn proofSourceIsActive(baseRef: U64, extId: U64) -> Bool {
+        if extId == 0U64 { return true }
+        if baseRef >= self.arena.types.count() { return false }
+        val base: TypeRef = self.arena.types[baseRef]
+        mut val i: U64 = 0U64
+        while i < base.viewIds.count() {
+            if base.viewIds[i] == extId { return true }
+            i += 1U64
         }
-        mut val found: U64 = 0
-        mut val count: U64 = 0
+        return base.viewIds.count() == 0U64 && base.viewExtId == extId
+    }
+
+    inout fn sameProofTraitArgs(a: Array[U64], b: Array[U64]) -> Bool {
+        if a.count() != b.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.count() {
+            if !(self.typeRefEq(a: a[i], b: b[i])) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    // Ground the target trait arguments of a witness using that witness's
+    // declaration-local impl binders.  This is deliberately the same binder
+    // map later used for its associated output.
+    inout fn groundedWitnessTraitArgs(cf: Conform, witness: WitnessMatch) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < cf.traitArgs.count() {
+            out.append(self.groundWitnessTypeTerm(ref: cf.traitArgs[i], params: cf.typeParams, matchResult: witness))
+            i += 1U64
+        }
+        return out
+    }
+
+    // Match one `impl B[U] as A[...]` edge against the already-ground B
+    // instance in a proof path.  The edge's own impl binders are the only
+    // variables that can bind; the incoming path arguments are rigid.
+    inout fn traitSubjectWitnessMatch(conformIdx: U64, subjectArgs: Array[U64]) -> WitnessMatch {
+        if conformIdx >= self.decls.conforms.count() { return <WitnessMatch /> }
+        val cf: Conform = self.decls.conforms[conformIdx]
+        if cf.subjectArgs.count() != subjectArgs.count() { return <WitnessMatch /> }
+        mut val binds: Array[UnifyBind] = []
+        mut val i: U64 = 0U64
+        while i < cf.subjectArgs.count() {
+            if !(self.unifyPatterns(a: cf.subjectArgs[i], aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds)) { return <WitnessMatch /> }
+            i += 1U64
+        }
+        return self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: cf.typeParams, binds: binds)
+    }
+
+    inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {
+        mut val i: U64 = 0U64
+        while i < states.count() {
+            if states[i].traitOwner == candidate.traitOwner && states[i].traitId == candidate.traitId && self.sameProofTraitArgs(a: states[i].traitArgs, b: candidate.traitArgs) {
+                return true
+            }
+            i += 1U64
+        }
+        return false
+    }
+
+    // Resolve a concrete trait instance through the normalized view source
+    // set.  A direct implementation and every trait-subject edge retain their
+    // own witness substitution, yielding one proof path instead of redoing
+    // name-based conformance lookups at each consumer.
+    inout fn concreteConformanceProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64]) -> StaticConformanceProof {
+        if baseRef >= self.arena.types.count() { return <StaticConformanceProof.Missing /> }
+        mut val pending: Array[TraitProofState] = []
+        mut val seen: Array[TraitProofState] = []
         mut val ci: U64 = 0U64
         while ci < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[ci]
-            if (traitId == 0U64 || cf.traitId == traitId) && (traitOwner == 0U64 || cf.traitStart == traitOwner) {
-                // A selected associated output belongs to a selected witness,
-                // not to the nominal receiver declaration.  In particular,
-                // `impl[T] Box[T] as Iterator { type Item = T }` must ground
-                // Item with the impl-binder match T -> the actual Box argument;
-                // grounding under Box's declaration binders is a different
-                // substitution and loses generic/trait-path proof identity.
-                val matchResult: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: traitArgs)
-                if matchResult.conformIdx != 0U64 {
-                    mut val ai: U64 = 0U64
-                    while ai < self.decls.assocBindings.count() {
-                        val ab: AssocBinding = self.decls.assocBindings[ai]
-                        if ab.implOffset == cf.defOffset && ab.traitOwner == cf.traitStart && ab.nameId == assocId {
-                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: matchResult)
-                            count += 1U64
-                        }
-                        ai += 1U64
+            if !cf.derived && !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) && self.proofSourceIsActive(baseRef: baseRef, extId: cf.extId) {
+                val witness: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: baseRef, traitArgs: [], traitArgsOpen: true)
+                if witness.conformIdx != 0U64 {
+                    mut val edges: Array[WitnessMatch] = []
+                    edges.append(witness)
+                    val start: TraitProofState = <TraitProofState traitOwner=cf.traitStart traitId=cf.traitId traitArgs=self.groundedWitnessTraitArgs(cf: cf, witness: witness) edges=edges />
+                    if start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && self.sameProofTraitArgs(a: start.traitArgs, b: traitArgs) {
+                        return <StaticConformanceProof.ConcreteWitness witness=witness />
+                    }
+                    if !(self.traitProofStateSeen(states: seen, candidate: start)) {
+                        seen.append(start)
+                        pending.append(start)
                     }
                 }
             }
             ci += 1U64
         }
-        if self.traceCodegen && assocId != 0U64 {
-            val t: TypeRef = self.arena.types[baseRef]
-            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Counter") || rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "MapIter") {
-                eprint(text: "[trace-codegen] assoc witness candidates=")
-                eprint(text: digitStrU(d: count))
-                eprint(text: " base=")
-                self.traceMonoTypeHead(ref: baseRef)
-                eprint(text: "\n")
+        mut val cursor: U64 = 0U64
+        while cursor < pending.count() {
+            val state: TraitProofState = pending[cursor]
+            ci = 0U64
+            while ci < self.decls.conforms.count() {
+                val edge: Conform = self.decls.conforms[ci]
+                if self.isTraitName(start: edge.typeStart, len: edge.typeLen) && edge.typeStart == state.traitOwner && edge.typeId == state.traitId && self.proofSourceIsActive(baseRef: baseRef, extId: edge.extId) {
+                    val witness: WitnessMatch = self.traitSubjectWitnessMatch(conformIdx: ci, subjectArgs: state.traitArgs)
+                    if witness.conformIdx != 0U64 {
+                        mut val edges: Array[WitnessMatch] = state.edges
+                        edges.append(witness)
+                        val next: TraitProofState = <TraitProofState traitOwner=edge.traitStart traitId=edge.traitId traitArgs=self.groundedWitnessTraitArgs(cf: edge, witness: witness) edges=edges />
+                        if next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && self.sameProofTraitArgs(a: next.traitArgs, b: traitArgs) {
+                            return <StaticConformanceProof.TraitPath edges=next.edges terminalConformIdx=witness.conformIdx />
+                        }
+                        if !(self.traitProofStateSeen(states: seen, candidate: next)) {
+                            seen.append(next)
+                            pending.append(next)
+                        }
+                    }
+                }
+                ci += 1U64
             }
+            cursor += 1U64
         }
-        if count == 1U64 { return found }
-        return 0
+        return <StaticConformanceProof.Missing />
+    }
+
+    inout fn assocBindingFor(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], assocId: U64) -> U64 {
+        val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs)
+        return self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
     }
 
     inout fn resolveAssocProjection(tyRef: U64) -> U64 {
@@ -68,7 +149,23 @@ pub impl Comp {
         if t.assocNameId == 0U64 {
             return tyRef
         }
-        val baseRef: U64 = self.groundTypeRef(ref: self.plainRefOfProjection(t: t))
+        val projectionReceiver: U64 = self.plainRefOfProjection(t: t)
+        mut val baseRef: U64 = self.groundTypeRef(ref: projectionReceiver)
+        // `T#E#A.Output` first substitutes T with its actual type, then keeps
+        // E as an additive source selection on that result. `groundTypeRef`
+        // correctly follows ParamId but returns the raw replacement, so this
+        // explicit term operation preserves the view facet across that
+        // substitution boundary.
+        if projectionReceiver < self.arena.types.count() {
+            val receiverTerm: TypeRef = self.arena.types[projectionReceiver]
+            mut val additions: Array[U64] = receiverTerm.viewIds
+            if additions.count() == 0U64 && receiverTerm.viewExtId != 0U64 {
+                additions.append(receiverTerm.viewExtId)
+            }
+            if additions.count() > 0U64 {
+                baseRef = self.typeRefWithAddedViews(ref: baseRef, additions: additions)
+            }
+        }
         if baseRef >= self.arena.types.count() {
             return tyRef
         }

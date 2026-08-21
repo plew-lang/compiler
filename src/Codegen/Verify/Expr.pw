@@ -140,11 +140,49 @@ pub impl Comp {
                 if mf < self.arena.funcs.count() {
                     val selectedFn: Func = self.arena.funcs[mf]
                     if self.methodRecvIsTrait(f: selectedFn) {
-                        if rt.nameLen != 0U64 {
-                            val recvId: U64 = intern(c: inout self, start: rt.nameStart, len: rt.nameLen)
-                            if !(self.conformExistsTraitInstance(typeId: recvId, traitId: selectedFn.recvId, traitArgs: selectedFn.recvTraitArgs, patternParams: selectedFn.typeParams)) {
-                                self.errorAt(offset: srcStart, msg: "extension does not apply to this trait instance")
+                        // This is an instance query, not a receiver-name
+                        // query.  In particular `B[Element]` on the selected
+                        // callable must be checked against the full `S:B[I64]`
+                        // witness and active view source; collapsing to S/B
+                        // head ids loses the edge substitution and rejects a
+                        // valid parameterized extension path.
+                        val recvRef: U64 = self.inferType(id: recv)
+                        if self.traceCodegen {
+                            eprint(text: "[trace-codegen] extension selected func=")
+                            eprint(text: digitStrU(d: mf))
+                            eprint(text: " origin=")
+                            eprint(text: digitStrU(d: selectedFn.originConformIdx))
+                            eprint(text: " provided=")
+                            if selectedFn.isProvided { eprint(text: "1") } else { eprint(text: "0") }
+                            eprint(text: " recv=")
+                            eprint(text: digitStrU(d: recvRef))
+                            eprint(text: "\n")
+                        }
+                        mut val applies: Bool = false
+                        if selectedFn.originConformIdx != 0U64 {
+                            val ci: U64 = selectedFn.originConformIdx - 1U64
+                            if ci < self.decls.conforms.count() {
+                                val origin: Conform = self.decls.conforms[ci]
+                                val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: recvRef, traitId: origin.traitId, traitOwner: origin.traitStart, traitArgs: origin.traitArgs)
+                                if self.traceCodegen {
+                                    eprint(text: "[trace-codegen] extension proof origin=")
+                                    eprint(text: digitStrU(d: ci))
+                                    eprint(text: " recv=")
+                                    eprint(text: digitStrU(d: recvRef))
+                                    eprint(text: " target=")
+                                    eprint(text: digitStrU(d: origin.traitId))
+                                    eprint(text: " result=")
+                                }
+                                match proof {
+                                    StaticConformanceProof.Missing => { if self.traceCodegen { eprint(text: "missing\n") } }
+                                    _ => { applies = true  if self.traceCodegen { eprint(text: "found\n") } }
+                                }
                             }
+                        } else {
+                            applies = self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: selectedFn.recvTraitArgs)
+                        }
+                        if recvRef != 0U64 && !applies {
+                            self.errorAt(offset: srcStart, msg: "extension does not apply to this trait instance")
                         }
                     }
                 }
