@@ -304,6 +304,18 @@ pub impl LlvmCtx {
             }
         }
         val mf: Func = c.arena.funcs[mfi]
+        // A trait-provided copy may be declared on its subject trait B while
+        // this final call is on the concrete S selected by a proof/path (for
+        // example `S#E.method()` through `extension E { impl B as A }`).  The
+        // final descriptor already owns that S instance.  Emit the shared
+        // provided body under it rather than falling through to the legacy
+        // Func-only `pf` cache, whose B receiver cannot name S's ABI.
+        if mf.isProvided && mf.typeParams.count() == 0U64 && selectedRecvRef != 0U64 {
+            val proofSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: selectedRecvRef, ownArgs: [])
+            if proofSlot < self.genMethK.count() {
+                return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: proofSlot, instRef: selectedRecvRef, args: args)
+            }
+        }
         // a `move fn` consumes self (its deinit runs in the callee): mark the receiver
         // local moved so the caller does not also deinit it.
         if mf.selfMove {

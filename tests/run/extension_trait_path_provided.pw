@@ -1,0 +1,27 @@
+// A trait-provided member inherits the source of the trait-subject edge that
+// reaches it. `double` is declared on A, but only E makes a B receiver expose
+// A, so it is callable through `#E` and never through the bare surface.
+import @Std/Io with { print }
+
+trait B { fn base() -> I64 }
+trait A { fn value() -> I64 }
+
+pub impl A {
+    fn double() -> I64 { return self.value() + self.value() }
+}
+
+extension E {
+    impl B as A {
+        fn value() -> I64 { return self.base() + 1I64 }
+    }
+}
+
+struct S { pub val n: I64 }
+pub impl S { factory }
+pub impl S as B {
+    fn base() -> I64 { return self.n }
+}
+
+fn main() {
+    print(<S n=3I64 />#E.double())
+}

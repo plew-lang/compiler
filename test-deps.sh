@@ -20,15 +20,17 @@ trap 'rm -rf "$WORK"' EXIT
 "$PLEWC" --runtime > "$WORK/rt.c"
 "$CC" -w "$WORK/resolve.ll" "$WORK/rt.c" -o "$WORK/plew-resolve"
 
-gitinit() { git -C "$1" init -q && git -C "$1" add -A && git -C "$1" -c user.email=t@t -c user.name=t commit -qm init; }
+# Fixtures model unsigned upstream repositories.  Do not inherit a developer's
+# global signing policy: this test exercises resolver semantics, not GPG setup.
+gitinit() { git -C "$1" init -q && git -C "$1" add -A && git -C "$1" -c commit.gpgsign=false -c user.email=t@t -c user.name=t commit -qm init; }
 
 # --- leaf git library, two tags ---
 LEAF="$WORK/leaf"; mkdir -p "$LEAF/src"
 printf 'name = "Acme/Greet"\n' > "$LEAF/Plew.toml"
 printf 'export fn hello() -> I64 { return 42I64 }\n' > "$LEAF/src/_.pw"
 gitinit "$LEAF"
-git -C "$LEAF" tag -a -m v1 1.0.0
-git -C "$LEAF" tag -a -m v1 1.2.0
+git -C "$LEAF" -c tag.gpgSign=false tag -a -m v1 1.0.0
+git -C "$LEAF" -c tag.gpgSign=false tag -a -m v1 1.2.0
 
 # --- mid git library depending on leaf ---
 MID="$WORK/mid"; mkdir -p "$MID/src"
@@ -39,7 +41,7 @@ name = "Mid"
 EOF
 printf 'import @Acme/Greet with { hello }\nexport fn midVal() -> I64 { return hello() + 1I64 }\n' > "$MID/src/_.pw"
 gitinit "$MID"
-git -C "$MID" tag -a -m v2 2.0.0
+git -C "$MID" -c tag.gpgSign=false tag -a -m v2 2.0.0
 
 fail=0
 check() { # name expected actual
@@ -97,9 +99,9 @@ check "auto-resolve wrote the lock" "1" "$([ -f "$A3/Plew.lock" ] && echo 1 || e
 L2="$WORK/leaf2"; mkdir -p "$L2/src"
 printf 'name = "L2"\n' > "$L2/Plew.toml"
 printf 'export fn leafval() -> I64 { return 1I64 }\n' > "$L2/src/_.pw"
-gitinit "$L2"; git -C "$L2" tag -a -m t 1.2.0
+gitinit "$L2"; git -C "$L2" -c tag.gpgSign=false tag -a -m t 1.2.0
 printf 'export fn leafval() -> I64 { return 100I64 }\n' > "$L2/src/_.pw"
-git -C "$L2" add -A && git -C "$L2" -c user.email=t@t -c user.name=t commit -qm v2; git -C "$L2" tag -a -m t 2.0.0
+git -C "$L2" add -A && git -C "$L2" -c commit.gpgsign=false -c user.email=t@t -c user.name=t commit -qm v2; git -C "$L2" -c tag.gpgSign=false tag -a -m t 2.0.0
 mkmid() { # name dir leafconstraint exportfn
     mkdir -p "$2/src"
     cat > "$2/Plew.toml" <<EOF
@@ -108,7 +110,7 @@ name = "$1"
 "L2" = { git = "$L2", version = "$3" }
 EOF
     printf 'import @L2 with { leafval }\nexport fn %s() -> I64 { return leafval() }\n' "$4" > "$2/src/_.pw"
-    gitinit "$2"; git -C "$2" tag -a -m t 1.0.0
+    gitinit "$2"; git -C "$2" -c tag.gpgSign=false tag -a -m t 1.0.0
 }
 mkmid MidA "$WORK/mida" 1 va
 mkmid MidB "$WORK/midb" 2 vb

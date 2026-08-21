@@ -904,9 +904,10 @@ pub impl LlvmCtx {
             // curRecvInstRef, so the view must be applied on top of it, preserving its args).
             if f.extId != 0U64 {
                 if recvRef == 0U64 || (c.arena.types[recvRef].viewExtId == 0U64 && c.arena.types[recvRef].viewIds.count() == 0U64) {
-                    mut val selfViewArgs: Array[U64] = []
-                    if recvRef != 0U64 { selfViewArgs = c.arena.types[recvRef].args }
-                    recvRef = c.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=selfViewArgs viewExtId=f.extId />)
+                    if recvRef != 0U64 {
+                        val selectedView: Array[U64] = [f.extId]
+                        recvRef = c.typeRefWithViews(ref: recvRef, viewExtId: f.extId, viewIds: selectedView)
+                    }
                 }
             }
             self.pushLocalR(nameStart: self.selfStart, nameLen: self.selfLen, ptr: selfPtr, ty: recvTy, kind: kindFromTySpan(c: inout c, tyStart: f.recvStart, tyLen: f.recvLen), structIdx: recvSidx, isArr: selfIsArr, elemTy: selfElemTy, elemKind: 0U64, typeRef: recvRef)

@@ -88,10 +88,12 @@ pub impl Comp {
         if out == 0U64 || out >= self.arena.types.count() { return out }
         val base: TypeRef = self.arena.types[out]
         if base.viewExtId != 0U64 || base.viewIds.count() != 0U64 {
-            out = self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen args=base.args />)
+            val noViews: Array[U64] = []
+            out = self.typeRefWithViews(ref: out, viewExtId: 0U64, viewIds: noViews)
         }
         if f.extId != 0U64 {
-            out = self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=self.arena.types[out].args viewExtId=f.extId />)
+            val selectedView: Array[U64] = [f.extId]
+            out = self.typeRefWithViews(ref: out, viewExtId: f.extId, viewIds: selectedView)
         }
         return out
     }

@@ -753,7 +753,11 @@ pub impl Comp {
                 } else {
                     sourceMatches = cand.sourceKind == 2U64 && self.callableMatchesAnyTrait(c: cand, sources: sources)
                 }
-                if sourceMatches && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
+                // A trait requirement has no executable body. It participates
+                // in declaration-time static member resolution, but never in
+                // this concrete callable surface; otherwise a trait receiver
+                // proof makes the requirement compete with its implementation.
+                if sourceMatches && (f.body != 0U64 || f.isExtern) && ((associated && f.isAssoc) || (!associated && f.hasRecv)) {
                     if f.nameId == qNameId && self.callableReceiverMatches(f: f, recvId: qRecvId, recvRef: recvRef) {
                         val matchRank: U64 = self.groundedMethodArgMatchRank(f: f, args: args, recvRef: recvRef)
                         if matchRank != 0U64 {

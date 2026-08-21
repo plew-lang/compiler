@@ -712,7 +712,11 @@ pub impl Comp {
             mut val fi: U64 = 0
             while fi < nFuncs {
                 val f: Func = self.arena.funcs[fi]
-                if f.hasRecv {
+                // A trait requirement is a signature only.  Only a default
+                // implementation with a body may be copied onto a conformance
+                // surface; copying the requirement itself creates a second,
+                // body-less callable next to the real implementation.
+                if f.hasRecv && f.body != 0U64 {
                     val copyOwnerMod: U64 = self.traitModuleByOwner(owner: cf.traitStart)
                     // match the conformance to the right same-name trait by arity (spec/08:
                     // trait names share a flat namespace — a user `trait Sub` vs Core's
@@ -731,15 +735,25 @@ pub impl Comp {
                             // an inherent method. Onto a non-generic conformer this is a
                             // no-op (the conformer has no params).
                             val copiedTP: Array[Bind] = self.providedCopyTypeParams(recvStart: cf.typeStart, recvLen: cf.typeLen, ownParams: f.typeParams)
-                            // preserve extId: a trait-subject extension method (spec/09
-                            // `extension Ext { impl Trait { … } }`) stays view-gated on the
-                            // conformer, reached via `value#Ext.m()` not a bare call.
+                            // A provided template can be bare while the conformance that
+                            // makes it available is extension-selected:
+                            //
+                            //   extension E { impl B as A {} }
+                            //   pub impl A { fn method() { … } }
+                            //
+                            // The copy is consequently an E-surface member.  Keeping only
+                            // the template's extId (zero here) made it view-only but gave it
+                            // no selectable source at all.  A template that was already
+                            // extension-owned stays in that bundle; otherwise the selected
+                            // conformance owns the provenance.
+                            mut val effectiveExtId: U64 = f.extId
+                            if effectiveExtId == 0U64 { effectiveExtId = cf.extId }
                             mut val providedOwnerMod: U64 = 4000000000U64
                             if !(f.isPub) {
                                 providedOwnerMod = copyOwnerMod
                             }
                             val copyIdx: U64 = self.arena.funcs.count()
-                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy recvPatternParams=cf.typeParams recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=cf.traitId originTraitOwner=cf.traitStart originTraitArity=cf.traitArgs.count() originConformIdx=ci + 1U64 providedOwnerMod=providedOwnerMod extId=f.extId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
+                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy recvPatternParams=cf.typeParams recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=cf.traitId originTraitOwner=cf.traitStart originTraitArity=cf.traitArgs.count() originConformIdx=ci + 1U64 providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
                             self.registerCallable(funcIdx: copyIdx)
                     }
                 }

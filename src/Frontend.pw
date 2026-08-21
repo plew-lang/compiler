@@ -190,6 +190,18 @@ pub impl Comp {
         return id
     }
 
+    // Rebuild one semantic type term with an explicitly selected view surface.
+    // A view refines the receiver; it must never replace its nominal/projection
+    // head, declaration identity, arguments, or existential qualifiers.  This
+    // is the flat-TypeRef migration bridge for the eventual TypeTerm `view`
+    // node, and keeps the full copy in one place so Mono and LLVM cannot each
+    // accidentally turn `S#E` into the trait named by E's conformance subject.
+    inout fn typeRefWithViews(ref: U64, viewExtId: U64, viewIds: Array[U64]) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val base: TypeRef = self.arena.types[ref]
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args viewExtId=viewExtId viewIds=viewIds isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)
+    }
+
     inout fn recordImportOrigins(imp: ImportAst, targetMod: U64, reExport: Bool) {
         mut val i: U64 = 0
         while i < imp.names.count() {

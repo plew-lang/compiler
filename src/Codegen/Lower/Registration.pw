@@ -658,9 +658,21 @@ pub impl Comp {
 
     // Match a call receiver against the declaration's complete receiver pattern.
     // A generic impl such as Box[T] is a pattern, whereas Box[I64] is exact.
-    // Calls without a recovered TypeRef retain the legacy head-name fallback.
+    // A trait-receiver *provided copy* is different: it may be declared on B
+    // while the selected concrete receiver is S, justified by S: B. Ask the
+    // same full-instance predicate used for extension applicability. A direct
+    // conformance method is instead the implementation witness for B itself;
+    // its visibility on S is represented by the separately registered copy.
+    // Letting that witness match every S: B duplicates the copy (and turns one
+    // proof into an ambiguity). Calls without a recovered TypeRef retain the
+    // legacy head-name fallback.
     inout fn callableReceiverMatches(f: Func, recvId: U64, recvRef: U64) -> Bool {
-        if f.recvId != recvId { return false }
+        if f.recvId != recvId {
+            if f.isProvided && self.methodRecvIsTrait(f: f) && recvRef != 0U64 {
+                return self.conformsInstance(ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: f.recvTraitArgs)
+            }
+            return false
+        }
         if recvRef == 0U64 || f.recvTy == 0U64 { return true }
         if recvRef >= self.arena.types.count() || f.recvTy >= self.arena.types.count() { return true }
         mut val binds: Array[UnifyBind] = []
