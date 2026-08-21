@@ -447,6 +447,7 @@ pub impl Comp {
 
     inout fn assocItemRef(recvStart: U64, recvLen: U64, recvInstRef: U64) -> U64 {
         val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+        val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
         mut val receiver: U64 = recvInstRef
         if receiver == 0U64 {
             receiver = self.simpleTypeRef(nameStart: recvStart, nameLen: recvLen)
@@ -459,14 +460,7 @@ pub impl Comp {
         // generic parameters.  A non-Iterator same-named output is ambiguous
         // here and deliberately yields no Item environment rather than being
         // selected by declaration order.
-        val out: U64 = self.assocBindingFor(baseRef: receiver, traitId: 0U64, traitOwner: 0U64, traitArgs: [], assocId: item.nameId)
-        if self.traceCodegen {
-            eprint(text: "[trace-codegen] Item receiver=")
-            self.traceMonoTypeHead(ref: receiver)
-            eprint(text: " output=")
-            self.traceMonoTypeHead(ref: out)
-            eprint(text: "\n")
-        }
+        val out: U64 = self.assocBindingFor(baseRef: receiver, traitId: 0U64, traitOwner: 0U64, traitArgs: [], assocId: itemId)
         return out
     }
 
@@ -482,6 +476,55 @@ pub impl Comp {
         } else {
             self.cur.itemRef = itemR0
         }
+    }
+
+    // Project an associated output from exactly the witness selected for this
+    // body. This is deliberately not a receiver-name lookup: `ConformId` and
+    // its one directional substitution are the proof that owns the output.
+    inout fn associatedOutputInProof(proof: StaticConformanceProof, traitOwner: U64, assocId: U64) -> U64 {
+        match proof {
+            StaticConformanceProof.ConcreteWitness(val witness) => {
+                if witness.conformIdx == 0U64 { return 0U64 }
+                val ci: U64 = witness.conformIdx - 1U64
+                if ci >= self.decls.conforms.count() { return 0U64 }
+                val cf: Conform = self.decls.conforms[ci]
+                if cf.traitStart != traitOwner { return 0U64 }
+                mut val found: U64 = 0U64
+                mut val count: U64 = 0U64
+                mut val ai: U64 = 0U64
+                while ai < cf.assocBindingIds.count() {
+                    val bindingId: U64 = cf.assocBindingIds[ai]
+                    if bindingId < self.decls.assocBindings.count() {
+                        val ab: AssocBinding = self.decls.assocBindings[bindingId]
+                        if ab.nameId == assocId {
+                        found = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: witness)
+                        count += 1U64
+                        }
+                    }
+                    ai += 1U64
+                }
+                if count == 1U64 { return found }
+                return 0U64
+            }
+            _ => { return 0U64 }
+        }
+    }
+
+    // Enter one concrete provided body from its immutable environment. `Self`
+    // is its selected receiver; `Item` is the selected Iterator-style output
+    // of that same conformance proof. Other body kinds retain the legacy
+    // bridge until all associated-type terms are explicit TypeTerm nodes.
+    inout fn setSelfItemEnvForBody(f: Func, environment: InstanceEnvironment) {
+        if environment.receiverRef != 0U64 && environment.receiverRef < self.arena.types.count() {
+            self.cur.selfRef = environment.receiverRef
+        } else {
+            self.cur.selfRef = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
+        }
+        self.cur.itemRef = 0U64
+        if !(f.isProvided) { return }
+        val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+        val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
+        self.cur.itemRef = self.associatedOutputInProof(proof: environment.proof, traitOwner: f.originTraitOwner, assocId: itemId)
     }
 
     inout fn clearSelfItemEnv() {

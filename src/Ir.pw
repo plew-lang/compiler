@@ -643,6 +643,10 @@ export struct Conform {
     // source offset of the impl declaration. Conform.typeStart is an interned span,
     // so diagnostics and owner-module checks must use this source anchor.
     pub val defOffset: U64 = 0
+    // Associated outputs are owned by this witness. A selected ConformId must
+    // reach them directly; re-identifying them by receiver/trait spelling or
+    // source-offset triples loses proof provenance.
+    pub val assocBindingIds: Array[U64] = []
     // signatures of the members this impl witnessed (body method or `via` line),
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.
@@ -707,6 +711,35 @@ export struct FnInst {
     pub val recvInstRef: U64 = 0
 }
 
+// The substitution produced by matching one concrete conformance. A binder is
+// its declaration-order slot in that conformance's `impl[...]` list, so source
+// spelling and an unrelated query's generic binders cannot leak into it.
+export struct WitnessBind {
+    pub val binder: U64
+    pub val term: U64
+}
+pub impl WitnessBind { factory }
+
+// A direct selected witness. `conformIdx` is one-based (0 means no match), and
+// its bindings map only that witness's impl-binder slots to semantic TypeRefs.
+export struct WitnessMatch {
+    pub val conformIdx: U64 = 0U64
+    pub val binds: Array[WitnessBind] = []
+}
+pub impl WitnessMatch { factory }
+
+// Static conformance evidence is deliberately richer than a direct impl
+// match. A generic declaration may rely on an assumed `where` bound before
+// any concrete witness exists; trait-to-trait entailment retains every edge
+// instantiation as a predecessor DAG. Runtime existential evidence is not a
+// member of this enum (it cannot prove a generic static bound).
+export enum StaticConformanceProof {
+    Missing
+    ConcreteWitness(witness: WitnessMatch)
+    AssumedBound(boundIdx: U64)
+    TraitPath(edges: Array[WitnessMatch], terminal: U64)
+}
+
 // The complete semantic substitution context of one concrete callable body.
 // `params[i] -> args[i]` is an immutable ParamId-keyed substitution map.
 // Binder identity is lexical (`Bind.paramId`), so the declaration binder of
@@ -718,6 +751,9 @@ export struct InstanceEnvironment {
     pub val params: Array[Bind] = []
     pub val args: Array[U64] = []
     pub val receiverRef: U64 = 0U64
+    // Selected evidence for a provided body. Associated outputs must be
+    // projected from this proof, never rediscovered by receiver spelling.
+    pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
 }
 
 // The selected callable for one semantic call site while compiling one concrete
@@ -807,6 +843,10 @@ export struct Func {
     // head-name fast path; this preserves the generic arguments and # view that
     // are part of the declaration namespace.
     pub val recvTy: U64 = 0
+    // Binder scope used only to match `recvTy`. A provided copy's receiver
+    // pattern belongs to its source conformance, while its callable body keeps
+    // its own nominal/method binder environment in `typeParams`.
+    pub val recvPatternParams: Array[Bind] = []
     // Positional arguments of a trait receiver. `recvTy` is deliberately 0 for
     // trait subjects (they are not value types), so this is the complete trait
     // instance key for `impl P[Arg] { ... }`. Associated-type bindings are
@@ -882,6 +922,10 @@ export struct Func {
     pub val originTraitId: U64 = 0
     pub val originTraitOwner: U64 = 0
     pub val originTraitArity: U64 = 0
+    // Exact selected conformance for a provided copy, one-based so 0 remains
+    // the absent/trait-path sentinel. This carries witness provenance through
+    // finalization; receiver spelling must never re-select an associated output.
+    pub val originConformIdx: U64 = 0
     // for a non-public provided-method copy (`impl Trait { ... }`, not
     // `pub impl Trait`): the trait owner's module id. Such helper copies are
     // callable only from that module. The sentinel means "no module-only gate"
@@ -985,35 +1029,6 @@ export struct TraitConstraint {
     pub val assocPredicates: Array[TraitAssocPredicate]
 }
 pub impl TraitConstraint { factory }
-
-// The substitution produced by matching one concrete conformance. A binder is
-// its declaration-order slot in that conformance's `impl[...]` list, so source
-// spelling and an unrelated query's generic binders cannot leak into it.
-export struct WitnessBind {
-    pub val binder: U64
-    pub val term: U64
-}
-pub impl WitnessBind { factory }
-
-// A direct selected witness. `conformIdx` is one-based (0 means no match), and
-// its bindings map only that witness's impl-binder slots to semantic TypeRefs.
-export struct WitnessMatch {
-    pub val conformIdx: U64 = 0U64
-    pub val binds: Array[WitnessBind] = []
-}
-pub impl WitnessMatch { factory }
-
-// Static conformance evidence is deliberately richer than a direct impl
-// match.  A generic declaration may rely on an assumed `where` bound before
-// any concrete witness exists; trait-to-trait entailment retains every edge
-// instantiation as a predecessor DAG.  Runtime existential evidence is not a
-// member of this enum (it cannot prove a generic static bound).
-export enum StaticConformanceProof {
-    Missing
-    ConcreteWitness(WitnessMatch)
-    AssumedBound(boundIdx: U64)
-    TraitPath(edges: Array[WitnessMatch], terminal: U64)
-}
 
 // A declaration-time trait member selected from static evidence.  It is kept
 // separate from the eventual CallResolution because generic template checking

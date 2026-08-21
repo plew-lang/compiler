@@ -285,6 +285,7 @@ pub impl Comp {
             traitArgIdx += 1U64
         }
         mut val witnessed: Array[Func] = []
+        mut val assocBindingIds: Array[U64] = []
         mut val mi: U64 = 0
         while mi < im.members.count() {
             val m: MemberAst = im.members[mi]
@@ -313,6 +314,7 @@ pub impl Comp {
                         trId = trN.nameId
                         trOwner = trN.nameStart
                     }
+                    assocBindingIds.append(self.decls.assocBindings.count())
                     self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId traitOwner=trOwner implOffset=im.span.start subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds traitArgs=conformanceTraitArgs tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
                 }
                 MemberKind.Factory => {
@@ -334,7 +336,7 @@ pub impl Comp {
                 val cfExtN: Bind = self.internBytes(s: im.extName)
                 cfExtId = intern(c: inout self, start: cfExtN.nameStart, len: cfExtN.nameLen)
             }
-            self.registerDeclaredConformance(cf: <Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=conformanceTraitArgs derived=false isPub=im.isPub witnessed=witnessed extId=cfExtId defOffset=im.span.start />)
+            self.registerDeclaredConformance(cf: <Conform typeStart=recvN.nameStart typeLen=recvN.nameLen typeId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds typeArity=im.recvType.args.count() traitStart=traitN.nameStart traitLen=traitN.nameLen traitId=intern(c: inout self, start: traitN.nameStart, len: traitN.nameLen) traitArgs=conformanceTraitArgs derived=false isPub=im.isPub witnessed=witnessed extId=cfExtId defOffset=im.span.start assocBindingIds=assocBindingIds />)
         }
         // attach pending `@[...]` directives to this impl block (a macro on an impl);
         // declStart/declEnd = the impl block's source span for the gen harness slice.

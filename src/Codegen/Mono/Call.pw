@@ -326,7 +326,7 @@ pub impl Comp {
         self.cur.typeParams = f.typeParams
         if recvRef != 0U64 && recvRef < self.arena.types.count() {
             self.cur.typeArgs = self.arena.types[recvRef].args
-            self.setSelfItemEnv(recvStart: self.arena.types[recvRef].nameStart, recvLen: self.arena.types[recvRef].nameLen, recvInstRef: recvRef)
+            self.setSelfItemEnvForBody(f: f, environment: self.bodyInstanceEnvironment(fnIdx: callee, args: self.cur.typeArgs, recvInstRef: recvRef))
         } else {
             self.cur.typeArgs = []
         }
@@ -358,9 +358,7 @@ pub impl Comp {
         val savedI: U64 = self.cur.itemRef
         self.cur.typeParams = f.typeParams
         self.cur.typeArgs = calleeArgs
-        if recvRef != 0U64 && recvRef < self.arena.types.count() {
-            self.setSelfItemEnv(recvStart: self.arena.types[recvRef].nameStart, recvLen: self.arena.types[recvRef].nameLen, recvInstRef: recvRef)
-        }
+        self.setSelfItemEnvForBody(f: f, environment: self.bodyInstanceEnvironment(fnIdx: callee, args: calleeArgs, recvInstRef: recvRef))
         val out: U64 = self.groundTypeRef(ref: f.retTy)
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
@@ -375,10 +373,27 @@ pub impl Comp {
     // including the common `struct Array[T]` / `impl[T] Array[T]` spelling.
     // Every body key and body-entry uses this constructor rather than carrying
     // parallel args/receiver projections.
+    // The provided copy itself records which conformance created it. Preserve
+    // that fact in the body environment: matching by the receiver again would
+    // conflate same-head parameterized or view-selected witnesses.
+    inout fn providedBodyProof(f: Func, receiverRef: U64) -> StaticConformanceProof {
+        if !(f.isProvided) || f.originConformIdx == 0U64 || receiverRef == 0U64 { return <StaticConformanceProof.Missing /> }
+        val ci: U64 = f.originConformIdx - 1U64
+        if ci >= self.decls.conforms.count() { return <StaticConformanceProof.Missing /> }
+        val cf: Conform = self.decls.conforms[ci]
+        if cf.traitId != f.originTraitId || cf.traitStart != f.originTraitOwner { return <StaticConformanceProof.Missing /> }
+        // The copy's ConformId already fixes the complete trait key. Only its
+        // impl binders are solved against this concrete receiver here.
+        val witness: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: receiverRef, traitArgs: [], traitArgsOpen: true)
+        if witness.conformIdx == 0U64 { return <StaticConformanceProof.Missing /> }
+        return <StaticConformanceProof.ConcreteWitness witness=witness />
+    }
+
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64) -> InstanceEnvironment {
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
         val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
+        mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
         if fnIdx < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fnIdx]
             mut val i: U64 = 0U64
@@ -387,6 +402,7 @@ pub impl Comp {
                 values.append(args[i])
                 i += 1U64
             }
+            proof = self.providedBodyProof(f: f, receiverRef: canonicalRecv)
         }
         if canonicalRecv != 0U64 && canonicalRecv < self.arena.types.count() {
             val recv: TypeRef = self.arena.types[canonicalRecv]
@@ -412,7 +428,7 @@ pub impl Comp {
                 }
             }
         }
-        return <InstanceEnvironment params=params args=values receiverRef=canonicalRecv />
+        return <InstanceEnvironment params=params args=values receiverRef=canonicalRecv proof=proof />
     }
 
     inout fn sameInstanceEnvironment(a: InstanceEnvironment, b: InstanceEnvironment) -> Bool {
@@ -1517,11 +1533,7 @@ pub impl Comp {
         // subject selected at the call.  Mirror emitOneGenFn's assoc environment
         // here so Mono and LLVM use the same body-instance identity.
         if f.hasRecv || f.isAssoc {
-            if instance.environment.receiverRef != 0U64 && instance.environment.receiverRef < self.arena.types.count() {
-                self.setSelfItemEnv(recvStart: self.arena.types[instance.environment.receiverRef].nameStart, recvLen: self.arena.types[instance.environment.receiverRef].nameLen, recvInstRef: instance.environment.receiverRef)
-            } else {
-                self.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
-            }
+            self.setSelfItemEnvForBody(f: f, environment: instance.environment)
         } else {
             self.clearSelfItemEnv()
         }
@@ -2202,7 +2214,8 @@ pub impl Comp {
                     self.scanExprInsts(exprId: args[i].expr)
                     i += 1
                 }
-                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
+                val finalIdx: U64 = self.resolveBodyCallee(exprId: exprId)
+                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: finalIdx)
                 // register the call's result type: a combinator on a generic receiver
                 // (`mapIter.filter(p)`) yields a new adapter instantiation
                 // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so
@@ -2560,11 +2573,12 @@ pub impl Comp {
                     if initialRef == 0U64 {
                         initialRef = self.bodyCalleeResultRef(exprId: iter)
                     }
+                    mut val iteratorRef: U64 = initialRef
                     if initialRef != 0U64 && initialRef < self.arena.types.count() && !(self.arena.types[initialRef].isAny) {
                         val noArgs: Array[Arg] = []
                         val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
                         mut val iteratorFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: noArgs, useOffset: 0U64)
-                        mut val iteratorRef: U64 = initialRef
+                        iteratorRef = initialRef
                         // Record the iterator slot even when this value is already
                         // an Iterator.  The sentinel tells LLVM that there is no
                         // iterator() call; it must not rediscover that fact from
@@ -2633,8 +2647,35 @@ pub impl Comp {
                             }
                             self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: et.nameStart, tyLen: et.nameLen, isArray: false, ty: elemRef, isInout: false, isMut: false, owned: false)
                         } else {
-                            val elemTi: TypeInfo = self.iterableItemInfo(et: et)
-                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
+                            // The selected implicit `next()` descriptor is the
+                            // concrete iterator proof for this body instance.
+                            // Its `Optional[Item]` result retains substitutions
+                            // that AST-wide `iterableItemInfo` necessarily loses
+                            // for a generic adapter chain.
+                            mut val itemRef: U64 = 0U64
+                            if iteratorRef != 0U64 && iteratorRef < self.arena.types.count() {
+                                val iteratorTy: TypeRef = self.arena.types[iteratorRef]
+                                // `for` is defined by the Iterator contract.
+                                // Its associated output is therefore selected
+                                // from the concrete conformance witness before
+                                // consulting the requirement body's legacy
+                                // template return type.
+                                itemRef = self.assocItemRef(recvStart: iteratorTy.nameStart, recvLen: iteratorTy.nameLen, recvInstRef: iteratorRef)
+                            }
+                            val nextResult: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 2U64)
+                            if itemRef == 0U64 && nextResult != 0U64 && nextResult < self.arena.types.count() {
+                                val nextTy: TypeRef = self.arena.types[nextResult]
+                                if rangeEquals(bytes: self.arena.bytes, start: nextTy.nameStart, len: nextTy.nameLen, kw: "Optional") && nextTy.args.count() == 1U64 {
+                                    itemRef = nextTy.args[0]
+                                }
+                            }
+                            if itemRef != 0U64 {
+                                val itemTi: TypeInfo = self.typeInfoOfRef(ref: itemRef)
+                                self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: itemRef, isInout: false, isMut: false, owned: false)
+                            } else {
+                                val elemTi: TypeInfo = self.iterableItemInfo(et: et)
+                                self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: elemTi.nameStart, tyLen: elemTi.nameLen, isArray: elemTi.kind == 3, ty: elemTi.ref, isInout: false, isMut: false, owned: false)
+                            }
                         }
                     }
                 }

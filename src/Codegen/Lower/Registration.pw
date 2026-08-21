@@ -664,7 +664,9 @@ pub impl Comp {
         if recvRef == 0U64 || f.recvTy == 0U64 { return true }
         if recvRef >= self.arena.types.count() || f.recvTy >= self.arena.types.count() { return true }
         mut val binds: Array[UnifyBind] = []
-        return self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: f.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
+        mut val patternParams: Array[Bind] = f.typeParams
+        if f.recvPatternParams.count() > 0U64 { patternParams = f.recvPatternParams }
+        return self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: patternParams, bParams: [], binds: inout binds, ignoreTopView: true)
     }
 
     inout fn sameTypeRefListAlphaEq(a: Array[U64], b: Array[U64], aParams: Array[Bind], bParams: Array[Bind]) -> Bool {
