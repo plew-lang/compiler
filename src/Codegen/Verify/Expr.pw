@@ -788,6 +788,7 @@ pub impl Comp {
             return
         }
         val st: TypeInfo = self.typeOf(id: scrut)
+        val generic: Bool = self.isGenericInst(ref: st.ref)
         mut val bi: U64 = 0
         if a.isStruct {
             while bi < a.binds.count() {
@@ -797,8 +798,8 @@ pub impl Comp {
                     continue
                 }
                 mut val ft: TypeInfo = scalarInfo()
-                if st.ref != 0U64 {
-                    ft = self.fieldTypeOfReceiver(receiverRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
+                if generic {
+                    ft = self.genericFieldTypeInfo(instRef: st.ref, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 } else {
                     ft = self.fieldType(structStart: a.enumStart, structLen: a.enumLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                 }
@@ -812,7 +813,7 @@ pub impl Comp {
                     bi += 1
                     continue
                 }
-                if self.isGenericEnumInst(ref: st.ref) {
+                if generic {
                     val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                     self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {

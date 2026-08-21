@@ -164,53 +164,54 @@ pub impl Comp {
         return self.typeInfoOfRef(ref: tyRef)
     }
 
-    // The exact semantic type term of a field selected from a concrete receiver.
-    // This is
-    // deliberately not a "generic field" helper: a field of `Holder[I32]` can be
-    // an anonymous record, and selecting that record's next field must keep the
-    // already-grounded `I32` term instead of falling back to its declaration-time
-    // `T`.  Every field consumer that has a receiver TypeRef must use this query.
-    inout fn fieldTypeRefOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> U64 {
-        if receiverRef == 0U64 || receiverRef >= self.arena.types.count() {
-            return 0U64
-        }
-        val t: TypeRef = self.arena.types[receiverRef]
-        val si: U64 = self.anyStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
-        if si >= self.arena.structs.count() {
-            return 0U64
-        }
+    // Legacy TypeInfo projection. It remains until TypeInfo itself is retired:
+    // scalar TypeInfo intentionally has no TypeRef payload, so it cannot be the
+    // carrier for an exact chained field type.
+    inout fn genericFieldTypeInfo(instRef: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
+        val t: TypeRef = self.arena.types[instRef]
+        val si: U64 = self.genericStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+        if si >= self.arena.structs.count() { return scalarInfo() }
         val s: StructDef = self.arena.structs[si]
         val fields: Array[FieldDef] = s.fields
         val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
-        mut val i: U64 = 0
+        mut val i: U64 = 0U64
         while i < fields.count() {
             val fd: FieldDef = fields[i]
             if fd.nameId == qField {
-                return self.groundUnderInst(instRef: receiverRef, tyRef: fd.ty)
+                val ftr: TypeRef = self.arena.types[fd.ty]
+                mut val pi: U64 = 0U64
+                while pi < s.typeParams.count() {
+                    val p: Bind = s.typeParams[pi]
+                    if ftr.nameId == p.nameId { return self.typeInfoOfRef(ref: t.args[pi]) }
+                    pi += 1U64
+                }
+                if rangeEquals(bytes: self.arena.bytes, start: ftr.nameStart, len: ftr.nameLen, kw: "Array") && ftr.args.count() > 0U64 {
+                    return self.groundedArrayFieldInfo(params: s.typeParams, instArgs: t.args, arrayTyRef: fd.ty)
+                }
+                return self.typeInfoOfRef(ref: self.groundUnderInst(instRef: instRef, tyRef: fd.ty))
             }
-            i += 1
+            i += 1U64
         }
-        return 0U64
+        return scalarInfo()
     }
 
-    // The legacy TypeInfo view of `fieldTypeRefOfReceiver`.  It is a projection
-    // for syntax/type-checking callers; it is never the authority for a later
-    // semantic field selection because scalar TypeInfo has no TypeRef payload.
-    inout fn fieldTypeOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
-        val result: U64 = self.fieldTypeRefOfReceiver(receiverRef: receiverRef, fieldStart: fieldStart, fieldLen: fieldLen)
-        if result == 0U64 { return scalarInfo() }
-        val projection: TypeInfo = self.typeInfoOfRef(ref: result)
-        // Preserve the existing TypeInfo contract for scalar results.  A
-        // structured result already carries its ref; an anonymous record is
-        // the one legacy shape whose fields are outside TypeRef, so retain its
-        // exact ref for a following `.` selection.  All semantic consumers use
-        // fieldTypeRefOfReceiver directly instead.
-        if projection.ref != 0U64 { return projection }
-        val term: TypeRef = self.arena.types[result]
-        if term.nameLen > 0U64 && self.arena.bytes[term.nameStart] == 40U8 {
-            return <TypeInfo kind=projection.kind nameStart=projection.nameStart nameLen=projection.nameLen ref=result viewExtId=projection.viewExtId />
+    // Exact semantic field term. Unlike the legacy projection above, this is
+    // suitable for a later field selection: `Holder[I32].pair.a` retains the
+    // already-grounded record term instead of re-reading its declaration `T`.
+    inout fn fieldTypeRefOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> U64 {
+        if receiverRef == 0U64 || receiverRef >= self.arena.types.count() { return 0U64 }
+        val t: TypeRef = self.arena.types[receiverRef]
+        val si: U64 = self.anyStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+        if si >= self.arena.structs.count() { return 0U64 }
+        val fields: Array[FieldDef] = self.arena.structs[si].fields
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        mut val i: U64 = 0U64
+        while i < fields.count() {
+            val fd: FieldDef = fields[i]
+            if fd.nameId == qField { return self.groundUnderInst(instRef: receiverRef, tyRef: fd.ty) }
+            i += 1U64
         }
-        return projection
+        return 0U64
     }
 
     inout fn genericEnumFieldTypeInfo(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
