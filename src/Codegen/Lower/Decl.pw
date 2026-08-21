@@ -356,7 +356,14 @@ pub impl Comp {
                 traitLen = self.traitNameLenByOwner(owner: resolvedOwner)
                 traitNameId = intern(c: inout self, start: traitStart, len: traitLen)
             }
-            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=traitNameId traitStart=traitStart traitLen=traitLen traitArgs=boundArgs traitAssocNames=boundAssocNames traitAssocValues=boundAssocValues />)
+            mut val predicates: Array[TraitAssocPredicate] = []
+            mut val pi: U64 = 0U64
+            while pi < boundAssocNames.count() && pi < boundAssocValues.count() {
+                predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=traitUseStart />)
+                pi += 1U64
+            }
+            val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> assocPredicates=predicates />
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=traitNameId traitStart=traitStart traitLen=traitLen traitArgs=boundArgs traitAssocNames=boundAssocNames traitAssocValues=boundAssocValues constraint=constraint />)
             i += 1
         }
     }

@@ -689,6 +689,34 @@ export struct MethodAlias {
     pub val realId: U64 = 0
 }
 
+// The semantic input of every trait query. `owner` is the resolved trait
+// declaration offset, never an interned spelling; `positionalArgs` are the
+// instance inputs. Associated outputs deliberately do not belong here: they
+// constrain the witness selected by this key.
+export struct TraitInstanceKey {
+    pub val owner: U64
+    pub val positionalArgs: Array[U64]
+}
+pub impl TraitInstanceKey { factory }
+
+// One associated-output predicate on a trait constraint. `span` is retained
+// solely for diagnostics and must never participate in semantic equality,
+// hashing, or a query cache key.
+export struct TraitAssocPredicate {
+    pub val member: U64
+    pub val value: U64
+    pub val span: U64 = 0U64
+}
+pub impl TraitAssocPredicate { factory }
+
+// `where T: P[Item=X]` / `any P[Item=X]`: select one witness by `key`, then
+// verify these output predicates against that selected witness.
+export struct TraitConstraint {
+    pub val key: TraitInstanceKey
+    pub val assocPredicates: Array[TraitAssocPredicate]
+}
+pub impl TraitConstraint { factory }
+
 // A trait bound `where T: Trait[Args]` on a function (spec/08). `fnIdx` indexes
 // c.arena.funcs; (paramStart,paramLen) names the bounded type parameter; (traitStart,
 // traitLen,traitArgs) are the complete required trait key. `where T: A + B` and
@@ -715,6 +743,10 @@ export struct FuncBound {
     // by the positional trait instance key; they are never positional inputs.
     pub val traitAssocNames: Array[U64] = []
     pub val traitAssocValues: Array[U64] = []
+    // The canonical semantic constraint. The preceding fields are a temporary
+    // source/provenance bridge for legacy readers and are derived from this
+    // value at lowering; semantic queries must migrate to this field.
+    pub val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> assocPredicates=[] />
 }
 
 // A concrete instantiation of a generic free function (`fn f[T](x: T)` called
@@ -1037,34 +1069,6 @@ export struct UnifyBind {
     pub val refSide: U64
 }
 pub impl UnifyBind { factory }
-
-// The semantic input of every trait query.  `owner` is the resolved trait
-// declaration offset, never an interned spelling; `positionalArgs` are the
-// instance inputs. Associated outputs deliberately do not belong here: they
-// constrain the witness selected by this key.
-export struct TraitInstanceKey {
-    pub val owner: U64
-    pub val positionalArgs: Array[U64]
-}
-pub impl TraitInstanceKey { factory }
-
-// One associated-output predicate on a trait constraint. `span` is retained
-// solely for diagnostics and must never participate in semantic equality,
-// hashing, or a query cache key.
-export struct TraitAssocPredicate {
-    pub val member: U64
-    pub val value: U64
-    pub val span: U64 = 0U64
-}
-pub impl TraitAssocPredicate { factory }
-
-// `where T: P[Item=X]` / `any P[Item=X]`: select one witness by `key`, then
-// verify these output predicates against that selected witness.
-export struct TraitConstraint {
-    pub val key: TraitInstanceKey
-    pub val assocPredicates: Array[TraitAssocPredicate]
-}
-pub impl TraitConstraint { factory }
 
 // A declaration-time trait member selected from static evidence.  It is kept
 // separate from the eventual CallResolution because generic template checking
