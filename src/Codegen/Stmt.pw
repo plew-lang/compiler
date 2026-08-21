@@ -11,7 +11,7 @@ pub impl Comp {
             Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
             Expr.Deref(base: _) => { return true }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.isPlaceExpr(id: operand) }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.isPlaceExpr(id: recv) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.isPlaceExpr(id: recv) }
             _ => { return false }
         }
     }

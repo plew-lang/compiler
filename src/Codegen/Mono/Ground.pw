@@ -97,14 +97,14 @@ pub impl Comp {
     // This is the only construction path used by term substitution: projection
     // trait arguments are children just like nominal arguments.
     inout fn rebuildTypeTerm(t: TypeRef, args: Array[U64], assocTraitArgs: Array[U64]) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=args viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // The legacy arena represents a projection receiver through the same head
     // and arguments as the projection itself. Expose it as an explicit term so
     // all structural operations can recurse into it.
     inout fn typeTermProjectionReceiver(t: TypeRef) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
     }
 
     // Apply exactly one concrete witness's impl-binder substitution. Query
@@ -141,7 +141,7 @@ pub impl Comp {
             if groundedReceiver != receiver {
                 if groundedReceiver >= self.arena.types.count() { return ref }
                 val base: TypeRef = self.arena.types[groundedReceiver]
-                return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen args=base.args viewExtId=base.viewExtId viewIds=base.viewIds isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+                return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen args=base.args viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
             }
         }
         // The legacy arena stores an anonymous record's component terms in its
@@ -401,7 +401,7 @@ pub impl Comp {
             // rebuild with the identity facets preserved: the view (`P#Ext`) and the
             // existential (`any P`) are part of type identity — grounding the args
             // must not strip them.
-            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
         }
         return ref
     }

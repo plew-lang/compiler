@@ -171,7 +171,7 @@ pub impl Comp {
                 }
                 return false
             }
-            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                 if self.exprMentionsAny(exprId: recv, forbidden: forbidden) {
                     return true
                 }
@@ -184,7 +184,7 @@ pub impl Comp {
                 }
                 return false
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+            Expr.ExtView(val recv, source: _, strip: _) => {
                 return self.exprMentionsAny(exprId: recv, forbidden: forbidden)
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
@@ -282,11 +282,11 @@ pub impl Comp {
                 if self.exprContainsAwait(exprId: recv) { return true }
                 return self.argsContainAwait(args: args)
             }
-            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                 if self.exprContainsAwait(exprId: recv) { return true }
                 return self.argsContainAwait(args: args)
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.exprContainsAwait(exprId: recv) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.exprContainsAwait(exprId: recv) }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.exprContainsAwait(exprId: operand) }
             Expr.MatchExpr(val scrut, val arms) => {
                 if self.exprContainsAwait(exprId: scrut) { return true }

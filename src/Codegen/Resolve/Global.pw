@@ -269,6 +269,21 @@ pub impl Comp {
         return self.internBytes(s: text)
     }
 
+    // Lower an authored selector once.  `traitOwner` is an immutable
+    // declaration identity, not a spelling to be resolved again by Verify,
+    // Mono, or LLVM.  An extension bundle is receiver-dependent, so it keeps
+    // its canonical surface key with traitOwner=0 until the common view query
+    // decides whether that bundle applies.
+    inout fn lowerViewSource(siteOffset: U64, text: String) -> ResolvedViewSource {
+        val written: Bind = self.internBytes(s: text)
+        val owner: U64 = self.traitOwnerForSelector(siteOffset: siteOffset, text: text)
+        if owner != 0U64 {
+            val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
+            return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitOwner=owner />
+        }
+        return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=written.nameId />
+    }
+
     // If `recv` is a bare identifier naming a type (not a local value), return that
     // type's name span as an assoc-fn receiver; else signal "not an assoc call" by
     // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.
@@ -277,7 +292,7 @@ pub impl Comp {
             // A type qualifier may carry the same static view set as a value
             // (`Sample#Extra.value()`).  The caller obtains the source set
             // separately; this helper owns only the lexical type head.
-            Expr.ExtView(recv: val base, srcStart: _, srcLen: _, strip: _) => {
+            Expr.ExtView(recv: val base, source: _, strip: _) => {
                 return self.assocRecvName(recv: base)
             }
             Expr.Ident(val start, val len) => {

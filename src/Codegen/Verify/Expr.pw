@@ -16,7 +16,7 @@ pub impl Comp {
             Expr.Arrow(base: _, nameStart: _, nameLen: _) => { return true }
             Expr.Deref(base: _) => { return true }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.moveOperandIsAggregatePartial(id: operand) }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.moveOperandIsAggregatePartial(id: recv) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.moveOperandIsAggregatePartial(id: recv) }
             _ => { return false }
         }
     }
@@ -120,69 +120,38 @@ pub impl Comp {
                 self.recordResolvedMethodCallee(id: id, callee: mf)
                 self.checkResolvedMethodArgs(mf: mf, args: args)
             }
-            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+            Expr.ExtMethod(val recv, source: val sourceSelector, val nameStart, val nameLen, val args) => {
+                val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
+                val srcStart: U64 = sourceSpan.start
+                val srcLen: U64 = sourceSpan.len
                 val assoc: Bind = self.assocRecvName(recv: recv)
                 if assoc.nameLen != 0U64 {
                     val assocRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
-                    val source: ViewSource = self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: intern(c: inout self, start: srcStart, len: srcLen), sourceOwner: srcStart)
+                    val source: ViewSource = self.resolveViewSourceKey(recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: assocRef, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner)
                     if source.kind == 0U64 {
-                        self.errorAt(offset: srcStart, msg: "cannot apply this view to the associated-call type qualifier")
+                        self.errorAt(offset: sourceSelector.writtenStart, msg: "cannot apply this view to the associated-call type qualifier")
                     }
-                    val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
                     self.recordResolvedMethodCallee(id: id, callee: mf)
                     self.checkResolvedMethodArgs(mf: mf, args: args)
                     self.verifyArgs(args: args)
                     return
                 }
-                self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: false)
+                self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: false)
                 val rt: TypeInfo = self.typeOf(id: recv)
-                val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                val mf: U64 = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, sourceOwner: sourceSelector.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
                 if mf < self.arena.funcs.count() {
                     val selectedFn: Func = self.arena.funcs[mf]
                     if self.methodRecvIsTrait(f: selectedFn) {
-                        // This is an instance query, not a receiver-name
-                        // query.  In particular `B[Element]` on the selected
-                        // callable must be checked against the full `S:B[I64]`
-                        // witness and active view source; collapsing to S/B
-                        // head ids loses the edge substitution and rejects a
-                        // valid parameterized extension path.
                         val recvRef: U64 = self.inferType(id: recv)
-                        if self.traceCodegen {
-                            eprint(text: "[trace-codegen] extension selected func=")
-                            eprint(text: digitStrU(d: mf))
-                            eprint(text: " origin=")
-                            eprint(text: digitStrU(d: selectedFn.originConformIdx))
-                            eprint(text: " provided=")
-                            if selectedFn.isProvided { eprint(text: "1") } else { eprint(text: "0") }
-                            eprint(text: " recv=")
-                            eprint(text: digitStrU(d: recvRef))
-                            eprint(text: "\n")
-                        }
-                        mut val applies: Bool = false
-                        if selectedFn.originConformIdx != 0U64 {
-                            val ci: U64 = selectedFn.originConformIdx - 1U64
-                            if ci < self.decls.conforms.count() {
-                                val origin: Conform = self.decls.conforms[ci]
-                                val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: recvRef, traitId: origin.traitId, traitOwner: origin.traitStart, traitArgs: origin.traitArgs)
-                                if self.traceCodegen {
-                                    eprint(text: "[trace-codegen] extension proof origin=")
-                                    eprint(text: digitStrU(d: ci))
-                                    eprint(text: " recv=")
-                                    eprint(text: digitStrU(d: recvRef))
-                                    eprint(text: " target=")
-                                    eprint(text: digitStrU(d: origin.traitId))
-                                    eprint(text: " result=")
-                                }
-                                match proof {
-                                    StaticConformanceProof.Missing => { if self.traceCodegen { eprint(text: "missing\n") } }
-                                    _ => { applies = true  if self.traceCodegen { eprint(text: "found\n") } }
-                                }
-                            }
-                        } else {
-                            applies = self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: selectedFn.recvTraitArgs)
-                        }
-                        if recvRef != 0U64 && !applies {
-                            self.errorAt(offset: srcStart, msg: "extension does not apply to this trait instance")
+                        // Candidate selection and applicability validation use
+                        // the same normalized receiver view.  Do not rebuild a
+                        // proof from a provided copy's origin here: that loses
+                        // the selected trait owner/source-set and can turn an
+                        // already-resolved call into a false ambiguity or a
+                        // false nonconformance.
+                        if recvRef != 0U64 && !(self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: selectedFn.recvTraitArgs)) {
+                            self.errorAt(offset: sourceSelector.writtenStart, msg: "extension does not apply to this trait instance")
                         }
                     }
                 }
@@ -194,7 +163,7 @@ pub impl Comp {
                 self.verifyExpr(id: recv)
                 self.verifyArgs(args: args)
             }
-            Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+            Expr.ExtView(val recv, source: val sourceSelector, val strip) => {
                 // When this node is the receiver of `Type#View.member()`, the
                 // parent Method verifies the type qualifier and its view
                 // source.  Descending here would turn the type name into an
@@ -203,10 +172,11 @@ pub impl Comp {
                 if self.assocRecvName(recv: id).nameLen != 0U64 {
                     return
                 }
-                self.checkViewValid(recv: recv, srcStart: srcStart, srcLen: srcLen, strip: strip)
+                val sourceSpan: InternedSpan = self.interner.entries[sourceSelector.surfaceId - 1U64]
+                self.checkResolvedViewValid(recv: recv, source: sourceSelector, strip: strip)
                 if !(self.exprFeedsAnotherView(id: id)) {
                     val finalType: TypeInfo = self.typeOf(id: id)
-                    self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: finalType.ref), offset: srcStart)
+                    self.checkTraitSubjectViewCycles(viewIds: self.typeRefViewIds(ref: finalType.ref), offset: sourceSelector.writtenStart)
                 }
                 self.verifyExpr(id: recv)
             }

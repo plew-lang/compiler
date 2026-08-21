@@ -153,26 +153,21 @@ pub impl Comp {
             // Synthetic TypeRefs and type-parameter heads have no authored
             // annotation site. Every user-written `Type#Name` does.
             if t.siteOffset != 0U64 {
-                self.checkTraitSubjectViewCycles(viewIds: t.viewIds, offset: t.siteOffset)
+                val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: i)
+                self.checkTraitSubjectViewCycles(viewIds: self.viewSourceIds(sources: sources), offset: t.siteOffset)
                 mut val selectedCount: U64 = 0U64
                 mut val vi: U64 = 0U64
-                while vi < t.viewIds.count() {
-                    val viewId: U64 = t.viewIds[vi]
-                    if viewId != 0U64 && viewId <= self.interner.entries.count() {
-                        val entry: InternedSpan = self.interner.entries[viewId - 1U64]
-                        self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: entry.start, srcLen: entry.len, offset: t.siteOffset, allowMonomorphicFallback: false)
-                        val source: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: viewId)
+                while vi < sources.count() {
+                    val sourceSelector: ResolvedViewSource = sources[vi]
+                    if sourceSelector.surfaceId != 0U64 && sourceSelector.surfaceId <= self.interner.entries.count() {
+                        self.checkResolvedTypeViewSourceValid(typeRef: i, source: sourceSelector, offset: t.siteOffset)
+                        val source: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: i, sourceId: sourceSelector.surfaceId, sourceOwner: sourceSelector.traitOwner)
                         if source.kind == 2U64 { selectedCount += 1U64 }
                     }
                     vi += 1U64
                 }
                 if selectedCount > 1U64 {
                     self.errorAt(offset: t.siteOffset, msg: "a type view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
-                }
-                // Synthetic refs from older construction paths carry only viewExtId.
-                if t.viewIds.count() == 0U64 && t.viewExtId != 0U64 && t.viewExtId <= self.interner.entries.count() {
-                    val entry: InternedSpan = self.interner.entries[t.viewExtId - 1U64]
-                    self.checkViewSourceValid(typeStart: t.nameStart, typeLen: t.nameLen, typeRef: i, srcStart: entry.start, srcLen: entry.len, offset: t.siteOffset, allowMonomorphicFallback: false)
                 }
             }
             i += 1U64
@@ -202,6 +197,60 @@ pub impl Comp {
         }
     }
 
+    // Value selectors already carry their lexical trait declaration owner.
+    // Do not send them through the legacy spelling-based validation above:
+    // its canonicalTraitOwner lookup has no re-export provenance and can
+    // select a same-spelled trait from another loaded module.
+    inout fn checkResolvedViewValid(recv: U64, source: ResolvedViewSource, strip: Bool) {
+        if strip { return }
+        val rt: TypeInfo = self.exprType(id: recv)
+        if rt.nameLen == 0U64 { return }
+        val selected: ViewSource = self.resolveViewSourceKey(recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
+        if selected.kind != 0U64 {
+            // `#Trait` is a singleton selector in the normalized view state.
+            // Compare semantic owners carried by both authored selectors; a
+            // spelling-only reconstruction here would again make imports part
+            // of the later resolver's meaning.
+            if selected.kind == 2U64 {
+                val active: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref)
+                mut val i: U64 = 0U64
+                while i < active.count() {
+                    if active[i].kind == 2U64 && !(self.sameViewSource(a: active[i], b: selected)) {
+                        self.errorAt(offset: source.writtenStart, msg: "a view may select at most one trait source; extension views compose but trait selection is singular (spec/09)")
+                    }
+                    i += 1U64
+                }
+            }
+            return
+        }
+        if source.traitOwner != 0U64 {
+            self.errorAt(offset: source.writtenStart, msg: "cannot view this value through that trait (`value#P`): its type does not conform to the trait — a trait view only narrows an existing conformance, it never confers one (spec/09)")
+        }
+        val entry: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
+        if self.isExtName(start: entry.start, len: entry.len) {
+            self.errorAt(offset: source.writtenStart, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)")
+        }
+        self.errorAt(offset: source.writtenStart, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+    }
+
+    // Type terms carry the same semantic selector child as value views. A
+    // trait selector is identified by declaration owner, never by its
+    // content-interned spelling.
+    inout fn checkResolvedTypeViewSourceValid(typeRef: U64, source: ResolvedViewSource, offset: U64) {
+        if typeRef == 0U64 || typeRef >= self.arena.types.count() { return }
+        val t: TypeRef = self.arena.types[typeRef]
+        val selected: ViewSource = self.resolveViewSourceKey(recvStart: t.nameStart, recvLen: t.nameLen, recvRef: typeRef, sourceId: source.surfaceId, sourceOwner: source.traitOwner)
+        if selected.kind != 0U64 { return }
+        if source.traitOwner != 0U64 {
+            self.errorAt(offset: offset, msg: "cannot view this type through that trait: its instance does not conform to the selected trait (spec/09)")
+        }
+        val entry: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
+        if self.isExtName(start: entry.start, len: entry.len) {
+            self.errorAt(offset: offset, msg: "extension does not apply to this trait instance or concrete receiver (spec/09)")
+        }
+        self.errorAt(offset: offset, msg: "unknown view `#X`: the name is neither an extension that applies here nor a trait this type conforms to (spec/09)")
+    }
+
     // A chain of `Expr.ExtView` nodes represents one normalized view, not a
     // succession of observable intermediate source-sets.  Its outermost node
     // is the only point that may run structural source-set validation.
@@ -209,8 +258,8 @@ pub impl Comp {
         mut val idx: U64 = 0U64
         while idx < self.arena.exprs.count() {
             match self.arena.exprs[idx] {
-                Expr.ExtView(recv: val recv, srcStart: _, srcLen: _, strip: _) => { if recv == id { return true } }
-                Expr.ExtMethod(recv: val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => { if recv == id { return true } }
+                Expr.ExtView(recv: val recv, source: _, strip: _) => { if recv == id { return true } }
+                Expr.ExtMethod(recv: val recv, source: _, nameStart: _, nameLen: _, args: _) => { if recv == id { return true } }
                 _ => {}
             }
             idx += 1U64

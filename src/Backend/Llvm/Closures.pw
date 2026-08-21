@@ -219,12 +219,12 @@ pub impl LlvmCtx {
                 mut val i: U64 = 0
                 while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
             }
-            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                 self.scanExprClosures(c: inout c, id: recv)
                 mut val i: U64 = 0
                 while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+            Expr.ExtView(val recv, source: _, strip: _) => {
                 self.scanExprClosures(c: inout c, id: recv)
             }
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }

@@ -141,7 +141,7 @@ pub impl LlvmCtx {
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
                 return self.typeViewIds(c: inout c, ref: c.bodyCalleeResultRef(exprId: id))
             }
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
                 return self.typeViewIds(c: inout c, ref: c.bodyCalleeResultRef(exprId: id))
             }
             _ => {}
@@ -150,11 +150,11 @@ pub impl LlvmCtx {
         mut val go: Bool = true
         while go {
             match c.arena.exprs[cur] {
-                Expr.ExtView(recv: val r, srcStart: val ss, srcLen: val sl, strip: val strp) => {
+                Expr.ExtView(recv: val r, source: val source, strip: val strp) => {
                     if strp {
                         go = false
                     } else {
-                        out.append(intern(c: inout c, start: ss, len: sl))
+                        out.append(source.surfaceId)
                         cur = r
                     }
                 }

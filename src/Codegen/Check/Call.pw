@@ -28,7 +28,7 @@ pub impl Comp {
         match self.arena.exprs[scrut] {
             Expr.Move(operand: _, val isBorrow) => { return !(isBorrow) }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.matchScrutIsMove(scrut: operand) }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.matchScrutIsMove(scrut: recv) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.matchScrutIsMove(scrut: recv) }
             _ => { return false }
         }
     }
@@ -37,7 +37,7 @@ pub impl Comp {
         match self.arena.exprs[scrut] {
             Expr.Move(operand: _, val isBorrow) => { return isBorrow }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return self.matchScrutIsBorrow(scrut: operand) }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return self.matchScrutIsBorrow(scrut: recv) }
+            Expr.ExtView(val recv, source: _, strip: _) => { return self.matchScrutIsBorrow(scrut: recv) }
             _ => { return false }
         }
     }

@@ -183,7 +183,7 @@ pub impl Comp {
                     }
                 }
             }
-            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                 self.recordExpr(exprId: recv)
                 mut val i: U64 = 0
                 while i < args.count() {
@@ -191,7 +191,7 @@ pub impl Comp {
                     i += 1
                 }
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { self.recordExpr(exprId: recv) }
+            Expr.ExtView(val recv, source: _, strip: _) => { self.recordExpr(exprId: recv) }
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.recordExpr(exprId: base) }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0

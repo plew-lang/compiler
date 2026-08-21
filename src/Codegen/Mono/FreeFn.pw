@@ -136,24 +136,20 @@ pub impl Comp {
             return 0
         }
         match self.arena.exprs[argExpr] {
-            Expr.ExtView(recv: _, val srcStart, val srcLen, val strip) => {
+            Expr.ExtView(recv: _, val source, val strip) => {
                 if strip {
                     return baseRef
                 }
-                val vid: U64 = intern(c: inout self, start: srcStart, len: srcLen)
                 val bt: TypeRef = self.arena.types[baseRef]
-                mut val ids: Array[U64] = bt.viewIds
-                if ids.count() == 0U64 && bt.viewExtId != 0U64 { ids.append(bt.viewExtId) }
+                mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: baseRef)
                 mut val present: Bool = false
                 mut val i: U64 = 0U64
-                while i < ids.count() {
-                    if ids[i] == vid { present = true }
+                while i < sources.count() {
+                    if self.semanticViewSourceEq(a: sources[i], b: source) { present = true }
                     i += 1U64
                 }
-                if !present { ids.append(vid) }
-                mut val legacy: U64 = 0U64
-                if ids.count() == 1U64 { legacy = ids[0] }
-                return self.pushType(t: <TypeRef nameStart=bt.nameStart nameLen=bt.nameLen args=bt.args viewExtId=legacy viewIds=ids />)
+                if !present { sources.append(source) }
+                return self.typeRefWithViewSources(ref: baseRef, sources: sources)
             }
             _ => {
                 return baseRef

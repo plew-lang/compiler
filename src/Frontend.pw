@@ -16,9 +16,9 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, BodyCallee, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -186,7 +186,7 @@ pub impl Comp {
     inout fn pushType(t: TypeRef) -> U64 {
         val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
         return id
     }
 
@@ -196,10 +196,85 @@ pub impl Comp {
     // is the flat-TypeRef migration bridge for the eventual TypeTerm `view`
     // node, and keeps the full copy in one place so Mono and LLVM cannot each
     // accidentally turn `S#E` into the trait named by E's conformance subject.
-    inout fn typeRefWithViews(ref: U64, viewExtId: U64, viewIds: Array[U64]) -> U64 {
+    inout fn semanticViewSourceEq(a: ResolvedViewSource, b: ResolvedViewSource) -> Bool {
+        if a.traitOwner != 0U64 || b.traitOwner != 0U64 {
+            return a.traitOwner != 0U64 && a.traitOwner == b.traitOwner
+        }
+        return a.surfaceId == b.surfaceId
+    }
+
+    inout fn typeRefViewSources(ref: U64) -> Array[ResolvedViewSource] {
+        mut val out: Array[ResolvedViewSource] = []
+        if ref == 0U64 || ref >= self.arena.types.count() { return out }
+        val t: TypeRef = self.arena.types[ref]
+        out = t.viewSources
+        if out.count() != 0U64 { return out }
+        mut val ids: Array[U64] = t.viewIds
+        if ids.count() == 0U64 && t.viewExtId != 0U64 { ids.append(t.viewExtId) }
+        mut val i: U64 = 0U64
+        while i < ids.count() {
+            out.append(<ResolvedViewSource surfaceId=ids[i] />)
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn sameSemanticViewSourceSet(a: Array[ResolvedViewSource], b: Array[ResolvedViewSource]) -> Bool {
+        if a.count() != b.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.count() {
+            mut val found: Bool = false
+            mut val j: U64 = 0U64
+            while j < b.count() {
+                if self.semanticViewSourceEq(a: a[i], b: b[j]) { found = true }
+                j += 1U64
+            }
+            if !found { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn viewSourceIds(sources: Array[ResolvedViewSource]) -> Array[U64] {
+        mut val ids: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < sources.count() {
+            mut val present: Bool = false
+            mut val j: U64 = 0U64
+            while j < ids.count() {
+                if ids[j] == sources[i].surfaceId { present = true }
+                j += 1U64
+            }
+            if !present && sources[i].surfaceId != 0U64 { ids.append(sources[i].surfaceId) }
+            i += 1U64
+        }
+        return ids
+    }
+
+    inout fn typeRefWithViewSources(ref: U64, sources: Array[ResolvedViewSource]) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val base: TypeRef = self.arena.types[ref]
-        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args viewExtId=viewExtId viewIds=viewIds isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)
+        val ids: Array[U64] = self.viewSourceIds(sources: sources)
+        mut val mirror: U64 = 0U64
+        if ids.count() == 1U64 { mirror = ids[0] }
+        // This is a derived type term for an expression/generic substitution,
+        // not a second authored type annotation.  Structural source-set checks
+        // run at the authored syntax node (or the outermost value-view), so an
+        // intermediate `T#E#F` erased later by `#!F` must not be rechecked.
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args viewExtId=mirror viewIds=ids viewSources=sources isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=0U64 />)
+    }
+
+    inout fn typeRefWithViews(ref: U64, viewExtId: U64, viewIds: Array[U64]) -> U64 {
+        mut val sources: Array[ResolvedViewSource] = []
+        mut val i: U64 = 0U64
+        while i < viewIds.count() {
+            sources.append(<ResolvedViewSource surfaceId=viewIds[i] />)
+            i += 1U64
+        }
+        if sources.count() == 0U64 && viewExtId != 0U64 {
+            sources.append(<ResolvedViewSource surfaceId=viewExtId />)
+        }
+        return self.typeRefWithViewSources(ref: ref, sources: sources)
     }
 
     // Apply source-set additions to an existing term.  `#` is additive and
@@ -207,29 +282,51 @@ pub impl Comp {
     // `T#E` must retain both the actual argument's views and E (rather than
     // returning the raw argument and silently losing E).
     inout fn typeRefWithAddedViews(ref: U64, additions: Array[U64]) -> U64 {
-        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
-        val base: TypeRef = self.arena.types[ref]
-        mut val views: Array[U64] = []
+        mut val sources: Array[ResolvedViewSource] = []
         mut val i: U64 = 0U64
-        while i < base.viewIds.count() {
-            views.append(base.viewIds[i])
+        while i < additions.count() {
+            sources.append(<ResolvedViewSource surfaceId=additions[i] />)
             i += 1U64
         }
-        if views.count() == 0U64 && base.viewExtId != 0U64 { views.append(base.viewExtId) }
-        i = 0U64
+        return self.typeRefWithAddedViewSources(ref: ref, additions: sources)
+    }
+
+    // Semantic callers must append the full selector, not only its spelling:
+    // two imported traits can spell alike while selecting different owners.
+    inout fn typeRefWithAddedViewSources(ref: U64, additions: Array[ResolvedViewSource]) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        mut val views: Array[ResolvedViewSource] = self.typeRefViewSources(ref: ref)
+        mut val i: U64 = 0U64
         while i < additions.count() {
             mut val present: Bool = false
             mut val j: U64 = 0U64
             while j < views.count() {
-                if views[j] == additions[i] { present = true }
+                if self.semanticViewSourceEq(a: views[j], b: additions[i]) { present = true }
                 j += 1U64
             }
             if !present { views.append(additions[i]) }
             i += 1U64
         }
-        mut val mirror: U64 = 0U64
-        if views.count() == 1U64 { mirror = views[0] }
-        return self.typeRefWithViews(ref: ref, viewExtId: mirror, viewIds: views)
+        return self.typeRefWithViewSources(ref: ref, sources: views)
+    }
+
+    // Directional semantic matching for a positional type-term list.  The
+    // left-hand declaration pattern may bind only its own lexical binders;
+    // the actual terms on the right remain rigid.  This is the common law for
+    // `impl[Element] B[Element]`, extension receiver applicability, and
+    // trait-subject proof edges -- alpha equality would incorrectly reject
+    // the ordinary instance B[I64].
+    inout fn typeRefListPatternMatches(pattern: Array[U64], patternParams: Array[Bind], actual: Array[U64]) -> Bool {
+        if pattern.count() != actual.count() { return false }
+        mut val binds: Array[UnifyBind] = []
+        mut val i: U64 = 0U64
+        while i < pattern.count() {
+            if !(self.unifyPatterns(a: pattern[i], aSide: 0U64, b: actual[i], bSide: 1U64, aParams: patternParams, bParams: [], binds: inout binds)) {
+                return false
+            }
+            i += 1U64
+        }
+        return true
     }
 
     inout fn recordImportOrigins(imp: ImportAst, targetMod: U64, reExport: Bool) {

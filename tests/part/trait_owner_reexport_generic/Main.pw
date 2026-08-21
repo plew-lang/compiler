@@ -1,0 +1,20 @@
+// The selected re-export owner must survive both a generic bound and an
+// associated-type projection in the generic signature.
+import ./B with { Convert }
+import ./C
+import @Std/Io with { print }
+
+struct Parser {}
+pub impl Parser { factory }
+pub impl Parser as Convert[String] {
+    type Output = I64
+    fn source() -> I64 { return 10I64 }
+}
+
+fn keep[T](value: T) -> I64 where T: Convert[String] {
+    return value#Convert.source()
+}
+
+fn main() {
+    print(keep(value: <Parser />))
+}

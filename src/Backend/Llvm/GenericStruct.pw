@@ -310,7 +310,7 @@ pub impl LlvmCtx {
                 val result: U64 = c.bodyCalleeResultRef(exprId: id)
                 if result != 0U64 { return result }
             }
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
                 val result: U64 = c.bodyCalleeResultRef(exprId: id)
                 if result != 0U64 { return result }
             }

@@ -600,16 +600,26 @@ pub impl Comp {
         if self.extAppliesToType(extStart: entry.start, extLen: entry.len, typeStart: recvStart, typeLen: recvLen, typeRef: recvRef) {
             found = <ViewSource kind=1U64 id=sourceId owner=sourceId arity=0U64 />
         }
-        mut val traitOwner: U64 = sourceOwner
-        if self.canonicalTraitOwner(start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) == 0U64 {
-            traitOwner = self.canonicalTraitOwner(start: entry.start, len: entry.len)
+        // A trait selector is resolved while lowering at its lexical use site.
+        // Never reconstruct an absent owner from its spelling here: doing so lets
+        // `#P` select an unimported, same-named trait from another module.
+        // Extension bundles intentionally remain name-keyed above.
+        val traitOwner: U64 = sourceOwner
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] view-source trait query\n")
         }
         val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val i: U64 = 0U64
         while i < self.decls.conforms.count() {
             val cf: Conform = self.decls.conforms[i]
             if traitOwner != 0U64 && cf.extId == 0U64 && cf.typeId == recvId && cf.traitStart == traitOwner {
+                if self.traceCodegen {
+                    eprint(text: "[trace-codegen] view-source matching conformance key\n")
+                }
                 if self.conformanceSubjectMatches(cf: cf, typeRef: recvRef) {
+                    if self.traceCodegen {
+                        eprint(text: "[trace-codegen] view-source subject matches\n")
+                    }
                     val key: ViewSource = <ViewSource kind=2U64 id=sourceId owner=cf.traitStart arity=cf.traitArgs.count() />
                     if found.kind == 0U64 {
                         found = key
@@ -639,20 +649,42 @@ pub impl Comp {
     // own trailing source.
     inout fn collectViewSources(recv: U64, recvStart: U64, recvLen: U64, recvRef: U64, finalSourceId: U64 = 0U64, finalSourceOwner: U64 = 0U64) -> Array[ViewSource] {
         mut val sources: Array[ViewSource] = []
+        // A TypeRef caches the source selectors already written on this
+        // expression. Keep those AST selectors distinct from inherited local
+        // type views, so the cache never re-resolves one written selector with
+        // weaker provenance and turns it into another same-named owner.
+        mut val writtenIds: Array[U64] = []
         if finalSourceId != 0U64 {
             self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: finalSourceId, sourceOwner: finalSourceOwner))
+            writtenIds.append(finalSourceId)
         }
         mut val cur: U64 = recv
         mut val go: Bool = true
         mut val stripped: Bool = false
         while go {
             match self.arena.exprs[cur] {
-                Expr.ExtView(recv: val base, srcStart: val vs, srcLen: val vl, strip: val strip) => {
+                Expr.ExtView(recv: val base, source: val selector, strip: val strip) => {
                     if strip {
                         stripped = true
                         go = false
                     } else {
-                        self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: intern(c: inout self, start: vs, len: vl)))
+                        val selectorId: U64 = selector.surfaceId
+                        // The outer `#Source` of an ExtMethod is passed as
+                        // finalSourceId and is also this AST node. Normalize
+                        // that selector exactly once with its authored
+                        // provenance: resolving it again from only its
+                        // spelling can select a different same-named trait
+                        // owner and manufacture an ambiguity.
+                        if selectorId != finalSourceId {
+                            self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: selectorId, sourceOwner: selector.traitOwner))
+                        }
+                        mut val written: Bool = false
+                        mut val wi: U64 = 0U64
+                        while wi < writtenIds.count() {
+                            if writtenIds[wi] == selectorId { written = true }
+                            wi += 1U64
+                        }
+                        if !written { writtenIds.append(selectorId) }
                         cur = base
                     }
                 }
@@ -674,15 +706,19 @@ pub impl Comp {
             }
         }
         if !stripped && recvRef != 0U64 && recvRef < self.arena.types.count() {
-            val staticTy: TypeRef = self.arena.types[recvRef]
+            val staticSources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: recvRef)
             mut val si: U64 = 0U64
-            while si < staticTy.viewIds.count() {
-                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: staticTy.viewIds[si]))
+            while si < staticSources.count() {
+                mut val written: Bool = false
+                mut val wi: U64 = 0U64
+                while wi < writtenIds.count() {
+                    if writtenIds[wi] == staticSources[si].surfaceId { written = true }
+                    wi += 1U64
+                }
+                if !written {
+                    self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: staticSources[si].surfaceId, sourceOwner: staticSources[si].traitOwner))
+                }
                 si += 1U64
-            }
-            // Compatibility for synthetic refs that predate viewIds.
-            if staticTy.viewIds.count() == 0U64 && staticTy.viewExtId != 0U64 {
-                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: staticTy.viewExtId))
             }
         }
         return sources
@@ -811,14 +847,16 @@ pub impl Comp {
     // additive: active extension candidates shadow the base surface, selected
     // traits narrow those candidates, then the bare surface is the fallback.
     // Type recovery, verifier, and backend consume this exact final Func.
-    inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, sourceOwner: U64 = 0U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
         // `Type#Source.member()` is the associated counterpart of a value
         // view.  It has no value TypeInfo, so select its source from the type
         // qualifier before entering the ordinary receiver path.
         val assoc: Bind = self.assocRecvName(recv: recv)
         if assoc.nameLen != 0U64 {
             val recvRef: U64 = self.simpleTypeRef(nameStart: assoc.nameStart, nameLen: assoc.nameLen)
-            val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: srcStart)
+            mut val finalOwner: U64 = srcStart
+            if sourceOwner != 0U64 { finalOwner = sourceOwner }
+            val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: assoc.nameStart, recvLen: assoc.nameLen, recvRef: recvRef, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: finalOwner)
             val selected: U64 = self.findAssocInViewSet(recvStart: assoc.nameStart, recvLen: assoc.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
             if selected < self.arena.funcs.count() { return selected }
             return self.findAssoc(recvStart: assoc.nameStart, recvLen: assoc.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
@@ -827,7 +865,9 @@ pub impl Comp {
         if !(rt.kind == 2 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.funcs.count()
         }
-        val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: srcStart)
+        mut val finalOwner: U64 = srcStart
+        if sourceOwner != 0U64 { finalOwner = sourceOwner }
+        val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: rt.ref, finalSourceId: intern(c: inout self, start: srcStart, len: srcLen), finalSourceOwner: finalOwner)
         mut val mfi: U64 = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
         if mfi >= self.arena.funcs.count() {
             mfi = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: rt.ref)
@@ -872,13 +912,12 @@ pub impl Comp {
                         val lo: Local = self.cur.locals[li]
                         if lo.nameId == localId && lo.ty != 0U64 && lo.ty < self.arena.types.count() {
                             val localTy: TypeRef = self.arena.types[lo.ty]
+                            val localSources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: lo.ty)
                             mut val vi: U64 = 0U64
-                            while vi < localTy.viewIds.count() {
-                                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: lo.ty, sourceId: localTy.viewIds[vi]))
+                            while vi < localSources.count() {
+                                val localSource: ResolvedViewSource = localSources[vi]
+                                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: lo.ty, sourceId: localSource.surfaceId, sourceOwner: localSource.traitOwner))
                                 vi += 1U64
-                            }
-                            if localTy.viewIds.count() == 0U64 && localTy.viewExtId != 0U64 {
-                                self.appendViewSource(sources: inout sources, source: self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: lo.ty, sourceId: localTy.viewExtId))
                             }
                         }
                     }

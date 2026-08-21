@@ -139,6 +139,12 @@ pub impl LlvmCtx {
         // methods); pairs 1:1 with mf.typeParams = [receiver params..., own params...].
         c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: ownArgs)
         self.curRecvInstRef = instRef
+        // Declaration and body emission must consume the same selected proof.
+        // Re-querying `Item` from just the receiver here loses the direct
+        // witness / trait-path substitution that Mono used for the final
+        // descriptor, allowing `Array[Item]` and `Array[I64]` to become
+        // distinct LLVM nominal instances for one callable.
+        val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
         // bind Self/Item to the receiver instance for a provided method, so a param/return
         // type naming `Item` resolves to the receiver's real item: a terminal returning
         // `Optional[Item]` (`first`/`reduce`) grounds its signature, and an own-param
@@ -147,7 +153,9 @@ pub impl LlvmCtx {
         val sDi: U64 = c.cur.itemRef
         // a non-generic method (B3-2: typeParams empty) needs `Self` bound to its receiver so
         // its signature (`-> Self`, a `Self` param) grounds — matching the body env above.
-        if mf.isProvided || mf.typeParams.count() == 0U64 {
+        if mf.isProvided {
+            c.setSelfItemEnvForBody(f: mf, environment: environment)
+        } else if mf.typeParams.count() == 0U64 {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
         mut val ptys: Array[LLVMTypeRef] = []
@@ -195,6 +203,7 @@ pub impl LlvmCtx {
         c.cur.typeParams = mf.typeParams
         c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot])
         self.curRecvInstRef = instRef
+        val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
         // a provided method with method-own type params (`fold[B]` on a generic receiver):
         // its body refers to the element by the associated `Item`, while the env carries
         // two same-named params (the receiver's `B` = item, the method-own `B` = accumulator)
@@ -206,10 +215,12 @@ pub impl LlvmCtx {
         // a non-generic method (B3-2: typeParams empty ⟺ a 0-type-arg receiver) needs `Self`
         // bound to its receiver too — a `-> Self` / `Self`-param inherent method resolves `Self`
         // to the receiver type, which the old pf path set via genLlvmFuncBody's didSelf.
-        if mf.isProvided || mf.typeParams.count() == 0U64 {
+        if mf.isProvided {
+            c.setSelfItemEnvForBody(f: mf, environment: environment)
+        } else if mf.typeParams.count() == 0U64 {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
-        self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot], environment: c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef))
+        self.genLlvmFuncBody(c: inout c, fi: mfi, fv: self.genMethVal[slot], environment: environment)
         c.cur.selfRef = s4
         c.cur.itemRef = si4
         c.cur.typeParams = savedP

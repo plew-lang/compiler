@@ -64,8 +64,9 @@ pub impl Comp {
                     r = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
             }
-            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
-                r = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+            Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
+                val src: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
+                r = self.resolveExtMethodFinal(recv: recv, srcStart: src.start, srcLen: src.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
             }
             _ => {}
         }

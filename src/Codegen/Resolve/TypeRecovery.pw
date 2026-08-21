@@ -41,13 +41,13 @@ pub impl Comp {
         mut val walking: Bool = true
         while walking {
             match self.arena.exprs[cur] {
-                Expr.ExtView(recv: val base, srcStart: val ss, srcLen: val sl, strip: val strip) => {
+                Expr.ExtView(recv: val base, source: val source, strip: val strip) => {
                     if strip {
                         out = []
                         keepBase = false
                         walking = false
                     } else {
-                        self.appendDistinctViewId(ids: inout out, id: intern(c: inout self, start: ss, len: sl))
+                        self.appendDistinctViewId(ids: inout out, id: source.surfaceId)
                         cur = base
                     }
                 }
@@ -303,7 +303,20 @@ pub impl Comp {
                 if expected != 0U64 && self.tyRefIsGround(ref: expected) {
                     val actual: TypeInfo = self.argResolvedTypeInfo(argExpr: args[ai].expr)
                     if actual.kind == 2I64 {
-                        if !(self.typeRefEq(a: actual.ref, b: expected)) {
+                        // Keep this discriminator congruent with argMatchesParam:
+                        // a plain named type does not necessarily retain a TypeRef
+                        // during method lookup, while generic/fn/any/view terms do
+                        // require their complete semantic identity.
+                        val expectedTerm: TypeRef = self.arena.types[expected]
+                        val actualViews: Array[U64] = self.argViewIds(argExpr: args[ai].expr, ti: actual)
+                        val expectedViews: Array[U64] = self.typeRefViewIds(ref: expected)
+                        if !(self.sameViewIdSet(a: actualViews, b: expectedViews)) {
+                            allMatch = false
+                        } else if self.refsGenericArgComparable(a: actual.ref, b: expected) || (self.isFnType(ref: actual.ref) && self.isFnType(ref: expected)) || (actual.ref != 0U64 && actual.ref < self.arena.types.count() && (self.arena.types[actual.ref].isAny || expectedTerm.isAny)) {
+                            if !(self.typeRefEq(a: actual.ref, b: expected)) {
+                                allMatch = false
+                            }
+                        } else if intern(c: inout self, start: actual.nameStart, len: actual.nameLen) != expectedTerm.nameId {
                             allMatch = false
                         }
                     } else {

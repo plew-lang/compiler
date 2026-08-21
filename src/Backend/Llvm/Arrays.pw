@@ -66,7 +66,7 @@ pub impl LlvmCtx {
                 }
                 return self.i64ty
             }
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
                 val resultRef: U64 = c.bodyCalleeResultRef(exprId: id)
                 if resultRef != 0U64 {
                     return self.llvmTypeOfRef(c: inout c, ref: resultRef)
@@ -80,7 +80,7 @@ pub impl LlvmCtx {
                 }
                 return self.i64ty
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+            Expr.ExtView(val recv, source: _, strip: _) => {
                 return self.exprLlvmType(c: inout c, id: recv)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {

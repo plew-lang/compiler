@@ -768,7 +768,7 @@ fn exprAliasesPlace(c: inout Comp, id: U64) -> Bool {
         Expr.Deref(base: _) => { return true }
         // representation no-ops: the value IS the operand's storage.
         Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { return exprAliasesPlace(c: inout c, id: operand) }
-        Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => { return exprAliasesPlace(c: inout c, id: recv) }
+        Expr.ExtView(val recv, source: _, strip: _) => { return exprAliasesPlace(c: inout c, id: recv) }
         // `borrow x` is BY DEFINITION an alias of x's storage (a non-consuming view —
         // classifying it as a temporary gave a borrowed unique arg a second owner =
         // double deinit); `move x` transfers a fresh-owned value (the source dies).

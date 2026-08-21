@@ -168,24 +168,38 @@ pub impl Comp {
         }
         mut val viewExtId: U64 = 0
         mut val viewIds: Array[U64] = []
+        mut val viewSources: Array[ResolvedViewSource] = []
         // Every authored selector enters the source-set normal form, including
         // the one-source case. `viewExtId` remains a compatibility mirror while
         // scalar consumers are migrated, but never carries the only source fact.
         if t.viewNames.count() > 0U64 {
             mut val vi: U64 = 0U64
             while vi < t.viewNames.count() {
-                val vn: Bind = self.internBytes(s: t.viewNames[vi])
-                viewIds.append(intern(c: inout self, start: vn.nameStart, len: vn.nameLen))
+                val source: ResolvedViewSource = self.lowerViewSource(siteOffset: t.span.start, text: t.viewNames[vi])
+                mut val present: Bool = false
+                mut val si: U64 = 0U64
+                while si < viewSources.count() {
+                    if self.semanticViewSourceEq(a: viewSources[si], b: source) { present = true }
+                    si += 1U64
+                }
+                if !present { viewSources.append(source) }
                 vi += 1U64
             }
         }
         if t.extView.bytes().count() > 0 {
-            val evN: Bind = self.internBytes(s: t.extView)
-            viewExtId = intern(c: inout self, start: evN.nameStart, len: evN.nameLen)
+            val source: ResolvedViewSource = self.lowerViewSource(siteOffset: t.span.start, text: t.extView)
+            mut val present: Bool = false
+            mut val si: U64 = 0U64
+            while si < viewSources.count() {
+                if self.semanticViewSourceEq(a: viewSources[si], b: source) { present = true }
+                si += 1U64
+            }
+            if !present { viewSources.append(source) }
         }
+        viewIds = self.viewSourceIds(sources: viewSources)
         // `viewExtId` is a legacy compatibility mirror.
         // A multi-selector type must never silently mean just its last spelling.
-        if viewIds.count() > 1U64 { viewExtId = 0U64 }
+        if viewIds.count() == 1U64 { viewExtId = viewIds[0U64] }
         mut val assocTraitStart: U64 = 0
         mut val assocTraitLen: U64 = 0
         mut val assocTraitId: U64 = 0
@@ -260,7 +274,7 @@ pub impl Comp {
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args viewExtId=viewExtId viewIds=viewIds isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

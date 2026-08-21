@@ -408,7 +408,7 @@ pub impl Comp {
                     return !self.arena.funcs[mi].hasRet
                 }
             }
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
                 val mi: U64 = self.resolvedCallee(id: id)
                 if mi < self.arena.funcs.count() {
                     return !self.arena.funcs[mi].hasRet

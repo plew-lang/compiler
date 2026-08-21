@@ -27,6 +27,21 @@ export struct PType {
     pub val ref: U64
 }
 
+// A source selected by an authored `#Name`.  This is a semantic child of a
+// value/type view, not a lookup side table: the written span exists only for
+// diagnostics, while traitOwner is the declaration identity chosen in the
+// lexical surface module.  A zero traitOwner is the deferred extension-bundle
+// case; surfaceId is then the bundle's canonical name key.  Later phases must
+// consume this node rather than recover an owner from its spelling again.
+export struct ResolvedViewSource {
+    pub val writtenStart: U64 = 0
+    pub val writtenLen: U64 = 0
+    pub val lexicalSurfaceModule: U64 = 0
+    pub val surfaceId: U64 = 0
+    pub val traitOwner: U64 = 0
+}
+pub impl ResolvedViewSource { factory }
+
 // A structured type reference: a head type name span plus a list of type
 // arguments (indices into Comp.arena.types). Non-generic types have an empty args
 // list. `Array[E]` is {name="Array", args=[E]}; `Optional[I32]` is
@@ -59,6 +74,11 @@ export struct TypeRef {
     // trait selector; retaining the list here makes the full source condition part
     // of type identity rather than collapsing it to the last `#Name`.
     pub val viewIds: Array[U64] = []
+    // The semantic source set of this view.  Unlike `viewIds`, this preserves
+    // a trait selector's resolved declaration owner across same-spelling
+    // imports/re-exports.  `viewIds`/`viewExtId` remain a compatibility mirror
+    // while old backend readers migrate; new semantic queries read this child.
+    pub val viewSources: Array[ResolvedViewSource] = []
     // `any P` (spec/08): this TypeRef is the existential over trait `name`, not the
     // trait used as a plain (non-value) name. The runtime value is a fat pointer
     // `{ data, vtable }`; part of type identity. nameStart/nameLen/nameId name the
@@ -252,12 +272,12 @@ export enum Expr {
     // `src` is the extension name selecting the method source; resolution finds a
     // method tagged with that extension on the receiver's type (it does not join
     // bare resolution). Distinct from Method so bare matches are unaffected.
-    ExtMethod(recv: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg])
+    ExtMethod(recv: U64, source: ResolvedViewSource, nameStart: U64, nameLen: U64, args: Array[Arg])
     // `recv#Ext` / `recv#!Ext` (spec/09): a zero-cost value re-view. Evaluates
     // `recv` unchanged. `strip=false` gives its type the `#Ext` view (viewExtId);
     // `strip=true` removes the view (`#!Ext` super form) so a following bare
     // `.method()` resolves the shadowed bare method. `src` names the extension.
-    ExtView(recv: U64, srcStart: U64, srcLen: U64, strip: Bool)
+    ExtView(recv: U64, source: ResolvedViewSource, strip: Bool)
     Cast(operand: U64, tyStart: U64, tyLen: U64, ty: U64)
     // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).

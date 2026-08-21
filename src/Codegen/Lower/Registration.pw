@@ -667,6 +667,42 @@ pub impl Comp {
     // proof into an ambiguity). Calls without a recovered TypeRef retain the
     // legacy head-name fallback.
     inout fn callableReceiverMatches(f: Func, recvId: U64, recvRef: U64) -> Bool {
+        // A trait-subject origin needs its full path proof: the copied
+        // receiver surface B is not the target trait A of `impl B as A`.
+        // Direct origins intentionally retain the established direct-witness
+        // predicate below; replacing them with a broader path search changes
+        // their body environment and can conflate independent witnesses.
+        mut val originIsTraitSubject: Bool = false
+        if f.isProvided && f.originConformIdx != 0U64 {
+            val ci: U64 = f.originConformIdx - 1U64
+            if ci < self.decls.conforms.count() {
+                val origin: Conform = self.decls.conforms[ci]
+                originIsTraitSubject = self.isTraitName(start: origin.typeStart, len: origin.typeLen)
+            }
+        }
+        if originIsTraitSubject && recvRef != 0U64 {
+            // A provided copy's `recv*` describes the surface it was copied
+            // onto (for `impl B as A`, B), not the trait that declared its
+            // requirement/provided body (A).  Its origin metadata is the
+            // only canonical target for proof selection.
+            mut val traitId: U64 = f.originTraitId
+            mut val traitOwner: U64 = f.originTraitOwner
+            mut val traitArgs: Array[U64] = []
+            if f.originConformIdx != 0U64 {
+                val ci: U64 = f.originConformIdx - 1U64
+                if ci < self.decls.conforms.count() {
+                    val origin: Conform = self.decls.conforms[ci]
+                    traitId = origin.traitId
+                    traitOwner = origin.traitStart
+                    traitArgs = origin.traitArgs
+                }
+            }
+            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: recvRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs)
+            match proof {
+                StaticConformanceProof.Missing => { return false }
+                _ => { return true }
+            }
+        }
         if f.recvId != recvId {
             if f.isProvided && self.methodRecvIsTrait(f: f) && recvRef != 0U64 {
                 return self.conformsInstance(ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: f.recvTraitArgs)

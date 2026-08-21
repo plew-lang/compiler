@@ -494,7 +494,16 @@ pub impl Comp {
                                 }
                             }
                         }
-                        return self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
+                        // A declared local always has a complete semantic type
+                        // term, including the ordinary monomorphic `S` case.
+                        // Returning only its head spelling made a later
+                        // `s#Trait` reconstruct the receiver from text and
+                        // lose both declaration identity and conformance
+                        // evidence.  Keep TypeInfo's legacy kind/name view,
+                        // but carry the exact TypeRef as the sole semantic
+                        // receiver input for view/proof/call resolution.
+                        val declared: TypeInfo = self.typeInfoOfName(start: lo.tyStart, len: lo.tyLen, isArray: lo.isArray)
+                        return <TypeInfo kind=declared.kind nameStart=declared.nameStart nameLen=declared.nameLen ref=lo.ty viewExtId=declared.viewExtId />
                     }
                 }
                 return scalarInfo()
@@ -745,47 +754,35 @@ pub impl Comp {
                 }
                 return scalarInfo()
             }
-            Expr.ExtView(val recv, val srcStart, val srcLen, val strip) => {
+            Expr.ExtView(val recv, val source, val strip) => {
                 // `recv#Ext` refines recv's TYPE with the extension view (spec/09): the
                 // view is a static facet of the type (`TypeRef.viewExtId`), steering
                 // method resolution and view-aware overload selection downstream — so the
                 // typed IR must carry it, not drop it for the dispatch site to re-derive.
                 // `recv#!Ext` (strip) removes the view (the result type is plain).
                 val bt: TypeInfo = self.exprType(id: recv)
-                mut val vid: U64 = intern(c: inout self, start: srcStart, len: srcLen)
-                if strip {
-                    vid = 0U64
-                }
                 val br: U64 = self.typedIrRefOfInfo(ti: bt)
                 if br != 0U64 {
                     val brt: TypeRef = self.arena.types[br]
-                    mut val ids: Array[U64] = brt.viewIds
-                    // Lift the legacy one-source representation into the same
-                    // source-set before extending it.  Without this, `T#E` then
-                    // `#F` would retain only F in its type while expression lookup
-                    // happened to see both nodes syntactically.
-                    if ids.count() == 0U64 && brt.viewExtId != 0U64 {
-                        ids.append(brt.viewExtId)
-                    }
+                    mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: br)
                     if strip {
-                        ids = []
+                        sources = []
                     } else {
                         mut val present: Bool = false
                         mut val ii: U64 = 0U64
-                        while ii < ids.count() {
-                            if ids[ii] == vid { present = true }
+                        while ii < sources.count() {
+                            if self.semanticViewSourceEq(a: sources[ii], b: source) { present = true }
                             ii += 1U64
                         }
-                        if !(present) { ids.append(vid) }
+                        if !(present) { sources.append(source) }
                     }
-                    mut val legacy: U64 = 0U64
-                    if ids.count() == 1U64 { legacy = ids[0] }
-                    val vr: U64 = self.pushType(t: <TypeRef nameStart=brt.nameStart nameLen=brt.nameLen args=brt.args viewExtId=legacy viewIds=ids />)
+                    val vr: U64 = self.typeRefWithViewSources(ref: br, sources: sources)
+                    val legacy: U64 = self.arena.types[vr].viewExtId
                     return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=vr viewExtId=legacy />
                 }
-                return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=bt.ref viewExtId=vid />
+                return <TypeInfo kind=bt.kind nameStart=bt.nameStart nameLen=bt.nameLen ref=bt.ref viewExtId=source.surfaceId />
             }
-            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+            Expr.ExtMethod(val recv, source: _, val nameStart, val nameLen, val args) => {
                 // `recv#X.name(args)` (spec/09): return type from the resolved method. A
                 // NAMED prim receiver (kind 0 carrying its name: `x#Doubler.double()` on
                 // I64) joins the same lookup — extensions extend prims too. A `#X` view is

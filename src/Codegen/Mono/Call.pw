@@ -118,7 +118,7 @@ pub impl Comp {
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
                 out = self.bodyCalleeResultRef(exprId: exprId)
             }
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => {
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
                 out = self.bodyCalleeResultRef(exprId: exprId)
             }
             _ => {}
@@ -282,6 +282,17 @@ pub impl Comp {
         // substitution, whereas the head does not.  Normalize once at the
         // final resolver boundary so every Mono caller shares the same surface.
         mut val surfaceRef: U64 = recvRef
+        // The explicit trailing `#Source` of an ExtMethod is semantic
+        // provenance for *all* downstream queries, including the proof query
+        // used by provided copies. `collectViewSources` used to receive it as
+        // a side argument while `callableReceiverMatches` received bare S,
+        // making an E-owned B -> A edge disappear between candidate selection
+        // and receiver applicability. The TypeRef view is the current
+        // migration carrier for this normalized source-set facet.
+        if sourceId != 0U64 && surfaceRef != 0U64 {
+            val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=sourceId traitOwner=sourceOwner />]
+            surfaceRef = self.typeRefWithAddedViewSources(ref: surfaceRef, additions: additions)
+        }
         val bodyRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
         if bodyRef != 0U64 && bodyRef < self.arena.types.count() {
             val bodyTy: TypeRef = self.arena.types[bodyRef]
@@ -384,11 +395,16 @@ pub impl Comp {
         if ci >= self.decls.conforms.count() { return <StaticConformanceProof.Missing /> }
         val cf: Conform = self.decls.conforms[ci]
         if cf.traitId != f.originTraitId || cf.traitStart != f.originTraitOwner { return <StaticConformanceProof.Missing /> }
-        // The copy's ConformId already fixes the complete trait key. Only its
-        // impl binders are solved against this concrete receiver here.
-        val witness: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: receiverRef, traitArgs: [], traitArgsOpen: true)
-        if witness.conformIdx == 0U64 { return <StaticConformanceProof.Missing /> }
-        return <StaticConformanceProof.ConcreteWitness witness=witness />
+        // A direct implementation owns its output through its own witness;
+        // keep that precise substitution rather than rediscovering a wider
+        // path. Only a trait-subject origin (`impl B as A`) needs closure
+        // traversal because the concrete receiver may reach A via S:B.
+        if !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) {
+            val witness: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: receiverRef, traitArgs: [], traitArgsOpen: true)
+            if witness.conformIdx == 0U64 { return <StaticConformanceProof.Missing /> }
+            return <StaticConformanceProof.ConcreteWitness witness=witness />
+        }
+        return self.concreteConformanceProof(baseRef: receiverRef, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: cf.traitArgs)
     }
 
     inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64) -> InstanceEnvironment {
@@ -673,7 +689,7 @@ pub impl Comp {
                     callArgs = args
                     recvInst = self.groundedBodyReceiverRef(exprId: recv)
                 }
-                Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, val args) => {
+                Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                     callArgs = args
                     recvInst = self.groundedBodyReceiverRef(exprId: recv)
                 }
@@ -998,7 +1014,7 @@ pub impl Comp {
         } else {
             match self.arena.exprs[exprId] {
                 Expr.Method(val recv, nameStart: _, nameLen: _, args: _) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: recv) }
-                Expr.ExtMethod(val recv, srcStart: _, srcLen: _, nameStart: _, nameLen: _, args: _) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: recv) }
+                Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, args: _) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: recv) }
                 Expr.Binary(op: _, val lhs, rhs: _) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: lhs) }
                 Expr.Unary(op: _, val operand) => { recvTypeRef = self.groundedBodyReceiverRef(exprId: operand) }
                 _ => {}
@@ -1328,7 +1344,7 @@ pub impl Comp {
                 nameLen = nl
                 args = callArgs
             }
-            Expr.ExtMethod(recv: val r, srcStart: _, srcLen: _, nameStart: val ns, nameLen: val nl, args: val callArgs) => {
+            Expr.ExtMethod(recv: val r, source: _, nameStart: val ns, nameLen: val nl, args: val callArgs) => {
                 recv = r
                 nameStart = ns
                 nameLen = nl
@@ -1373,7 +1389,7 @@ pub impl Comp {
             Expr.Method(recv: _, nameStart: val ns, nameLen: val nl, args: _) => {
                 self.recordBodyClosureFieldTarget(exprId: exprId, recvRef: self.bodyCalleeReceiverRef(exprId: exprId), nameStart: ns, nameLen: nl)
             }
-            Expr.ExtMethod(recv: _, srcStart: _, srcLen: _, nameStart: val ns, nameLen: val nl, args: _) => {
+            Expr.ExtMethod(recv: _, source: _, nameStart: val ns, nameLen: val nl, args: _) => {
                 self.recordBodyClosureFieldTarget(exprId: exprId, recvRef: self.bodyCalleeReceiverRef(exprId: exprId), nameStart: ns, nameLen: nl)
             }
             _ => {}
@@ -1484,12 +1500,13 @@ pub impl Comp {
                     }
                 }
             }
-            Expr.ExtMethod(val recv, val srcStart, val srcLen, val nameStart, val nameLen, val args) => {
+            Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
                 val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
-                val sourceId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
-                callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: sourceId, sourceOwner: srcStart, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                val sourceId: U64 = source.surfaceId
+                callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: sourceId, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                 if callee >= self.arena.funcs.count() {
-                    callee = self.resolveExtMethodFinal(recv: recv, srcStart: srcStart, srcLen: srcLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    val sourceSpan: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
+                    callee = self.resolveExtMethodFinal(recv: recv, srcStart: sourceSpan.start, srcLen: sourceSpan.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
             }
             _ => {}
@@ -2197,7 +2214,7 @@ pub impl Comp {
                 }
                 self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
             }
-            Expr.ExtMethod(val recv, srcStart: _, srcLen: _, val nameStart, val nameLen, val args) => {
+            Expr.ExtMethod(val recv, source: _, val nameStart, val nameLen, val args) => {
                 self.scanExprInsts(exprId: recv)
                 mut val i: U64 = 0
                 while i < args.count() {
@@ -2206,7 +2223,7 @@ pub impl Comp {
                 }
                 self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
             }
-            Expr.ExtView(val recv, srcStart: _, srcLen: _, strip: _) => {
+            Expr.ExtView(val recv, source: _, strip: _) => {
                 self.scanExprInsts(exprId: recv)
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {

@@ -83,11 +83,24 @@ pub impl Comp {
         return false
     }
 
-    // Resolve a concrete trait instance through the normalized view source
-    // set.  A direct implementation and every trait-subject edge retain their
-    // own witness substitution, yielding one proof path instead of redoing
-    // name-based conformance lookups at each consumer.
-    inout fn concreteConformanceProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64]) -> StaticConformanceProof {
+    // Reify a worklist state as its retained static evidence.  A direct
+    // conformance is a one-edge path; a trait-subject path keeps the direct
+    // root and every bridge witness so the terminal associated output is
+    // grounded by exactly the witness that owns it.
+    inout fn traitProofStateEvidence(state: TraitProofState) -> StaticConformanceProof {
+        if state.edges.count() == 0U64 { return <StaticConformanceProof.Missing /> }
+        if state.edges.count() == 1U64 {
+            return <StaticConformanceProof.ConcreteWitness witness=state.edges[0] />
+        }
+        val terminal: WitnessMatch = state.edges[state.edges.count() - 1U64]
+        return <StaticConformanceProof.TraitPath edges=state.edges terminalConformIdx=terminal.conformIdx />
+    }
+
+    // Resolve a concrete receiver through its normalized view source set to a
+    // trait *pattern*.  The target pattern's declaration binders may bind;
+    // the proof state's ground positional arguments stay rigid.  Exact trait
+    // instance lookup is the `patternParams=[]` specialization below.
+    inout fn concreteTraitPatternProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], patternParams: Array[Bind]) -> StaticConformanceProof {
         if baseRef >= self.arena.types.count() { return <StaticConformanceProof.Missing /> }
         mut val pending: Array[TraitProofState] = []
         mut val seen: Array[TraitProofState] = []
@@ -100,8 +113,8 @@ pub impl Comp {
                     mut val edges: Array[WitnessMatch] = []
                     edges.append(witness)
                     val start: TraitProofState = <TraitProofState traitOwner=cf.traitStart traitId=cf.traitId traitArgs=self.groundedWitnessTraitArgs(cf: cf, witness: witness) edges=edges />
-                    if start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && self.sameProofTraitArgs(a: start.traitArgs, b: traitArgs) {
-                        return <StaticConformanceProof.ConcreteWitness witness=witness />
+                    if start.traitOwner == traitOwner && (traitId == 0U64 || start.traitId == traitId) && self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: start.traitArgs) {
+                        return self.traitProofStateEvidence(state: start)
                     }
                     if !(self.traitProofStateSeen(states: seen, candidate: start)) {
                         seen.append(start)
@@ -123,8 +136,8 @@ pub impl Comp {
                         mut val edges: Array[WitnessMatch] = state.edges
                         edges.append(witness)
                         val next: TraitProofState = <TraitProofState traitOwner=edge.traitStart traitId=edge.traitId traitArgs=self.groundedWitnessTraitArgs(cf: edge, witness: witness) edges=edges />
-                        if next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && self.sameProofTraitArgs(a: next.traitArgs, b: traitArgs) {
-                            return <StaticConformanceProof.TraitPath edges=next.edges terminalConformIdx=witness.conformIdx />
+                        if next.traitOwner == traitOwner && (traitId == 0U64 || next.traitId == traitId) && self.typeRefListPatternMatches(pattern: traitArgs, patternParams: patternParams, actual: next.traitArgs) {
+                            return self.traitProofStateEvidence(state: next)
                         }
                         if !(self.traitProofStateSeen(states: seen, candidate: next)) {
                             seen.append(next)
@@ -139,6 +152,13 @@ pub impl Comp {
         return <StaticConformanceProof.Missing />
     }
 
+    // Resolve an exact concrete trait instance through the same proof query
+    // used by extension receiver applicability.  The queried positional args
+    // are rigid, so no target binder list is supplied.
+    inout fn concreteConformanceProof(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64]) -> StaticConformanceProof {
+        return self.concreteTraitPatternProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: [])
+    }
+
     inout fn assocBindingFor(baseRef: U64, traitId: U64, traitOwner: U64, traitArgs: Array[U64], assocId: U64) -> U64 {
         val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: baseRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs)
         return self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: assocId)
@@ -149,23 +169,12 @@ pub impl Comp {
         if t.assocNameId == 0U64 {
             return tyRef
         }
-        val projectionReceiver: U64 = self.plainRefOfProjection(t: t)
-        mut val baseRef: U64 = self.groundTypeRef(ref: projectionReceiver)
-        // `T#E#A.Output` first substitutes T with its actual type, then keeps
-        // E as an additive source selection on that result. `groundTypeRef`
-        // correctly follows ParamId but returns the raw replacement, so this
-        // explicit term operation preserves the view facet across that
-        // substitution boundary.
-        if projectionReceiver < self.arena.types.count() {
-            val receiverTerm: TypeRef = self.arena.types[projectionReceiver]
-            mut val additions: Array[U64] = receiverTerm.viewIds
-            if additions.count() == 0U64 && receiverTerm.viewExtId != 0U64 {
-                additions.append(receiverTerm.viewExtId)
-            }
-            if additions.count() > 0U64 {
-                baseRef = self.typeRefWithAddedViews(ref: baseRef, additions: additions)
-            }
-        }
+        // `groundTypeRef` preserves the projection receiver's additive view
+        // facet while substituting a ParamId (`T#E` -> `S#E`).  Keeping that
+        // law in the general substitution operation makes every consumer --
+        // projections, ordinary extension calls, and final descriptors --
+        // agree on the same source provenance.
+        val baseRef: U64 = self.groundTypeRef(ref: self.plainRefOfProjection(t: t))
         if baseRef >= self.arena.types.count() {
             return tyRef
         }
@@ -428,7 +437,16 @@ pub impl Comp {
                         // ParamId lookup instead of treating one ambient pair as
                         // the whole environment.
                         if arg != tyRef {
-                            return self.resolveTy(tyRef: arg)
+                            val resolved: U64 = self.resolveTy(tyRef: arg)
+                            // Views are an outer term facet, not part of the
+                            // substituted binder value.  Replacing `T#E`
+                            // with S must therefore form S#E; returning S
+                            // here would silently erase the selected
+                            // extension source for every later proof/call
+                            // query.
+                            val additions: Array[ResolvedViewSource] = self.typeRefViewSources(ref: tyRef)
+                            if additions.count() == 0U64 { return resolved }
+                            return self.typeRefWithAddedViewSources(ref: resolved, additions: additions)
                         }
                     }
                     return tyRef
@@ -437,7 +455,10 @@ pub impl Comp {
             }
             val receiverArg: U64 = self.receiverParamArgument(paramId: t.paramId)
             if receiverArg != 0U64 && receiverArg != tyRef {
-                return self.resolveTy(tyRef: receiverArg)
+                val resolved: U64 = self.resolveTy(tyRef: receiverArg)
+                val additions: Array[ResolvedViewSource] = self.typeRefViewSources(ref: tyRef)
+                if additions.count() == 0U64 { return resolved }
+                return self.typeRefWithAddedViewSources(ref: resolved, additions: additions)
             }
             return tyRef
         }
