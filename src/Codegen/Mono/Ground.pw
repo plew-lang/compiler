@@ -402,9 +402,22 @@ pub impl Comp {
         self.cur.typeParams = composedP
         self.cur.typeArgs = composedA
         val g: U64 = self.groundTermInEnvironment(ref: tyRef, params: composedP, values: composedA)
+        // A legacy anonymous-record TypeRef has its components in the matching
+        // StructDef rather than as TypeRef children. Normalize it while the
+        // explicit receiver environment is installed, so `Holder[I32].pair`
+        // becomes the concrete `(a:I32,b:I32)` record before a later `.a`
+        // selection. This is the one carrier bridge for structural records;
+        // the final TypeTerm node will make those fields ordinary children.
+        mut val normalized: U64 = g
+        if g != 0U64 && g < self.arena.types.count() {
+            val gt: TypeRef = self.arena.types[g]
+            if gt.nameLen > 0U64 && self.arena.bytes[gt.nameStart] == 40U8 {
+                normalized = self.groundTypeRef(ref: g)
+            }
+        }
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
-        return g
+        return normalized
     }
 
     inout fn simpleTypeRef(nameStart: U64, nameLen: U64) -> U64 {

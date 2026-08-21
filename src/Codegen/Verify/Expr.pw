@@ -812,7 +812,7 @@ pub impl Comp {
                     bi += 1
                     continue
                 }
-                if generic {
+                if self.isGenericEnumInst(ref: st.ref) {
                     val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
                     self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
