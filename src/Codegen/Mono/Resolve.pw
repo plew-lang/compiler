@@ -253,6 +253,16 @@ pub impl Comp {
         if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable {
             return false
         }
+        // A stamped generic parameter is a lexical semantic term, not a
+        // spelling.  `struct Box[T]`, `impl[T] Box[T]`, and a method's own
+        // `T` may have identical names yet denote distinct binders until an
+        // InstanceEnvironment explicitly relates them.  Comparing only the
+        // interned name here would let a proof/cache key silently conflate
+        // those scopes.  The temporary name fallback remains only when both
+        // legacy terms have no ParamId.
+        if ta.paramId != 0U64 || tb.paramId != 0U64 {
+            if ta.paramId != tb.paramId { return false }
+        }
         // a `#`-view is part of type identity (spec/09): `S`, `S#P`, `S#Q` are distinct
         // types, so two generic instantiations differing only by the view argument are
         // distinct instances (`useR[S#P]` vs `useR[S#Q]` get separate bodies/dispatch).
