@@ -1,0 +1,18 @@
+// A closure call must retain the declaration chosen by lexical resolution, not
+// look up the call spelling again while lowering.  The same name denotes three
+// distinct closure values across nested scopes (spec/03,11).
+import @Std/Io with { print }
+
+fn main() {
+    val invoke: fn() -> I64 = fn() -> I64 { return 1I64 }
+    if true {
+        val invoke: fn() -> I64 = fn() -> I64 { return 2I64 }
+        print(invoke())
+        if true {
+            val invoke: fn() -> I64 = fn() -> I64 { return 3I64 }
+            print(invoke())
+        }
+        print(invoke())
+    }
+    print(invoke())
+}

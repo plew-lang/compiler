@@ -152,15 +152,14 @@ pub impl LlvmCtx {
     }
 
     inout fn genLlvmCall(c: inout Comp, callId: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
-        // An indirect closure target is recorded by Mono with its lexical binding
-        // and grounded function type. Mono-local array indices are not an ABI:
-        // lowering a `for` introduces iterator storage before its loop binding.
-        // Find the already-selected binding in the emitter's current lexical
-        // storage; this is not callable/name resolution.
+        // An indirect closure target is recorded by Mono with its resolved
+        // declaration identity and grounded function type. Mono-local array
+        // indices are not an ABI: lowering a `for` introduces iterator storage
+        // before its loop binding. This lookup only materializes the already-
+        // selected binding; it is not callable/name resolution.
         if c.bodyCalleeTargetKind(exprId: callId) == 2U64 {
-            val targetStart: U64 = c.bodyCalleeTargetNameStart(exprId: callId)
-            val targetLen: U64 = c.bodyCalleeTargetNameLen(exprId: callId)
-            val cli: U64 = self.findLocal(c: inout c, start: targetStart, len: targetLen)
+            val targetDeclStart: U64 = c.bodyCalleeTargetBindingDeclStart(exprId: callId)
+            val cli: U64 = self.findLocalByDeclStart(declStart: targetDeclStart)
             val fnRef: U64 = c.bodyCalleeTargetTypeRef(exprId: callId)
             if cli >= self.nLocals || fnRef == 0U64 || !(c.isFnType(ref: fnRef)) {
                 c.errorAt(offset: nameStart, msg: "internal error: final closure callable has no matching local storage")

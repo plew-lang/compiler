@@ -1184,7 +1184,7 @@ pub impl Comp {
             if finalResult == 0U64 && resultTypeRef != 0U64 { finalResult = resultTypeRef }
             mut val finalArgs: Array[U64] = prior.calleeTypeArgs
             if finalArgs.count() == 0U64 && calleeTypeArgs.count() > 0U64 { finalArgs = calleeTypeArgs }
-            self.arena.finalCallees.set(i: priorIdx, value: <BodyCallee bodyId=prior.bodyId exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetNameStart=prior.targetNameStart targetNameLen=prior.targetNameLen targetTypeRef=prior.targetTypeRef />)
+            self.arena.finalCallees.set(i: priorIdx, value: <BodyCallee bodyId=prior.bodyId exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetBindingDeclStart=prior.targetBindingDeclStart targetTypeRef=prior.targetTypeRef />)
             return
         }
         self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef)
@@ -1302,7 +1302,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=recvRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=recvRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1315,7 +1315,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1329,7 +1329,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetNameStart=e.targetNameStart targetNameLen=e.targetNameLen targetTypeRef=e.targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1342,11 +1342,11 @@ pub impl Comp {
     // Dynamic calls are selected in Mono just like ordinary Func calls.  The
     // target descriptor is deliberately stored beside the static callee rather
     // than reconstructed from a method spelling in LLVM.
-    inout fn setBodyCalleeTarget(exprId: U64, targetKind: U64, targetTraitIdx: U64, targetSlot: U64, targetTypeRef: U64 = 0U64, targetNameStart: U64 = 0U64, targetNameLen: U64 = 0U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
+    inout fn setBodyCalleeTarget(exprId: U64, targetKind: U64, targetTraitIdx: U64, targetSlot: U64, targetTypeRef: U64 = 0U64, targetBindingDeclStart: U64 = 0U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: BodyCallee = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetNameStart=targetNameStart targetNameLen=targetNameLen targetTypeRef=targetTypeRef />)
+            self.arena.finalCallees.set(i: i, value: <BodyCallee bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
         }
     }
 
@@ -1366,15 +1366,9 @@ pub impl Comp {
         return self.bodyCalleeTargetPart(exprId: exprId, part: 3U64, siteIsStmt: siteIsStmt, slot: slot)
     }
 
-    inout fn bodyCalleeTargetNameStart(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+    inout fn bodyCalleeTargetBindingDeclStart(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].targetNameStart }
-        return 0U64
-    }
-
-    inout fn bodyCalleeTargetNameLen(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
-        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].targetNameLen }
+        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].targetBindingDeclStart }
         return 0U64
     }
 
@@ -1464,7 +1458,7 @@ pub impl Comp {
                 if li < self.cur.locals.count() {
                     val fnRef: U64 = self.groundTypeRef(ref: self.cur.locals[li].ty)
                     if fnRef != 0U64 && self.isFnType(ref: fnRef) {
-                        self.setBodyCalleeTarget(exprId: exprId, targetKind: 2U64, targetTraitIdx: 0U64, targetSlot: 0U64, targetTypeRef: fnRef, targetNameStart: ns, targetNameLen: nl)
+                        self.setBodyCalleeTarget(exprId: exprId, targetKind: 2U64, targetTraitIdx: 0U64, targetSlot: 0U64, targetTypeRef: fnRef, targetBindingDeclStart: self.cur.locals[li].nameStart)
                         val fnTy: TypeRef = self.arena.types[fnRef]
                         if fnTy.args.count() > 0U64 {
                             self.setBodyCalleeResultRef(exprId: exprId, resultRef: fnTy.args[0])

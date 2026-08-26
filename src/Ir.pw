@@ -887,12 +887,11 @@ export struct BodyCallee {
     pub val targetKind: U64 = 0U64
     pub val targetTraitIdx: U64 = 0U64
     pub val targetSlot: U64 = 0U64
-    // A closure-local target is a lexical binding, not a Mono-local array
-    // position: lowering may introduce backend-only storage before it.  Keep
-    // the binding identity with the final descriptor so LLVM has no reason to
-    // inspect the call AST when materializing the selected closure value.
-    pub val targetNameStart: U64 = 0U64
-    pub val targetNameLen: U64 = 0U64
+    // A closure-local target is a resolved lexical binding, not a Mono-local
+    // array position or the call's spelling.  Its declaration offset is stable
+    // across lowering even when later storage introduces a same-named local.
+    // LLVM uses this identity only to materialize the already-selected value.
+    pub val targetBindingDeclStart: U64 = 0U64
     // Dynamic target's already-grounded callable value type.  For a closure
     // local/field this is its `fn(...) -> R` TypeRef; no LLVM-side recovery is
     // permitted from the call spelling.
