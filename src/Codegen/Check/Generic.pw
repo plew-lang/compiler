@@ -171,8 +171,9 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
-                    val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
-                    if self.traitProvidesMember(traitNameId: qTrait, traitArity: fb.traitArgs.count(), qName: qName, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart)) {
+                    val owner: U64 = fb.constraint.key.owner
+                    val qTrait: U64 = intern(c: inout self, start: owner, len: self.traitNameLenByOwner(owner: owner))
+                    if self.traitProvidesMember(traitNameId: qTrait, traitArity: fb.constraint.key.positionalArgs.count(), qName: qName, args: args, depth: 0U64, useMod: self.moduleOf(offset: nameStart)) {
                         return true
                     }
                 }
@@ -189,7 +190,8 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx {
                 if fb.paramNameId == qTp {
-                    if rangeEquals(bytes: self.arena.bytes, start: fb.traitStart, len: fb.traitLen, kw: traitName) {
+                    val owner: U64 = fb.constraint.key.owner
+                    if rangeEquals(bytes: self.arena.bytes, start: owner, len: self.traitNameLenByOwner(owner: owner), kw: traitName) {
                         return true
                     }
                 }
@@ -211,9 +213,9 @@ pub impl Comp {
                 while bi < self.decls.funcBounds.count() {
                     val bound: FuncBound = self.decls.funcBounds[bi]
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
-                        val boundOwner: U64 = self.canonicalTraitOwner(start: bound.traitStart, len: bound.traitLen)
+                        val boundOwner: U64 = bound.constraint.key.owner
                         if boundOwner == f.provTraitOwner {
-                            if self.typeRefListPatternMatches(pattern: recvArgs, patternParams: f.typeParams, actual: bound.traitArgs) { return true }
+                            if self.typeRefListPatternMatches(pattern: recvArgs, patternParams: f.typeParams, actual: bound.constraint.key.positionalArgs) { return true }
                         }
                     }
                     bi += 1U64
@@ -236,8 +238,8 @@ pub impl Comp {
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         // Both ids are resolved during lowering.  Compare them rather
                         // than their source spans: a bound may use an imported alias.
-                        if subjectOwner != 0U64 && cf.typeId == bound.traitNameId {
-                            if self.typeRefListPatternMatches(pattern: cf.subjectArgs, patternParams: cf.typeParams, actual: bound.traitArgs) { return true }
+                        if subjectOwner != 0U64 && cf.typeStart == bound.constraint.key.owner {
+                            if self.typeRefListPatternMatches(pattern: cf.subjectArgs, patternParams: cf.typeParams, actual: bound.constraint.key.positionalArgs) { return true }
                         }
                     }
                     bi += 1U64

@@ -277,8 +277,9 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
-                val qTrait: U64 = intern(c: inout self, start: fb.traitStart, len: fb.traitLen)
-                val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, traitArity: fb.traitArgs.count(), qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
+                val owner: U64 = fb.constraint.key.owner
+                val qTrait: U64 = intern(c: inout self, start: owner, len: self.traitNameLenByOwner(owner: owner))
+                val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, traitArity: fb.constraint.key.positionalArgs.count(), qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
                 if r.nameLen != 0U64 {
                     return r
                 }

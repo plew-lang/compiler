@@ -28,7 +28,8 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val bound: FuncBound = self.decls.funcBounds[bi]
             if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
-                val traitId: U64 = intern(c: inout self, start: bound.traitStart, len: bound.traitLen)
+                val owner: U64 = bound.constraint.key.owner
+                val traitId: U64 = intern(c: inout self, start: owner, len: self.traitNameLenByOwner(owner: owner))
                 mut val ti: U64 = 0U64
                 while ti < self.decls.traits.count() {
                     val traitDef: TraitDef = self.decls.traits[ti]
