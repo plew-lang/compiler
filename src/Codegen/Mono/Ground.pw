@@ -21,6 +21,27 @@ pub impl Comp {
     inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64]) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
+        // A projection's receiver is a child type term, not the projection
+        // term itself.  Substitute it before considering the legacy flat
+        // ParamId carried on the projection node: grounding
+        // `T#Parser.Output` with T=P must produce `P#Parser.Output`, never P.
+        // This is also why a closed TypeTerm traversal has to treat the
+        // receiver and trait-instance arguments as children together.
+        if t.assocNameId != 0U64 {
+            val receiver: U64 = self.typeTermProjectionReceiver(t: t)
+            val groundedReceiver: U64 = self.groundTermInEnvironment(ref: receiver, params: params, values: values)
+            mut val traitArgs: Array[U64] = []
+            mut val changed: Bool = groundedReceiver != receiver
+            mut val ai: U64 = 0U64
+            while ai < t.assocTraitArgs.count() {
+                val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[ai], params: params, values: values)
+                if next != t.assocTraitArgs[ai] { changed = true }
+                traitArgs.append(next)
+                ai += 1U64
+            }
+            if !changed { return ref }
+            return self.rebuildProjectionTerm(t: t, receiver: groundedReceiver, traitArgs: traitArgs)
+        }
         if t.paramId != 0U64 {
             mut val pi: U64 = 0U64
             while pi < params.count() && pi < values.count() {
@@ -141,6 +162,16 @@ pub impl Comp {
         return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
     }
 
+    // Reassemble a projection after a structural traversal transformed its
+    // receiver and/or positional trait arguments.  Keeping the receiver
+    // replacement here prevents each substitution path from accidentally
+    // treating a projection's flattened legacy head as the whole term.
+    inout fn rebuildProjectionTerm(t: TypeRef, receiver: U64, traitArgs: Array[U64]) -> U64 {
+        if receiver >= self.arena.types.count() { return 0U64 }
+        val base: TypeRef = self.arena.types[receiver]
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+    }
+
     // Apply exactly one concrete witness's impl-binder substitution. Query
     // terms stay rigid: an unmatched binder remains symbolic.
     inout fn groundWitnessTypeTerm(ref: U64, params: Array[Bind], matchResult: WitnessMatch) -> U64 {
@@ -178,9 +209,9 @@ pub impl Comp {
             val receiver: U64 = self.typeTermProjectionReceiver(t: t)
             val groundedReceiver: U64 = self.groundWitnessTypeTerm(ref: receiver, params: params, matchResult: matchResult)
             if groundedReceiver != receiver {
-                if groundedReceiver >= self.arena.types.count() { return ref }
-                val base: TypeRef = self.arena.types[groundedReceiver]
-                return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen args=base.args viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+                val rebuilt: U64 = self.rebuildProjectionTerm(t: t, receiver: groundedReceiver, traitArgs: assocArgs)
+                if rebuilt != 0U64 { return rebuilt }
+                return ref
             }
         }
         // The legacy arena stores an anonymous record's component terms in its

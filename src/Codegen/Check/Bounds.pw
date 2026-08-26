@@ -17,7 +17,7 @@ pub impl Comp {
     // with their owner already canonicalized.
     inout fn existentialTraitConstraintFor(t: TypeRef) -> TraitConstraint {
         if !(t.isAny) {
-            return <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> assocPredicates=[] />
+            return <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] />
         }
         mut val owner: U64 = 0U64
         // Visibility resolution preserves the declaration selected by the
@@ -35,12 +35,12 @@ pub impl Comp {
             predicates.append(<TraitAssocPredicate member=names[i] value=values[i] span=t.siteOffset />)
             i += 1U64
         }
-        return <TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.positionalTraitArgs(t: t) /> assocPredicates=predicates />
+        return <TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=self.positionalTraitArgs(t: t) /> positionalArgsOpen=false assocPredicates=predicates />
     }
 
     inout fn existentialTraitConstraint(ref: U64) -> TraitConstraint {
         if ref >= self.arena.types.count() {
-            return <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> assocPredicates=[] />
+            return <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] />
         }
         return self.existentialTraitConstraintFor(t: self.arena.types[ref])
     }
@@ -59,7 +59,44 @@ pub impl Comp {
             values.append(constraint.assocPredicates[i].value)
             i += 1U64
         }
-        return self.conformsInstance(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, assocNames: names, assocValues: values)
+        return self.conformsInstance(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values)
+    }
+
+    // Ground every term owned by a constraint through one explicit instance
+    // map.  This is the sole substitution boundary for a bound's trait key
+    // and associated-output predicates; callers must not separately ground
+    // the old `traitArgs` / `traitAssocValues` arrays.
+    inout fn groundTraitConstraintInEnvironment(constraint: TraitConstraint, params: Array[Bind], args: Array[U64]) -> TraitConstraint {
+        mut val positional: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < constraint.key.positionalArgs.count() {
+            positional.append(self.groundTermInEnvironment(ref: constraint.key.positionalArgs[i], params: params, values: args))
+            i += 1U64
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        i = 0U64
+        while i < constraint.assocPredicates.count() {
+            val predicate: TraitAssocPredicate = constraint.assocPredicates[i]
+            predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundTermInEnvironment(ref: predicate.value, params: params, values: args) span=predicate.span />)
+            i += 1U64
+        }
+        return <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
+    }
+
+    // A view can establish a conformance that the bare receiver does not have.
+    // Keep this policy beside the constraint API, rather than asking each
+    // generic-bound checker to unpack owner, positional args and predicates.
+    inout fn viewedTypeConformsTraitConstraint(ref: U64, constraint: TraitConstraint) -> Bool {
+        if constraint.key.owner == 0U64 { return false }
+        mut val names: Array[U64] = []
+        mut val values: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < constraint.assocPredicates.count() {
+            names.append(constraint.assocPredicates[i].member)
+            values.append(constraint.assocPredicates[i].value)
+            i += 1U64
+        }
+        return self.viewedTypeConforms(ref: ref, traitStart: constraint.key.owner, traitLen: self.traitNameLenByOwner(owner: constraint.key.owner), traitArgs: constraint.key.positionalArgs, traitArgsOpen: constraint.positionalArgsOpen, assocNames: names, assocValues: values)
     }
 
     // Declaration-time evidence is a separate query from concrete
@@ -842,19 +879,11 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fin.fnIdx {
-                val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: f.typeParams, args: fin.args)
-                val boundAssocValues: Array[U64] = self.groundedBoundTraitAssocValues(fb: fb, params: f.typeParams, args: fin.args)
+                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: f.typeParams, args: fin.args)
                 if fb.paramTy != 0U64 {
-                    val savedP: Array[Bind] = self.cur.typeParams
-                    val savedA: Array[U64] = self.cur.typeArgs
-                    self.cur.typeParams = f.typeParams
-                    self.cur.typeArgs = fin.args
-                    val lhs: U64 = self.groundTypeRef(ref: fb.paramTy)
-                    self.cur.typeParams = savedP
-                    self.cur.typeArgs = savedA
+                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: f.typeParams, values: fin.args)
                     if lhs < self.arena.types.count() {
-                        val at: TypeRef = self.arena.types[lhs]
-                        val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)
+                        val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)
                         if !ok {
                             self.errorAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`")
                         }
@@ -866,14 +895,13 @@ pub impl Comp {
                     val tp: Bind = f.typeParams[pi]
                     if tp.nameId == fb.paramNameId {
                         if pi < fin.args.count() {
-                            val at: TypeRef = self.arena.types[fin.args[pi]]
                             // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
                             // spec/09) satisfies the bound via the conformance path the
                             // view selects, even when the bare type does not conform.
                             // conformsInstance checks CONDITIONAL conformance against the
                             // arg's full ref (`Array[NoEq]` ⟹ false here, at this bound's
                             // location — no deferral to a deeper monomorphization level).
-                            val ok: Bool = self.viewedTypeConforms(ref: fin.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)
+                            val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: fin.args[pi], constraint: constraint)
                             if !ok {
                                 self.errorAt(offset: f.defOffset, msg: "type argument does not conform to the trait required by `where`")
                             }
@@ -924,38 +952,32 @@ pub impl Comp {
                         val fb: FuncBound = self.decls.funcBounds[bi]
                         if fb.fnIdx == mfi {
                             val receiverEnv: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: instRef)
-                            mut val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: f.typeParams, args: inst.args)
-                            mut val boundAssocValues: Array[U64] = self.groundedBoundTraitAssocValues(fb: fb, params: f.typeParams, args: inst.args)
+                            mut val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: f.typeParams, args: inst.args)
                             if receiverEnv.conformIdx != 0U64 {
-                                boundArgs = []
+                                mut val positional: Array[U64] = []
                                 mut val bai: U64 = 0U64
-                                while bai < fb.traitArgs.count() {
-                                    boundArgs.append(self.groundWitnessTypeTerm(ref: fb.traitArgs[bai], params: f.typeParams, matchResult: receiverEnv))
+                                while bai < constraint.key.positionalArgs.count() {
+                                    positional.append(self.groundWitnessTypeTerm(ref: constraint.key.positionalArgs[bai], params: f.typeParams, matchResult: receiverEnv))
                                     bai += 1U64
                                 }
-                                boundAssocValues = []
+                                mut val predicates: Array[TraitAssocPredicate] = []
                                 bai = 0U64
-                                while bai < fb.traitAssocValues.count() {
-                                    boundAssocValues.append(self.groundWitnessTypeTerm(ref: fb.traitAssocValues[bai], params: f.typeParams, matchResult: receiverEnv))
+                                while bai < constraint.assocPredicates.count() {
+                                    val predicate: TraitAssocPredicate = constraint.assocPredicates[bai]
+                                    predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundWitnessTypeTerm(ref: predicate.value, params: f.typeParams, matchResult: receiverEnv) span=predicate.span />)
                                     bai += 1U64
                                 }
+                                constraint = <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
                             }
                             if fb.paramTy != 0U64 {
                                 mut val lhs: U64 = 0U64
                                 if receiverEnv.conformIdx != 0U64 {
                                     lhs = self.groundWitnessTypeTerm(ref: fb.paramTy, params: f.typeParams, matchResult: receiverEnv)
                                 } else {
-                                    val savedP: Array[Bind] = self.cur.typeParams
-                                    val savedA: Array[U64] = self.cur.typeArgs
-                                    self.cur.typeParams = f.typeParams
-                                    self.cur.typeArgs = inst.args
-                                    lhs = self.groundTypeRef(ref: fb.paramTy)
-                                    self.cur.typeParams = savedP
-                                    self.cur.typeArgs = savedA
+                                    lhs = self.groundTermInEnvironment(ref: fb.paramTy, params: f.typeParams, values: inst.args)
                                 }
                                 if lhs < self.arena.types.count() {
-                                    val at: TypeRef = self.arena.types[lhs]
-                                    val ok: Bool = self.viewedTypeConforms(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)
+                                    val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)
                                     if !ok {
                                         self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                     }
@@ -966,7 +988,7 @@ pub impl Comp {
                                 val tp: Bind = f.typeParams[pi]
                                 if tp.nameId == fb.paramNameId {
                                     if pi < inst.args.count() {
-                                        if !(self.conformsInstance(ref: inst.args[pi], traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)) {
+                                        if !(self.conformsTraitConstraint(ref: inst.args[pi], constraint: constraint)) {
                                             self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
                                         }
                                     }

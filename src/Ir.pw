@@ -738,13 +738,19 @@ pub impl TraitAssocPredicate { factory }
 // verify these output predicates against that selected witness.
 export struct TraitConstraint {
     pub val key: TraitInstanceKey
+    // `where T: Add` intentionally leaves Add's positional inputs open.  This
+    // cannot be reconstructed from an empty `positionalArgs` array: that same
+    // array is the complete key of an arity-zero trait.  Keep the authored
+    // matching mode with the semantic constraint so a consumer never needs to
+    // consult FuncBound's former parallel fields.
+    pub val positionalArgsOpen: Bool = false
     pub val assocPredicates: Array[TraitAssocPredicate]
 }
 pub impl TraitConstraint { factory }
 
 // A trait bound `where T: Trait[Args]` on a function (spec/08). `fnIdx` indexes
-// c.arena.funcs; (paramStart,paramLen) names the bounded type parameter; (traitStart,
-// traitLen,traitArgs) are the complete required trait key. `where T: A + B` and
+// c.arena.funcs; (paramStart,paramLen) names the bounded type parameter. `constraint`
+// is the complete required trait constraint. `where T: A + B` and
 // `where T: A, U: B` expand to one FuncBound per atom. Enforced at instantiation:
 // the concrete type bound to the parameter must conform to that exact trait
 // instance, else a loud error.
@@ -771,7 +777,7 @@ export struct FuncBound {
     // The canonical semantic constraint. The preceding fields are a temporary
     // source/provenance bridge for legacy readers and are derived from this
     // value at lowering; semantic queries must migrate to this field.
-    pub val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> assocPredicates=[] />
+    pub val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] />
 }
 
 // A concrete instantiation of a generic free function (`fn f[T](x: T)` called

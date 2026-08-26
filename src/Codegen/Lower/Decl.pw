@@ -367,7 +367,12 @@ pub impl Comp {
                 predicates.append(<TraitAssocPredicate member=boundAssocNames[pi] value=boundAssocValues[pi] span=traitUseStart />)
                 pi += 1U64
             }
-            val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> assocPredicates=predicates />
+            // An empty authored argument list is an open bound (`T: Add`),
+            // including when Add happens to have arity zero.  The latter has
+            // identical observable matching today, while retaining this bit
+            // makes the distinction available without reopening FuncBound's
+            // legacy arrays.
+            val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates />
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=traitNameId traitStart=traitStart traitLen=traitLen traitArgs=boundArgs traitAssocNames=boundAssocNames traitAssocValues=boundAssocValues constraint=constraint />)
             i += 1
         }
