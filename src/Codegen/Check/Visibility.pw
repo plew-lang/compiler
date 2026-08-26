@@ -680,7 +680,7 @@ pub impl Comp {
             val b: FuncBound = self.decls.funcBounds[bi]
             if b.fnIdx == fnIdx {
                 self.checkSurfaceType(surfaceMod: surfaceMod, ref: b.paramTy, offset: offset)
-                self.checkSurfaceTraitOwner(surfaceMod: surfaceMod, owner: b.traitStart, offset: offset)
+                self.checkSurfaceTraitOwner(surfaceMod: surfaceMod, owner: b.constraint.key.owner, offset: offset)
             }
             bi += 1
         }

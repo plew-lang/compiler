@@ -83,6 +83,27 @@ pub impl Comp {
         return <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
     }
 
+    // Conditional impls bind their receiver parameters directionally through
+    // a selected witness rather than by position in the caller's type-arg
+    // array.  Ground the whole constraint under that same witness map so
+    // positional inputs and associated-output predicates cannot diverge.
+    inout fn groundTraitConstraintThroughWitness(constraint: TraitConstraint, params: Array[Bind], matchResult: WitnessMatch) -> TraitConstraint {
+        mut val positional: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < constraint.key.positionalArgs.count() {
+            positional.append(self.groundWitnessTypeTerm(ref: constraint.key.positionalArgs[i], params: params, matchResult: matchResult))
+            i += 1U64
+        }
+        mut val predicates: Array[TraitAssocPredicate] = []
+        i = 0U64
+        while i < constraint.assocPredicates.count() {
+            val predicate: TraitAssocPredicate = constraint.assocPredicates[i]
+            predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundWitnessTypeTerm(ref: predicate.value, params: params, matchResult: matchResult) span=predicate.span />)
+            i += 1U64
+        }
+        return <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
+    }
+
     // A view can establish a conformance that the bare receiver does not have.
     // Keep this policy beside the constraint API, rather than asking each
     // generic-bound checker to unpack owner, positional args and predicates.
@@ -283,41 +304,6 @@ pub impl Comp {
             _ => {}
         }
         return 0U64
-    }
-
-    // Ground the full trait key of a bound in the function/method instance that
-    // owns it.  Trait arguments belong to the bound, not to a later resolver
-    // fallback: `where T: Add[T]` becomes `Add[I64]` for T=I64 here.
-    inout fn groundedBoundTraitArgs(fb: FuncBound, params: Array[Bind], args: Array[U64]) -> Array[U64] {
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        self.cur.typeParams = params
-        self.cur.typeArgs = args
-        mut val out: Array[U64] = []
-        mut val i: U64 = 0U64
-        while i < fb.traitArgs.count() {
-            out.append(self.groundTypeRef(ref: fb.traitArgs[i]))
-            i += 1U64
-        }
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        return out
-    }
-
-    inout fn groundedBoundTraitAssocValues(fb: FuncBound, params: Array[Bind], args: Array[U64]) -> Array[U64] {
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        self.cur.typeParams = params
-        self.cur.typeArgs = args
-        mut val out: Array[U64] = []
-        mut val i: U64 = 0U64
-        while i < fb.traitAssocValues.count() {
-            out.append(self.groundTypeRef(ref: fb.traitAssocValues[i]))
-            i += 1U64
-        }
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        return out
     }
 
     // A named trait argument constrains an associated output after the
@@ -812,22 +798,15 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == wfi {
                 if fb.paramTy != 0U64 {
-                    val savedP: Array[Bind] = self.cur.typeParams
-                    val savedA: Array[U64] = self.cur.typeArgs
-                    self.cur.typeParams = wf.typeParams
-                    self.cur.typeArgs = t.args
-                    val lhs: U64 = self.groundTypeRef(ref: fb.paramTy)
-                    val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: wf.typeParams, args: t.args)
-                    val boundAssocValues: Array[U64] = self.groundedBoundTraitAssocValues(fb: fb, params: wf.typeParams, args: t.args)
-                    self.cur.typeParams = savedP
-                    self.cur.typeArgs = savedA
+                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: wf.typeParams, values: t.args)
+                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: wf.typeParams, args: t.args)
                     if lhs >= self.arena.types.count() {
                         return false
                     }
                     if !(self.tyRefIsGround(ref: lhs)) {
                         return false
                     }
-                    if !(self.conformsInstance(ref: lhs, traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)) {
+                    if !(self.conformsTraitConstraint(ref: lhs, constraint: constraint)) {
                         return false
                     }
                     bi += 1
@@ -845,9 +824,8 @@ pub impl Comp {
                     k += 1
                 }
                 if pos < t.args.count() {
-                    val boundArgs: Array[U64] = self.groundedBoundTraitArgs(fb: fb, params: wf.typeParams, args: t.args)
-                    val boundAssocValues: Array[U64] = self.groundedBoundTraitAssocValues(fb: fb, params: wf.typeParams, args: t.args)
-                    if !(self.conformsInstance(ref: t.args[pos], traitStart: fb.traitStart, traitLen: fb.traitLen, traitArgs: boundArgs, traitArgsOpen: boundArgs.count() == 0U64, assocNames: fb.traitAssocNames, assocValues: boundAssocValues)) {
+                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: wf.typeParams, args: t.args)
+                    if !(self.conformsTraitConstraint(ref: t.args[pos], constraint: constraint)) {
                         return false
                     }
                 }
