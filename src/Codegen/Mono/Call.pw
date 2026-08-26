@@ -269,11 +269,11 @@ pub impl Comp {
         return out
     }
 
-    // Resolve a method from the concrete receiver identity of the body instance.
-    // `resolveMethodFinal(recv: ...)` is intentionally syntax-facing and starts
-    // from `typeOf(recv)`; in a shared generic body that value is still the
-    // parameter spelling (`T`).  Mono owns the one post-substitution resolution,
-    // so it starts from the grounded TypeRef and retains the resulting callable.
+    // Adapt this BodyInstance's receiver to the frontend semantic call query.
+    // `resolveMethodFinal(recv: ...)` is syntax-facing and starts from
+    // `typeOf(recv)`; a shared generic body's node still spells `T`, so Mono
+    // contributes only its grounded receiver term. Candidate selection itself
+    // is owned by `resolveMethodForResolvedReceiver` in the frontend resolver.
     inout fn resolveBodyMethodForRef(recv: U64, recvRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: Array[Arg], useOffset: U64) -> U64 {
         // The receiver argument is normally `groundedBodyReceiverRef(recv)`,
         // but callers that arrived through an older TypeInfo recovery can hand
@@ -300,29 +300,7 @@ pub impl Comp {
                 surfaceRef = bodyRef
             }
         }
-        if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
-            return self.arena.funcs.count()
-        }
-        // A newtype is a distinct source type but inherits the underlying
-        // callable surface and representation.  Normalize at the one resolver
-        // that constructs final method callables, so generic bodies (`print[T]`
-        // with T=UserId) use the same String witness as direct source calls.
-        mut val resolvedRef: U64 = surfaceRef
-        val original: TypeRef = self.arena.types[surfaceRef]
-        val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
-        if underlying != 0U64 && underlying < self.arena.types.count() {
-            resolvedRef = underlying
-        }
-        val rt: TypeRef = self.arena.types[resolvedRef]
-        mut val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner)
-        mut val callee: U64 = self.arena.funcs.count()
-        if sources.count() > 0U64 {
-            callee = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef)
-        }
-        if callee >= self.arena.funcs.count() {
-            callee = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, useOffset: useOffset)
-        }
-        return callee
+        return self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: surfaceRef, sourceId: sourceId, sourceOwner: sourceOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: useOffset)
     }
 
     // Ground a selected method's result under the same concrete receiver that

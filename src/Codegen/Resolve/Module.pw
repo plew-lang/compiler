@@ -724,6 +724,35 @@ pub impl Comp {
         return sources
     }
 
+    // The semantic query for a method call whose receiver has already been
+    // grounded by a BodyInstance.  Candidate search, newtype normalization and
+    // view-source normalization belong to the frontend resolver; Mono supplies
+    // only the concrete receiver term it obtained from its environment.
+    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: Array[Arg], useOffset: U64) -> U64 {
+        if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
+            return self.arena.funcs.count()
+        }
+        // A newtype is a distinct source type but inherits the underlying
+        // callable surface and representation. Normalize inside the semantic
+        // query so every caller applies the same rule.
+        mut val resolvedRef: U64 = surfaceRef
+        val original: TypeRef = self.arena.types[surfaceRef]
+        val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
+        if underlying != 0U64 && underlying < self.arena.types.count() {
+            resolvedRef = underlying
+        }
+        val rt: TypeRef = self.arena.types[resolvedRef]
+        val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner)
+        mut val callee: U64 = self.arena.funcs.count()
+        if sources.count() > 0U64 {
+            callee = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef)
+        }
+        if callee >= self.arena.funcs.count() {
+            callee = self.findMethod(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef, useOffset: useOffset)
+        }
+        return callee
+    }
+
     inout fn viewSetHasTrait(sources: Array[ViewSource]) -> Bool {
         mut val i: U64 = 0U64
         while i < sources.count() {
