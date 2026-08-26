@@ -336,12 +336,12 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == self.cur.checkFn {
                 if fb.paramNameId == qTp {
-                    if constraint.key.owner != 0U64 && fb.traitStart == constraint.key.owner && fb.traitArgs.count() == constraint.key.positionalArgs.count() {
+                    if constraint.key.owner != 0U64 && fb.constraint.key.owner == constraint.key.owner && fb.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
                         mut val binds: Array[UnifyBind] = []
                         mut val ai: U64 = 0U64
                         mut val matches: Bool = true
-                        while ai < fb.traitArgs.count() {
-                            if !(self.unifyPatterns(a: fb.traitArgs[ai], aSide: 0U64, b: constraint.key.positionalArgs[ai], bSide: 1U64, aParams: self.cur.typeParams, bParams: [], binds: inout binds)) {
+                        while ai < fb.constraint.key.positionalArgs.count() {
+                            if !(self.unifyPatterns(a: fb.constraint.key.positionalArgs[ai], aSide: 0U64, b: constraint.key.positionalArgs[ai], bSide: 1U64, aParams: self.cur.typeParams, bParams: [], binds: inout binds)) {
                                 matches = false
                             }
                             ai += 1U64
@@ -351,16 +351,15 @@ pub impl Comp {
                         // when it promises the same selected-witness outputs;
                         // `T: Iter[Item=String]` must not erase to
                         // `any Iter[Item=I64]` merely because both share Iter.
-                        if fb.traitAssocNames.count() != constraint.assocPredicates.count() { matches = false }
+                        if fb.constraint.assocPredicates.count() != constraint.assocPredicates.count() { matches = false }
                         mut val need: U64 = 0U64
                         while need < constraint.assocPredicates.count() {
                             mut val found: Bool = false
                             mut val bi: U64 = 0U64
-                            while bi < fb.traitAssocNames.count() {
-                                if fb.traitAssocNames[bi] == constraint.assocPredicates[need].member {
-                                    if bi < fb.traitAssocValues.count() {
-                                        if self.typeRefEq(a: fb.traitAssocValues[bi], b: constraint.assocPredicates[need].value) { found = true }
-                                    }
+                            while bi < fb.constraint.assocPredicates.count() {
+                                val provided: TraitAssocPredicate = fb.constraint.assocPredicates[bi]
+                                if provided.member == constraint.assocPredicates[need].member {
+                                    if self.typeRefEq(a: provided.value, b: constraint.assocPredicates[need].value) { found = true }
                                 }
                                 bi += 1U64
                             }
