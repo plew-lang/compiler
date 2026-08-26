@@ -944,7 +944,7 @@ pub impl LlvmCtx {
         c.cur.bodyItemRef = c.cur.itemRef
         c.enterBodyInstance(fnIdx: fi, environment: environment)
         // Consume the same canonical body-instance receiver that Mono used to
-        // populate BodyCallee.  This is a key projection only; LLVM never
+        // populate CallResolution. This is a key projection only; LLVM never
         // resolves a call or infers a source from it.
         self.curBodyMark = self.nLocals
         self.genLlvmBlock(c: inout c, id: f.body)

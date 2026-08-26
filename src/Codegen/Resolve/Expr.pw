@@ -37,7 +37,7 @@ pub impl Comp {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 // A lexical closure binding shadows a same-spelled free
                 // function.  It has no static Func identity, so retain the
-                // sentinel here; Mono records the closure target in BodyCallee.
+                // sentinel here; Mono records the closure target in CallResolution.
                 val li: U64 = self.localIndexByName(start: nameStart, len: nameLen)
                 if li >= self.cur.locals.count() || !(self.isFnType(ref: self.cur.locals[li].ty)) {
                     r = self.findFunc(nameStart: nameStart, nameLen: nameLen, args: args)

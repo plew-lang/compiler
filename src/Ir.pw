@@ -857,7 +857,7 @@ export struct InstanceEnvironment {
 // instances, so the enclosing function, its substitution arguments, and its
 // receiver instance are also part of the decision context.  Mono owns these
 // records; backend only consumes them.
-export struct BodyCallee {
+export struct CallResolution {
     // 1-based index into Arena.bodyInstances.  A final call belongs to one
     // canonical semantic body instance; duplicating its function/environment
     // here made every lookup re-compare the whole substitution map.
@@ -899,7 +899,7 @@ export struct BodyCallee {
 }
 
 // A concrete body that code generation may emit.  This is the reachability
-// worklist paired with BodyCallee: resolving a call enqueues its callee body,
+// worklist paired with CallResolution: resolving a call enqueues its callee body,
 // and the frontend drains the list before LLVM begins.  `recvInstRef` is kept
 // even for an argless receiver so a shared provided body can substitute Self
 // to the actual conformer.
@@ -1204,13 +1204,13 @@ export struct Arena {
     // Final static call selections belong to the analyzed program, not to
     // MonoWork's transient discovery queues.  LLVM consumes this immutable
     // semantic result after frontend finalization.
-    pub mut val finalCallees: Array[BodyCallee] = []
+    pub mut val finalCallees: Array[CallResolution] = []
     // Canonical semantic body instances. Mono interns a complete body key here;
     // the backend consumes the same id rather than reconstructing an enclosing
     // substitution environment at every call site.
     pub mut val bodyInstances: Array[BodyInstance] = []
     // Derived open-addressed index for finalCallees. Slots hold a 1-based
-    // finalCallees index and are rebuilt from BodyCallee's semantic key only.
+    // finalCallees index and are rebuilt from CallResolution's semantic key only.
     pub mut val finalCalleeIndexSlots: Array[U64] = []
     // Instance-invariant final callable per expression.  Kept as a scalar
     // parallel array so a plain free call does not depend on a body worklist.
@@ -1275,7 +1275,7 @@ export struct ChainSite {
     // Keep their declaration-time selections with the parametric stage instead
     // of asking each BodyInstance to re-resolve a synthetic `Head.empty()` /
     // `Head.fromValue(...)` spelling.  Mono grounds `stageRef` and turns this
-    // template into ordinary BodyCallee records per concrete body instance.
+    // template into ordinary CallResolution records per concrete body instance.
     pub val fromValueExprId: U64 = 0U64
     pub val fromValueCallee: U64 = 0U64
     pub val emptyExprId: U64 = 0U64
@@ -1600,7 +1600,7 @@ pub impl MethodAlias { factory }
 pub impl FuncBound { factory }
 pub impl FnInst { factory }
 pub impl InstanceEnvironment { factory }
-pub impl BodyCallee { factory }
+pub impl CallResolution { factory }
 pub impl BodyInstance { factory }
 pub impl EnumDef { factory }
 pub impl Func { factory }
