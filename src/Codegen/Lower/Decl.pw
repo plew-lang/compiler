@@ -326,9 +326,6 @@ pub impl Comp {
             // alias is a surface name, not the semantic trait identity stored
             // in a bound: every later proof/query must see the declaration
             // owner just as `impl … as Trait` does.
-            mut val traitStart: U64 = tn.nameStart
-            mut val traitLen: U64 = tn.nameLen
-            mut val traitNameId: U64 = tn.nameId
             // `traits[i]` is a convenience spelling and may have been
             // re-interned away from the authored `where` clause.  Trait
             // identity is resolved at that use site: `where T: BP` must
@@ -357,9 +354,6 @@ pub impl Comp {
                 resolvedOwner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.funcs[fnIdx].defOffset), nameId: tn.nameId)
             }
             if resolvedOwner != 0U64 {
-                traitStart = resolvedOwner
-                traitLen = self.traitNameLenByOwner(owner: resolvedOwner)
-                traitNameId = intern(c: inout self, start: traitStart, len: traitLen)
             }
             mut val predicates: Array[TraitAssocPredicate] = []
             mut val pi: U64 = 0U64
@@ -373,7 +367,7 @@ pub impl Comp {
             // makes the distinction available without reopening FuncBound's
             // legacy arrays.
             val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates />
-            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId traitNameId=traitNameId traitStart=traitStart traitLen=traitLen traitArgs=boundArgs traitAssocNames=boundAssocNames traitAssocValues=boundAssocValues constraint=constraint />)
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId constraint=constraint />)
             i += 1
         }
     }

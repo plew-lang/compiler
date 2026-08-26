@@ -762,21 +762,12 @@ export struct FuncBound {
     // the same bare type parameter as paramStart/paramLen; for associated-type
     // bounds it can be `T#Iterator.Item`.
     pub val paramTy: U64 = 0
-    // interned ids (Phase D) of the bounded type-parameter name and the required
-    // trait name, set at construction (both names come from internBytes). The
-    // instantiation-time bound check matches the type parameter by integer ==.
+    // Interned identity of the bounded type parameter. The trait identity and
+    // all of its inputs/predicates live exclusively in `constraint` below.
     pub val paramNameId: U64 = 0
-    pub val traitNameId: U64 = 0
-    pub val traitStart: U64
-    pub val traitLen: U64
-    pub val traitArgs: Array[U64] = []
-    // Named arguments constrain associated-type outputs of the witness selected
-    // by the positional trait instance key; they are never positional inputs.
-    pub val traitAssocNames: Array[U64] = []
-    pub val traitAssocValues: Array[U64] = []
-    // The canonical semantic constraint. The preceding fields are a temporary
-    // source/provenance bridge for legacy readers and are derived from this
-    // value at lowering; semantic queries must migrate to this field.
+    // The canonical semantic constraint for this bound. Its owner is resolved
+    // at the authored use, positional inputs select a trait instance, and its
+    // predicates constrain outputs of that selected witness.
     pub val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=0U64 positionalArgs=[] /> positionalArgsOpen=false assocPredicates=[] />
 }
 
