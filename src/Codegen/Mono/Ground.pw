@@ -32,6 +32,30 @@ pub impl Comp {
                 pi += 1U64
             }
         }
+        // Some checked-in declaration templates predate ParamId stamping.  A
+        // bare legacy term is still unambiguous *at this boundary*: `params`
+        // are the binders owned by one explicitly selected receiver instance,
+        // not the caller's ambient scope.  Resolve it only against that
+        // immutable instance map.  This keeps `Optional`'s historical `T`
+        // field from being re-read as an unbound nominal type (and recursively
+        // registering `Optional[T]`), while preserving the final rule that all
+        // newly lowered terms use ParamId.
+        if t.paramId == 0U64 && t.args.count() == 0U64 {
+            mut val termNameId: U64 = t.nameId
+            if termNameId == 0U64 {
+                termNameId = intern(c: inout self, start: t.nameStart, len: t.nameLen)
+            }
+            mut val pi: U64 = 0U64
+            while pi < params.count() && pi < values.count() {
+                val binder: Bind = params[pi]
+                if termNameId == binder.nameId || (binder.nameId == 0U64 && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: binder.nameStart, bLen: binder.nameLen)) {
+                    val replacement: U64 = values[pi]
+                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values) }
+                    return ref
+                }
+                pi += 1U64
+            }
+        }
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []
         mut val changed: Bool = false
@@ -121,13 +145,18 @@ pub impl Comp {
     // terms stay rigid: an unmatched binder remains symbolic.
     inout fn groundWitnessTypeTerm(ref: U64, params: Array[Bind], matchResult: WitnessMatch) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val semantic: TypeRef = self.arena.types[ref]
+        if semantic.paramId != 0U64 {
+            val byParam: U64 = self.witnessBindParamIndex(binds: matchResult.binds, paramId: semantic.paramId)
+            if byParam < matchResult.binds.count() { return matchResult.binds[byParam].term }
+        }
         val binder: U64 = self.plainBinder(ref: ref, params: params)
         if binder < params.count() {
             val found: U64 = self.witnessBindIndex(binds: matchResult.binds, binder: binder)
             if found < matchResult.binds.count() { return matchResult.binds[found].term }
             return ref
         }
-        val t: TypeRef = self.arena.types[ref]
+        val t: TypeRef = semantic
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []
         mut val changed: Bool = false

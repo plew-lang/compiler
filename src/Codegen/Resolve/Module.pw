@@ -879,7 +879,14 @@ pub impl Comp {
     // `T#Source`. Resolve that static source before the additive bare surface;
     // this is the same final-callable contract as explicit `value#Source.m()`.
     inout fn resolveMethodFinal(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
-        val rt: TypeInfo = self.typeOf(id: recv)
+        return self.resolveMethodFinalForType(recv: recv, receiverType: self.typeOf(id: recv), nameStart: nameStart, nameLen: nameLen, args: args)
+    }
+
+    // Selection over an already-resolved semantic receiver. A ChainHole
+    // continuation owns that receiver term structurally, so re-deriving it
+    // from the context-free ExprId query would discard the payload binding.
+    inout fn resolveMethodFinalForType(recv: U64, receiverType: TypeInfo, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+        val rt: TypeInfo = receiverType
         if !(rt.kind == 2 || rt.kind == 3 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.funcs.count()
         }

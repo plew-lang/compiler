@@ -657,7 +657,7 @@ pub impl Comp {
         }
     }
 
-    inout fn traceIncompleteFinalCallee(f: Func, args: Array[U64], recvRef: U64) {
+    inout fn traceIncompleteFinalCallee(exprId: U64, f: Func, args: Array[U64], recvRef: U64) {
         if !(self.traceCodegen) { return }
         mut val name: Array[U8] = []
         mut val i: U64 = 0U64
@@ -673,6 +673,10 @@ pub impl Comp {
         eprint(text: digitStrU(d: args.count()))
         eprint(text: " receiverRef=")
         eprint(text: digitStrU(d: recvRef))
+        eprint(text: " expr=")
+        eprint(text: digitStrU(d: exprId))
+        eprint(text: " offset=")
+        eprint(text: digitStrU(d: self.exprOffset(id: exprId)))
         eprint(text: " args=[")
         i = 0U64
         while i < args.count() {
@@ -706,6 +710,11 @@ pub impl Comp {
         val f: Func = self.arena.funcs[callee]
         mut val finalArgs: Array[U64] = []
         mut val recvInst: U64 = 0U64
+        // A semantic call-resolution template can provide the selected
+        // receiver directly.  In that case it outranks an AST type entry: a
+        // shared generic desugar node necessarily stores `Head[T]`, while this
+        // body instance may be compiling `Head[I64]`.
+        val hasReceiverInstanceOverride: Bool = recvInstOverride != 0U64
         mut val callArgs: Array[Arg] = []
         if !implicit {
             match self.arena.exprs[exprId] {
@@ -771,7 +780,7 @@ pub impl Comp {
         // Method whose receiver is the bare type name).  Its already-grounded
         // result supplies that same subject instance.  Preserve it here rather
         // than asking LLVM to infer type arguments from the spelling again.
-        if f.isAssoc && f.typeParams.count() > 0U64 {
+        if f.isAssoc && f.typeParams.count() > 0U64 && !hasReceiverInstanceOverride {
             val resultInst: U64 = self.groundedTypeOf(id: exprId)
             if resultInst != 0U64 && resultInst < self.arena.types.count() {
                 val resultTy: TypeRef = self.arena.types[resultInst]
@@ -860,7 +869,7 @@ pub impl Comp {
             }
             if finalArgs.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: finalArgs)) {
                 // An incomplete generic call has no emittable final instance.
-                self.traceIncompleteFinalCallee(f: f, args: finalArgs, recvRef: recvInst)
+                self.traceIncompleteFinalCallee(exprId: exprId, f: f, args: finalArgs, recvRef: recvInst)
                 return
             }
         }
@@ -1157,10 +1166,14 @@ pub impl Comp {
                 }
             }
         }
-        // The ordinary collection walk can encounter a template before this
-        // finalization pass reaches its concrete instance.  Keep one entry per
-        // body key, but replace that provisional result with the resolved
-        // callable/receiver rather than silently preserving a zero sentinel.
+        // The ordinary collection walk can revisit a call after Mono has
+        // already completed it.  A later record pass may only have the shared
+        // declaration template (`fn[I64, Item]`), whereas
+        // `enqueueSelectedCallee` has the selected witness and records the
+        // concrete result (`fn[I64, I64]`).  Do not let that less-informed
+        // recovery overwrite a completed final descriptor.  `recordBodyCallee`
+        // may fill a missing field; the explicit finalization setters are the
+        // only writers allowed to replace one.
         if priorIdx < self.finalCalleeCount() {
             val prior: BodyCallee = self.arena.finalCallees[priorIdx]
             mut val finalCallee: U64 = prior.callee
@@ -1168,9 +1181,9 @@ pub impl Comp {
             mut val finalRecv: U64 = prior.recvTypeRef
             if recvTypeRef != 0U64 { finalRecv = recvTypeRef }
             mut val finalResult: U64 = prior.resultTypeRef
-            if resultTypeRef != 0U64 { finalResult = resultTypeRef }
+            if finalResult == 0U64 && resultTypeRef != 0U64 { finalResult = resultTypeRef }
             mut val finalArgs: Array[U64] = prior.calleeTypeArgs
-            if calleeTypeArgs.count() > 0U64 { finalArgs = calleeTypeArgs }
+            if finalArgs.count() == 0U64 && calleeTypeArgs.count() > 0U64 { finalArgs = calleeTypeArgs }
             self.arena.finalCallees.set(i: priorIdx, value: <BodyCallee bodyId=prior.bodyId exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetNameStart=prior.targetNameStart targetNameLen=prior.targetNameLen targetTypeRef=prior.targetTypeRef />)
             return
         }
@@ -1495,6 +1508,27 @@ pub impl Comp {
     // decision for every downstream consumer (instance registration, type
     // recovery, and LLVM emission).
     inout fn resolveBodyCallee(exprId: U64) -> U64 {
+        // An OptChain rewrite manufactures associated factory calls after the
+        // written program was resolved.  Their ChainSite entry is therefore
+        // the semantic call-resolution template.  Ground only its receiver
+        // term under this body instance, then use the normal BodyCallee /
+        // reachability machinery; do not re-run name lookup on `Head.empty`.
+        val chainTemplate: U64 = self.chainImplicitCallee(exprId: exprId)
+        if chainTemplate < self.arena.funcs.count() {
+            val stageTerm: U64 = self.chainImplicitStageRef(exprId: exprId)
+            val stageRef: U64 = self.groundTypeRef(ref: stageTerm)
+            // A generic declaration's AST is visited before any concrete body
+            // instance exists.  Its Chain template is semantic evidence, not
+            // an emittable call: wait until the body environment grounds the
+            // stage.  Recording `Optional[T].empty()` here would leak a
+            // symbolic descriptor into the final-call table and make LLVM see
+            // a factory with an unfilled T.
+            if stageRef == 0U64 || !(self.tyRefIsGround(ref: stageRef)) {
+                return self.arena.funcs.count()
+            }
+            self.materializeImplicitAssocTemplate(exprId: exprId, callee: chainTemplate, recvRef: stageRef)
+            return chainTemplate
+        }
         // Non-generic verification may provide an instance-invariant final
         // callable, including generic free-call substitutions.  Keep that
         // descriptor: it is the call-site authority consumed by Mono and LLVM.
@@ -1517,6 +1551,10 @@ pub impl Comp {
             }
         }
         mut val callee: U64 = self.arena.funcs.count()
+        // A resolved receiver is part of a final call decision. In particular,
+        // an OptChain desugar replaces its hole with a synthetic local whose
+        // source spelling cannot be re-resolved after the rewrite.
+        mut val resolvedReceiverRef: U64 = 0U64
         match self.arena.exprs[exprId] {
             Expr.Call(val nameStart, val nameLen, val args) => {
                 val localIdx: U64 = self.localIndexByName(start: nameStart, len: nameLen)
@@ -1547,6 +1585,7 @@ pub impl Comp {
                     callee = self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 } else {
                     val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+                    resolvedReceiverRef = recvRef
                     if recvRef != 0U64 && recvRef < self.arena.types.count() {
                         if rangeEquals(bytes: self.arena.bytes, start: self.arena.types[recvRef].nameStart, len: self.arena.types[recvRef].nameLen, kw: "Self") {
                             self.errorAt(offset: nameStart, msg: "internal diagnostic: final method receiver remained Self after body substitution")
@@ -1571,10 +1610,28 @@ pub impl Comp {
                             callee = self.findMethod(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef, useOffset: self.exprOffset(id: exprId))
                         }
                     }
+                    if self.traceCodegen && callee >= self.arena.funcs.count() {
+                        eprint(text: "[trace-codegen] unresolved method expr=")
+                        eprint(text: digitStrU(d: exprId))
+                        eprint(text: " offset=")
+                        eprint(text: digitStrU(d: self.exprOffset(id: exprId)))
+                        eprint(text: " body=")
+                        eprint(text: digitStrU(d: self.cur.bodyFnIdx))
+                        eprint(text: " receiver=")
+                        self.traceMonoTypeHead(ref: recvRef)
+                        if recvRef < self.arena.types.count() {
+                            eprint(text: " any=")
+                            if self.arena.types[recvRef].isAny { eprint(text: "1") } else { eprint(text: "0") }
+                            eprint(text: " param=")
+                            eprint(text: digitStrU(d: self.arena.types[recvRef].paramId))
+                        }
+                        eprint(text: "\n")
+                    }
                 }
             }
             Expr.ExtMethod(val recv, val source, val nameStart, val nameLen, val args) => {
                 val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
+                resolvedReceiverRef = recvRef
                 val sourceId: U64 = source.surfaceId
                 callee = self.resolveBodyMethodForRef(recv: recv, recvRef: recvRef, sourceId: sourceId, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                 if callee >= self.arena.funcs.count() {
@@ -1594,11 +1651,41 @@ pub impl Comp {
             }
             _ => {}
         }
-        self.recordBodyCallee(exprId: exprId, callee: callee)
+        self.recordBodyCallee(exprId: exprId, callee: callee, recvTypeOverride: resolvedReceiverRef)
         self.recordBodyAnyTarget(exprId: exprId)
         self.recordBodyClosureTarget(exprId: exprId, callee: callee)
-        self.enqueueSelectedCallee(exprId: exprId, callee: callee)
+        self.enqueueSelectedCallee(exprId: exprId, callee: callee, recvInstOverride: resolvedReceiverRef)
         return callee
+    }
+
+    // Turn one declaration-time implicit associated-call template into the
+    // concrete final decision for the active BodyInstance.  Unlike a written
+    // source call, a template has already selected both callable and subject;
+    // consulting its shared synthetic AST would reintroduce `Head[T]` and lose
+    // the concrete receiver.  This is the narrow first consumer of the wider
+    // CallResolution-template contract: selected callee + receiver term yield
+    // a complete BodyCallee without a second inference pass.
+    inout fn materializeImplicitAssocTemplate(exprId: U64, callee: U64, recvRef: U64) {
+        self.recordBodyCallee(exprId: exprId, callee: callee, recvTypeOverride: recvRef)
+        if callee >= self.arena.funcs.count() || recvRef == 0U64 || recvRef >= self.arena.types.count() {
+            return
+        }
+        val f: Func = self.arena.funcs[callee]
+        if !(f.isAssoc) {
+            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit call template selected a non-associated callable")
+            return
+        }
+        val args: Array[U64] = self.arena.types[recvRef].args
+        if args.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: args)) {
+            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit associated call template has no complete receiver substitution")
+            return
+        }
+        self.setBodyCalleeReceiverRef(exprId: exprId, recvRef: recvRef)
+        self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: args)
+        self.setBodyCalleeResultRef(exprId: exprId, resultRef: self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvRef, calleeArgs: args))
+        self.enqueueFinalBody(fnIdx: callee, args: args, recvInstRef: recvRef)
+        self.enqueueSelectedAssocInstance(callee: callee, args: args, recvInstRef: recvRef)
+        self.enqueueSelectedFreeInstance(callee: callee, args: args)
     }
 
     // Walk one already-selected concrete body instance.  It is the frontend
@@ -1607,6 +1694,9 @@ pub impl Comp {
     // nested calls.  This is the only place generic bodies acquire their
     // instance-specific final-callable entries.
     inout fn scanFinalBodyInstance(bodyId: U64) {
+        if self.tracePhases {
+            self.traceFinalBodyScans += 1U64
+        }
         val instance: BodyInstance = self.arena.bodyInstances[bodyId - 1U64]
         val f: Func = self.arena.funcs[instance.fnIdx]
         self.cur.locals = []
@@ -1643,6 +1733,54 @@ pub impl Comp {
         }
         self.scanBlockInsts(blkId: f.body)
         if f.hasRecv || f.isAssoc { self.clearSelfItemEnv() }
+    }
+
+    // Trace the instance fan-out by callable, not merely its total. The normal
+    // compilation path does not allocate this summary or inspect the body table.
+    inout fn traceFinalBodyInstanceSummary() {
+        if !(self.tracePhases) { return }
+        mut val counts: Array[U64] = []
+        mut val fi: U64 = 0U64
+        while fi < self.arena.funcs.count() {
+            counts.append(0U64)
+            fi += 1U64
+        }
+        mut val bi: U64 = 0U64
+        while bi < self.arena.bodyInstances.count() {
+            val fnIdx: U64 = self.arena.bodyInstances[bi].fnIdx
+            if fnIdx < counts.count() {
+                counts[fnIdx] = counts[fnIdx] + 1U64
+            }
+            bi += 1U64
+        }
+        mut val rank: U64 = 0U64
+        while rank < 12U64 {
+            mut val bestFn: U64 = counts.count()
+            mut val bestCount: U64 = 0U64
+            fi = 0U64
+            while fi < counts.count() {
+                if counts[fi] > bestCount {
+                    bestFn = fi
+                    bestCount = counts[fi]
+                }
+                fi += 1U64
+            }
+            if bestCount == 0U64 { return }
+            val f: Func = self.arena.funcs[bestFn]
+            mut val nameBytes: Array[U8] = []
+            mut val ni: U64 = 0U64
+            while ni < f.nameLen {
+                nameBytes.append(self.arena.bytes[f.nameStart + ni])
+                ni += 1U64
+            }
+            eprint(text: "[trace-phase] finalize-callables:body-fn ")
+            eprint(text: stringFromBytesUnchecked(nameBytes))
+            eprint(text: "=")
+            traceU64(n: bestCount)
+            eprint(text: "\n")
+            counts[bestFn] = 0U64
+            rank += 1U64
+        }
     }
 
     // Close the semantic call graph before backend emission.  The existing
@@ -1864,17 +2002,22 @@ pub impl Comp {
     // Replace the ChainHole at the root of an OptChain's `cont` (the leftmost base
     // spine) with a reference to the match-bound value `__chainVal`, anchored at the
     // `?.member` source token. `cont` is `hole.b.c` -> `__chainVal.b.c`.
-    inout fn retargetChainHole(exprId: U64, cvStart: U64, cvLen: U64, anchor: U64) {
+    inout fn retargetChainHole(exprId: U64, cvStart: U64, cvLen: U64, anchor: U64, valueRef: U64) {
         match self.arena.exprs[exprId] {
             Expr.ChainHole => {
                 self.arena.exprs[exprId] = <Expr.Ident start=cvStart len=cvLen />
                 self.arena.exprSpanStart[exprId] = anchor
+                // `__chainVal` is a real semantic temporary after the rewrite.
+                // Preserve the parent stage's parametric Value term on this
+                // replacement node so finalization and LLVM never recover its
+                // receiver from the synthetic spelling.
+                self.recordSyntheticExprType(exprId: exprId, ref: valueRef)
             }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
-            Expr.Method(val recv, nameStart: _, nameLen: _, args: _) => { self.retargetChainHole(exprId: recv, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
-            Expr.Index(val base, index: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
-            Expr.Deref(val base) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor) }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor, valueRef: valueRef) }
+            Expr.Method(val recv, nameStart: _, nameLen: _, args: _) => { self.retargetChainHole(exprId: recv, cvStart: cvStart, cvLen: cvLen, anchor: anchor, valueRef: valueRef) }
+            Expr.Index(val base, index: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor, valueRef: valueRef) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor, valueRef: valueRef) }
+            Expr.Deref(val base) => { self.retargetChainHole(exprId: base, cvStart: cvStart, cvLen: cvLen, anchor: anchor, valueRef: valueRef) }
             _ => {}
         }
     }
@@ -1885,36 +2028,6 @@ pub impl Comp {
     // generic receiver from its bare source spelling.
     inout fn recordSyntheticExprType(exprId: U64, ref: U64) {
         self.recordSemanticExprTerm(exprId: exprId, term: ref)
-    }
-
-    // A rewritten chain MatchExpr has exactly two Give arms, each containing
-    // one synthesized associated Method.  Retag both the call and its type
-    // qualifier with the grounded stage type for the active body instance.
-    inout fn recordChainDesugarStageType(exprId: U64, stageRef: U64) {
-        match self.arena.exprs[exprId] {
-            Expr.MatchExpr(scrut: _, val arms) => {
-                mut val ai: U64 = 0U64
-                while ai < arms.count() {
-                    val stmts: Array[U64] = self.arena.blocks[arms[ai].body].stmts
-                    if stmts.count() > 0U64 {
-                        match self.arena.stmts[stmts[0]] {
-                            Stmt.Give(val value) => {
-                                self.recordSyntheticExprType(exprId: value, ref: stageRef)
-                                match self.arena.exprs[value] {
-                                    Expr.Method(val recv, nameStart: _, nameLen: _, args: _) => {
-                                        self.recordSyntheticExprType(exprId: recv, ref: stageRef)
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    ai += 1U64
-                }
-            }
-            _ => {}
-        }
     }
 
     inout fn rewriteOptChainToChainMatch(exprId: U64, base: U64, cont: U64, memberStart: U64, headStart: U64, headLen: U64, stageRef: U64) {
@@ -1933,7 +2046,15 @@ pub impl Comp {
         // Some(v: val __chainVal) => <Head.fromValue value=(cont with hole -> __chainVal) />
         val fromRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
         self.recordSyntheticExprType(exprId: fromRecv, ref: stageRef)
-        self.retargetChainHole(exprId: cont, cvStart: cvN.nameStart, cvLen: cvN.nameLen, anchor: memberStart)
+        mut val valueRef: U64 = 0U64
+        if stageRef != 0U64 && stageRef < self.arena.types.count() {
+            val stage: TypeRef = self.arena.types[stageRef]
+            val valueIndex: U64 = self.chainValueArgIndex(headStart: stage.nameStart, headLen: stage.nameLen)
+            if valueIndex < stage.args.count() {
+                valueRef = stage.args[valueIndex]
+            }
+        }
+        self.retargetChainHole(exprId: cont, cvStart: cvN.nameStart, cvLen: cvN.nameLen, anchor: memberStart, valueRef: valueRef)
         // the synthesized nodes anchor at the `?.member` source token: their own name
         // spans are interned (`chain`/`fromValue`/`__chainVal`), so a diagnostic on the
         // desugar would otherwise point at a garbage line outside the source. `cont`'s
@@ -1968,6 +2089,13 @@ pub impl Comp {
         mut val arms: Array[MatchArm] = []
         arms.append(someArm)
         arms.append(noneArm)
+        // These factory calls are compiler-introduced.  Select their exact
+        // declarations while the Chain conformer's source head is still
+        // available, then retain that semantic template in ChainSite.  The
+        // shared rewritten AST must never be a second source-resolution input.
+        val fromValueCallee: U64 = self.findAssoc(recvStart: headStart, recvLen: headLen, nameStart: fromValueN.nameStart, nameLen: fromValueN.nameLen, args: fromArgs)
+        val emptyCallee: U64 = self.findAssoc(recvStart: headStart, recvLen: headLen, nameStart: emptyN.nameStart, nameLen: emptyN.nameLen, args: noArgs)
+        self.setChainSiteImplicitCalls(exprId: exprId, fromValueExprId: fromCall, fromValueCallee: fromValueCallee, emptyExprId: emptyCall, emptyCallee: emptyCallee)
         self.arena.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=arms />
     }
 
@@ -2032,10 +2160,7 @@ pub impl Comp {
         // type `cont` under ChainHole = V. exprType's Field/Method arms ground member
         // types through V's instance (genericFieldTypeInfo for a generic chain Value),
         // so U comes back concrete — no separate groundUnderInst needed.
-        val savedHole: U64 = self.cur.chainHoleRef
-        self.cur.chainHoleRef = vRef
-        val uInfo: TypeInfo = self.exprType(id: cont)
-        self.cur.chainHoleRef = savedHole
+        val uInfo: TypeInfo = self.exprTypeWithChainHole(id: cont, chainHoleRef: vRef)
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
             val noTArgs: Array[U64] = []
@@ -2069,6 +2194,14 @@ pub impl Comp {
         if oRef == 0 || oRef >= self.arena.types.count() {
             return
         }
+        // This shared rewritten tree is also visited while validating a
+        // generic declaration.  `Head[T]` is a template then, not a concrete
+        // monomorphization request: adding factory FnInsts at that point
+        // creates an unfilled `empty[T]` body that survives to LLVM.  Concrete
+        // BodyInstance scans revisit the same ChainSite with a ground stage.
+        if !(self.tyRefIsGround(ref: oRef)) {
+            return
+        }
         val ot: TypeRef = self.arena.types[oRef]
         if ot.args.count() < 1 {
             return
@@ -2081,10 +2214,11 @@ pub impl Comp {
         }
         val uRef: U64 = ot.args[vi]
         val vRef: U64 = self.groundTypeRef(ref: site.valueRef)
-        // The desugar tree is shared by generic body instances.  Re-stamp its
-        // two synthetic factory calls with THIS instance's grounded stage
-        // type before they enter ordinary call finalization.
-        self.recordChainDesugarStageType(exprId: exprId, stageRef: oRef)
+        // The desugar tree is shared by generic body instances. Its synthetic
+        // receiver/call entries were recorded once with the parametric
+        // `stageRef` during rewriting; never overwrite those AST-global
+        // entries with this instance's `oRef`. `groundedTypeOf` applies the
+        // active BodyInstance environment when finalizing each call.
         self.scanType(ref: oRef)
         // the chain() result `Optional[V]` (V = the receiver's chain Value = its first
         // type arg): register the concrete instance so the desugar's `match base.chain()`
@@ -2102,13 +2236,10 @@ pub impl Comp {
         optUArgs.append(uRef)
         val optURef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs />)
         self.scanType(ref: optURef)
-        // both factories monomorphize to `Head[…U…]`: `empty()` has no argument, and the
-        // `fromValue(value:)` argument is the synthesized `__chainVal.member` whose type
-        // the argument-inference path can't recover (a fresh match-bound place), so
-        // register both instances explicitly keyed by the head's full type args (the Value
-        // position is U, sibling parameters carried through — see chainStageResultRef).
-        self.registerChainFactoryInst(headStart: headStart, headLen: headLen, name: "empty", args: ot.args)
-        self.registerChainFactoryInst(headStart: headStart, headLen: headLen, name: "fromValue", args: ot.args)
+        // The two factories are reached through their ChainSite call
+        // templates when the rewritten match arms are scanned below.  Do not
+        // append raw FnInsts here: that bypasses the selected receiver and
+        // duplicates a symbolic generic template as if it were concrete.
     }
 
     // The recorded `?.` site of a chain-rewritten match at `exprId`
@@ -2124,17 +2255,46 @@ pub impl Comp {
         return <ChainSite exprId=0 stageRef=0 valueRef=0 />
     }
 
-    inout fn registerChainFactoryInst(headStart: U64, headLen: U64, name: String, args: Array[U64]) {
-        val fi: U64 = self.findAssocByName(recvStart: headStart, recvLen: headLen, name: name)
-        if fi >= self.arena.funcs.count() {
-            return
+    // Attach the two declaration-time selections made by the Chain desugar.
+    // ChainSite is the declaration-owned template; BodyCallee remains the
+    // concrete, body-instance-owned result of grounding it.
+    inout fn setChainSiteImplicitCalls(exprId: U64, fromValueExprId: U64, fromValueCallee: U64, emptyExprId: U64, emptyCallee: U64) {
+        mut val i: U64 = 0U64
+        while i < self.decls.chainSites.count() {
+            val site: ChainSite = self.decls.chainSites[i]
+            if site.exprId == exprId {
+                self.decls.chainSites.set(i: i, value: <ChainSite exprId=site.exprId stageRef=site.stageRef valueRef=site.valueRef fromValueExprId=fromValueExprId fromValueCallee=fromValueCallee emptyExprId=emptyExprId emptyCallee=emptyCallee />)
+                return
+            }
+            i += 1U64
         }
-        if !(self.isGenericFreeFn(fi: fi)) {
-            return
+    }
+
+    // Return the declaration-time template selected for an implicit Chain
+    // factory call, or the normal no-callable sentinel.  This is deliberately
+    // keyed by the synthetic call ExprId, not by its text: the text is only a
+    // lowering artifact and may be shared by several generic body instances.
+    fn chainImplicitCallee(exprId: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.chainSites.count() {
+            val site: ChainSite = self.decls.chainSites[i]
+            if site.fromValueExprId == exprId { return site.fromValueCallee }
+            if site.emptyExprId == exprId { return site.emptyCallee }
+            i += 1U64
         }
-        if !(self.fnInstExists(fnIdx: fi, args: args)) {
-            self.monoWork.fnInsts.append(<FnInst fnIdx=fi args=args />)
+        return self.arena.funcs.count()
+    }
+
+    fn chainImplicitStageRef(exprId: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.chainSites.count() {
+            val site: ChainSite = self.decls.chainSites[i]
+            if site.fromValueExprId == exprId || site.emptyExprId == exprId {
+                return site.stageRef
+            }
+            i += 1U64
         }
+        return 0U64
     }
 
     inout fn findAssocByName(recvStart: U64, recvLen: U64, name: String) -> U64 {
@@ -2212,6 +2372,9 @@ pub impl Comp {
     }
 
     inout fn scanExprInsts(exprId: U64) {
+        if self.tracePhases {
+            self.traceExprInstScans += 1U64
+        }
         match self.arena.exprs[exprId] {
             Expr.Ident(val start, val len) => {
                 // capture detection: inside a closure, an identifier that resolves to
@@ -2306,14 +2469,15 @@ pub impl Comp {
                 }
                 val finalIdx: U64 = self.resolveBodyCallee(exprId: exprId)
                 self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: finalIdx)
-                // register the call's result type: a combinator on a generic receiver
-                // (`mapIter.filter(p)`) yields a new adapter instantiation
-                // (`FilterIter[MapIter[…],…]`) that no field/signature scan reaches, so
-                // its typedef + methods (and the provided method's reachability) depend
-                // on registering it here.
-                val mrt: TypeInfo = self.typeOf(id: exprId)
-                if mrt.ref != 0 {
-                    self.scanType(ref: mrt.ref)
+                // A selected method's result is part of its final descriptor.
+                // `typeOf` is declaration-template typing and can retain a
+                // provided trait's symbolic `Item`; registering that value
+                // creates a second, invalid adapter body alongside the exact
+                // `FilterIter[MapIter[..., I64], ...]` result.  Reachability
+                // must consume the same CallResolution result as Mono/LLVM.
+                val resultRef: U64 = self.bodyCalleeResultRef(exprId: exprId)
+                if resultRef != 0U64 {
+                    self.scanType(ref: resultRef)
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => { self.scanExprInsts(exprId: base) }
@@ -2426,11 +2590,18 @@ pub impl Comp {
                         val noCA: Array[U64] = []
                         self.cur.typeParams = noCP
                         self.cur.typeArgs = noCA
-                        val btP: TypeInfo = self.typeOf(id: base)
-                        val stageRef: U64 = self.chainStageResultRef(baseRef: btP.ref, cont: cont)
+                        // The rewritten tree is shared by every generic body
+                        // instance. Its declaration-time stage must therefore
+                        // start from Record's parametric term, never from
+                        // `typeOf(base)`: the latter may already reflect the
+                        // first concrete body currently being scanned and
+                        // would freeze `T` to that instance. `stageRef` is
+                        // grounded later, once per BodyInstance.
+                        val baseTerm: U64 = self.parametricExprTerm(exprId: base)
+                        val stageRef: U64 = self.chainStageResultRef(baseRef: baseTerm, cont: cont)
                         if stageRef != 0 {
-                            if btP.ref < self.arena.types.count() {
-                                val bref: TypeRef = self.arena.types[btP.ref]
+                            if baseTerm < self.arena.types.count() {
+                                val bref: TypeRef = self.arena.types[baseTerm]
                                 val vIdx: U64 = self.chainValueArgIndex(headStart: bref.nameStart, headLen: bref.nameLen)
                                 if vIdx < bref.args.count() {
                                     self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=bref.args[vIdx] />)

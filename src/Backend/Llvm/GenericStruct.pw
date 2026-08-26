@@ -336,6 +336,27 @@ pub impl LlvmCtx {
             c.cur.typeArgs = c.arena.types[ref].args
             return true
         }
+        // An enum instance's semantic substitution belongs to the TypeRef and
+        // its declaration, not to whether this backend has already emitted a
+        // named LLVM layout for that instance.  Match-payload lowering needs
+        // the environment even for a signature-only `Optional[any P]`; making
+        // it depend on `genEnumRefs` silently falls back to the template field
+        // type (`T` as i64) while the actual payload is the existential fat
+        // value.  The resulting LLVM type mismatch can crash the C API.
+        //
+        // The migration target is a resolved TypeTerm owner query.  Until that
+        // carrier is complete, use the generic enum declaration selected by
+        // this TypeRef as the semantic fallback; layout registration remains a
+        // separate backend concern.
+        if ref < c.arena.types.count() {
+            val t: TypeRef = c.arena.types[ref]
+            val ei: U64 = c.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+            if ei < c.arena.enums.count() {
+                c.cur.typeParams = c.arena.enums[ei].typeParams
+                c.cur.typeArgs = t.args
+                return true
+            }
+        }
         return false
     }
 

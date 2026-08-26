@@ -9,6 +9,25 @@ pub impl LlvmCtx {
         // vtable. The receiver's TypeRef carries isAny.
         val finalMfi: U64 = c.bodyCallee(exprId: callId)
         val selectedRecvRef: U64 = c.bodyCalleeReceiverRef(exprId: callId)
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] backend method call=")
+            eprint(text: digitStrU(d: callId))
+            eprint(text: " offset=")
+            eprint(text: digitStrU(d: c.exprOffset(id: callId)))
+            eprint(text: " name=")
+            mut val traceName: Array[U8] = []
+            mut val traceI: U64 = 0U64
+            while traceI < nameLen {
+                traceName.append(c.arena.bytes[nameStart + traceI])
+                traceI += 1U64
+            }
+            eprint(text: stringFromBytesUnchecked(traceName))
+            eprint(text: " receiver=")
+            c.traceMonoTypeHead(ref: selectedRecvRef)
+            eprint(text: " targetKind=")
+            eprint(text: digitStrU(d: c.bodyCalleeTargetKind(exprId: callId)))
+            eprint(text: "\n")
+        }
         if selectedRecvRef != 0U64 {
             if refIsAny(c: inout c, ref: selectedRecvRef) {
                 if c.bodyCalleeTargetKind(exprId: callId) != 1U64 {

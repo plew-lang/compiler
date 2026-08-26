@@ -135,59 +135,87 @@ pub impl Comp {
     // this here (rather than in either syntax arm) makes source qualification a pure
     // selection concern, never a second generic-inference mechanism.
     inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: Array[Arg]) -> U64 {
-        if f.retTy == 0U64 || !(self.isGenericInst(ref: recvTy.ref)) {
+        // Declaration-time result typing must accept a symbolic generic
+        // receiver (`Box[T_outer]`) as well as a concrete one (`Box[I64]`).
+        // The receiver's argument terms still provide the complete mapping to
+        // the selected method/impl binders; only an absent TypeRef is invalid.
+        if f.retTy == 0U64 || recvTy.ref == 0U64 || recvTy.ref >= self.arena.types.count() {
             return 0U64
         }
-        val inst: TypeRef = self.arena.types[recvTy.ref]
-        mut val rcount: U64 = 0U64
-        val gsi: U64 = self.genericStructIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
-        if gsi < self.arena.structs.count() {
-            rcount = self.arena.structs[gsi].typeParams.count()
-        } else {
-            val gei: U64 = self.genericEnumIndex(nameStart: inst.nameStart, nameLen: inst.nameLen)
-            if gei >= self.arena.enums.count() {
-                return 0U64
-            }
-            rcount = self.arena.enums[gei].typeParams.count()
-        }
-        if rcount == 0U64 || f.typeParams.count() < rcount || inst.args.count() < rcount {
-            return 0U64
-        }
+        // A method's generic binder list can contain the nominal declaration
+        // binder, an impl receiver-pattern binder, and method-owned binders.
+        // They are lexical identities, not positional aliases. Match the
+        // selected receiver against the declared pattern once and use that
+        // directional substitution for the return term (the same operation
+        // conformance proofs use).
+        val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: recvTy.ref)
+        if receiverMatch.conformIdx == 0U64 { return 0U64 }
         mut val fullArgs: Array[U64] = []
-        mut val ri: U64 = 0U64
-        while ri < rcount {
-            fullArgs.append(inst.args[ri])
-            ri += 1U64
+        mut val fi: U64 = 0U64
+        while fi < f.typeParams.count() {
+            fullArgs.append(0U64)
+            fi += 1U64
         }
-        if f.typeParams.count() > rcount {
-            // Infer only method-owned parameters. The receiver-owned prefix is
-            // supplied by `inst`, including for an argless `box#E.value()` call.
-            val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
-            mut val oi: U64 = rcount
-            while oi < inferred.count() {
-                fullArgs.append(inferred[oi])
-                oi += 1U64
+        mut val bi: U64 = 0U64
+        while bi < receiverMatch.binds.count() {
+            val binding: WitnessBind = receiverMatch.binds[bi]
+            mut val target: U64 = f.typeParams.count()
+            if binding.paramId != 0U64 {
+                mut val pi: U64 = 0U64
+                while pi < f.typeParams.count() {
+                    if f.typeParams[pi].paramId == binding.paramId {
+                        target = pi
+                        break
+                    }
+                    pi += 1U64
+                }
             }
+            if target >= fullArgs.count() { target = binding.binder }
+            if target < fullArgs.count() {
+                fullArgs.set(i: target, value: binding.term)
+            }
+            bi += 1U64
         }
-        if fullArgs.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: fullArgs)) {
+        // Fill only binders the receiver pattern did not determine. Those are
+        // method-owned generic parameters and may be inferred from arguments.
+        val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
+        fi = 0U64
+        while fi < inferred.count() && fi < fullArgs.count() {
+            if fullArgs[fi] == 0U64 { fullArgs.set(i: fi, value: inferred[fi]) }
+            fi += 1U64
+        }
+        // This is a declaration-time semantic query as well as a concrete
+        // codegen query.  A receiver such as `Box[T_outer]` supplies a fully
+        // resolved *symbolic* argument for the method's `T_impl`; requiring a
+        // concrete term here discards that relation and makes `?.read()` lose
+        // its outer T.  Only an absent inference slot is incomplete.
+        if fullArgs.count() != f.typeParams.count() || !(self.fnArgsAllResolved(args: fullArgs)) {
             return 0U64
         }
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        val savedSelf: U64 = self.cur.selfRef
-        val savedItem: U64 = self.cur.itemRef
-        self.setSelfItemEnv(recvStart: inst.nameStart, recvLen: inst.nameLen, recvInstRef: recvTy.ref)
-        self.cur.typeParams = f.typeParams
-        self.cur.typeArgs = fullArgs
-        val grounded: U64 = self.groundTypeRef(ref: f.retTy)
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        self.cur.selfRef = savedSelf
-        self.cur.itemRef = savedItem
-        if grounded != 0U64 && self.tyRefIsGround(ref: grounded) {
+        // Preserve ParamId identity in the result. The legacy Cursor grounding
+        // path can use spelling fallback while translating a method binder;
+        // an immutable map cannot, so the returned outer `T` remains the
+        // caller's lexical term for later BodyInstance grounding.
+        val environment: InstanceEnvironment = <InstanceEnvironment params=f.typeParams args=fullArgs receiverRef=recvTy.ref />
+        val grounded: U64 = self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: recvTy.ref, itemRef: 0U64)
+        if grounded != 0U64 {
             return grounded
         }
         return 0U64
+    }
+
+    // `fnArgsAllGround` is intentionally stricter: Mono may only enqueue a
+    // concrete code-generation instance.  Frontend result typing instead
+    // needs a complete substitution that is allowed to retain enclosing
+    // ParamId terms until that enclosing body is instantiated.
+    inout fn fnArgsAllResolved(args: Array[U64]) -> Bool {
+        if args.count() == 0U64 { return false }
+        mut val i: U64 = 0U64
+        while i < args.count() {
+            if args[i] == 0U64 { return false }
+            i += 1U64
+        }
+        return true
     }
 
     // The non-generic receiver half of the same final-callable calculation.  `Self`
@@ -327,7 +355,18 @@ pub impl Comp {
         return scalarInfo()
     }
 
+    // The context-free expression query. An optional-chain continuation uses
+    // the explicit variant below: its root ChainHole is a structural input from
+    // the preceding chain stage, never ambient mutable Cursor state.
     inout fn exprType(id: U64) -> TypeInfo {
+        return self.exprTypeWithChainHole(id: id, chainHoleRef: 0U64)
+    }
+
+    // Type `id` with the one structural input an OptChain continuation owns.
+    // A continuation AST has exactly one parent stage, so this is not a general
+    // context cache: the parent supplies its parametric Value term and recursive
+    // children receive that same input explicitly.
+    inout fn exprTypeWithChainHole(id: U64, chainHoleRef: U64) -> TypeInfo {
         val e: Expr = self.arena.exprs[id]
         match e {
             Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
@@ -435,6 +474,18 @@ pub impl Comp {
                             val lt: TypeRef = self.arena.types[lo.ty]
                             return <TypeInfo kind=2 nameStart=lt.nameStart nameLen=lt.nameLen ref=lo.ty />
                         }
+                        // A declaration-time generic term such as
+                        // `Optional[Box[T]]` is not a *concrete* generic
+                        // instance, but it is still a complete semantic term.
+                        // Preserve its TypeRef while recording so consumers
+                        // can later substitute the lexical ParamId; reducing
+                        // it to the `Optional` spelling loses every argument.
+                        if lo.ty != 0U64 && lo.ty < self.arena.types.count() {
+                            val declared: TypeRef = self.arena.types[lo.ty]
+                            if declared.args.count() > 0U64 || declared.paramId != 0U64 {
+                                return self.typeInfoOfRef(ref: lo.ty)
+                            }
+                        }
                         if self.isStrongRefInst(ref: lo.ty) || self.isWeakRefLikeInst(ref: lo.ty) {
                             val lt2: TypeRef = self.arena.types[lo.ty]
                             return <TypeInfo kind=2 nameStart=lt2.nameStart nameLen=lt2.nameLen ref=lo.ty />
@@ -511,7 +562,7 @@ pub impl Comp {
             Expr.Unary(val op, val operand) => {
                 // A struct operand is a trait-dispatched unary (Neg/Not/BitNot); its
                 // result is the trait's Output, which for standard operators is Self.
-                val ot: TypeInfo = self.exprType(id: operand)
+                val ot: TypeInfo = self.exprTypeWithChainHole(id: operand, chainHoleRef: chainHoleRef)
                 if ot.kind == 2 { return ot }
                 // `-` / `~` preserve the operand's width; `!` is Bool (width-less).
                 if op == opSub() { return ot }
@@ -526,12 +577,12 @@ pub impl Comp {
                 // instead of reporting it as type-less. Comparisons fall to scalar Bool.
                 if op >= 56 {
                     if op <= 60 {
-                        return self.binResultTypeInfo(lhs: lhs, rhs: rhs, op: op)
+                        return self.binResultTypeInfoWithChainHole(lhs: lhs, rhs: rhs, op: op, chainHoleRef: chainHoleRef)
                     }
                 }
                 if op >= 74 {
                     if op <= 78 {
-                        return self.binResultTypeInfo(lhs: lhs, rhs: rhs, op: op)
+                        return self.binResultTypeInfoWithChainHole(lhs: lhs, rhs: rhs, op: op, chainHoleRef: chainHoleRef)
                     }
                 }
                 // comparisons (50-55) and logical `&&`/`||` (61,62) produce Bool — report
@@ -556,7 +607,7 @@ pub impl Comp {
                 mut val fi: U64 = self.arena.funcs.count()
                 if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
                     if args.count() == 2U64 {
-                        val br: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: args[0].expr))
+                        val br: U64 = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: args[0].expr, chainHoleRef: chainHoleRef))
                         if br != 0U64 {
                             val brt: TypeRef = self.arena.types[br]
                             val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)
@@ -647,7 +698,7 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 // (`s.bytes()`/`arr.count()` are ordinary methods now — collections.md §3-付録4 —
                 // typed through method resolution, not a field branch. A bare no-paren `arr.count`
                 // has no property branch: it falls to field-type lookup, which finds no `count`
@@ -694,7 +745,7 @@ pub impl Comp {
             }
             Expr.Array(val elems) => { return scalarInfo() }
             Expr.Index(val base, val index) => {
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 if bt.kind == 3 {
                     // nested array: if the element is itself an `Array[X]`, indexing
                     // yields an array (kind 3) whose element is X — not a kind-2 value
@@ -760,7 +811,7 @@ pub impl Comp {
                 // method resolution and view-aware overload selection downstream — so the
                 // typed IR must carry it, not drop it for the dispatch site to re-derive.
                 // `recv#!Ext` (strip) removes the view (the result type is plain).
-                val bt: TypeInfo = self.exprType(id: recv)
+                val bt: TypeInfo = self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef)
                 val br: U64 = self.typedIrRefOfInfo(ti: bt)
                 if br != 0U64 {
                     val brt: TypeRef = self.arena.types[br]
@@ -794,11 +845,11 @@ pub impl Comp {
                 if mfi < self.arena.funcs.count() {
                     val mf: Func = self.arena.funcs[mfi]
                     if mf.hasRet {
-                        val grounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: self.exprType(id: recv), args: args)
+                        val grounded: U64 = self.groundFinalMethodReturn(f: mf, recvTy: self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef), args: args)
                         if grounded != 0U64 {
                             return self.typeInfoOfRef(ref: grounded)
                         }
-                        val concreteGrounded: U64 = self.groundConcreteFinalMethodReturn(f: mf, recvTy: self.exprType(id: recv), args: args)
+                        val concreteGrounded: U64 = self.groundConcreteFinalMethodReturn(f: mf, recvTy: self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef), args: args)
                         if concreteGrounded != 0U64 {
                             return self.typeInfoOfRef(ref: concreteGrounded)
                         }
@@ -884,7 +935,7 @@ pub impl Comp {
                     }
                     return scalarInfo()
                 }
-                mut val rt: TypeInfo = self.exprType(id: recv)
+                mut val rt: TypeInfo = self.exprTypeWithChainHole(id: recv, chainHoleRef: chainHoleRef)
                 // a newtype receiver inherits its underlying's members (spec/10):
                 // resolve the name to the underlying BEFORE method lookup (`u.bytes()`
                 // where `newtype UserId = String` dispatches String's `bytes`).
@@ -963,7 +1014,15 @@ pub impl Comp {
                             }
                         }
                     }
-                    val mi: U64 = self.resolvedCallee(id: id)
+                    mut val mi: U64 = self.resolvedCallee(id: id)
+                    // Generic-body verification cannot pre-fill a callee for
+                    // a synthetic ChainHole receiver. The continuation carries
+                    // its receiver term explicitly, so select through that
+                    // term only for this missing-descriptor case; ordinary
+                    // source expressions keep their already-selected cache.
+                    if mi == self.arena.funcs.count() && chainHoleRef != 0U64 {
+                        mi = self.resolveMethodFinalForType(recv: recv, receiverType: rt, nameStart: nameStart, nameLen: nameLen, args: args)
+                    }
                     if mi == self.arena.funcs.count() {
                         // not a method — but it may be a closure-typed FIELD called
                         // indirectly (`h.run()`); recover the fn type's return.
@@ -1149,7 +1208,7 @@ pub impl Comp {
                     if !(arms[mai].isDiverge) {
                         val mg: U64 = self.blockGiveExpr(blkId: arms[mai].body)
                         if mg < self.arena.exprs.count() {
-                            return self.exprType(id: mg)
+                            return self.exprTypeWithChainHole(id: mg, chainHoleRef: chainHoleRef)
                         }
                     }
                     mai += 1
@@ -1159,7 +1218,7 @@ pub impl Comp {
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 val g: U64 = self.blockGiveExpr(blkId: thenBlk)
                 if g < self.arena.exprs.count() {
-                    return self.exprType(id: g)
+                    return self.exprTypeWithChainHole(id: g, chainHoleRef: chainHoleRef)
                 }
                 return scalarInfo()
             }
@@ -1181,14 +1240,14 @@ pub impl Comp {
             }
             Expr.ChainHole => {
                 // the unwrapped chain Value, set by chainStageResultRef while typing `cont`.
-                if self.cur.chainHoleRef != 0U64 {
-                    return self.typeInfoOfRef(ref: self.cur.chainHoleRef)
+                if chainHoleRef != 0U64 {
+                    return self.typeInfoOfRef(ref: chainHoleRef)
                 }
                 return scalarInfo()
             }
             Expr.Try(val expr) => {
                 // result type = the Result's Ok payload T (args[0] of Result[T, E]).
-                val rt: TypeInfo = self.exprType(id: expr)
+                val rt: TypeInfo = self.exprTypeWithChainHole(id: expr, chainHoleRef: chainHoleRef)
                 if self.isGenericInst(ref: rt.ref) {
                     val inst: TypeRef = self.arena.types[rt.ref]
                     if inst.args.count() > 0 {
@@ -1199,7 +1258,7 @@ pub impl Comp {
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
                 // pointee field type: base is Ref[T] / MutableRef[T]; resolve T then T's field.
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 if self.isStrongRefInst(ref: bt.ref) {
                     val inst: TypeRef = self.arena.types[bt.ref]
                     val pt: TypeInfo = self.typeInfoOfRef(ref: inst.args[0])
@@ -1213,7 +1272,7 @@ pub impl Comp {
                 // `*ref` (the receiver of `ref->method()`): the pointee type T of base:
                 // Ref[T] / MutableRef[T], so method resolution / arg inference runs against T
                 // like a normal receiver.
-                val bt: TypeInfo = self.exprType(id: base)
+                val bt: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 if self.isStrongRefInst(ref: bt.ref) {
                     val inst: TypeRef = self.arena.types[bt.ref]
                     if inst.args.count() > 0 {
@@ -1230,12 +1289,12 @@ pub impl Comp {
             }
             Expr.Move(val operand, val isBorrow) => {
                 // `move`/`borrow` have the operand's type (the value just flows).
-                return self.exprType(id: operand)
+                return self.exprTypeWithChainHole(id: operand, chainHoleRef: chainHoleRef)
             }
             Expr.Await(val operand) => {
                 // `await e` (e: Promise[T]) yields T: recover the operand's generic
                 // type argument. A value-less Promise[()] (args empty) yields a scalar.
-                val ot: TypeInfo = self.exprType(id: operand)
+                val ot: TypeInfo = self.exprTypeWithChainHole(id: operand, chainHoleRef: chainHoleRef)
                 if ot.ref != 0 {
                     val tr: TypeRef = self.arena.types[ot.ref]
                     if tr.args.count() > 0 {

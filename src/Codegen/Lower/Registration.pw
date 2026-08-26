@@ -330,6 +330,18 @@ pub impl Comp {
         return binds.count()
     }
 
+    // Semantic witness lookup is lexical. Keep the positional helper above
+    // only for old callers that still carry a declaration-order slot.
+    inout fn witnessBindParamIndex(binds: Array[WitnessBind], paramId: U64) -> U64 {
+        if paramId == 0U64 { return binds.count() }
+        mut val i: U64 = 0U64
+        while i < binds.count() {
+            if binds[i].paramId == paramId { return i }
+            i += 1U64
+        }
+        return binds.count()
+    }
+
     // Convert the directional unifier's implementation-side bindings into the
     // public witness substitution. Query terms stay rigid: only a binder slot
     // declared by this conformance may appear on the left of the result.
@@ -343,7 +355,7 @@ pub impl Comp {
                 if slot < typeParams.count() {
                     val old: U64 = self.witnessBindIndex(binds: out, binder: slot)
                     if old == out.count() {
-                        out.append(<WitnessBind binder=slot term=b.ref />)
+                        out.append(<WitnessBind binder=slot paramId=typeParams[slot].paramId term=b.ref />)
                     }
                 }
             }

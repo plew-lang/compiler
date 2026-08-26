@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// `T` is a trait declaration, not a type parameter.  In particular, the
+// `Optional[Self]` result is erased to `Optional[any T]`, then its payload is
+// matched and dynamically dispatched.  A global spelling-based generic-name
+// test used to treat this `T` as an unresolved parameter and recurse in the
+// backend instead of compiling this ordinary existential program.
+trait T { fn peek() -> Optional[Self]  fn tag() -> I64 }
+
+struct Value { pub val n: I64 }
+pub impl Value { factory }
+pub impl Value as T {
+    fn peek() -> Optional[Self] { return <Optional[Self].Some v=self /> }
+    fn tag() -> I64 { return self.n }
+}
+
+fn describe(value: Optional[any T]) {
+    match value {
+        Optional.Some(v: val item) => { print(item.tag()) }
+        Optional.None => { print(-1I64) }
+    }
+}
+
+fn main() {
+    val value: any T = <Value n=7 />
+    describe(value: value.peek())
+}

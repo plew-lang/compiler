@@ -788,11 +788,14 @@ export struct FnInst {
     pub val recvInstRef: U64 = 0
 }
 
-// The substitution produced by matching one concrete conformance. A binder is
-// its declaration-order slot in that conformance's `impl[...]` list, so source
-// spelling and an unrelated query's generic binders cannot leak into it.
+// The substitution produced by matching one concrete conformance. `paramId` is
+// the lexical identity of the implementation-side binder; `binder` is retained
+// only as a migration-time positional projection for legacy consumers. New
+// semantic substitutions must use `paramId`, so independently written `T`s
+// cannot be confused merely because they occupy the same slot.
 export struct WitnessBind {
     pub val binder: U64
+    pub val paramId: U64 = 0U64
     pub val term: U64
 }
 pub impl WitnessBind { factory }
@@ -1272,6 +1275,15 @@ export struct ChainSite {
     pub val exprId: U64
     pub val stageRef: U64
     pub val valueRef: U64
+    // `?.` creates these calls after ordinary source resolution has finished.
+    // Keep their declaration-time selections with the parametric stage instead
+    // of asking each BodyInstance to re-resolve a synthetic `Head.empty()` /
+    // `Head.fromValue(...)` spelling.  Mono grounds `stageRef` and turns this
+    // template into ordinary BodyCallee records per concrete body instance.
+    pub val fromValueExprId: U64 = 0U64
+    pub val fromValueCallee: U64 = 0U64
+    pub val emptyExprId: U64 = 0U64
+    pub val emptyCallee: U64 = 0U64
 }
 pub impl ChainSite { factory }
 
@@ -1527,9 +1539,6 @@ export struct Cursor {
     pub mut val recvInstRef: U64 = 0
     pub mut val selfRef: U64 = 0
     pub mut val itemRef: U64 = 0
-    // the type of an OptChain's ChainHole (the unwrapped chain Value) while typing a
-    // `?.`'s trailing `cont`; 0 outside a chain-stage type computation.
-    pub mut val chainHoleRef: U64 = 0
     pub mut val typeParams: Array[Bind] = []
     pub mut val typeArgs: Array[U64] = []
     // The immutable body-scoped substitution snapshot. It is distinct from

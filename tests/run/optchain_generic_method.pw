@@ -1,0 +1,31 @@
+// A `?.` continuation is typed from the Optional payload's parametric type,
+// not from an ambient compiler-only placeholder. The same generic body is
+// instantiated twice, so the continuation's generic method result must retain
+// `T` and ground independently for each body instance.
+import @Std/Io with { print }
+import @Std/Core
+
+struct Box[T] { pub val value: T }
+pub impl Box { factory }
+pub impl[T] Box[T] {
+    fn read() -> T { return self.value }
+}
+
+fn optionalRead[T](value: Optional[Box[T]]) -> Optional[T] {
+    return value?.read()
+}
+
+fn showInt(value: Optional[I64]) {
+    print(value.unwrapOr(fallback: 0I64))
+}
+
+fn showString(value: Optional[String]) {
+    print(value.unwrapOr(fallback: "none"))
+}
+
+fn main() {
+    val intBox: Optional[Box[I64]] = <Optional.Some v=<Box[I64] value=7 /> />
+    val stringBox: Optional[Box[String]] = <Optional.Some v=<Box[String] value="hello" /> />
+    showInt(value: optionalRead(value: intBox))
+    showString(value: optionalRead(value: stringBox))
+}

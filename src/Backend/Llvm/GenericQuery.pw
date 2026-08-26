@@ -73,6 +73,16 @@ pub impl LlvmCtx {
         val runtimeRef: U64 = c.runtimeTypeRef(ref: ref)
         if runtimeRef != ref { return self.structIdxOfRef(c: inout c, ref: runtimeRef) }
         val t: TypeRef = c.arena.types[ref]
+        // An existential is a distinct semantic term with the fat `anyTy`
+        // representation.  Its trait head is not a nominal struct name, even
+        // when it happens to spell the same as an ambient generic binder.
+        // Letting it fall through to localStructIdxFor would re-enter that
+        // textual binder lookup (`any T` -> T -> any T).  The final TypeTerm
+        // query dispatches by node kind; this is the equivalent carrier-level
+        // boundary during the migration.
+        if t.isAny {
+            return c.arena.structs.count()
+        }
         if rangeEquals(bytes: c.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
             return c.structDefByNameAny(start: t.nameStart, len: t.nameLen)
         }

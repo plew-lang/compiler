@@ -1,0 +1,31 @@
+import @Std/Io with { print }
+
+trait Iterator {
+    type Item
+    fn next() -> Item
+}
+
+struct Box[Element] {
+    pub val value: Element
+}
+
+pub impl[Element] Box[Element] { factory }
+
+pub impl[Element] Box[Element] as Iterator {
+    type Item = Element
+    fn next() -> Element {
+        return self.value
+    }
+}
+
+// `Output` is an associated-output predicate expressed through a second,
+// outer lexical binder.  The proof remains symbolic while checking this body
+// and must ground both binders in the caller instance.
+fn read[Source, Output](value: Source, fallback: Output) -> Output where Source: Iterator[Item = Output] {
+    return value.next()
+}
+
+fn main() {
+    print(read(value: <Box[I64] value=7I64 />, fallback: 0I64))
+    print(read(value: <Box[String] value="ok" />, fallback: ""))
+}

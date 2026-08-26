@@ -276,11 +276,16 @@ pub impl Comp {
         self.cur.lowerRetTy = retRef
         val body: U64 = self.lowerBlock(b: d.body)
         self.cur.lowerRetTy = savedRet
+        val fnIdx: U64 = self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=nameStart />)
+        // A `where T: P` is part of this function's declaration, not a later
+        // name lookup.  Lower it while the same lexical binder scope that
+        // lowered the parameters, return type, and body remains installed.
+        // Restoring first loses T's ParamId and turns an unrelated global name
+        // such as a user-written trait `T` into a false type-visibility error.
+        self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes, traitTypes: d.whereTraitTypes)
         self.cur.typeParams = savedTP
         self.lowerWhereTypes = savedWT
         self.lowerWhereTraits = savedWTr
-        val fnIdx: U64 = self.registerDeclaredFunc(f: <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=nameStart />)
-        self.appendFuncBounds(fnIdx: fnIdx, params: d.whereParams, traits: d.whereTraits, types: d.whereTypes, traitTypes: d.whereTraitTypes)
         // attach pending `@[...]` directives to this fn (a macro on a free function);
         // declStart/declEnd = the fn's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: d.span.start, declEnd: d.span.end)

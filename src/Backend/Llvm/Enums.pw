@@ -275,7 +275,8 @@ pub impl LlvmCtx {
             }
             i += 1
         }
-        return LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
+        val layout: LLVMTypeRef = LLVMStructTypeInContext(self.ctx, arrayCPtr(elems), elems.count(), 0I32)
+        return layout
     }
 
     // ---- enum value ARC (tag-dispatch over the active variant's payload) ----

@@ -211,10 +211,7 @@ pub impl Comp {
         if ot.args.count() < 1 {
             return 0
         }
-        val savedHole: U64 = self.cur.chainHoleRef
-        self.cur.chainHoleRef = ot.args[0]
-        val uInfo: TypeInfo = self.exprType(id: cont)
-        self.cur.chainHoleRef = savedHole
+        val uInfo: TypeInfo = self.exprTypeWithChainHole(id: cont, chainHoleRef: ot.args[0])
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
             val noArgs: Array[U64] = []

@@ -196,7 +196,7 @@ pub impl LlvmCtx {
                 }
             } else {
                 val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
-                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot, consuming: consuming)
+                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot, instanceRef: scrutRef, consuming: consuming)
                 if didB {
                     c.cur.typeParams = savedVP
                     c.cur.typeArgs = savedVA

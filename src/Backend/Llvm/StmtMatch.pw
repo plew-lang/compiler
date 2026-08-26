@@ -7,6 +7,21 @@
 // wildcard `_` arm is the catch-all.
 
 pub impl LlvmCtx {
+    // The generic-enum ABI is fixed as `{ tag: I64, payload: [word] }`.
+    // Its payload is subsequently interpreted under the selected variant's
+    // semantic field layout.  Address the word storage through that ABI rather
+    // than re-applying a concrete struct-field projection to an opaque LLVM
+    // pointer: the latter couples the place calculation to whichever
+    // semantically-equal TypeRef happened to register the named layout.
+    inout fn enumMatchPayloadStorage(c: inout Comp, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef, instanceRef: U64) -> LLVMValueRef {
+        if c.isGenericEnumInst(ref: instanceRef) {
+            mut val wordIndex: Array[LLVMValueRef] = []
+            wordIndex.append(LLVMConstInt(self.i64ty, 1U64, 0I32))
+            return LLVMBuildGEP2(self.b, self.i64ty, scrutSlot, arrayCPtr(wordIndex), 1U64, anon())
+        }
+        return LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, 1U64, anon())
+    }
+
     inout fn genLlvmMatch(c: inout Comp, scrut: U64, arms: Array[MatchArm]) {
         val consuming: Bool = c.matchScrutIsMove(scrut: scrut)
         val sv: LLVMValueRef = self.genLlvmExpr(c: inout c, id: scrut)
@@ -60,6 +75,17 @@ pub impl LlvmCtx {
         // the outer (e.g. monomorphized-method) env so a body's `self.f` / `self.inner`
         // still grounds. Saved here so each arm can set/restore around its bind.
         val scrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
+        // Semantic TypeRefs may be reconstructed at distinct source sites while
+        // denoting the same instance.  The stored LLVM value, however, has one
+        // concrete registered layout.  Payload reads must use that layout's
+        // instance ref so its field substitution and its `{tag, words}` shape
+        // are derived from the same key; a merely equivalent ref can carry a
+        // different legacy binder spelling.
+        mut val scrutLayoutRef: U64 = scrutRef
+        val scrutReg: U64 = self.genEnumSlot(c: inout c, ref: scrutRef)
+        if scrutReg < self.genEnumRefs.count() {
+            scrutLayoutRef = self.genEnumRefs[scrutReg]
+        }
         val savedMP: Array[Bind] = c.cur.typeParams
         val savedMA: Array[U64] = c.cur.typeArgs
         // the enum: from the first non-wildcard, non-struct arm.
@@ -135,7 +161,7 @@ pub impl LlvmCtx {
                 // bind the payload under the enum env, then restore the outer env so the
                 // arm body grounds against the enclosing method/function, not the enum.
                 val didB: Bool = self.setEnumEnv(c: inout c, ref: scrutRef)
-                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot, consuming: consuming)
+                self.bindMatchPayload(c: inout c, eid: eid, arm: arm, scrutTy: sty, scrutSlot: sslot, instanceRef: scrutLayoutRef, consuming: consuming)
                 if didB {
                     c.cur.typeParams = savedMP
                     c.cur.typeArgs = savedMA
@@ -203,7 +229,7 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn bindMatchPayload(c: inout Comp, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef, consuming: Bool) {
+    inout fn bindMatchPayload(c: inout Comp, eid: U64, arm: MatchArm, scrutTy: LLVMTypeRef, scrutSlot: LLVMValueRef, instanceRef: U64, consuming: Bool) {
         if arm.binds.count() == 0U64 {
             if consuming {
                 self.emitEnumRelease(c: inout c, v: LLVMBuildLoad2(self.b, scrutTy, scrutSlot, anon()), eid: eid, ety: scrutTy)
@@ -211,8 +237,15 @@ pub impl LlvmCtx {
             return
         }
         val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
-        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi)
-        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, LLVMBuildStructGEP2(self.b, scrutTy, scrutSlot, 1U64, anon()), anon())
+        // The payload layout is determined by the matched enum instance, not
+        // by the mutable body environment.  Passing the selected TypeRef makes
+        // `Optional[any P]` ground its `T` field to the two-word existential
+        // representation even while the arm body later restores its outer
+        // environment.  This is the same instance-local rule used by enum
+        // construction and release.
+        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: eid, vi: vi, instanceRef: instanceRef)
+        val payloadStorage: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: scrutTy, scrutSlot: scrutSlot, instanceRef: instanceRef)
+        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadStorage, anon())
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
         mut val bi: U64 = 0
         while bi < arm.binds.count() {
@@ -230,11 +263,29 @@ pub impl LlvmCtx {
             }
             if fidx < fs.count() {
                 val fd: FieldDef = fs[fidx]
+                // The field's representation is determined by the selected
+                // enum instance.  Do not classify its declaration spelling
+                // (`T`) through the ambient LLVM environment: a trait named
+                // `T` and Optional's declaration binder `T` are distinct
+                // semantic terms.  `fieldTerm` is the one ground term used by
+                // every payload-bind decision below.
+                mut val fieldTerm: U64 = fd.ty
+                if fieldTerm != 0U64 {
+                    fieldTerm = c.groundTypeRef(ref: fieldTerm)
+                }
                 // an array-typed payload field (declared `Array[E]` or a type param that
                 // grounds to one): the bound local is the {ptr,i64} array value, tracked
                 // as an array so `v[i]` / `v.count()` work in the arm body.
                 val elemRef: U64 = arrayFieldElemRef(c: inout c, f: fd)
-                mut val pty: LLVMTypeRef = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                mut val pty: LLVMTypeRef = self.i64ty
+                if fieldTerm != 0U64 {
+                    pty = self.llvmTypeOfRef(c: inout c, ref: fieldTerm)
+                } else {
+                    // Legacy FieldDefs without a TypeRef can only use the
+                    // spelling fallback; lowered semantic fields always take
+                    // the exact-term branch above.
+                    pty = self.llvmScalarTy(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
+                }
                 mut val isArrF: Bool = false
                 mut val elemTyF: LLVMTypeRef = self.i64ty
                 mut val elemKindF: U64 = 0U64
@@ -251,11 +302,8 @@ pub impl LlvmCtx {
                 // the active env) so the alloca + extractvalue + a nested match agree.
                 mut val genFieldRef: U64 = 0
                 if elemRef == 0U64 {
-                    if fd.ty != 0U64 {
-                        mut val gfp: U64 = fd.ty
-                        if c.cur.typeParams.count() > 0U64 {
-                            gfp = c.groundTypeRef(ref: fd.ty)
-                        }
+                    if fieldTerm != 0U64 {
+                        val gfp: U64 = fieldTerm
                         // an existential `any P` payload (`Wrap(v: any Shape)`, or a type
                         // param bound to one): the stored value is the fat pointer (anyTy,
                         // 2 words). Carry the `any` TypeRef as the bind's ref so a method
@@ -345,14 +393,9 @@ pub impl LlvmCtx {
                     if !(isArrF) {
                         mut val gns: U64 = fd.tyStart
                         mut val gnl: U64 = fd.tyLen
-                        if fd.ty != 0U64 {
-                            if c.cur.typeParams.count() > 0U64 {
-                                val gfr: U64 = c.groundTypeRef(ref: fd.ty)
-                                if gfr != 0U64 {
-                                    gns = c.arena.types[gfr].nameStart
-                                    gnl = c.arena.types[gfr].nameLen
-                                }
-                            }
+                        if fieldTerm != 0U64 {
+                            gns = c.arena.types[fieldTerm].nameStart
+                            gnl = c.arena.types[fieldTerm].nameLen
                         }
                         val gnu: Bind = c.newtypeUnderName(start: gns, len: gnl)
                         if isPrimIntName(c: inout c, start: gnu.nameStart, len: gnu.nameLen) {
@@ -381,19 +424,17 @@ pub impl LlvmCtx {
                 // so a String/Bool payload is recognized as kind 1/2, not defaulted to int
                 // (which would miscompile the bound {ptr,i64} value at the arm's use site).
                 mut val bindKind: U64 = kindFromTySpan(c: inout c, tyStart: fd.tyStart, tyLen: fd.tyLen)
-                if fd.ty != 0U64 {
-                    if c.cur.typeParams.count() > 0U64 {
-                        val gft: U64 = c.groundTypeRef(ref: fd.ty)
-                        if gft != 0U64 {
-                            bindKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[gft].nameStart, tyLen: c.arena.types[gft].nameLen)
-                        }
-                    }
+                if fieldTerm != 0U64 {
+                    bindKind = kindFromTySpan(c: inout c, tyStart: c.arena.types[fieldTerm].nameStart, tyLen: c.arena.types[fieldTerm].nameLen)
                 }
                 // a generic-instance payload bind (`Some(v: N[I64])` of a recursive generic):
                 // its struct index is the generic struct DEF (via genStructSlot), not a
                 // lookup by the un-grounded param name `fd.tyStart` (`T`), so field access
                 // `v.field` in the arm body resolves.
-                mut val bindStructIdx: U64 = self.localStructIdxFor(c: inout c, start: fd.tyStart, len: fd.tyLen)
+                mut val bindStructIdx: U64 = c.arena.structs.count()
+                if fieldTerm != 0U64 {
+                    bindStructIdx = self.structIdxOfRef(c: inout c, ref: fieldTerm)
+                }
                 if genFieldRef != 0U64 {
                     if c.isGenericInst(ref: genFieldRef) {
                         val gbs: U64 = self.genStructSlot(c: inout c, ref: genFieldRef)

@@ -424,6 +424,21 @@ pub impl Comp {
         if t.assocNameId != 0U64 {
             return self.resolveAssocProjection(tyRef: tyRef)
         }
+        // `any P[Args]` is an existential type constructor, not a bare use of
+        // the spelling `P`.  In particular, a user trait named `T` must remain
+        // `any T` while we are grounding `Optional[T]`: treating the
+        // existential head as a legacy textual binder rewrites the entire
+        // existential through Optional's declaration parameter and can create
+        // a self-recursing type query.  Its positional arguments are grounded
+        // structurally by groundTypeRef before this head-resolution step.
+        //
+        // The final TypeTerm makes this distinction representational
+        // (`Existential` versus `Param`); `isAny` is the corresponding
+        // migration-carrier tag, so this belongs at the semantic resolver
+        // boundary rather than in an LLVM/backend special case.
+        if t.isAny {
+            return tyRef
+        }
         if t.paramId != 0U64 {
             mut val pi: U64 = 0U64
             while pi < self.cur.typeParams.count() {

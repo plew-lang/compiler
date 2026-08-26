@@ -220,18 +220,32 @@ pub impl Comp {
                         if !literalIsExplicit {
                             val grounded: U64 = self.groundedBodyReceiverRef(exprId: args[ai].expr)
                             if grounded != 0U64 { baseRef = grounded }
-                        }
-                        // A nested call/operator's selected result is the
-                        // exact semantic type for this body instance.  The
-                        // AST-wide TypeInfo is only a template projection and
-                        // may be nonzero yet still retain an ungrounded
-                        // provided-method result (`Item`, `B`, …).  Prefer the
-                        // finalized descriptor whenever it exists; otherwise a
-                        // surrounding generic call can lose its own argument
-                        // despite the child having already been resolved.
-                        val selectedResult: U64 = self.bodyCalleeResultRef(exprId: args[ai].expr)
-                        if selectedResult != 0U64 {
-                            baseRef = selectedResult
+                            // A nested call/operator's selected result is the
+                            // exact semantic type for this body instance.  The
+                            // AST-wide TypeInfo is only a template projection and
+                            // may be nonzero yet still retain an ungrounded
+                            // provided-method result (`Item`, `B`, …).  Prefer the
+                            // finalized descriptor whenever it exists; otherwise a
+                            // surrounding generic call can lose its own argument
+                            // despite the child having already been resolved.
+                            val selectedResult: U64 = self.bodyCalleeResultRef(exprId: args[ai].expr)
+                            if selectedResult != 0U64 {
+                                baseRef = selectedResult
+                            }
+                            // The semantic expression term is the body-local
+                            // type authority.  In particular, `p.value` in an
+                            // iterator body is a field of this concrete
+                            // iteration record; `exprType` can only recover
+                            // the shared template's `E`.  Read the recorded
+                            // term through the active body environment before
+                            // consulting older receiver/call descriptor
+                            // bridges.  This is not a second inference pass:
+                            // it merely consumes the same semantic term used
+                            // by Mono and LLVM elsewhere.
+                            val semantic: U64 = self.groundedTypeOf(id: args[ai].expr)
+                            if semantic != 0U64 {
+                                baseRef = semantic
+                            }
                         }
                         // A generic body is shared by all instances, so the
                         // AST-global TypeInfo for `self`/a local can still be
@@ -460,22 +474,19 @@ pub impl Comp {
             if !(self.fnInstExists(fnIdx: mi, args: fullArgs, recvInstRef: recvInst)) {
                 self.monoWork.fnInsts.append(<FnInst fnIdx=mi args=fullArgs recvInstRef=recvInst />)
             }
-            // register the grounded return adapter (`MapIter[…,I64]`) + its transitive
-            // instantiations, so its typedef/methods get emitted (a generic method is
-            // skipped by the struct-field/signature scans).
-            val savedP: Array[Bind] = self.cur.typeParams
-            val savedA: Array[U64] = self.cur.typeArgs
-            self.cur.typeParams = mf.typeParams
-            self.cur.typeArgs = fullArgs
-            if mf.hasRet {
-                val finalResult: U64 = self.groundTypeRef(ref: mf.retTy)
-                if callId != 4000000000U64 {
-                    self.setBodyCalleeResultRef(exprId: callId, resultRef: finalResult)
+            // Mono has already selected and grounded this call under its
+            // concrete receiver/proof.  Registration is a consumer of that
+            // final decision, not another return-type resolver: re-grounding
+            // `mf.retTy` from the shared provided-method template can turn a
+            // completed `MapIter[..., fn[I64, I64], I64]` back into
+            // `MapIter[..., fn[I64, Item], I64]`.  Use the descriptor both for
+            // reachability and for the type scan; LLVM receives the same term.
+            if mf.hasRet && callId != 4000000000U64 {
+                val finalResult: U64 = self.bodyCalleeResultRef(exprId: callId)
+                if finalResult != 0U64 {
+                    self.scanType(ref: finalResult)
                 }
-                self.scanType(ref: mf.retTy)
             }
-            self.cur.typeParams = savedP
-            self.cur.typeArgs = savedA
         }
         self.clearSelfItemEnv()
     }

@@ -87,20 +87,48 @@ pub impl Comp {
         }
     }
 
-    inout fn recordExpr(exprId: U64) {
+    // Record an expression under an optional-chain payload supplied by its
+    // unique enclosing chain stage. The payload is a structural child input,
+    // not Cursor state: ordinary expressions use 0, and every continuation
+    // descendant receives the same explicit parametric term.
+    inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64) {
+        // The flat TypeRef carrier cannot represent an anonymous-record value
+        // and its fields as one semantic node yet.  Retain the legacy adapter
+        // record for every expression, then let structural cases below refine
+        // the exact term where the receiver already exposes one.
         if exprId < self.arena.semanticExprTypes.count() {
-            self.recordSemanticExprInfo(exprId: exprId, ti: self.exprType(id: exprId))
+            self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
         }
         match self.arena.exprs[exprId] {
-            Expr.Unary(op: _, val operand) => { self.recordExpr(exprId: operand) }
+            // A local binding's declared TypeRef is the lexical source of
+            // truth for an identifier. Record it directly after the legacy
+            // adapter so a parametric annotation (`Optional[Box[T]]`) cannot
+            // be collapsed to its head spelling by TypeInfo recovery.
+            Expr.Ident(val start, val len) => {
+                val localIdx: U64 = self.localIndexByName(start: start, len: len)
+                if localIdx < self.cur.locals.count() {
+                    val local: Local = self.cur.locals[localIdx]
+                    if local.ty != 0U64 {
+                        self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
+                    } else if exprId < self.arena.semanticExprTypes.count() {
+                        self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+                    }
+                } else if exprId < self.arena.semanticExprTypes.count() {
+                    // `self` and a small number of legacy global bindings do
+                    // not live in locals; retain their established query until
+                    // their explicit semantic nodes are introduced.
+                    self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+                }
+            }
+            Expr.Unary(op: _, val operand) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
             Expr.Binary(op: _, val lhs, val rhs) => {
-                self.recordExpr(exprId: lhs)
-                self.recordExpr(exprId: rhs)
+                self.recordExpr(exprId: lhs, chainHoleRef: chainHoleRef)
+                self.recordExpr(exprId: rhs, chainHoleRef: chainHoleRef)
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
                 while i < args.count() {
-                    self.recordExpr(exprId: args[i].expr)
+                    self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 val cfi: U64 = self.resolvedCallee(id: exprId)
@@ -143,10 +171,10 @@ pub impl Comp {
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                self.recordExpr(exprId: recv)
+                self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
                 while i < args.count() {
-                    self.recordExpr(exprId: args[i].expr)
+                    self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 // context-type an array-literal argument from the resolved method's
@@ -184,19 +212,35 @@ pub impl Comp {
                 }
             }
             Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
-                self.recordExpr(exprId: recv)
+                self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
                 while i < args.count() {
-                    self.recordExpr(exprId: args[i].expr)
+                    self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
             }
-            Expr.ExtView(val recv, source: _, strip: _) => { self.recordExpr(exprId: recv) }
-            Expr.Field(val base, nameStart: _, nameLen: _) => { self.recordExpr(exprId: base) }
+            Expr.ExtView(val recv, source: _, strip: _) => { self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef) }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                // Field selection is a structural type-term operation. Once the
+                // receiver has been recorded, derive the exact field term here
+                // rather than forcing every BodyInstance to re-walk Field in
+                // groundedTypeOf. `groundUnderInst` preserves a symbolic
+                // receiver argument (Box[T]) for later body grounding.
+                val baseTerm: U64 = self.parametricExprTerm(exprId: base)
+                val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseTerm, fieldStart: nameStart, fieldLen: nameLen)
+                if fieldTerm != 0U64 {
+                    self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
+                } else if exprId < self.arena.semanticExprTypes.count() {
+                    // Non-struct field syntax is still on the legacy carrier
+                    // until enum/projection nodes become first-class terms.
+                    self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+                }
+            }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
                 while i < fields.count() {
-                    self.recordExpr(exprId: fields[i].value)
+                    self.recordExpr(exprId: fields[i].value, chainHoleRef: chainHoleRef)
                     val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
                     mut val ctxRef: U64 = self.typedIrRefOfInfo(ti: ft)
                     // a generic construction's field context is the DECLARED field type
@@ -216,7 +260,7 @@ pub impl Comp {
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
                 while i < elems.count() {
-                    self.recordExpr(exprId: elems[i])
+                    self.recordExpr(exprId: elems[i], chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 // an array literal types as `Array[E]` from its first element (exprType
@@ -233,12 +277,31 @@ pub impl Comp {
                 }
             }
             Expr.Index(val base, val index) => {
-                self.recordExpr(exprId: base)
-                self.recordExpr(exprId: index)
+                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                self.recordExpr(exprId: index, chainHoleRef: chainHoleRef)
+                // Array/Buffer indexing is equally structural: the selected
+                // element term is an existing child of the recorded receiver.
+                // Other index forms lower through a final method callable and
+                // intentionally remain outside this direct type-term rule.
+                val baseTerm: U64 = self.parametricExprTerm(exprId: base)
+                if baseTerm != 0U64 && baseTerm < self.arena.types.count() {
+                    val baseTy: TypeRef = self.arena.types[baseTerm]
+                    if baseTy.args.count() == 1U64 {
+                        if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
+                            self.recordSemanticExprTerm(exprId: exprId, term: baseTy.args[0])
+                        } else if exprId < self.arena.semanticExprTypes.count() {
+                            self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+                        }
+                    } else if exprId < self.arena.semanticExprTypes.count() {
+                        self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+                    }
+                } else if exprId < self.arena.semanticExprTypes.count() {
+                    self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+                }
             }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.recordExpr(exprId: operand) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
             Expr.MatchExpr(val scrut, val arms) => {
-                self.recordExpr(exprId: scrut)
+                self.recordExpr(exprId: scrut, chainHoleRef: chainHoleRef)
                 mut val ai: U64 = 0
                 while ai < arms.count() {
                     val a: MatchArm = arms[ai]
@@ -250,17 +313,28 @@ pub impl Comp {
                 }
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
-                self.recordExpr(exprId: cond)
+                self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
                 self.recordBlock(blkId: thenBlk)
                 self.recordBlock(blkId: elseBlk)
             }
-            Expr.OptChain(val base, cont: _) => { self.recordExpr(exprId: base) }
+            Expr.OptChain(val base, val cont) => {
+                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                val baseInfo: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
+                val baseRef: U64 = self.typedIrRefOfInfo(ti: baseInfo)
+                if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                    val baseTerm: TypeRef = self.arena.types[baseRef]
+                    val valueIndex: U64 = self.chainValueArgIndex(headStart: baseTerm.nameStart, headLen: baseTerm.nameLen)
+                    if valueIndex < baseTerm.args.count() {
+                        self.recordExpr(exprId: cont, chainHoleRef: baseTerm.args[valueIndex])
+                    }
+                }
+            }
             Expr.ChainHole => {}
-            Expr.Try(val expr) => { self.recordExpr(exprId: expr) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.recordExpr(exprId: base) }
-            Expr.Deref(val base) => { self.recordExpr(exprId: base) }
-            Expr.Move(val operand, isBorrow: _) => { self.recordExpr(exprId: operand) }
-            Expr.Await(val operand) => { self.recordExpr(exprId: operand) }
+            Expr.Try(val expr) => { self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.recordExpr(exprId: base, chainHoleRef: chainHoleRef) }
+            Expr.Deref(val base) => { self.recordExpr(exprId: base, chainHoleRef: chainHoleRef) }
+            Expr.Move(val operand, isBorrow: _) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
+            Expr.Await(val operand) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
             // a closure body is walked IN PLACE, its params scoped over the enclosing
             // locals (captures resolve to the enclosing bindings) — the hole the check
             // passes leave open (neither checkGenericBodies nor this pass's caller
@@ -427,7 +501,14 @@ pub impl Comp {
                 self.cur.recvInstRef = 0
                 self.cur.selfRef = self.parametricSelfRef(f: f)
                 self.cur.itemRef = 0
-                self.cur.typeParams = noParams
+                // This is a declaration-time walk: generic binders are in
+                // lexical scope but have no concrete arguments. Keeping the
+                // Func's ParamIds here lets `value: Optional[Box[T]]` record
+                // its complete parametric term. Omitting them made the record
+                // miss the base of a `?.` chain, after which Mono had to read
+                // an incidental concrete `typeOf` result and froze T to the
+                // first instantiated body.
+                self.cur.typeParams = f.typeParams
                 self.cur.typeArgs = noArgs
                 self.cur.checkFn = fi
                 mut val pi: U64 = 0

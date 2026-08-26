@@ -244,6 +244,57 @@ pub impl Comp {
         return 0U64
     }
 
+    // The declaration-time semantic term of an expression. Most expressions
+    // are supplied by Record; an identifier's lexical Local is equally a
+    // first-class producer, and remains available while a legacy TypeInfo
+    // adapter is unable to represent a symbolic generic instance. This is one
+    // central read boundary, not an OptChain-specific recovery.
+    inout fn parametricExprTerm(exprId: U64) -> U64 {
+        val recorded: U64 = self.semanticExprTerm(exprId: exprId)
+        if recorded != 0U64 { return recorded }
+        // A Chain desugar replaces an OptChain node with MatchExpr after the
+        // ordinary expression record pass.  Its parametric result is therefore
+        // owned by ChainSite rather than the AST-global expression entry.  This
+        // belongs in the central semantic-term reader: an outer `?.` must be
+        // able to use an already-rewritten inner `?.` as its receiver without
+        // re-deriving the MatchExpr or falling back to a concrete instance.
+        val chain: ChainSite = self.chainSiteFor(exprId: exprId)
+        if chain.stageRef != 0U64 { return chain.stageRef }
+        match self.arena.exprs[exprId] {
+            Expr.Ident(val start, val len) => {
+                val localIdx: U64 = self.localIndexByName(start: start, len: len)
+                if localIdx < self.cur.locals.count() {
+                    return self.cur.locals[localIdx].ty
+                }
+            }
+            // The legacy arena keeps anonymous-record component terms in a
+            // StructDef rather than as TypeRef children. Until the semantic
+            // TypeTerm record node replaces that carrier, field/index remain
+            // structural recovery queries: their recorded flat term alone
+            // cannot ground an iterator's `(index: U64, value: E)` component.
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                val baseRef: U64 = self.groundedTypeOf(id: base)
+                if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                    val fieldRef: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
+                    if fieldRef != 0U64 { return fieldRef }
+                }
+            }
+            Expr.Index(val base, index: _) => {
+                val baseRef: U64 = self.groundedTypeOf(id: base)
+                if baseRef != 0U64 && baseRef < self.arena.types.count() {
+                    val baseTy: TypeRef = self.arena.types[baseRef]
+                    if baseTy.args.count() == 1U64 {
+                        if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
+                            return baseTy.args[0]
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
     inout fn semanticExprTypeInfo(exprId: U64) -> TypeInfo {
         if exprId < self.arena.semanticExprTypes.count() {
             val e: SemanticExprType = self.arena.semanticExprTypes[exprId]
@@ -267,6 +318,20 @@ pub impl Comp {
             return self.typeInfoOfRef(ref: grounded)
         }
         return entry
+    }
+
+    // The TypeRef counterpart of groundSemanticExprTypeInfo.  It is the sole
+    // read of an ExprId-owned semantic term under an explicit environment;
+    // structural expressions such as field/index selection compose this query
+    // instead of reopening typeOf.  A Chain rewrite owns its result in
+    // ChainSite until it can be recorded in the ordinary slot.
+    inout fn groundSemanticExprTypeRef(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
+        mut val term: U64 = self.semanticExprTerm(exprId: exprId)
+        if term == 0U64 {
+            term = self.chainSiteFor(exprId: exprId).stageRef
+        }
+        if term == 0U64 { return 0U64 }
+        return self.groundTermForBody(ref: term, environment: environment, selfRef: selfRef, itemRef: itemRef)
     }
 
     inout fn recordSemanticExprInfo(exprId: U64, ti: TypeInfo) {
@@ -332,6 +397,11 @@ pub impl Comp {
                     if local.ty != 0U64 { return self.groundBodyTerm(ref: local.ty) }
                 }
             }
+            // A field/index result is not a flat TypeRef child when its
+            // receiver is an anonymous record: the component declarations
+            // live in StructDef.  Until SemanticTypeTerm has a Record node,
+            // form this one structural edge under the active body environment
+            // before consulting the expression's legacy template entry.
             Expr.Field(val base, val nameStart, val nameLen) => {
                 val baseRef: U64 = self.groundedTypeOf(id: base)
                 if baseRef != 0U64 && baseRef < self.arena.types.count() {
@@ -352,15 +422,8 @@ pub impl Comp {
             }
             _ => {}
         }
-        mut val pr: U64 = self.semanticExprTerm(exprId: id)
-        // a Chain-desugar MatchExpr has no parametric store entry of its own — its
-        // parametric result lives in the ChainSite side list (stageRef); ground it
-        // through the same body-env substitution so every consumer of the typed IR
-        // (array-element stride, argument homes, ...) sees the stage type, not 0.
-        if pr == 0U64 {
-            pr = self.chainSiteFor(exprId: id).stageRef
-        }
-        if pr != 0U64 { return self.groundTermForBody(ref: pr, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) }
+        val recorded: U64 = self.groundSemanticExprTypeRef(exprId: id, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        if recorded != 0U64 { return recorded }
         return self.typedIrRefOfInfo(ti: self.typeOf(id: id))
     }
 }

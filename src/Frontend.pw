@@ -23,7 +23,7 @@ import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, f
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
 import ./Cache with { cacheRoot }
-import ./Diag with { compileErrorAt, compileErrorAtFile, eprintInt, digitByte }
+import ./Diag with { compileErrorAt, compileErrorAtFile, eprintInt, digitByte, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, compoundBinOp, isBinTraitOp, binTraitName, binTraitMethodName, unaryMethodName }
 
 export struct Comp {
@@ -68,6 +68,10 @@ export struct Comp {
     // only coarse boundaries, so an external timestamping wrapper can attribute a
     // self-host build without the voluminous generic-codegen trace.
     pub mut val tracePhases: Bool = false
+    // Optional counters paired with --trace-phases. They isolate monomorphization
+    // work amplification without changing its worklist or generated LLVM.
+    pub mut val traceExprInstScans: U64 = 0
+    pub mut val traceFinalBodyScans: U64 = 0
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
     // `opt -passes=asan` actually instruments loads/stores (a bare `.ll` has no
@@ -539,6 +543,23 @@ fn tracePhase(c: inout Comp, label: String) {
     if c.tracePhases {
         eprint(text: "[trace-phase] ")
         eprint(text: label)
+        eprint(text: "\n")
+    }
+}
+
+fn traceU64(n: U64) {
+    if n >= 10U64 {
+        traceU64(n: n / 10U64)
+    }
+    eprint(text: digitStrU(d: n % 10U64))
+}
+
+fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
+    if c.tracePhases {
+        eprint(text: "[trace-phase] ")
+        eprint(text: label)
+        eprint(text: "=")
+        traceU64(n: count)
         eprint(text: "\n")
     }
 }
@@ -1067,6 +1088,7 @@ export fn runFrontend(c: inout Comp) {
     // so collectGenInsts (which scans Make.ty) reaches the inferred instance. Runs after
     // top-down grounding (done during lowering) and before collection.
     tracePhase(c: inout c, label: "instantiation-collection:start")
+    c.traceExprInstScans = 0U64
     c.inferConstructTypeArgs()
     c.inCollection = true
     c.collectGenInsts()
@@ -1074,6 +1096,7 @@ export fn runFrontend(c: inout Comp) {
     // (each emitted as a specialized C function `f_<arg-mangle>`).
     c.collectFnInsts()
     c.inCollection = false
+    tracePhaseCount(c: inout c, label: "instantiation-collection:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "instantiation-collection:done")
     // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
     // type argument must conform to the trait its parameter is bound to.
@@ -1122,9 +1145,16 @@ export fn runFrontend(c: inout Comp) {
     // of LLVM's lazy declaration queues: all backend call emission consumes the
     // resulting entries and never runs overload/source resolution itself.
     tracePhase(c: inout c, label: "finalize-callables:start")
+    c.traceExprInstScans = 0U64
+    c.traceFinalBodyScans = 0U64
     c.inCollection = true
     c.finalizeCallables()
     c.inCollection = false
+    tracePhaseCount(c: inout c, label: "finalize-callables:scan-exprs", count: c.traceExprInstScans)
+    tracePhaseCount(c: inout c, label: "finalize-callables:body-scans", count: c.traceFinalBodyScans)
+    tracePhaseCount(c: inout c, label: "finalize-callables:body-identities", count: c.arena.bodyInstances.count())
+    tracePhaseCount(c: inout c, label: "finalize-callables:descriptors", count: c.arena.finalCallees.count())
+    c.traceFinalBodyInstanceSummary()
     tracePhase(c: inout c, label: "finalize-callables:done")
 }
 // Whether the literal (non-negative magnitude `value`, negated when `neg`) fits
