@@ -879,6 +879,10 @@ export struct CallResolution {
     // them with the target prevents LLVM from running a second generic
     // inference pass over the AST.
     pub val calleeTypeArgs: Array[U64] = []
+    // Fully-grounded ABI parameter types in the selected Func's declaration
+    // order.  Argument lowering consumes these directly; it must not reopen
+    // the callee's symbolic `Param.ty` under the caller's ambient environment.
+    pub val parameterTypeRefs: Array[U64] = []
     // Concrete receiver identity at source selection.  0 for an ordinary
     // free call; association/operator calls retain their subject type here.
     // Backend consumes this rather than reconstructing it from the shared AST.

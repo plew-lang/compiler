@@ -90,7 +90,7 @@ pub impl LlvmCtx {
             val pslot: U64 = self.asyncEntrySlot(fi: cfi)
             if pslot < self.asyncEntryIdx.count() {
                 mut val pav: Array[LLVMValueRef] = []
-                self.appendCallArgValues(c: inout c, av: inout pav, f: cf0, args: args)
+                self.appendCallArgValues(c: inout c, av: inout pav, f: cf0, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                 return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
             }
             c.errorAt(offset: callOffset, msg: "internal error: final async callable has no declared entry")
@@ -129,7 +129,7 @@ pub impl LlvmCtx {
             }
             val pinMark: U64 = self.pinCells.count()
             mut val av2: Array[LLVMValueRef] = []
-            self.appendCallArgValues(c: inout c, av: inout av2, f: cf, args: args)
+            self.appendCallArgValues(c: inout c, av: inout av2, f: cf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
             c.cur.typeParams = savedP
             c.cur.typeArgs = savedA
             c.cur.selfRef = savedSelf
@@ -145,7 +145,7 @@ pub impl LlvmCtx {
             if pslot < self.asyncEntryIdx.count() {
                 val cf: Func = c.arena.funcs[cfi]
                 mut val pav: Array[LLVMValueRef] = []
-                self.appendCallArgValues(c: inout c, av: inout pav, f: cf, args: args)
+                self.appendCallArgValues(c: inout c, av: inout pav, f: cf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                 return LLVMBuildCall2(self.b, self.asyncEntryTy[pslot], self.asyncEntryVal[pslot], arrayCPtr(pav), pav.count(), anon())
             }
         return LLVMConstNull(self.ptrty)

@@ -246,9 +246,9 @@ pub impl LlvmCtx {
         // operator operands are view-blind (operators dispatch on the underlying type;
         // the `#Ext` view only adds methods) — `self * 2` in an `impl I64` extension must
         // not trip the arg view-invariance check against the plain-typed witness param.
-        av.append(self.genArgValueV(c: inout c, argExpr: lhs, p: af.params[0], checkView: false))
+        av.append(self.genArgValueV(c: inout c, argExpr: lhs, p: af.params[0], parameterTypeRef: af.params[0].ty, checkView: false))
         if binary {
-            av.append(self.genArgValueV(c: inout c, argExpr: rhs, p: af.params[1], checkView: false))
+            av.append(self.genArgValueV(c: inout c, argExpr: rhs, p: af.params[1], parameterTypeRef: af.params[1].ty, checkView: false))
         }
         // Source-level operator syntax is no exception: Mono fixed both the
         // witness subject and every generic substitution in its final-callee

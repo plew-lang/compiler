@@ -1,0 +1,25 @@
+// A direct field read from an extension-method record result must consume the
+// CallResolution of the *concrete generic body instance*.  The declaration
+// body is shared, so reading the method's `(first: T, second: T)` template
+// would leak bare T into one of these calls.
+import @Std/Io with { print }
+
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+
+extension Extra {
+    pub impl[T] Box[T] {
+        fn duplicate() -> (first: T, second: T) {
+            return (first: self.value, second: self.value)
+        }
+    }
+}
+
+fn first[T](value: Box[T]) -> T {
+    return value#Extra.duplicate().first
+}
+
+fn main() {
+    print(first(value: <Box[I64] value=7I64 />))
+    print(first(value: <Box[String] value="tea" />))
+}

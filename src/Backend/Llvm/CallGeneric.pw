@@ -44,7 +44,7 @@ pub impl LlvmCtx {
         }
         val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: instRef, ownArgs: margs)
         if gslot < self.genMethK.count() {
-            return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gslot, instRef: instRef, args: args)
+            return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: mfi, slot: gslot, instRef: instRef, args: args)
         }
         return LLVMConstNull(self.ptrty)
     }
@@ -52,7 +52,7 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    inout fn genGenMethodCall(c: inout Comp, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
+    inout fn genGenMethodCall(c: inout Comp, callId: U64 = 0U64, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
         val mf: Func = c.arena.funcs[mfi]
         val pinMark: U64 = self.pinCells.count()
         mut val av: Array[LLVMValueRef] = []
@@ -84,7 +84,11 @@ pub impl LlvmCtx {
         if mf.isProvided {
             c.setSelfItemEnv(recvStart: c.arena.types[instRef].nameStart, recvLen: c.arena.types[instRef].nameLen, recvInstRef: instRef)
         }
-        self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args)
+        mut val parameterTypeRefs: Array[U64] = []
+        if callId != 0U64 {
+            parameterTypeRefs = c.bodyCalleeParameterTypeRefs(exprId: callId)
+        }
+        self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args, parameterTypeRefs: parameterTypeRefs)
         c.cur.selfRef = sGs
         c.cur.itemRef = sGi
         c.cur.typeParams = savedP
@@ -438,21 +442,25 @@ pub impl LlvmCtx {
 }
 
 pub impl LlvmCtx {
-    inout fn appendCallArgValues(c: inout Comp, av: inout Array[LLVMValueRef], f: Func, args: Array[Arg]) {
+    inout fn appendCallArgValues(c: inout Comp, av: inout Array[LLVMValueRef], f: Func, args: Array[Arg], parameterTypeRefs: Array[U64] = []) {
         mut val pi: U64 = 0
         while pi < f.params.count() {
+            mut val parameterTypeRef: U64 = f.params[pi].ty
+            if pi < parameterTypeRefs.count() && parameterTypeRefs[pi] != 0U64 {
+                parameterTypeRef = parameterTypeRefs[pi]
+            }
             val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
             if ai < args.count() {
-                av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: f.params[pi]))
+                av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: f.params[pi], parameterTypeRef: parameterTypeRef))
             } else {
-                av.append(self.genArgValue(c: inout c, argExpr: f.params[pi].defaultExpr, p: f.params[pi]))
+                av.append(self.genArgValue(c: inout c, argExpr: f.params[pi].defaultExpr, p: f.params[pi], parameterTypeRef: parameterTypeRef))
             }
             pi += 1U64
         }
     }
 
-    inout fn genArgValue(c: inout Comp, argExpr: U64, p: Param) -> LLVMValueRef {
-        return self.genArgValueV(c: inout c, argExpr: argExpr, p: p, checkView: true)
+    inout fn genArgValue(c: inout Comp, argExpr: U64, p: Param, parameterTypeRef: U64) -> LLVMValueRef {
+        return self.genArgValueV(c: inout c, argExpr: argExpr, p: p, parameterTypeRef: parameterTypeRef, checkView: true)
     }
 
     // As genArgValue, but `checkView` selects whether the extension-view invariance is
@@ -460,7 +468,7 @@ pub impl LlvmCtx {
     // the UNDERLYING type (the `#Ext` view only adds methods, spec/09), so `self * 2`
     // inside an `impl I64` extension flows `self` (a viewed value) into the plain-typed
     // `I64.mul` witness param without a view mismatch. Every other call passes `true`.
-    inout fn genArgValueV(c: inout Comp, argExpr: U64, p: Param, checkView: Bool) -> LLVMValueRef {
+    inout fn genArgValueV(c: inout Comp, argExpr: U64, p: Param, parameterTypeRef: U64, checkView: Bool) -> LLVMValueRef {
         // extension-view invariance (spec/09): `A` and `A#Ext` are distinct types with
         // no implicit cast either way, so an argument's view must match the parameter's
         // declared view exactly — the view is applied/dropped explicitly at the call
@@ -468,12 +476,12 @@ pub impl LlvmCtx {
         // type-parameter param absorbs the view (it binds to `S#P` via inference), so the
         // check applies only to a concrete param type.
         mut val pConcrete: Bool = true
-        if p.ty != 0U64 {
-            pConcrete = tyNameConcrete(c: inout c, start: c.arena.types[p.ty].nameStart, len: c.arena.types[p.ty].nameLen)
+        if parameterTypeRef != 0U64 {
+            pConcrete = tyNameConcrete(c: inout c, start: c.arena.types[parameterTypeRef].nameStart, len: c.arena.types[parameterTypeRef].nameLen)
         }
         if checkView {
             if pConcrete {
-                if !(c.sameViewIdSet(a: self.typeViewIds(c: inout c, ref: p.ty), b: self.collectViewChain(c: inout c, id: argExpr))) {
+                if !(c.sameViewIdSet(a: self.typeViewIds(c: inout c, ref: parameterTypeRef), b: self.collectViewChain(c: inout c, id: argExpr))) {
                     c.errorAt(offset: c.exprOffset(id: argExpr), msg: "extension view mismatch: a plain type and its `#Ext` view are distinct — apply or drop the view explicitly at the call (`value#Ext` / `value#!Ext`)")
                 }
             }
@@ -499,21 +507,10 @@ pub impl LlvmCtx {
         // borrow (no retain — the binding outlives the call; escapes inside the callee
         // retain via consumeIntoOwned); an `any` temporary (an `any`-returning call)
         // is homed like every other temp class. A `move` arg hands the callee ownership.
-        // Ground a generic type-param param first: `value: V` on `Buffer[any P].append`
-        // (V bound to `any P` via the receiver instance env) is a bare `V` on p.ty, not
-        // `any` — without grounding, a concrete arg was stored raw into the fat-pointer
-        // slot (SEGV / invalid IR). Mirrors paramLlvmTy / bindOneParam.
-        mut val pAnyRef: U64 = p.ty
-        if p.ty != 0U64 {
-            if !(refIsAny(c: inout c, ref: p.ty)) {
-                if c.cur.typeParams.count() > 0U64 {
-                    val pg: U64 = c.groundTypeRef(ref: p.ty)
-                    if refIsAny(c: inout c, ref: pg) {
-                        pAnyRef = pg
-                    }
-                }
-            }
-        }
+        // The descriptor already carries the selected ABI type. For example,
+        // `value: V` on `Buffer[any P].append` is recorded as `any P`, so
+        // boxing never depends on the caller's incidental substitution frame.
+        val pAnyRef: U64 = parameterTypeRef
         mut val argBoxed: Bool = false
         val argAny: LLVMValueRef = self.coerceToAnyIfNeeded(c: inout c, targetRef: pAnyRef, valueExpr: argExpr, outBoxed: inout argBoxed)
         if argBoxed {
@@ -535,21 +532,16 @@ pub impl LlvmCtx {
             match c.arena.exprs[argExpr] {
                 Expr.Array(val elems) => {
                     mut val argElemRef: U64 = 0
-                    if p.ty != 0U64 {
-                        if c.arena.types[p.ty].args.count() > 0U64 {
-                            argElemRef = c.arena.types[p.ty].args[0]
+                    if parameterTypeRef != 0U64 {
+                        if c.arena.types[parameterTypeRef].args.count() > 0U64 {
+                            argElemRef = c.arena.types[parameterTypeRef].args[0]
                         }
                     }
                     val litArg: LLVMValueRef = self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: self.llvmScalarTy(c: inout c, tyStart: p.tyStart, tyLen: p.tyLen), elemRef: argElemRef)
                     // a literal arg is a temporary: give it a home so its buffer is
                     // released at the statement end (an escape inside the callee retains).
                     if !(p.isMove) {
-                        mut val latr: U64 = p.ty
-                        if latr != 0U64 {
-                            if c.cur.typeParams.count() > 0U64 {
-                                latr = c.groundTypeRef(ref: p.ty)
-                            }
-                        }
+                        val latr: U64 = parameterTypeRef
                         self.registerArgTemp(c: inout c, v: litArg, typeRef: latr)
                     }
                     return litArg
@@ -565,12 +557,7 @@ pub impl LlvmCtx {
             // register it as an anonymous owned local (statement-end drain; see the tail).
             if !(p.isMove) {
                 if !(exprAliasesPlace(c: inout c, id: argExpr)) {
-                    mut val atr: U64 = p.ty
-                    if atr != 0U64 {
-                        if c.cur.typeParams.count() > 0U64 {
-                            atr = c.groundTypeRef(ref: p.ty)
-                        }
-                    }
+                    val atr: U64 = parameterTypeRef
                     self.registerArgTemp(c: inout c, v: arrArg, typeRef: atr)
                 }
             }
@@ -581,14 +568,20 @@ pub impl LlvmCtx {
         // explicit type args (`<Optional.Some v=5 />`) grounds its head from context
         // (genLlvmMake/genLlvmMakeEnum consume self.expectedTy). Reset after so an
         // unconsumed value (a non-construction arg) cannot leak into a later one.
-        if p.ty != 0U64 {
-            if c.isGenericInst(ref: p.ty) {
-                self.expectedTy = p.ty
+        if parameterTypeRef != 0U64 {
+            if c.isGenericInst(ref: parameterTypeRef) {
+                self.expectedTy = parameterTypeRef
             }
         }
         val argV: LLVMValueRef = self.genLlvmExpr(c: inout c, id: argExpr)
         self.expectedTy = 0U64
-        val out: LLVMValueRef = self.coerceIntTo(c: inout c, v: argV, tyStart: p.tyStart, tyLen: p.tyLen)
+        mut val coerceStart: U64 = p.tyStart
+        mut val coerceLen: U64 = p.tyLen
+        if parameterTypeRef != 0U64 {
+            coerceStart = c.arena.types[parameterTypeRef].nameStart
+            coerceLen = c.arena.types[parameterTypeRef].nameLen
+        }
+        val out: LLVMValueRef = self.coerceIntTo(c: inout c, v: argV, tyStart: coerceStart, tyLen: coerceLen)
         // Swift-guaranteed (+0) convention for EVERY by-value class (spec/14 の同期呼び
         // 出し・Swift 4.2+ の既定と同型): a PLACE arg is a BORROW — no retain here, no
         // release in the callee. The caller's binding outlives the call (single thread;
@@ -609,12 +602,7 @@ pub impl LlvmCtx {
                     // type). A bare type-param ref stays unground here (caller env
                     // can't substitute the callee's T) and classifies scalar — the
                     // pre-existing gap, not a regression.
-                    ttr = p.ty
-                    if ttr != 0U64 {
-                        if c.cur.typeParams.count() > 0U64 {
-                            ttr = c.groundTypeRef(ref: ttr)
-                        }
-                    }
+                    ttr = parameterTypeRef
                 }
                 self.registerArgTemp(c: inout c, v: out, typeRef: ttr)
             }

@@ -94,7 +94,7 @@ pub impl LlvmCtx {
                         c.cur.typeArgs = ginf
                         val gPinMark: U64 = self.pinCells.count()
                         mut val gav: Array[LLVMValueRef] = []
-                        self.appendCallArgValues(c: inout c, av: inout gav, f: gaf, args: args)
+                        self.appendCallArgValues(c: inout c, av: inout gav, f: gaf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                         c.cur.typeParams = gsavedP
                         c.cur.typeArgs = gsavedA
                         self.emitInoutOverlapChecks(c: inout c, f: gaf, av: gav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: gPinMark)
@@ -106,7 +106,7 @@ pub impl LlvmCtx {
                 val af: Func = c.arena.funcs[afi]
                 val aPinMark: U64 = self.pinCells.count()
                 mut val aav: Array[LLVMValueRef] = []
-                self.appendCallArgValues(c: inout c, av: inout aav, f: af, args: args)
+                self.appendCallArgValues(c: inout c, av: inout aav, f: af, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                 // an assoc fn (`Greeter.banner()`, `tryFrom`, a free conformance fn) has no
                 // self, so it is its own 0-type-arg `gf` instance (B4-1).
                 val agslot: U64 = self.ensureFnInst(c: inout c, fnIdx: afi, args: [], recvInstRef: selectedRecvRef)
@@ -152,7 +152,7 @@ pub impl LlvmCtx {
                 if selectedRecvRef != 0U64 {
                     val primSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: smfi, instRef: selectedRecvRef, ownArgs: [])
                     if primSlot < self.genMethK.count() {
-                        return self.genGenMethodCall(c: inout c, recv: recv, mfi: smfi, slot: primSlot, instRef: selectedRecvRef, args: args)
+                        return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: smfi, slot: primSlot, instRef: selectedRecvRef, args: args)
                     }
                 }
                 // a method with its own type params on a primitive (`(self.a:U64).absorb[S](…)`).
@@ -173,7 +173,7 @@ pub impl LlvmCtx {
                         // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
                         sav.append(self.genBorrowedArg(c: inout c, argExpr: recv))
                     }
-                    self.appendCallArgValues(c: inout c, av: inout sav, f: smf, args: args)
+                    self.appendCallArgValues(c: inout c, av: inout sav, f: smf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                     self.emitInoutOverlapChecks(c: inout c, f: smf, av: sav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: sPinMark)
                     val srv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[sslot], self.fnVal[sslot], arrayCPtr(sav), sav.count(), anon())
                     self.releaseInoutPins(c: inout c, mark: sPinMark)
@@ -223,7 +223,7 @@ pub impl LlvmCtx {
                     }
                     val gslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: gmfi, instRef: recvRef, ownArgs: gOwn)
                     if gslot < self.genMethK.count() {
-                        return self.genGenMethodCall(c: inout c, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
+                        return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: gmfi, slot: gslot, instRef: recvRef, args: args)
                     }
                     c.errorAt(offset: nameStart, msg: "LLVM backend: this generic method is not emittable yet (provided / std / method-own type params)")
                     return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -260,7 +260,7 @@ pub impl LlvmCtx {
                             val einst: U64 = self.genEnumRefs[ereg0]
                             val egmslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: emfi, instRef: einst, ownArgs: [])
                             if egmslot < self.genMethK.count() {
-                                return self.genGenMethodCall(c: inout c, recv: recv, mfi: emfi, slot: egmslot, instRef: einst, args: args)
+                                return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: emfi, slot: egmslot, instRef: einst, args: args)
                             }
                         }
                         mut val eslot: U64 = self.userFnSlot(idx: emfi)
@@ -277,7 +277,7 @@ pub impl LlvmCtx {
                                 // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
                                 eav.append(self.genBorrowedArg(c: inout c, argExpr: recv))
                             }
-                            self.appendCallArgValues(c: inout c, av: inout eav, f: emf, args: args)
+                            self.appendCallArgValues(c: inout c, av: inout eav, f: emf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
                             self.emitInoutOverlapChecks(c: inout c, f: emf, av: eav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: ePinMark)
                             val erv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[eslot], self.fnVal[eslot], arrayCPtr(eav), eav.count(), anon())
                             self.releaseInoutPins(c: inout c, mark: ePinMark)
@@ -332,7 +332,7 @@ pub impl LlvmCtx {
         if mf.isProvided && mf.typeParams.count() == 0U64 && selectedRecvRef != 0U64 {
             val proofSlot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: selectedRecvRef, ownArgs: [])
             if proofSlot < self.genMethK.count() {
-                return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: proofSlot, instRef: selectedRecvRef, args: args)
+                return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: mfi, slot: proofSlot, instRef: selectedRecvRef, args: args)
             }
         }
         // a `move fn` consumes self (its deinit runs in the callee): mark the receiver
@@ -355,7 +355,7 @@ pub impl LlvmCtx {
                 val instRef0: U64 = self.genStructRefs[rslot]
                 val gmslot: U64 = self.ensureGenMethodDeclared(c: inout c, mfi: mfi, instRef: instRef0, ownArgs: [])
                 if gmslot < self.genMethK.count() {
-                    return self.genGenMethodCall(c: inout c, recv: recv, mfi: mfi, slot: gmslot, instRef: instRef0, args: args)
+                    return self.genGenMethodCall(c: inout c, callId: callId, recv: recv, mfi: mfi, slot: gmslot, instRef: instRef0, args: args)
                 }
             }
         }
@@ -378,7 +378,7 @@ pub impl LlvmCtx {
             // guaranteed self (+0): place = borrow; a temp receiver gets an owned home.
             av.append(self.genBorrowedArg(c: inout c, argExpr: recv))
         }
-        self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args)
+        self.appendCallArgValues(c: inout c, av: inout av, f: mf, args: args, parameterTypeRefs: c.bodyCalleeParameterTypeRefs(exprId: callId))
         self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
         val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count(), anon())
         self.releaseInoutPins(c: inout c, mark: pinMark)
