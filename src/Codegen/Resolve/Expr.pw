@@ -400,12 +400,21 @@ pub impl Comp {
             // Field selection consumes the concrete receiver term.  In
             // particular, a direct `box#E.duplicate().first` must use the
             // nested call's completed CallResolution result, not re-open the
-            // shared declaration template `(first: T, ...)`.  The receiver
-            // reader falls back to this body's parametric term before Mono
-            // has selected the nested call, so declaration-time checking does
-            // not observe a partial descriptor.
+            // shared declaration template `(first: T, ...)`.  Probe the
+            // descriptor only when the receiver is call syntax; calling the
+            // full body-local receiver recovery for every ordinary field
+            // turns declaration-time record walks into an O(body) hot path.
+            // If Mono has not selected the nested call yet, preserve the
+            // existing parametric query unchanged.
             Expr.Field(val base, val nameStart, val nameLen) => {
-                val baseRef: U64 = self.groundedBodyReceiverRef(exprId: base)
+                mut val baseRef: U64 = 0U64
+                match self.arena.exprs[base] {
+                    Expr.Call(nameStart: _, nameLen: _, args: _) => { baseRef = self.bodyCalleeResultRef(exprId: base) }
+                    Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { baseRef = self.bodyCalleeResultRef(exprId: base) }
+                    Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { baseRef = self.bodyCalleeResultRef(exprId: base) }
+                    _ => {}
+                }
+                if baseRef == 0U64 { baseRef = self.groundedTypeOf(id: base) }
                 if baseRef != 0U64 && baseRef < self.arena.types.count() {
                     val fieldRef: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
                     if fieldRef != 0U64 { return fieldRef }
