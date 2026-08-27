@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+
+extension Extra {
+    pub impl[T] Box[T] {
+        fn duplicate() -> (first: T, second: T) {
+            return (first: self.value, second: self.value)
+        }
+    }
+}
+
+fn main() {
+    print(<Box[I64] value=7I64 />#Extra.duplicate().first)
+    print(<Box[String] value="tea" />#Extra.duplicate().second)
+}

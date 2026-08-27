@@ -397,13 +397,15 @@ pub impl Comp {
                     if local.ty != 0U64 { return self.groundBodyTerm(ref: local.ty) }
                 }
             }
-            // A field/index result is not a flat TypeRef child when its
-            // receiver is an anonymous record: the component declarations
-            // live in StructDef.  Until SemanticTypeTerm has a Record node,
-            // form this one structural edge under the active body environment
-            // before consulting the expression's legacy template entry.
+            // Field selection consumes the concrete receiver term.  In
+            // particular, a direct `box#E.duplicate().first` must use the
+            // nested call's completed CallResolution result, not re-open the
+            // shared declaration template `(first: T, ...)`.  The receiver
+            // reader falls back to this body's parametric term before Mono
+            // has selected the nested call, so declaration-time checking does
+            // not observe a partial descriptor.
             Expr.Field(val base, val nameStart, val nameLen) => {
-                val baseRef: U64 = self.groundedTypeOf(id: base)
+                val baseRef: U64 = self.groundedBodyReceiverRef(exprId: base)
                 if baseRef != 0U64 && baseRef < self.arena.types.count() {
                     val fieldRef: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
                     if fieldRef != 0U64 { return fieldRef }
