@@ -816,10 +816,7 @@ pub impl Comp {
             if f.isAssoc && recvInst != 0U64 && recvInst < self.arena.types.count() {
                 val recvArgs: Array[U64] = self.arena.types[recvInst].args
                 if recvArgs.count() == f.typeParams.count() && self.fnArgsAllGround(args: recvArgs) {
-                    self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: recvArgs, siteIsStmt: siteIsStmt, slot: slot)
-                    self.setBodyCalleeParameterTypeRefs(exprId: exprId, parameterTypeRefs: self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvInst, calleeArgs: recvArgs), siteIsStmt: siteIsStmt, slot: slot)
-                    val directResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvInst, calleeArgs: recvArgs)
-                    self.setBodyCalleeResultRef(exprId: exprId, resultRef: directResult, siteIsStmt: siteIsStmt, slot: slot)
+                    self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: recvArgs, siteIsStmt: siteIsStmt, slot: slot)
                     self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst)
                     self.enqueueSelectedAssocInstance(callee: callee, args: recvArgs, recvInstRef: recvInst)
                     self.enqueueSelectedFreeInstance(callee: callee, args: recvArgs)
@@ -882,10 +879,8 @@ pub impl Comp {
                 return
             }
         }
-        self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: finalArgs, siteIsStmt: siteIsStmt, slot: slot)
-        self.setBodyCalleeParameterTypeRefs(exprId: exprId, parameterTypeRefs: self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvInst, calleeArgs: finalArgs), siteIsStmt: siteIsStmt, slot: slot)
-        val finalResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvInst, calleeArgs: finalArgs)
-        self.setBodyCalleeResultRef(exprId: exprId, resultRef: finalResult, siteIsStmt: siteIsStmt, slot: slot)
+        self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, siteIsStmt: siteIsStmt, slot: slot)
+        val finalResult: U64 = self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
         self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst)
         self.enqueueSelectedAssocInstance(callee: callee, args: finalArgs, recvInstRef: recvInst)
@@ -1194,7 +1189,7 @@ pub impl Comp {
             if finalResult == 0U64 && resultTypeRef != 0U64 { finalResult = resultTypeRef }
             mut val finalArgs: Array[U64] = prior.calleeTypeArgs
             if finalArgs.count() == 0U64 && calleeTypeArgs.count() > 0U64 { finalArgs = calleeTypeArgs }
-            self.arena.finalCallees.set(i: priorIdx, value: <CallResolution bodyId=prior.bodyId exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs parameterTypeRefs=prior.parameterTypeRefs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetBindingDeclStart=prior.targetBindingDeclStart targetTypeRef=prior.targetTypeRef />)
+            self.replaceFinalCallee(entry: priorIdx, resolution: <CallResolution bodyId=prior.bodyId exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs parameterTypeRefs=prior.parameterTypeRefs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetBindingDeclStart=prior.targetBindingDeclStart targetTypeRef=prior.targetTypeRef />)
             return
         }
         self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef)
@@ -1218,6 +1213,16 @@ pub impl Comp {
             indexSlot = (indexSlot + 1U64) % capacity
         }
         return self.finalCalleeCount()
+    }
+
+    // The sole mutation boundary for a completed call descriptor.  Transitional
+    // callers may still discover individual facts at different times, but they
+    // must carry every already-resolved fact through this one whole-value write;
+    // no setter may accidentally erase a proof/ABI/target selected earlier.
+    inout fn replaceFinalCallee(entry: U64, resolution: CallResolution) {
+        if entry < self.finalCalleeCount() {
+            self.arena.finalCallees.set(i: entry, value: resolution)
+        }
     }
 
     // A call in a body without substitutions is instance-invariant.  Its
@@ -1312,7 +1317,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=recvRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
+            self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=recvRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1325,7 +1330,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
+            self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1339,7 +1344,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
+            self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1353,7 +1358,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
+            self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
         }
     }
 
@@ -1363,6 +1368,19 @@ pub impl Comp {
         return []
     }
 
+    // Finalize the static portion of a selected call atomically.  The target
+    // kind may already have been fixed for an existential/closure call, so it
+    // is preserved; type arguments, ABI parameters, receiver and result are
+    // one coherent grounding under the same selected invocation.
+    inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], siteIsStmt: Bool = false, slot: U64 = 0U64) {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i >= self.finalCalleeCount() { return }
+        val e: CallResolution = self.arena.finalCallees[i]
+        val params: Array[U64] = self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
+        val result: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
+        self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=callee calleeTypeArgs=calleeArgs parameterTypeRefs=params recvTypeRef=recvRef resultTypeRef=result targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
+    }
+
     // Dynamic calls are selected in Mono just like ordinary Func calls.  The
     // target descriptor is deliberately stored beside the static callee rather
     // than reconstructed from a method spelling in LLVM.
@@ -1370,7 +1388,7 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
-            self.arena.finalCallees.set(i: i, value: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
+            self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
         }
     }
 
@@ -1698,10 +1716,7 @@ pub impl Comp {
             self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: implicit associated call template has no complete receiver substitution")
             return
         }
-        self.setBodyCalleeReceiverRef(exprId: exprId, recvRef: recvRef)
-        self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: args)
-        self.setBodyCalleeParameterTypeRefs(exprId: exprId, parameterTypeRefs: self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvRef, calleeArgs: args))
-        self.setBodyCalleeResultRef(exprId: exprId, resultRef: self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvRef, calleeArgs: args))
+        self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvRef, calleeArgs: args)
         self.enqueueFinalBody(fnIdx: callee, args: args, recvInstRef: recvRef)
         self.enqueueSelectedAssocInstance(callee: callee, args: args, recvInstRef: recvRef)
         self.enqueueSelectedFreeInstance(callee: callee, args: args)
