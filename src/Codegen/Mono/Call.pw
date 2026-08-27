@@ -908,7 +908,7 @@ pub impl Comp {
             // deliberately does not invent a fallback callable.
             return
         }
-        self.recordBodyCallee(exprId: exprId, callee: factory, recvTypeOverride: returnErr)
+        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId callee=factory receiverRef=returnErr resultHintRef=returnErr />)
         self.enqueueSelectedCallee(exprId: exprId, callee: factory, implicit: true, recvInstOverride: returnErr)
     }
 
@@ -1074,7 +1074,11 @@ pub impl Comp {
         self.arena.finalCalleeIndexSlots.set(i: indexSlot, value: self.finalCalleeCount())
     }
 
-    inout fn recordBodyCallee(exprId: U64, callee: U64, siteIsStmt: Bool = false, slot: U64 = 0U64, recvOverride: U64 = 0U64, recvTypeOverride: U64 = 0U64) {
+    inout fn recordSelectedBodyCallee(selection: CallSiteSelection, recvOverride: U64 = 0U64) {
+        val exprId: U64 = selection.exprId
+        val callee: U64 = selection.callee
+        val siteIsStmt: Bool = selection.siteIsStmt
+        val slot: U64 = selection.slot
         // Persist an instance-invariant final decision in the AST-owned cache.
         // This is not a backend lookup fallback: it is the canonical storage
         // for calls whose body key has no substitutions or receiver instance.
@@ -1089,8 +1093,8 @@ pub impl Comp {
         }
         val priorIdx: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         mut val recvTypeRef: U64 = 0U64
-        if recvTypeOverride != 0U64 {
-            recvTypeRef = recvTypeOverride
+        if selection.receiverRef != 0U64 {
+            recvTypeRef = selection.receiverRef
         } else if recvOverride != 0U64 {
             recvTypeRef = self.groundedBodyReceiverRef(exprId: recvOverride)
         } else {
@@ -1125,8 +1129,8 @@ pub impl Comp {
         // it.
         if callee < self.arena.funcs.count() {
             val assoc: Func = self.arena.funcs[callee]
-            if assoc.isAssoc && self.monoWork.scanExpectedTy != 0U64 && self.monoWork.scanExpectedTy < self.arena.types.count() {
-                val expected: U64 = self.groundTypeRef(ref: self.monoWork.scanExpectedTy)
+            if assoc.isAssoc && selection.resultHintRef != 0U64 && selection.resultHintRef < self.arena.types.count() {
+                val expected: U64 = selection.resultHintRef
                 if expected != 0U64 && expected < self.arena.types.count() {
                     val et: TypeRef = self.arena.types[expected]
                     if spansEqual(c: inout self, aStart: et.nameStart, aLen: et.nameLen, bStart: assoc.recvStart, bLen: assoc.recvLen) {
@@ -1196,6 +1200,23 @@ pub impl Comp {
         if calleeTypeArgs.count() > 0U64 {
             self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: calleeTypeArgs, siteIsStmt: siteIsStmt, slot: slot)
         }
+    }
+
+    // Capture expected-result provenance at the semantic selection boundary.
+    // The final builder must not consult the collector's ambient expected type.
+    inout fn selectedResultHint(callee: U64) -> U64 {
+        if callee < self.arena.funcs.count() && self.arena.funcs[callee].isAssoc && self.monoWork.scanExpectedTy != 0U64 {
+            return self.groundTypeRef(ref: self.monoWork.scanExpectedTy)
+        }
+        return 0U64
+    }
+
+    // Compatibility entry while resolver call sites migrate to an explicit
+    // CallSiteSelection. New callers must pass their selected receiver/result
+    // directly; this wrapper is deleted once no legacy AST recovery remains.
+    inout fn recordBodyCallee(exprId: U64, callee: U64, siteIsStmt: Bool = false, slot: U64 = 0U64, recvOverride: U64 = 0U64, recvTypeOverride: U64 = 0U64) {
+        val hint: U64 = self.selectedResultHint(callee: callee)
+        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverRef=recvTypeOverride resultHintRef=hint />, recvOverride: recvOverride)
     }
 
     // `CallResolution` is keyed by the concrete body instance rather than AST alone:
@@ -1697,7 +1718,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        self.recordBodyCallee(exprId: exprId, callee: callee, recvTypeOverride: resolvedReceiverRef)
+        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId callee=callee receiverRef=resolvedReceiverRef resultHintRef=self.selectedResultHint(callee: callee) />)
         self.recordBodyAnyTarget(exprId: exprId)
         self.recordBodyClosureTarget(exprId: exprId, callee: callee)
         self.enqueueSelectedCallee(exprId: exprId, callee: callee, recvInstOverride: resolvedReceiverRef)
@@ -1712,7 +1733,7 @@ pub impl Comp {
     // CallResolution-template contract: selected callee + receiver term yield
     // a complete CallResolution without a second inference pass.
     inout fn materializeImplicitAssocTemplate(exprId: U64, callee: U64, recvRef: U64) {
-        self.recordBodyCallee(exprId: exprId, callee: callee, recvTypeOverride: recvRef)
+        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=recvRef />)
         if callee >= self.arena.funcs.count() || recvRef == 0U64 || recvRef >= self.arena.types.count() {
             return
         }
