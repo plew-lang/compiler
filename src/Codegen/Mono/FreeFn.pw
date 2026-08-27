@@ -260,7 +260,7 @@ pub impl Comp {
                             // bridges.  This is not a second inference pass:
                             // it merely consumes the same semantic term used
                             // by Mono and LLVM elsewhere.
-                            val semantic: U64 = self.groundedTypeOf(id: args[ai].expr)
+                            val semantic: U64 = self.groundCurrentBodySemanticExprTypeRef(exprId: args[ai].expr)
                             if semantic != 0U64 {
                                 baseRef = semantic
                             }
