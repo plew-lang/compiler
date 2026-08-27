@@ -1,0 +1,10 @@
+// Record fields are semantic TypeTerm children.  Within an owner SCC this
+// edge duplicates T structurally, just as `(left: T, right: T)` does, and
+// must be rejected before instance rewriting can grow without a bound.
+trait A[Item] {}
+trait B[Item] {}
+
+impl[T] A[(value: T)] as B[(left: T, right: T)] {}
+impl[T] B[(left: T, right: T)] as A[(value: T)] {}
+
+fn main() {}
