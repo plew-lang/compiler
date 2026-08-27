@@ -334,14 +334,6 @@ pub impl Comp {
         return self.groundTermForBody(ref: term, environment: environment, selfRef: selfRef, itemRef: itemRef)
     }
 
-    // Mono/LLVM body consumers use this convenience only to name their already
-    // explicit body environment. It is not an ambient type-inference fallback:
-    // all expression-owned semantic terms still flow through the explicit query
-    // above. Keeping this wrapper central prevents each consumer from mixing
-    // TypeInfo, local tables and final-call descriptors in a different order.
-    inout fn groundCurrentBodySemanticExprTypeRef(exprId: U64) -> U64 {
-        return self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-    }
 
     inout fn recordSemanticExprInfo(exprId: U64, ti: TypeInfo) {
         self.ensureSemanticExprType(exprId: exprId)
