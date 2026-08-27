@@ -1217,14 +1217,6 @@ pub impl Comp {
         return 0U64
     }
 
-    // Compatibility entry while resolver call sites migrate to an explicit
-    // CallSiteSelection. New callers must pass their selected receiver/result
-    // directly; this wrapper is deleted once no legacy AST recovery remains.
-    inout fn recordBodyCallee(exprId: U64, callee: U64, siteIsStmt: Bool = false, slot: U64 = 0U64, recvOverride: U64 = 0U64, recvTypeOverride: U64 = 0U64) {
-        val hint: U64 = self.selectedResultHint(callee: callee)
-        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee receiverRef=recvTypeOverride resultHintRef=hint />, recvOverride: recvOverride)
-    }
-
     // `CallResolution` is keyed by the concrete body instance rather than AST alone:
     // generic templates share AST nodes, while their selected callees need not.
     // Keep the key comparison here, rather than duplicating it in every table
@@ -1406,15 +1398,6 @@ pub impl Comp {
         val params: Array[U64] = self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
         val result: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
         self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=callee calleeTypeArgs=calleeArgs parameterTypeRefs=params recvTypeRef=recvRef resultTypeRef=result targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
-    }
-
-    // Dynamic dispatch has no static ABI body, but its target identity and
-    // result are equally one semantic decision. Keep them atomic too.
-    inout fn completeDynamicBodyCallee(exprId: U64, targetKind: U64, targetTraitIdx: U64, targetSlot: U64, targetTypeRef: U64, targetBindingDeclStart: U64, resultRef: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
-        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        if i >= self.finalCalleeCount() { return }
-        val e: CallResolution = self.arena.finalCallees[i]
-        self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
     }
 
     // Dynamic calls are selected in Mono just like ordinary Func calls.  The
@@ -2925,7 +2908,6 @@ pub impl Comp {
                         // recovering it from the expression tree.
                         val none: U64 = self.arena.funcs.count()
                         self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef />)
-                        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=initialRef />)
                         val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
                         val noArgs: Array[Arg] = []
                         val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: initialRef)
@@ -2934,7 +2916,7 @@ pub impl Comp {
                             self.errorAt(offset: 0U64, msg: "internal diagnostic: final existential iterator target was not finalized")
                         } else {
                             val nextReq: Func = self.decls.traits[traitIdx].reqs[nextSlot - 1U64]
-                            self.completeDynamicBodyCallee(exprId: stmtId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: nextSlot, targetTypeRef: 0U64, targetBindingDeclStart: 0U64, resultRef: self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref, siteIsStmt: true, slot: 2U64)
+                            self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=initialRef resultRef=self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref targetKind=1U64 targetTraitIdx=traitIdx targetSlot=nextSlot />)
                         }
                     }
                     val et: TypeInfo = self.typeOf(id: iter)
