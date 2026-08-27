@@ -58,7 +58,7 @@ pub impl LlvmCtx {
             val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
             mut val aargs: Array[U64] = []
             aargs.append(c.findOrAddTypeRef(nameStart: cap.tyStart, nameLen: cap.tyLen))
-            return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+            return c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
         if cap.tyLen == 0U64 {
             return 0U64

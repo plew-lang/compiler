@@ -100,7 +100,7 @@ pub impl LlvmCtx {
             val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
             mut val aargs: Array[U64] = []
             aargs.append(elemRef)
-            val aref: U64 = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+            val aref: U64 = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
             val gs: U64 = self.genStructSlot(c: inout c, ref: aref)
             if gs < self.genStructRefs.count() {
                 return self.genStructTys[gs]

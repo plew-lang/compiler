@@ -125,6 +125,14 @@ pub impl Comp {
             if self.arena.types[f.retTy].isAny {
                 return self.typeInfoOfRef(ref: f.retTy)
             }
+            // A non-generic anonymous-record return is nevertheless a fully
+            // structured semantic term.  Returning only its synthetic layout
+            // spelling would erase the Record children before the caller can
+            // compare, ground, or select a field.
+            if self.arena.types[f.retTy].isRecord {
+                val rt: TypeRef = self.arena.types[f.retTy]
+                return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=f.retTy viewExtId=rt.viewExtId />
+            }
         }
         return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
     }
@@ -270,7 +278,23 @@ pub impl Comp {
     // The return TypeInfo of `value.name(args)` where `value: T` and T is a bound type
     // parameter of `fnIdx` — rustc-style bound-based method typing: search each of T's
     // bound traits for the member and take its declared return.
-    inout fn boundMethodRetInfo(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> TypeInfo {
+    inout fn boundMethodRetInfo(fnIdx: U64, receiverRef: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> TypeInfo {
+        // The static proof owns both requirement selection and its associated
+        // output predicates. Reify the complete return TypeTerm before the
+        // older name-shaped fallback; this handles nested results such as
+        // `Optional[Item]` under `where I: Iterator[Item=E]`.
+        mut val semanticReceiver: U64 = receiverRef
+        if semanticReceiver == 0U64 {
+            semanticReceiver = self.simpleTypeRef(nameStart: tpStart, nameLen: tpLen)
+        }
+        val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: fnIdx, receiverRef: semanticReceiver, nameStart: nameStart, nameLen: nameLen, args: args)
+        match resolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                val result: U64 = self.staticRequirementResultType(resolution: resolution)
+                if result != 0U64 { return self.typeInfoOfRef(ref: result) }
+            }
+            _ => {}
+        }
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val bi: U64 = 0
@@ -279,6 +303,33 @@ pub impl Comp {
             if fb.fnIdx == fnIdx && fb.paramNameId == qTp {
                 val owner: U64 = fb.constraint.key.owner
                 val qTrait: U64 = intern(c: inout self, start: owner, len: self.traitNameLenByOwner(owner: owner))
+                mut val traitIdx: U64 = 0U64
+                while traitIdx < self.decls.traits.count() {
+                    if self.decls.traits[traitIdx].nameId == qTrait && self.traitArityMatches(actual: self.decls.traits[traitIdx].typeParams.count(), expected: fb.constraint.key.positionalArgs.count()) {
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        mut val reqIdx: U64 = 0U64
+                        while reqIdx < traitDef.reqs.count() {
+                            val req: Func = traitDef.reqs[reqIdx]
+                            if req.nameId == qName && self.paramsLabelsOk(params: req.params, args: args) {
+                                if req.hasRet && req.retTy != 0U64 {
+                                    val savedParams: Array[Bind] = self.cur.typeParams
+                                    val savedArgs: Array[U64] = self.cur.typeArgs
+                                    self.cur.typeParams = traitDef.typeParams
+                                    self.cur.typeArgs = fb.constraint.key.positionalArgs
+                                    val grounded: U64 = self.groundTypeRef(ref: req.retTy)
+                                    self.cur.typeParams = savedParams
+                                    self.cur.typeArgs = savedArgs
+                                    val result: U64 = self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, bound: fb)
+                                    if result != 0U64 { return self.typeInfoOfRef(ref: result) }
+                                }
+                            }
+                            reqIdx += 1U64
+                        }
+                        traitIdx = self.decls.traits.count()
+                    } else {
+                        traitIdx += 1U64
+                    }
+                }
                 val r: TypeInfo = self.traitMemberRetInfo(traitNameId: qTrait, traitArity: fb.constraint.key.positionalArgs.count(), qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: 0U64, useMod: self.moduleOf(offset: nameStart))
                 if r.nameLen != 0U64 {
                     return r
@@ -725,7 +776,8 @@ pub impl Comp {
                     if !isEnum && ty == 0U64 {
                         val rr: U64 = self.inferRecordMakeRef(fields: fields)
                         if rr != 0U64 {
-                            return self.typeInfoOfRef(ref: rr)
+                            val rt: TypeRef = self.arena.types[rr]
+                            return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=rr viewExtId=rt.viewExtId />
                         }
                     }
                     return <TypeInfo kind=2 nameStart=typeStart nameLen=typeLen ref=0 />
@@ -737,6 +789,17 @@ pub impl Comp {
                 if ty != 0U64 {
                     if self.cur.typeParams.count() > 0U64 {
                         g = self.groundTypeRef(ref: ty)
+                    }
+                }
+                // A context-typed record construction already owns its complete
+                // Record TypeTerm in `ty`.  Do not discard it merely because the
+                // synthetic ABI layout is non-generic: later compatibility,
+                // inference, and field selection must see the same structural
+                // children as the annotated context.
+                if g != 0U64 && g < self.arena.types.count() {
+                    if self.arena.types[g].isRecord {
+                        val rt: TypeRef = self.arena.types[g]
+                        return <TypeInfo kind=2 nameStart=rt.nameStart nameLen=rt.nameLen ref=g viewExtId=rt.viewExtId />
                     }
                 }
                 if self.isGenericInst(ref: g) {
@@ -955,7 +1018,7 @@ pub impl Comp {
                     // value: T, T: Format): the bound trait's member signature types the
                     // result (rustc-style bound-based method typing).
                     if self.isTypeParamOf(fnIdx: self.cur.checkFn, start: rt.nameStart, len: rt.nameLen) {
-                        return self.boundMethodRetInfo(fnIdx: self.cur.checkFn, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                        return self.boundMethodRetInfo(fnIdx: self.cur.checkFn, receiverRef: rt.ref, tpStart: rt.nameStart, tpLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
                     }
                     // Keep the return of a requirement selected through an
                     // assumed bound symbolic during generic-body validation.

@@ -463,7 +463,7 @@ pub impl LlvmCtx {
                                 val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
                                 mut val aargs: Array[U64] = []
                                 aargs.append(aer)
-                                tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+                                tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                             }
                         }
                     }

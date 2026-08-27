@@ -48,6 +48,20 @@ pub impl Comp {
         // witness does not inherit a caller's conformance-path view: its shared
         // body is checked against the surface written at its declaration.
         val vid: U64 = f.extId
+        // `recvTy` is the declaration's already-lowered semantic receiver.
+        // Rebuilding it from the first same-spelled f.typeParams used to erase
+        // their ParamIds, making `self.field: I` fail to match an `I: Trait`
+        // proof during abstract generic checking.  A non-extension receiver
+        // can use this exact term directly.  Extensions retain the view
+        // decoration path below until TypeRef view construction is centralized.
+        if f.recvTy != 0U64 {
+            if vid == 0U64 {
+                return f.recvTy
+            }
+            mut val extensionView: Array[U64] = []
+            extensionView.append(vid)
+            return self.typeRefWithViews(ref: f.recvTy, viewExtId: vid, viewIds: extensionView)
+        }
         mut val rcount: U64 = 0
         val si: U64 = self.anyStructIndex(nameStart: f.recvStart, nameLen: f.recvLen)
         if si < self.arena.structs.count() {
@@ -66,7 +80,7 @@ pub impl Comp {
             }
             i += 1
         }
-        return self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=args viewExtId=vid />)
+        return self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=vid />)
     }
 
     // Context-type an array literal from its expected type (the record-pass analog of

@@ -111,7 +111,27 @@ pub impl Comp {
         mut val effTy: U64 = ty
         if tyLen == 0 {
             if !(tyIsArray) {
-                val ti: TypeInfo = self.exprType(id: init)
+                // A selected call has an instance-owned result in
+                // CallResolution. `exprType` is the shared
+                // declaration-template projection, so using it alone would
+                // bind `val pair = box#E.duplicate()` as `(first: T,
+                // second: T)` after Mono had already proved its concrete
+                // result. Local inference is the first consumer that gives
+                // the result a stable body binding; it must read the same
+                // semantic fact as later field selection and LLVM. Other
+                // expressions retain the ordinary projection, including
+                // uncontextualized literals.
+                mut val ti: TypeInfo = self.exprType(id: init)
+                mut val resolved: U64 = 0U64
+                match self.arena.exprs[init] {
+                    Expr.Call(nameStart: _, nameLen: _, args: _) => { resolved = self.bodyCalleeResultRef(exprId: init) }
+                    Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { resolved = self.bodyCalleeResultRef(exprId: init) }
+                    Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { resolved = self.bodyCalleeResultRef(exprId: init) }
+                    _ => {}
+                }
+                if resolved != 0U64 && resolved < self.arena.types.count() {
+                    ti = self.typeInfoOfRef(ref: resolved)
+                }
                 // an array-literal init reports unknown via exprType (literal typing is
                 // element-wise/bidirectional in the check passes), so derive `Array[E]`
                 // from the first element HERE — the one un-annotated-let inference the

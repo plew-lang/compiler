@@ -31,7 +31,7 @@ pub impl Comp {
             i += 1
         }
         val noArgs: Array[U64] = []
-        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     inout fn closureFnTypeRef(params: Array[Param], retTy: U64) -> U64 {
@@ -43,7 +43,7 @@ pub impl Comp {
             args.append(params[i].ty)
             i += 1
         }
-        return self.pushType(t: <TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args />)
+        return self.pushType(t: <TypeRef nameStart=fnName.nameStart nameLen=fnName.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     inout fn unifyTypeParam(paramRef: U64, argRef: U64, tpStart: U64, tpLen: U64) -> U64 {
@@ -51,6 +51,28 @@ pub impl Comp {
             return 0
         }
         val pt: TypeRef = self.arena.types[paramRef]
+        if argRef >= self.arena.types.count() {
+            return 0
+        }
+        val at: TypeRef = self.arena.types[argRef]
+        // Anonymous records are structural TypeTerm nodes.  Their synthetic
+        // layout names (`(value:T)` / `(value:I32)`) are intentionally ignored
+        // here: infer through the canonical labelled field children exactly as
+        // for nominal type arguments.  This must precede the bare-parameter
+        // case: record nodes have no nominal `args` by design.
+        if pt.isRecord || at.isRecord {
+            if !(pt.isRecord) || !(at.isRecord) { return 0U64 }
+            if pt.recordFieldLabels.count() != at.recordFieldLabels.count() || pt.recordFieldTerms.count() != at.recordFieldTerms.count() { return 0U64 }
+            mut val ri: U64 = 0U64
+            while ri < pt.recordFieldTerms.count() {
+                if ri >= pt.recordFieldLabels.count() || ri >= at.recordFieldLabels.count() { return 0U64 }
+                if pt.recordFieldLabels[ri] != at.recordFieldLabels[ri] { return 0U64 }
+                val inferred: U64 = self.unifyTypeParam(paramRef: pt.recordFieldTerms[ri], argRef: at.recordFieldTerms[ri], tpStart: tpStart, tpLen: tpLen)
+                if inferred != 0U64 { return inferred }
+                ri += 1U64
+            }
+            return 0U64
+        }
         // A projection is not invertible.  From an argument of type
         // `T#Parser.Output` we cannot infer `T`: unrelated conformers may
         // expose the same output type.  Inference must first obtain T from an
@@ -74,10 +96,6 @@ pub impl Comp {
             }
             return 0
         }
-        if argRef >= self.arena.types.count() {
-            return 0
-        }
-        val at: TypeRef = self.arena.types[argRef]
         mut val i: U64 = 0
         while i < pt.args.count() {
             if i < at.args.count() {

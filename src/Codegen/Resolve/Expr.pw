@@ -198,7 +198,7 @@ pub impl Comp {
         val ab: Bind = self.kwSpan(kw: "Array", kwLen: 5)
         mut val args: Array[U64] = []
         args.append(elemRef)
-        return self.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=args />)
+        return self.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     inout fn typedIrRefOfInfo(ti: TypeInfo) -> U64 {
@@ -472,6 +472,7 @@ pub impl Comp {
         // `val u: () = ()` lowers to), so a bare bind types without an annotation.
         mut val names: Array[String] = []
         mut val tys: Array[PType] = []
+        mut val terms: Array[U64] = []
         mut val i: U64 = 0
         while i < fields.count() {
             val mf: MakeField = fields[i]
@@ -491,10 +492,11 @@ pub impl Comp {
             }
             names.append(stringFromBytesUnchecked(nb))
             tys.append(<PType start=ti.nameStart len=ti.nameLen isArray=false ref=fref />)
+            terms.append(fref)
             i += 1
         }
         val rnm: Bind = self.ensureRecordStruct(fieldNames: names, fieldTys: tys)
-        return self.simpleTypeRef(nameStart: rnm.nameStart, nameLen: rnm.nameLen)
+        return self.recordTypeTerm(name: rnm, fieldNames: names, fieldTerms: terms)
     }
 
     // The grounded TypeRef inferred for a generic-struct construction, or 0 when it can't
@@ -548,7 +550,7 @@ pub impl Comp {
             args.append(argRef)
             pi += 1
         }
-        return self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen args=args />)
+        return self.pushType(t: <TypeRef nameStart=typeStart nameLen=typeLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     // The TypeRef for the value supplied to the make-field named `fieldNameId`, or 0 when
@@ -573,7 +575,7 @@ pub impl Comp {
                     }
                 }
                 mut val noArgs: Array[U64] = []
-                return self.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs />)
+                return self.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
             }
             k += 1
         }

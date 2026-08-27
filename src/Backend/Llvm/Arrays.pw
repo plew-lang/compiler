@@ -175,7 +175,7 @@ pub impl LlvmCtx {
         }
         if ti.nameLen != 0U64 {
             mut val noArgs: Array[U64] = []
-            return c.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs />)
+            return c.pushType(t: <TypeRef nameStart=ti.nameStart nameLen=ti.nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
         return 0U64
     }

@@ -215,11 +215,11 @@ pub impl Comp {
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
             val noArgs: Array[U64] = []
-            uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noArgs />)
+            uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
         mut val args: Array[U64] = []
         args.append(uRef)
-        return self.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args />)
+        return self.pushType(t: <TypeRef nameStart=ot.nameStart nameLen=ot.nameLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     inout fn fieldType(structStart: U64, structLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {

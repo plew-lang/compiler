@@ -41,6 +41,20 @@ pub impl Comp {
         // generic-payload case the head-name checks can't see (the un-annotated construction
         // carries no type args itself; they come from the expected type).
         self.tcCheckMakeFields(expectedRef: expectedRef, makeId: valueExpr)
+        // Record literals are bidirectionally typed: after their labelled
+        // fields have been checked against the expected Record TypeTerm, that
+        // context is the literal's semantic type even when a field expression
+        // (such as `a / b`) has no bottom-up TypeInfo.  Do not fall through to
+        // the old nominal-layout comparison, which would discard the Record
+        // node merely because the literal had no independent annotation.
+        if expectedRef < self.arena.types.count() {
+            if self.arena.types[expectedRef].isRecord {
+                match self.arena.exprs[valueExpr] {
+                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, fields: _) => { return }
+                    _ => {}
+                }
+            }
+        }
         // a value-position if/match (`val x: I64 = if c { give A } else { give B }`): each
         // branch's give value must match the expected type — so a divergent branch (`give
         // "s"` where I64 is wanted) is caught even when another branch matches.
@@ -302,40 +316,32 @@ pub impl Comp {
             return
         }
         val et: TypeRef = self.arena.types[expectedRef]
-        // a record literal in a typed record position (`pair: (a:I32,b:I32) = (a:3I32,b:4I32)`):
-        // the literal carries the TEMPLATE record name `(a:T,b:T)` (lowered under the field's
-        // declared type), but `et` is the GROUNDED record whose StructDef fields hold the
-        // concrete types. Records encode their components in the name (no top-level args), so
-        // the generic-args path below misses them — check each field value against the grounded
-        // field type directly (`3I32` vs `I32`). This is the record analog of tcCheckFieldsUnder.
-        if et.nameLen > 0U64 {
-            if self.arena.bytes[et.nameStart] == 40U8 {
-                match self.arena.exprs[makeId] {
-                    Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
-                        val rsi: U64 = self.structIndexByName(start: et.nameStart, len: et.nameLen)
-                        if rsi < self.arena.structs.count() {
-                            val rsd: StructDef = self.arena.structs[rsi]
-                            mut val rmi: U64 = 0
-                            while rmi < fields.count() {
-                                mut val rdi: U64 = 0
-                                while rdi < rsd.fields.count() {
-                                    if spansEqual(c: inout self, aStart: rsd.fields[rdi].nameStart, aLen: rsd.fields[rdi].nameLen, bStart: fields[rmi].nameStart, bLen: fields[rmi].nameLen) {
-                                        if rsd.fields[rdi].ty != 0U64 {
-                                            self.tcCheckValue(expectedRef: rsd.fields[rdi].ty, valueExpr: fields[rmi].value, pos: "record-field")
-                                        }
-                                        rdi = rsd.fields.count()
-                                    } else {
-                                        rdi += 1
-                                    }
-                                }
-                                rmi += 1
+        // A Record's semantic field types live in its TypeTerm children. The
+        // synthetic StructDef is an ABI layout cache and may originate in a
+        // different lexical generic scope, so consulting it here would replace
+        // the correct ParamId with an unrelated same-spelled binder.
+        if et.isRecord {
+            if et.recordFieldLabels.count() != et.recordFieldTerms.count() { return }
+            match self.arena.exprs[makeId] {
+                Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
+                    mut val mi: U64 = 0U64
+                    while mi < fields.count() {
+                        val label: U64 = intern(c: inout self, start: fields[mi].nameStart, len: fields[mi].nameLen)
+                        mut val ri: U64 = 0U64
+                        while ri < et.recordFieldLabels.count() {
+                            if et.recordFieldLabels[ri] == label {
+                                self.tcCheckValue(expectedRef: et.recordFieldTerms[ri], valueExpr: fields[mi].value, pos: "record-field")
+                                ri = et.recordFieldLabels.count()
+                            } else {
+                                ri += 1U64
                             }
                         }
+                        mi += 1U64
                     }
-                    _ => {}
                 }
-                return
+                _ => {}
             }
+            return
         }
         if et.args.count() == 0U64 {
             return

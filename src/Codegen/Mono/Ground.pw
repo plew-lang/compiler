@@ -21,6 +21,20 @@ pub impl Comp {
     inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64]) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
+        if t.isRecord {
+            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
+            mut val fields: Array[U64] = []
+            mut val changed: Bool = false
+            mut val ri: U64 = 0U64
+            while ri < t.recordFieldTerms.count() {
+                val next: U64 = self.groundTermInEnvironment(ref: t.recordFieldTerms[ri], params: params, values: values)
+                if next != t.recordFieldTerms[ri] { changed = true }
+                fields.append(next)
+                ri += 1U64
+            }
+            if changed { return self.rebuildRecordTypeTerm(t: t, fieldTerms: fields) }
+            return ref
+        }
         // A projection's receiver is a child type term, not the projection
         // term itself.  Substitute it before considering the legacy flat
         // ParamId carried on the projection node: grounding
@@ -152,14 +166,21 @@ pub impl Comp {
     // This is the only construction path used by term substitution: projection
     // trait arguments are children just like nominal arguments.
     inout fn rebuildTypeTerm(t: TypeRef, args: Array[U64], assocTraitArgs: Array[U64]) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=args viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+    }
+
+    // Rebuild a Record TypeTerm after a closed traversal transformed its field
+    // children.  The retained layout name is opaque ABI metadata; labels and
+    // fields are the semantic identity and must travel together.
+    inout fn rebuildRecordTypeTerm(t: TypeRef, fieldTerms: Array[U64]) -> U64 {
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=true recordFieldLabels=t.recordFieldLabels recordFieldTerms=fieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // The legacy arena represents a projection receiver through the same head
     // and arguments as the projection itself. Expose it as an explicit term so
     // all structural operations can recurse into it.
     inout fn typeTermProjectionReceiver(t: TypeRef) -> U64 {
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
     }
 
     // Reassemble a projection after a structural traversal transformed its
@@ -169,7 +190,7 @@ pub impl Comp {
     inout fn rebuildProjectionTerm(t: TypeRef, receiver: U64, traitArgs: Array[U64]) -> U64 {
         if receiver >= self.arena.types.count() { return 0U64 }
         val base: TypeRef = self.arena.types[receiver]
-        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=base.viewExtId viewIds=base.viewIds viewSources=base.viewSources isAny=base.isAny argLabels=base.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=traitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     // Apply exactly one concrete witness's impl-binder substitution. Query
@@ -188,6 +209,24 @@ pub impl Comp {
             return ref
         }
         val t: TypeRef = semantic
+        // Record fields are ordinary semantic children.  Witness grounding
+        // must recurse through the same carrier as body grounding rather than
+        // reopening the synthetic StructDef layout: the latter is ABI-only
+        // and may have been registered under a different lexical binder.
+        if t.isRecord {
+            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
+            mut val fields: Array[U64] = []
+            mut val recordChanged: Bool = false
+            mut val ri: U64 = 0U64
+            while ri < t.recordFieldTerms.count() {
+                val next: U64 = self.groundWitnessTypeTerm(ref: t.recordFieldTerms[ri], params: params, matchResult: matchResult)
+                if next != t.recordFieldTerms[ri] { recordChanged = true }
+                fields.append(next)
+                ri += 1U64
+            }
+            if recordChanged { return self.rebuildRecordTypeTerm(t: t, fieldTerms: fields) }
+            return ref
+        }
         mut val args: Array[U64] = []
         mut val assocArgs: Array[U64] = []
         mut val changed: Bool = false
@@ -242,7 +281,7 @@ pub impl Comp {
                 values.append(matchResult.binds[matchIdx].term)
             } else {
                 val p: Bind = params[i]
-                values.append(self.pushType(t: <TypeRef nameStart=p.nameStart nameLen=p.nameLen paramId=p.paramId args=[] />))
+                values.append(self.pushType(t: <TypeRef nameStart=p.nameStart nameLen=p.nameLen paramId=p.paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
             }
             i += 1U64
         }
@@ -313,6 +352,30 @@ pub impl Comp {
         if tr.isSendable {
             appendBytes(into: inout out, from: "sendable ".bytes())
         }
+        if tr.isRecord {
+            if tr.recordFieldLabels.count() != tr.recordFieldTerms.count() { return out }
+            val si: U64 = self.anyStructIndex(nameStart: tr.nameStart, nameLen: tr.nameLen)
+            if si >= self.arena.structs.count() { return out }
+            val fields: Array[FieldDef] = self.arena.structs[si].fields
+            if fields.count() != tr.recordFieldTerms.count() { return out }
+            appendBytes(into: inout out, from: "(".bytes())
+            mut val ri: U64 = 0U64
+            while ri < tr.recordFieldTerms.count() {
+                if ri > 0U64 { appendBytes(into: inout out, from: ",".bytes()) }
+                val fd: FieldDef = fields[ri]
+                if fd.nameId != tr.recordFieldLabels[ri] { return [] }
+                mut val bi: U64 = 0U64
+                while bi < fd.nameLen {
+                    out.append(self.arena.bytes[fd.nameStart + bi])
+                    bi += 1U64
+                }
+                appendBytes(into: inout out, from: ":".bytes())
+                appendBytes(into: inout out, from: self.recordTypeKeyFromRef(ref: tr.recordFieldTerms[ri]))
+                ri += 1U64
+            }
+            appendBytes(into: inout out, from: ")".bytes())
+            return out
+        }
         mut val i: U64 = 0
         while i < tr.nameLen {
             out.append(self.arena.bytes[tr.nameStart + i])
@@ -368,7 +431,11 @@ pub impl Comp {
                 k += 1
             }
             appendBytes(into: inout cn, from: ":".bytes())
-            val g: U64 = self.groundTypeRef(ref: fd.ty)
+            mut val fieldTerm: U64 = fd.ty
+            if t.isRecord && j < t.recordFieldTerms.count() {
+                fieldTerm = t.recordFieldTerms[j]
+            }
+            val g: U64 = self.groundTypeRef(ref: fieldTerm)
             if g != fd.ty {
                 changed = true
             }
@@ -406,8 +473,7 @@ pub impl Comp {
                 self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nid typeParams=noTP fields=gfields isUnique=sd.isUnique isNonsendable=sd.isNonsendable isExtern=false defOffset=sd.defOffset />)
             }
         }
-        mut val noArgs: Array[U64] = []
-        return self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen args=noArgs />)
+        return self.recordTypeTermForLayout(name: nm)
     }
 
     // Structural nesting depth of a TypeRef (`I64`=1, `Box[I64]`=2, `Box[Box[I64]]`=3).
@@ -446,6 +512,24 @@ pub impl Comp {
             return ref
         }
         val t: TypeRef = self.arena.types[ref]
+        if t.isRecord {
+            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
+            mut val fields: Array[U64] = []
+            mut val changed: Bool = false
+            mut val ri: U64 = 0U64
+            while ri < t.recordFieldTerms.count() {
+                val next: U64 = self.groundTypeRef(ref: t.recordFieldTerms[ri])
+                if next != t.recordFieldTerms[ri] { changed = true }
+                fields.append(next)
+                ri += 1U64
+            }
+            if !changed { return ref }
+            val rebuilt: U64 = self.rebuildRecordTypeTerm(t: t, fieldTerms: fields)
+            // This is the sole semantic→ABI boundary for records: the traversal
+            // above consumed only Record children; materialization registers the
+            // concrete synthetic layout needed by the current LLVM backend.
+            return self.groundRecordStruct(ref: rebuilt)
+        }
         if t.assocNameId != 0U64 {
             return self.resolveTy(tyRef: ref)
         }
@@ -471,7 +555,7 @@ pub impl Comp {
             // rebuild with the identity facets preserved: the view (`P#Ext`) and the
             // existential (`any P`) are part of type identity — grounding the args
             // must not strip them.
-            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
         }
         return ref
     }
@@ -550,7 +634,7 @@ pub impl Comp {
 
     inout fn simpleTypeRef(nameStart: U64, nameLen: U64) -> U64 {
         val noArgs: Array[U64] = []
-        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs />)
+        return self.pushType(t: <TypeRef nameStart=nameStart nameLen=nameLen args=noArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     inout fn assocItemRef(recvStart: U64, recvLen: U64, recvInstRef: U64) -> U64 {

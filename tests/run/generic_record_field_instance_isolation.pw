@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// A generic body's anonymous-record field selection is recorded once as the
+// parametric term `T`, then grounded independently for every BodyInstance.
+// The two calls share the same `first` AST but must not let the first instance
+// determine the later record component's representation.
+fn first[T](pair: (value: T)) -> T {
+    return pair.value
+}
+
+fn main() {
+    print(first(pair: (value: 7I32)))
+    print(first(pair: (value: "tea")))
+}

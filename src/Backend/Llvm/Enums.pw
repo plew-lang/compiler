@@ -239,7 +239,7 @@ pub impl LlvmCtx {
                     // the separate name-registered `enumIdxs`/`enumTys` tables are gone. The
                     // instance ref is the enum's bare name with no args.
                     mut val zargs: Array[U64] = []
-                    val instRef: U64 = c.pushType(t: <TypeRef nameStart=e.nameStart nameLen=e.nameLen args=zargs />)
+                    val instRef: U64 = c.pushType(t: <TypeRef nameStart=e.nameStart nameLen=e.nameLen args=zargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                     self.genEnumRefs.append(instRef)
                     self.genEnumTys.append(ty)
                     self.genEnumDefs.append(ei)

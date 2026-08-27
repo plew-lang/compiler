@@ -451,7 +451,7 @@ pub impl LlvmCtx {
                         val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
                         mut val aargs: Array[U64] = []
                         aargs.append(elemRef)
-                        tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />)
+                        tref = c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                         bindStructIdx = c.structDefByNameAny(start: ab.nameStart, len: 5U64)
                     }
                 }
@@ -532,7 +532,7 @@ pub impl LlvmCtx {
                             val ab: Bind = c.kwSpan(kw: "Array", kwLen: 5U64)
                             mut val aargs: Array[U64] = []
                             aargs.append(fer)
-                            self.setLocalTypeRef(ref: c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs />))
+                            self.setLocalTypeRef(ref: c.pushType(t: <TypeRef nameStart=ab.nameStart nameLen=ab.nameLen args=aargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />))
                         }
                     }
                     // TOTAL-REF: a non-array struct-pattern field bind (`Outer { val inner }` with

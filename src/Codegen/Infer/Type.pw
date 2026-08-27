@@ -203,60 +203,58 @@ pub impl Comp {
             }
             return true
         }
-        // two record types compare STRUCTURALLY, field-by-field — the record analog of the
-        // generic-args comparison below. Records encode their components in the name, not in
-        // top-level args, so a grounded `(a:I32,b:I32)` and the inferred template `(a:T,b:T)`
-        // string-differ; recurse per field (`I32` vs `T`) so a type param matches its concrete
-        // instantiation, exactly as `Box[T]` matches `Box[I32]`. Field VALUES are checked
-        // precisely by tcCheckMakeFields; this only governs the type-level shape match.
-        val eRec: Bool = te.nameLen > 0U64
-        if eRec {
-            if self.arena.bytes[te.nameStart] != 40U8 {
-                return self.compatNamed(te: te, tin: tin)
+        if te.isRecord || tin.isRecord {
+            // A semantic Record may meet a still-legacy layout spelling at the
+            // frontend/backend migration seam. Reify that spelling immediately
+            // and then take the ordinary structural path; it is not a second
+            // equality rule.
+            mut val er: U64 = exp
+            mut val ir: U64 = inferred
+            if !(te.isRecord) {
+                if te.nameLen == 0U64 || self.arena.bytes[te.nameStart] != 40U8 { return false }
+                er = self.recordTypeTermForLayout(name: <Bind nameStart=te.nameStart nameLen=te.nameLen fieldStart=0U64 fieldLen=0U64 />)
             }
-        } else {
-            return self.compatNamed(te: te, tin: tin)
-        }
-        val iRec: Bool = tin.nameLen > 0U64
-        if iRec {
-            if self.arena.bytes[tin.nameStart] != 40U8 {
-                return self.compatNamed(te: te, tin: tin)
+            if !(tin.isRecord) {
+                if tin.nameLen == 0U64 || self.arena.bytes[tin.nameStart] != 40U8 { return false }
+                ir = self.recordTypeTermForLayout(name: <Bind nameStart=tin.nameStart nameLen=tin.nameLen fieldStart=0U64 fieldLen=0U64 />)
             }
-        } else {
-            return self.compatNamed(te: te, tin: tin)
+            return self.recordsCompatible(teRef: er, tinRef: ir)
         }
-        return self.recordsCompatible(teRef: exp, tinRef: inferred)
+        // Bootstrap compatibility only: a compiler produced before TypeTerm.Record
+        // may still feed this checker a record's synthetic layout spelling.  Reify
+        // that spelling immediately, then use the same structural comparison as
+        // every normal record path.  New resolution never constructs this form.
+        if te.nameLen > 0U64 && tin.nameLen > 0U64 {
+            if self.arena.bytes[te.nameStart] == 40U8 && self.arena.bytes[tin.nameStart] == 40U8 {
+                val er: U64 = self.recordTypeTermForLayout(name: <Bind nameStart=te.nameStart nameLen=te.nameLen fieldStart=0U64 fieldLen=0U64 />)
+                val ir: U64 = self.recordTypeTermForLayout(name: <Bind nameStart=tin.nameStart nameLen=tin.nameLen fieldStart=0U64 fieldLen=0U64 />)
+                return self.recordsCompatible(teRef: er, tinRef: ir)
+            }
+        }
+        return self.compatNamed(te: te, tin: tin)
     }
 
-    // Structural field-by-field compatibility of two record types (both names begin `(`).
+    // Structural field-by-field compatibility of two Record TypeTerms.
     inout fn recordsCompatible(teRef: U64, tinRef: U64) -> Bool {
         val te: TypeRef = self.arena.types[teRef]
         val tin: TypeRef = self.arena.types[tinRef]
-        val esi: U64 = self.structIndexByName(start: te.nameStart, len: te.nameLen)
-        val isi: U64 = self.structIndexByName(start: tin.nameStart, len: tin.nameLen)
-        if esi >= self.arena.structs.count() || isi >= self.arena.structs.count() {
-            // a record StructDef not (yet) registered: fall back to exact name identity.
-            return spansEqual(c: inout self, aStart: te.nameStart, aLen: te.nameLen, bStart: tin.nameStart, bLen: tin.nameLen)
-        }
-        val esd: StructDef = self.arena.structs[esi]
-        val isd: StructDef = self.arena.structs[isi]
-        if esd.fields.count() != isd.fields.count() {
+        if !(te.isRecord) || !(tin.isRecord) { return false }
+        if te.recordFieldLabels.count() != tin.recordFieldLabels.count() || te.recordFieldTerms.count() != tin.recordFieldTerms.count() || te.recordFieldLabels.count() != te.recordFieldTerms.count() {
             return false
         }
-        // canonical layout is sorted by field name, so the i-th fields correspond; require
-        // matching names and per-field type compatibility.
+        // Constructors sort labels, so the corresponding structural children
+        // occupy the same index.  Field values themselves are checked by
+        // tcCheckMakeFields.
         mut val i: U64 = 0
-        while i < esd.fields.count() {
-            if !(spansEqual(c: inout self, aStart: esd.fields[i].nameStart, aLen: esd.fields[i].nameLen, bStart: isd.fields[i].nameStart, bLen: isd.fields[i].nameLen)) {
-                return false
-            }
+        while i < te.recordFieldTerms.count() {
+            if i >= te.recordFieldLabels.count() || i >= tin.recordFieldLabels.count() || te.recordFieldLabels[i] != tin.recordFieldLabels[i] { return false }
             // a record/tuple field widening concrete->`any P` has no backend repack (records are
             // not a covariant container the erasure handles), so reject it rather than silently
             // miscompile the differing field layout (spec/08; mirrors compatNamed's gate).
-            if self.argWidensToAny(expectedArg: esd.fields[i].ty, inferredArg: isd.fields[i].ty) {
+            if self.argWidensToAny(expectedArg: te.recordFieldTerms[i], inferredArg: tin.recordFieldTerms[i]) {
                 return false
             }
-            if !(self.typesCompatible(expected: esd.fields[i].ty, inferred: isd.fields[i].ty)) {
+            if !(self.typesCompatible(expected: te.recordFieldTerms[i], inferred: tin.recordFieldTerms[i])) {
                 return false
             }
             i += 1

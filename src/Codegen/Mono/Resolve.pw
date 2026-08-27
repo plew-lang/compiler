@@ -11,7 +11,7 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
         if t.viewExtId == 0U64 && t.viewIds.count() == 0U64 { return ref }
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
     }
 
     inout fn plainRefOfProjection(t: TypeRef) -> U64 {
@@ -240,6 +240,19 @@ pub impl Comp {
         }
         val ta: TypeRef = self.arena.types[a]
         val tb: TypeRef = self.arena.types[b]
+        // A record's synthetic layout name is ABI-only.  Its semantic identity
+        // is the canonical labelled field tree.
+        if ta.isRecord || tb.isRecord {
+            if !(ta.isRecord) || !(tb.isRecord) { return false }
+            if ta.isSendable != tb.isSendable || ta.recordFieldLabels.count() != tb.recordFieldLabels.count() || ta.recordFieldTerms.count() != tb.recordFieldTerms.count() { return false }
+            mut val ri: U64 = 0U64
+            while ri < ta.recordFieldTerms.count() {
+                if ri >= ta.recordFieldLabels.count() || ri >= tb.recordFieldLabels.count() { return false }
+                if ta.recordFieldLabels[ri] != tb.recordFieldLabels[ri] || !(self.typeRefEq(a: ta.recordFieldTerms[ri], b: tb.recordFieldTerms[ri])) { return false }
+                ri += 1U64
+            }
+            return true
+        }
         // `nameId == 0` is an unfilled interning cache, not a real type name.
         // Reconstructed scalar refs commonly carry it, so comparing two zero
         // ids as equal merged unrelated concrete instances (I64 and String)
@@ -402,7 +415,7 @@ pub impl Comp {
             mut val pi: U64 = 0U64
             while pi < bodyFn.typeParams.count() {
                 if bodyFn.typeParams[pi].paramId == paramId {
-                    val term: U64 = self.pushType(t: <TypeRef nameStart=bodyFn.typeParams[pi].nameStart nameLen=bodyFn.typeParams[pi].nameLen paramId=paramId args=[] />)
+                    val term: U64 = self.pushType(t: <TypeRef nameStart=bodyFn.typeParams[pi].nameStart nameLen=bodyFn.typeParams[pi].nameLen paramId=paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                     val matched: U64 = self.receiverPatternArgument(termRef: term)
                     if matched != 0U64 { return matched }
                 }

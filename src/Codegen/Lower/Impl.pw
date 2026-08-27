@@ -169,7 +169,7 @@ pub impl Comp {
                 val optN: Bind = self.internBytes(s: "Optional")
                 mut val oargs: Array[U64] = []
                 oargs.append(ft.ref)
-                retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs />)
+                retRef = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=oargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                 retStart = optN.nameStart
                 retLen = optN.nameLen
                 retIsArray = false
@@ -180,7 +180,7 @@ pub impl Comp {
                     mut val rargs: Array[U64] = []
                     rargs.append(ft.ref)
                     rargs.append(et.ref)
-                    retRef = self.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs />)
+                    retRef = self.pushType(t: <TypeRef nameStart=resN.nameStart nameLen=resN.nameLen args=rargs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                     retStart = resN.nameStart
                     retLen = resN.nameLen
                     retIsArray = false

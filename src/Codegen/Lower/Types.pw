@@ -75,6 +75,68 @@ pub impl Comp {
 
 pub impl Comp {
 
+    // Build the semantic Record node associated with an already-registered
+    // canonical layout struct.  The layout name remains available to lowering
+    // and LLVM, but it is deliberately not the source of record meaning:
+    // generic inference and grounding recurse through the explicit field
+    // terms below.  `ensureRecordStruct` sorts fields, so this is also the
+    // canonical ordering for structural equality and keys.
+    inout fn recordTypeTermForLayout(name: Bind) -> U64 {
+        val si: U64 = self.anyStructIndex(nameStart: name.nameStart, nameLen: name.nameLen)
+        if si >= self.arena.structs.count() {
+            val noLabels: Array[U64] = []
+            val noFields: Array[U64] = []
+            return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=noLabels recordFieldTerms=noFields />)
+        }
+        val fields: Array[FieldDef] = self.arena.structs[si].fields
+        mut val labels: Array[U64] = []
+        mut val terms: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < fields.count() {
+            labels.append(fields[i].nameId)
+            terms.append(fields[i].ty)
+            i += 1U64
+        }
+        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+    }
+
+    // Construct a Record TypeTerm from the lexical terms at its source site.
+    // The synthetic StructDef is an ABI layout cache only: it may have been
+    // first registered in a different generic scope whose same-spelled `T`
+    // has a different ParamId.  Never recover semantic children from it here.
+    inout fn recordTypeTerm(name: Bind, fieldNames: Array[String], fieldTerms: Array[U64]) -> U64 {
+        if fieldNames.count() != fieldTerms.count() { return 0U64 }
+        mut val order: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < fieldNames.count() {
+            order.append(i)
+            i += 1U64
+        }
+        mut val a: U64 = 0U64
+        while a < order.count() {
+            mut val b: U64 = a + 1U64
+            while b < order.count() {
+                if stringGt(a: fieldNames[order[a]], b: fieldNames[order[b]]) {
+                    val tmp: U64 = order[a]
+                    order[a] = order[b]
+                    order[b] = tmp
+                }
+                b += 1U64
+            }
+            a += 1U64
+        }
+        mut val labels: Array[U64] = []
+        mut val terms: Array[U64] = []
+        mut val oi: U64 = 0U64
+        while oi < order.count() {
+            val label: Bind = self.internBytes(s: fieldNames[order[oi]])
+            labels.append(label.nameId)
+            terms.append(fieldTerms[order[oi]])
+            oi += 1U64
+        }
+        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+    }
+
     // Register (or find) the synthetic struct for an anonymous record type with the given
     // field names and lowered field types (spec/02). The struct is keyed by a canonical
     // name built from the fields sorted by name, so two records with the same field
@@ -153,7 +215,13 @@ pub impl Comp {
                 fi += 1
             }
             val rnm: Bind = self.ensureRecordStruct(fieldNames: t.argLabels, fieldTys: fieldTys)
-            val rref: U64 = self.pushType(t: <TypeRef nameStart=rnm.nameStart nameLen=rnm.nameLen args=[] />)
+            mut val fieldTerms: Array[U64] = []
+            mut val ti: U64 = 0U64
+            while ti < fieldTys.count() {
+                fieldTerms.append(fieldTys[ti].ref)
+                ti += 1U64
+            }
+            val rref: U64 = self.recordTypeTerm(name: rnm, fieldNames: t.argLabels, fieldTerms: fieldTerms)
             return <PType start=rnm.nameStart len=rnm.nameLen isArray=false ref=rref />
         }
         val nm: Bind = self.internBytes(s: t.name)
@@ -274,7 +342,7 @@ pub impl Comp {
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {

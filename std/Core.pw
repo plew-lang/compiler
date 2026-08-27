@@ -250,7 +250,7 @@ export struct FilterIter[I, P, E] {
     pub val p: P
 }
 pub impl[I, P, E] FilterIter[I, P, E] { factory }
-pub impl[I, P, E] FilterIter[I, P, E] as Iterator where I: Iterator {
+pub impl[I, P, E] FilterIter[I, P, E] as Iterator where I: Iterator[Item = E] {
     type Item = E
     inout fn next() -> Optional[E] {
         mut val go: Bool = true
@@ -275,7 +275,7 @@ export struct TakeIter[I, E] {
     pub mut val remaining: U64
 }
 pub impl[I, E] TakeIter[I, E] { factory }
-pub impl[I, E] TakeIter[I, E] as Iterator where I: Iterator {
+pub impl[I, E] TakeIter[I, E] as Iterator where I: Iterator[Item = E] {
     type Item = E
     inout fn next() -> Optional[E] {
         if self.remaining == 0U64 {
@@ -293,7 +293,7 @@ export struct SkipIter[I, E] {
     pub mut val pending: U64
 }
 pub impl[I, E] SkipIter[I, E] { factory }
-pub impl[I, E] SkipIter[I, E] as Iterator where I: Iterator {
+pub impl[I, E] SkipIter[I, E] as Iterator where I: Iterator[Item = E] {
     type Item = E
     inout fn next() -> Optional[E] {
         mut val go: Bool = true
@@ -321,7 +321,7 @@ export struct EnumerateIter[I, E] {
     pub mut val n: U64 = 0U64
 }
 pub impl[I, E] EnumerateIter[I, E] { factory }
-pub impl[I, E] EnumerateIter[I, E] as Iterator where I: Iterator {
+pub impl[I, E] EnumerateIter[I, E] as Iterator where I: Iterator[Item = E] {
     type Item = (index: U64, value: E)
     inout fn next() -> Optional[(index: U64, value: E)] {
         match self.inner.next() {

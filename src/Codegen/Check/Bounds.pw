@@ -247,11 +247,63 @@ pub impl Comp {
         return 0U64
     }
 
-    // Reify a requirement result under the selected static proof.  An
-    // associated output is not looked up in an arbitrary concrete impl: it is
-    // the symbolic projection `bound.receiver#Trait[bound.args].Member`.
-    // Ordinary trait parameter occurrences are substituted by the same bound
-    // environment used for requirement parameters.
+    // Reify every occurrence of the selected trait's associated-output binder
+    // in a requirement result.  The owner is the already-selected TraitDef,
+    // never a name search: `Optional[Item]` must receive the same treatment as
+    // a top-level `Item` under `where T: Iterator[Item=E]`.
+    inout fn reifyBoundAssociatedTerms(ref: U64, traitDef: TraitDef, bound: FuncBound) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val raw: TypeRef = self.arena.types[ref]
+        mut val rawName: U64 = raw.nameId
+        if rawName == 0U64 { rawName = intern(c: inout self, start: raw.nameStart, len: raw.nameLen) }
+        if raw.args.count() == 0U64 && raw.assocNameId == 0U64 {
+            mut val ai: U64 = 0U64
+            while ai < traitDef.assocTypes.count() {
+                if traitDef.assocTypes[ai].nameId == rawName {
+                    mut val pi: U64 = 0U64
+                    while pi < bound.constraint.assocPredicates.count() {
+                        val predicate: TraitAssocPredicate = bound.constraint.assocPredicates[pi]
+                        if predicate.member == rawName { return predicate.value }
+                        pi += 1U64
+                    }
+                    if bound.paramTy >= self.arena.types.count() { return ref }
+                    val receiver: TypeRef = self.arena.types[bound.paramTy]
+                    val noLabels: Array[U64] = []
+                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=bound.constraint.key.owner assocTraitLen=self.traitNameLenByOwner(owner: bound.constraint.key.owner) assocTraitId=intern(c: inout self, start: bound.constraint.key.owner, len: self.traitNameLenByOwner(owner: bound.constraint.key.owner)) assocTraitArgs=bound.constraint.key.positionalArgs assocTraitArgLabels=noLabels assocNameStart=traitDef.assocTypes[ai].nameStart assocNameLen=traitDef.assocTypes[ai].nameLen assocNameId=traitDef.assocTypes[ai].nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=bound.constraint.key.owner siteOffset=0U64 />)
+                }
+                ai += 1U64
+            }
+        }
+        if raw.isRecord {
+            if raw.recordFieldLabels.count() != raw.recordFieldTerms.count() { return ref }
+            mut val fields: Array[U64] = []
+            mut val changed: Bool = false
+            mut val ri: U64 = 0U64
+            while ri < raw.recordFieldTerms.count() {
+                val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.recordFieldTerms[ri], traitDef: traitDef, bound: bound)
+                if next != raw.recordFieldTerms[ri] { changed = true }
+                fields.append(next)
+                ri += 1U64
+            }
+            if changed { return self.rebuildRecordTypeTerm(t: raw, fieldTerms: fields) }
+            return ref
+        }
+        mut val args: Array[U64] = []
+        mut val argsChanged: Bool = false
+        mut val i: U64 = 0U64
+        while i < raw.args.count() {
+            val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.args[i], traitDef: traitDef, bound: bound)
+            if next != raw.args[i] { argsChanged = true }
+            args.append(next)
+            i += 1U64
+        }
+        if argsChanged { return self.rebuildTypeTerm(t: raw, args: args, assocTraitArgs: raw.assocTraitArgs) }
+        return ref
+    }
+
+    // Reify a requirement result under the selected static proof. Ordinary
+    // trait parameters ground first; then associated outputs reify recursively
+    // through the selected proof's constraint.
     inout fn staticRequirementResultType(resolution: StaticMemberResolution) -> U64 {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
@@ -263,40 +315,14 @@ pub impl Comp {
                         val req: Func = traitDef.reqs[reqIdx]
                         if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.types.count() { return 0U64 }
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
-                        val raw: TypeRef = self.arena.types[req.retTy]
-                        mut val rawName: U64 = raw.nameId
-                        if rawName == 0U64 { rawName = intern(c: inout self, start: raw.nameStart, len: raw.nameLen) }
-                        mut val ai: U64 = 0U64
-                        while ai < traitDef.assocTypes.count() {
-                            if traitDef.assocTypes[ai].nameId == rawName {
-                                // A bound may promise this exact associated
-                                // output (`where R: P[Item=I64]`).  It is a
-                                // post-key predicate, so use it only after the
-                                // requirement/member was selected through the
-                                // same proof.
-                                mut val pi: U64 = 0U64
-                                while pi < bound.constraint.assocPredicates.count() {
-                                    val predicate: TraitAssocPredicate = bound.constraint.assocPredicates[pi]
-                                    if predicate.member == rawName {
-                                        return predicate.value
-                                    }
-                                    pi += 1U64
-                                }
-                                if bound.paramTy >= self.arena.types.count() { return 0U64 }
-                                val receiver: TypeRef = self.arena.types[bound.paramTy]
-                                val noLabels: Array[U64] = []
-                                return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen args=receiver.args viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=bound.constraint.key.owner assocTraitLen=self.traitNameLenByOwner(owner: bound.constraint.key.owner) assocTraitId=intern(c: inout self, start: bound.constraint.key.owner, len: self.traitNameLenByOwner(owner: bound.constraint.key.owner)) assocTraitArgs=bound.constraint.key.positionalArgs assocTraitArgLabels=noLabels assocNameStart=traitDef.assocTypes[ai].nameStart assocNameLen=traitDef.assocTypes[ai].nameLen assocNameId=traitDef.assocTypes[ai].nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=bound.constraint.key.owner siteOffset=0U64 />)
-                            }
-                            ai += 1U64
-                        }
                         val savedParams: Array[Bind] = self.cur.typeParams
                         val savedArgs: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = traitDef.typeParams
                         self.cur.typeArgs = bound.constraint.key.positionalArgs
-                        val out: U64 = self.groundTypeRef(ref: req.retTy)
+                        val grounded: U64 = self.groundTypeRef(ref: req.retTy)
                         self.cur.typeParams = savedParams
                         self.cur.typeArgs = savedArgs
-                        return out
+                        return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, bound: bound)
                     }
                     _ => { return 0U64 }
                 }

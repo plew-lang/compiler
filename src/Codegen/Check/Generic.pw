@@ -529,18 +529,17 @@ pub impl Comp {
                 mut val i: U64 = 0
                 while i < fields.count() {
                     self.checkBoundsExpr(exprId: fields[i].value)
-                    // a `T` value placed into a CONCRETE-typed field (`<S a=valueT/>` where
-                    // S.a: I64) is a type error at the definition. The field type comes from
-                    // the (concrete) owner decl; a generic owner's type-param field is lenient.
-                    val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
-                    if ft.nameLen > 0U64 {
-                        mut val fref: U64 = ft.ref
-                        if fref == 0U64 {
-                            fref = self.simpleTypeRef(nameStart: ft.nameStart, nameLen: ft.nameLen)
-                        }
-                        self.checkGenericTypeMatch(expectedRef: fref, valueExpr: fields[i].value)
-                    }
                     i += 1
+                }
+                // A declaration field type alone is not a semantic field
+                // expectation: `<Optional.Some ...>` names the declaration's
+                // binder `T`, while the expression may be in
+                // `Optional[(index: U64, value: E)]`.  Use the construction's
+                // complete TypeTerm when present; an unannotated construction
+                // is checked by its enclosing expected type (return, let,
+                // argument, or record field) in checkGenericTypeMatch.
+                if ty != 0U64 {
+                    self.genericCheckMakeFields(expectedRef: ty, valueExpr: exprId)
                 }
             }
             Expr.Array(val elems) => {
@@ -603,6 +602,101 @@ pub impl Comp {
         }
     }
 
+    // `Make` is checked bidirectionally in the ordinary type checker: the
+    // expected TypeTerm determines each field's expected TypeTerm.  Generic
+    // body checking must use the same direction.  Inferring a construction
+    // first loses opaque parameters nested below its outer constructor (for
+    // example `Optional[(index: U64, value: E)]`).
+    //
+    // Returns true only when `valueExpr` is a construction of `expectedRef`;
+    // callers can then skip the lossy whole-expression inference fallback.
+    inout fn genericCheckMakeFields(expectedRef: U64, valueExpr: U64) -> Bool {
+        if expectedRef >= self.arena.types.count() {
+            return false
+        }
+        val et: TypeRef = self.arena.types[expectedRef]
+        match self.arena.exprs[valueExpr] {
+            Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+                // Records have no declaration-owned semantic fields.  Their
+                // children are the canonical TypeTerm, not the synthetic ABI
+                // layout's StructDef.
+                if et.isRecord {
+                    if et.recordFieldLabels.count() != et.recordFieldTerms.count() {
+                        return false
+                    }
+                    mut val mi: U64 = 0U64
+                    while mi < fields.count() {
+                        val label: U64 = intern(c: inout self, start: fields[mi].nameStart, len: fields[mi].nameLen)
+                        mut val ri: U64 = 0U64
+                        while ri < et.recordFieldLabels.count() {
+                            if et.recordFieldLabels[ri] == label {
+                                self.checkGenericTypeMatch(expectedRef: et.recordFieldTerms[ri], valueExpr: fields[mi].value)
+                                ri = et.recordFieldLabels.count()
+                            } else {
+                                ri += 1U64
+                            }
+                        }
+                        mi += 1U64
+                    }
+                    return true
+                }
+                if intern(c: inout self, start: typeStart, len: typeLen) != et.nameId {
+                    return false
+                }
+                // Lang-item references do not have declaration fields, but
+                // their `value` field has the single type argument.
+                if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
+                    mut val refFieldIdx: U64 = 0U64
+                    while refFieldIdx < fields.count() {
+                        if rangeEquals(bytes: self.arena.bytes, start: fields[refFieldIdx].nameStart, len: fields[refFieldIdx].nameLen, kw: "value") {
+                            self.checkGenericTypeMatch(expectedRef: et.args[0], valueExpr: fields[refFieldIdx].value)
+                        }
+                        refFieldIdx += 1U64
+                    }
+                    return true
+                }
+                if isEnum {
+                    val ei: U64 = self.anyEnumIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                    if ei >= self.arena.enums.count() { return false }
+                    val vi: U64 = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                    if vi >= self.arena.enums[ei].variants.count() { return false }
+                    self.genericCheckFieldsUnder(params: self.arena.enums[ei].typeParams, targs: et.args, defFields: self.arena.enums[ei].variants[vi].fields, makeFields: fields)
+                    return true
+                }
+                val si: U64 = self.anyStructIndex(nameStart: et.nameStart, nameLen: et.nameLen)
+                if si >= self.arena.structs.count() { return false }
+                self.genericCheckFieldsUnder(params: self.arena.structs[si].typeParams, targs: et.args, defFields: self.arena.structs[si].fields, makeFields: fields)
+                return true
+            }
+            _ => { return false }
+        }
+    }
+
+    inout fn genericCheckFieldsUnder(params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: Array[MakeField]) {
+        mut val mi: U64 = 0U64
+        while mi < makeFields.count() {
+            mut val di: U64 = 0U64
+            while di < defFields.count() {
+                if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeFields[mi].nameStart, bLen: makeFields[mi].nameLen) {
+                    if defFields[di].ty != 0U64 {
+                        val savedP: Array[Bind] = self.cur.typeParams
+                        val savedA: Array[U64] = self.cur.typeArgs
+                        self.cur.typeParams = params
+                        self.cur.typeArgs = targs
+                        val grounded: U64 = self.groundTypeRef(ref: defFields[di].ty)
+                        self.cur.typeParams = savedP
+                        self.cur.typeArgs = savedA
+                        self.checkGenericTypeMatch(expectedRef: grounded, valueExpr: makeFields[mi].value)
+                    }
+                    di = defFields.count()
+                } else {
+                    di += 1U64
+                }
+            }
+            mi += 1U64
+        }
+    }
+
     inout fn checkGenericTypeMatch(expectedRef: U64, valueExpr: U64) {
         if expectedRef == 0U64 {
             return
@@ -657,6 +751,9 @@ pub impl Comp {
                 }
             }
             _ => {}
+        }
+        if self.genericCheckMakeFields(expectedRef: expectedRef, valueExpr: valueExpr) {
+            return
         }
         // an array literal in an `Array[E]` position: recurse element-wise (inferType
         // reports an array literal as unknown, so check each element against E).
@@ -829,12 +926,29 @@ pub impl Comp {
                 self.cur.extId = f.extId
                 self.cur.selfInout = f.selfInout
                 self.cur.recvInstRef = 0
+                // Install the declaration binders before building Self: the
+                // receiver's arguments must carry these ParamIds, not just
+                // same-spelled names from a previous body.
+                self.cur.typeParams = f.typeParams
+                self.cur.typeArgs = noArgs
+                // The abstract body is still checked under a complete
+                // symbolic receiver term.  A bare receiver spelling loses
+                // `self.inner: I`'s ParamId before a bound proof can type
+                // `self.inner.next()` as `Optional[E]`.
+                // A trait provided method deliberately keeps `self` on the
+                // abstract-Self path below; giving it a nominal `Self` ref
+                // would bypass `isSelfTypeInProvided` and admit members or
+                // result types not declared by the trait.
+                if !(self.methodRecvIsTrait(f: f)) {
+                    self.cur.selfRef = self.parametricSelfRef(f: f)
+                } else {
+                    self.cur.selfRef = 0U64
+                }
+                self.cur.itemRef = 0
                 // This is a declaration-time symbolic environment: function
                 // binders are active but have no concrete arguments. Keeping
                 // them here lets every type query distinguish `T` from an
                 // unknown type and discharge `where T: P[...]` constraints.
-                self.cur.typeParams = f.typeParams
-                self.cur.typeArgs = noArgs
                 self.cur.checkFn = fi
                 mut val pi: U64 = 0
                 while pi < f.params.count() {
@@ -849,6 +963,8 @@ pub impl Comp {
         self.cur.locals = []
         self.cur.hasRecv = false
         self.cur.extId = 0
+        self.cur.selfRef = 0
+        self.cur.itemRef = 0
         self.cur.checkFn = self.arena.funcs.count()
     }
 }

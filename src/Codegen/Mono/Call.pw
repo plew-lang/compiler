@@ -2136,7 +2136,7 @@ pub impl Comp {
         mut val uRef: U64 = uInfo.ref
         if uRef == 0 {
             val noTArgs: Array[U64] = []
-            uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noTArgs />)
+            uRef = self.pushType(t: <TypeRef nameStart=uInfo.nameStart nameLen=uInfo.nameLen args=noTArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         }
         // rebuild the head preserving every type argument, with the Value position -> U.
         mut val oArgs: Array[U64] = []
@@ -2149,7 +2149,7 @@ pub impl Comp {
             }
             ai += 1
         }
-        return self.pushType(t: <TypeRef nameStart=gt.nameStart nameLen=gt.nameLen args=oArgs />)
+        return self.pushType(t: <TypeRef nameStart=gt.nameStart nameLen=gt.nameLen args=oArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     }
 
     // Register the instances a chain-rewritten `?.` stage needs, grounded under
@@ -2199,14 +2199,14 @@ pub impl Comp {
         val optN: Bind = self.internBytes(s: "Optional")
         mut val optArgs: Array[U64] = []
         optArgs.append(vRef)
-        val optVRef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optArgs />)
+        val optVRef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         self.scanType(ref: optVRef)
         // registering the result `Head[U]` pulls in its own `chain()`, whose body builds
         // `Optional[U]`; register that too (U may differ from V — `Head[U]` vs receiver
         // `Head[V]`).
         mut val optUArgs: Array[U64] = []
         optUArgs.append(uRef)
-        val optURef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs />)
+        val optURef: U64 = self.pushType(t: <TypeRef nameStart=optN.nameStart nameLen=optN.nameLen args=optUArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         self.scanType(ref: optURef)
         // The two factories are reached through their ChainSite call
         // templates when the rewritten match arms are scanned below.  Do not

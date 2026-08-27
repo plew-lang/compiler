@@ -201,7 +201,7 @@ pub impl Comp {
                         targs.append(self.lowerType(t: typeArgs[ti]).ref)
                         ti += 1
                     }
-                    tyRef = self.pushType(t: <TypeRef nameStart=tn.nameStart nameLen=tn.nameLen args=targs />)
+                    tyRef = self.pushType(t: <TypeRef nameStart=tn.nameStart nameLen=tn.nameLen args=targs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                 }
                 mut val vStart: U64 = 0
                 mut val vLen: U64 = 0

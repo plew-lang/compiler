@@ -201,6 +201,19 @@ pub impl Comp {
     inout fn fieldTypeRefOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> U64 {
         if receiverRef == 0U64 || receiverRef >= self.arena.types.count() { return 0U64 }
         val t: TypeRef = self.arena.types[receiverRef]
+        // Record selection is a direct TypeTerm child query.  In particular,
+        // `(index: U64, value: E).value` retains `E` without reopening the
+        // synthetic layout StructDef or parsing its canonical name.
+        if t.isRecord {
+            val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return 0U64 }
+            mut val ri: U64 = 0U64
+            while ri < t.recordFieldLabels.count() {
+                if t.recordFieldLabels[ri] == qField { return t.recordFieldTerms[ri] }
+                ri += 1U64
+            }
+            return 0U64
+        }
         val si: U64 = self.anyStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
         if si >= self.arena.structs.count() { return 0U64 }
         val fields: Array[FieldDef] = self.arena.structs[si].fields

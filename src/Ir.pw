@@ -64,6 +64,14 @@ export struct TypeRef {
     // while legacy consumers still read the flat arena shape.
     pub val paramId: U64 = 0
     pub val args: Array[U64]
+    // A labelled anonymous record is a structural TypeTerm node, not a
+    // nominal type whose field types are hidden in a synthetic layout name.
+    // `name*` retains that layout name solely for ABI materialization; semantic
+    // operations recurse through these parallel canonical field arrays.
+    // Labels are interned ids, sorted by label just like the synthetic layout.
+    pub val isRecord: Bool = false
+    pub val recordFieldLabels: Array[U64] = []
+    pub val recordFieldTerms: Array[U64] = []
     // `Person#Ext` (spec/09): the interned id of the extension view refining this
     // type, 0 for a plain type. A zero-cost view (same layout); it selects which
     // extension's methods resolve on a value of this type. Part of type identity

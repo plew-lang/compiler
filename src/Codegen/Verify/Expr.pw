@@ -823,7 +823,11 @@ pub impl Comp {
                 }
                 if generic {
                     val bti: TypeInfo = self.genericEnumFieldTypeInfo(instRef: st.ref, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen)
-                    self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: 0, isInout: false, isMut: false, owned: false)
+                    // The pattern payload's TypeInfo may be a bound-associated
+                    // output or a structural Record. Keep its exact TypeTerm;
+                    // reducing it to nameStart/nameLen loses the proof-selected
+                    // `Item = E` substitution before the arm body is checked.
+                    self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: bti.nameStart, tyLen: bti.nameLen, isArray: bti.kind == 3, ty: self.typedIrRefOfInfo(ti: bti), isInout: false, isMut: false, owned: false)
                 } else {
                     self.addBindLocalCn(enumStart: a.enumStart, enumLen: a.enumLen, variantStart: a.variantStart, variantLen: a.variantLen, fieldStart: bd.fieldStart, fieldLen: bd.fieldLen, bindStart: bd.nameStart, bindLen: bd.nameLen, cnum: 0)
                 }
