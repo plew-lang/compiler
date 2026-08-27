@@ -231,6 +231,36 @@ pub impl Comp {
         return 0U64
     }
 
+    // Only labels that alter the semantic type identity belong in equality.
+    // Ordinary `argLabels` also carry function parameter names, which are
+    // call syntax rather than function-type identity. Existentials are the
+    // exception: their labels bind associated outputs (`any P[Item=I64]`).
+    inout fn typeTermIdentityChildLabel(t: TypeRef, index: U64) -> U64 {
+        if t.isRecord || t.assocNameId != 0U64 { return self.typeTermChildLabel(t: t, index: index) }
+        if t.isAny && index < t.argLabels.count() { return t.argLabels[index] }
+        return 0U64
+    }
+
+    // Compare the non-recursive semantic identity of two type terms. Child
+    // terms and their labels are deliberately left to the shared traversal so
+    // equality, matching and canonicalization cannot disagree about a record
+    // field, existential output binding or projection receiver.
+    inout fn typeTermSameHead(a: TypeRef, b: TypeRef) -> Bool {
+        if a.isRecord || b.isRecord { return a.isRecord && b.isRecord && a.isSendable == b.isSendable }
+        if a.nameId != 0U64 && b.nameId != 0U64 {
+            if a.nameId != b.nameId { return false }
+        } else if !(spansEqual(c: inout self, aStart: a.nameStart, aLen: a.nameLen, bStart: b.nameStart, bLen: b.nameLen)) {
+            return false
+        }
+        if a.isAny != b.isAny || a.isSendable != b.isSendable { return false }
+        if a.paramId != 0U64 || b.paramId != 0U64 {
+            if a.paramId != b.paramId { return false }
+        }
+        if a.viewExtId != b.viewExtId || !(self.sameViewIdSet(a: a.viewIds, b: b.viewIds)) { return false }
+        if (a.hasDecl && b.hasDecl && a.declOffset != b.declOffset) || a.assocTraitId != b.assocTraitId || (a.hasAssocTraitDecl && b.hasAssocTraitDecl && a.assocTraitDeclOffset != b.assocTraitDeclOffset) || a.assocNameId != b.assocNameId { return false }
+        return true
+    }
+
     // Reassemble a projection after a structural traversal transformed its
     // receiver and/or positional trait arguments.  Keeping the receiver
     // replacement here prevents each substitution path from accidentally

@@ -238,75 +238,14 @@ pub impl Comp {
         if a == b {
             return true
         }
+        if a >= self.arena.types.count() || b >= self.arena.types.count() { return false }
         val ta: TypeRef = self.arena.types[a]
         val tb: TypeRef = self.arena.types[b]
-        // A record's synthetic layout name is ABI-only.  Its semantic identity
-        // is the canonical labelled field tree.
-        if ta.isRecord || tb.isRecord {
-            if !(ta.isRecord) || !(tb.isRecord) { return false }
-            if ta.isSendable != tb.isSendable || ta.recordFieldLabels.count() != tb.recordFieldLabels.count() || ta.recordFieldTerms.count() != tb.recordFieldTerms.count() { return false }
-            mut val ri: U64 = 0U64
-            while ri < ta.recordFieldTerms.count() {
-                if ri >= ta.recordFieldLabels.count() || ri >= tb.recordFieldLabels.count() { return false }
-                if ta.recordFieldLabels[ri] != tb.recordFieldLabels[ri] || !(self.typeRefEq(a: ta.recordFieldTerms[ri], b: tb.recordFieldTerms[ri])) { return false }
-                ri += 1U64
-            }
-            return true
-        }
-        // `nameId == 0` is an unfilled interning cache, not a real type name.
-        // Reconstructed scalar refs commonly carry it, so comparing two zero
-        // ids as equal merged unrelated concrete instances (I64 and String)
-        // in final-callable/body keys. Use ids only when both exist; spelling
-        // is the canonical fallback used by runtime receiver identity too.
-        if ta.nameId != 0U64 && tb.nameId != 0U64 {
-            if ta.nameId != tb.nameId { return false }
-        } else {
-            if !(spansEqual(c: inout self, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen)) { return false }
-        }
-        if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable {
-            return false
-        }
-        // A stamped generic parameter is a lexical semantic term, not a
-        // spelling.  `struct Box[T]`, `impl[T] Box[T]`, and a method's own
-        // `T` may have identical names yet denote distinct binders until an
-        // InstanceEnvironment explicitly relates them.  Comparing only the
-        // interned name here would let a proof/cache key silently conflate
-        // those scopes.  The temporary name fallback remains only when both
-        // legacy terms have no ParamId.
-        if ta.paramId != 0U64 || tb.paramId != 0U64 {
-            if ta.paramId != tb.paramId { return false }
-        }
-        // a `#`-view is part of type identity (spec/09): `S`, `S#P`, `S#Q` are distinct
-        // types, so two generic instantiations differing only by the view argument are
-        // distinct instances (`useR[S#P]` vs `useR[S#Q]` get separate bodies/dispatch).
-        if ta.viewExtId != tb.viewExtId || !(self.sameViewIdSet(a: ta.viewIds, b: tb.viewIds)) {
-            return false
-        }
-        if (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId {
-            return false
-        }
-        if ta.args.count() != tb.args.count() {
-            return false
-        }
-        mut val i: U64 = 0
-        while i < ta.args.count() {
-            if !(self.typeRefEq(a: ta.args[i], b: tb.args[i])) {
-                return false
-            }
-            i += 1
-        }
-        if ta.assocTraitArgs.count() != tb.assocTraitArgs.count() {
-            return false
-        }
-        i = 0U64
-        while i < ta.assocTraitArgs.count() {
-            mut val al: U64 = 0U64
-            mut val bl: U64 = 0U64
-            if i < ta.assocTraitArgLabels.count() { al = ta.assocTraitArgLabels[i] }
-            if i < tb.assocTraitArgLabels.count() { bl = tb.assocTraitArgLabels[i] }
-            if al != bl || !(self.typeRefEq(a: ta.assocTraitArgs[i], b: tb.assocTraitArgs[i])) {
-                return false
-            }
+        if !(self.typeTermSameHead(a: ta, b: tb)) { return false }
+        if self.typeTermChildCount(t: ta) != self.typeTermChildCount(t: tb) { return false }
+        mut val i: U64 = 0U64
+        while i < self.typeTermChildCount(t: ta) {
+            if self.typeTermIdentityChildLabel(t: ta, index: i) != self.typeTermIdentityChildLabel(t: tb, index: i) || !(self.typeRefEq(a: self.typeTermChildRef(t: ta, index: i), b: self.typeTermChildRef(t: tb, index: i))) { return false }
             i += 1U64
         }
         return true
