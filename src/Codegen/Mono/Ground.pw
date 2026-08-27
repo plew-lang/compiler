@@ -402,19 +402,16 @@ pub impl Comp {
         }
         if tr.isRecord {
             if tr.recordFieldLabels.count() != tr.recordFieldTerms.count() { return out }
-            val si: U64 = self.anyStructIndex(nameStart: tr.nameStart, nameLen: tr.nameLen)
-            if si >= self.arena.structs.count() { return out }
-            val fields: Array[FieldDef] = self.arena.structs[si].fields
-            if fields.count() != tr.recordFieldTerms.count() { return out }
             appendBytes(into: inout out, from: "(".bytes())
             mut val ri: U64 = 0U64
             while ri < tr.recordFieldTerms.count() {
                 if ri > 0U64 { appendBytes(into: inout out, from: ",".bytes()) }
-                val fd: FieldDef = fields[ri]
-                if fd.nameId != tr.recordFieldLabels[ri] { return [] }
+                val labelId: U64 = tr.recordFieldLabels[ri]
+                if labelId == 0U64 || labelId > self.interner.entries.count() { return [] }
+                val label: InternedSpan = self.interner.entries[labelId - 1U64]
                 mut val bi: U64 = 0U64
-                while bi < fd.nameLen {
-                    out.append(self.arena.bytes[fd.nameStart + bi])
+                while bi < label.len {
+                    out.append(self.arena.bytes[label.start + bi])
                     bi += 1U64
                 }
                 appendBytes(into: inout out, from: ":".bytes())
