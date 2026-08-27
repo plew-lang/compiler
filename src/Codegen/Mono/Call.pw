@@ -933,10 +933,23 @@ pub impl Comp {
                 canUseInvariantCache = false
             }
         }
+        // This resolver is the source boundary for operator syntax. Retain its
+        // receiver once so both a cached witness and a freshly selected witness
+        // construct the same explicit CallSiteSelection.
+        mut val receiverExpr: U64 = self.arena.exprs.count()
+        match self.arena.exprs[exprId] {
+            Expr.Binary(op: _, val lhs, rhs: _) => { receiverExpr = lhs }
+            Expr.Unary(op: _, val operand) => { receiverExpr = operand }
+            _ => {}
+        }
+        mut val selectedReceiverRef: U64 = 0U64
+        if receiverExpr < self.arena.exprs.count() {
+            selectedReceiverRef = self.groundedBodyReceiverRef(exprId: receiverExpr)
+        }
         if canUseInvariantCache && exprId < self.typeCache.callee.count() {
             val cached: U64 = self.typeCache.callee[exprId]
             if cached != calleeUnfilled() && cached < self.arena.funcs.count() {
-                self.recordBodyCallee(exprId: exprId, callee: cached)
+                self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId callee=cached receiverRef=selectedReceiverRef resultHintRef=self.selectedResultHint(callee: cached) />)
                 self.enqueueSelectedCallee(exprId: exprId, callee: cached)
                 return
             }
@@ -950,7 +963,7 @@ pub impl Comp {
                     else if op == opLt() || op == opLe() || op == opGt() || op == opGe() { method = "compare" }
                     else if isBinTraitOp(op: op) { method = binTraitMethodName(op: op) }
                     if method.bytes().count() > 0U64 {
-                        val recvRef: U64 = self.groundedBodyReceiverRef(exprId: lhs)
+                        val recvRef: U64 = selectedReceiverRef
                         if recvRef != 0U64 && recvRef < self.arena.types.count() {
                             val rt: TypeRef = self.arena.types[recvRef]
                             val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
@@ -970,7 +983,7 @@ pub impl Comp {
                 }
             }
             Expr.Unary(val op, val operand) => {
-                val recvRef: U64 = self.groundedBodyReceiverRef(exprId: operand)
+                val recvRef: U64 = selectedReceiverRef
                 if recvRef != 0U64 && recvRef < self.arena.types.count() {
                     val rt: TypeRef = self.arena.types[recvRef]
                     val method: String = unaryMethodName(op: op)
@@ -988,25 +1001,15 @@ pub impl Comp {
         // A primitive/floor operator legitimately has no user callable.  It is
         // still a resolved semantic outcome: record the sentinel so LLVM does
         // not mistake it for a missing finalization entry and re-query syntax.
-        self.recordBodyCallee(exprId: exprId, callee: callee)
+        mut val selectedResultRef: U64 = 0U64
+        if callee >= self.arena.funcs.count() {
+            // A primitive fallback has the grounded left/sole operand type.
+            // This is resolved here, not patched into a partial descriptor.
+            selectedResultRef = selectedReceiverRef
+        }
+        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef />)
         if callee < self.arena.funcs.count() {
             self.enqueueSelectedCallee(exprId: exprId, callee: callee)
-        } else {
-            // The primitive fallback's result is its grounded left/sole
-            // operand.  Record it as part of the same final descriptor so an
-            // enclosing generic call can use the exact child result without a
-            // second type-recovery pass.
-            match self.arena.exprs[exprId] {
-                Expr.Binary(op: _, val lhs, rhs: _) => {
-                    val resultRef: U64 = self.groundedBodyReceiverRef(exprId: lhs)
-                    self.setBodyCalleeResultRef(exprId: exprId, resultRef: resultRef)
-                }
-                Expr.Unary(op: _, val operand) => {
-                    val resultRef: U64 = self.groundedBodyReceiverRef(exprId: operand)
-                    self.setBodyCalleeResultRef(exprId: exprId, resultRef: resultRef)
-                }
-                _ => {}
-            }
         }
     }
 
@@ -1174,6 +1177,9 @@ pub impl Comp {
                     resultTypeRef = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvTypeRef, calleeArgs: calleeTypeArgs)
                 }
             }
+        }
+        if selection.resultRef != 0U64 {
+            resultTypeRef = selection.resultRef
         }
         // The ordinary collection walk can revisit a call after Mono has
         // already completed it.  A later record pass may only have the shared

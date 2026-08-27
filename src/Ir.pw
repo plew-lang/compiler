@@ -913,7 +913,8 @@ export struct CallResolution {
 // Frontend-owned input to final call construction.  It intentionally carries
 // semantic facts selected at the source/implicit/control-flow boundary rather
 // than asking the finalizer to reopen a shared AST node. `resultHintRef` is the
-// expected-result provenance for argument-less associated factories.
+// expected-result provenance for argument-less associated factories; `resultRef`
+// is an already-selected result for a call with no user callable.
 export struct CallSiteSelection {
     pub val exprId: U64
     pub val siteIsStmt: Bool = false
@@ -921,6 +922,7 @@ export struct CallSiteSelection {
     pub val callee: U64
     pub val receiverRef: U64 = 0U64
     pub val resultHintRef: U64 = 0U64
+    pub val resultRef: U64 = 0U64
 }
 pub impl CallSiteSelection { factory }
 
