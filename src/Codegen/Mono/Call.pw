@@ -1381,6 +1381,15 @@ pub impl Comp {
         self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=callee calleeTypeArgs=calleeArgs parameterTypeRefs=params recvTypeRef=recvRef resultTypeRef=result targetKind=e.targetKind targetTraitIdx=e.targetTraitIdx targetSlot=e.targetSlot targetBindingDeclStart=e.targetBindingDeclStart targetTypeRef=e.targetTypeRef />)
     }
 
+    // Dynamic dispatch has no static ABI body, but its target identity and
+    // result are equally one semantic decision. Keep them atomic too.
+    inout fn completeDynamicBodyCallee(exprId: U64, targetKind: U64, targetTraitIdx: U64, targetSlot: U64, targetTypeRef: U64, targetBindingDeclStart: U64, resultRef: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i >= self.finalCalleeCount() { return }
+        val e: CallResolution = self.arena.finalCallees[i]
+        self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=resultRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
+    }
+
     // Dynamic calls are selected in Mono just like ordinary Func calls.  The
     // target descriptor is deliberately stored beside the static callee rather
     // than reconstructed from a method spelling in LLVM.
@@ -1482,12 +1491,11 @@ pub impl Comp {
             self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized")
             return
         }
-        self.setBodyCalleeTarget(exprId: exprId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: reqSlot)
         // Ground the selected requirement here, while the any binding context is
         // still frontend-owned. The descriptor therefore includes both target
         // and result, rather than asking LLVM to inspect the requirement again.
         val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
-        self.setBodyCalleeResultRef(exprId: exprId, resultRef: self.anyMemberRetInfo(anyRef: recvRef, req: req).ref)
+        self.completeDynamicBodyCallee(exprId: exprId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: reqSlot, targetTypeRef: 0U64, targetBindingDeclStart: 0U64, resultRef: self.anyMemberRetInfo(anyRef: recvRef, req: req).ref)
     }
 
     // A closure value is a dynamic call target too. Mono fixes both the
@@ -1500,11 +1508,12 @@ pub impl Comp {
                 if li < self.cur.locals.count() {
                     val fnRef: U64 = self.groundTypeRef(ref: self.cur.locals[li].ty)
                     if fnRef != 0U64 && self.isFnType(ref: fnRef) {
-                        self.setBodyCalleeTarget(exprId: exprId, targetKind: 2U64, targetTraitIdx: 0U64, targetSlot: 0U64, targetTypeRef: fnRef, targetBindingDeclStart: self.cur.locals[li].nameStart)
                         val fnTy: TypeRef = self.arena.types[fnRef]
+                        mut val resultRef: U64 = 0U64
                         if fnTy.args.count() > 0U64 {
-                            self.setBodyCalleeResultRef(exprId: exprId, resultRef: fnTy.args[0])
+                            resultRef = fnTy.args[0]
                         }
+                        self.completeDynamicBodyCallee(exprId: exprId, targetKind: 2U64, targetTraitIdx: 0U64, targetSlot: 0U64, targetTypeRef: fnRef, targetBindingDeclStart: self.cur.locals[li].nameStart, resultRef: resultRef)
                     }
                 }
             }
@@ -1532,11 +1541,12 @@ pub impl Comp {
         if fi >= self.arena.structs[sidx].fields.count() { return }
         val fnRef: U64 = self.groundTypeRef(ref: self.arena.structs[sidx].fields[fi].ty)
         if fnRef != 0U64 && self.isFnType(ref: fnRef) {
-            self.setBodyCalleeTarget(exprId: exprId, targetKind: 3U64, targetTraitIdx: 0U64, targetSlot: fi, targetTypeRef: fnRef)
             val fnTy: TypeRef = self.arena.types[fnRef]
+            mut val resultRef: U64 = 0U64
             if fnTy.args.count() > 0U64 {
-                self.setBodyCalleeResultRef(exprId: exprId, resultRef: fnTy.args[0])
+                resultRef = fnTy.args[0]
             }
+            self.completeDynamicBodyCallee(exprId: exprId, targetKind: 3U64, targetTraitIdx: 0U64, targetSlot: fi, targetTypeRef: fnRef, targetBindingDeclStart: 0U64, resultRef: resultRef)
         }
     }
 
@@ -2906,9 +2916,8 @@ pub impl Comp {
                         if traitIdx >= self.decls.traits.count() || nextSlot == 0U64 {
                             self.errorAt(offset: 0U64, msg: "internal diagnostic: final existential iterator target was not finalized")
                         } else {
-                            self.setBodyCalleeTarget(exprId: stmtId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: nextSlot, siteIsStmt: true, slot: 2U64)
                             val nextReq: Func = self.decls.traits[traitIdx].reqs[nextSlot - 1U64]
-                            self.setBodyCalleeResultRef(exprId: stmtId, resultRef: self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref, siteIsStmt: true, slot: 2U64)
+                            self.completeDynamicBodyCallee(exprId: stmtId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: nextSlot, targetTypeRef: 0U64, targetBindingDeclStart: 0U64, resultRef: self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref, siteIsStmt: true, slot: 2U64)
                         }
                     }
                     val et: TypeInfo = self.typeOf(id: iter)
