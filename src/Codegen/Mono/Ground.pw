@@ -183,6 +183,54 @@ pub impl Comp {
         return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset siteOffset=t.siteOffset />)
     }
 
+    // The closed semantic child view of a TypeTerm.  Record fields, a
+    // projection receiver and its trait-instance arguments are all type
+    // children; no consumer may silently choose a narrower legacy layout.
+    // The order is stable: record fields; projection receiver then its trait
+    // arguments; otherwise ordinary arguments then trait-instance arguments.
+    inout fn typeTermChildCount(t: TypeRef) -> U64 {
+        if t.isRecord { return t.recordFieldTerms.count() }
+        if t.assocNameId != 0U64 { return 1U64 + t.assocTraitArgs.count() }
+        return t.args.count() + t.assocTraitArgs.count()
+    }
+
+    inout fn typeTermChildRef(t: TypeRef, index: U64) -> U64 {
+        if t.isRecord {
+            if index < t.recordFieldTerms.count() { return t.recordFieldTerms[index] }
+            return 0U64
+        }
+        if t.assocNameId != 0U64 {
+            if index == 0U64 { return self.typeTermProjectionReceiver(t: t) }
+            val traitIndex: U64 = index - 1U64
+            if traitIndex < t.assocTraitArgs.count() { return t.assocTraitArgs[traitIndex] }
+            return 0U64
+        }
+        if index < t.args.count() { return t.args[index] }
+        val traitIndex: U64 = index - t.args.count()
+        if traitIndex < t.assocTraitArgs.count() { return t.assocTraitArgs[traitIndex] }
+        return 0U64
+    }
+
+    inout fn typeTermChildLabel(t: TypeRef, index: U64) -> U64 {
+        if t.isRecord {
+            if index < t.recordFieldLabels.count() { return t.recordFieldLabels[index] }
+            return 0U64
+        }
+        if t.assocNameId != 0U64 {
+            if index == 0U64 { return 0U64 }
+            val traitIndex: U64 = index - 1U64
+            if traitIndex < t.assocTraitArgLabels.count() { return t.assocTraitArgLabels[traitIndex] }
+            return 0U64
+        }
+        if index < t.args.count() {
+            if index < t.argLabels.count() { return t.argLabels[index] }
+            return 0U64
+        }
+        val traitIndex: U64 = index - t.args.count()
+        if traitIndex < t.assocTraitArgLabels.count() { return t.assocTraitArgLabels[traitIndex] }
+        return 0U64
+    }
+
     // Reassemble a projection after a structural traversal transformed its
     // receiver and/or positional trait arguments.  Keeping the receiver
     // replacement here prevents each substitution path from accidentally
