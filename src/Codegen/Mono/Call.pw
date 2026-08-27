@@ -2909,7 +2909,7 @@ pub impl Comp {
                         // an Iterator.  The sentinel tells LLVM that there is no
                         // iterator() call; it must not rediscover that fact from
                         // the receiver spelling.
-                        self.recordBodyCallee(exprId: stmtId, callee: iteratorFn, siteIsStmt: true, slot: 1U64, recvTypeOverride: initialRef)
+                        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultHintRef=initialRef />)
                         if iteratorFn < self.arena.funcs.count() {
                             self.enqueueSelectedCallee(exprId: stmtId, callee: iteratorFn, implicit: true, recvInstOverride: initialRef, siteIsStmt: true, slot: 1U64)
                             val returned: U64 = self.groundedCalleeReturn(callee: iteratorFn, recvRef: initialRef)
@@ -2917,7 +2917,7 @@ pub impl Comp {
                         }
                         val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
                         val nextFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: noArgs, useOffset: 0U64)
-                        self.recordBodyCallee(exprId: stmtId, callee: nextFn, siteIsStmt: true, slot: 2U64, recvTypeOverride: iteratorRef)
+                        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=nextFn receiverRef=iteratorRef resultHintRef=iteratorRef />)
                         if nextFn < self.arena.funcs.count() {
                             self.enqueueSelectedCallee(exprId: stmtId, callee: nextFn, implicit: true, recvInstOverride: iteratorRef, siteIsStmt: true, slot: 2U64)
                         }
@@ -2928,8 +2928,8 @@ pub impl Comp {
                         // slots so LLVM consumes the same source type rather than
                         // recovering it from the expression tree.
                         val none: U64 = self.arena.funcs.count()
-                        self.recordBodyCallee(exprId: stmtId, callee: none, siteIsStmt: true, slot: 1U64, recvTypeOverride: initialRef)
-                        self.recordBodyCallee(exprId: stmtId, callee: none, siteIsStmt: true, slot: 2U64, recvTypeOverride: initialRef)
+                        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=none receiverRef=initialRef />)
+                        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=initialRef />)
                         val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
                         val noArgs: Array[Arg] = []
                         val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: initialRef)
