@@ -1065,10 +1065,10 @@ pub impl Comp {
         }
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64) {
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, targetKind: U64 = 0U64, targetTraitIdx: U64 = 0U64, targetSlot: U64 = 0U64, targetBindingDeclStart: U64 = 0U64, targetTypeRef: U64 = 0U64) {
         val bodyId: U64 = self.currentBodyInstanceId()
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
-        self.arena.finalCallees.append(<CallResolution bodyId=bodyId exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef />)
+        self.arena.finalCallees.append(<CallResolution bodyId=bodyId exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
         mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, exprId: exprId, siteIsStmt: siteIsStmt, slot: slot) % capacity
         while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
@@ -1202,7 +1202,7 @@ pub impl Comp {
             self.replaceFinalCallee(entry: priorIdx, resolution: <CallResolution bodyId=prior.bodyId exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs parameterTypeRefs=prior.parameterTypeRefs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetBindingDeclStart=prior.targetBindingDeclStart targetTypeRef=prior.targetTypeRef />)
             return
         }
-        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef)
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef, targetKind: selection.targetKind, targetTraitIdx: selection.targetTraitIdx, targetSlot: selection.targetSlot, targetBindingDeclStart: selection.targetBindingDeclStart, targetTypeRef: selection.targetTypeRef)
         if calleeTypeArgs.count() > 0U64 {
             self.setBodyCalleeTypeArgs(exprId: exprId, calleeTypeArgs: calleeTypeArgs, siteIsStmt: siteIsStmt, slot: slot)
         }
@@ -1490,45 +1490,34 @@ pub impl Comp {
         return self.findTraitIdxByName(start: t.nameStart, len: t.nameLen)
     }
 
-    inout fn recordBodyAnyTarget(exprId: U64) {
-        mut val recv: U64 = self.arena.exprs.count()
-        mut val nameStart: U64 = 0U64
-        mut val nameLen: U64 = 0U64
-        mut val args: Array[Arg] = []
-        match self.arena.exprs[exprId] {
-            Expr.Method(recv: val r, nameStart: val ns, nameLen: val nl, args: val callArgs) => {
-                recv = r
-                nameStart = ns
-                nameLen = nl
-                args = callArgs
-            }
-            Expr.ExtMethod(recv: val r, source: _, nameStart: val ns, nameLen: val nl, args: val callArgs) => {
-                recv = r
-                nameStart = ns
-                nameLen = nl
-                args = callArgs
-            }
-            _ => { return }
+    // Source/implicit resolvers construct the whole dynamic call decision.
+    // Finalization only copies this value into CallResolution; it never reopens
+    // a shared expression or looks through an earlier descriptor.
+    inout fn selectedClosureFieldCall(exprId: U64, callee: U64, recvRef: U64, resultHintRef: U64, nameStart: U64, nameLen: U64) -> CallSiteSelection {
+        if recvRef == 0U64 || recvRef >= self.arena.types.count() { return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> }
+        val rt: TypeRef = self.arena.types[recvRef]
+        val sidx: U64 = self.structDefByNameAny(start: rt.nameStart, len: rt.nameLen)
+        if sidx >= self.arena.structs.count() { return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> }
+        val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        mut val fi: U64 = 0U64
+        while fi < self.arena.structs[sidx].fields.count() {
+            if self.arena.structs[sidx].fields[fi].nameId == fieldName { break }
+            fi += 1U64
         }
-        val recvRef: U64 = self.groundedBodyReceiverRef(exprId: recv)
-        if recvRef == 0U64 || recvRef >= self.arena.types.count() || !(self.arena.types[recvRef].isAny) { return }
-        val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
-        val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: nameStart, nameLen: nameLen, args: args)
-        if traitIdx >= self.decls.traits.count() || reqSlot == 0U64 {
-            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized")
-            return
+        if fi >= self.arena.structs[sidx].fields.count() { return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef /> }
+        val fnRef: U64 = self.groundTypeRef(ref: self.arena.structs[sidx].fields[fi].ty)
+        if fnRef != 0U64 && self.isFnType(ref: fnRef) {
+            val fnTy: TypeRef = self.arena.types[fnRef]
+            mut val resultRef: U64 = 0U64
+            if fnTy.args.count() > 0U64 {
+                resultRef = fnTy.args[0]
+            }
+            return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef targetKind=3U64 targetSlot=fi targetTypeRef=fnRef />
         }
-        // Ground the selected requirement here, while the any binding context is
-        // still frontend-owned. The descriptor therefore includes both target
-        // and result, rather than asking LLVM to inspect the requirement again.
-        val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
-        self.completeDynamicBodyCallee(exprId: exprId, targetKind: 1U64, targetTraitIdx: traitIdx, targetSlot: reqSlot, targetTypeRef: 0U64, targetBindingDeclStart: 0U64, resultRef: self.anyMemberRetInfo(anyRef: recvRef, req: req).ref)
+        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef />
     }
 
-    // A closure value is a dynamic call target too. Mono fixes both the
-    // binding/field and its grounded `fn` TypeRef; LLVM later only materializes
-    // that already-selected value.
-    inout fn recordBodyClosureTarget(exprId: U64, callee: U64) {
+    inout fn selectBodyCall(exprId: U64, callee: U64, recvRef: U64, resultHintRef: U64) -> CallSiteSelection {
         match self.arena.exprs[exprId] {
             Expr.Call(nameStart: val ns, nameLen: val nl, args: _) => {
                 val li: U64 = self.localIndexByName(start: ns, len: nl)
@@ -1537,44 +1526,47 @@ pub impl Comp {
                     if fnRef != 0U64 && self.isFnType(ref: fnRef) {
                         val fnTy: TypeRef = self.arena.types[fnRef]
                         mut val resultRef: U64 = 0U64
-                        if fnTy.args.count() > 0U64 {
-                            resultRef = fnTy.args[0]
-                        }
-                        self.completeDynamicBodyCallee(exprId: exprId, targetKind: 2U64, targetTraitIdx: 0U64, targetSlot: 0U64, targetTypeRef: fnRef, targetBindingDeclStart: self.cur.locals[li].nameStart, resultRef: resultRef)
+                        if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
+                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef targetKind=2U64 targetBindingDeclStart=self.cur.locals[li].nameStart targetTypeRef=fnRef />
                     }
                 }
             }
-            Expr.Method(recv: _, nameStart: val ns, nameLen: val nl, args: _) => {
-                self.recordBodyClosureFieldTarget(exprId: exprId, recvRef: self.bodyCalleeReceiverRef(exprId: exprId), nameStart: ns, nameLen: nl)
+            Expr.Method(recv: _, nameStart: val ns, nameLen: val nl, args: val args) => {
+                if recvRef != 0U64 && recvRef < self.arena.types.count() && self.arena.types[recvRef].isAny {
+                    val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
+                    val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
+                    if traitIdx >= self.decls.traits.count() || reqSlot == 0U64 {
+                        self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized")
+                    } else {
+                        val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
+                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref targetKind=1U64 targetTraitIdx=traitIdx targetSlot=reqSlot />
+                    }
+                }
+                return self.selectedClosureFieldCall(exprId: exprId, callee: callee, recvRef: recvRef, resultHintRef: resultHintRef, nameStart: ns, nameLen: nl)
             }
-            Expr.ExtMethod(recv: _, source: _, nameStart: val ns, nameLen: val nl, args: _) => {
-                self.recordBodyClosureFieldTarget(exprId: exprId, recvRef: self.bodyCalleeReceiverRef(exprId: exprId), nameStart: ns, nameLen: nl)
+            Expr.ExtMethod(recv: _, source: _, nameStart: val ns, nameLen: val nl, args: val args) => {
+                if recvRef != 0U64 && recvRef < self.arena.types.count() && self.arena.types[recvRef].isAny {
+                    val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
+                    val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
+                    if traitIdx < self.decls.traits.count() && reqSlot != 0U64 {
+                        val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
+                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref targetKind=1U64 targetTraitIdx=traitIdx targetSlot=reqSlot />
+                    }
+                }
+                return self.selectedClosureFieldCall(exprId: exprId, callee: callee, recvRef: recvRef, resultHintRef: resultHintRef, nameStart: ns, nameLen: nl)
             }
             _ => {}
         }
+        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef />
     }
 
-    inout fn recordBodyClosureFieldTarget(exprId: U64, recvRef: U64, nameStart: U64, nameLen: U64) {
-        if recvRef == 0U64 || recvRef >= self.arena.types.count() { return }
-        val rt: TypeRef = self.arena.types[recvRef]
-        val sidx: U64 = self.structDefByNameAny(start: rt.nameStart, len: rt.nameLen)
-        if sidx >= self.arena.structs.count() { return }
-        val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
-        mut val fi: U64 = 0U64
-        while fi < self.arena.structs[sidx].fields.count() {
-            if self.arena.structs[sidx].fields[fi].nameId == fieldName { break }
-            fi += 1U64
+    inout fn selectedCallReceiverRef(exprId: U64) -> U64 {
+        match self.arena.exprs[exprId] {
+            Expr.Method(recv: val recv, nameStart: _, nameLen: _, args: _) => { return self.groundedBodyReceiverRef(exprId: recv) }
+            Expr.ExtMethod(recv: val recv, source: _, nameStart: _, nameLen: _, args: _) => { return self.groundedBodyReceiverRef(exprId: recv) }
+            _ => {}
         }
-        if fi >= self.arena.structs[sidx].fields.count() { return }
-        val fnRef: U64 = self.groundTypeRef(ref: self.arena.structs[sidx].fields[fi].ty)
-        if fnRef != 0U64 && self.isFnType(ref: fnRef) {
-            val fnTy: TypeRef = self.arena.types[fnRef]
-            mut val resultRef: U64 = 0U64
-            if fnTy.args.count() > 0U64 {
-                resultRef = fnTy.args[0]
-            }
-            self.completeDynamicBodyCallee(exprId: exprId, targetKind: 3U64, targetTraitIdx: 0U64, targetSlot: fi, targetTypeRef: fnRef, targetBindingDeclStart: 0U64, resultRef: resultRef)
-        }
+        return 0U64
     }
 
     // Resolve once under Mono's concrete body environment, then retain that
@@ -1616,11 +1608,11 @@ pub impl Comp {
         }
         if !bodyIsProvided && self.cur.bodyEnvironment.params.count() == 0U64 && exprId < self.typeCache.callee.count() {
             if self.typeCache.callee[exprId] != calleeUnfilled() && self.typeCache.callee[exprId] < self.arena.funcs.count() {
-                self.recordBodyCallee(exprId: exprId, callee: self.typeCache.callee[exprId])
-                self.recordBodyAnyTarget(exprId: exprId)
-                self.recordBodyClosureTarget(exprId: exprId, callee: self.typeCache.callee[exprId])
-                self.enqueueSelectedCallee(exprId: exprId, callee: self.typeCache.callee[exprId])
-                return self.typeCache.callee[exprId]
+                val cached: U64 = self.typeCache.callee[exprId]
+                val recvRef: U64 = self.selectedCallReceiverRef(exprId: exprId)
+                self.recordSelectedBodyCallee(selection: self.selectBodyCall(exprId: exprId, callee: cached, recvRef: recvRef, resultHintRef: self.selectedResultHint(callee: cached)))
+                self.enqueueSelectedCallee(exprId: exprId, callee: cached, recvInstOverride: recvRef)
+                return cached
             }
         }
         mut val callee: U64 = self.arena.funcs.count()
@@ -1724,9 +1716,7 @@ pub impl Comp {
             }
             _ => {}
         }
-        self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=exprId callee=callee receiverRef=resolvedReceiverRef resultHintRef=self.selectedResultHint(callee: callee) />)
-        self.recordBodyAnyTarget(exprId: exprId)
-        self.recordBodyClosureTarget(exprId: exprId, callee: callee)
+        self.recordSelectedBodyCallee(selection: self.selectBodyCall(exprId: exprId, callee: callee, recvRef: resolvedReceiverRef, resultHintRef: self.selectedResultHint(callee: callee)))
         self.enqueueSelectedCallee(exprId: exprId, callee: callee, recvInstOverride: resolvedReceiverRef)
         return callee
     }
