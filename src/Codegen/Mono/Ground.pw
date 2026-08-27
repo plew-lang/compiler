@@ -525,8 +525,9 @@ pub impl Comp {
     }
 
     // Structural nesting depth of a TypeRef (`I64`=1, `Box[I64]`=2, `Box[Box[I64]]`=3).
-    // Terminates because a ref's args are always pushed before the ref itself (indices
-    // strictly decrease). Used by the instantiation-depth gate below.
+    // TypeTerm children cover records and projection receivers too. The receiver
+    // carrier removes the projection marker, so this still descends structurally.
+    // Used by the instantiation-depth gate below.
     inout fn tyRefDepth(ref: U64) -> U64 {
         if ref >= self.arena.types.count() {
             return 0
@@ -534,8 +535,8 @@ pub impl Comp {
         val t: TypeRef = self.arena.types[ref]
         mut val d: U64 = 0
         mut val i: U64 = 0
-        while i < t.args.count() {
-            val ad: U64 = self.tyRefDepth(ref: t.args[i])
+        while i < self.typeTermChildCount(t: t) {
+            val ad: U64 = self.tyRefDepth(ref: self.typeTermChildRef(t: t, index: i))
             if ad > d {
                 d = ad
             }

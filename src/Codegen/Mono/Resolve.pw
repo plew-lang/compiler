@@ -654,8 +654,8 @@ pub impl Comp {
             return false
         }
         mut val i: U64 = 0
-        while i < t.args.count() {
-            if !(self.tyRefIsGround(ref: t.args[i])) {
+        while i < self.typeTermChildCount(t: t) {
+            if !(self.tyRefIsGround(ref: self.typeTermChildRef(t: t, index: i))) {
                 return false
             }
             i += 1
