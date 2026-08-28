@@ -222,6 +222,11 @@ export struct CallProvenance {
     pub val callee: U64 = 0U64
     pub val receiverTerm: U64 = 0U64
     pub val calleeTypeArgs: Array[U64] = []
+    // The bidirectional result context written at the call's source boundary
+    // (return, annotated binding, or assignment).  This stays outside the
+    // result TypeTerm: it constrains generic selection but is not the type
+    // identity of the call expression itself.
+    pub val expectedResultTerm: U64 = 0U64
 }
 pub impl CallProvenance { factory }
 
@@ -297,6 +302,16 @@ export struct Arg {
     pub val hasLabel: Bool
 }
 
+// Immutable slice of call arguments in Arena.argPool. Call-like Expr nodes
+// carry only this scalar descriptor, so inspecting a call never copies an ARC
+// managed Array payload.
+export struct ArgRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ArgRange { factory }
+
+
 export enum Expr {
     // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
     // so the full unsigned range up to 2^64-1 fits); a leading `-` is a separate
@@ -311,18 +326,18 @@ export enum Expr {
     Ident(start: U64, len: U64)
     Unary(op: I64, operand: U64)
     Binary(op: I64, lhs: U64, rhs: U64)
-    Call(nameStart: U64, nameLen: U64, args: Array[Arg])
+    Call(nameStart: U64, nameLen: U64, args: ArgRange)
     Field(base: U64, nameStart: U64, nameLen: U64)
     Make(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField])
     Str(start: U64, len: U64)
     Array(elems: Array[U64])
     Index(base: U64, index: U64)
-    Method(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg])
+    Method(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange)
     // `recv#Src.name(args)` (spec/09): a method call through an extension view.
     // `src` is the extension name selecting the method source; resolution finds a
     // method tagged with that extension on the receiver's type (it does not join
     // bare resolution). Distinct from Method so bare matches are unaffected.
-    ExtMethod(recv: U64, source: ResolvedViewSource, nameStart: U64, nameLen: U64, args: Array[Arg])
+    ExtMethod(recv: U64, source: ResolvedViewSource, nameStart: U64, nameLen: U64, args: ArgRange)
     // `recv#Ext` / `recv#!Ext` (spec/09): a zero-cost value re-view. Evaluates
     // `recv` unchanged. `strip=false` gives its type the `#Ext` view (viewExtId);
     // `strip=true` removes the view (`#!Ext` super form) so a following bare
@@ -460,8 +475,13 @@ export enum Stmt {
     Continue(offset: U64)
 }
 
+// A block owns no Array value. Its statement sequence lives in Arena.blockStmtPool
+// and is addressed by this immutable slice. AST walks routinely copy/match blocks;
+// embedding Array[U64] here made every such read retain/drop the child buffer even
+// though arena children never have an independent lifetime.
 export struct Block {
-    pub val stmts: Array[U64]
+    pub val stmtStart: U64
+    pub val stmtLen: U64
 }
 
 export struct Param {
@@ -887,6 +907,9 @@ export struct CallResolution {
     // canonical semantic body instance; duplicating its function/environment
     // here made every lookup re-compare the whole substitution map.
     pub val bodyId: U64
+    // Semantic identity of the call occurrence. `exprId` below is retained
+    // solely as the backend navigation anchor; it is not a semantic key.
+    pub val siteKey: CallSiteKey = <CallSiteKey />
     pub val exprId: U64
     pub val siteIsStmt: Bool = false
     pub val slot: U64 = 0U64
@@ -934,11 +957,15 @@ export struct CallResolution {
 // is an already-selected result for a call with no user callable. Dynamic target
 // identity belongs here too: the final builder may copy it but never recover it.
 export struct CallSiteSelection {
+    pub val siteKey: CallSiteKey = <CallSiteKey />
     pub val exprId: U64
     pub val siteIsStmt: Bool = false
     pub val slot: U64 = 0U64
     pub val callee: U64
     pub val receiverRef: U64 = 0U64
+    // Parametric call-template substitutions, grounded by the source
+    // resolver under the caller BodyInstance before final construction.
+    pub val calleeTypeArgs: Array[U64] = []
     pub val resultHintRef: U64 = 0U64
     pub val resultRef: U64 = 0U64
     pub val targetKind: U64 = 0U64
@@ -1235,6 +1262,9 @@ export struct NewtypeDef {
 export struct Arena {
     pub mut val bytes: Array[U8] = []
     pub mut val exprs: Array[Expr] = []
+    // Flat immutable payload pool for Call / Method / ExtMethod arguments.
+    // ArgRange is the only AST-side handle; consumers read through Comp.argAt.
+    pub mut val argPool: Array[Arg] = []
     // Complete semantic type entry per expression node. Kept with the expression
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
@@ -1244,8 +1274,20 @@ export struct Arena {
     // node); backend-synthesized exprs keep 0. THE diagnostic-position store:
     // exprOffset reads this before any per-form fallback.
     pub mut val exprSpanStart: Array[U64] = []
+    // Exclusive end paired with exprSpanStart.  A source call origin is the
+    // full span, rather than only its start: nested calls such as `a.b().c()`
+    // share a start but are distinct semantic sites.
+    pub mut val exprSpanEnd: Array[U64] = []
+    // Monotonic origin token assigned when an expression node is created.
+    // This is intentionally separate from the arena navigation index: source
+    // span identifies the written occurrence, and the token distinguishes
+    // multiple lowered operations legitimately derived from that one span.
+    pub mut val exprOriginSerial: Array[U64] = []
     pub mut val stmts: Array[Stmt] = []
     pub mut val blocks: Array[Block] = []
+    // One immutable child pool for Block statement slices. Only pushBlock appends;
+    // readers use blockStmtAt/count and never materialize an Array adapter.
+    pub mut val blockStmtPool: Array[U64] = []
     pub mut val funcs: Array[Func] = []
     pub mut val structs: Array[StructDef] = []
     pub mut val enums: Array[EnumDef] = []
@@ -1334,6 +1376,48 @@ export struct ChainSite {
 }
 pub impl ChainSite { factory }
 
+// A compiler-synthesized call may have no spelling from which its concrete
+// receiver can be reconstructed.  Keep the parametric receiver chosen by the
+// lowering rule alongside that call site; Mono grounds it under BodyInstance
+// and publishes an ordinary CallResolution.  This is the same provenance rule
+// as ChainSite, generalized to non-source implementation calls.
+export struct SyntheticCallSite {
+    pub val exprId: U64
+    // Allocated at the synthesis point.  Generated nodes have no source span,
+    // so an arena index is only a navigation anchor, never their origin.
+    pub val originSerial: U64 = 0U64
+    pub val receiverTerm: U64
+}
+pub impl SyntheticCallSite { factory }
+
+// The stable identity of a semantic call occurrence.  `ownerFnIdx` is the
+// declaration body (globals use the one-past-last Func sentinel).  originKind
+// is 1=written source, 2=compiler synthesis, 3=implicit protocol.  Source
+// origins use the complete span; synthesized and implicit origins use a
+// producer-allocated serial.  `exprId` deliberately does not appear here.
+export struct CallSiteKey {
+    pub val ownerFnIdx: U64 = 0U64
+    pub val originKind: U64 = 0U64
+    pub val originStart: U64 = 0U64
+    pub val originEnd: U64 = 0U64
+    pub val originSerial: U64 = 0U64
+    pub val slot: U64 = 0U64
+}
+pub impl CallSiteKey { factory }
+
+// Parametric call semantics are owned by a declaration body and CallSiteKey,
+// never by ExprId. Expected-result context is part of this template, while
+// the expression result TypeTerm remains in SemanticExprType for generic type
+// operations that are not calls.
+export struct CallTemplate {
+    pub val siteKey: CallSiteKey = <CallSiteKey />
+    pub val callee: U64 = 0U64
+    pub val receiverTerm: U64 = 0U64
+    pub val calleeTypeArgs: Array[U64] = []
+    pub val expectedResultTerm: U64 = 0U64
+}
+pub impl CallTemplate { factory }
+
 // One record-destructuring site (`(val a, b: _) = init` statement, the struct
 // form `P { val a } = init`, or the `for (val a, val b) in xs` loop pattern),
 // recorded at Lower time because the desugar (temp + per-field lets/assigns)
@@ -1385,6 +1469,8 @@ export struct Decls {
     pub mut val namespaces: Array[Bind] = []
     pub mut val importAliases: Array[Bind] = []
     pub mut val chainSites: Array[ChainSite] = []
+    pub mut val syntheticCallSites: Array[SyntheticCallSite] = []
+    pub mut val callTemplates: Array[CallTemplate] = []
     pub mut val destructureSites: Array[DestructureSite] = []
     pub mut val kwCache: Array[Bind] = []
 }

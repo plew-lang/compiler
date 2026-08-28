@@ -7,12 +7,10 @@
 
 pub impl Comp {
     inout fn blockGiveExpr(blkId: U64) -> U64 {
-        val blk: Block = self.arena.blocks[blkId]
-        val stmts: Array[U64] = blk.stmts
         mut val i: U64 = 0
         mut val found: U64 = self.arena.exprs.count()
-        while i < stmts.count() {
-            val s: Stmt = self.arena.stmts[stmts[i]]
+        while i < self.blockStmtCount(blkId: blkId) {
+            val s: Stmt = self.arena.stmts[self.blockStmtAt(blkId: blkId, index: i)]
             match s {
                 Stmt.Give(val value) => { found = value }
                 _ => {}

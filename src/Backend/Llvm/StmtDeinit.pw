@@ -433,15 +433,14 @@ pub impl LlvmCtx {
     inout fn genLlvmBlock(c: inout Comp, id: U64) {
         // lexical scope: bindings declared in this block leave scope at its end.
         val mark: U64 = self.nLocals
-        val blk: Block = c.arena.blocks[id]
         mut val i: U64 = 0
-        while i < blk.stmts.count() {
+        while i < c.blockStmtCount(blkId: id) {
             if self.terminated {
                 self.nLocals = mark
                 return
             }
             val stmtMark: U64 = self.nLocals
-            self.genLlvmStmt(c: inout c, id: blk.stmts[i])
+            self.genLlvmStmt(c: inout c, id: c.blockStmtAt(blkId: id, index: i))
             // statement-end destruction of temporaries (spec/03): a temp created by
             // this statement dies here, not at block exit. A terminated statement
             // (return / break / continue) already dropped them in its unwind.

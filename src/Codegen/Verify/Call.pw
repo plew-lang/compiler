@@ -18,7 +18,7 @@ pub impl Comp {
     // the latter belongs to Mono after T is instantiated.  Keeping the two
     // phases distinct prevents unrelated concrete conformance paths from
     // changing whether `fn f[T](x: T) where T: R { x.r() }` is well formed.
-    inout fn verifyBoundMethodCall(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    inout fn verifyBoundMethodCall(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
         val tpId: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         val methodId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val found: Bool = false
@@ -56,11 +56,11 @@ pub impl Comp {
         if !found { return false }
         val chosen: Func = self.decls.traits[chosenTrait].reqs[chosenReq]
         mut val ai: U64 = 0U64
-        while ai < args.count() {
+        while ai < args.len {
             val pi: U64 = self.paramIndexForArg(params: chosen.params, args: args, argIdx: ai)
             if pi < chosen.params.count() {
-                self.checkArgInoutMode(p: chosen.params[pi], arg: args[ai])
-                self.tcCheckValue(expectedRef: chosen.params[pi].ty, valueExpr: args[ai].expr, pos: "arg")
+                self.checkArgInoutMode(p: chosen.params[pi], arg: self.argAt(args: args, index: ai))
+                self.tcCheckValue(expectedRef: chosen.params[pi].ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1U64
         }
@@ -102,7 +102,7 @@ pub impl Comp {
     // Final argument-type validation operates on the already source-selected
     // callable.  Bare and `#` method calls must not rediscover candidates by
     // different rules after resolution.
-    inout fn checkResolvedMethodArgCategories(mf: U64, args: Array[Arg]) {
+    inout fn checkResolvedMethodArgCategories(mf: U64, args: ArgRange) {
         if mf >= self.arena.funcs.count() { return }
         val cf: Func = self.arena.funcs[mf]
         // Generic and provided methods need their resolved substitution before
@@ -112,31 +112,31 @@ pub impl Comp {
         if cf.typeParams.count() > 0U64 { return }
         if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
         mut val ai: U64 = 0U64
-        while ai < args.count() {
+        while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
-                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
+                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1U64
         }
     }
 
-    inout fn checkResolvedMethodArgs(mf: U64, args: Array[Arg]) {
+    inout fn checkResolvedMethodArgs(mf: U64, args: ArgRange) {
         if mf >= self.arena.funcs.count() { return }
         val cf: Func = self.arena.funcs[mf]
         if !(self.paramsLabelsOk(params: cf.params, args: args)) { return }
         mut val ai: U64 = 0U64
-        while ai < args.count() {
+        while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
-                self.checkArgInoutMode(p: cf.params[pIdx], arg: args[ai])
+                self.checkArgInoutMode(p: cf.params[pIdx], arg: self.argAt(args: args, index: ai))
             }
             ai += 1U64
         }
         self.checkResolvedMethodArgCategories(mf: mf, args: args)
     }
 
-    inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    inout fn checkMethodArgCategories(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
         val rt: TypeInfo = self.typeOf(id: recv)
         if rt.kind != 2 {
             return
@@ -168,7 +168,7 @@ pub impl Comp {
         self.checkResolvedMethodArgCategories(mf: theFi, args: args)
     }
 
-    inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    inout fn checkCallArgCategories(nameStart: U64, nameLen: U64, args: ArgRange) {
         val q: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val theFi: U64 = self.arena.funcs.count()
         mut val count: U64 = 0
@@ -194,10 +194,10 @@ pub impl Comp {
             return
         }
         mut val ai: U64 = 0
-        while ai < args.count() {
+        while ai < args.len {
             val pIdx: U64 = self.paramIndexForArg(params: cf.params, args: args, argIdx: ai)
             if pIdx < cf.params.count() {
-                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: args[ai].expr, pos: "arg")
+                self.tcCheckValue(expectedRef: cf.params[pIdx].ty, valueExpr: self.argAt(args: args, index: ai).expr, pos: "arg")
             }
             ai += 1
         }

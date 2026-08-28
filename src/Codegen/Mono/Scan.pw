@@ -84,7 +84,7 @@ pub impl Comp {
         // Iterable: iterator() returns the iterator; bare Iterator: the iterand is the
         // iterator (so `for v in xs.filter(p)` recovers the right element type).
         val itName: Bind = self.kwSpan(kw: "iterator", kwLen: 8)
-        val imi: U64 = self.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: noArgs)
+        val imi: U64 = self.findMethod(recvStart: et.nameStart, recvLen: et.nameLen, nameStart: itName.nameStart, nameLen: itName.nameLen, args: self.pushArgs(args: noArgs))
         mut val itRef: U64 = et.ref
         mut val nrStart: U64 = et.nameStart
         mut val nrLen: U64 = et.nameLen
@@ -95,7 +95,7 @@ pub impl Comp {
             nrLen = imf.retLen
         }
         val nxName: Bind = self.kwSpan(kw: "next", kwLen: 4)
-        val nmi: U64 = self.findMethod(recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: noArgs)
+        val nmi: U64 = self.findMethod(recvStart: nrStart, recvLen: nrLen, nameStart: nxName.nameStart, nameLen: nxName.nameLen, args: self.pushArgs(args: noArgs))
         if nmi == self.arena.funcs.count() {
             return scalarInfo()
         }
@@ -272,5 +272,30 @@ pub impl Comp {
             return false
         }
         return f.typeParams.count() == inst.args.count()
+    }
+
+    // A generic associated conformance witness has no value receiver, yet the
+    // backend may emit it when materializing the witness table for a reached
+    // receiver instance.  It therefore belongs to the same frontend body
+    // reachability closure as a generic value method.  `isProvided` copies are
+    // selected through CallResolution (their lexical trait body is shared), so
+    // this predicate intentionally covers only the authored witness body.
+    inout fn assocWitnessMatchesInst(f: Func, instRef: U64) -> Bool {
+        if !(f.isAssoc) || f.isProvided || f.typeParams.count() == 0U64 { return false }
+        val inst: TypeRef = self.arena.types[instRef]
+        if f.recvId != intern(c: inout self, start: inst.nameStart, len: inst.nameLen) {
+            return false
+        }
+        if f.typeParams.count() != inst.args.count() { return false }
+        // Reaching a generic layout does not itself establish every
+        // conditional conformance declared on that layout. In particular,
+        // `Buffer[NoEq]` is a valid value type while the `Buffer[T] as Eq
+        // where T: Eq` witness is absent. Only materialize an associated
+        // witness body when its declared trait instance is actually proven
+        // for this concrete receiver; otherwise LLVM would emit the abstract
+        // `T == T` body without a witness.
+        if f.originTraitOwner == 0U64 { return false }
+        val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=f.originTraitOwner positionalArgs=f.recvTraitArgs /> positionalArgsOpen=false assocPredicates=[] />
+        return self.viewedTypeConformsTraitConstraint(ref: instRef, constraint: constraint)
     }
 }

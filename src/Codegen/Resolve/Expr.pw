@@ -244,6 +244,117 @@ pub impl Comp {
         return 0U64
     }
 
+    // A source declaration body is the stable owner of a parametric call
+    // template.  Globals use the one sentinel immediately after Func indices;
+    // Mono normalizes its synthetic global body key to the same value.
+    inout fn callTemplateOwner(fnIdx: U64) -> U64 {
+        if fnIdx < self.arena.funcs.count() { return fnIdx }
+        return self.arena.funcs.count()
+    }
+
+    // A provided method is copied once per conformance but deliberately shares
+    // the trait declaration's body.  Parametric call templates belong to that
+    // one lexical body, not to any selected conformance copy.  Keep this
+    // canonicalization at the key boundary so every template producer and
+    // consumer agrees without an ambient "current selected method" rule.
+    inout fn callTemplateBodyOwner(fnIdx: U64) -> U64 {
+        if fnIdx >= self.arena.funcs.count() { return self.callTemplateOwner(fnIdx: fnIdx) }
+        val selected: Func = self.arena.funcs[fnIdx]
+        if !(selected.isProvided) { return fnIdx }
+        mut val i: U64 = 0U64
+        while i < self.arena.funcs.count() {
+            val candidate: Func = self.arena.funcs[i]
+            if !(candidate.isProvided) && candidate.body == selected.body && candidate.nameId == selected.nameId && candidate.provTraitOwner == selected.provTraitOwner {
+                return i
+            }
+            i += 1U64
+        }
+        // A malformed generated copy without its lexical source is an internal
+        // error elsewhere; retain its own identity here rather than aliasing an
+        // unrelated body with the same spelling.
+        return fnIdx
+    }
+
+    // Source calls are identified by the declaration body plus their complete
+    // parsed span.  The arena index remains an implementation-navigation aid
+    // only; using it as semantic identity made generated/shared bodies alias.
+    inout fn sourceCallSiteKey(fnIdx: U64, exprId: U64) -> CallSiteKey {
+        val owner: U64 = self.callTemplateOwner(fnIdx: self.callTemplateBodyOwner(fnIdx: fnIdx))
+        mut val start: U64 = 0U64
+        mut val end: U64 = 0U64
+        mut val serial: U64 = 0U64
+        if exprId < self.arena.exprSpanStart.count() { start = self.arena.exprSpanStart[exprId] }
+        if exprId < self.arena.exprSpanEnd.count() { end = self.arena.exprSpanEnd[exprId] }
+        if exprId < self.arena.exprOriginSerial.count() { serial = self.arena.exprOriginSerial[exprId] }
+        return <CallSiteKey ownerFnIdx=owner originKind=1U64 originStart=start originEnd=end originSerial=serial />
+    }
+
+    // The semantic identity of a call template uses the same origin namespace
+    // as the final descriptor.  Lowered calls have no independent source span:
+    // treating them as written calls here while Mono reads them as synthetic
+    // made one body own two unrelated keys, so a finalized generic body could
+    // not find the template that created its call.  `exprId` remains only the
+    // navigation anchor for locating the producer-assigned serial.
+    inout fn templateCallSiteKey(fnIdx: U64, exprId: U64) -> CallSiteKey {
+        val owner: U64 = self.callTemplateOwner(fnIdx: self.callTemplateBodyOwner(fnIdx: fnIdx))
+        mut val si: U64 = 0U64
+        while si < self.decls.syntheticCallSites.count() {
+            val synthetic: SyntheticCallSite = self.decls.syntheticCallSites[si]
+            if synthetic.exprId == exprId {
+                return <CallSiteKey ownerFnIdx=owner originKind=2U64 originSerial=synthetic.originSerial />
+            }
+            si += 1U64
+        }
+        return self.sourceCallSiteKey(fnIdx: fnIdx, exprId: exprId)
+    }
+
+    fn sameCallSiteKey(a: CallSiteKey, b: CallSiteKey) -> Bool {
+        return a.ownerFnIdx == b.ownerFnIdx && a.originKind == b.originKind && a.originStart == b.originStart && a.originEnd == b.originEnd && a.originSerial == b.originSerial && a.slot == b.slot
+    }
+
+    inout fn callTemplateIndex(siteKey: CallSiteKey) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.callTemplates.count() {
+            val t: CallTemplate = self.decls.callTemplates[i]
+            if self.sameCallSiteKey(a: t.siteKey, b: siteKey) { return i }
+            i += 1U64
+        }
+        return self.decls.callTemplates.count()
+    }
+
+    inout fn recordCallTemplate(exprId: U64, callee: U64, receiverTerm: U64, calleeTypeArgs: Array[U64]) {
+        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        if index < self.decls.callTemplates.count() {
+            val prior: CallTemplate = self.decls.callTemplates[index]
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey callee=callee receiverTerm=receiverTerm calleeTypeArgs=calleeTypeArgs expectedResultTerm=prior.expectedResultTerm />)
+            return
+        }
+        self.decls.callTemplates.append(<CallTemplate siteKey=siteKey callee=callee receiverTerm=receiverTerm calleeTypeArgs=calleeTypeArgs />)
+    }
+
+    inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) {
+        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        // Context can be known before declaration-time call selection. This
+        // is normal for a type-qualified generic associated factory in a
+        // shared body: its concrete receiver is not selected until Mono, but
+        // its source expected result is already a complete template input.
+        if index >= self.decls.callTemplates.count() {
+            self.decls.callTemplates.append(<CallTemplate siteKey=siteKey expectedResultTerm=expectedTerm />)
+            return
+        }
+        val prior: CallTemplate = self.decls.callTemplates[index]
+        self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey callee=prior.callee receiverTerm=prior.receiverTerm calleeTypeArgs=prior.calleeTypeArgs expectedResultTerm=expectedTerm />)
+    }
+
+    inout fn callTemplateForCurrentBody(exprId: U64) -> CallTemplate {
+        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId)
+        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        if index < self.decls.callTemplates.count() { return self.decls.callTemplates[index] }
+        return <CallTemplate siteKey=siteKey />
+    }
+
     // The declaration-time semantic term of an expression. Most expressions
     // are supplied by Record; an identifier's lexical Local is equally a
     // first-class producer, and remains available while a legacy TypeInfo
@@ -366,12 +477,50 @@ pub impl Comp {
     inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiverTerm: U64, calleeTypeArgs: Array[U64], resultTerm: U64) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
-        mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext call=<CallProvenance callee=callee receiverTerm=receiverTerm calleeTypeArgs=calleeTypeArgs /> />
+        mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext call=<CallProvenance callee=callee receiverTerm=receiverTerm calleeTypeArgs=calleeTypeArgs expectedResultTerm=prior.call.expectedResultTerm /> />
         if resultTerm != 0U64 && resultTerm < self.arena.types.count() {
             val ti: TypeInfo = self.typeInfoOfRef(ref: resultTerm)
             next = <SemanticExprType term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext call=next.call />
         }
         self.arena.semanticExprTypes.set(i: exprId, value: next)
+        self.recordCallTemplate(exprId: exprId, callee: callee, receiverTerm: receiverTerm, calleeTypeArgs: calleeTypeArgs)
+    }
+
+    // Record the expected result at a semantic statement boundary.  It is not
+    // a replacement expression type: an uninstantiated generic call still
+    // owns its callee return TypeTerm.  Keeping the two facts distinct lets a
+    // later BodyInstance infer a callee binder from the caller's binder
+    // without reopening the AST or reading Mono's ambient scan state.
+    inout fn recordSemanticExprExpectedResult(exprId: U64, expectedTerm: U64) {
+        if expectedTerm == 0U64 || expectedTerm >= self.arena.types.count() { return }
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
+        val call: CallProvenance = prior.call
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext call=<CallProvenance callee=call.callee receiverTerm=call.receiverTerm calleeTypeArgs=call.calleeTypeArgs expectedResultTerm=expectedTerm /> />)
+        self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
+    }
+
+    // The explicit body-context read for the expected-result side of a call
+    // template.  Zero means the source supplied no bidirectional context.
+    inout fn groundSemanticCallExpectedResult(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
+        val expected: U64 = self.callTemplateForCurrentBody(exprId: exprId).expectedResultTerm
+        if expected == 0U64 { return 0U64 }
+        return self.groundTermForBody(ref: expected, environment: environment, selfRef: selfRef, itemRef: itemRef)
+    }
+
+    // Ground the selected callee substitutions recorded beside an expression's
+    // TypeTerm.  This is the direct producer→consumer handoff for generic free
+    // calls; Mono must not re-infer a body-local `self` from AST/TypeInfo when
+    // the parametric template already selected it.
+    inout fn groundSemanticCallTypeArgs(exprId: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> Array[U64] {
+        mut val out: Array[U64] = []
+        val args: Array[U64] = self.callTemplateForCurrentBody(exprId: exprId).calleeTypeArgs
+        mut val i: U64 = 0U64
+        while i < args.count() {
+            out.append(self.groundTermForBody(ref: args[i], environment: environment, selfRef: selfRef, itemRef: itemRef))
+            i += 1U64
+        }
+        return out
     }
 
     // The grounded TypeRef of expression `id` under the BODY instance env — the typed-IR

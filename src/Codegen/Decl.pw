@@ -699,7 +699,15 @@ pub impl Comp {
                             providedOwnerMod = self.traitModuleByOwner(owner: f.provTraitOwner)
                         }
                         val copyIdx: U64 = self.arena.funcs.count()
-                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=srcTag originTraitOwner=f.provTraitOwner originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
+                        // `srcTraitId` identifies this conferred copy's path
+                        // (and may therefore be the blanket subject such as
+                        // FilterIter). `originTraitId`, in contrast, names
+                        // the trait whose proof owns the method's Self/Item
+                        // semantics. Conflating the two produced the invalid
+                        // pair `(owner: Iterator, id: FilterIter)`, so an
+                        // otherwise selected Iterator witness could never
+                        // ground a provided method's associated output.
+                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=f.recvId originTraitOwner=f.provTraitOwner originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
                         self.registerCallable(funcIdx: copyIdx)
                     }
                 }

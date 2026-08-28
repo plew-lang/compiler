@@ -130,10 +130,9 @@ pub impl Comp {
 
     inout fn verifyBlock(blockId: U64) {
         val mark: U64 = self.scopeMark()
-        val b: Block = self.arena.blocks[blockId]
         mut val i: U64 = 0
-        while i < b.stmts.count() {
-            self.verifyStmt(stmtId: b.stmts[i])
+        while i < self.blockStmtCount(blkId: blockId) {
+            self.verifyStmt(stmtId: self.blockStmtAt(blkId: blockId, index: i))
             i += 1
         }
         self.popLocals(mark: mark)

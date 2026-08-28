@@ -126,12 +126,20 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: this iterator's next method is not emittable yet")
             return
         }
-        val nf: Func = c.arena.funcs[nfi]
+        // Mono has already selected and grounded this implicit `next()` call
+        // for the concrete loop receiver. Its result is the only authority
+        // for Optional[Item]; reopening the requirement's `nf.retTy` here
+        // loses an adapter proof's Item substitution.
+        val optRef: U64 = c.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 2U64)
+        if optRef == 0U64 {
+            compileErrorAt(line: 0, msg: "internal error: final iterator next callable is missing its result type")
+            return
+        }
         // ownsIter=false here: the non-generic Iterable path does not yet thread the iterator
         // instance ref needed to drop a heap-owning iterator at loop end (rare — all stdlib
         // collections are generic and take genLlvmForGenIterable). Loop var + body locals are
         // still released via emitIterNextLoop's per-iteration unwind.
-        self.emitIterNextLoop(c: inout c, iterVal: iterVal, iterInstRef: 0U64, ownsIter: false, optRef: nf.retTy, nextTy: self.genMethTy[nSlotF], nextVal: self.genMethVal[nSlotF], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
+        self.emitIterNextLoop(c: inout c, iterVal: iterVal, iterInstRef: 0U64, ownsIter: false, optRef: optRef, nextTy: self.genMethTy[nSlotF], nextVal: self.genMethVal[nSlotF], varStart: varStart, varLen: varLen, patStart: patStart, patLen: patLen, binds: binds, body: body)
     }
 
     // `for x in genericIterable` where the receiver is a generic instance (`Box[I64]`).
@@ -152,7 +160,7 @@ pub impl LlvmCtx {
                 compileErrorAt(line: 0, msg: "LLVM backend: this generic Iterable's iterator method is not emittable yet")
                 return
             }
-            iterVal = self.genGenMethodCall(c: inout c, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: noArgs)
+            iterVal = self.genGenMethodCall(c: inout c, recv: iter, mfi: itfi, slot: itSlot, instRef: recvRef, args: c.pushArgs(args: noArgs))
             iterInstRef = c.bodyCalleeReceiverRef(exprId: stmtId, siteIsStmt: true, slot: 2U64)
         } else {
             // the value IS its own Iterator (it has next() directly).
@@ -169,14 +177,16 @@ pub impl LlvmCtx {
             compileErrorAt(line: 0, msg: "LLVM backend: this generic iterator's next method is not emittable yet")
             return
         }
-        val nf: Func = c.arena.funcs[nfi]
-        val sP2: Array[Bind] = c.cur.typeParams
-        val sA2: Array[U64] = c.cur.typeArgs
-        c.cur.typeParams = nf.typeParams
-        c.cur.typeArgs = it.args
-        val optRef: U64 = c.groundTypeRef(ref: nf.retTy)
-        c.cur.typeParams = sP2
-        c.cur.typeArgs = sA2
+        // As in the non-generic path, consume the completed implicit call
+        // descriptor. The receiver's struct arguments and a provided
+        // method's `Self`/`Item` proof are disjoint substitutions; attempting
+        // to recreate both by assigning `it.args` to `nf.typeParams` is not a
+        // valid semantic environment.
+        val optRef: U64 = c.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: 2U64)
+        if optRef == 0U64 {
+            compileErrorAt(line: 0, msg: "internal error: final generic iterator next callable is missing its result type")
+            return
+        }
         // we OWN the iterator only when we created it via iterator() (a fresh temp that
         // shares the source's buffer). When the value IS its own iterator, it is the caller's
         // place — dropping it here would double-free — so leave it to its own scope.
@@ -414,7 +424,7 @@ pub impl LlvmCtx {
         LLVMPositionBuilderAtEnd(self.b, condBB)
         // it.next() via dynamic dispatch (the loaded fat pointer's stable data ptr -> the
         // shared box, mutated in place).
-        val opt: LLVMValueRef = self.genLlvmAnyDispatch(c: inout c, recv: iter, anyRef: anyRef, traitIdx: traitIdx, slot: nextSlot, args: noArgs, callOffset: 0U64)
+        val opt: LLVMValueRef = self.genLlvmAnyDispatch(c: inout c, recv: iter, anyRef: anyRef, traitIdx: traitIdx, slot: nextSlot, args: c.pushArgs(args: noArgs), callOffset: 0U64)
         val optSlot: LLVMValueRef = self.entryAlloca(ty: optTy)
         LLVMBuildStore(self.b, opt, optSlot)
         val tag: LLVMValueRef = LLVMBuildLoad2(self.b, self.i64ty, LLVMBuildStructGEP2(self.b, optTy, optSlot, 0U64, anon()), anon())

@@ -42,11 +42,10 @@ pub impl Comp {
         if f.body == 0U64 {
             return false
         }
-        val blk: Block = self.arena.blocks[f.body]
-        if blk.stmts.count() == 0U64 {
+        if self.blockStmtCount(blkId: f.body) == 0U64 {
             return false
         }
-        return self.moduleOf(offset: self.stmtPrincipalOffset(sid: blk.stmts[0])) == 0U64
+        return self.moduleOf(offset: self.stmtPrincipalOffset(sid: self.blockStmtAt(blkId: f.body, index: 0U64))) == 0U64
     }
 
     inout fn isAmbientInLang(start: U64, len: U64) -> Bool {
@@ -279,7 +278,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn findFunc(nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    inout fn findFunc(nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
         // Among candidates whose labels match, prefer the one whose parameter types
         // match the argument types (type-based overload). Fall back to the first label
         // match when none type-matches (or there is a single candidate). Resolution is
@@ -470,7 +469,7 @@ pub impl Comp {
     // opaque backend failure. Returns false when a visible label match exists (then any
     // remaining mismatch is a normal overload/type error) or when nothing matches the labels
     // (a local / closure / builtin, handled elsewhere).
-    inout fn labelMatchOnlyInvisible(useMod: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    inout fn labelMatchOnlyInvisible(useMod: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
         val qId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val foundInvisible: Bool = false
         mut val i: U64 = 0
@@ -517,7 +516,7 @@ pub impl Comp {
     // selector for a synthetic call (`[]` -> `index`).  Visibility belongs to
     // the source call-site, not that interned helper span, so callers can pass
     // the real AST offset explicitly.
-    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64, useOffset: U64 = 0U64) -> U64 {
+    inout fn findMethod(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64, useOffset: U64 = 0U64) -> U64 {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
@@ -615,7 +614,7 @@ pub impl Comp {
         return self.arena.funcs.count()
     }
 
-    inout fn findExtMethod(recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    inout fn findExtMethod(recvStart: U64, recvLen: U64, srcStart: U64, srcLen: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> U64 {
         val qSrcId: U64 = intern(c: inout self, start: srcStart, len: srcLen)
         return self.findExtMethodById(recvStart: recvStart, recvLen: recvLen, srcId: qSrcId, sourceOwner: srcStart, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
     }
@@ -757,7 +756,7 @@ pub impl Comp {
     // grounded by a BodyInstance.  Candidate search, newtype normalization and
     // view-source normalization belong to the frontend resolver; Mono supplies
     // only the concrete receiver term it obtained from its environment.
-    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: Array[Arg], useOffset: U64) -> U64 {
+    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64) -> U64 {
         if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
             return self.arena.funcs.count()
         }
@@ -818,7 +817,7 @@ pub impl Comp {
     // differ only in the receiver surface they address; their active source
     // set, provenance narrowing, overload ranking, and ambiguity rule are
     // identical.
-    inout fn findCallableInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: Array[Arg], associated: Bool, recvRef: U64 = 0U64) -> U64 {
+    inout fn findCallableInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, associated: Bool, recvRef: U64 = 0U64) -> U64 {
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         val useMod: U64 = self.moduleOf(offset: nameStart)
@@ -893,11 +892,11 @@ pub impl Comp {
         return self.arena.funcs.count()
     }
 
-    inout fn findMethodInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    inout fn findMethodInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> U64 {
         return self.findCallableInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: false, recvRef: recvRef)
     }
 
-    inout fn findAssocInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    inout fn findAssocInViewSet(recvStart: U64, recvLen: U64, sources: Array[ViewSource], nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> U64 {
         return self.findCallableInViewSet(recvStart: recvStart, recvLen: recvLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: true, recvRef: recvRef)
     }
 
@@ -905,7 +904,7 @@ pub impl Comp {
     // additive: active extension candidates shadow the base surface, selected
     // traits narrow those candidates, then the bare surface is the fallback.
     // Type recovery, verifier, and backend consume this exact final Func.
-    inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, sourceOwner: U64 = 0U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    inout fn resolveExtMethodFinal(recv: U64, srcStart: U64, srcLen: U64, sourceOwner: U64 = 0U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
         // `Type#Source.member()` is the associated counterpart of a value
         // view.  It has no value TypeInfo, so select its source from the type
         // qualifier before entering the ordinary receiver path.
@@ -936,14 +935,14 @@ pub impl Comp {
     // Ordinary syntax still carries a view when its receiver was declared as
     // `T#Source`. Resolve that static source before the additive bare surface;
     // this is the same final-callable contract as explicit `value#Source.m()`.
-    inout fn resolveMethodFinal(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    inout fn resolveMethodFinal(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
         return self.resolveMethodFinalForType(recv: recv, receiverType: self.typeOf(id: recv), nameStart: nameStart, nameLen: nameLen, args: args)
     }
 
     // Selection over an already-resolved semantic receiver. A ChainHole
     // continuation owns that receiver term structurally, so re-deriving it
     // from the context-free ExprId query would discard the payload binding.
-    inout fn resolveMethodFinalForType(recv: U64, receiverType: TypeInfo, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    inout fn resolveMethodFinalForType(recv: U64, receiverType: TypeInfo, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
         val rt: TypeInfo = receiverType
         if !(rt.kind == 2 || rt.kind == 3 || (rt.kind == 0 && rt.nameLen > 0U64)) {
             return self.arena.funcs.count()
@@ -1041,13 +1040,13 @@ pub impl Comp {
         return false
     }
 
-    inout fn findExtMethodById(recvStart: U64, recvLen: U64, srcId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    inout fn findExtMethodById(recvStart: U64, recvLen: U64, srcId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> U64 {
         if srcId == 0U64 || srcId > self.interner.entries.count() { return self.arena.funcs.count() }
         val source: ViewSource = self.resolveViewSourceKey(recvStart: recvStart, recvLen: recvLen, recvRef: recvRef, sourceId: srcId, sourceOwner: sourceOwner)
         return self.findExtMethodBySource(recvStart: recvStart, recvLen: recvLen, source: source, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: recvRef)
     }
 
-    inout fn findExtMethodBySource(recvStart: U64, recvLen: U64, source: ViewSource, nameStart: U64, nameLen: U64, args: Array[Arg], recvRef: U64 = 0U64) -> U64 {
+    inout fn findExtMethodBySource(recvStart: U64, recvLen: U64, source: ViewSource, nameStart: U64, nameLen: U64, args: ArgRange, recvRef: U64 = 0U64) -> U64 {
         if source.kind == 0U64 { return self.arena.funcs.count() }
         val qNameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qRecvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
@@ -1100,7 +1099,7 @@ pub impl Comp {
         return firstLabel
     }
 
-    inout fn findAssoc(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> U64 {
+    inout fn findAssoc(recvStart: U64, recvLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
         mut val firstLabel: U64 = self.arena.funcs.count()
         mut val typeMatch: U64 = self.arena.funcs.count()
         mut val typeMatch2: U64 = self.arena.funcs.count()
@@ -1339,8 +1338,7 @@ pub impl Comp {
                         Expr.Ident(start: val tStart, len: val tLen) => {
                             if self.isTypeName(start: tStart, len: tLen) {
                                 if self.typeHasAssocVal(typeStart: tStart, typeLen: tLen, nameStart: nameStart, nameLen: nameLen) {
-                                    val noArgs: Array[Arg] = []
-                                    self.arena.exprs[i] = <Expr.Method recv=base nameStart=nameStart nameLen=nameLen args=noArgs />
+                                    self.arena.exprs[i] = <Expr.Method recv=base nameStart=nameStart nameLen=nameLen args=<ArgRange start=0U64 len=0U64 /> />
                                 }
                             }
                         }

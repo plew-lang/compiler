@@ -5,10 +5,10 @@
 // run via checkLitCtx -> checkCallArgs -> checkUniqueArgModes).
 
 pub impl Comp {
-    inout fn verifyArgs(args: Array[Arg]) {
+    inout fn verifyArgs(args: ArgRange) {
         mut val i: U64 = 0
-        while i < args.count() {
-            self.verifyExpr(id: args[i].expr)
+        while i < args.len {
+            self.verifyExpr(id: self.argAt(args: args, index: i).expr)
             i += 1
         }
         // overlapping `inout` (spec/03, Swift-equivalent granularity): two or more
@@ -17,12 +17,12 @@ pub impl Comp {
         // distinct fields); shared-world pairs (`r1->v`/`r2->v`) whose cell identity is
         // a runtime value get a cell-identity check emitted by the backend.
         mut val a: U64 = 0
-        while a < args.count() {
-            if args[a].isInout {
+        while a < args.len {
+            if self.argAt(args: args, index: a).isInout {
                 mut val b: U64 = a + 1U64
-                while b < args.count() {
-                    if args[b].isInout {
-                        self.checkInoutPair(a: args[a].expr, b: args[b].expr)
+                while b < args.len {
+                    if self.argAt(args: args, index: b).isInout {
+                        self.checkInoutPair(a: self.argAt(args: args, index: a).expr, b: self.argAt(args: args, index: b).expr)
                     }
                     b += 1U64
                 }
@@ -361,7 +361,7 @@ pub impl Comp {
         }
     }
 
-    inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: Array[Arg]) {
+    inout fn verifyResolvedMethodCall(recv: U64, ownerStart: U64, ownerLen: U64, nameStart: U64, mf: U64, args: ArgRange) {
         if mf < self.arena.funcs.count() {
                 self.checkMethodVis(ownerStart: ownerStart, ownerLen: ownerLen, mf: self.arena.funcs[mf], offset: nameStart)
                 // an `inout fn` method mutates the receiver, so it must be a mutable PLACE
@@ -380,9 +380,9 @@ pub impl Comp {
                     // a.field)`) errors here; runtime-value pairs get the pre-call
                     // place-identity check from the backend.
                     mut val k: U64 = 0
-                    while k < args.count() {
-                        if args[k].isInout {
-                            self.checkInoutPair(a: recv, b: args[k].expr)
+                    while k < args.len {
+                        if self.argAt(args: args, index: k).isInout {
+                            self.checkInoutPair(a: recv, b: self.argAt(args: args, index: k).expr)
                         }
                         k += 1U64
                     }
@@ -390,7 +390,7 @@ pub impl Comp {
         }
     }
 
-    inout fn verifyMethodVis(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    inout fn verifyMethodVis(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
         val rt: TypeInfo = self.typeOf(id: recv)
         if rt.kind == 2 {
             // Resolve once, then validate the resolved callable. `#` methods

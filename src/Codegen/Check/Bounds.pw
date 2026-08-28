@@ -176,7 +176,7 @@ pub impl Comp {
     // The result carries both the proof and the selected declaration.  Its
     // associated result stays symbolic until the type-term/proof consumer
     // grounds the selected bound at an actual instantiation.
-    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> StaticMemberResolution {
+    inout fn staticMemberResolution(fnIdx: U64, receiverRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> StaticMemberResolution {
         val memberId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         mut val i: U64 = 0U64
         while i < self.decls.funcBounds.count() {
@@ -218,7 +218,7 @@ pub impl Comp {
     // `0` means that the selected member is a provided method or otherwise has
     // no direct requirement parameter at `argIdx`; its fuller CallResolution
     // migration remains deliberately separate from this requirement slice.
-    inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: Array[Arg], argIdx: U64) -> U64 {
+    inout fn staticRequirementParamType(resolution: StaticMemberResolution, args: ArgRange, argIdx: U64) -> U64 {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 match proof {

@@ -51,11 +51,9 @@ pub impl LlvmCtx {
     // hands out frame fields — so field index N in the pre-pass is the N-th
     // `asyncFrameSlot` the body pass consumes. Recurses into if/while/match.
     inout fn collectAsyncFieldTys(c: inout Comp, blockId: U64, tys: inout Array[LLVMTypeRef]) {
-        val b: Block = c.arena.blocks[blockId]
-        val stmts: Array[U64] = b.stmts
         mut val i: U64 = 0
-        while i < stmts.count() {
-            match c.arena.stmts[stmts[i]] {
+        while i < c.blockStmtCount(blkId: blockId) {
+            match c.arena.stmts[c.blockStmtAt(blkId: blockId, index: i)] {
                 Stmt.Let(mutable: _, nameStart: _, nameLen: _, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                     // an `await`-initialized binding holds the type-erased value coerced
                     // to its declared type; a normal binding holds its declared/inferred

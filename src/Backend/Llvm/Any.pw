@@ -668,7 +668,7 @@ pub impl LlvmCtx {
     // Dynamic dispatch of an existential requirement selected by Mono.  `traitIdx`
     // and `slot` are final-callable data: LLVM deliberately receives no source
     // selector and therefore cannot change the meaning by looking one up again.
-    inout fn genLlvmAnyDispatch(c: inout Comp, recv: U64, anyRef: U64, traitIdx: U64, slot: U64, args: Array[Arg], callOffset: U64) -> LLVMValueRef {
+    inout fn genLlvmAnyDispatch(c: inout Comp, recv: U64, anyRef: U64, traitIdx: U64, slot: U64, args: ArgRange, callOffset: U64) -> LLVMValueRef {
         if traitIdx >= c.decls.traits.count() {
             c.errorAt(offset: callOffset, msg: "internal error: final existential trait target was not recorded")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)

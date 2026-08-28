@@ -10,7 +10,7 @@
 // args can't be inferred / the instance can't be declared.
 
 pub impl LlvmCtx {
-    inout fn genMethodOwnTypeParamCall(c: inout Comp, callId: U64, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    inout fn genMethodOwnTypeParamCall(c: inout Comp, callId: U64, recv: U64, mfi: U64, recvStart: U64, recvLen: U64, args: ArgRange) -> LLVMValueRef {
         val mf: Func = c.arena.funcs[mfi]
         val allArgs: Array[U64] = c.bodyCalleeTypeArgs(exprId: callId)
         mut val margs: Array[U64] = []
@@ -52,7 +52,7 @@ pub impl LlvmCtx {
 
 pub impl LlvmCtx {
 
-    inout fn genGenMethodCall(c: inout Comp, callId: U64 = 0U64, recv: U64, mfi: U64, slot: U64, instRef: U64, args: Array[Arg]) -> LLVMValueRef {
+    inout fn genGenMethodCall(c: inout Comp, callId: U64 = 0U64, recv: U64, mfi: U64, slot: U64, instRef: U64, args: ArgRange) -> LLVMValueRef {
         val mf: Func = c.arena.funcs[mfi]
         val pinMark: U64 = self.pinCells.count()
         mut val av: Array[LLVMValueRef] = []
@@ -369,7 +369,7 @@ pub impl LlvmCtx {
     // holds the receiver (when `hasRecv`) followed by ALL parameters in declaration order
     // starting at `avArgStart`; omitted-default positions carry callee-side temps and never
     // overlap a caller place, so only provided args are paired.
-    inout fn emitInoutOverlapChecks(c: inout Comp, f: Func, av: Array[LLVMValueRef], args: Array[Arg], hasRecv: Bool, recvExpr: U64, avArgStart: U64, pinMark: U64) {
+    inout fn emitInoutOverlapChecks(c: inout Comp, f: Func, av: Array[LLVMValueRef], args: ArgRange, hasRecv: Bool, recvExpr: U64, avArgStart: U64, pinMark: U64) {
         mut val ioExpr: Array[U64] = []
         mut val ioPtr: Array[LLVMValueRef] = []
         if hasRecv {
@@ -379,11 +379,11 @@ pub impl LlvmCtx {
             }
         }
         mut val ai: U64 = 0
-        while ai < args.count() {
+        while ai < args.len {
             val pi: U64 = c.paramIndexForArg(params: f.params, args: args, argIdx: ai)
             if pi < f.params.count() {
                 if f.params[pi].isInout {
-                    ioExpr.append(args[ai].expr)
+                    ioExpr.append(c.argAt(args: args, index: ai).expr)
                     ioPtr.append(av[avArgStart + pi])
                 }
             }
@@ -442,7 +442,7 @@ pub impl LlvmCtx {
 }
 
 pub impl LlvmCtx {
-    inout fn appendCallArgValues(c: inout Comp, av: inout Array[LLVMValueRef], f: Func, args: Array[Arg], parameterTypeRefs: Array[U64] = []) {
+    inout fn appendCallArgValues(c: inout Comp, av: inout Array[LLVMValueRef], f: Func, args: ArgRange, parameterTypeRefs: Array[U64] = []) {
         mut val pi: U64 = 0
         while pi < f.params.count() {
             mut val parameterTypeRef: U64 = f.params[pi].ty
@@ -450,8 +450,8 @@ pub impl LlvmCtx {
                 parameterTypeRef = parameterTypeRefs[pi]
             }
             val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
-            if ai < args.count() {
-                av.append(self.genArgValue(c: inout c, argExpr: args[ai].expr, p: f.params[pi], parameterTypeRef: parameterTypeRef))
+            if ai < args.len {
+                av.append(self.genArgValue(c: inout c, argExpr: c.argAt(args: args, index: ai).expr, p: f.params[pi], parameterTypeRef: parameterTypeRef))
             } else {
                 av.append(self.genArgValue(c: inout c, argExpr: f.params[pi].defaultExpr, p: f.params[pi], parameterTypeRef: parameterTypeRef))
             }

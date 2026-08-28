@@ -445,7 +445,7 @@ pub impl Comp {
     // `Head.value(value: 7)`) still needs the original expected result type to ground
     // factory params. Do it generally for assoc fns whose receiver head matches ctxRef,
     // so the special case remains at the intrinsic floor, not at Ref syntax.
-    inout fn checkAssocArgsLitCtxFromExpected(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg], ctxRef: U64) -> Bool {
+    inout fn checkAssocArgsLitCtxFromExpected(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange, ctxRef: U64) -> Bool {
         val arn: Bind = self.assocRecvName(recv: recv)
         if arn.nameLen == 0U64 {
             return false
@@ -487,7 +487,7 @@ pub impl Comp {
         self.cur.typeParams = f.typeParams
         self.cur.typeArgs = ginf
         mut val k: U64 = 0
-        while k < args.count() {
+        while k < args.len {
             val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: k)
             if pi < f.params.count() {
                 val p: Param = f.params[pi]
@@ -496,10 +496,10 @@ pub impl Comp {
                     pref = self.groundTypeRef(ref: p.ty)
                 }
                 if pref != 0U64 && self.tyRefIsGround(ref: pref) {
-                    self.checkLitTi(id: args[k].expr, ti: self.typeInfoOfRef(ref: pref))
-                    self.tcCheckValue(expectedRef: pref, valueExpr: args[k].expr, pos: "arg")
+                    self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: pref))
+                    self.tcCheckValue(expectedRef: pref, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                 } else {
-                    self.checkLitSpan(id: args[k].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                    self.checkLitSpan(id: self.argAt(args: args, index: k).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
                 }
             }
             k += 1

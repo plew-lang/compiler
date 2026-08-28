@@ -65,15 +65,16 @@ pub impl Comp {
         }
     }
 
-    inout fn checkUniqueArgModes(args: Array[Arg]) {
+    inout fn checkUniqueArgModes(args: ArgRange) {
         mut val i: U64 = 0
-        while i < args.count() {
-            self.checkUniquePlaceCopy(exprId: args[i].expr, inoutOk: args[i].isInout)
+        while i < args.len {
+            val arg: Arg = self.argAt(args: args, index: i)
+            self.checkUniquePlaceCopy(exprId: arg.expr, inoutOk: arg.isInout)
             i += 1
         }
     }
 
-    inout fn tcCheckGenericArgConsistency(f: Func, args: Array[Arg]) {
+    inout fn tcCheckGenericArgConsistency(f: Func, args: ArgRange) {
         if f.typeParams.count() == 0U64 {
             return
         }
@@ -81,7 +82,7 @@ pub impl Comp {
         while tpi < f.typeParams.count() {
             mut val firstRef: U64 = 0
             mut val ai: U64 = 0
-            while ai < args.count() {
+            while ai < args.len {
                 val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
                 if pi < f.params.count() {
                     val p: Param = f.params[pi]
@@ -89,13 +90,13 @@ pub impl Comp {
                     // binding.  A projection such as `T#Parser.Output` has
                     // the same legacy head spelling but cannot determine T.
                     if self.plainBinder(ref: p.ty, params: f.typeParams) == tpi {
-                        val ar: U64 = self.inferType(id: args[ai].expr)
+                        val ar: U64 = self.inferType(id: self.argAt(args: args, index: ai).expr)
                         if ar != 0U64 {
                             if firstRef == 0U64 {
                                 firstRef = ar
                             } else {
                                 if !(self.typesCompatible(expected: firstRef, inferred: ar)) {
-                                    self.errorAt(offset: self.exprOffset(id: args[ai].expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
+                                    self.errorAt(offset: self.exprOffset(id: self.argAt(args: args, index: ai).expr), msg: "inconsistent types for a type parameter: two arguments bound to the same `[T]` have different types")
                                 }
                             }
                         }
@@ -176,7 +177,7 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    inout fn checkCallArgs(id: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
         self.checkUniqueArgModes(args: args)
         val fi: U64 = self.resolvedCallee(id: id)
         if fi == self.arena.funcs.count() {
@@ -188,9 +189,9 @@ pub impl Comp {
                 if self.isFnType(ref: lty) {
                     val ft: TypeRef = self.arena.types[lty]
                     mut val k: U64 = 0
-                    while k < args.count() {
+                    while k < args.len {
                         if k + 1U64 < ft.args.count() {
-                            self.tcCheckValue(expectedRef: ft.args[k + 1U64], valueExpr: args[k].expr, pos: "fn-value arg")
+                            self.tcCheckValue(expectedRef: ft.args[k + 1U64], valueExpr: self.argAt(args: args, index: k).expr, pos: "fn-value arg")
                         }
                         k += 1
                     }
@@ -198,8 +199,8 @@ pub impl Comp {
                 }
             }
             mut val i: U64 = 0
-            while i < args.count() {
-                self.checkLitCtx(id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
+            while i < args.len {
+                self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 1, eBits: 64, eSgn: true)
                 i += 1
             }
             return
@@ -208,21 +209,21 @@ pub impl Comp {
         self.tcCheckGenericArgConsistency(f: f, args: args)
         val ps: Array[Param] = f.params
         mut val i: U64 = 0
-        while i < args.count() {
+        while i < args.len {
             val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: i)
             if pi < ps.count() {
                 val p: Param = ps[pi]
-                self.checkArgInoutMode(p: p, arg: args[i])
-                self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                self.checkClosureArgArity(argExpr: args[i].expr, p: p)
+                self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
+                self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                self.checkClosureArgArity(argExpr: self.argAt(args: args, index: i).expr, p: p)
                 // full type-compatibility (not just literal context): a non-literal VALUE
                 // argument whose type disagrees with the parameter (a closure with the wrong
                 // return type for a `fn(...)->R` param, etself.) — checkLitSpan only sees
                 // literals. tcCheckValue rejects only DEFINITE mismatches (unknown/generic
                 // types pass through).
-                self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
+                self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
             } else {
-                self.checkLitCtx(id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
+                self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
             }
             i += 1
         }
@@ -294,7 +295,7 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) {
+    inout fn checkMethodArgs(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
         self.checkUniqueArgModes(args: args)
         self.checkLitCtx(id: recv, eKind: 0, eBits: 0, eSgn: false)
         // (typeOf, cached: read via kind==2 then .ref — a receiver is never the width-less
@@ -315,13 +316,14 @@ pub impl Comp {
                             // getOr / contains / at / remove (`d.get(key: 5I64)` on a
                             // Dictionary[String,_]). spec/02.
                             mut val dai: U64 = 0
-                            while dai < args.count() {
-                                if args[dai].hasLabel {
-                                    if rangeEquals(bytes: self.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "key") {
-                                        self.tcCheckValue(expectedRef: drt.args[0], valueExpr: args[dai].expr, pos: "dict key")
+                            while dai < args.len {
+                                val arg: Arg = self.argAt(args: args, index: dai)
+                                if arg.hasLabel {
+                                    if rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "key") {
+                                        self.tcCheckValue(expectedRef: drt.args[0], valueExpr: arg.expr, pos: "dict key")
                                     }
-                                    if rangeEquals(bytes: self.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "value") || rangeEquals(bytes: self.arena.bytes, start: args[dai].labelStart, len: args[dai].labelLen, kw: "fallback") {
-                                        self.tcCheckValue(expectedRef: drt.args[1], valueExpr: args[dai].expr, pos: "dict value")
+                                    if rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "value") || rangeEquals(bytes: self.arena.bytes, start: arg.labelStart, len: arg.labelLen, kw: "fallback") {
+                                        self.tcCheckValue(expectedRef: drt.args[1], valueExpr: arg.expr, pos: "dict value")
                                     }
                                 }
                                 dai += 1
@@ -346,24 +348,24 @@ pub impl Comp {
                 val ps: Array[Param] = mf.params
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
                 mut val i: U64 = 0
-                while i < args.count() {
+                while i < args.len {
                     val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: i)
                     if pi < ps.count() {
                         val p: Param = ps[pi]
-                        self.checkArgInoutMode(p: p, arg: args[i])
+                        self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
                         if genericRecv {
                             // a CONCRETE primitive param (`n: I64`) on a generic receiver
                             // needs no grounding — check it directly. (substTypeInfo with the
                             // method's own type params mis-grounds a method-own generic like
                             // `fold[B]`'s `B`, so only primitives are checked this way.)
                             if self.isPrimType(start: p.tyStart, len: p.tyLen) {
-                                self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                                self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
+                                self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                                self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                             } else {
                                 // resolve the param's type under the receiver's
                                 // instantiation so a literal arg gets the concrete context.
                                 val pti: TypeInfo = self.substTypeInfo(instRef: rt.ref, params: mf.typeParams, tyRef: p.ty)
-                                self.checkLitTi(id: args[i].expr, ti: pti)
+                                self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: pti)
                                 // full type-compatibility against the GROUNDED param type — a
                                 // typed value whose type disagrees with the (instantiated)
                                 // parameter (`w.combine(x: 5I64)` on `W[String]` stores an I64
@@ -396,16 +398,16 @@ pub impl Comp {
                                         }
                                     }
                                     if pref != 0U64 {
-                                        self.tcCheckValue(expectedRef: pref, valueExpr: args[i].expr, pos: "arg")
+                                        self.tcCheckValue(expectedRef: pref, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                                     }
                                 }
                             }
                         } else {
-                            self.checkLitSpan(id: args[i].expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
-                            self.tcCheckValue(expectedRef: p.ty, valueExpr: args[i].expr, pos: "arg")
+                            self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray)
+                            self.tcCheckValue(expectedRef: p.ty, valueExpr: self.argAt(args: args, index: i).expr, pos: "arg")
                         }
                     } else {
-                        self.checkLitCtx(id: args[i].expr, eKind: 0, eBits: 0, eSgn: false)
+                        self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 0, eBits: 0, eSgn: false)
                     }
                     i += 1
                 }
@@ -436,18 +438,18 @@ pub impl Comp {
                     }
                 }
                 mut val i: U64 = 0
-                while i < args.count() {
+                while i < args.len {
                     if innerArr {
-                        self.checkLitArray(id: args[i].expr, elemStart: innerStart, elemLen: innerLen)
+                        self.checkLitArray(id: self.argAt(args: args, index: i).expr, elemStart: innerStart, elemLen: innerLen)
                     } else {
-                        self.checkLitSpan(id: args[i].expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
+                        self.checkLitSpan(id: self.argAt(args: args, index: i).expr, tyStart: rt.nameStart, tyLen: rt.nameLen, isArray: false)
                         // a primitive-element array: the appended value's type must match the
                         // element type (`Array[I64].append(true)` — checkLitSpan range-checks a
                         // literal but a `true`/typed value of the wrong type slips through). Only
                         // primitives are checked (their simpleTypeRef is reliable; a struct/
                         // generic element name may be mangled and is left to other checks).
                         if self.isIntType(start: rt.nameStart, len: rt.nameLen) || self.isFloatType(start: rt.nameStart, len: rt.nameLen) || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "Bool") || rangeEquals(bytes: self.arena.bytes, start: rt.nameStart, len: rt.nameLen, kw: "String") {
-                            self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: args[i].expr, pos: "append")
+                            self.tcCheckValue(expectedRef: self.simpleTypeRef(nameStart: rt.nameStart, nameLen: rt.nameLen), valueExpr: self.argAt(args: args, index: i).expr, pos: "append")
                         }
                     }
                     i += 1
@@ -469,11 +471,11 @@ pub impl Comp {
                         ginf = self.inferFnArgs(f: af, args: args)
                     }
                     mut val k: U64 = 0
-                    while k < args.count() {
+                    while k < args.len {
                         val pi: U64 = self.paramIndexForArg(params: aps, args: args, argIdx: k)
                         if pi < aps.count() {
                             val ap: Param = aps[pi]
-                            self.checkArgInoutMode(p: ap, arg: args[k])
+                            self.checkArgInoutMode(p: ap, arg: self.argAt(args: args, index: k))
                             mut val checkedGround: Bool = false
                             if ap.ty != 0U64 {
                                 if ginf.count() == af.typeParams.count() {
@@ -485,15 +487,15 @@ pub impl Comp {
                                     self.cur.typeParams = savedP
                                     self.cur.typeArgs = savedA
                                     if gty != 0U64 && self.tyRefIsGround(ref: gty) {
-                                        self.checkLitTi(id: args[k].expr, ti: self.typeInfoOfRef(ref: gty))
-                                        self.tcCheckValue(expectedRef: gty, valueExpr: args[k].expr, pos: "arg")
+                                        self.checkLitTi(id: self.argAt(args: args, index: k).expr, ti: self.typeInfoOfRef(ref: gty))
+                                        self.tcCheckValue(expectedRef: gty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                                         checkedGround = true
                                     }
                                 }
                             }
                             if !(checkedGround) {
-                                self.checkLitSpan(id: args[k].expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
-                                self.tcCheckValue(expectedRef: ap.ty, valueExpr: args[k].expr, pos: "arg")
+                                self.checkLitSpan(id: self.argAt(args: args, index: k).expr, tyStart: ap.tyStart, tyLen: ap.tyLen, isArray: ap.tyIsArray)
+                                self.tcCheckValue(expectedRef: ap.ty, valueExpr: self.argAt(args: args, index: k).expr, pos: "arg")
                             }
                         }
                         k += 1
@@ -501,7 +503,7 @@ pub impl Comp {
                     return
                 }
                 if self.typeHasAssocFn(typeStart: rStart, typeLen: rLen, nameStart: nameStart, nameLen: nameLen) {
-                    if args.count() == 0U64 {
+                    if args.len == 0U64 {
                         self.errorAt(offset: nameStart, msg: "an associated function declaration cannot be used as a value; call it with the required arguments or wrap the call in an explicit closure (spec/07)")
                     } else {
                         self.errorAt(offset: nameStart, msg: "no matching associated function for this argument list (spec/07)")
@@ -512,8 +514,8 @@ pub impl Comp {
             _ => {}
         }
         mut val i: U64 = 0
-        while i < args.count() {
-            self.checkLitCtx(id: args[i].expr, eKind: 1, eBits: 64, eSgn: true)
+        while i < args.len {
+            self.checkLitCtx(id: self.argAt(args: args, index: i).expr, eKind: 1, eBits: 64, eSgn: true)
             i += 1
         }
     }

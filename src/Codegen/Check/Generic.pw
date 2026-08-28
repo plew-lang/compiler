@@ -109,7 +109,7 @@ pub impl Comp {
         return self.classifyIdent(start: start, len: len, tpFn: tpFn) == identTypeQualCode()
     }
 
-    inout fn traitProvidesMember(traitNameId: U64, traitArity: U64, qName: U64, args: Array[Arg], depth: U64, useMod: U64) -> Bool {
+    inout fn traitProvidesMember(traitNameId: U64, traitArity: U64, qName: U64, args: ArgRange, depth: U64, useMod: U64) -> Bool {
         if depth > 64U64 {
             return false
         }
@@ -163,7 +163,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn boundProvidesMethod(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> Bool {
+    inout fn boundProvidesMethod(fnIdx: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> Bool {
         val qName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
         val qTp: U64 = intern(c: inout self, start: tpStart, len: tpLen)
         mut val bi: U64 = 0
@@ -360,8 +360,8 @@ pub impl Comp {
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val i: U64 = 0
-                while i < args.count() {
-                    self.checkBoundsExpr(exprId: args[i].expr)
+                while i < args.len {
+                    self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
                 // a `T` value passed to a CONCRETE-typed parameter (`f(x: a)` where `a: T`
@@ -371,11 +371,11 @@ pub impl Comp {
                 if fi < self.arena.funcs.count() {
                     val ps: Array[Param] = self.arena.funcs[fi].params
                     mut val k: U64 = 0
-                    while k < args.count() {
+                    while k < args.len {
                         val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: k)
                         if pi < ps.count() {
                             if !(ps[pi].tyIsArray) {
-                                self.checkGenericTypeMatch(expectedRef: ps[pi].ty, valueExpr: args[k].expr)
+                                self.checkGenericTypeMatch(expectedRef: ps[pi].ty, valueExpr: self.argAt(args: args, index: k).expr)
                             }
                         }
                         k += 1
@@ -394,8 +394,8 @@ pub impl Comp {
                     }
                 }
                 mut val i: U64 = 0
-                while i < args.count() {
-                    self.checkBoundsExpr(exprId: args[i].expr)
+                while i < args.len {
+                    self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
             }
@@ -419,8 +419,8 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.checkBoundsRecv(recv: recv, tpFn: self.cur.checkFn)
                 mut val i: U64 = 0
-                while i < args.count() {
-                    self.checkBoundsExpr(exprId: args[i].expr)
+                while i < args.len {
+                    self.checkBoundsExpr(exprId: self.argAt(args: args, index: i).expr)
                     i += 1
                 }
                 val rt: TypeInfo = self.typeOf(id: recv)
@@ -456,10 +456,10 @@ pub impl Comp {
                             StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
                                 staticBoundMember = true
                                 mut val bk: U64 = 0U64
-                                while bk < args.count() {
+                                while bk < args.len {
                                     val expected: U64 = self.staticRequirementParamType(resolution: staticResolution, args: args, argIdx: bk)
                                     if expected != 0U64 {
-                                        self.checkGenericTypeMatch(expectedRef: expected, valueExpr: args[bk].expr)
+                                        self.checkGenericTypeMatch(expectedRef: expected, valueExpr: self.argAt(args: args, index: bk).expr)
                                     }
                                     bk += 1U64
                                 }
@@ -471,11 +471,11 @@ pub impl Comp {
                             if mi != self.arena.funcs.count() {
                                 val mps: Array[Param] = self.arena.funcs[mi].params
                                 mut val mk: U64 = 0
-                                while mk < args.count() {
+                                while mk < args.len {
                                     val mpi: U64 = self.paramIndexForArg(params: mps, args: args, argIdx: mk)
                                     if mpi < mps.count() {
                                         if !(mps[mpi].tyIsArray) {
-                                            self.checkGenericTypeMatch(expectedRef: mps[mpi].ty, valueExpr: args[mk].expr)
+                                            self.checkGenericTypeMatch(expectedRef: mps[mpi].ty, valueExpr: self.argAt(args: args, index: mk).expr)
                                         }
                                     }
                                     mk += 1
@@ -867,10 +867,9 @@ pub impl Comp {
 
     inout fn checkBoundsBlock(blkId: U64) {
         val mark: U64 = self.scopeMark()
-        val stmts: Array[U64] = self.arena.blocks[blkId].stmts
         mut val i: U64 = 0
-        while i < stmts.count() {
-            self.checkBoundsStmt(stmtId: stmts[i])
+        while i < self.blockStmtCount(blkId: blkId) {
+            self.checkBoundsStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i))
             i += 1
         }
         self.popLocals(mark: mark)

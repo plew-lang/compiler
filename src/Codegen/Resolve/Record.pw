@@ -26,10 +26,109 @@
 
 pub impl Comp {
 
+    // `for` introduces a source-level binding just like `val`: its type must
+    // be the iterator proof's associated `Item` term, not the legacy
+    // TypeInfo name recovered from the iterator head.  An adapter such as
+    // `xs.map(...).filter(...)` owns `Item = E` in its conformance; retaining
+    // that term is what lets a generic free call in the loop body later ground
+    // E through the enclosing BodyInstance.
+    inout fn iterableItemTerm(iterExpr: U64, iterTerm: U64) -> U64 {
+        if iterTerm == 0U64 || iterTerm >= self.arena.types.count() { return 0U64 }
+        val iterTy: TypeRef = self.arena.types[iterTerm]
+        if iterTy.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: iterTy.nameStart, len: iterTy.nameLen, kw: "Array") {
+            return iterTy.args[0]
+        }
+        // Prefer the resolved source carried by the iterator-producing call.
+        // It is a declaration owner, so a user trait spelled `Iterator` can
+        // never capture this proof query. A direct iterator value has no call
+        // provenance and uses assocItemRef's Core-contract path below.
+        mut val itemTerm: U64 = 0U64
+        if iterExpr < self.arena.semanticExprTypes.count() {
+            val call: CallProvenance = self.arena.semanticExprTypes[iterExpr].call
+            if call.callee < self.arena.funcs.count() {
+                val selected: Func = self.arena.funcs[call.callee]
+                if selected.originTraitOwner != 0U64 {
+                    val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+                    itemTerm = self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: selected.recvTraitArgs, assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen))
+                }
+            }
+        }
+        if itemTerm == 0U64 {
+            itemTerm = self.assocItemRef(recvStart: iterTy.nameStart, recvLen: iterTy.nameLen, recvInstRef: iterTerm)
+        }
+        if itemTerm != 0U64 { return itemTerm }
+        return 0U64
+    }
+
+    // A body-local `Self` is a semantic receiver projection, not an opaque
+    // nominal argument.  Generic-call recording needs its declaration-time
+    // receiver pattern when the callee parameter structurally exposes that
+    // receiver's arguments: in `impl[T] Buffer[T] as Eq`, passing
+    // `lhs: Self` to `bufferEq[T](Buffer[T], Buffer[T])` selects the caller's
+    // `T`.  Trait requirement bodies have no nominal receiver pattern and
+    // intentionally retain abstract `Self`; their concrete witness instance
+    // supplies it only when the shared body is grounded.
+    inout fn parametricCallArgumentTerm(exprId: U64) -> U64 {
+        val term: U64 = self.parametricExprTerm(exprId: exprId)
+        if term == 0U64 || term >= self.arena.types.count() { return term }
+        val t: TypeRef = self.arena.types[term]
+        if t.args.count() != 0U64 || !(rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self")) {
+            return term
+        }
+        if self.cur.checkFn >= self.arena.funcs.count() { return term }
+        val owner: Func = self.arena.funcs[self.cur.checkFn]
+        if owner.recvTy != 0U64 { return owner.recvTy }
+        return term
+    }
+
+    // Complete only the holes left by the general inference helper with the
+    // declaration receiver pattern described above.  This deliberately lives
+    // on the Record path: generic checking also calls `inferFnArgs`, where
+    // abstract `Self` must remain opaque.  A recorded CallTemplate, by
+    // contrast, is a body-owned substitution program and may retain the
+    // enclosing `impl[T] Receiver[T]` pattern needed to ground the call later.
+    inout fn completeRecordedFreeCallArgs(f: Func, args: ArgRange, inferred: Array[U64]) -> Array[U64] {
+        mut val out: Array[U64] = inferred
+        mut val ti: U64 = 0U64
+        while ti < f.typeParams.count() {
+            if ti >= out.count() { out.append(0U64) }
+            // The semantic argument term is more precise than legacy
+            // TypeInfo even when that adapter produced a nonzero answer:
+            // a for-local can be `I64` by its selected Iterator proof while
+            // TypeInfo still spells the provided method's template `Item`.
+            // CallTemplate is the body-instance authority, so refine rather
+            // than merely fill holes.
+            val tp: Bind = f.typeParams[ti]
+            mut val pi: U64 = 0U64
+            while pi < f.params.count() {
+                val p: Param = f.params[pi]
+                val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                if ai < args.len {
+                    val argTerm: U64 = self.parametricCallArgumentTerm(exprId: self.argAt(args: args, index: ai).expr)
+                    mut val candidate: U64 = 0U64
+                    if p.tyIsArray {
+                        if p.tyNameId == tp.nameId && argTerm != 0U64 && argTerm < self.arena.types.count() {
+                            val at: TypeRef = self.arena.types[argTerm]
+                            if at.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: at.nameStart, len: at.nameLen, kw: "Array") {
+                                candidate = at.args[0]
+                            }
+                        }
+                    } else if argTerm != 0U64 {
+                        candidate = self.unifyTypeParam(paramRef: p.ty, argRef: argTerm, tpStart: tp.nameStart, tpLen: tp.nameLen)
+                    }
+                    if candidate != 0U64 { out.set(i: ti, value: candidate) }
+                }
+                pi += 1U64
+            }
+            ti += 1U64
+        }
+        return out
+    }
+
     // Record the parametric result and the independently-carried source call
     // selection.  The result is a plain TypeTerm; callee/receiver/substitution
     // remain provenance so canonical type identity cannot depend on a call.
-    inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: Array[Arg]) {
+    inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: ArgRange) {
         if callee >= self.arena.funcs.count() { return }
         val f: Func = self.arena.funcs[callee]
         mut val calleeArgs: Array[U64] = []
@@ -47,9 +146,16 @@ pub impl Comp {
             self.cur.typeArgs = savedArgs
         }
         self.recordSemanticExprCall(exprId: exprId, callee: callee, receiverTerm: 0U64, calleeTypeArgs: calleeArgs, resultTerm: result)
+        // The existing SemanticExprType is still consumed by the abstract
+        // checker, so it retains its established abstract substitution. The
+        // final-call template is independent provenance and may carry the
+        // receiver-pattern completion needed solely for body-instance
+        // grounding.
+        val templateArgs: Array[U64] = self.completeRecordedFreeCallArgs(f: f, args: args, inferred: calleeArgs)
+        self.recordCallTemplate(exprId: exprId, callee: callee, receiverTerm: 0U64, calleeTypeArgs: templateArgs)
     }
 
-    inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverTerm: U64, args: Array[Arg]) {
+    inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverTerm: U64, args: ArgRange) {
         if callee >= self.arena.funcs.count() || receiverTerm == 0U64 || receiverTerm >= self.arena.types.count() { return }
         val f: Func = self.arena.funcs[callee]
         val result: U64 = self.groundFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args)
@@ -171,8 +277,8 @@ pub impl Comp {
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count() {
-                    self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
+                while i < args.len {
+                    self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 val cfi: U64 = self.resolvedCallee(id: exprId)
@@ -195,7 +301,7 @@ pub impl Comp {
                         canGround = self.fnArgsAllGround(args: inferred)
                     }
                     mut val k: U64 = 0
-                    while k < args.count() {
+                    while k < args.len {
                         if k < ps.count() {
                             mut val cctx: U64 = ps[k].ty
                             if cctx != 0U64 && canGround && !(self.tyRefIsGround(ref: cctx)) {
@@ -208,7 +314,8 @@ pub impl Comp {
                                 self.cur.typeArgs = savedA
                             }
                             if cctx != 0U64 && self.tyRefIsGround(ref: cctx) {
-                                self.recordArrayLitCtx(exprId: args[k].expr, ctxRef: cctx)
+                                self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: k).expr, expectedTerm: cctx)
+                                self.recordArrayLitCtx(exprId: self.argAt(args: args, index: k).expr, ctxRef: cctx)
                             }
                         }
                         k += 1
@@ -218,8 +325,8 @@ pub impl Comp {
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
-                while i < args.count() {
-                    self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
+                while i < args.len {
+                    self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 val methodCallee: U64 = self.resolvedCallee(id: exprId)
@@ -243,14 +350,15 @@ pub impl Comp {
                     if mmi < self.arena.funcs.count() {
                         val mps: Array[Param] = self.arena.funcs[mmi].params
                         mut val mk: U64 = 0
-                        while mk < args.count() {
+                        while mk < args.len {
                             if mk < mps.count() {
                                 mut val mctx: U64 = mps[mk].ty
                                 if mrt.ref != 0U64 {
                                     mctx = self.groundUnderInst(instRef: mrt.ref, tyRef: mctx)
                                 }
                                 if mctx != 0U64 && self.tyRefIsGround(ref: mctx) {
-                                    self.recordArrayLitCtx(exprId: args[mk].expr, ctxRef: mctx)
+                                    self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: mk).expr, expectedTerm: mctx)
+                                    self.recordArrayLitCtx(exprId: self.argAt(args: args, index: mk).expr, ctxRef: mctx)
                                 }
                             }
                             mk += 1
@@ -261,8 +369,8 @@ pub impl Comp {
             Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                 self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
-                while i < args.count() {
-                    self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
+                while i < args.len {
+                    self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 val methodCallee: U64 = self.resolvedCallee(id: exprId)
@@ -299,10 +407,22 @@ pub impl Comp {
                     if ctxRef != 0U64 && ty != 0U64 && self.isGenericInst(ref: ty) {
                         ctxRef = self.groundUnderInst(instRef: ty, tyRef: ctxRef)
                     }
-                    if ctxRef != 0U64 && !(self.tyRefIsGround(ref: ctxRef)) {
-                        ctxRef = 0
+                    // A field declaration is a bidirectional semantic input
+                    // for *every* expression placed in that field.  In a
+                    // generic body it is intentionally parametric (`Buffer[E]`),
+                    // so a later BodyInstance can ground `Buffer.new()` to
+                    // `Buffer[String]`.  Dropping it merely because it is not
+                    // ground loses the only result-side substitution for an
+                    // argument-less generic associated call.
+                    self.recordSemanticExprExpectedResult(exprId: fields[i].value, expectedTerm: ctxRef)
+                    // Empty array literals are different: their AST-owned
+                    // literal type must itself be concrete, so retain the old
+                    // ground-only gate for this literal-specific adapter.
+                    mut val arrayCtx: U64 = ctxRef
+                    if arrayCtx != 0U64 && !(self.tyRefIsGround(ref: arrayCtx)) {
+                        arrayCtx = 0U64
                     }
-                    self.recordArrayLitCtx(exprId: fields[i].value, ctxRef: ctxRef)
+                    self.recordArrayLitCtx(exprId: fields[i].value, ctxRef: arrayCtx)
                     i += 1
                 }
             }
@@ -368,13 +488,40 @@ pub impl Comp {
             }
             Expr.OptChain(val base, val cont) => {
                 self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
-                val baseInfo: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
-                val baseRef: U64 = self.typedIrRefOfInfo(ti: baseInfo)
+                mut val baseInfo: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
+                mut val baseRef: U64 = self.parametricExprTerm(exprId: base)
+                if baseRef == 0U64 {
+                    baseRef = self.typedIrRefOfInfo(ti: baseInfo)
+                }
                 if baseRef != 0U64 && baseRef < self.arena.types.count() {
                     val baseTerm: TypeRef = self.arena.types[baseRef]
+                    // The structural semantic term is authoritative over the
+                    // legacy TypeInfo adapter: nested `?.` has already become
+                    // MatchExpr here, whose lexical arm binding cannot be
+                    // re-derived outside the desugar.
+                    baseInfo = self.typeInfoOfRef(ref: baseRef)
                     val valueIndex: U64 = self.chainValueArgIndex(headStart: baseTerm.nameStart, headLen: baseTerm.nameLen)
                     if valueIndex < baseTerm.args.count() {
                         self.recordExpr(exprId: cont, chainHoleRef: baseTerm.args[valueIndex])
+                    }
+                }
+                // `?.` is a semantic desugar, not a late Mono recovery. Record
+                // has now walked its base/continuation in the right lexical
+                // environment and owns their parametric terms; normalize before
+                // Verify can observe this shared AST node. Initial collection
+                // deliberately does not do this because these terms do not yet
+                // exist there.
+                if baseInfo.kind == 2I64 && baseRef != 0U64 && baseRef < self.arena.types.count() {
+                    if self.typeConformsToChain(nameStart: baseInfo.nameStart, nameLen: baseInfo.nameLen) {
+                        val stageRef: U64 = self.chainStageResultRef(baseRef: baseRef, cont: cont)
+                        if stageRef != 0U64 {
+                            val baseTerm: TypeRef = self.arena.types[baseRef]
+                            val valueIndex: U64 = self.chainValueArgIndex(headStart: baseTerm.nameStart, headLen: baseTerm.nameLen)
+                            if valueIndex < baseTerm.args.count() {
+                                self.decls.chainSites.append(<ChainSite exprId=exprId stageRef=stageRef valueRef=baseTerm.args[valueIndex] />)
+                            }
+                        }
+                        self.rewriteOptChainToChainMatch(exprId: exprId, base: base, cont: cont, memberStart: self.exprOffset(id: exprId), headStart: baseInfo.nameStart, headLen: baseInfo.nameLen, stageRef: stageRef)
                     }
                 }
             }
@@ -410,6 +557,7 @@ pub impl Comp {
         match self.arena.stmts[stmtId] {
             Stmt.Let(val mutable, val nameStart, val nameLen, val tyStart, val tyLen, val tyIsArray, val ty, val init) => {
                 self.recordExpr(exprId: init)
+                self.recordSemanticExprExpectedResult(exprId: init, expectedTerm: ty)
                 self.recordArrayLitCtx(exprId: init, ctxRef: ty)
                 // an UNANNOTATED let (`mut val it = self`) infers its local type from the
                 // init (rustc-style local inference, incl. an array-literal init) —
@@ -417,19 +565,36 @@ pub impl Comp {
                 // annotation wins when present (inferLetType passes it through). Shared
                 // with the scan pass so both see the same local type.
                 val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: le.ty, isInout: false, isMut: mutable, owned: true)
+                // An unannotated binding is a semantic boundary: retain the
+                // exact TypeTerm produced for its initializer.  Reopening
+                // legacy `typeOf` here collapses a structurally-grounded
+                // result such as `(first: I64, second: I64)` back to the
+                // method declaration's naked `T`, so every later generic
+                // call observes the wrong argument term.  The legacy LetEff
+                // fields remain the spelling/kind adapter; `ty` is the
+                // semantic source of truth whenever Record supplied one.
+                mut val localTerm: U64 = le.ty
+                if ty == 0U64 {
+                    val initTerm: U64 = self.parametricExprTerm(exprId: init)
+                    if initTerm != 0U64 { localTerm = initTerm }
+                }
+                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: localTerm, isInout: false, isMut: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
                 self.recordExpr(exprId: target)
                 self.recordExpr(exprId: value)
-                self.recordArrayLitCtx(exprId: value, ctxRef: self.typedIrRefOfInfo(ti: self.typeOf(id: target)))
+                val expected: U64 = self.parametricExprTerm(exprId: target)
+                self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expected)
+                self.recordArrayLitCtx(exprId: value, ctxRef: expected)
             }
             Stmt.ExprStmt(val expr) => { self.recordExpr(exprId: expr) }
             Stmt.Return(val value, val hasValue, offset: _) => {
                 if hasValue {
                     self.recordExpr(exprId: value)
                     if self.cur.checkFn < self.arena.funcs.count() {
-                        self.recordArrayLitCtx(exprId: value, ctxRef: self.arena.funcs[self.cur.checkFn].retTy)
+                        val expected: U64 = self.arena.funcs[self.cur.checkFn].retTy
+                        self.recordSemanticExprExpectedResult(exprId: value, expectedTerm: expected)
+                        self.recordArrayLitCtx(exprId: value, ctxRef: expected)
                     }
                 }
             }
@@ -454,10 +619,19 @@ pub impl Comp {
                     self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: varTyStart, tyLen: varTyLen, isArray: false, ty: 0, isInout: false, isMut: false, owned: false)
                 } else {
                     val et: TypeInfo = self.typeOf(id: iter)
+                    val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
+                    val semanticItem: U64 = self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm)
                     if isStruct {
-                        self.addForStructBinds(et: et, binds: binds)
+                        if semanticItem != 0U64 {
+                            self.addForStructBinds(et: self.typeInfoOfRef(ref: semanticItem), binds: binds)
+                        } else {
+                            self.addForStructBinds(et: et, binds: binds)
+                        }
                     } else {
-                        if et.kind == 3 {
+                        if semanticItem != 0U64 {
+                            val itemTi: TypeInfo = self.typeInfoOfRef(ref: semanticItem)
+                            self.addLocal(nameStart: varStart, nameLen: varLen, tyStart: itemTi.nameStart, tyLen: itemTi.nameLen, isArray: itemTi.kind == 3, ty: semanticItem, isInout: false, isMut: false, owned: false)
+                        } else if et.kind == 3 {
                             // carry the ELEMENT ref off the array's carried `Array[E]`
                             // (an `any P` / generic-inst element loses its structure as
                             // a bare name — `for s in shapes` then can't dispatch on s).
@@ -499,10 +673,9 @@ pub impl Comp {
 
     inout fn recordBlock(blkId: U64) {
         val mark: U64 = self.scopeMark()
-        val stmts: Array[U64] = self.arena.blocks[blkId].stmts
         mut val i: U64 = 0
-        while i < stmts.count() {
-            self.recordStmt(stmtId: stmts[i])
+        while i < self.blockStmtCount(blkId: blkId) {
+            self.recordStmt(stmtId: self.blockStmtAt(blkId: blkId, index: i))
             i += 1
         }
         self.popLocals(mark: mark)

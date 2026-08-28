@@ -85,12 +85,12 @@ pub impl Comp {
         return intern(c: inout self, start: arg.labelStart, len: arg.labelLen) == param.nameId
     }
 
-    inout fn paramIndexForArg(params: Array[Param], args: Array[Arg], argIdx: U64) -> U64 {
+    inout fn paramIndexForArg(params: Array[Param], args: ArgRange, argIdx: U64) -> U64 {
         mut val ai: U64 = 0
         mut val pi: U64 = 0
         while pi < params.count() {
-            if ai < args.count() {
-                if self.argMatchesParamLabel(param: params[pi], arg: args[ai]) {
+            if ai < args.len {
+                if self.argMatchesParamLabel(param: params[pi], arg: self.argAt(args: args, index: ai)) {
                     if ai == argIdx {
                         return pi
                     }
@@ -102,12 +102,12 @@ pub impl Comp {
         return params.count()
     }
 
-    inout fn argIndexForParam(params: Array[Param], args: Array[Arg], paramIdx: U64) -> U64 {
+    inout fn argIndexForParam(params: Array[Param], args: ArgRange, paramIdx: U64) -> U64 {
         mut val ai: U64 = 0
         mut val pi: U64 = 0
         while pi < params.count() {
-            if ai < args.count() {
-                if self.argMatchesParamLabel(param: params[pi], arg: args[ai]) {
+            if ai < args.len {
+                if self.argMatchesParamLabel(param: params[pi], arg: self.argAt(args: args, index: ai)) {
                     if pi == paramIdx {
                         return ai
                     }
@@ -116,18 +116,18 @@ pub impl Comp {
             }
             pi += 1U64
         }
-        return args.count()
+        return args.len
     }
 
-    inout fn paramsLabelsOk(params: Array[Param], args: Array[Arg]) -> Bool {
-        if args.count() > params.count() {
+    inout fn paramsLabelsOk(params: Array[Param], args: ArgRange) -> Bool {
+        if args.len > params.count() {
             return false
         }
         mut val ai: U64 = 0
         mut val pi: U64 = 0
         while pi < params.count() {
-            if ai < args.count() {
-                if self.argMatchesParamLabel(param: params[pi], arg: args[ai]) {
+            if ai < args.len {
+                if self.argMatchesParamLabel(param: params[pi], arg: self.argAt(args: args, index: ai)) {
                     ai += 1U64
                 } else {
                     if !(params[pi].hasDefault) {
@@ -141,7 +141,7 @@ pub impl Comp {
             }
             pi += 1U64
         }
-        return ai == args.count()
+        return ai == args.len
     }
 
     // Whether two type refs may be compared by FULL structural identity for overload
@@ -245,12 +245,12 @@ pub impl Comp {
 
     // Whether every provided argument's type matches its parameter's declared type.
     // Defaulted positions have already been checked at the declaration.
-    inout fn paramsTypesMatch(params: Array[Param], args: Array[Arg]) -> Bool {
+    inout fn paramsTypesMatch(params: Array[Param], args: ArgRange) -> Bool {
         mut val ai: U64 = 0
-        while ai < args.count() {
+        while ai < args.len {
             val pi: U64 = self.paramIndexForArg(params: params, args: args, argIdx: ai)
             if pi < params.count() {
-                if !(self.argMatchesParam(argExpr: args[ai].expr, p: params[pi])) {
+                if !(self.argMatchesParam(argExpr: self.argAt(args: args, index: ai).expr, p: params[pi])) {
                     return false
                 }
             } else {
@@ -265,7 +265,7 @@ pub impl Comp {
     // callable form, 1 is a selector-only match (for diagnostics/fallback),
     // and 2 is a complete call match.  Every resolver entry point consumes the
     // same rank instead of composing label and type tests independently.
-    inout fn callableArgMatchRank(f: Func, args: Array[Arg]) -> U64 {
+    inout fn callableArgMatchRank(f: Func, args: ArgRange) -> U64 {
         if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
         if self.paramsTypesMatch(params: f.params, args: args) { return 2U64 }
         return 1U64
@@ -277,7 +277,7 @@ pub impl Comp {
     // merely `fallback: T`); otherwise a closure can spuriously match the
     // eager overload and reach LLVM as an integer.  This is resolver work, not
     // a later validation repair.
-    inout fn groundedMethodArgMatchRank(f: Func, args: Array[Arg], recvRef: U64) -> U64 {
+    inout fn groundedMethodArgMatchRank(f: Func, args: ArgRange, recvRef: U64) -> U64 {
         if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
         if recvRef == 0U64 || recvRef >= self.arena.types.count() {
             return self.callableArgMatchRank(f: f, args: args)
@@ -291,7 +291,7 @@ pub impl Comp {
         self.setSelfItemEnv(recvStart: self.arena.types[recvRef].nameStart, recvLen: self.arena.types[recvRef].nameLen, recvInstRef: recvRef)
         mut val allMatch: Bool = true
         mut val ai: U64 = 0U64
-        while ai < args.count() {
+        while ai < args.len {
             val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
             if pi >= f.params.count() {
                 allMatch = false
@@ -301,14 +301,14 @@ pub impl Comp {
                 // intentionally inferred from the argument later; receiver
                 // binders, by contrast, were just made concrete above.
                 if expected != 0U64 && self.tyRefIsGround(ref: expected) {
-                    val actual: TypeInfo = self.argResolvedTypeInfo(argExpr: args[ai].expr)
+                    val actual: TypeInfo = self.argResolvedTypeInfo(argExpr: self.argAt(args: args, index: ai).expr)
                     if actual.kind == 2I64 {
                         // Keep this discriminator congruent with argMatchesParam:
                         // a plain named type does not necessarily retain a TypeRef
                         // during method lookup, while generic/fn/any/view terms do
                         // require their complete semantic identity.
                         val expectedTerm: TypeRef = self.arena.types[expected]
-                        val actualViews: Array[U64] = self.argViewIds(argExpr: args[ai].expr, ti: actual)
+                        val actualViews: Array[U64] = self.argViewIds(argExpr: self.argAt(args: args, index: ai).expr, ti: actual)
                         val expectedViews: Array[U64] = self.typeRefViewIds(ref: expected)
                         if !(self.sameViewIdSet(a: actualViews, b: expectedViews)) {
                             allMatch = false
@@ -353,10 +353,10 @@ pub impl Comp {
     // untyped integer-literal argument maps to differing parameter types between
     // them. (Overloads that agree on every provided arg type but differ only via
     // defaulted/omitted params are a separate concern, not flagged here.)
-    inout fn overloadsAmbiguous(fa: Func, fb: Func, args: Array[Arg]) -> Bool {
+    inout fn overloadsAmbiguous(fa: Func, fb: Func, args: ArgRange) -> Bool {
         mut val i: U64 = 0
-        while i < args.count() {
-            if self.argIsUntypedIntLit(argExpr: args[i].expr) {
+        while i < args.len {
+            if self.argIsUntypedIntLit(argExpr: self.argAt(args: args, index: i).expr) {
                 val pa: U64 = self.paramIndexForArg(params: fa.params, args: args, argIdx: i)
                 val pb: U64 = self.paramIndexForArg(params: fb.params, args: args, argIdx: i)
                 if pa < fa.params.count() {
@@ -375,12 +375,12 @@ pub impl Comp {
     // Loudly reject (exits) when the two type-matching overloads `a`/`b` are
     // ambiguous for this call — picking the first silently would invent meaning
     // (spec: 補完はする／忖度はしない／曖昧はエラー).
-    inout fn checkOverloadAmbiguity(a: U64, b: U64, args: Array[Arg]) {
+    inout fn checkOverloadAmbiguity(a: U64, b: U64, args: ArgRange) {
         if b != self.arena.funcs.count() {
             if self.overloadsAmbiguous(fa: self.arena.funcs[a], fb: self.arena.funcs[b], args: args) {
                 mut val off: U64 = 0
-                if args.count() > 0 {
-                    off = self.exprOffset(id: args[0].expr)
+                if args.len > 0 {
+                    off = self.exprOffset(id: self.argAt(args: args, index: 0U64).expr)
                 }
                 self.errorAt(offset: off, msg: "ambiguous call: an unsuffixed integer literal matches more than one overload; add a type suffix (e.g. `5I32`)")
             }

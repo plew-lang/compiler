@@ -50,7 +50,7 @@ pub impl LlvmCtx {
     // remaining fields = the method args in order (map's `f`, filter's `p`), under the
     // adapter instance's substitution env. Mirrors the provided method's one-line body
     // `<MapIter inner=self f=f />` with `self` = the receiver.
-    inout fn genLlvmAdapterWrap(c: inout Comp, recv: U64, args: Array[Arg], adapterRef: U64) -> LLVMValueRef {
+    inout fn genLlvmAdapterWrap(c: inout Comp, recv: U64, args: ArgRange, adapterRef: U64) -> LLVMValueRef {
         val gslot: U64 = self.genStructSlot(c: inout c, ref: adapterRef)
         if gslot >= self.genStructRefs.count() {
             compileErrorAt(line: 0, msg: "LLVM backend: iterator adapter struct is not registered")
@@ -62,8 +62,8 @@ pub impl LlvmCtx {
         fields.append(<MakeField nameStart=sd.fields[0].nameStart nameLen=sd.fields[0].nameLen value=recv />)
         mut val i: U64 = 1
         while i < sd.fields.count() {
-            if i - 1U64 < args.count() {
-                fields.append(<MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=args[i - 1U64].expr />)
+            if i - 1U64 < args.len {
+                fields.append(<MakeField nameStart=sd.fields[i].nameStart nameLen=sd.fields[i].nameLen value=c.argAt(args: args, index: i - 1U64).expr />)
             }
             i += 1
         }

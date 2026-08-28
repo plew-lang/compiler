@@ -624,16 +624,22 @@ pub impl Comp {
         return out
     }
 
-    // A fresh `Buffer.new()` call expr (the empty floor buffer). Its element type is
-    // inferred from the expected type at the use site (the `Buffer[K]` dict field), so
-    // none is supplied here — Buffer is opaque single-pointer storage, so the empty
-    // buffer is element-type-agnostic at construction.
-    inout fn synthBufferNew() -> U64 {
+    // A fresh `Buffer.new()` call for one statically selected parametric
+    // receiver. The generated spelling has no source type arguments, so the
+    // receiver belongs in SyntheticCallSite provenance rather than in the AST
+    // node or a later backend recovery.
+    inout fn synthBufferNew(elemRef: U64) -> U64 {
         val bufN: Bind = self.internBytes(s: "Buffer")
         val newN: Bind = self.internBytes(s: "new")
+        val typeArgs: Array[U64] = [elemRef]
+        val receiverTerm: U64 = self.pushType(t: <TypeRef nameStart=bufN.nameStart nameLen=bufN.nameLen args=typeArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
         val recv: U64 = self.pushExpr(e: <Expr.Ident start=bufN.nameStart len=bufN.nameLen />)
         val noArgs: Array[Arg] = []
-        return self.pushExpr(e: <Expr.Method recv=recv nameStart=newN.nameStart nameLen=newN.nameLen args=noArgs />)
+        val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=newN.nameStart nameLen=newN.nameLen args=self.pushArgs(args: noArgs) />)
+        val originSerial: U64 = self.nextExprOriginSerial
+        self.nextExprOriginSerial += 1U64
+        self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=receiverTerm />)
+        return call
     }
 
     // Build a fresh empty
@@ -648,11 +654,12 @@ pub impl Comp {
         val hN: Bind = self.internBytes(s: "hashes")
         val bN: Bind = self.internBytes(s: "buckets")
         val cN: Bind = self.internBytes(s: "entryCount")
-        val emptyKeys: U64 = self.synthBufferNew()
-        val emptyVals: U64 = self.synthBufferNew()
-        val emptyHashes: U64 = self.synthBufferNew()
-        val emptyBuckets: U64 = self.synthBufferNew()
+        val emptyKeys: U64 = self.synthBufferNew(elemRef: ct.args[0])
+        val emptyVals: U64 = self.synthBufferNew(elemRef: ct.args[1])
         val u64N: Bind = self.internBytes(s: "U64")
+        val u64Ref: U64 = self.simpleTypeRef(nameStart: u64N.nameStart, nameLen: u64N.nameLen)
+        val emptyHashes: U64 = self.synthBufferNew(elemRef: u64Ref)
+        val emptyBuckets: U64 = self.synthBufferNew(elemRef: u64Ref)
         val zero: U64 = self.pushExpr(e: <Expr.Int value=0 offset=0 isBool=false tyStart=u64N.nameStart tyLen=u64N.nameLen isNeg=false />)
         mut val fields: Array[MakeField] = []
         // offset = the interned (unloaded) name span: marks these as synthesized so the
@@ -708,20 +715,18 @@ pub impl Comp {
             mut val args: Array[Arg] = []
             args.append(<Arg expr=kId isInout=false labelStart=keyL.nameStart labelLen=keyL.nameLen hasLabel=true />)
             args.append(<Arg expr=vId isInout=false labelStart=valL.nameStart labelLen=valL.nameLen hasLabel=true />)
-            val m: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=insN.nameStart nameLen=insN.nameLen args=args />)
+            val m: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=insN.nameStart nameLen=insN.nameLen args=self.pushArgs(args: args) />)
             stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=m />))
             i += 1
         }
         val giveRecv: U64 = self.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
         val mv: U64 = self.pushExpr(e: <Expr.Move operand=giveRecv isBorrow=false />)
         stmts.append(self.pushStmt(s: <Stmt.Give value=mv />))
-        val thenBlk: U64 = self.arena.blocks.count()
-        self.arena.blocks.append(<Block stmts=stmts />)
+        val thenBlk: U64 = self.pushBlock(stmts: stmts)
         mut val elseStmts: Array[U64] = []
         val elseDict: U64 = self.synthEmptyDict(ctxRef: ctxRef)
         elseStmts.append(self.pushStmt(s: <Stmt.Give value=elseDict />))
-        val elseBlk: U64 = self.arena.blocks.count()
-        self.arena.blocks.append(<Block stmts=elseStmts />)
+        val elseBlk: U64 = self.pushBlock(stmts: elseStmts)
         val cond: U64 = self.pushExpr(e: <Expr.Int value=1 offset=span.start isBool=true tyStart=0 tyLen=0 isNeg=false />)
         val rid: U64 = self.pushExpr(e: <Expr.IfExpr cond=cond thenBlk=thenBlk elseBlk=elseBlk />)
         self.arena.exprSpanStart[rid] = span.start

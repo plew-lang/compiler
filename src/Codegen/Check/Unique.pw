@@ -150,8 +150,8 @@ pub impl Comp {
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count() {
-                    if self.exprMentionsAny(exprId: args[i].expr, forbidden: forbidden) {
+                while i < args.len {
+                    if self.exprMentionsAny(exprId: self.argAt(args: args, index: i).expr, forbidden: forbidden) {
                         return true
                     }
                     i += 1
@@ -163,8 +163,8 @@ pub impl Comp {
                     return true
                 }
                 mut val i: U64 = 0
-                while i < args.count() {
-                    if self.exprMentionsAny(exprId: args[i].expr, forbidden: forbidden) {
+                while i < args.len {
+                    if self.exprMentionsAny(exprId: self.argAt(args: args, index: i).expr, forbidden: forbidden) {
                         return true
                     }
                     i += 1
@@ -176,8 +176,8 @@ pub impl Comp {
                     return true
                 }
                 mut val i: U64 = 0
-                while i < args.count() {
-                    if self.exprMentionsAny(exprId: args[i].expr, forbidden: forbidden) {
+                while i < args.len {
+                    if self.exprMentionsAny(exprId: self.argAt(args: args, index: i).expr, forbidden: forbidden) {
                         return true
                     }
                     i += 1
@@ -317,10 +317,10 @@ pub impl Comp {
         }
     }
 
-    inout fn argsContainAwait(args: Array[Arg]) -> Bool {
+    inout fn argsContainAwait(args: ArgRange) -> Bool {
         mut val i: U64 = 0
-        while i < args.count() {
-            if self.exprContainsAwait(exprId: args[i].expr) { return true }
+        while i < args.len {
+            if self.exprContainsAwait(exprId: self.argAt(args: args, index: i).expr) { return true }
             i += 1U64
         }
         return false
@@ -330,10 +330,9 @@ pub impl Comp {
         if blockId >= self.arena.blocks.count() {
             return false
         }
-        val b: Block = self.arena.blocks[blockId]
         mut val i: U64 = 0
-        while i < b.stmts.count() {
-            if self.stmtContainsAwait(stmtId: b.stmts[i]) { return true }
+        while i < self.blockStmtCount(blkId: blockId) {
+            if self.stmtContainsAwait(stmtId: self.blockStmtAt(blkId: blockId, index: i)) { return true }
             i += 1U64
         }
         return false

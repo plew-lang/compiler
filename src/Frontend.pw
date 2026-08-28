@@ -16,9 +16,9 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, CallProvenance, SemanticExprType, MakeField, Bind, Arg, ArgRange, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, CallSiteKey, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, Bind, Arg, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, CallProvenance, SemanticExprType, MakeField, Bind, Arg, ArgRange, MatchArm, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, CallSiteKey, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -31,6 +31,9 @@ export struct Comp {
     // single owner of the program's data that all passes read; `c.arena.exprs`,
     // `c.arena.funcs`, `c.arena.bytes`, etc.
     pub mut val arena: Arena = <Arena />
+    // Source/synthetic call-origin allocator.  It never participates in AST
+    // indexing and remains stable even if the arena representation changes.
+    pub mut val nextExprOriginSerial: U64 = 1U64
     // declaration / conformance / name side-tables built during loading & analysis
     // (see `Decls`): traits, conformances, method aliases,
     // derive requests, where-bounds, deinits, assoc bindings, pub factories, and
@@ -170,7 +173,24 @@ pub impl Comp {
         val id: U64 = self.arena.exprs.count()
         self.arena.exprs.append(e)
         self.arena.exprSpanStart.append(0U64)
+        self.arena.exprSpanEnd.append(0U64)
+        self.arena.exprOriginSerial.append(self.nextExprOriginSerial)
+        self.nextExprOriginSerial += 1U64
         return id
+    }
+
+    inout fn pushArgs(args: Array[Arg]) -> ArgRange {
+        val start: U64 = self.arena.argPool.count()
+        mut val i: U64 = 0
+        while i < args.count() {
+            self.arena.argPool.append(args[i])
+            i += 1
+        }
+        return <ArgRange start=start len=args.count() />
+    }
+
+    inout fn argAt(args: ArgRange, index: U64) -> Arg {
+        return self.arena.argPool[args.start + index]
     }
     // Append a statement node, returning its arena index.
     inout fn pushStmt(s: Stmt) -> U64 {
@@ -178,6 +198,33 @@ pub impl Comp {
         self.arena.stmts.append(s)
         return id
     }
+    // Store a block's child statements in Arena's single immutable pool. A block is
+    // a slice, not an owning Array, so copying the block during every frontend walk
+    // cannot create ARC traffic for its children.
+    inout fn pushBlock(stmts: Array[U64]) -> U64 {
+        val start: U64 = self.arena.blockStmtPool.count()
+        mut val i: U64 = 0U64
+        while i < stmts.count() {
+            self.arena.blockStmtPool.append(stmts[i])
+            i += 1U64
+        }
+        val id: U64 = self.arena.blocks.count()
+        self.arena.blocks.append(<Block stmtStart=start stmtLen=stmts.count() />)
+        return id
+    }
+
+    inout fn blockStmtCount(blkId: U64) -> U64 {
+        if blkId >= self.arena.blocks.count() { return 0U64 }
+        return self.arena.blocks[blkId].stmtLen
+    }
+
+    inout fn blockStmtAt(blkId: U64, index: U64) -> U64 {
+        if blkId >= self.arena.blocks.count() { return 0U64 }
+        val block: Block = self.arena.blocks[blkId]
+        if index >= block.stmtLen { return 0U64 }
+        return self.arena.blockStmtPool[block.stmtStart + index]
+    }
+
     // Append a structured type reference, returning its Comp.arena.types index. This is
     // the single interning choke point for type names (Phase D): the head name span
     // is interned here so every TypeRef carries its `nameId`, regardless of which
@@ -618,7 +665,7 @@ export fn runFrontend(c: inout Comp) {
     // the first function body lowered (the entry file, which loads before the
     // ambient Prelude) would land at block 0 and be indistinguishable from no body
     // — wrongly skipped by the body-walks that gate on `body != 0`.
-    c.arena.blocks.append(<Block stmts=[] />)
+    c.pushBlock(stmts: [])
     c.genMode = genMode
     c.tcLog = tcLog
     c.asan = asan
@@ -1104,16 +1151,13 @@ export fn runFrontend(c: inout Comp) {
     c.checkFnBounds()
     // typed-IR parametric store: one slot per expression node (0 = unrecorded), sized
     // now while expr ids are stable. A separate array from typeCache (built later).
-    mut val peI: U64 = 0
+    mut val peI: U64 = 0U64
     while peI < c.arena.exprs.count() {
         c.arena.semanticExprTypes.append(<SemanticExprType />)
         peI += 1U64
     }
-    // typed-IR recording (Resolve/Record): a dedicated check-free walk of every
-    // function body stores each expr's PARAMETRIC type; the backend substitutes
-    // per instance at read (groundedTypeOf). Separate from checkGenericBodies on
-    // purpose — recording needs an env (parametric self, non-generic coverage)
-    // the check pass must not run under.
+    // The generic checker still reads the established abstract expression record;
+    // CallTemplate keeps its more-specific finalization provenance separately.
     tracePhase(c: inout c, label: "semantic-expression-record:start")
     c.recordParametricTypes()
     tracePhase(c: inout c, label: "semantic-expression-record:done")

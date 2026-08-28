@@ -377,9 +377,8 @@ pub impl Comp {
             // the receiver type.  Source-qualified calls in that module are
             // therefore valid; callers in other modules still require `pub impl`.
             if mf.extId != 0U64 && mf.body != 0U64 {
-                val block: Block = self.arena.blocks[mf.body]
-                if block.stmts.count() > 0U64 {
-                    if self.moduleOf(offset: offset) == self.moduleOf(offset: self.stmtPrincipalOffset(sid: block.stmts[0])) {
+                if self.blockStmtCount(blkId: mf.body) > 0U64 {
+                    if self.moduleOf(offset: offset) == self.moduleOf(offset: self.stmtPrincipalOffset(sid: self.blockStmtAt(blkId: mf.body, index: 0U64))) {
                         return
                     }
                 }

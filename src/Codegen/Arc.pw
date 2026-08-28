@@ -108,7 +108,7 @@ pub impl Comp {
         val sd: StructDef = self.arena.structs[sidx]
         val b: Bind = self.kwSpan(kw: "deinit", kwLen: 6U64)
         val noArgs: Array[Arg] = []
-        return self.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: noArgs)
+        return self.findMethod(recvStart: sd.nameStart, recvLen: sd.nameLen, nameStart: b.nameStart, nameLen: b.nameLen, args: self.pushArgs(args: noArgs))
     }
 
     // Whether destroying a value of (grounded) type `ref` performs ANY ARC action —

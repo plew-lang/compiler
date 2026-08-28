@@ -47,12 +47,12 @@ pub impl Comp {
             }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count() { self.collectGlobalDeps(id: args[i].expr, into: inout into) i += 1 }
+                while i < args.len { self.collectGlobalDeps(id: self.argAt(args: args, index: i).expr, into: inout into) i += 1 }
             }
             Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
                 self.collectGlobalDeps(id: recv, into: inout into)
                 mut val i: U64 = 0
-                while i < args.count() { self.collectGlobalDeps(id: args[i].expr, into: inout into) i += 1 }
+                while i < args.len { self.collectGlobalDeps(id: self.argAt(args: args, index: i).expr, into: inout into) i += 1 }
             }
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.collectGlobalDeps(id: base, into: inout into) }
             Expr.Index(val base, val index) => {
@@ -153,7 +153,7 @@ pub impl Comp {
                                 args.append(<Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
                                 fi += 1
                             }
-                            self.arena.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=args />
+                            self.arena.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=self.pushArgs(args: args) />
                         }
                     } else {
                         // Anonymous factory form (spec/05): `factory(label: T)` lowers as an
@@ -166,7 +166,7 @@ pub impl Comp {
                                 val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                                 mut val fargs: Array[Arg] = []
                                 fargs.append(<Arg expr=fields[0].value isInout=false labelStart=fields[0].nameStart labelLen=fields[0].nameLen hasLabel=true />)
-                                self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fields[0].nameStart nameLen=fields[0].nameLen args=fargs />
+                                self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fields[0].nameStart nameLen=fields[0].nameLen args=self.pushArgs(args: fargs) />
                             }
                         }
                     }
@@ -179,7 +179,7 @@ pub impl Comp {
                         val recv: U64 = self.pushExpr(e: <Expr.Ident start=tyStart len=tyLen />)
                         mut val cargs: Array[Arg] = []
                         cargs.append(<Arg expr=operand isInout=false labelStart=fromN.nameStart labelLen=fromN.nameLen hasLabel=true />)
-                        self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=cargs />
+                        self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fromN.nameStart nameLen=fromN.nameLen args=self.pushArgs(args: cargs) />
                     }
                 }
                 _ => {}

@@ -6,11 +6,9 @@
 
 pub impl Comp {
     inout fn blockDiverges(blkId: U64) -> Bool {
-        val blk: Block = self.arena.blocks[blkId]
-        val stmts: Array[U64] = blk.stmts
         mut val i: U64 = 0
-        while i < stmts.count() {
-            if self.stmtDiverges(stmtId: stmts[i]) {
+        while i < self.blockStmtCount(blkId: blkId) {
+            if self.stmtDiverges(stmtId: self.blockStmtAt(blkId: blkId, index: i)) {
                 return true
             }
             i += 1
@@ -19,11 +17,9 @@ pub impl Comp {
     }
 
     inout fn blockHasLoopBreak(blkId: U64) -> Bool {
-        val blk: Block = self.arena.blocks[blkId]
-        val stmts: Array[U64] = blk.stmts
         mut val i: U64 = 0
-        while i < stmts.count() {
-            if self.stmtHasLoopBreak(stmtId: stmts[i]) {
+        while i < self.blockStmtCount(blkId: blkId) {
+            if self.stmtHasLoopBreak(stmtId: self.blockStmtAt(blkId: blkId, index: i)) {
                 return true
             }
             i += 1

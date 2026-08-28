@@ -301,11 +301,11 @@ pub impl Comp {
         if blockId == 0U64 || blockId >= self.arena.blocks.count() {
             return 0U64
         }
-        val stmts: Array[U64] = self.arena.blocks[blockId].stmts
-        if stmts.count() == 0U64 {
+        val count: U64 = self.blockStmtCount(blkId: blockId)
+        if count == 0U64 {
             return 0U64
         }
-        match self.arena.stmts[stmts[stmts.count() - 1U64]] {
+        match self.arena.stmts[self.blockStmtAt(blkId: blockId, index: count - 1U64)] {
             Stmt.Give(val value) => { return value }
             _ => { return 0U64 }
         }

@@ -44,9 +44,7 @@ pub impl Comp {
 pub impl Comp {
 
     inout fn blockOfStmts(stmts: Array[U64]) -> U64 {
-        val id: U64 = self.arena.blocks.count()
-        self.arena.blocks.append(<Block stmts=stmts />)
-        return id
+        return self.pushBlock(stmts: stmts)
     }
 
     inout fn blockOfGive(giveExpr: U64) -> U64 {
@@ -275,8 +273,8 @@ pub impl Comp {
                 mut val ns: Array[U64] = []
                 ns.append(capLet)
                 mut val k: U64 = 0
-                while k < self.arena.blocks[bodyIdx].stmts.count() {
-                    ns.append(self.arena.blocks[bodyIdx].stmts[k])
+                while k < self.blockStmtCount(blkId: bodyIdx) {
+                    ns.append(self.blockStmtAt(blkId: bodyIdx, index: k))
                     k += 1
                 }
                 bodyIdx = self.blockOfStmts(stmts: ns)
@@ -486,12 +484,11 @@ pub impl Comp {
                         bi += 1
                     }
                     mut val ob: U64 = 0
-                    while ob < self.arena.blocks[inner].stmts.count() {
-                        bstmts.append(self.arena.blocks[inner].stmts[ob])
+                    while ob < self.blockStmtCount(blkId: inner) {
+                        bstmts.append(self.blockStmtAt(blkId: inner, index: ob))
                         ob += 1
                     }
-                    val bd2: U64 = self.arena.blocks.count()
-                    self.arena.blocks.append(<Block stmts=bstmts />)
+                    val bd2: U64 = self.pushBlock(stmts: bstmts)
                     result = self.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
                     return result
                 }
@@ -657,9 +654,7 @@ pub impl Comp {
             }
             i += 1
         }
-        val id: U64 = self.arena.blocks.count()
-        self.arena.blocks.append(<Block stmts=stmts />)
-        return id
+        return self.pushBlock(stmts: stmts)
     }
 }
 

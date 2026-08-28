@@ -18,16 +18,26 @@ pub impl Comp {
     // ambient Cursor path still supports old declaration-time callers. A body
     // instance must never infer its field type from that ambient state: its
     // ParamId map is the authority.
-    inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64]) -> U64 {
+    inout fn groundTermInEnvironment(ref: U64, params: Array[Bind], values: Array[U64], selfRef: U64 = 0U64, itemRef: U64 = 0U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
+        // Self and Item are proof-derived binders just like ParamId entries,
+        // except their values live on the selected receiver proof rather than
+        // in a method's generic argument vector. They may occur below a
+        // nominal constructor (`MapIter[Self, fn(Item)->B, B]`), so this must
+        // be part of the recursive term substitution rather than a root-only
+        // convenience in groundTermForBody.
+        if t.args.count() == 0U64 {
+            if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") { return selfRef }
+            if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") { return itemRef }
+        }
         if t.isRecord {
             if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
             mut val fields: Array[U64] = []
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
             while ri < t.recordFieldTerms.count() {
-                val next: U64 = self.groundTermInEnvironment(ref: t.recordFieldTerms[ri], params: params, values: values)
+                val next: U64 = self.groundTermInEnvironment(ref: t.recordFieldTerms[ri], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
                 if next != t.recordFieldTerms[ri] { changed = true }
                 fields.append(next)
                 ri += 1U64
@@ -43,12 +53,12 @@ pub impl Comp {
         // receiver and trait-instance arguments as children together.
         if t.assocNameId != 0U64 {
             val receiver: U64 = self.typeTermProjectionReceiver(t: t)
-            val groundedReceiver: U64 = self.groundTermInEnvironment(ref: receiver, params: params, values: values)
+            val groundedReceiver: U64 = self.groundTermInEnvironment(ref: receiver, params: params, values: values, selfRef: selfRef, itemRef: itemRef)
             mut val traitArgs: Array[U64] = []
             mut val changed: Bool = groundedReceiver != receiver
             mut val ai: U64 = 0U64
             while ai < t.assocTraitArgs.count() {
-                val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[ai], params: params, values: values)
+                val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[ai], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
                 if next != t.assocTraitArgs[ai] { changed = true }
                 traitArgs.append(next)
                 ai += 1U64
@@ -61,7 +71,7 @@ pub impl Comp {
             while pi < params.count() && pi < values.count() {
                 if params[pi].paramId == t.paramId {
                     val replacement: U64 = values[pi]
-                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values) }
+                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef) }
                     return ref
                 }
                 pi += 1U64
@@ -85,7 +95,7 @@ pub impl Comp {
                 val binder: Bind = params[pi]
                 if termNameId == binder.nameId || (binder.nameId == 0U64 && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: binder.nameStart, bLen: binder.nameLen)) {
                     val replacement: U64 = values[pi]
-                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values) }
+                    if replacement != ref { return self.groundTermInEnvironment(ref: replacement, params: params, values: values, selfRef: selfRef, itemRef: itemRef) }
                     return ref
                 }
                 pi += 1U64
@@ -96,14 +106,14 @@ pub impl Comp {
         mut val changed: Bool = false
         mut val i: U64 = 0U64
         while i < t.args.count() {
-            val next: U64 = self.groundTermInEnvironment(ref: t.args[i], params: params, values: values)
+            val next: U64 = self.groundTermInEnvironment(ref: t.args[i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
             if next != t.args[i] { changed = true }
             args.append(next)
             i += 1U64
         }
         i = 0U64
         while i < t.assocTraitArgs.count() {
-            val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[i], params: params, values: values)
+            val next: U64 = self.groundTermInEnvironment(ref: t.assocTraitArgs[i], params: params, values: values, selfRef: selfRef, itemRef: itemRef)
             if next != t.assocTraitArgs[i] { changed = true }
             assocArgs.append(next)
             i += 1U64
@@ -130,7 +140,7 @@ pub impl Comp {
                 return itemRef
             }
         }
-        val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args)
+        val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
         if explicit != ref { return explicit }
         // ParamId-stamped terms are fully decided by the immutable map above.
         // Only old zero-ParamId terms retain the temporary compatibility path
@@ -728,7 +738,15 @@ pub impl Comp {
         // generic parameters.  A non-Iterator same-named output is ambiguous
         // here and deliberately yields no Item environment rather than being
         // selected by declaration order.
-        val out: U64 = self.assocBindingFor(baseRef: receiver, traitId: 0U64, traitOwner: 0U64, traitArgs: [], assocId: itemId)
+        // `Item` here is not a spelling-level search: `for` is defined by
+        // the Core `Iterator` contract.  Carry that resolved owner into the
+        // proof query, otherwise `associatedOutputInProof` quite correctly
+        // rejects every selected witness as belonging to a different trait
+        // and callers fall back to a naked declaration `E`.
+        val traitOwner: U64 = self.coreTraitOwner(name: "Iterator")
+        if traitOwner == 0U64 { return 0U64 }
+        val traitId: U64 = self.internBytes(s: "Iterator").nameId
+        val out: U64 = self.assocBindingFor(baseRef: receiver, traitId: traitId, traitOwner: traitOwner, traitArgs: [], assocId: itemId)
         return out
     }
 
@@ -765,7 +783,14 @@ pub impl Comp {
                     if bindingId < self.decls.assocBindings.count() {
                         val ab: AssocBinding = self.decls.assocBindings[bindingId]
                         if ab.nameId == assocId {
-                        found = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: witness)
+                        // The associated output was lowered in the binding's
+                        // lexical impl scope. A Conform currently mirrors
+                        // that scope for ordinary impls, but it is not the
+                        // owner of `ab.ty` (and need not remain identical for
+                        // generated/conferred witnesses). Ground through the
+                        // binding's own ParamId list so the proof substitution
+                        // is applied to the terms it actually binds.
+                        found = self.groundWitnessTypeTerm(ref: ab.ty, params: ab.typeParams, matchResult: witness)
                         count += 1U64
                         }
                     }
@@ -797,7 +822,7 @@ pub impl Comp {
                     if bindingId < self.decls.assocBindings.count() {
                         val ab: AssocBinding = self.decls.assocBindings[bindingId]
                         if ab.nameId == assocId {
-                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: terminal)
+                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: ab.typeParams, matchResult: terminal)
                             count += 1U64
                         }
                     }
@@ -821,10 +846,18 @@ pub impl Comp {
             self.cur.selfRef = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
         }
         self.cur.itemRef = 0U64
-        if !(f.isProvided) { return }
+        self.cur.itemRef = self.bodyProvidedItemTerm(f: f, environment: environment)
+    }
+
+    // `Item` is a derived fact of one selected provided-method proof, never a
+    // positional entry in the method's generic-argument vector.  Keep this
+    // pure query beside ConformanceProof consumption so every frontend and
+    // Mono caller obtains the same output without borrowing Cursor state.
+    inout fn bodyProvidedItemTerm(f: Func, environment: InstanceEnvironment) -> U64 {
+        if !(f.isProvided) { return 0U64 }
         val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
         val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
-        self.cur.itemRef = self.associatedOutputInProof(proof: environment.proof, traitOwner: f.originTraitOwner, assocId: itemId)
+        return self.associatedOutputInProof(proof: environment.proof, traitOwner: f.originTraitOwner, assocId: itemId)
     }
 
     inout fn clearSelfItemEnv() {

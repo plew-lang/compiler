@@ -63,6 +63,6 @@ pub impl Comp {
             val l1: Bind = self.kwSpan(kw: arg1Label, kwLen: arg1Label.bytes().count())
             args.append(<Arg expr=arg1 isInout=false labelStart=l1.nameStart labelLen=l1.nameLen hasLabel=true />)
         }
-        return self.pushExpr(e: <Expr.Method recv=recv nameStart=nm.nameStart nameLen=nm.nameLen args=args />)
+        return self.pushExpr(e: <Expr.Method recv=recv nameStart=nm.nameStart nameLen=nm.nameLen args=self.pushArgs(args: args) />)
     }
 }

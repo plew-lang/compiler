@@ -106,7 +106,7 @@ pub impl Comp {
             pargs.append(<Arg expr=srcE isInout=false labelStart=srcN.nameStart labelLen=srcN.nameLen hasLabel=true />)
             pargs.append(<Arg expr=startE isInout=false labelStart=startN.nameStart labelLen=startN.nameLen hasLabel=true />)
             pargs.append(<Arg expr=endE isInout=false labelStart=endN.nameStart labelLen=endN.nameLen hasLabel=true />)
-            val parseCall: U64 = self.pushExpr(e: <Expr.Call nameStart=parseN.nameStart nameLen=parseN.nameLen args=pargs />)
+            val parseCall: U64 = self.pushExpr(e: <Expr.Call nameStart=parseN.nameStart nameLen=parseN.nameLen args=self.pushArgs(args: pargs) />)
             // the receiver of `.derive`: a bare `@[X]` (no args) names the type/trait X
             // directly (assoc `Derive`); `@[X(args)]` constructs `<X args/>` first
             // (instance `ParameterizedDerive`, `self` = the config).
@@ -119,16 +119,15 @@ pub impl Comp {
             // `recv.derive(input: parseItem(...))`
             mut val dargs: Array[Arg] = []
             dargs.append(<Arg expr=parseCall isInout=false labelStart=inputN.nameStart labelLen=inputN.nameLen hasLabel=true />)
-            val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=deriveN.nameStart nameLen=deriveN.nameLen args=dargs />)
+            val call: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=deriveN.nameStart nameLen=deriveN.nameLen args=self.pushArgs(args: dargs) />)
             // `write(s: <that>)`.
             mut val wargs: Array[Arg] = []
             wargs.append(<Arg expr=call isInout=false labelStart=sN.nameStart labelLen=sN.nameLen hasLabel=true />)
-            val wc: U64 = self.pushExpr(e: <Expr.Call nameStart=writeN.nameStart nameLen=writeN.nameLen args=wargs />)
+            val wc: U64 = self.pushExpr(e: <Expr.Call nameStart=writeN.nameStart nameLen=writeN.nameLen args=self.pushArgs(args: wargs) />)
             stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=wc />))
             i += 1
         }
-        val blkId: U64 = self.arena.blocks.count()
-        self.arena.blocks.append(<Block stmts=stmts />)
+        val blkId: U64 = self.pushBlock(stmts: stmts)
         val noTP: Array[Bind] = []
         val noParams: Array[Param] = []
         self.genMainIdx = self.arena.funcs.count()

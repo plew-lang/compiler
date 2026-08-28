@@ -4,7 +4,7 @@
 // selected by Mono. Source-view spelling is never re-resolved in LLVM.
 
 pub impl LlvmCtx {
-    inout fn genLlvmMethod(c: inout Comp, callId: U64, recv: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> LLVMValueRef {
+    inout fn genLlvmMethod(c: inout Comp, callId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> LLVMValueRef {
         // an existential `any P` receiver (spec/08): dynamic dispatch through the value's
         // vtable. The receiver's TypeRef carries isAny.
         val finalMfi: U64 = c.bodyCallee(exprId: callId)

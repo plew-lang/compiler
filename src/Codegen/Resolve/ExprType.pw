@@ -13,7 +13,7 @@ pub impl Comp {
     // (tpStart/tpLen — the conformer IS the type param, so it grounds per instance); a
     // structured return mentioning `Self`/`Item` stays unknown for now (recording it
     // raw would let the ENCLOSING method's Self substitute in — a different Self).
-    inout fn traitMemberRetInfo(traitNameId: U64, traitArity: U64, qName: U64, args: Array[Arg], tpStart: U64, tpLen: U64, depth: U64, useMod: U64) -> TypeInfo {
+    inout fn traitMemberRetInfo(traitNameId: U64, traitArity: U64, qName: U64, args: ArgRange, tpStart: U64, tpLen: U64, depth: U64, useMod: U64) -> TypeInfo {
         if depth > 64U64 {
             return scalarInfo()
         }
@@ -142,7 +142,7 @@ pub impl Comp {
     // derive `T` in `impl[T] Box[T]` from the same receiver TypeRef as well.  Keeping
     // this here (rather than in either syntax arm) makes source qualification a pure
     // selection concern, never a second generic-inference mechanism.
-    inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: Array[Arg]) -> U64 {
+    inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
         // Declaration-time result typing must accept a symbolic generic
         // receiver (`Box[T_outer]`) as well as a concrete one (`Box[I64]`).
         // The receiver's argument terms still provide the complete mapping to
@@ -205,7 +205,19 @@ pub impl Comp {
         // an immutable map cannot, so the returned outer `T` remains the
         // caller's lexical term for later BodyInstance grounding.
         val environment: InstanceEnvironment = <InstanceEnvironment params=f.typeParams args=fullArgs receiverRef=recvTy.ref />
-        val grounded: U64 = self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: recvTy.ref, itemRef: 0U64)
+        // A provided trait method's `Item` is part of its selected receiver
+        // proof, just like `Self`; it is not a free declaration spelling.
+        // Record-time return construction must carry both or a chain such as
+        // `counter.map(...).filter(...)` freezes the trait template's naked
+        // `Item` into the outer call provenance before Mono can see it.
+        mut val itemRef: U64 = 0U64
+        if f.isProvided && f.originTraitOwner != 0U64 {
+            val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+            val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
+            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: recvTy.ref, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: f.recvTraitArgs)
+            itemRef = self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId)
+        }
+        val grounded: U64 = self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: recvTy.ref, itemRef: itemRef)
         if grounded != 0U64 {
             return grounded
         }
@@ -229,7 +241,7 @@ pub impl Comp {
     // The non-generic receiver half of the same final-callable calculation.  `Self`
     // and `Item` are receiver-relative even when the receiver itself has no type
     // arguments; method-owned parameters are inferred from the call arguments.
-    inout fn groundConcreteFinalMethodReturn(f: Func, recvTy: TypeInfo, args: Array[Arg]) -> U64 {
+    inout fn groundConcreteFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
         if f.retTy == 0U64 || recvTy.nameLen == 0U64 || self.isGenericInst(ref: recvTy.ref) {
             return 0U64
         }
@@ -278,7 +290,7 @@ pub impl Comp {
     // The return TypeInfo of `value.name(args)` where `value: T` and T is a bound type
     // parameter of `fnIdx` — rustc-style bound-based method typing: search each of T's
     // bound traits for the member and take its declared return.
-    inout fn boundMethodRetInfo(fnIdx: U64, receiverRef: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: Array[Arg]) -> TypeInfo {
+    inout fn boundMethodRetInfo(fnIdx: U64, receiverRef: U64, tpStart: U64, tpLen: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> TypeInfo {
         // The static proof owns both requirement selection and its associated
         // output predicates. Reify the complete return TypeTerm before the
         // older name-shaped fallback; this handles nested results such as
@@ -658,8 +670,8 @@ pub impl Comp {
                 // the base has no matching `pow` (a user free `pow` with other labels).
                 mut val fi: U64 = self.arena.funcs.count()
                 if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "pow") {
-                    if args.count() == 2U64 {
-                        val br: U64 = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: args[0].expr, chainHoleRef: chainHoleRef))
+                    if args.len == 2U64 {
+                        val br: U64 = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: self.argAt(args: args, index: 0U64).expr, chainHoleRef: chainHoleRef))
                         if br != 0U64 {
                             val brt: TypeRef = self.arena.types[br]
                             val powN: Bind = self.kwSpan(kw: "pow", kwLen: 3U64)

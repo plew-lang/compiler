@@ -212,17 +212,17 @@ pub impl LlvmCtx {
             Expr.Binary(op: _, val lhs, val rhs) => { self.scanExprClosures(c: inout c, id: lhs) self.scanExprClosures(c: inout c, id: rhs) }
             Expr.Call(nameStart: _, nameLen: _, val args) => {
                 mut val i: U64 = 0
-                while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.len { self.scanExprClosures(c: inout c, id: c.argAt(args: args, index: i).expr) i += 1 }
             }
             Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
                 self.scanExprClosures(c: inout c, id: recv)
                 mut val i: U64 = 0
-                while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.len { self.scanExprClosures(c: inout c, id: c.argAt(args: args, index: i).expr) i += 1 }
             }
             Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
                 self.scanExprClosures(c: inout c, id: recv)
                 mut val i: U64 = 0
-                while i < args.count() { self.scanExprClosures(c: inout c, id: args[i].expr) i += 1 }
+                while i < args.len { self.scanExprClosures(c: inout c, id: c.argAt(args: args, index: i).expr) i += 1 }
             }
             Expr.ExtView(val recv, source: _, strip: _) => {
                 self.scanExprClosures(c: inout c, id: recv)
@@ -300,10 +300,9 @@ pub impl LlvmCtx {
         if id == 0U64 {
             return
         }
-        val blk: Block = c.arena.blocks[id]
         mut val i: U64 = 0
-        while i < blk.stmts.count() {
-            self.scanStmtClosures(c: inout c, id: blk.stmts[i])
+        while i < c.blockStmtCount(blkId: id) {
+            self.scanStmtClosures(c: inout c, id: c.blockStmtAt(blkId: id, index: i))
             i += 1
         }
     }

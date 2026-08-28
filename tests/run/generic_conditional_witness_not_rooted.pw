@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+
+// A generic layout may be reached without satisfying every conditional
+// conformance declared for it. `Array[NoEq]` is valid as a value, but it must
+// not cause the `Buffer[T] as Eq where T: Eq` witness body to be emitted.
+struct NoEq { pub val value: I64 }
+pub impl NoEq { factory }
+
+fn main() {
+    val values: Array[NoEq] = [<NoEq value=7 />]
+    print(values.count())
+}
