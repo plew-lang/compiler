@@ -625,6 +625,10 @@ pub impl Comp {
                 } else {
                     val et: TypeInfo = self.typeOf(id: iter)
                     val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
+                    val iteratorReceiver: CallTemplateReceiver = <CallTemplateReceiver.Term term=iterTerm />
+                    val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
+                    self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver)
+                    self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver)
                     val semanticItem: U64 = self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm)
                     if isStruct {
                         if semanticItem != 0U64 {

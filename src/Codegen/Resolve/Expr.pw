@@ -308,6 +308,24 @@ pub impl Comp {
         return self.sourceCallSiteKey(fnIdx: fnIdx, exprId: exprId)
     }
 
+    // `for` protocol calls have no Expr node. Their template key must match
+    // Mono's statement-site final descriptor key exactly.
+    inout fn templateProtocolSiteKey(fnIdx: U64, stmtId: U64, slot: U64) -> CallSiteKey {
+        val owner: U64 = self.callTemplateOwner(fnIdx: self.callTemplateBodyOwner(fnIdx: fnIdx))
+        mut val start: U64 = 0U64
+        mut val end: U64 = 0U64
+        if stmtId < self.arena.stmts.count() {
+            match self.arena.stmts[stmtId] {
+                Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, val iter, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => {
+                    start = self.exprOffset(id: iter)
+                    if iter < self.arena.exprSpanEnd.count() { end = self.arena.exprSpanEnd[iter] }
+                }
+                _ => {}
+            }
+        }
+        return <CallSiteKey ownerFnIdx=owner originKind=3U64 originStart=start originEnd=end originSerial=stmtId + 1U64 slot=slot />
+    }
+
     fn sameCallSiteKey(a: CallSiteKey, b: CallSiteKey) -> Bool {
         return a.ownerFnIdx == b.ownerFnIdx && a.originKind == b.originKind && a.originStart == b.originStart && a.originEnd == b.originEnd && a.originSerial == b.originSerial && a.slot == b.slot
     }
@@ -331,6 +349,17 @@ pub impl Comp {
             return
         }
         self.decls.callTemplates.append(<CallTemplate siteKey=siteKey callee=callee receiver=<CallTemplateReceiver.Term term=receiverTerm /> calleeTypeArgs=calleeTypeArgs />)
+    }
+
+    inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver) {
+        val key: CallSiteKey = self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot)
+        val index: U64 = self.callTemplateIndex(siteKey: key)
+        if index < self.decls.callTemplates.count() {
+            val prior: CallTemplate = self.decls.callTemplates[index]
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey callee=prior.callee receiver=receiver calleeTypeArgs=prior.calleeTypeArgs expectedResultTerm=prior.expectedResultTerm />)
+            return
+        }
+        self.decls.callTemplates.append(<CallTemplate siteKey=key receiver=receiver />)
     }
 
     inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) {
