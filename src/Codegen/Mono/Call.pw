@@ -1013,7 +1013,11 @@ pub impl Comp {
             // This is resolved here, not patched into a partial descriptor.
             selectedResultRef = selectedReceiverRef
         }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef />
+        mut val target: CallTarget = <CallTarget.NoCallable />
+        if callee < self.arena.funcs.count() {
+            target = <CallTarget.Direct />
+        }
+        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef target=target />
         self.recordSelectedBodyCallee(selection: selection)
         if callee < self.arena.funcs.count() {
             self.enqueueSelectedCallee(selection: selection)
@@ -1116,11 +1120,11 @@ pub impl Comp {
         }
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], targetKind: U64 = 0U64, targetTraitIdx: U64 = 0U64, targetSlot: U64 = 0U64, targetBindingDeclStart: U64 = 0U64, targetTypeRef: U64 = 0U64) {
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], target: CallTarget = <CallTarget.Direct />) {
         val bodyId: U64 = self.currentBodyInstanceId()
         val siteKey: CallSiteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
-        self.arena.finalCallees.append(<CallResolution bodyId=bodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=parameterTypeRefs recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
+        self.arena.finalCallees.append(<CallResolution bodyId=bodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=parameterTypeRefs recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef target=target />)
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
         mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
         while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
@@ -1154,7 +1158,7 @@ pub impl Comp {
         // Dynamic and primitive/no-callable selections have no such static
         // grounding step, so they continue below and publish their completed
         // target decision directly.
-        if selection.targetKind == 0U64 && callee < self.arena.funcs.count() {
+        if self.callTargetIsDirect(target: selection.target) && callee < self.arena.funcs.count() {
             return
         }
         val priorIdx: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
@@ -1262,10 +1266,10 @@ pub impl Comp {
             if finalResult == 0U64 && resultTypeRef != 0U64 { finalResult = resultTypeRef }
             mut val finalArgs: Array[U64] = prior.calleeTypeArgs
             if finalArgs.count() == 0U64 && calleeTypeArgs.count() > 0U64 { finalArgs = calleeTypeArgs }
-            self.replaceFinalCallee(entry: priorIdx, resolution: <CallResolution bodyId=prior.bodyId siteKey=prior.siteKey exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs parameterTypeRefs=prior.parameterTypeRefs recvTypeRef=finalRecv resultTypeRef=finalResult targetKind=prior.targetKind targetTraitIdx=prior.targetTraitIdx targetSlot=prior.targetSlot targetBindingDeclStart=prior.targetBindingDeclStart targetTypeRef=prior.targetTypeRef />)
+            self.replaceFinalCallee(entry: priorIdx, resolution: <CallResolution bodyId=prior.bodyId siteKey=prior.siteKey exprId=prior.exprId siteIsStmt=prior.siteIsStmt slot=prior.slot callee=finalCallee calleeTypeArgs=finalArgs parameterTypeRefs=prior.parameterTypeRefs recvTypeRef=finalRecv resultTypeRef=finalResult target=prior.target />)
             return
         }
-        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef, targetKind: selection.targetKind, targetTraitIdx: selection.targetTraitIdx, targetSlot: selection.targetSlot, targetBindingDeclStart: selection.targetBindingDeclStart, targetTypeRef: selection.targetTypeRef)
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvTypeRef, resultTypeRef: resultTypeRef, target: selection.target)
     }
 
     // Capture expected-result provenance at the semantic selection boundary.
@@ -1426,7 +1430,7 @@ pub impl Comp {
     }
 
     inout fn sameStaticCallResolution(e: CallResolution, callee: U64, recvRef: U64, calleeArgs: Array[U64], parameterTypeRefs: Array[U64], resultRef: U64) -> Bool {
-        return e.targetKind == 0U64 && e.callee == callee && self.typeRefEq(a: e.recvTypeRef, b: recvRef) && self.typeRefEq(a: e.resultTypeRef, b: resultRef) && self.sameResolvedTypeRefs(a: e.calleeTypeArgs, b: calleeArgs) && self.sameResolvedTypeRefs(a: e.parameterTypeRefs, b: parameterTypeRefs)
+        return self.callTargetIsDirect(target: e.target) && e.callee == callee && self.typeRefEq(a: e.recvTypeRef, b: recvRef) && self.typeRefEq(a: e.resultTypeRef, b: resultRef) && self.sameResolvedTypeRefs(a: e.calleeTypeArgs, b: calleeArgs) && self.sameResolvedTypeRefs(a: e.parameterTypeRefs, b: parameterTypeRefs)
     }
 
     inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], siteIsStmt: Bool = false, slot: U64 = 0U64) {
@@ -1447,14 +1451,10 @@ pub impl Comp {
         self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, calleeTypeArgs: calleeArgs, parameterTypeRefs: params)
     }
 
-    // Dynamic calls are selected in Mono just like ordinary Func calls.  The
-    // target descriptor is deliberately stored beside the static callee rather
-    // than reconstructed from a method spelling in LLVM.
-    inout fn setBodyCalleeTarget(exprId: U64, targetKind: U64, targetTraitIdx: U64, targetSlot: U64, targetTypeRef: U64 = 0U64, targetBindingDeclStart: U64 = 0U64, siteIsStmt: Bool = false, slot: U64 = 0U64) {
-        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        if i < self.finalCalleeCount() {
-            val e: CallResolution = self.arena.finalCallees[i]
-            self.replaceFinalCallee(entry: i, resolution: <CallResolution bodyId=e.bodyId siteKey=e.siteKey exprId=e.exprId siteIsStmt=e.siteIsStmt slot=e.slot callee=e.callee calleeTypeArgs=e.calleeTypeArgs parameterTypeRefs=e.parameterTypeRefs recvTypeRef=e.recvTypeRef resultTypeRef=e.resultTypeRef targetKind=targetKind targetTraitIdx=targetTraitIdx targetSlot=targetSlot targetBindingDeclStart=targetBindingDeclStart targetTypeRef=targetTypeRef />)
+    fn callTargetIsDirect(target: CallTarget) -> Bool {
+        match target {
+            CallTarget.Direct => { return true }
+            _ => { return false }
         }
     }
 
@@ -1476,7 +1476,12 @@ pub impl Comp {
 
     inout fn bodyCalleeTargetBindingDeclStart(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
-        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].targetBindingDeclStart }
+        if i < self.finalCalleeCount() {
+            match self.arena.finalCallees[i].target {
+                CallTarget.ClosureLocal(val bindingDeclStart, fnTypeRef: _) => { return bindingDeclStart }
+                _ => {}
+            }
+        }
         return 0U64
     }
 
@@ -1484,10 +1489,24 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         if i < self.finalCalleeCount() {
             val e: CallResolution = self.arena.finalCallees[i]
-            if part == 0U64 { return e.targetKind }
-            if part == 1U64 { return e.targetTraitIdx }
-            if part == 2U64 { return e.targetSlot }
-            return e.targetTypeRef
+            match e.target {
+                CallTarget.Direct => { if part == 0U64 { return 0U64 } }
+                CallTarget.NoCallable => { if part == 0U64 { return 4U64 } }
+                CallTarget.ExistentialRequirement(val traitIdx, slot: val targetSlot) => {
+                    if part == 0U64 { return 1U64 }
+                    if part == 1U64 { return traitIdx }
+                    if part == 2U64 { return targetSlot }
+                }
+                CallTarget.ClosureLocal(bindingDeclStart: _, val fnTypeRef) => {
+                    if part == 0U64 { return 2U64 }
+                    if part == 3U64 { return fnTypeRef }
+                }
+                CallTarget.ClosureField(val fieldIndex, val fnTypeRef) => {
+                    if part == 0U64 { return 3U64 }
+                    if part == 2U64 { return fieldIndex }
+                    if part == 3U64 { return fnTypeRef }
+                }
+            }
         }
         return 0U64
     }
@@ -1542,7 +1561,7 @@ pub impl Comp {
             if fnTy.args.count() > 0U64 {
                 resultRef = fnTy.args[0]
             }
-            return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef targetKind=3U64 targetSlot=fi targetTypeRef=fnRef />
+            return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fi fnTypeRef=fnRef /> />
         }
         return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef />
     }
@@ -1583,7 +1602,7 @@ pub impl Comp {
                         val fnTy: TypeRef = self.arena.types[fnRef]
                         mut val resultRef: U64 = 0U64
                         if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
-                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef targetKind=2U64 targetBindingDeclStart=self.cur.locals[li].nameStart targetTypeRef=fnRef />
+                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=self.cur.locals[li].nameStart fnTypeRef=fnRef /> />
                     }
                 }
             }
@@ -1595,11 +1614,11 @@ pub impl Comp {
                         self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized")
                     } else {
                         val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
-                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref targetKind=1U64 targetTraitIdx=traitIdx targetSlot=reqSlot />
+                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> />
                     }
                 }
                 val fieldSelection: CallSiteSelection = self.selectedClosureFieldCall(exprId: exprId, callee: callee, recvRef: recvRef, resultHintRef: resultHintRef, nameStart: ns, nameLen: nl)
-                if fieldSelection.targetKind == 3U64 { return fieldSelection }
+                match fieldSelection.target { CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => { return fieldSelection } _ => {} }
             }
             Expr.ExtMethod(recv: _, source: _, nameStart: val ns, nameLen: val nl, args: val args) => {
                 if recvRef != 0U64 && recvRef < self.arena.types.count() && self.arena.types[recvRef].isAny {
@@ -1607,11 +1626,11 @@ pub impl Comp {
                     val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
                     if traitIdx < self.decls.traits.count() && reqSlot != 0U64 {
                         val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
-                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref targetKind=1U64 targetTraitIdx=traitIdx targetSlot=reqSlot />
+                        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> />
                     }
                 }
                 val fieldSelection: CallSiteSelection = self.selectedClosureFieldCall(exprId: exprId, callee: callee, recvRef: recvRef, resultHintRef: resultHintRef, nameStart: ns, nameLen: nl)
-                if fieldSelection.targetKind == 3U64 { return fieldSelection }
+                match fieldSelection.target { CallTarget.ClosureField(fieldIndex: _, fnTypeRef: _) => { return fieldSelection } _ => {} }
             }
             _ => {}
         }
@@ -1925,7 +1944,7 @@ pub impl Comp {
     // calls have a different, already-selected target carrier and are checked
     // when that carrier is made into a sum type.
     inout fn finalStaticCalleeIsComplete(e: CallResolution) -> Bool {
-        if e.targetKind != 0U64 || e.callee >= self.arena.funcs.count() {
+        if !(self.callTargetIsDirect(target: e.target)) || e.callee >= self.arena.funcs.count() {
             return true
         }
         val f: Func = self.arena.funcs[e.callee]
@@ -3094,7 +3113,7 @@ pub impl Comp {
                             self.errorAt(offset: 0U64, msg: "internal diagnostic: final existential iterator target was not finalized")
                         } else {
                             val nextReq: Func = self.decls.traits[traitIdx].reqs[nextSlot - 1U64]
-                            self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=initialRef resultRef=self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref targetKind=1U64 targetTraitIdx=traitIdx targetSlot=nextSlot />)
+                            self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=initialRef resultRef=self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=nextSlot /> />)
                         }
                     }
                     val et: TypeInfo = self.typeOf(id: iter)

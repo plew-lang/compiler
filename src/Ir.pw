@@ -894,6 +894,20 @@ export struct InstanceEnvironment {
     pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
 }
 
+// The destination of a resolved call.  This is a sum type rather than a
+// `kind` plus optional parallel fields: an existential requirement cannot
+// accidentally carry a closure binding, and a closure field cannot omit its
+// callable type.  `NoCallable` is the selected outcome for primitive syntax
+// whose lowering has no function declaration (for example a floor operator),
+// not a missing resolution.
+export enum CallTarget {
+    Direct
+    NoCallable
+    ExistentialRequirement(traitIdx: U64, slot: U64)
+    ClosureLocal(bindingDeclStart: U64, fnTypeRef: U64)
+    ClosureField(fieldIndex: U64, fnTypeRef: U64)
+}
+
 // The selected callable for one semantic call site while compiling one concrete
 // function body instance.  A site can be a written expression or an implicit
 // call introduced by a control construct (for example `for`'s iterator/next
@@ -932,22 +946,9 @@ export struct CallResolution {
     // must consume the concrete adapter result selected by Mono, never infer it
     // again from the receiver expression or method spelling.
     pub val resultTypeRef: U64 = 0U64
-    // Non-static call targets use the same final-callee record.  kind 0 is a
-    // Func (or an explicit no-callable sentinel); kind 1 is an existential
-    // requirement, whose trait table index and 1-based vtable slot are fixed
-    // by Mono.  LLVM must not re-select either from source spellings.
-    pub val targetKind: U64 = 0U64
-    pub val targetTraitIdx: U64 = 0U64
-    pub val targetSlot: U64 = 0U64
-    // A closure-local target is a resolved lexical binding, not a Mono-local
-    // array position or the call's spelling.  Its declaration offset is stable
-    // across lowering even when later storage introduces a same-named local.
-    // LLVM uses this identity only to materialize the already-selected value.
-    pub val targetBindingDeclStart: U64 = 0U64
-    // Dynamic target's already-grounded callable value type.  For a closure
-    // local/field this is its `fn(...) -> R` TypeRef; no LLVM-side recovery is
-    // permitted from the call spelling.
-    pub val targetTypeRef: U64 = 0U64
+    // LLVM consumes this selected target directly and never re-selects it
+    // from source spellings.
+    pub val target: CallTarget = <CallTarget.Direct />
 }
 
 // Frontend-owned input to final call construction.  It intentionally carries
@@ -968,11 +969,7 @@ export struct CallSiteSelection {
     pub val calleeTypeArgs: Array[U64] = []
     pub val resultHintRef: U64 = 0U64
     pub val resultRef: U64 = 0U64
-    pub val targetKind: U64 = 0U64
-    pub val targetTraitIdx: U64 = 0U64
-    pub val targetSlot: U64 = 0U64
-    pub val targetBindingDeclStart: U64 = 0U64
-    pub val targetTypeRef: U64 = 0U64
+    pub val target: CallTarget = <CallTarget.Direct />
 }
 pub impl CallSiteSelection { factory }
 
