@@ -1406,6 +1406,15 @@ export struct CallSiteKey {
 }
 pub impl CallSiteKey { factory }
 
+// A call template's receiver is either an explicit parametric term or the
+// completed result of an earlier implicit protocol slot. Keeping this as a sum
+// type prevents a template from accidentally carrying both sources.
+export enum CallTemplateReceiver {
+    None
+    Term(term: U64)
+    PriorProtocolResult(slot: U64)
+}
+
 // Parametric call semantics are owned by a declaration body and CallSiteKey,
 // never by ExprId. Expected-result context is part of this template, while
 // the expression result TypeTerm remains in SemanticExprType for generic type
@@ -1413,7 +1422,7 @@ pub impl CallSiteKey { factory }
 export struct CallTemplate {
     pub val siteKey: CallSiteKey = <CallSiteKey />
     pub val callee: U64 = 0U64
-    pub val receiverTerm: U64 = 0U64
+    pub val receiver: CallTemplateReceiver = <CallTemplateReceiver.None />
     pub val calleeTypeArgs: Array[U64] = []
     pub val expectedResultTerm: U64 = 0U64
 }

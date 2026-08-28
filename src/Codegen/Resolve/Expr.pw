@@ -327,10 +327,10 @@ pub impl Comp {
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey callee=callee receiverTerm=receiverTerm calleeTypeArgs=calleeTypeArgs expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey callee=callee receiver=<CallTemplateReceiver.Term term=receiverTerm /> calleeTypeArgs=calleeTypeArgs expectedResultTerm=prior.expectedResultTerm />)
             return
         }
-        self.decls.callTemplates.append(<CallTemplate siteKey=siteKey callee=callee receiverTerm=receiverTerm calleeTypeArgs=calleeTypeArgs />)
+        self.decls.callTemplates.append(<CallTemplate siteKey=siteKey callee=callee receiver=<CallTemplateReceiver.Term term=receiverTerm /> calleeTypeArgs=calleeTypeArgs />)
     }
 
     inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) {
@@ -345,7 +345,7 @@ pub impl Comp {
             return
         }
         val prior: CallTemplate = self.decls.callTemplates[index]
-        self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey callee=prior.callee receiverTerm=prior.receiverTerm calleeTypeArgs=prior.calleeTypeArgs expectedResultTerm=expectedTerm />)
+        self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey callee=prior.callee receiver=prior.receiver calleeTypeArgs=prior.calleeTypeArgs expectedResultTerm=expectedTerm />)
     }
 
     inout fn callTemplateForCurrentBody(exprId: U64) -> CallTemplate {
