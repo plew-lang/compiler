@@ -141,6 +141,13 @@ pub impl Comp {
             }
         }
         val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+        // Substitution alone does not close `T#Trait.Output`: the projection
+        // receiver may now be concrete, but only a static conformance proof
+        // owns the associated output.  Do this before the legacy Cursor
+        // bridge, and recurse through every TypeTerm child, so a projection
+        // nested in `Array[...]` or a record field follows the same rule.
+        val closed: U64 = self.closeBodyProjectionTerms(ref: explicit, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        if closed != explicit { return closed }
         if explicit != ref { return explicit }
         // ParamId-stamped terms are fully decided by the immutable map above.
         // Only old zero-ParamId terms retain the temporary compatibility path
@@ -164,6 +171,80 @@ pub impl Comp {
         self.cur.itemRef = savedI
         self.cur.recvInstRef = savedR
         return legacy
+    }
+
+    // Close every associated-type projection in an already body-substituted
+    // TypeTerm.  The source of truth is always a StaticConformanceProof: first
+    // the selected proof carried by this provided body, then (for a distinct
+    // projection) the exact proof of its concrete receiver and trait instance.
+    // This must stay here, rather than in individual call/local consumers, so
+    // all frontend semantic reads agree on one closed type term.
+    inout fn closeBodyProjectionTerms(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val t: TypeRef = self.arena.types[ref]
+        if t.isRecord {
+            if t.recordFieldLabels.count() != t.recordFieldTerms.count() { return ref }
+            mut val fields: Array[U64] = []
+            mut val changed: Bool = false
+            mut val ri: U64 = 0U64
+            while ri < t.recordFieldTerms.count() {
+                val next: U64 = self.closeBodyProjectionTerms(ref: t.recordFieldTerms[ri], environment: environment, selfRef: selfRef, itemRef: itemRef)
+                if next != t.recordFieldTerms[ri] { changed = true }
+                fields.append(next)
+                ri += 1U64
+            }
+            if changed { return self.rebuildRecordTypeTerm(t: t, fieldTerms: fields) }
+            return ref
+        }
+        if t.assocNameId != 0U64 {
+            val rawReceiver: U64 = self.typeTermProjectionReceiver(t: t)
+            val receiver: U64 = self.closeBodyProjectionTerms(ref: rawReceiver, environment: environment, selfRef: selfRef, itemRef: itemRef)
+            mut val traitArgs: Array[U64] = []
+            mut val changed: Bool = receiver != rawReceiver
+            mut val ai: U64 = 0U64
+            while ai < t.assocTraitArgs.count() {
+                val next: U64 = self.closeBodyProjectionTerms(ref: t.assocTraitArgs[ai], environment: environment, selfRef: selfRef, itemRef: itemRef)
+                if next != t.assocTraitArgs[ai] { changed = true }
+                traitArgs.append(next)
+                ai += 1U64
+            }
+            mut val projection: U64 = ref
+            if changed {
+                projection = self.rebuildProjectionTerm(t: t, receiver: receiver, traitArgs: traitArgs)
+            }
+            if projection == 0U64 || projection >= self.arena.types.count() { return ref }
+            val p: TypeRef = self.arena.types[projection]
+            if p.assocTraitId == 0U64 { return projection }
+            mut val traitOwner: U64 = p.assocTraitDeclOffset
+            if traitOwner == 0U64 { traitOwner = p.assocTraitStart }
+            mut val output: U64 = self.associatedOutputInProof(proof: environment.proof, traitOwner: traitOwner, assocId: p.assocNameId)
+            if output == 0U64 {
+                val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiver, traitId: p.assocTraitId, traitOwner: traitOwner, traitArgs: traitArgs)
+                output = self.associatedOutputInProof(proof: proof, traitOwner: traitOwner, assocId: p.assocNameId)
+            }
+            if output == 0U64 || output == projection { return projection }
+            val substituted: U64 = self.groundTermInEnvironment(ref: output, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+            return self.closeBodyProjectionTerms(ref: substituted, environment: environment, selfRef: selfRef, itemRef: itemRef)
+        }
+        mut val args: Array[U64] = []
+        mut val assocArgs: Array[U64] = []
+        mut val changed: Bool = false
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            val next: U64 = self.closeBodyProjectionTerms(ref: t.args[i], environment: environment, selfRef: selfRef, itemRef: itemRef)
+            if next != t.args[i] { changed = true }
+            args.append(next)
+            i += 1U64
+        }
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            val next: U64 = self.closeBodyProjectionTerms(ref: t.assocTraitArgs[i], environment: environment, selfRef: selfRef, itemRef: itemRef)
+            if next != t.assocTraitArgs[i] { changed = true }
+            assocArgs.append(next)
+            i += 1U64
+        }
+        if changed { return self.rebuildTypeTerm(t: t, args: args, assocTraitArgs: assocArgs) }
+        return ref
     }
 
     // Compatibility wrapper for existing body consumers. New semantic queries
