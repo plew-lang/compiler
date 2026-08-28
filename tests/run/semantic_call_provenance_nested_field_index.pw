@@ -1,0 +1,30 @@
+// A shared generic body carries a call result through a record field, an array
+// element, and another generic call.  I64 and String must be grounded from the
+// body instance independently; neither the bare `T` result template nor the
+// call-specific extension view may leak into type identity.
+import @Std/Io with { print }
+
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+
+extension Extra {
+    pub impl[T] Box[T] {
+        fn duplicate() -> (first: T, second: T) {
+            return (first: self.value, second: self.value)
+        }
+    }
+}
+
+fn keep[T](value: T) -> T {
+    return value
+}
+
+fn project[T](box: Box[T]) -> T {
+    val values = [box#Extra.duplicate().second]
+    return keep(value: values[0U64])
+}
+
+fn main() {
+    print(project(box: <Box[I64] value=7I64 />))
+    print(project(box: <Box[String] value="tea" />))
+}

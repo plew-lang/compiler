@@ -339,7 +339,7 @@ pub impl Comp {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         val term: U64 = self.typedIrRefOfInfo(ti: ti)
-        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext call=prior.call />)
     }
 
     // A context or synthetic lowering can refine an already-recorded type term.
@@ -350,14 +350,28 @@ pub impl Comp {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         val ti: TypeInfo = self.typeInfoOfRef(ref: term)
-        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext call=prior.call />)
     }
 
     inout fn recordSemanticExprLiteralContext(exprId: U64, context: U64) {
         if context == 0U64 { return }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
-        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=context />)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=context call=prior.call />)
+    }
+
+    // Record selection evidence independently from the expression result
+    // TypeTerm.  A later body-instance ground reads the term for type equality
+    // and the provenance for CallResolution; neither reader needs AST recovery.
+    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiverTerm: U64, calleeTypeArgs: Array[U64], resultTerm: U64) {
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
+        mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext call=<CallProvenance callee=callee receiverTerm=receiverTerm calleeTypeArgs=calleeTypeArgs /> />
+        if resultTerm != 0U64 && resultTerm < self.arena.types.count() {
+            val ti: TypeInfo = self.typeInfoOfRef(ref: resultTerm)
+            next = <SemanticExprType term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext call=next.call />
+        }
+        self.arena.semanticExprTypes.set(i: exprId, value: next)
     }
 
     // The grounded TypeRef of expression `id` under the BODY instance env — the typed-IR

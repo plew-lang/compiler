@@ -26,6 +26,36 @@
 
 pub impl Comp {
 
+    // Record the parametric result and the independently-carried source call
+    // selection.  The result is a plain TypeTerm; callee/receiver/substitution
+    // remain provenance so canonical type identity cannot depend on a call.
+    inout fn recordParametricFreeCall(exprId: U64, callee: U64, args: Array[Arg]) {
+        if callee >= self.arena.funcs.count() { return }
+        val f: Func = self.arena.funcs[callee]
+        mut val calleeArgs: Array[U64] = []
+        if f.typeParams.count() > 0U64 {
+            calleeArgs = self.inferParametricFnArgs(f: f, args: args)
+        }
+        mut val result: U64 = f.retTy
+        if f.typeParams.count() > 0U64 && self.fnArgsAllGround(args: calleeArgs) {
+            val savedParams: Array[Bind] = self.cur.typeParams
+            val savedArgs: Array[U64] = self.cur.typeArgs
+            self.cur.typeParams = f.typeParams
+            self.cur.typeArgs = calleeArgs
+            result = self.groundTypeRef(ref: f.retTy)
+            self.cur.typeParams = savedParams
+            self.cur.typeArgs = savedArgs
+        }
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiverTerm: 0U64, calleeTypeArgs: calleeArgs, resultTerm: result)
+    }
+
+    inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverTerm: U64, args: Array[Arg]) {
+        if callee >= self.arena.funcs.count() || receiverTerm == 0U64 || receiverTerm >= self.arena.types.count() { return }
+        val f: Func = self.arena.funcs[callee]
+        val result: U64 = self.groundFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args)
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiverTerm: receiverTerm, calleeTypeArgs: [], resultTerm: result)
+    }
+
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
     // so groundTypeRef at emission substitutes the instance: a trait provided-method
     // template records `Self` (grounds to the conformer via cur.selfRef); a generic
@@ -147,6 +177,7 @@ pub impl Comp {
                 }
                 val cfi: U64 = self.resolvedCallee(id: exprId)
                 if cfi < self.arena.funcs.count() {
+                    self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
                     val cf: Func = self.arena.funcs[cfi]
                     val ps: Array[Param] = cf.params
                     // a generic callee's parametric param (`xs: Array[T]`) is grounded
@@ -191,6 +222,8 @@ pub impl Comp {
                     self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
+                val methodCallee: U64 = self.resolvedCallee(id: exprId)
+                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverTerm: self.parametricExprTerm(exprId: recv), args: args)
                 // context-type an array-literal argument from the resolved method's
                 // declared param (mirrors the Call arm). A kind-3 receiver's methods
                 // live on `Array`; a generic-receiver param (`append(value: T)`) is
@@ -232,6 +265,8 @@ pub impl Comp {
                     self.recordExpr(exprId: args[i].expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
+                val methodCallee: U64 = self.resolvedCallee(id: exprId)
+                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverTerm: self.parametricExprTerm(exprId: recv), args: args)
             }
             Expr.ExtView(val recv, source: _, strip: _) => { self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef) }
             Expr.Field(val base, val nameStart, val nameLen) => {
@@ -282,7 +317,7 @@ pub impl Comp {
                 // — so the refinement lives here, not in exprType). An empty literal stays
                 // 0; its Let-context declared type records it (recordStmt).
                 if elems.count() > 0U64 {
-                    val eRef: U64 = self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
+                    val eRef: U64 = self.parametricExprTerm(exprId: elems[0])
                     if eRef != 0U64 {
                         if exprId < self.arena.semanticExprTypes.count() {
                             self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))

@@ -212,6 +212,19 @@ export struct TypeInfo {
 // an independent type source: every write enters through Comp's semantic-entry
 // helpers, and the adapter is reconstructed from this entry.
 //
+// A call's selection evidence is expression provenance, never type identity.
+// `resultTerm` therefore lives in SemanticExprType.term; two unrelated calls
+// returning I64 share that TypeTerm even when their callee/view/proof differ.
+// The template remains parametric because one generic AST body is reused by
+// multiple BodyInstances.  Mono grounds it once before producing the concrete
+// CallResolution consumed by LLVM.
+export struct CallProvenance {
+    pub val callee: U64 = 0U64
+    pub val receiverTerm: U64 = 0U64
+    pub val calleeTypeArgs: Array[U64] = []
+}
+pub impl CallProvenance { factory }
+
 // Shapes: 0 unknown scalar, 1 scalar, 2 String, 3 nominal, 4 Array,
 // 5 function, 6 existential. Source locations stay on Expr/TypeRef and are
 // deliberately absent from semantic identity.
@@ -226,6 +239,10 @@ export struct SemanticExprType {
     // Integer/float context code. This is a semantic constraint recorded by
     // checking, not a source span and not part of TypeTerm identity.
     pub val literalContext: U64 = 0
+    // Optional selection template for Call/Method/ExtMethod.  It is kept
+    // beside, rather than inside, `term` so call provenance cannot split a
+    // canonical TypeTerm/cache key.
+    pub val call: CallProvenance = <CallProvenance />
 }
 pub impl SemanticExprType { factory }
 
