@@ -1,0 +1,20 @@
+// Call-site resolution and body reachability must remain separate. `left` and
+// `right` are mutually recursive, while their one shared generic AST body is
+// instantiated for both I64 and String. Re-entering an already-scanning body
+// must not wait for its nested calls or reuse the other instance's resolution.
+import @Std/Io with { print }
+
+fn left[T](value: T, remaining: I64) -> T {
+    if remaining <= 0I64 { return value }
+    return right(value: value, remaining: remaining - 1I64)
+}
+
+fn right[T](value: T, remaining: I64) -> T {
+    if remaining <= 0I64 { return value }
+    return left(value: value, remaining: remaining - 1I64)
+}
+
+fn main() {
+    print(left(value: 7I64, remaining: 4I64))
+    print(left(value: "tea", remaining: 5I64))
+}
