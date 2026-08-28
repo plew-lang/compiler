@@ -682,7 +682,7 @@ pub impl Comp {
         eprint(text: "\n")
     }
 
-    inout fn enqueueSelectedCallee(selection: CallSiteSelection, implicit: Bool = false) {
+    inout fn enqueueSelectedCallee(selection: CallSiteSelection) {
         val exprId: U64 = selection.exprId
         val callee: U64 = selection.callee
         val siteIsStmt: Bool = selection.siteIsStmt
@@ -690,7 +690,7 @@ pub impl Comp {
         if callee >= self.arena.funcs.count() { return }
         val f: Func = self.arena.funcs[callee]
         mut val finalArgs: Array[U64] = []
-        mut val recvInst: U64 = 0U64
+        mut val recvInst: U64 = selection.receiverRef
         // A semantic call-resolution template can provide the selected
         // receiver directly.  In that case it outranks an AST type entry: a
         // shared generic desugar node necessarily stores `Head[T]`, while this
@@ -705,38 +705,7 @@ pub impl Comp {
                 hasSelectedReceiver = true
             }
         }
-        mut val callArgs: ArgRange = <ArgRange start=0U64 len=0U64 />
-        mut val synthesizedArgs: Array[Arg] = []
-        if !implicit {
-            match self.arena.exprs[exprId] {
-                Expr.Call(nameStart: _, nameLen: _, val args) => { callArgs = args }
-                Expr.Method(val recv, nameStart: _, nameLen: _, val args) => {
-                    callArgs = args
-                    recvInst = self.groundedBodyReceiverRef(exprId: recv)
-                }
-                Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
-                    callArgs = args
-                    recvInst = self.groundedBodyReceiverRef(exprId: recv)
-                }
-                Expr.Binary(op: _, val lhs, val rhs) => {
-                    val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
-                    synthesizedArgs.append(<Arg expr=lhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                    synthesizedArgs.append(<Arg expr=rhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                    callArgs = self.pushArgs(args: synthesizedArgs)
-                    recvInst = self.groundedBodyReceiverRef(exprId: lhs)
-                }
-                Expr.Unary(op: _, val operand) => {
-                    val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
-                    synthesizedArgs.append(<Arg expr=operand isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                    callArgs = self.pushArgs(args: synthesizedArgs)
-                    recvInst = self.groundedBodyReceiverRef(exprId: operand)
-                }
-                _ => { return }
-            }
-        }
-        if selection.receiverRef != 0U64 {
-            recvInst = selection.receiverRef
-        }
+        val callArgs: ArgRange = selection.args
         if f.hasRecv && recvInst == 0U64 {
             recvInst = self.simpleTypeRef(nameStart: f.recvStart, nameLen: f.recvLen)
         }
@@ -768,7 +737,7 @@ pub impl Comp {
         // result supplies that same subject instance.  Preserve it here rather
         // than asking LLVM to infer type arguments from the spelling again.
         if f.isAssoc && f.typeParams.count() > 0U64 && !hasSelectedReceiver {
-            val resultInst: U64 = self.groundedTypeOf(id: exprId)
+            val resultInst: U64 = selection.resultRef
             if resultInst != 0U64 && resultInst < self.arena.types.count() {
                 val resultTy: TypeRef = self.arena.types[resultInst]
                 if spansEqual(c: inout self, aStart: resultTy.nameStart, aLen: resultTy.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
@@ -914,7 +883,7 @@ pub impl Comp {
         }
         val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=factory receiverRef=returnErr resultHintRef=returnErr />
         self.recordSelectedBodyCallee(selection: selection)
-        self.enqueueSelectedCallee(selection: selection, implicit: true)
+        self.enqueueSelectedCallee(selection: selection)
     }
 
     // Operators are source-level calls to their selected associated witnesses.
@@ -1017,7 +986,7 @@ pub impl Comp {
         if callee < self.arena.funcs.count() {
             target = <CallTarget.Direct />
         }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef target=target />
+        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.selectedCallArgs(exprId: exprId) resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef target=target />
         self.recordSelectedBodyCallee(selection: selection)
         if callee < self.arena.funcs.count() {
             self.enqueueSelectedCallee(selection: selection)
@@ -1550,7 +1519,34 @@ pub impl Comp {
         }
         val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val calleeArgs: Array[U64] = self.groundSemanticCallTypeArgs(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef calleeTypeArgs=calleeArgs resultHintRef=expected resultRef=self.groundedTypeOf(id: exprId) />
+        return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef args=self.selectedCallArgs(exprId: exprId) calleeTypeArgs=calleeArgs resultHintRef=expected resultRef=self.groundedTypeOf(id: exprId) />
+    }
+
+    // Extract source children exactly once at the resolver boundary.  The
+    // static final builder receives this range and never pattern-matches Expr
+    // to rediscover it. Operators have no call node, so this is also where
+    // their two/one operand argument slices are materialized.
+    inout fn selectedCallArgs(exprId: U64) -> ArgRange {
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: _, nameLen: _, val args) => { return args }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, val args) => { return args }
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, val args) => { return args }
+            Expr.Binary(op: _, val lhs, val rhs) => {
+                val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+                mut val args: Array[Arg] = []
+                args.append(<Arg expr=lhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                args.append(<Arg expr=rhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                return self.pushArgs(args: args)
+            }
+            Expr.Unary(op: _, val operand) => {
+                val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+                mut val args: Array[Arg] = []
+                args.append(<Arg expr=operand isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+                return self.pushArgs(args: args)
+            }
+            _ => {}
+        }
+        return <ArgRange start=0U64 len=0U64 />
     }
 
     inout fn selectedCallReceiverRef(exprId: U64) -> U64 {
@@ -2993,7 +2989,7 @@ pub impl Comp {
                         val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultHintRef=initialRef />
                         self.recordSelectedBodyCallee(selection: iteratorSelection)
                         if iteratorFn < self.arena.funcs.count() {
-                            self.enqueueSelectedCallee(selection: iteratorSelection, implicit: true)
+                            self.enqueueSelectedCallee(selection: iteratorSelection)
                             // `iterator()` has just been finalized under this
                             // concrete body instance.  Its descriptor result
                             // is the sole authority for the next receiver:
@@ -3009,7 +3005,7 @@ pub impl Comp {
                         val nextSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=nextFn receiverRef=iteratorRef resultHintRef=iteratorRef />
                         self.recordSelectedBodyCallee(selection: nextSelection)
                         if nextFn < self.arena.funcs.count() {
-                            self.enqueueSelectedCallee(selection: nextSelection, implicit: true)
+                            self.enqueueSelectedCallee(selection: nextSelection)
                         }
                     } else if initialRef != 0U64 {
                         // Dynamic existential protocol calls have no static Func

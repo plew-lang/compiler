@@ -6,7 +6,7 @@
 // Instantiations are discovered from use-site TypeRefs after parsing.
 
 import ../Diag with { digitStrU }
-import ../Ir with { CallSiteKey, CallSiteSelection, CallTarget }
+import ../Ir with { ArgRange, CallSiteKey, CallSiteSelection, CallTarget }
 
 //
 // Split across `Mono/` for readability; all parts share the module scope.

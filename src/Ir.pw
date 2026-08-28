@@ -964,6 +964,10 @@ export struct CallSiteSelection {
     pub val slot: U64 = 0U64
     pub val callee: U64
     pub val receiverRef: U64 = 0U64
+    // The resolver owns the source-child boundary. Static finalization reads
+    // this immutable arena slice instead of pattern-matching the shared AST
+    // again to rediscover arguments.
+    pub val args: ArgRange = <ArgRange start=0U64 len=0U64 />
     // Parametric call-template substitutions, grounded by the source
     // resolver under the caller BodyInstance before final construction.
     pub val calleeTypeArgs: Array[U64] = []
