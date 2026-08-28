@@ -675,7 +675,7 @@ pub impl Comp {
     // `value#E#A` and `value#A#E` therefore carry the same extension source E
     // and trait selector A. A strip ends the inherited chain but not the call's
     // own trailing source.
-    inout fn collectViewSources(recv: U64, recvStart: U64, recvLen: U64, recvRef: U64, finalSourceId: U64 = 0U64, finalSourceOwner: U64 = 0U64) -> Array[ViewSource] {
+    inout fn collectViewSources(recv: U64, recvStart: U64, recvLen: U64, recvRef: U64, finalSourceId: U64 = 0U64, finalSourceOwner: U64 = 0U64, readReceiverSyntax: Bool = true) -> Array[ViewSource] {
         mut val sources: Array[ViewSource] = []
         // A TypeRef caches the source selectors already written on this
         // expression. Keep those AST selectors distinct from inherited local
@@ -689,6 +689,7 @@ pub impl Comp {
         mut val cur: U64 = recv
         mut val go: Bool = true
         mut val stripped: Bool = false
+        if !(readReceiverSyntax) { go = false }
         while go {
             match self.arena.exprs[cur] {
                 Expr.ExtView(recv: val base, source: val selector, strip: val strip) => {
@@ -723,7 +724,7 @@ pub impl Comp {
         // been materialized as a view-bearing TypeRef (that happens again for
         // each backend instance). Its source is nevertheless lexical and must
         // join the same source set as an explicit `self#Ext`.
-        if !stripped {
+        if readReceiverSyntax && !stripped {
             match self.arena.exprs[cur] {
                 Expr.Ident(start: val selfStart, len: val selfLen) => {
                     if self.isSelfRef(start: selfStart, len: selfLen) && self.cur.extId != 0U64 {
@@ -756,7 +757,7 @@ pub impl Comp {
     // grounded by a BodyInstance.  Candidate search, newtype normalization and
     // view-source normalization belong to the frontend resolver; Mono supplies
     // only the concrete receiver term it obtained from its environment.
-    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64) -> U64 {
+    inout fn resolveMethodForResolvedReceiver(recv: U64, surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64, readReceiverSyntax: Bool = true) -> U64 {
         if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
             return self.arena.funcs.count()
         }
@@ -770,7 +771,7 @@ pub impl Comp {
             resolvedRef = underlying
         }
         val rt: TypeRef = self.arena.types[resolvedRef]
-        val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner)
+        val sources: Array[ViewSource] = self.collectViewSources(recv: recv, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: readReceiverSyntax)
         mut val callee: U64 = self.arena.funcs.count()
         if sources.count() > 0U64 {
             callee = self.findMethodInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: resolvedRef)

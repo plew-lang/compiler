@@ -303,6 +303,74 @@ pub impl Comp {
         return self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: surfaceRef, sourceId: sourceId, sourceOwner: sourceOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: useOffset)
     }
 
+    // Control-flow protocol calls have no receiver expression at finalization:
+    // their receiver is already a grounded CallTemplate term.  Do not feed a
+    // statement's iterable AST back into view collection; all source facets
+    // must have travelled with that term from Record.
+    inout fn resolveProtocolMethodForReceiver(recvRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
+        return self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: recvRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: 0U64, readReceiverSyntax: false)
+    }
+
+    // The only reader for an implicit protocol receiver. Slot 1 owns either a
+    // parametric source term or a prior written-call result; slot 2 explicitly
+    // depends on slot 1's completed CallResolution. No fallback is permitted:
+    // recovering `Stmt.For.iter` here would create a second semantic source.
+    inout fn groundedProtocolTemplateReceiver(stmtId: U64, slot: U64) -> U64 {
+        val key: CallSiteKey = self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot)
+        val index: U64 = self.callTemplateIndex(siteKey: key)
+        if index >= self.decls.callTemplates.count() {
+            self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate was not recorded")
+            return 0U64
+        }
+        match self.decls.callTemplates[index].receiver {
+            CallTemplateReceiver.Term(val term) => {
+                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            }
+            CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val dependency) => {
+                return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency)
+            }
+            CallTemplateReceiver.PriorProtocolResult(slot: val priorSlot) => {
+                val result: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: priorSlot)
+                if result == 0U64 {
+                    self.errorAt(offset: 0U64, msg: "internal error: implicit protocol dependency was not finalized")
+                }
+                return result
+            }
+            CallTemplateReceiver.None => {
+                self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has no receiver")
+            }
+        }
+        return 0U64
+    }
+
+    // Resolve a receiver dependency only through the immutable descriptor
+    // already published for this BodyInstance. `exprId` is not a semantic key:
+    // the stored CallSiteKey guards against accidentally reading a different
+    // shared generic body occurrence with the same arena navigation anchor.
+    inout fn bodyCalleeResultForTemplateDependency(exprId: U64, siteKey: CallSiteKey) -> U64 {
+        val bodyId: U64 = self.currentBodyInstanceId()
+        mut val i: U64 = 0U64
+        while i < self.arena.finalCallees.count() {
+            val entry: CallResolution = self.arena.finalCallees[i]
+            if entry.bodyId == bodyId && entry.exprId == exprId && self.sameCallSiteKey(a: entry.siteKey, b: siteKey) {
+                return entry.resultTypeRef
+            }
+            i += 1U64
+        }
+        self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: implicit protocol call dependency was not finalized")
+        return 0U64
+    }
+
+    // Instance collection discovers layouts before Record has produced the
+    // declaration-time template table.  Its selection is provisional: it is
+    // discarded before backend emission and may only enqueue reachable bodies.
+    // Once Record has supplied this site, finalization must take the template
+    // route above and may not recover the receiver from `Stmt.For.iter`.
+    inout fn hasProtocolCallTemplate(stmtId: U64, slot: U64) -> Bool {
+        val key: CallSiteKey = self.currentCallSiteKey(exprId: stmtId, siteIsStmt: true, slot: slot)
+        return self.callTemplateIndex(siteKey: key) < self.decls.callTemplates.count()
+    }
+
     // Ground a selected method's result under the same concrete receiver that
     // selected it.  Control-flow desugars such as `for` have no explicit AST
     // Method node for their iterator result, so this keeps that intermediate
@@ -2972,15 +3040,29 @@ pub impl Comp {
                     // has no written Method AST nodes, so select both implicit
                     // calls here and retain them under the statement site. LLVM
                     // subsequently receives only these Func identities.
-                    mut val initialRef: U64 = self.groundedBodyReceiverRef(exprId: iter)
-                    if initialRef == 0U64 {
-                        initialRef = self.bodyCalleeResultRef(exprId: iter)
+                    val useProtocolTemplate: Bool = self.hasProtocolCallTemplate(stmtId: stmtId, slot: 1U64)
+                    mut val initialRef: U64 = 0U64
+                    if useProtocolTemplate {
+                        initialRef = self.groundedProtocolTemplateReceiver(stmtId: stmtId, slot: 1U64)
+                    } else {
+                        // Provisional reachability collection only. Its output
+                        // is cleared by finalizeCallables; this AST recovery
+                        // must never publish a final CallResolution.
+                        initialRef = self.groundedBodyReceiverRef(exprId: iter)
+                        if initialRef == 0U64 {
+                            initialRef = self.bodyCalleeResultRef(exprId: iter)
+                        }
                     }
                     mut val iteratorRef: U64 = initialRef
                     if initialRef != 0U64 && initialRef < self.arena.types.count() && !(self.arena.types[initialRef].isAny) {
                         val noArgs: Array[Arg] = []
                         val iteratorName: Bind = self.kwSpan(kw: "iterator", kwLen: 8U64)
-                        mut val iteratorFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64)
+                        mut val iteratorFn: U64 = self.arena.funcs.count()
+                        if useProtocolTemplate {
+                            iteratorFn = self.resolveProtocolMethodForReceiver(recvRef: initialRef, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs))
+                        } else {
+                            iteratorFn = self.resolveBodyMethodForRef(recv: iter, recvRef: initialRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: iteratorName.nameStart, nameLen: iteratorName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64)
+                        }
                         iteratorRef = initialRef
                         // Record the iterator slot even when this value is already
                         // an Iterator.  The sentinel tells LLVM that there is no
@@ -3001,7 +3083,12 @@ pub impl Comp {
                             if returned != 0U64 { iteratorRef = returned }
                         }
                         val nextName: Bind = self.kwSpan(kw: "next", kwLen: 4U64)
-                        val nextFn: U64 = self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64)
+                        mut val nextFn: U64 = self.arena.funcs.count()
+                        if useProtocolTemplate {
+                            nextFn = self.resolveProtocolMethodForReceiver(recvRef: iteratorRef, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs))
+                        } else {
+                            nextFn = self.resolveBodyMethodForRef(recv: iter, recvRef: iteratorRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: nextName.nameStart, nameLen: nextName.nameLen, args: self.pushArgs(args: noArgs), useOffset: 0U64)
+                        }
                         val nextSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=nextFn receiverRef=iteratorRef resultHintRef=iteratorRef />
                         self.recordSelectedBodyCallee(selection: nextSelection)
                         if nextFn < self.arena.funcs.count() {

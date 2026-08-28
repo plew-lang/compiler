@@ -26,6 +26,27 @@
 
 pub impl Comp {
 
+    // `for` protocol slot 1 consumes an iterable value. When that value is a
+    // written call, its precise concrete receiver is the completed result of
+    // that call under the active BodyInstance — not the call's declaration-time
+    // result term, which can intentionally retain `Self`/`Item`. Record the
+    // semantic dependency by CallSiteKey; ExprId is merely lookup navigation.
+    inout fn protocolReceiverTemplateForExpr(exprId: U64) -> CallTemplateReceiver {
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                return <CallTemplateReceiver.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+            }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                return <CallTemplateReceiver.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+            }
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
+                return <CallTemplateReceiver.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+            }
+            _ => {}
+        }
+        return <CallTemplateReceiver.Term term=self.parametricExprTerm(exprId: exprId) />
+    }
+
     // `for` introduces a source-level binding just like `val`: its type must
     // be the iterator proof's associated `Item` term, not the legacy
     // TypeInfo name recovered from the iterator head.  An adapter such as
@@ -625,7 +646,7 @@ pub impl Comp {
                 } else {
                     val et: TypeInfo = self.typeOf(id: iter)
                     val iterTerm: U64 = self.parametricExprTerm(exprId: iter)
-                    val iteratorReceiver: CallTemplateReceiver = <CallTemplateReceiver.Term term=iterTerm />
+                    val iteratorReceiver: CallTemplateReceiver = self.protocolReceiverTemplateForExpr(exprId: iter)
                     val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
                     self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver)
                     self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver)
@@ -758,8 +779,11 @@ pub impl Comp {
         self.cur.locals = []
         self.cur.hasRecv = false
         self.cur.extId = 0
+        self.cur.recvInstRef = 0
         self.cur.selfRef = 0
         self.cur.itemRef = 0
+        self.cur.typeParams = []
+        self.cur.typeArgs = []
         self.cur.checkFn = self.arena.funcs.count()
     }
 }

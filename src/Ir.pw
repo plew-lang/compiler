@@ -1407,11 +1407,14 @@ export struct CallSiteKey {
 pub impl CallSiteKey { factory }
 
 // A call template's receiver is either an explicit parametric term or the
-// completed result of an earlier implicit protocol slot. Keeping this as a sum
+// completed result of an earlier call.  A `CallSiteKey` is its semantic
+// identity; `exprId` is only the navigation anchor used while looking up that
+// already-published result in the current BodyInstance. Keeping this as a sum
 // type prevents a template from accidentally carrying both sources.
 export enum CallTemplateReceiver {
     None
     Term(term: U64)
+    PriorCallResult(exprId: U64, siteKey: CallSiteKey)
     PriorProtocolResult(slot: U64)
 }
 

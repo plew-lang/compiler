@@ -611,6 +611,21 @@ fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
     }
 }
 
+// Record the one parametric semantic type/provenance table after instance
+// discovery and before generic checking. Keeping this as an explicit phase
+// makes the hand-off into CallTemplate finalization a real `Comp` boundary,
+// rather than an incidental region inside the frontend driver.
+fn recordSemanticExpressionTypes(c: inout Comp) {
+    mut val i: U64 = 0U64
+    while i < c.arena.exprs.count() {
+        c.arena.semanticExprTypes.append(<SemanticExprType />)
+        i += 1U64
+    }
+    tracePhase(c: inout c, label: "semantic-expression-record:start")
+    c.recordParametricTypes()
+    tracePhase(c: inout c, label: "semantic-expression-record:done")
+}
+
 // Fill the caller-owned compiler state through parsing, lowering, verification,
 // monomorphization, and final-callable closure.  The state is intentionally not
 // returned by value: `CallResolution` is semantic analysis output consumed by LLVM,
@@ -1149,18 +1164,7 @@ export fn runFrontend(c: inout Comp) {
     // type argument must conform to the trait its parameter is bound to.
     tracePhase(c: inout c, label: "generic-checks:start")
     c.checkFnBounds()
-    // typed-IR parametric store: one slot per expression node (0 = unrecorded), sized
-    // now while expr ids are stable. A separate array from typeCache (built later).
-    mut val peI: U64 = 0U64
-    while peI < c.arena.exprs.count() {
-        c.arena.semanticExprTypes.append(<SemanticExprType />)
-        peI += 1U64
-    }
-    // The generic checker still reads the established abstract expression record;
-    // CallTemplate keeps its more-specific finalization provenance separately.
-    tracePhase(c: inout c, label: "semantic-expression-record:start")
-    c.recordParametricTypes()
-    tracePhase(c: inout c, label: "semantic-expression-record:done")
+    recordSemanticExpressionTypes(c: inout c)
     // eager generic type-check (#9): every generic template body is checked once
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").
