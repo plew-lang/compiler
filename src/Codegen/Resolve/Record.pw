@@ -535,7 +535,12 @@ pub impl Comp {
             // locals (captures resolve to the enclosing bindings) — the hole the check
             // passes leave open (neither checkGenericBodies nor this pass's caller
             // descends into closures for scope reasons; here scoping is all we need).
-            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, retTy: _, val body) => {
+            Expr.Closure(val params, hasRet: _, retStart: _, retLen: _, retIsArray: _, val retTy, val body) => {
+                // A closure literal has an ordinary semantic function TypeTerm.
+                // Recording it here lets a concrete generic-call inference
+                // consume the same parametric producer as every other
+                // expression instead of reconstructing it through exprType.
+                self.recordSemanticExprTerm(exprId: exprId, term: self.closureFnTypeRef(params: params, retTy: retTy))
                 val mark: U64 = self.scopeMark()
                 mut val pi: U64 = 0
                 while pi < params.count() {
