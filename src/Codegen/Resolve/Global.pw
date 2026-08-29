@@ -61,11 +61,11 @@ pub impl Comp {
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count() { self.collectGlobalDeps(id: fields[i].value, into: inout into) i += 1 }
+                while i < fields.len { self.collectGlobalDeps(id: self.makeFieldAt(fields: fields, index: i).value, into: inout into) i += 1 }
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() { self.collectGlobalDeps(id: elems[i], into: inout into) i += 1 }
+                while i < elems.len { self.collectGlobalDeps(id: self.exprAt(exprs: elems, index: i), into: inout into) i += 1 }
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.collectGlobalDeps(id: operand, into: inout into) }
             Expr.OptChain(val base, val cont) => {
@@ -149,8 +149,9 @@ pub impl Comp {
                             val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                             mut val args: Array[Arg] = []
                             mut val fi: U64 = 0
-                            while fi < fields.count() {
-                                args.append(<Arg expr=fields[fi].value isInout=false labelStart=fields[fi].nameStart labelLen=fields[fi].nameLen hasLabel=true />)
+                            while fi < fields.len {
+                                val field: MakeField = self.makeFieldAt(fields: fields, index: fi)
+                                args.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
                                 fi += 1
                             }
                             self.arena.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=self.pushArgs(args: args) />
@@ -161,12 +162,13 @@ pub impl Comp {
                         // routes to `Type.label(label: x)`. `from` is just the conversion
                         // instance of this rule; memberwise construction remains the fallback
                         // when no such factory exists.
-                        if fields.count() == 1U64 {
-                            if self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: fields[0].nameStart, nameLen: fields[0].nameLen) {
+                        if fields.len == 1U64 {
+                            val field: MakeField = self.makeFieldAt(fields: fields, index: 0U64)
+                            if self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: field.nameStart, nameLen: field.nameLen) {
                                 val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
                                 mut val fargs: Array[Arg] = []
-                                fargs.append(<Arg expr=fields[0].value isInout=false labelStart=fields[0].nameStart labelLen=fields[0].nameLen hasLabel=true />)
-                                self.arena.exprs[i] = <Expr.Method recv=recv nameStart=fields[0].nameStart nameLen=fields[0].nameLen args=self.pushArgs(args: fargs) />
+                                fargs.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
+                                self.arena.exprs[i] = <Expr.Method recv=recv nameStart=field.nameStart nameLen=field.nameLen args=self.pushArgs(args: fargs) />
                             }
                         }
                     }

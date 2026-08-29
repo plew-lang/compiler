@@ -394,7 +394,7 @@ pub impl Comp {
         }
     }
 
-    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: Array[MakeField], offset: U64) {
+    inout fn checkConstructVis(typeStart: U64, typeLen: U64, isEnum: Bool, fields: MakeFieldRange, offset: U64) {
         if isEnum {
             return
         }
@@ -418,19 +418,20 @@ pub impl Comp {
         }
         val inOwnerImpl: Bool = self.inAnonImplOf(ownerStart: typeStart, ownerLen: typeLen)
         mut val i: U64 = 0
-        while i < fields.count() {
-            val v: U64 = self.fieldVis(structStart: typeStart, structLen: typeLen, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
+        while i < fields.len {
+            val field: MakeField = self.makeFieldAt(fields: fields, index: i)
+            val v: U64 = self.fieldVis(structStart: typeStart, structLen: typeLen, fieldStart: field.nameStart, fieldLen: field.nameLen)
             if !inOwnerImpl {
                 if v == 0U64 || v == 1U64 {
                     // gate by the field's ORIGINAL source offset (nameStart is re-interned
                     // and does not map to a module); synthesized constructions carry an
                     // unloaded offset (the dict literal's `keys`/… use the interned span)
                     // and are skipped.
-                    if self.offsetIsLoaded(offset: fields[i].offset) {
+                    if self.offsetIsLoaded(offset: field.offset) {
                         if v == 0U64 {
-                            self.errorAt(offset: fields[i].offset, msg: "cannot set a private field when constructing outside its type's anonymous impl")
+                            self.errorAt(offset: field.offset, msg: "cannot set a private field when constructing outside its type's anonymous impl")
                         } else {
-                            self.errorAt(offset: fields[i].offset, msg: "cannot set a `pub(get)` field when constructing outside its type's anonymous impl (it is read-only outside the type)")
+                            self.errorAt(offset: field.offset, msg: "cannot set a `pub(get)` field when constructing outside its type's anonymous impl (it is read-only outside the type)")
                         }
                     }
                 }
@@ -443,13 +444,14 @@ pub impl Comp {
         if !inOwnerImpl {
             if !(self.structHasPubFactory(nameId: sd.nameId)) {
                 mut val ci: U64 = 0
-                while ci < fields.count() {
-                    if self.offsetIsLoaded(offset: fields[ci].offset) {
-                        self.errorAt(offset: fields[ci].offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
+                while ci < fields.len {
+                    val field: MakeField = self.makeFieldAt(fields: fields, index: ci)
+                    if self.offsetIsLoaded(offset: field.offset) {
+                        self.errorAt(offset: field.offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
                     }
                     ci += 1U64
                 }
-                if fields.count() == 0U64 {
+                if fields.len == 0U64 {
                     self.errorAt(offset: offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
                 }
             }

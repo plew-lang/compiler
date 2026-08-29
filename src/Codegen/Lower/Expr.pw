@@ -26,7 +26,7 @@ pub impl Comp {
                                 // inner literal lowers context-free and the backend can't build it).
                                 val recName: String = stringFromBytesUnchecked(extractSpan(buf: self.arena.bytes, start: ct.nameStart, len: ct.nameLen))
                                 val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: recName, variant: "", isEnum: false)
-                                val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
+                                val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fs) />)
                                 self.arena.exprSpanStart[rid] = span.start
                                 return rid
                             }
@@ -42,7 +42,7 @@ pub impl Comp {
                                     val tn: Bind = self.internBytes(s: typeName)
                                     if intern(c: inout self, start: tn.nameStart, len: tn.nameLen) == ct.nameId {
                                         val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: "", isEnum: false)
-                                        val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fs />)
+                                        val rid: U64 = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fs) />)
                                         self.arena.exprSpanStart[rid] = span.start
                                         return rid
                                     }
@@ -211,7 +211,7 @@ pub impl Comp {
                     vLen = vb.nameLen
                 }
                 val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: typeName, variant: variant, isEnum: isEnum)
-                result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=isEnum ty=tyRef fields=fs />)
+                result = self.pushExpr(e: <Expr.Make typeStart=tn.nameStart typeLen=tn.nameLen variantStart=vStart variantLen=vLen isEnum=isEnum ty=tyRef fields=self.pushMakeFields(fields: fs) />)
             }
             ExprAst.ArrayLit(val elems, val span) => {
                 mut val es: Array[U64] = []
@@ -220,7 +220,7 @@ pub impl Comp {
                     es.append(self.lowerExpr(e: elems[i]))
                     i += 1
                 }
-                result = self.pushExpr(e: <Expr.Array elems=es />)
+                result = self.pushExpr(e: <Expr.Array elems=self.pushExprs(exprs: es) />)
             }
             ExprAst.DictLit(val keys, val vals, val span) => {
                 // a bare dictionary literal with no binding/return context: K/V can't be
@@ -234,7 +234,7 @@ pub impl Comp {
                 // / no type name: the backend resolves the record struct from the values
                 // (or st.expectedTy if a construction site set one).
                 val fs: Array[MakeField] = self.lowerMakeFields(fields: fields, typeName: "", variant: "", isEnum: false)
-                result = self.pushExpr(e: <Expr.Make typeStart=0 typeLen=0 variantStart=0 variantLen=0 isEnum=false ty=0 fields=fs />)
+                result = self.pushExpr(e: <Expr.Make typeStart=0 typeLen=0 variantStart=0 variantLen=0 isEnum=false ty=0 fields=self.pushMakeFields(fields: fs) />)
             }
             ExprAst.Cast(val operand, val ty, val span) => {
                 val o: U64 = self.lowerExpr(e: operand)

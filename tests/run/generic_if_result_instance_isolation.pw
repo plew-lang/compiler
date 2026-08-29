@@ -1,0 +1,28 @@
+// A value-position if is a semantic producer: its result is the TypeTerm of
+// its non-diverging `give` branches.  The shared generic body is instantiated
+// twice, and the selected result is immediately used structurally, so a
+// declaration-template `Box[T]` must not leak into either caller.
+import @Std/Io with { print }
+
+struct Box[T] {
+    pub val value: T
+}
+
+pub impl Box[T] {
+    factory
+}
+
+fn choose[T](first: Box[T], second: Box[T], useFirst: Bool) -> Box[T] {
+    return if useFirst {
+        give first
+    } else {
+        give second
+    }
+}
+
+fn main() {
+    val integer: Box[I64] = choose(first: <Box value=41I64/>, second: <Box value=0I64/>, useFirst: true)
+    val text: Box[String] = choose(first: <Box value="wrong"/>, second: <Box value="right"/>, useFirst: false)
+    print(integer.value + 1I64)
+    print(text.value)
+}

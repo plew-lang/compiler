@@ -114,7 +114,7 @@ pub impl Comp {
             if d.args.count() == 0 {
                 recv = self.pushExpr(e: <Expr.Ident start=d.nameStart len=d.nameLen />)
             } else {
-                recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=d.args />)
+                recv = self.pushExpr(e: <Expr.Make typeStart=d.nameStart typeLen=d.nameLen variantStart=0 variantLen=0 isEnum=false ty=0 fields=self.pushMakeFields(fields: d.args) />)
             }
             // `recv.derive(input: parseItem(...))`
             mut val dargs: Array[Arg] = []

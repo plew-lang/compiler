@@ -189,8 +189,8 @@ pub impl Comp {
             }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count() {
-                    if self.exprMentionsAny(exprId: fields[i].value, forbidden: forbidden) {
+                while i < fields.len {
+                    if self.exprMentionsAny(exprId: self.makeFieldAt(fields: fields, index: i).value, forbidden: forbidden) {
                         return true
                     }
                     i += 1
@@ -199,8 +199,8 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    if self.exprMentionsAny(exprId: elems[i], forbidden: forbidden) {
+                while i < elems.len {
+                    if self.exprMentionsAny(exprId: self.exprAt(exprs: elems, index: i), forbidden: forbidden) {
                         return true
                     }
                     i += 1
@@ -260,16 +260,16 @@ pub impl Comp {
             Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprContainsAwait(exprId: base) }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count() {
-                    if self.exprContainsAwait(exprId: fields[i].value) { return true }
+                while i < fields.len {
+                    if self.exprContainsAwait(exprId: self.makeFieldAt(fields: fields, index: i).value) { return true }
                     i += 1U64
                 }
                 return false
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    if self.exprContainsAwait(exprId: elems[i]) { return true }
+                while i < elems.len {
+                    if self.exprContainsAwait(exprId: self.exprAt(exprs: elems, index: i)) { return true }
                     i += 1U64
                 }
                 return false

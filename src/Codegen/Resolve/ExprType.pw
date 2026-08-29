@@ -331,7 +331,7 @@ pub impl Comp {
                                     val grounded: U64 = self.groundTypeRef(ref: req.retTy)
                                     self.cur.typeParams = savedParams
                                     self.cur.typeArgs = savedArgs
-                                    val result: U64 = self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, bound: fb)
+                                    val result: U64 = self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: fb.paramTy, traitOwner: fb.constraint.key.owner, traitArgs: fb.constraint.key.positionalArgs, predicates: fb.constraint.assocPredicates)
                                     if result != 0U64 { return self.typeInfoOfRef(ref: result) }
                                 }
                             }

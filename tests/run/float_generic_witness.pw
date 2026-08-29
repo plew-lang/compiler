@@ -6,7 +6,7 @@
 import @Std/Io with { print }
 import @Std/Core with { Add, Eq, Ord }
 
-fn sum[T](a: T, b: T) -> T where T: Add[T] {
+fn sum[T](a: T, b: T) -> T where T: Add[T, Output = T] {
     return a + b
 }
 

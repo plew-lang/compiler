@@ -139,16 +139,17 @@ pub impl Comp {
                 if ti.kind == 0 && ti.nameLen == 0 {
                     match self.arena.exprs[init] {
                         Expr.Array(val elems) => {
-                            if elems.count() > 0 {
+                            if elems.len > 0 {
                                 // The element's parametric semantic term is the
                                 // declaration-time source of truth.  In a
                                 // shared generic body it preserves the outer
                                 // binder selected by a nested call; exprType
                                 // alone can reopen that call's declaration and
                                 // substitute the callee's unrelated `T`.
-                                mut val eRef: U64 = self.parametricExprTerm(exprId: elems[0])
+                                val first: U64 = self.exprAt(exprs: elems, index: 0U64)
+                                mut val eRef: U64 = self.parametricExprTerm(exprId: first)
                                 if eRef == 0U64 {
-                                    eRef = self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
+                                    eRef = self.typedIrRefOfInfo(ti: self.exprType(id: first))
                                 }
                                 // an ARGLESS generic head (`<Optional.Some v=1 />` with no
                                 // inferable instance reports its bare head name) must not be

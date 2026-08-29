@@ -247,7 +247,7 @@ pub impl LlvmCtx {
 
     // Construct a registered struct value from a JSX `<Type field=expr ... />`: build
     // each declared field (matched by name, or its default) in order via insertvalue.
-    inout fn genLlvmMake(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    inout fn genLlvmMake(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: MakeFieldRange) -> LLVMValueRef {
         // inside a generic method/function body, a construction `<Box[T] … />` names
         // the syntactic `Box[T]`; ground its type args through the active env so it
         // resolves to the registered concrete instance (`Box[I32]`).
@@ -441,7 +441,7 @@ pub impl LlvmCtx {
 
     // Build a struct value of LLVM type `sty` from def `sd`: each declared field
     // (matched by name, or its default), under the active substitution env.
-    inout fn buildStructValue(c: inout Comp, sd: StructDef, sty: LLVMTypeRef, fields: Array[MakeField], errOffset: U64) -> LLVMValueRef {
+    inout fn buildStructValue(c: inout Comp, sd: StructDef, sty: LLVMTypeRef, fields: MakeFieldRange, errOffset: U64) -> LLVMValueRef {
         mut val agg: LLVMValueRef = LLVMGetUndef(sty)
         mut val fi: U64 = 0
         while fi < sd.fields.count() {
@@ -449,11 +449,12 @@ pub impl LlvmCtx {
             mut val provided: Bool = false
             mut val valExpr: U64 = 0
             mut val mi: U64 = 0
-            while mi < fields.count() {
-                if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
+            while mi < fields.len {
+                val field: MakeField = c.makeFieldAt(fields: fields, index: mi)
+                if spansEqual(c: inout c, aStart: field.nameStart, aLen: field.nameLen, bStart: fld.nameStart, bLen: fld.nameLen) {
                     provided = true
-                    valExpr = fields[mi].value
-                    mi = fields.count()
+                    valExpr = field.value
+                    mi = fields.len
                 } else {
                     mi += 1
                 }

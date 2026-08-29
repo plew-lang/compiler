@@ -808,7 +808,7 @@ pub impl LlvmCtx {
 
     // Construct an enum value `<E.V f=e ... />`: alloca {tag,payload}, store the tag
     // and (if any) the variant payload struct, then load the whole value.
-    inout fn genLlvmMakeEnum(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, ty: U64, fields: Array[MakeField]) -> LLVMValueRef {
+    inout fn genLlvmMakeEnum(c: inout Comp, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, ty: U64, fields: MakeFieldRange) -> LLVMValueRef {
         // a JSX construction without explicit type args (`<Optional.Some v=42 />`) has
         // an ungrounded head `ty`; fall back to the expected type from context (a let
         // annotation / boxed-field pointee) when it names this same generic enum. Consume
@@ -864,7 +864,7 @@ pub impl LlvmCtx {
 
     // Build an enum value of LLVM type `ety` for def `eid`: store the tag + the
     // variant payload struct (under the active substitution env).
-    inout fn buildEnumValue(c: inout Comp, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: Array[MakeField], instanceRef: U64 = 0U64) -> LLVMValueRef {
+    inout fn buildEnumValue(c: inout Comp, eid: U64, ety: LLVMTypeRef, typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, fields: MakeFieldRange, instanceRef: U64 = 0U64) -> LLVMValueRef {
         val vi: U64 = c.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
         val slot: LLVMValueRef = self.entryAlloca(ty: ety)
         // zero the whole cell first (tag + payload) so unused payload words are
@@ -885,11 +885,12 @@ pub impl LlvmCtx {
                 mut val valExpr: U64 = 0
                 mut val found: Bool = false
                 mut val mi: U64 = 0
-                while mi < fields.count() {
-                    if spansEqual(c: inout c, aStart: fields[mi].nameStart, aLen: fields[mi].nameLen, bStart: fs[fj].nameStart, bLen: fs[fj].nameLen) {
-                        valExpr = fields[mi].value
+                while mi < fields.len {
+                    val field: MakeField = c.makeFieldAt(fields: fields, index: mi)
+                    if spansEqual(c: inout c, aStart: field.nameStart, aLen: field.nameLen, bStart: fs[fj].nameStart, bLen: fs[fj].nameLen) {
+                        valExpr = field.value
                         found = true
-                        mi = fields.count()
+                        mi = fields.len
                     } else {
                         mi += 1
                     }

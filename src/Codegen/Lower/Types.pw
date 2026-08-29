@@ -669,7 +669,7 @@ pub impl Comp {
         fields.append(<MakeField nameStart=hN.nameStart nameLen=hN.nameLen value=emptyHashes offset=hN.nameStart />)
         fields.append(<MakeField nameStart=bN.nameStart nameLen=bN.nameLen value=emptyBuckets offset=bN.nameStart />)
         fields.append(<MakeField nameStart=cN.nameStart nameLen=cN.nameLen value=zero offset=cN.nameStart />)
-        return self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=fields />)
+        return self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0 variantLen=0 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />)
     }
 
     // Lower a dictionary literal `[k0: v0, ...]` / `[:]` (spec/02). The K/V types come

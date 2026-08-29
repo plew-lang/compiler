@@ -212,24 +212,6 @@ export struct TypeInfo {
 // an independent type source: every write enters through Comp's semantic-entry
 // helpers, and the adapter is reconstructed from this entry.
 //
-// A call's selection evidence is expression provenance, never type identity.
-// `resultTerm` therefore lives in SemanticExprType.term; two unrelated calls
-// returning I64 share that TypeTerm even when their callee/view/proof differ.
-// The template remains parametric because one generic AST body is reused by
-// multiple BodyInstances.  Mono grounds it once before producing the concrete
-// CallResolution consumed by LLVM.
-export struct CallProvenance {
-    pub val callee: U64 = 0U64
-    pub val receiverTerm: U64 = 0U64
-    pub val calleeTypeArgs: Array[U64] = []
-    // The bidirectional result context written at the call's source boundary
-    // (return, annotated binding, or assignment).  This stays outside the
-    // result TypeTerm: it constrains generic selection but is not the type
-    // identity of the call expression itself.
-    pub val expectedResultTerm: U64 = 0U64
-}
-pub impl CallProvenance { factory }
-
 // Shapes: 0 unknown scalar, 1 scalar, 2 String, 3 nominal, 4 Array,
 // 5 function, 6 existential. Source locations stay on Expr/TypeRef and are
 // deliberately absent from semantic identity.
@@ -244,10 +226,6 @@ export struct SemanticExprType {
     // Integer/float context code. This is a semantic constraint recorded by
     // checking, not a source span and not part of TypeTerm identity.
     pub val literalContext: U64 = 0
-    // Optional selection template for Call/Method/ExtMethod.  It is kept
-    // beside, rather than inside, `term` so call provenance cannot split a
-    // canonical TypeTerm/cache key.
-    pub val call: CallProvenance = <CallProvenance />
 }
 pub impl SemanticExprType { factory }
 
@@ -311,6 +289,24 @@ export struct ArgRange {
 }
 pub impl ArgRange { factory }
 
+// Immutable slice of expression children in Arena.exprChildPool.  Array literal
+// nodes keep only this scalar descriptor: reading Expr.Array therefore does not
+// copy an ARC-managed Array payload on each frontend/backend traversal.
+export struct ExprRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ExprRange { factory }
+
+// Immutable slice of construction fields in Arena.makeFieldPool. Make nodes
+// carry only this scalar descriptor, so inspecting a construction cannot copy
+// an ARC-managed field Array during frontend or backend walks.
+export struct MakeFieldRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl MakeFieldRange { factory }
+
 
 export enum Expr {
     // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
@@ -328,9 +324,9 @@ export enum Expr {
     Binary(op: I64, lhs: U64, rhs: U64)
     Call(nameStart: U64, nameLen: U64, args: ArgRange)
     Field(base: U64, nameStart: U64, nameLen: U64)
-    Make(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: Array[MakeField])
+    Make(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, ty: U64, fields: MakeFieldRange)
     Str(start: U64, len: U64)
-    Array(elems: Array[U64])
+    Array(elems: ExprRange)
     Index(base: U64, index: U64)
     Method(recv: U64, nameStart: U64, nameLen: U64, args: ArgRange)
     // `recv#Src.name(args)` (spec/09): a method call through an extension view.
@@ -1266,10 +1262,19 @@ export struct Arena {
     // Flat immutable payload pool for Call / Method / ExtMethod arguments.
     // ArgRange is the only AST-side handle; consumers read through Comp.argAt.
     pub mut val argPool: Array[Arg] = []
+    // Flat immutable expression-child pool for Array literals. ExprRange is the
+    // only AST-side handle; consumers read through Comp.exprAt.
+    pub mut val exprChildPool: Array[U64] = []
+    // Flat immutable construction-field pool. MakeFieldRange is the only
+    // AST-side handle; consumers read through Comp.makeFieldAt.
+    pub mut val makeFieldPool: Array[MakeField] = []
     // Complete semantic type entry per expression node. Kept with the expression
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
     pub mut val semanticExprTypes: Array[SemanticExprType] = []
+    // Deferred semantic type-source recipes are a separate dependency graph;
+    // TypeRef remains the canonical structural type arena. IDs are one-based.
+    pub mut val semanticTypeRecipes: Array[SemanticTypeRecipe] = []
     // Source byte offset of each expr (parallel to `exprs`; 0 = unknown). Lower
     // records the parsed ExprAst's span start (the AST carries a span on every
     // node); backend-synthesized exprs keep 0. THE diagnostic-position store:
@@ -1406,6 +1411,37 @@ export struct CallSiteKey {
 }
 pub impl CallSiteKey { factory }
 
+// A semantic type source may depend on an earlier call result even though a
+// canonical TypeTerm must remain a pure structural algebra. `kind` is
+// 1=Term, 2=CallResult, 3=Project, 4=OptionalPayload. `input` is the child of
+// Project or OptionalPayload; CallResult's
+// CallSiteKey is semantic identity; ExprId plus `siteIsStmt` are navigation
+// only, because implicit protocol calls are statement-owned rather than
+// expression-owned.
+export struct SemanticTypeRecipe {
+    pub val kind: U64 = 0U64
+    pub val term: U64 = 0U64
+    pub val input: U64 = 0U64
+    pub val exprId: U64 = 0U64
+    pub val siteIsStmt: Bool = false
+    pub val callSite: CallSiteKey = <CallSiteKey />
+    pub val traitOwner: U64 = 0U64
+    pub val traitId: U64 = 0U64
+    pub val traitArgs: Array[U64] = []
+    pub val assocId: U64 = 0U64
+}
+pub impl SemanticTypeRecipe { factory }
+
+// The semantic type source of one non-range `for` binding. Stmt ids are
+// stable arena navigation keys; the recipe itself carries semantic call
+// identity where one is needed. This is not a Local field because Record and
+// every BodyInstance scan construct independent local scopes.
+export struct ForTypeRecipe {
+    pub val stmtId: U64 = 0U64
+    pub val itemRecipe: U64 = 0U64
+}
+pub impl ForTypeRecipe { factory }
+
 // A call template's receiver is either an explicit parametric term or the
 // completed result of an earlier call.  A `CallSiteKey` is its semantic
 // identity; `exprId` is only the navigation anchor used while looking up that
@@ -1418,15 +1454,33 @@ export enum CallTemplateReceiver {
     PriorProtocolResult(slot: U64)
 }
 
+// One operator operand is semantic input, not a request to inspect a shared
+// Expr later.  A literal whose type is intentionally context-sensitive keeps
+// its Record-time TypeInfo adapter; every other value carries either its closed
+// TypeTerm or the completed result of an earlier call site.
+export enum OperatorOperandSource {
+    Term(exprId: U64, term: U64)
+    PriorCallResult(exprId: U64, siteKey: CallSiteKey)
+    Legacy(exprId: U64, info: TypeInfo)
+}
+
+// The template is a site-kind sum.  These alternatives deliberately cannot
+// mix an ordinary call's declared callee with an operator's symbolic proof or
+// a protocol receiver.  Finalization consumes exactly the selected variant.
+export enum CallTemplateKind {
+    Pending
+    Direct(callee: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64])
+    Protocol(receiver: CallTemplateReceiver)
+    Operator(op: I64, operands: Array[OperatorOperandSource], resolution: StaticMemberResolution, resultTerm: U64)
+}
+
 // Parametric call semantics are owned by a declaration body and CallSiteKey,
 // never by ExprId. Expected-result context is part of this template, while
 // the expression result TypeTerm remains in SemanticExprType for generic type
 // operations that are not calls.
 export struct CallTemplate {
     pub val siteKey: CallSiteKey = <CallSiteKey />
-    pub val callee: U64 = 0U64
-    pub val receiver: CallTemplateReceiver = <CallTemplateReceiver.None />
-    pub val calleeTypeArgs: Array[U64] = []
+    pub val kind: CallTemplateKind = <CallTemplateKind.Pending />
     pub val expectedResultTerm: U64 = 0U64
 }
 pub impl CallTemplate { factory }
@@ -1467,7 +1521,9 @@ pub impl DestructureSite { factory }
 // registration ground it under their own env — storing a grounded result would
 // freeze the first instance's grounding into every other instantiation of a
 // generic body. `destructureSites`: each record/struct destructure's bind list
-// (see DestructureSite). `kwCache`: cached built-in name spans (O(1) kwSpan).
+// (see DestructureSite). `forTypeRecipes`: each non-range `for` binding's
+// deferred item source (see ForTypeRecipe). `kwCache`: cached built-in name
+// spans (O(1) kwSpan).
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
     pub mut val traitOwners: Array[TraitOwner] = []
@@ -1484,7 +1540,12 @@ export struct Decls {
     pub mut val chainSites: Array[ChainSite] = []
     pub mut val syntheticCallSites: Array[SyntheticCallSite] = []
     pub mut val callTemplates: Array[CallTemplate] = []
+    // Derived open-addressed index for CallTemplate. Slots hold one-based
+    // callTemplates indices and are rebuilt solely from CallSiteKey; this is
+    // lookup structure, never a second semantic source.
+    pub mut val callTemplateIndexSlots: Array[U64] = []
     pub mut val destructureSites: Array[DestructureSite] = []
+    pub mut val forTypeRecipes: Array[ForTypeRecipe] = []
     pub mut val kwCache: Array[Bind] = []
 }
 pub impl Decls { factory }

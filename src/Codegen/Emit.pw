@@ -269,8 +269,8 @@ pub impl Comp {
             // an array literal anchors at its first element (the literal node itself
             // carries no source span); an empty `[]` stays 0 like the other spanless forms.
             Expr.Array(val elems) => {
-                if elems.count() > 0 {
-                    return self.exprOffset(id: elems[0])
+                if elems.len > 0 {
+                    return self.exprOffset(id: self.exprAt(exprs: elems, index: 0U64))
                 }
                 return 0
             }

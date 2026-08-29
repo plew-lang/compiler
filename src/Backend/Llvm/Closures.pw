@@ -230,11 +230,11 @@ pub impl LlvmCtx {
             Expr.Field(val base, nameStart: _, nameLen: _) => { self.scanExprClosures(c: inout c, id: base) }
             Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count() { self.scanExprClosures(c: inout c, id: fields[i].value) i += 1 }
+                while i < fields.len { self.scanExprClosures(c: inout c, id: c.makeFieldAt(fields: fields, index: i).value) i += 1 }
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() { self.scanExprClosures(c: inout c, id: elems[i]) i += 1 }
+                while i < elems.len { self.scanExprClosures(c: inout c, id: c.exprAt(exprs: elems, index: i)) i += 1 }
             }
             Expr.Index(val base, val index) => { self.scanExprClosures(c: inout c, id: base) self.scanExprClosures(c: inout c, id: index) }
             Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.scanExprClosures(c: inout c, id: operand) }

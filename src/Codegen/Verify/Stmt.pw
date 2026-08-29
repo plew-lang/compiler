@@ -52,8 +52,8 @@ pub impl Comp {
                                     }
                                 }
                                 mut val ek: U64 = 0
-                                while ek < elems.count() {
-                                    self.tcCheckValue(expectedRef: elemRef, valueExpr: elems[ek], pos: "element")
+                                while ek < elems.len {
+                                    self.tcCheckValue(expectedRef: elemRef, valueExpr: self.exprAt(exprs: elems, index: ek), pos: "element")
                                     ek += 1
                                 }
                             }
@@ -100,8 +100,8 @@ pub impl Comp {
                                 val infElemRef: U64 = self.arena.types[le.ty].args[0]
                                 // element 0 DEFINED E; check the rest against it.
                                 mut val ek: U64 = 1
-                                while ek < elems.count() {
-                                    self.tcCheckValue(expectedRef: infElemRef, valueExpr: elems[ek], pos: "element")
+                                while ek < elems.len {
+                                    self.tcCheckValue(expectedRef: infElemRef, valueExpr: self.exprAt(exprs: elems, index: ek), pos: "element")
                                     ek += 1
                                 }
                             }

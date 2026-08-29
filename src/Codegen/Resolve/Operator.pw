@@ -3,6 +3,18 @@
 // transition so still-free-function callers (Resolve/ExprType) can reach them.
 
 pub impl Comp {
+    // Declaration-time generic operators use the bound proof, never a
+    // currently-visible concrete witness.  In particular `T: Add[T,
+    // Output=I64]` gives `a + b` the semantic term I64 even though T has no
+    // concrete implementation while its body is checked.
+    inout fn staticBinaryOperatorResultRef(lhs: U64, op: I64) -> U64 {
+        if !(isBinTraitOp(op: op)) || self.cur.checkFn >= self.arena.funcs.count() { return 0U64 }
+        val receiverRef: U64 = self.inferType(id: lhs)
+        if receiverRef == 0U64 { return 0U64 }
+        val resolution: StaticMemberResolution = self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: self.binOpTraitName(op: op), memberName: binTraitMethodName(op: op), arity: 2U64)
+        return self.staticRequirementResultType(resolution: resolution)
+    }
+
     // The result type of a binary operator `a OP b` (spec/12). For an arithmetic/bitwise
     // operator whose left operand's type declares `type Output = X` on the matching
     // operator trait (`Output != Self`, e.g. `Point - Point -> Vector`), return X;
@@ -65,6 +77,8 @@ pub impl Comp {
     }
 
     inout fn binResultTypeInfoWithChainHole(lhs: U64, rhs: U64, op: I64, chainHoleRef: U64) -> TypeInfo {
+        val staticResult: U64 = self.staticBinaryOperatorResultRef(lhs: lhs, op: op)
+        if staticResult != 0U64 { return self.typeInfoOfRef(ref: staticResult) }
         mut val lt: TypeInfo = self.exprTypeWithChainHole(id: lhs, chainHoleRef: chainHoleRef)
         val rt: TypeInfo = self.exprTypeWithChainHole(id: rhs, chainHoleRef: chainHoleRef)
         if lt.kind != 0 {

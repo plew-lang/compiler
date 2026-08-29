@@ -71,7 +71,7 @@ pub impl LlvmCtx {
         val savedA: Array[U64] = c.cur.typeArgs
         c.cur.typeParams = sd.typeParams
         c.cur.typeArgs = c.arena.types[adapterRef].args
-        val v: LLVMValueRef = self.buildStructValue(c: inout c, sd: sd, sty: self.genStructTys[gslot], fields: fields, errOffset: c.exprOffset(id: recv))
+        val v: LLVMValueRef = self.buildStructValue(c: inout c, sd: sd, sty: self.genStructTys[gslot], fields: c.pushMakeFields(fields: fields), errOffset: c.exprOffset(id: recv))
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
         return v

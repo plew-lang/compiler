@@ -5,8 +5,8 @@
 // `{ ptr data, i64 count }` value.
 
 pub impl LlvmCtx {
-    inout fn genLlvmArrayLit(c: inout Comp, elems: Array[U64], elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
-        val n: U64 = elems.count()
+    inout fn genLlvmArrayLit(c: inout Comp, elems: ExprRange, elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
+        val n: U64 = elems.len
         if n == 0U64 {
             return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
         }
@@ -19,14 +19,15 @@ pub impl LlvmCtx {
             mut val ev: LLVMValueRef = LLVMConstNull(self.ptrty)
             if elemIsAny {
                 mut val eb: Bool = false
-                ev = self.coerceToAnyIfNeeded(c: inout c, targetRef: elemRef, valueExpr: elems[i], outBoxed: inout eb)
+                val elem: U64 = c.exprAt(exprs: elems, index: i)
+                ev = self.coerceToAnyIfNeeded(c: inout c, targetRef: elemRef, valueExpr: elem, outBoxed: inout eb)
                 if !(eb) {
                     // the element is ALREADY an `any P` value (`[a, b]` where a/b are any
                     // locals): value semantics copies the existential PLACE by retaining its
                     // boxed data cell, so the literal owns an independent box (mirrors the
                     // return path Stmt.pw). A raw load stored a borrowed box → the source
                     // binding and the buffer both released it = a double free (UAF).
-                    ev = self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: elems[i]), valueExpr: elems[i])
+                    ev = self.copyAnyIfPlace(c: inout c, rv: self.genLlvmExpr(c: inout c, id: elem), valueExpr: elem)
                 }
             } else {
                 // flow the element's expected instance to the expression (same protocol
@@ -41,7 +42,8 @@ pub impl LlvmCtx {
                 }
                 // value semantics: copy an array/struct PLACE element (`[a, b]` for
                 // Array[Array[T]]) so the literal is independent of the source bindings.
-                ev = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elems[i]), elemTy: elemTy), expr: elems[i], typeRef: elemRef)
+                val elem: U64 = c.exprAt(exprs: elems, index: i)
+                ev = self.consumeIntoOwned(c: inout c, v: self.coerceElem(v: self.genLlvmExpr(c: inout c, id: elem), elemTy: elemTy), expr: elem, typeRef: elemRef)
                 self.expectedTy = 0U64
             }
             LLVMBuildStore(self.b, ev, self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))

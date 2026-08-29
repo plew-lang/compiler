@@ -1,6 +1,8 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
+import ../../Ir with { ForTypeRecipe, OperatorOperandSource, CallTemplateKind }
+
 // Walk an expression, registering any generic free function calls it contains
 // (args before self, so a nested generic call is registered before the outer one
 // whose argument type may depend on it).
@@ -12,6 +14,56 @@
 // function-typed capture are not supported yet.
 
 pub impl Comp {
+
+    // Resolve a deferred semantic type source under the active BodyInstance.
+    // The result is always an ordinary ground TypeTerm; recipes never cross
+    // the frontend/backend freeze boundary.
+    inout fn groundSemanticTypeRecipe(recipeId: U64) -> U64 {
+        if recipeId == 0U64 || recipeId > self.arena.semanticTypeRecipes.count() { return 0U64 }
+        val recipe: SemanticTypeRecipe = self.arena.semanticTypeRecipes[recipeId - 1U64]
+        if recipe.kind == 1U64 {
+            return self.groundTermForBody(ref: recipe.term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        }
+        if recipe.kind == 2U64 {
+            if recipe.siteIsStmt {
+                return self.bodyCalleeResultRef(exprId: recipe.exprId, siteIsStmt: true, slot: recipe.callSite.slot)
+            }
+            return self.bodyCalleeResultForTemplateDependency(exprId: recipe.exprId, siteKey: recipe.callSite)
+        }
+        if recipe.kind == 3U64 {
+            val receiver: U64 = self.groundSemanticTypeRecipe(recipeId: recipe.input)
+            mut val args: Array[U64] = []
+            mut val i: U64 = 0U64
+            while i < recipe.traitArgs.count() {
+                args.append(self.groundTermForBody(ref: recipe.traitArgs[i], environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef))
+                i += 1U64
+            }
+            return self.assocBindingFor(baseRef: receiver, traitId: recipe.traitId, traitOwner: recipe.traitOwner, traitArgs: args, assocId: recipe.assocId)
+        }
+        if recipe.kind == 4U64 {
+            val optional: U64 = self.groundSemanticTypeRecipe(recipeId: recipe.input)
+            if optional == 0U64 || optional >= self.arena.types.count() { return 0U64 }
+            val t: TypeRef = self.arena.types[optional]
+            if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Optional") && t.args.count() == 1U64 {
+                return t.args[0]
+            }
+            return 0U64
+        }
+        return 0U64
+    }
+
+    // Record owns one immutable source recipe for every non-range `for`.
+    // This lookup is deliberately keyed by the statement navigation id, while
+    // a nested CallResult recipe retains its own CallSiteKey identity.
+    inout fn forItemTypeRecipe(stmtId: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.forTypeRecipes.count() {
+            val recipe: ForTypeRecipe = self.decls.forTypeRecipes[i]
+            if recipe.stmtId == stmtId { return recipe.itemRecipe }
+            i += 1U64
+        }
+        return 0U64
+    }
     // CallResolution keys share one U64 namespace for ordinary Func bodies and
     // closure bodies.  Arena expression ids occupy the low range, so reserve
     // the high bit for a closure body.  This lets a closure's static calls be
@@ -322,23 +374,28 @@ pub impl Comp {
             self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate was not recorded")
             return 0U64
         }
-        match self.decls.callTemplates[index].receiver {
-            CallTemplateReceiver.Term(val term) => {
-                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-            }
-            CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val dependency) => {
-                return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency)
-            }
-            CallTemplateReceiver.PriorProtocolResult(slot: val priorSlot) => {
-                val result: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: priorSlot)
-                if result == 0U64 {
-                    self.errorAt(offset: 0U64, msg: "internal error: implicit protocol dependency was not finalized")
+        match self.decls.callTemplates[index].kind {
+            CallTemplateKind.Protocol(val receiver) => {
+                match receiver {
+                    CallTemplateReceiver.Term(val term) => {
+                        return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    }
+                    CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val dependency) => {
+                        return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency)
+                    }
+                    CallTemplateReceiver.PriorProtocolResult(slot: val priorSlot) => {
+                        val result: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: priorSlot)
+                        if result == 0U64 {
+                            self.errorAt(offset: 0U64, msg: "internal error: implicit protocol dependency was not finalized")
+                        }
+                        return result
+                    }
+                    CallTemplateReceiver.None => {
+                        self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has no receiver")
+                    }
                 }
-                return result
             }
-            CallTemplateReceiver.None => {
-                self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has no receiver")
-            }
+            _ => { self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has the wrong site kind") }
         }
         return 0U64
     }
@@ -954,111 +1011,143 @@ pub impl Comp {
         self.enqueueSelectedCallee(selection: selection)
     }
 
-    // Operators are source-level calls to their selected associated witnesses.
-    // They do not have an Expr.Call node, but must enter the same semantic
-    // reachability closure before LLVM lowers the operator syntax.
-    inout fn recordBodyOperatorCallee(exprId: U64) {
-        // Concrete bodies already have the verifier's one canonical witness
-        // selection.  Retain it rather than repeating argument matching here;
-        // in particular a nested contextless literal has no independent AST
-        // type to re-derive (`b + 2 * 3`).  Generic/provided bodies deliberately
-        // resolve below under their concrete BodyInstance environment.
-        // A trait-provided body's AST is shared by every concrete conformer.
-        // Even a non-generic copy therefore has instance-dependent `self` calls:
-        // caching `self.step()` globally lets the last copied conformer (say
-        // `Two`) overwrite the callable used while emitting another (`Counter`).
-        // Only a body with neither substitutions nor provided provenance owns an
-        // AST-invariant selection.
-        mut val canUseInvariantCache: Bool = self.cur.bodyEnvironment.params.count() == 0U64
-        if self.cur.bodyFnIdx < self.arena.funcs.count() {
-            if self.arena.funcs[self.cur.bodyFnIdx].isProvided {
-                canUseInvariantCache = false
+    // Ground one explicitly-recorded operator operand.  This is intentionally
+    // separate from groundedBodyReceiverRef: that helper is a compatibility
+    // reader for arbitrary Expr navigation, whereas an operator template owns
+    // its complete semantic input and must not rediscover it from shared AST.
+    inout fn groundOperatorOperand(source: OperatorOperandSource) -> U64 {
+        match source {
+            OperatorOperandSource.Term(exprId: _, val term) => {
+                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            }
+            OperatorOperandSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
+                return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
+            }
+            OperatorOperandSource.Legacy(exprId: _, val info) => {
+                return self.typedIrRefOfInfo(ti: info)
             }
         }
-        // This resolver is the source boundary for operator syntax. Retain its
-        // receiver once so both a cached witness and a freshly selected witness
-        // construct the same explicit CallSiteSelection.
-        mut val receiverExpr: U64 = self.arena.exprs.count()
-        match self.arena.exprs[exprId] {
-            Expr.Binary(op: _, val lhs, rhs: _) => { receiverExpr = lhs }
-            Expr.Unary(op: _, val operand) => { receiverExpr = operand }
-            _ => {}
+    }
+
+    fn operatorOperandExprId(source: OperatorOperandSource) -> U64 {
+        match source {
+            OperatorOperandSource.Term(val exprId, term: _) => { return exprId }
+            OperatorOperandSource.PriorCallResult(val exprId, siteKey: _) => { return exprId }
+            OperatorOperandSource.Legacy(val exprId, info: _) => { return exprId }
         }
-        mut val selectedReceiverRef: U64 = 0U64
-        if receiverExpr < self.arena.exprs.count() {
-            selectedReceiverRef = self.groundedBodyReceiverRef(exprId: receiverExpr)
+    }
+
+    inout fn operatorTemplateArgs(operands: Array[OperatorOperandSource]) -> ArgRange {
+        val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
+        mut val args: Array[Arg] = []
+        mut val i: U64 = 0U64
+        while i < operands.count() {
+            args.append(<Arg expr=self.operatorOperandExprId(source: operands[i]) isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+            i += 1U64
         }
-        if canUseInvariantCache && exprId < self.typeCache.callee.count() {
-            val cached: U64 = self.typeCache.callee[exprId]
-            if cached != calleeUnfilled() && cached < self.arena.funcs.count() {
-                val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=cached receiverRef=selectedReceiverRef resultHintRef=self.selectedResultHint(callee: cached) />
-                self.recordSelectedBodyCallee(selection: selection)
-                self.enqueueSelectedCallee(selection: selection)
-                return
-            }
+        return self.pushArgs(args: args)
+    }
+
+    // Same selector as check-time binary dispatch, but the RHS arrives through
+    // the template instead of an Expr.  The untyped flag retains literal
+    // adaptation without letting finalization reopen literal syntax.
+    inout fn findBinTraitWitnessForRef(typeStart: U64, typeLen: U64, name: String, rhsRef: U64, rhsUntyped: Bool) -> U64 {
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val rhsId: U64 = 0U64
+        if rhsRef < self.arena.types.count() {
+            val rhs: TypeRef = self.arena.types[rhsRef]
+            rhsId = intern(c: inout self, start: rhs.nameStart, len: rhs.nameLen)
         }
-        mut val callee: U64 = self.arena.funcs.count()
-        match self.arena.exprs[exprId] {
-            Expr.Binary(val op, val lhs, val rhs) => {
-                if !(op == opAnd() || op == opOr()) {
-                    mut val method: String = ""
-                    if op == opEq() || op == opNe() { method = "eq" }
-                    else if op == opLt() || op == opLe() || op == opGt() || op == opGe() { method = "compare" }
-                    else if isBinTraitOp(op: op) { method = binTraitMethodName(op: op) }
-                    if method.bytes().count() > 0U64 {
-                        val recvRef: U64 = selectedReceiverRef
-                        if recvRef != 0U64 && recvRef < self.arena.types.count() {
-                            val rt: TypeRef = self.arena.types[recvRef]
-                            val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
-                            mut val args: Array[Arg] = []
-                            args.append(<Arg expr=lhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                            args.append(<Arg expr=rhs isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
-                            // Every binary trait operation — including Eq.eq
-                            // and Ord.compare — uses the same witness selector
-                            // as checking.  Calling the generic callable
-                            // matcher here loses the operator's shared-RHS
-                            // rule and, notably, failed to retain String's
-                            // `Eq.eq` in the final table.  The selected Func is
-                            // the only operator-resolution fact LLVM receives.
-                            callee = self.findBinTraitWitness(typeStart: rt.nameStart, typeLen: rt.nameLen, name: method, rhs: rhs)
-                        }
+        mut val firstMatch: U64 = self.arena.funcs.count()
+        mut val intMatch: U64 = self.arena.funcs.count()
+        mut val i: U64 = 0U64
+        while i < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[i]
+            if f.isAssoc && f.recvId == qType && rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
+                if firstMatch == self.arena.funcs.count() { firstMatch = i }
+                if f.params.count() >= 2U64 {
+                    if rhsId != 0U64 && f.params[1].tyNameId == rhsId { return i }
+                    if rhsUntyped && intMatch == self.arena.funcs.count() && self.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                        intMatch = i
                     }
                 }
             }
-            Expr.Unary(val op, val operand) => {
-                val recvRef: U64 = selectedReceiverRef
-                if recvRef != 0U64 && recvRef < self.arena.types.count() {
-                    val rt: TypeRef = self.arena.types[recvRef]
-                    val method: String = unaryMethodName(op: op)
-                    // Unary trait witnesses have exactly one source operand.
-                    // The generic declaration is often `not(value: Self)`, so
-                    // generic parameter matching against the concrete operand
-                    // would incorrectly reject it. The concrete witness table
-                    // already has one selector per receiver; use the same
-                    // selector lookup as Eq/Ord operator checking.
-                    callee = self.findAssocByName(typeStart: rt.nameStart, typeLen: rt.nameLen, name: method)
+            i += 1U64
+        }
+        if rhsUntyped && intMatch < self.arena.funcs.count() { return intMatch }
+        return firstMatch
+    }
+
+    // Operators are source-level calls to their selected associated witnesses.
+    // The CallTemplate is the sole semantic input; Expr remains only a backend
+    // navigation anchor after this final descriptor is published.
+    inout fn recordBodyOperatorCallee(exprId: U64) {
+        val template: CallTemplate = self.callTemplateForCurrentBody(exprId: exprId)
+        mut val op: I64 = 0
+        mut val operands: Array[OperatorOperandSource] = []
+        mut val resultTerm: U64 = 0U64
+        match template.kind {
+            CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: _, resultTerm: val storedResult) => {
+                op = storedOp
+                operands = storedOperands
+                resultTerm = storedResult
+            }
+            _ => {
+                // Collection runs once to establish concrete type instances
+                // before Record produces semantic templates, then again to
+                // finalize call reachability.  There is no valid operator
+                // decision in the first phase; defer it rather than reopening
+                // Expr syntax.  Once Record allocated the full table, a
+                // missing site is an invariant violation.
+                if self.arena.semanticExprTypes.count() < self.arena.exprs.count() { return }
+                self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: operator CallTemplate was not recorded")
+                return
+            }
+        }
+        // A primitive operator may contain only contextual literals, hence no
+        // operand TypeTerm of its own.  Its enclosing annotation is already a
+        // semantic CallTemplate input and is the authoritative type in that
+        // case; never fall back to Mono's AST/type-cache recovery.
+        mut val expectedResultRef: U64 = 0U64
+        if template.expectedResultTerm != 0U64 {
+            expectedResultRef = self.groundTermForBody(ref: template.expectedResultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        }
+        mut val operandRefs: Array[U64] = []
+        mut val oi: U64 = 0U64
+        while oi < operands.count() {
+            operandRefs.append(self.groundOperatorOperand(source: operands[oi]))
+            oi += 1U64
+        }
+        mut val selectedReceiverRef: U64 = 0U64
+        if operandRefs.count() > 0U64 { selectedReceiverRef = operandRefs[0] }
+        if selectedReceiverRef == 0U64 { selectedReceiverRef = expectedResultRef }
+        mut val callee: U64 = self.arena.funcs.count()
+        if !(op == opAnd() || op == opOr()) && selectedReceiverRef != 0U64 && selectedReceiverRef < self.arena.types.count() {
+            val receiver: TypeRef = self.arena.types[selectedReceiverRef]
+            if operands.count() == 1U64 {
+                callee = self.findAssocByName(recvStart: receiver.nameStart, recvLen: receiver.nameLen, name: unaryMethodName(op: op))
+            } else if operands.count() == 2U64 {
+                mut val method: String = ""
+                if op == opEq() || op == opNe() { method = "eq" }
+                else if op == opLt() || op == opLe() || op == opGt() || op == opGe() { method = "compare" }
+                else if isBinTraitOp(op: op) { method = binTraitMethodName(op: op) }
+                if method.bytes().count() > 0U64 {
+                    val rhsUntyped: Bool = operandRefs[1] == 0U64
+                    callee = self.findBinTraitWitnessForRef(typeStart: receiver.nameStart, typeLen: receiver.nameLen, name: method, rhsRef: operandRefs[1], rhsUntyped: rhsUntyped)
                 }
             }
-            _ => {}
         }
-        // A primitive/floor operator legitimately has no user callable.  It is
-        // still a resolved semantic outcome: record the sentinel so LLVM does
-        // not mistake it for a missing finalization entry and re-query syntax.
         mut val selectedResultRef: U64 = 0U64
-        if callee >= self.arena.funcs.count() {
-            // A primitive fallback has the grounded left/sole operand type.
-            // This is resolved here, not patched into a partial descriptor.
-            selectedResultRef = selectedReceiverRef
+        if resultTerm != 0U64 {
+            selectedResultRef = self.groundTermForBody(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         }
+        if selectedResultRef == 0U64 { selectedResultRef = expectedResultRef }
+        if callee >= self.arena.funcs.count() && selectedResultRef == 0U64 { selectedResultRef = selectedReceiverRef }
         mut val target: CallTarget = <CallTarget.NoCallable />
-        if callee < self.arena.funcs.count() {
-            target = <CallTarget.Direct />
-        }
-        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.selectedCallArgs(exprId: exprId) resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef target=target />
+        if callee < self.arena.funcs.count() { target = <CallTarget.Direct /> }
+        val selection: CallSiteSelection = <CallSiteSelection exprId=exprId callee=callee receiverRef=selectedReceiverRef args=self.operatorTemplateArgs(operands: operands) resultHintRef=self.selectedResultHint(callee: callee) resultRef=selectedResultRef target=target />
         self.recordSelectedBodyCallee(selection: selection)
-        if callee < self.arena.funcs.count() {
-            self.enqueueSelectedCallee(selection: selection)
-        }
+        if callee < self.arena.funcs.count() { self.enqueueSelectedCallee(selection: selection) }
     }
 
     // Record the one final callable selected for `exprId` in the concrete body
@@ -2787,8 +2876,8 @@ pub impl Comp {
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count() {
-                    self.scanExprInsts(exprId: fields[i].value)
+                while i < fields.len {
+                    self.scanExprInsts(exprId: self.makeFieldAt(fields: fields, index: i).value)
                     i += 1
                 }
                 // bottom-up type-argument inference for a generic construction the front
@@ -2819,8 +2908,8 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    self.scanExprInsts(exprId: elems[i])
+                while i < elems.len {
+                    self.scanExprInsts(exprId: self.exprAt(exprs: elems, index: i))
                     i += 1
                 }
             }
@@ -3068,7 +3157,12 @@ pub impl Comp {
                         // an Iterator.  The sentinel tells LLVM that there is no
                         // iterator() call; it must not rediscover that fact from
                         // the receiver spelling.
-                        val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultHintRef=initialRef />
+                        // A value that already conforms to Iterator has no
+                        // iterator() callable. Its slot-1 descriptor is still
+                        // an identity semantic call and must publish the same
+                        // resultTypeRef as a real iterator() call; consumers
+                        // such as deferred Item recipes never read hints.
+                        val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultRef=initialRef resultHintRef=initialRef />
                         self.recordSelectedBodyCallee(selection: iteratorSelection)
                         if iteratorFn < self.arena.funcs.count() {
                             self.enqueueSelectedCallee(selection: iteratorSelection)
@@ -3121,7 +3215,22 @@ pub impl Comp {
                     // `iteratorRef` is the final body-instance receiver: it
                     // also covers an Iterable whose implicit iterator() call
                     // changed the concrete iterator type.
-                    val semanticItem: U64 = self.iterableItemTerm(iterExpr: iter, iterTerm: iteratorRef)
+                    mut val semanticItem: U64 = 0U64
+                    if useProtocolTemplate {
+                        val itemRecipe: U64 = self.forItemTypeRecipe(stmtId: stmtId)
+                        if itemRecipe == 0U64 {
+                            self.errorAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe was not recorded")
+                        } else {
+                            semanticItem = self.groundSemanticTypeRecipe(recipeId: itemRecipe)
+                            if semanticItem == 0U64 {
+                                self.errorAt(offset: 0U64, msg: "internal diagnostic: final for binding type recipe did not ground")
+                            }
+                        }
+                    } else {
+                        // Provisional collection has no Record contract yet.
+                        // Its selections are discarded before backend emission.
+                        semanticItem = self.iterableItemTerm(iterExpr: iter, iterTerm: iteratorRef)
+                    }
                     if semanticItem != 0U64 {
                         val itemTi: TypeInfo = self.typeInfoOfRef(ref: semanticItem)
                         if isStruct {

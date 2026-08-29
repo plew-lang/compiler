@@ -153,7 +153,7 @@ pub impl LlvmCtx {
     // typed-IR `Array[E]` ref (which also covers a context-typed EMPTY `[]`: the record
     // pass stores the declared/expected type); a store miss (a backend-synthesized
     // literal the record pass never saw) falls back to the first element's type.
-    inout fn arrayLitElemRef(c: inout Comp, id: U64, elems: Array[U64]) -> U64 {
+    inout fn arrayLitElemRef(c: inout Comp, id: U64, elems: ExprRange) -> U64 {
         val lr: U64 = self.exprTypeRef(c: inout c, id: id)
         if lr != 0U64 && lr < c.arena.types.count() {
             val lt: TypeRef = c.arena.types[lr]
@@ -161,10 +161,10 @@ pub impl LlvmCtx {
                 return lt.args[0]
             }
         }
-        if elems.count() == 0U64 {
+        if elems.len == 0U64 {
             return 0U64
         }
-        val e0: U64 = elems[0]
+        val e0: U64 = c.exprAt(exprs: elems, index: 0U64)
         val r: U64 = self.exprTypeRef(c: inout c, id: e0)
         if r != 0U64 {
             return r

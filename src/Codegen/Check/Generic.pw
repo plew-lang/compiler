@@ -351,7 +351,21 @@ pub impl Comp {
                             need = self.binOpTraitName(op: op)
                         }
                         if need.bytes().count() != 0U64 {
-                            if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
+                            // Arithmetic/bitwise operator typing and its
+                            // capability check must share one proof query.
+                            // Looking only at the trait's spelling loses the
+                            // selected `Add[Rhs, Output=…]` instance and made
+                            // an existing bound appear missing.
+                            if isBinTraitOp(op: op) {
+                                val receiverRef: U64 = self.inferType(id: lhs)
+                                val resolution: StaticMemberResolution = self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: need, memberName: binTraitMethodName(op: op), arity: 2U64)
+                                match resolution {
+                                    StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {}
+                                    StaticMemberResolution.Missing => {
+                                        self.errorAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
+                                    }
+                                }
+                            } else if !(self.boundHasTraitNamed(fnIdx: self.cur.checkFn, tpStart: lt.nameStart, tpLen: lt.nameLen, traitName: need)) {
                                 self.errorAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                             }
                         }
@@ -527,8 +541,8 @@ pub impl Comp {
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count() {
-                    self.checkBoundsExpr(exprId: fields[i].value)
+                while i < fields.len {
+                    self.checkBoundsExpr(exprId: self.makeFieldAt(fields: fields, index: i).value)
                     i += 1
                 }
                 // A declaration field type alone is not a semantic field
@@ -544,8 +558,8 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    self.checkBoundsExpr(exprId: elems[i])
+                while i < elems.len {
+                    self.checkBoundsExpr(exprId: self.exprAt(exprs: elems, index: i))
                     i += 1
                 }
             }
@@ -625,12 +639,13 @@ pub impl Comp {
                         return false
                     }
                     mut val mi: U64 = 0U64
-                    while mi < fields.count() {
-                        val label: U64 = intern(c: inout self, start: fields[mi].nameStart, len: fields[mi].nameLen)
+                    while mi < fields.len {
+                        val field: MakeField = self.makeFieldAt(fields: fields, index: mi)
+                        val label: U64 = intern(c: inout self, start: field.nameStart, len: field.nameLen)
                         mut val ri: U64 = 0U64
                         while ri < et.recordFieldLabels.count() {
                             if et.recordFieldLabels[ri] == label {
-                                self.checkGenericTypeMatch(expectedRef: et.recordFieldTerms[ri], valueExpr: fields[mi].value)
+                                self.checkGenericTypeMatch(expectedRef: et.recordFieldTerms[ri], valueExpr: field.value)
                                 ri = et.recordFieldLabels.count()
                             } else {
                                 ri += 1U64
@@ -647,9 +662,10 @@ pub impl Comp {
                 // their `value` field has the single type argument.
                 if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
                     mut val refFieldIdx: U64 = 0U64
-                    while refFieldIdx < fields.count() {
-                        if rangeEquals(bytes: self.arena.bytes, start: fields[refFieldIdx].nameStart, len: fields[refFieldIdx].nameLen, kw: "value") {
-                            self.checkGenericTypeMatch(expectedRef: et.args[0], valueExpr: fields[refFieldIdx].value)
+                    while refFieldIdx < fields.len {
+                        val field: MakeField = self.makeFieldAt(fields: fields, index: refFieldIdx)
+                        if rangeEquals(bytes: self.arena.bytes, start: field.nameStart, len: field.nameLen, kw: "value") {
+                            self.checkGenericTypeMatch(expectedRef: et.args[0], valueExpr: field.value)
                         }
                         refFieldIdx += 1U64
                     }
@@ -672,12 +688,13 @@ pub impl Comp {
         }
     }
 
-    inout fn genericCheckFieldsUnder(params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: Array[MakeField]) {
+    inout fn genericCheckFieldsUnder(params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: MakeFieldRange) {
         mut val mi: U64 = 0U64
-        while mi < makeFields.count() {
+        while mi < makeFields.len {
+            val makeField: MakeField = self.makeFieldAt(fields: makeFields, index: mi)
             mut val di: U64 = 0U64
             while di < defFields.count() {
-                if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeFields[mi].nameStart, bLen: makeFields[mi].nameLen) {
+                if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeField.nameStart, bLen: makeField.nameLen) {
                     if defFields[di].ty != 0U64 {
                         val savedP: Array[Bind] = self.cur.typeParams
                         val savedA: Array[U64] = self.cur.typeArgs
@@ -686,7 +703,7 @@ pub impl Comp {
                         val grounded: U64 = self.groundTypeRef(ref: defFields[di].ty)
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
-                        self.checkGenericTypeMatch(expectedRef: grounded, valueExpr: makeFields[mi].value)
+                        self.checkGenericTypeMatch(expectedRef: grounded, valueExpr: makeField.value)
                     }
                     di = defFields.count()
                 } else {
@@ -764,8 +781,8 @@ pub impl Comp {
                         Expr.Array(val elems) => {
                             val elemRef: U64 = self.arena.types[expectedRef].args[0]
                             mut val ei: U64 = 0
-                            while ei < elems.count() {
-                                self.checkGenericTypeMatch(expectedRef: elemRef, valueExpr: elems[ei])
+                            while ei < elems.len {
+                                self.checkGenericTypeMatch(expectedRef: elemRef, valueExpr: self.exprAt(exprs: elems, index: ei))
                                 ei += 1
                             }
                             return
@@ -775,10 +792,56 @@ pub impl Comp {
                 }
             }
         }
-        val inferred: U64 = self.inferType(id: valueExpr)
+        // An abstract operator's result is selected by its static trait proof.
+        // `inferType` remains the compatibility adapter for ordinary legacy
+        // expressions, but it cannot represent an unbound associated Output
+        // without collapsing its receiver head.  Preserve the semantic term at
+        // this generic-check boundary instead.
+        mut val inferred: U64 = self.inferType(id: valueExpr)
+        mut val inferredFromStaticOperator: Bool = false
+        match self.arena.exprs[valueExpr] {
+            Expr.Binary(val op, lhs: val lhs, rhs: _) => {
+                val operatorResult: U64 = self.staticBinaryOperatorResultRef(lhs: lhs, op: op)
+                if operatorResult != 0U64 {
+                    inferred = operatorResult
+                    inferredFromStaticOperator = true
+                }
+            }
+            _ => {}
+        }
+        // An associated-type projection is a closed semantic TypeTerm, not an
+        // unknown nominal spelling.  The legacy compatibility adapter below
+        // deliberately admits `T` against an unknown term for calls whose
+        // instantiation supplies that term later; applying that rule here
+        // would silently prove `T#Add[T].Output == T`.  Generic bodies instead
+        // compare a projection structurally, after ordinary grounding.  Thus
+        // `Output = T` succeeds through the bound predicate, while an
+        // unbound Output remains distinct from T.
+        if inferredFromStaticOperator && (self.typeTermContainsAssociatedProjection(ref: expectedRef) || self.typeTermContainsAssociatedProjection(ref: inferred)) {
+            val expectedTerm: U64 = self.groundTypeRef(ref: expectedRef)
+            if !(self.typeRefEq(a: expectedTerm, b: inferred)) {
+                self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
+            }
+            return
+        }
         if !(self.typesCompatible(expected: expectedRef, inferred: inferred)) {
             self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
         }
+    }
+
+    // Projection identity may occur under a nominal constructor or record.
+    // Traverse the shared TypeTerm child relation so generic checking sees the
+    // same complete term shape as grounding, equality, and monomorphization.
+    inout fn typeTermContainsAssociatedProjection(ref: U64) -> Bool {
+        if ref == 0U64 || ref >= self.arena.types.count() { return false }
+        val t: TypeRef = self.arena.types[ref]
+        if t.assocNameId != 0U64 { return true }
+        mut val i: U64 = 0U64
+        while i < self.typeTermChildCount(t: t) {
+            if self.typeTermContainsAssociatedProjection(ref: self.typeTermChildRef(t: t, index: i)) { return true }
+            i += 1U64
+        }
+        return false
     }
 
     inout fn checkBoundsStmt(stmtId: U64) {

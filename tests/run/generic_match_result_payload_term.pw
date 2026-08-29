@@ -1,0 +1,26 @@
+// A match expression must record the TypeTerm of an arm payload while that
+// arm's lexical bindings are in scope.  Re-reading the first `give` after the
+// arm scope has been popped loses `value: Box[T]`; the local `picked` below
+// then cannot be typed structurally.
+import @Std/Io with { print }
+
+struct Box[T] { pub val value: T }
+pub impl Box[T] { factory }
+
+enum Choice[T] {
+    First(value: T)
+    Second(value: T)
+}
+
+fn read[T](choice: Choice[Box[T]]) -> T {
+    val picked = match choice {
+        Choice.First(value: val value) => { give value }
+        Choice.Second(value: val value) => { give value }
+    }
+    return picked.value
+}
+
+fn main() {
+    print(read(choice: <Choice[Box[I64]].First value=<Box value=42I64/>/>))
+    print(read(choice: <Choice[Box[String]].Second value=<Box value="right"/>/>))
+}

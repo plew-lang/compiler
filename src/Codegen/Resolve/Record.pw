@@ -26,6 +26,36 @@
 
 pub impl Comp {
 
+    // Preserve an expression's semantic type source without placing a call
+    // result inside TypeTerm. A written call is identified by its template key;
+    // every other expression is an ordinary parametric term.
+    inout fn semanticTypeRecipeForExpr(exprId: U64) -> U64 {
+        match self.arena.exprs[exprId] {
+            Expr.Call(nameStart: _, nameLen: _, args: _) => {
+                return self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=exprId callSite=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />)
+            }
+            Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+                return self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=exprId callSite=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />)
+            }
+            Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
+                return self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=exprId callSite=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />)
+            }
+            _ => {}
+        }
+        return self.semanticTypeRecipeTerm(term: self.parametricExprTerm(exprId: exprId))
+    }
+
+    // The source-level `for` binding is the payload of the selected `next()`
+    // result. This is the desugaring's actual semantic boundary: it preserves
+    // a static Iterator proof and an existential requirement witness through
+    // the same immutable CallResolution, without a second trait lookup.
+    // Recording it on Decls makes it survive fresh local scopes.
+    inout fn recordForItemTypeRecipe(stmtId: U64) {
+        val next: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=2U64 exprId=stmtId siteIsStmt=true callSite=self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: 2U64) />)
+        val item: U64 = self.pushSemanticTypeRecipe(recipe: <SemanticTypeRecipe kind=4U64 input=next />)
+        self.decls.forTypeRecipes.append(<ForTypeRecipe stmtId=stmtId itemRecipe=item />)
+    }
+
     // `for` protocol slot 1 consumes an iterable value. When that value is a
     // written call, its precise concrete receiver is the completed result of
     // that call under the active BodyInstance — not the call's declaration-time
@@ -64,14 +94,19 @@ pub impl Comp {
         // never capture this proof query. A direct iterator value has no call
         // provenance and uses assocItemRef's Core-contract path below.
         mut val itemTerm: U64 = 0U64
-        if iterExpr < self.arena.semanticExprTypes.count() {
-            val call: CallProvenance = self.arena.semanticExprTypes[iterExpr].call
-            if call.callee < self.arena.funcs.count() {
-                val selected: Func = self.arena.funcs[call.callee]
-                if selected.originTraitOwner != 0U64 {
-                    val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
-                    itemTerm = self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: selected.recvTraitArgs, assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen))
+        if iterExpr < self.arena.exprs.count() {
+            val template: CallTemplate = self.callTemplateForCurrentBody(exprId: iterExpr)
+            match template.kind {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, calleeTypeArgs: _) => {
+                    if callee < self.arena.funcs.count() {
+                        val selected: Func = self.arena.funcs[callee]
+                        if selected.originTraitOwner != 0U64 {
+                            val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
+                            itemTerm = self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: selected.recvTraitArgs, assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen))
+                        }
+                    }
                 }
+                _ => {}
             }
         }
         if itemTerm == 0U64 {
@@ -258,19 +293,54 @@ pub impl Comp {
         }
     }
 
+    // The value of an expression block is its final `give`.  Read the term
+    // after Record has visited the block, while its lexical arm bindings have
+    // already supplied the give expression's own SemanticExprType.  This is a
+    // producer boundary: it never re-runs exprType/typeOf after the block's
+    // scope has been popped.
+    inout fn recordValueBlockResult(exprId: U64, blockId: U64) -> Bool {
+        val giveExpr: U64 = self.blockGiveExpr(blkId: blockId)
+        if giveExpr >= self.arena.exprs.count() { return false }
+        val term: U64 = self.parametricExprTerm(exprId: giveExpr)
+        if term == 0U64 { return false }
+        self.recordSemanticExprTerm(exprId: exprId, term: term)
+        return true
+    }
+
     // Record an expression under an optional-chain payload supplied by its
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64) {
-        // The flat TypeRef carrier cannot represent an anonymous-record value
-        // and its fields as one semantic node yet.  Retain the legacy adapter
-        // record for every expression, then let structural cases below refine
-        // the exact term where the receiver already exposes one.
-        if exprId < self.arena.semanticExprTypes.count() {
-            self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
-        }
+        // Structural forms write their TypeTerm below.  The legacy TypeInfo
+        // adapter is intentionally a post-order fallback: computing it first
+        // recursively reopens children whose semantic producer has already
+        // written the exact term.  This keeps type recovery a compatibility
+        // boundary rather than the universal source of semantic truth.
         match self.arena.exprs[exprId] {
+            // These literals have a type fixed by their own spelling.  Record
+            // it as a TypeTerm directly instead of routing through TypeInfo;
+            // only an unsuffixed integer remains context-polymorphic.
+            Expr.Int(value: _, offset: _, val isBool, val tyStart, val tyLen, isNeg: _) => {
+                if isBool {
+                    val boolName: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen))
+                } else if tyLen != 0U64 {
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen))
+                }
+            }
+            Expr.Float(start: _, len: _, val tyStart, val tyLen) => {
+                if tyLen != 0U64 {
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: tyStart, nameLen: tyLen))
+                } else {
+                    val floatName: Bind = self.kwSpan(kw: "F64", kwLen: 3U64)
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: floatName.nameStart, nameLen: floatName.nameLen))
+                }
+            }
+            Expr.Str(start: _, len: _) => {
+                val stringName: Bind = self.kwSpan(kw: "String", kwLen: 6U64)
+                self.recordSemanticExprTerm(exprId: exprId, term: self.simpleTypeRef(nameStart: stringName.nameStart, nameLen: stringName.nameLen))
+            }
             // A local binding's declared TypeRef is the lexical source of
             // truth for an identifier. Record it directly after the legacy
             // adapter so a parametric annotation (`Optional[Box[T]]`) cannot
@@ -281,14 +351,7 @@ pub impl Comp {
                     val local: Local = self.cur.locals[localIdx]
                     if local.ty != 0U64 {
                         self.recordSemanticExprTerm(exprId: exprId, term: local.ty)
-                    } else if exprId < self.arena.semanticExprTypes.count() {
-                        self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
                     }
-                } else if exprId < self.arena.semanticExprTypes.count() {
-                    // `self` and a small number of legacy global bindings do
-                    // not live in locals; retain their established query until
-                    // their explicit semantic nodes are introduced.
-                    self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
                 }
             }
             Expr.Unary(op: _, val operand) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
@@ -397,7 +460,33 @@ pub impl Comp {
                 val methodCallee: U64 = self.resolvedCallee(id: exprId)
                 self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverTerm: self.parametricExprTerm(exprId: recv), args: args)
             }
-            Expr.ExtView(val recv, source: _, strip: _) => { self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef) }
+            Expr.ExtView(val recv, val source, val strip) => {
+                self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
+                // A view is a type-level facet of an existing value, not a
+                // method-resolution query.  Preserve the receiver's exact
+                // TypeTerm and apply the resolved source set once, matching
+                // the canonical TypeRef representation used everywhere else.
+                val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
+                if receiverTerm != 0U64 && receiverTerm < self.arena.types.count() {
+                    mut val sources: Array[ResolvedViewSource] = self.typeRefViewSources(ref: receiverTerm)
+                    if strip {
+                        sources = []
+                    } else {
+                        mut val present: Bool = false
+                        mut val i: U64 = 0U64
+                        while i < sources.count() {
+                            if self.semanticViewSourceEq(a: sources[i], b: source) {
+                                present = true
+                            }
+                            i += 1U64
+                        }
+                        if !(present) {
+                            sources.append(source)
+                        }
+                    }
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.typeRefWithViewSources(ref: receiverTerm, sources: sources))
+                }
+            }
             Expr.Field(val base, val nameStart, val nameLen) => {
                 self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 // Field selection is a structural type-term operation. Once the
@@ -409,17 +498,14 @@ pub impl Comp {
                 val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseTerm, fieldStart: nameStart, fieldLen: nameLen)
                 if fieldTerm != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
-                } else if exprId < self.arena.semanticExprTypes.count() {
-                    // Non-struct field syntax is still on the legacy carrier
-                    // until enum/projection nodes become first-class terms.
-                    self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
                 }
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
                 mut val i: U64 = 0
-                while i < fields.count() {
-                    self.recordExpr(exprId: fields[i].value, chainHoleRef: chainHoleRef)
-                    val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: fields[i].nameStart, fieldLen: fields[i].nameLen)
+                while i < fields.len {
+                    val field: MakeField = self.makeFieldAt(fields: fields, index: i)
+                    self.recordExpr(exprId: field.value, chainHoleRef: chainHoleRef)
+                    val ft: TypeInfo = self.makeFieldType(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
                     mut val ctxRef: U64 = self.typedIrRefOfInfo(ti: ft)
                     // a generic construction's field context is the DECLARED field type
                     // (`items: Array[T]` on `<Box[I64] …/>`) — ground it under the
@@ -435,7 +521,7 @@ pub impl Comp {
                     // `Buffer[String]`.  Dropping it merely because it is not
                     // ground loses the only result-side substitution for an
                     // argument-less generic associated call.
-                    self.recordSemanticExprExpectedResult(exprId: fields[i].value, expectedTerm: ctxRef)
+                    self.recordSemanticExprExpectedResult(exprId: field.value, expectedTerm: ctxRef)
                     // Empty array literals are different: their AST-owned
                     // literal type must itself be concrete, so retain the old
                     // ground-only gate for this literal-specific adapter.
@@ -443,22 +529,32 @@ pub impl Comp {
                     if arrayCtx != 0U64 && !(self.tyRefIsGround(ref: arrayCtx)) {
                         arrayCtx = 0U64
                     }
-                    self.recordArrayLitCtx(exprId: fields[i].value, ctxRef: arrayCtx)
+                    self.recordArrayLitCtx(exprId: field.value, ctxRef: arrayCtx)
                     i += 1
+                }
+                // A named construction already owns its complete TypeTerm from
+                // Lower.  It is the value's declared instance (including
+                // lexical generic arguments), so reopening exprType would only
+                // reconstruct the same fact from spelling and can erase those
+                // arguments. Anonymous records intentionally keep the fallback:
+                // their term is assembled from field terms by the record
+                // canonicalizer, not stored on this node.
+                if ty != 0U64 {
+                    self.recordSemanticExprTerm(exprId: exprId, term: ty)
                 }
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    self.recordExpr(exprId: elems[i], chainHoleRef: chainHoleRef)
+                while i < elems.len {
+                    self.recordExpr(exprId: self.exprAt(exprs: elems, index: i), chainHoleRef: chainHoleRef)
                     i += 1
                 }
                 // an array literal types as `Array[E]` from its first element (exprType
                 // reports a literal as unknown for the CHECK passes — element-wise checking
                 // — so the refinement lives here, not in exprType). An empty literal stays
                 // 0; its Let-context declared type records it (recordStmt).
-                if elems.count() > 0U64 {
-                    val eRef: U64 = self.parametricExprTerm(exprId: elems[0])
+                if elems.len > 0U64 {
+                    val eRef: U64 = self.parametricExprTerm(exprId: self.exprAt(exprs: elems, index: 0U64))
                     if eRef != 0U64 {
                         if exprId < self.arena.semanticExprTypes.count() {
                             self.recordSemanticExprTerm(exprId: exprId, term: self.arrayRefOfElem(elemRef: eRef))
@@ -479,17 +575,18 @@ pub impl Comp {
                     if baseTy.args.count() == 1U64 {
                         if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
                             self.recordSemanticExprTerm(exprId: exprId, term: baseTy.args[0])
-                        } else if exprId < self.arena.semanticExprTypes.count() {
-                            self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
                         }
-                    } else if exprId < self.arena.semanticExprTypes.count() {
-                        self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
                     }
-                } else if exprId < self.arena.semanticExprTypes.count() {
-                    self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
                 }
             }
-            Expr.Cast(val operand, tyStart: _, tyLen: _, ty: _) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
+            Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
+                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                // `as Target` is an explicit source-level type boundary; Lower
+                // has resolved Target into `ty`, so this is not an inference
+                // query. Recording it directly preserves a generic/view term
+                // exactly as written for every later BodyInstance.
+                self.recordSemanticExprTerm(exprId: exprId, term: ty)
+            }
             Expr.MatchExpr(val scrut, val arms) => {
                 self.recordExpr(exprId: scrut, chainHoleRef: chainHoleRef)
                 mut val ai: U64 = 0
@@ -501,13 +598,33 @@ pub impl Comp {
                     self.popLocals(mark: mark)
                     ai += 1
                 }
+                // The type checker verifies that all non-diverging arms agree.
+                // Select the first recorded value solely as that canonical
+                // term; resolving it after `popLocals` would lose arm payload
+                // binders such as `Choice.First(value: Box[T])`.
+                mut val resultArm: U64 = 0U64
+                while resultArm < arms.count() {
+                    if !(arms[resultArm].isDiverge) {
+                        self.recordValueBlockResult(exprId: exprId, blockId: arms[resultArm].body)
+                        resultArm = arms.count()
+                    } else {
+                        resultArm += 1U64
+                    }
+                }
             }
             Expr.IfExpr(val cond, val thenBlk, val elseBlk) => {
                 self.recordExpr(exprId: cond, chainHoleRef: chainHoleRef)
                 self.recordBlock(blkId: thenBlk)
                 self.recordBlock(blkId: elseBlk)
+                self.recordValueBlockResult(exprId: exprId, blockId: thenBlk)
             }
             Expr.OptChain(val base, val cont) => {
+                // This form rewrites itself to MatchExpr below. Preserve its
+                // pre-rewrite legacy adapter before changing the AST node;
+                // other forms use the common post-order fallback.
+                if exprId < self.arena.semanticExprTypes.count() {
+                    self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+                }
                 self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
                 mut val baseInfo: TypeInfo = self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef)
                 mut val baseRef: U64 = self.parametricExprTerm(exprId: base)
@@ -546,12 +663,55 @@ pub impl Comp {
                     }
                 }
             }
-            Expr.ChainHole => {}
-            Expr.Try(val expr) => { self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef) }
-            Expr.Arrow(val base, nameStart: _, nameLen: _) => { self.recordExpr(exprId: base, chainHoleRef: chainHoleRef) }
-            Expr.Deref(val base) => { self.recordExpr(exprId: base, chainHoleRef: chainHoleRef) }
-            Expr.Move(val operand, isBorrow: _) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
-            Expr.Await(val operand) => { self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef) }
+            Expr.ChainHole => {
+                // The unique enclosing chain stage supplies this term explicitly;
+                // it is never ambient resolver state.
+                self.recordSemanticExprTerm(exprId: exprId, term: chainHoleRef)
+            }
+            Expr.Try(val expr) => {
+                self.recordExpr(exprId: expr, chainHoleRef: chainHoleRef)
+                val resultTerm: U64 = self.parametricExprTerm(exprId: expr)
+                if self.isGenericInst(ref: resultTerm) {
+                    val result: TypeRef = self.arena.types[resultTerm]
+                    if result.args.count() > 0U64 {
+                        self.recordSemanticExprTerm(exprId: exprId, term: result.args[0])
+                    }
+                }
+            }
+            Expr.Arrow(val base, val nameStart, val nameLen) => {
+                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                val refTerm: U64 = self.parametricExprTerm(exprId: base)
+                if self.isStrongRefInst(ref: refTerm) {
+                    val reference: TypeRef = self.arena.types[refTerm]
+                    if reference.args.count() > 0U64 {
+                        self.recordSemanticExprTerm(exprId: exprId, term: self.fieldTypeRefOfReceiver(receiverRef: reference.args[0], fieldStart: nameStart, fieldLen: nameLen))
+                    }
+                }
+            }
+            Expr.Deref(val base) => {
+                self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)
+                val refTerm: U64 = self.parametricExprTerm(exprId: base)
+                if self.isStrongRefInst(ref: refTerm) {
+                    val reference: TypeRef = self.arena.types[refTerm]
+                    if reference.args.count() > 0U64 {
+                        self.recordSemanticExprTerm(exprId: exprId, term: reference.args[0])
+                    }
+                }
+            }
+            Expr.Move(val operand, isBorrow: _) => {
+                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                self.recordSemanticExprTerm(exprId: exprId, term: self.parametricExprTerm(exprId: operand))
+            }
+            Expr.Await(val operand) => {
+                self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)
+                val promiseTerm: U64 = self.parametricExprTerm(exprId: operand)
+                if promiseTerm != 0U64 && promiseTerm < self.arena.types.count() {
+                    val promise: TypeRef = self.arena.types[promiseTerm]
+                    if promise.args.count() > 0U64 {
+                        self.recordSemanticExprTerm(exprId: exprId, term: promise.args[0])
+                    }
+                }
+            }
             // a closure body is walked IN PLACE, its params scoped over the enclosing
             // locals (captures resolve to the enclosing bindings) — the hole the check
             // passes leave open (neither checkGenericBodies nor this pass's caller
@@ -563,6 +723,13 @@ pub impl Comp {
                 // expression instead of reconstructing it through exprType.
                 self.recordSemanticExprTerm(exprId: exprId, term: self.closureFnTypeRef(params: params, retTy: retTy))
                 val mark: U64 = self.scopeMark()
+                // A closure owns a distinct Mono body key.  Its CallTemplates
+                // must use the same owner while retaining the enclosing lexical
+                // locals for capture typing; otherwise finalization searches the
+                // closure key and finds only a Pending template recorded under
+                // the parent function.
+                val savedCheckFn: U64 = self.cur.checkFn
+                self.cur.checkFn = self.closureBodyKey(closureId: exprId)
                 mut val pi: U64 = 0
                 while pi < params.count() {
                     val p: Param = params[pi]
@@ -570,7 +737,27 @@ pub impl Comp {
                     pi += 1
                 }
                 self.recordBlock(blkId: body)
+                self.cur.checkFn = savedCheckFn
                 self.popLocals(mark: mark)
+            }
+            _ => {}
+        }
+        if exprId < self.arena.semanticExprTypes.count() {
+            if self.semanticExprTerm(exprId: exprId) == 0U64 {
+                self.recordSemanticExprInfo(exprId: exprId, ti: self.exprTypeWithChainHole(id: exprId, chainHoleRef: chainHoleRef))
+            }
+        }
+        // Record only after child terms and fallback literal adapters are
+        // available. The template is the unique semantic input for operator
+        // finalization; Mono must not reopen this Binary/Unary expression.
+        match self.arena.exprs[exprId] {
+            Expr.Unary(val op, val operand) => {
+                val operands: Array[U64] = [operand]
+            self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: operands, isUnary: true)
+            }
+            Expr.Binary(val op, val lhs, val rhs) => {
+                val operands: Array[U64] = [lhs, rhs]
+            self.recordOperatorTemplate(exprId: exprId, op: op, operandExprs: operands, isUnary: false)
             }
             _ => {}
         }
@@ -650,6 +837,7 @@ pub impl Comp {
                     val nextReceiver: CallTemplateReceiver = <CallTemplateReceiver.PriorProtocolResult slot=1U64 />
                     self.recordProtocolCallTemplate(stmtId: stmtId, slot: 1U64, receiver: iteratorReceiver)
                     self.recordProtocolCallTemplate(stmtId: stmtId, slot: 2U64, receiver: nextReceiver)
+                    self.recordForItemTypeRecipe(stmtId: stmtId)
                     val semanticItem: U64 = self.iterableItemTerm(iterExpr: iter, iterTerm: iterTerm)
                     if isStruct {
                         if semanticItem != 0U64 {
@@ -742,7 +930,12 @@ pub impl Comp {
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fi]
-            if !(f.isExtern) && f.body != 0U64 && f.srcTraitId == 0U64 {
+            // A trait-provided body is copied per conformance, but its lexical
+            // source body owns one shared CallTemplate set.  Skipping every
+            // `srcTraitId` body left operators in provided methods without the
+            // semantic template that Mono is required to consume.  Record the
+            // source declaration once and skip only generated provided copies.
+            if !(f.isExtern) && f.body != 0U64 && !(f.isProvided) {
                 self.cur.locals = []
                 self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
                 self.cur.hasRecv = f.hasRecv

@@ -98,8 +98,8 @@ pub impl Comp {
                     if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Array") {
                         if et.args.count() > 0U64 {
                             mut val ei: U64 = 0
-                            while ei < elems.count() {
-                                self.tcCheckValue(expectedRef: et.args[0], valueExpr: elems[ei], pos: "element")
+                            while ei < elems.len {
+                                self.tcCheckValue(expectedRef: et.args[0], valueExpr: self.exprAt(exprs: elems, index: ei), pos: "element")
                                 ei += 1
                             }
                         }
@@ -325,12 +325,13 @@ pub impl Comp {
             match self.arena.exprs[makeId] {
                 Expr.Make(typeStart: _, typeLen: _, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
                     mut val mi: U64 = 0U64
-                    while mi < fields.count() {
-                        val label: U64 = intern(c: inout self, start: fields[mi].nameStart, len: fields[mi].nameLen)
+                    while mi < fields.len {
+                        val field: MakeField = self.makeFieldAt(fields: fields, index: mi)
+                        val label: U64 = intern(c: inout self, start: field.nameStart, len: field.nameLen)
                         mut val ri: U64 = 0U64
                         while ri < et.recordFieldLabels.count() {
                             if et.recordFieldLabels[ri] == label {
-                                self.tcCheckValue(expectedRef: et.recordFieldTerms[ri], valueExpr: fields[mi].value, pos: "record-field")
+                                self.tcCheckValue(expectedRef: et.recordFieldTerms[ri], valueExpr: field.value, pos: "record-field")
                                 ri = et.recordFieldLabels.count()
                             } else {
                                 ri += 1U64
@@ -357,9 +358,10 @@ pub impl Comp {
                 if rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "Ref") || rangeEquals(bytes: self.arena.bytes, start: et.nameStart, len: et.nameLen, kw: "WeakRef") {
                     if et.args.count() >= 1U64 {
                         mut val rfi: U64 = 0
-                        while rfi < fields.count() {
-                            if rangeEquals(bytes: self.arena.bytes, start: fields[rfi].nameStart, len: fields[rfi].nameLen, kw: "value") {
-                                self.tcCheckValue(expectedRef: et.args[0], valueExpr: fields[rfi].value, pos: "ref value")
+                        while rfi < fields.len {
+                            val field: MakeField = self.makeFieldAt(fields: fields, index: rfi)
+                            if rangeEquals(bytes: self.arena.bytes, start: field.nameStart, len: field.nameLen, kw: "value") {
+                                self.tcCheckValue(expectedRef: et.args[0], valueExpr: field.value, pos: "ref value")
                             }
                             rfi += 1
                         }
@@ -388,12 +390,13 @@ pub impl Comp {
         }
     }
 
-    inout fn tcCheckFieldsUnder(params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: Array[MakeField]) {
+    inout fn tcCheckFieldsUnder(params: Array[Bind], targs: Array[U64], defFields: Array[FieldDef], makeFields: MakeFieldRange) {
         mut val mi: U64 = 0
-        while mi < makeFields.count() {
+        while mi < makeFields.len {
+            val makeField: MakeField = self.makeFieldAt(fields: makeFields, index: mi)
             mut val di: U64 = 0
             while di < defFields.count() {
-                if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeFields[mi].nameStart, bLen: makeFields[mi].nameLen) {
+                if spansEqual(c: inout self, aStart: defFields[di].nameStart, aLen: defFields[di].nameLen, bStart: makeField.nameStart, bLen: makeField.nameLen) {
                     if defFields[di].ty != 0U64 {
                         val savedP: Array[Bind] = self.cur.typeParams
                         val savedA: Array[U64] = self.cur.typeArgs
@@ -402,7 +405,7 @@ pub impl Comp {
                         val grounded: U64 = self.groundTypeRef(ref: defFields[di].ty)
                         self.cur.typeParams = savedP
                         self.cur.typeArgs = savedA
-                        self.tcCheckValue(expectedRef: grounded, valueExpr: makeFields[mi].value, pos: "ginst-field")
+                        self.tcCheckValue(expectedRef: grounded, valueExpr: makeField.value, pos: "ginst-field")
                     }
                     di = defFields.count()
                 } else {

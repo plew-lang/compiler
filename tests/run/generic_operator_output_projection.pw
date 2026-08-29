@@ -1,0 +1,24 @@
+// `Add`'s associated Output is independent of both operands.  Abstract
+// checking must carry the bound's projection through `a + b`, rather than
+// silently treating the result as T or reopening a concrete witness.
+import @Std/Io with { print }
+import @Std/Core with { Add }
+
+fn sumOutput[T](a: T, b: T) -> I64 where T: Add[T, Output = I64] {
+    return a + b
+}
+
+struct Score { pub val value: I64 }
+pub impl Score { factory }
+
+// The generic body cannot select this witness at declaration time. Its
+// `Add[Score].Output = I64` proof must survive until the concrete body instance
+// finalizes the source-level `+` call.
+impl Score as Add[Score] {
+    type Output = I64
+    assoc fn add(lhs: Score, rhs: Score) -> I64 { return lhs.value + rhs.value }
+}
+
+fn main() {
+    print(sumOutput(a: <Score value=19I64 />, b: <Score value=23I64 />))
+}

@@ -169,8 +169,8 @@ pub impl LlvmCtx {
                 mut val et: LLVMTypeRef = self.i64ty
                 if elemRef != 0U64 {
                     et = self.llvmTypeOfRef(c: inout c, ref: elemRef)
-                } else if elems.count() > 0U64 {
-                    et = self.exprLlvmType(c: inout c, id: elems[0])
+                } else if elems.len > 0U64 {
+                    et = self.exprLlvmType(c: inout c, id: c.exprAt(exprs: elems, index: 0U64))
                 }
                 return self.genLlvmArrayLit(c: inout c, elems: elems, elemTy: et, elemRef: elemRef)
             }

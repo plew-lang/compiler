@@ -8,7 +8,7 @@
 import @Std/Io with { print }
 import @Std/Core with { Add }
 
-fn sum[T](xs: Array[T], seed: T) -> T where T: Add {
+fn sum[T](xs: Array[T], seed: T) -> T where T: Add[T, Output = T] {
     mut val acc: T = seed
     for x in xs {
         acc = acc + x

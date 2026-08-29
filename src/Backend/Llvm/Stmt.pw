@@ -112,9 +112,10 @@ pub impl LlvmCtx {
                     match c.arena.exprs[init] {
                         Expr.Array(val elems) => {
                             isArr = true
-                            if elems.count() > 0U64 {
-                                elemTy = self.exprLlvmType(c: inout c, id: elems[0])
-                                elemKind = self.valueKind(c: inout c, id: elems[0])
+                            if elems.len > 0U64 {
+                                val first: U64 = c.exprAt(exprs: elems, index: 0U64)
+                                elemTy = self.exprLlvmType(c: inout c, id: first)
+                                elemKind = self.valueKind(c: inout c, id: first)
                             }
                         }
                         _ => {

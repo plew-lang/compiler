@@ -188,9 +188,6 @@ pub impl Comp {
                         mut val ti: U64 = 0U64
                         while ti < self.decls.traits.count() {
                             val traitDef: TraitDef = self.decls.traits[ti]
-                            // `traitStart` is the resolved declaration owner,
-                            // not merely the spelling at the `where` site.
-                            // Same-name/same-arity imported traits are distinct.
                             if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
                                 mut val ri: U64 = 0U64
                                 while ri < traitDef.reqs.count() {
@@ -205,6 +202,49 @@ pub impl Comp {
                         }
                     }
                     _ => {}
+                }
+            }
+            i += 1U64
+        }
+        return <StaticMemberResolution.Missing />
+    }
+
+    // Operator syntax has no written argument labels, yet it is still a
+    // source-level call to one fixed trait requirement.  Do not manufacture an
+    // ArgRange merely to reuse `staticMemberResolution`: that would append
+    // transient AST payload while answering a pure type query.  Its arity is
+    // part of the operator grammar, so this is the same proof-backed selection
+    // with the only applicable call shape stated explicitly.
+    inout fn staticOperatorResolution(fnIdx: U64, receiverRef: U64, traitName: String, memberName: String, arity: U64) -> StaticMemberResolution {
+        val traitId: U64 = self.internBytes(s: traitName).nameId
+        val memberId: U64 = self.internBytes(s: memberName).nameId
+        mut val i: U64 = 0U64
+        while i < self.decls.funcBounds.count() {
+            val bound: FuncBound = self.decls.funcBounds[i]
+            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
+                val ownerId: U64 = intern(c: inout self, start: bound.constraint.key.owner, len: self.traitNameLenByOwner(owner: bound.constraint.key.owner))
+                if ownerId == traitId {
+                    val proof: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint)
+                    match proof {
+                        StaticConformanceProof.AssumedBound(boundIdx: _) => {
+                            mut val ti: U64 = 0U64
+                            while ti < self.decls.traits.count() {
+                                val traitDef: TraitDef = self.decls.traits[ti]
+                                if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
+                                    mut val ri: U64 = 0U64
+                                    while ri < traitDef.reqs.count() {
+                                        val req: Func = traitDef.reqs[ri]
+                                        if req.nameId == memberId && req.params.count() == arity {
+                                            return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
+                                        }
+                                        ri += 1U64
+                                    }
+                                }
+                                ti += 1U64
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             i += 1U64
@@ -251,7 +291,7 @@ pub impl Comp {
     // in a requirement result.  The owner is the already-selected TraitDef,
     // never a name search: `Optional[Item]` must receive the same treatment as
     // a top-level `Item` under `where T: Iterator[Item=E]`.
-    inout fn reifyBoundAssociatedTerms(ref: U64, traitDef: TraitDef, bound: FuncBound) -> U64 {
+    inout fn reifyBoundAssociatedTerms(ref: U64, traitDef: TraitDef, receiverRef: U64, traitOwner: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val raw: TypeRef = self.arena.types[ref]
         mut val rawName: U64 = raw.nameId
@@ -261,15 +301,15 @@ pub impl Comp {
             while ai < traitDef.assocTypes.count() {
                 if traitDef.assocTypes[ai].nameId == rawName {
                     mut val pi: U64 = 0U64
-                    while pi < bound.constraint.assocPredicates.count() {
-                        val predicate: TraitAssocPredicate = bound.constraint.assocPredicates[pi]
+                    while pi < predicates.count() {
+                        val predicate: TraitAssocPredicate = predicates[pi]
                         if predicate.member == rawName { return predicate.value }
                         pi += 1U64
                     }
-                    if bound.paramTy >= self.arena.types.count() { return ref }
-                    val receiver: TypeRef = self.arena.types[bound.paramTy]
+                    if receiverRef >= self.arena.types.count() { return ref }
+                    val receiver: TypeRef = self.arena.types[receiverRef]
                     val noLabels: Array[U64] = []
-                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=bound.constraint.key.owner assocTraitLen=self.traitNameLenByOwner(owner: bound.constraint.key.owner) assocTraitId=intern(c: inout self, start: bound.constraint.key.owner, len: self.traitNameLenByOwner(owner: bound.constraint.key.owner)) assocTraitArgs=bound.constraint.key.positionalArgs assocTraitArgLabels=noLabels assocNameStart=traitDef.assocTypes[ai].nameStart assocNameLen=traitDef.assocTypes[ai].nameLen assocNameId=traitDef.assocTypes[ai].nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=bound.constraint.key.owner siteOffset=0U64 />)
+                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen paramId=receiver.paramId args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=traitOwner assocTraitLen=self.traitNameLenByOwner(owner: traitOwner) assocTraitId=intern(c: inout self, start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) assocTraitArgs=traitArgs assocTraitArgLabels=noLabels assocNameStart=traitDef.assocTypes[ai].nameStart assocNameLen=traitDef.assocTypes[ai].nameLen assocNameId=traitDef.assocTypes[ai].nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner siteOffset=0U64 />)
                 }
                 ai += 1U64
             }
@@ -280,7 +320,7 @@ pub impl Comp {
             mut val changed: Bool = false
             mut val ri: U64 = 0U64
             while ri < raw.recordFieldTerms.count() {
-                val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.recordFieldTerms[ri], traitDef: traitDef, bound: bound)
+                val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.recordFieldTerms[ri], traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates)
                 if next != raw.recordFieldTerms[ri] { changed = true }
                 fields.append(next)
                 ri += 1U64
@@ -292,7 +332,7 @@ pub impl Comp {
         mut val argsChanged: Bool = false
         mut val i: U64 = 0U64
         while i < raw.args.count() {
-            val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.args[i], traitDef: traitDef, bound: bound)
+            val next: U64 = self.reifyBoundAssociatedTerms(ref: raw.args[i], traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitOwner, traitArgs: traitArgs, predicates: predicates)
             if next != raw.args[i] { argsChanged = true }
             args.append(next)
             i += 1U64
@@ -304,6 +344,18 @@ pub impl Comp {
     // Reify a requirement result under the selected static proof. Ordinary
     // trait parameters ground first; then associated outputs reify recursively
     // through the selected proof's constraint.
+    inout fn staticRequirementResultTypeForProof(traitDef: TraitDef, req: Func, receiverRef: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
+        if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.types.count() { return 0U64 }
+        val savedParams: Array[Bind] = self.cur.typeParams
+        val savedArgs: Array[U64] = self.cur.typeArgs
+        self.cur.typeParams = traitDef.typeParams
+        self.cur.typeArgs = traitArgs
+        val grounded: U64 = self.groundTypeRef(ref: req.retTy)
+        self.cur.typeParams = savedParams
+        self.cur.typeArgs = savedArgs
+        return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitDef.nameStart, traitArgs: traitArgs, predicates: predicates)
+    }
+
     inout fn staticRequirementResultType(resolution: StaticMemberResolution) -> U64 {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
@@ -313,16 +365,8 @@ pub impl Comp {
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val req: Func = traitDef.reqs[reqIdx]
-                        if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.types.count() { return 0U64 }
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
-                        val savedParams: Array[Bind] = self.cur.typeParams
-                        val savedArgs: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = traitDef.typeParams
-                        self.cur.typeArgs = bound.constraint.key.positionalArgs
-                        val grounded: U64 = self.groundTypeRef(ref: req.retTy)
-                        self.cur.typeParams = savedParams
-                        self.cur.typeArgs = savedArgs
-                        return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, bound: bound)
+                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.paramTy, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
                     }
                     _ => { return 0U64 }
                 }

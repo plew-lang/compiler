@@ -151,7 +151,7 @@ pub impl Comp {
     inout fn exprIsUnit(id: U64) -> Bool {
         match self.arena.exprs[id] {
             Expr.Make(typeStart: _, val typeLen, variantStart: _, variantLen: _, isEnum: _, ty: _, val fields) => {
-                return typeLen == 0U64 && fields.count() == 0U64
+                return typeLen == 0U64 && fields.len == 0U64
             }
             _ => {
                 return false

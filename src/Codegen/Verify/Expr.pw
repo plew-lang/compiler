@@ -224,10 +224,11 @@ pub impl Comp {
                                 }
                                 if !(enumIsGen) {
                                     mut val mfk: U64 = 0
-                                    while mfk < fields.count() {
-                                        if spansEqual(c: inout self, aStart: fields[mfk].nameStart, aLen: fields[mfk].nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
-                                            self.tcCheckValue(expectedRef: cfs[cfi].ty, valueExpr: fields[mfk].value, pos: self.tcFieldPos(prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
-                                            mfk = fields.count()
+                                    while mfk < fields.len {
+                                        val field: MakeField = self.makeFieldAt(fields: fields, index: mfk)
+                                        if spansEqual(c: inout self, aStart: field.nameStart, aLen: field.nameLen, bStart: cfs[cfi].nameStart, bLen: cfs[cfi].nameLen) {
+                                            self.tcCheckValue(expectedRef: cfs[cfi].ty, valueExpr: field.value, pos: self.tcFieldPos(prefix: "payload:", nameStart: cfs[cfi].nameStart, nameLen: cfs[cfi].nameLen))
+                                            mfk = fields.len
                                         } else {
                                             mfk += 1U64
                                         }
@@ -284,14 +285,15 @@ pub impl Comp {
                 // field gate (spec/05): a non-`pub` field cannot be set from another module.
                 self.checkConstructVis(typeStart: typeStart, typeLen: typeLen, isEnum: isEnum, fields: fields, offset: self.exprOffset(id: id))
                 mut val i: U64 = 0
-                while i < fields.count() {
-                    self.verifyExpr(id: fields[i].value)
+                while i < fields.len {
+                    val field: MakeField = self.makeFieldAt(fields: fields, index: i)
+                    self.verifyExpr(id: field.value)
                     if nonGenSidx < self.arena.structs.count() {
                         val cfs: Array[FieldDef] = self.arena.structs[nonGenSidx].fields
                         mut val fk: U64 = 0
                         while fk < cfs.count() {
-                            if spansEqual(c: inout self, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
-                                self.tcCheckValue(expectedRef: cfs[fk].ty, valueExpr: fields[i].value, pos: "field")
+                            if spansEqual(c: inout self, aStart: cfs[fk].nameStart, aLen: cfs[fk].nameLen, bStart: field.nameStart, bLen: field.nameLen) {
+                                self.tcCheckValue(expectedRef: cfs[fk].ty, valueExpr: field.value, pos: "field")
                                 fk = cfs.count()
                             } else {
                                 fk += 1U64
@@ -302,8 +304,9 @@ pub impl Comp {
                     // silent last-wins bug otherwise — reject the duplicate (spec/05).
                     mut val j: U64 = 0
                     while j < i {
-                        if spansEqual(c: inout self, aStart: fields[j].nameStart, aLen: fields[j].nameLen, bStart: fields[i].nameStart, bLen: fields[i].nameLen) {
-                            self.errorAt(offset: fields[i].offset, msg: "duplicate field in construction; each field may be set at most once")
+                        val prior: MakeField = self.makeFieldAt(fields: fields, index: j)
+                        if spansEqual(c: inout self, aStart: prior.nameStart, aLen: prior.nameLen, bStart: field.nameStart, bLen: field.nameLen) {
+                            self.errorAt(offset: field.offset, msg: "duplicate field in construction; each field may be set at most once")
                         }
                         j += 1U64
                     }
@@ -332,8 +335,8 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    self.verifyExpr(id: elems[i])
+                while i < elems.len {
+                    self.verifyExpr(id: self.exprAt(exprs: elems, index: i))
                     i += 1
                 }
             }
@@ -587,10 +590,11 @@ pub impl Comp {
 pub impl Comp {
 
     // Whether any construction field matches the given field name (start,len).
-    inout fn makeFieldsCoverField(fields: Array[MakeField], fieldStart: U64, fieldLen: U64) -> Bool {
+    inout fn makeFieldsCoverField(fields: MakeFieldRange, fieldStart: U64, fieldLen: U64) -> Bool {
         mut val i: U64 = 0
-        while i < fields.count() {
-            if spansEqual(c: inout self, aStart: fields[i].nameStart, aLen: fields[i].nameLen, bStart: fieldStart, bLen: fieldLen) {
+        while i < fields.len {
+            val field: MakeField = self.makeFieldAt(fields: fields, index: i)
+            if spansEqual(c: inout self, aStart: field.nameStart, aLen: field.nameLen, bStart: fieldStart, bLen: fieldLen) {
                 return true
             }
             i += 1U64

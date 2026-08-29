@@ -176,8 +176,8 @@ pub impl Comp {
         }
         match self.arena.exprs[argExpr] {
             Expr.Array(val elems) => {
-                if elems.count() > 0 {
-                    return self.typedIrRefOfInfo(ti: self.exprType(id: elems[0]))
+                if elems.len > 0 {
+                    return self.typedIrRefOfInfo(ti: self.exprType(id: self.exprAt(exprs: elems, index: 0U64)))
                 }
             }
             _ => {}

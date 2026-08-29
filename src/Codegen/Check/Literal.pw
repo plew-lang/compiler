@@ -227,8 +227,8 @@ pub impl Comp {
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    self.checkLitCtx(id: elems[i], eKind: eKind, eBits: eBits, eSgn: eSgn)
+                while i < elems.len {
+                    self.checkLitCtx(id: self.exprAt(exprs: elems, index: i), eKind: eKind, eBits: eBits, eSgn: eSgn)
                     i += 1
                 }
             }
@@ -575,8 +575,8 @@ pub impl Comp {
         match e {
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
-                while i < elems.count() {
-                    self.checkLitSpan(id: elems[i], tyStart: elemStart, tyLen: elemLen, isArray: false)
+                while i < elems.len {
+                    self.checkLitSpan(id: self.exprAt(exprs: elems, index: i), tyStart: elemStart, tyLen: elemLen, isArray: false)
                     i += 1
                 }
             }
