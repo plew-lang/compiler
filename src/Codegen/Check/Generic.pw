@@ -580,8 +580,8 @@ pub impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 self.checkBoundsExpr(exprId: scrut)
                 mut val ai: U64 = 0
-                while ai < arms.count() {
-                    val a: MatchArm = arms[ai]
+                while ai < arms.len {
+                    val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)
@@ -755,10 +755,11 @@ pub impl Comp {
             }
             Expr.MatchExpr(scrut: _, val arms) => {
                 mut val ai: U64 = 0
-                while ai < arms.count() {
-                    if !(arms[ai].isDiverge) {
-                        if arms[ai].binds.count() == 0U64 {
-                            val g: U64 = self.blockGiveExpr(blkId: arms[ai].body)
+                while ai < arms.len {
+                    val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
+                    if !(arm.isDiverge) {
+                        if arm.binds.len == 0U64 {
+                            val g: U64 = self.blockGiveExpr(blkId: arm.body)
                             if g < self.arena.exprs.count() {
                                 self.checkGenericTypeMatch(expectedRef: expectedRef, valueExpr: g)
                             }
@@ -912,8 +913,8 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 self.checkBoundsExpr(exprId: scrut)
                 mut val ai: U64 = 0
-                while ai < arms.count() {
-                    val a: MatchArm = arms[ai]
+                while ai < arms.len {
+                    val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.checkBoundsBlock(blkId: a.body)

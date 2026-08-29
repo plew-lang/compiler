@@ -478,12 +478,13 @@ pub impl Comp {
                     self.errorAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 }
                 mut val ai: U64 = 0
-                while ai < arms.count() {
+                while ai < arms.len {
+                    val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val armMark: U64 = self.scopeMark()
-                    self.checkDestructureComplete(a: arms[ai])
-                    self.verifyAddArmBinds(a: arms[ai], scrut: scrut)
-                    self.checkBranchYieldsValue(blkId: arms[ai].body, offset: self.exprOffset(id: id))
-                    self.verifyBlock(blockId: arms[ai].body)
+                    self.checkDestructureComplete(a: arm)
+                    self.verifyAddArmBinds(a: arm, scrut: scrut)
+                    self.checkBranchYieldsValue(blkId: arm.body, offset: self.exprOffset(id: id))
+                    self.verifyBlock(blockId: arm.body)
                     self.popLocals(mark: armMark)
                     ai += 1
                 }
@@ -602,10 +603,11 @@ pub impl Comp {
         return false
     }
 
-    inout fn bindsCoverField(binds: Array[Bind], fieldStart: U64, fieldLen: U64) -> Bool {
+    inout fn bindsCoverField(binds: BindRange, fieldStart: U64, fieldLen: U64) -> Bool {
         mut val i: U64 = 0
-        while i < binds.count() {
-            if spansEqual(c: inout self, aStart: binds[i].fieldStart, aLen: binds[i].fieldLen, bStart: fieldStart, bLen: fieldLen) {
+        while i < binds.len {
+            val bind: Bind = self.bindAt(binds: binds, index: i)
+            if spansEqual(c: inout self, aStart: bind.fieldStart, aLen: bind.fieldLen, bStart: fieldStart, bLen: fieldLen) {
                 return true
             }
             i += 1
@@ -676,17 +678,19 @@ pub impl Comp {
         }
         val sd: StructDef = self.arena.structs[sidx]
         mut val bi: U64 = 0
-        while bi < site.binds.count() {
+        while bi < site.binds.len {
+            val bind: Bind = self.bindAt(binds: site.binds, index: bi)
             // each named field must exist on the record (also covers a typo'd
             // `nope: _` discard, which synthesizes no Field read)…
-            if !(self.structFieldsContain(fields: sd.fields, fieldStart: site.binds[bi].fieldStart, fieldLen: site.binds[bi].fieldLen)) {
-                self.errorAt(offset: site.binds[bi].offset, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)")
+            if !(self.structFieldsContain(fields: sd.fields, fieldStart: bind.fieldStart, fieldLen: bind.fieldLen)) {
+                self.errorAt(offset: bind.offset, msg: "no such field on this value's type (a record-destructure shorthand bind must spell the field's name — rename with `fieldName: val newName`)")
             }
             // …and only once.
             mut val bj: U64 = bi + 1U64
-            while bj < site.binds.count() {
-                if spansEqual(c: inout self, aStart: site.binds[bi].fieldStart, aLen: site.binds[bi].fieldLen, bStart: site.binds[bj].fieldStart, bLen: site.binds[bj].fieldLen) {
-                    self.errorAt(offset: site.binds[bj].offset, msg: "this field is destructured more than once — a record destructure names each field exactly once (spec/03)")
+            while bj < site.binds.len {
+                val other: Bind = self.bindAt(binds: site.binds, index: bj)
+                if spansEqual(c: inout self, aStart: bind.fieldStart, aLen: bind.fieldLen, bStart: other.fieldStart, bLen: other.fieldLen) {
+                    self.errorAt(offset: other.offset, msg: "this field is destructured more than once — a record destructure names each field exactly once (spec/03)")
                 }
                 bj += 1
             }
@@ -710,11 +714,13 @@ pub impl Comp {
         // a pattern names each field at most once — a duplicate bind would read the
         // same field into two locals while completeness lets another field slip.
         mut val di: U64 = 0
-        while di < a.binds.count() {
+        while di < a.binds.len {
+            val bind: Bind = self.bindAt(binds: a.binds, index: di)
             mut val dj: U64 = di + 1U64
-            while dj < a.binds.count() {
-                if spansEqual(c: inout self, aStart: a.binds[di].fieldStart, aLen: a.binds[di].fieldLen, bStart: a.binds[dj].fieldStart, bLen: a.binds[dj].fieldLen) {
-                    self.errorAt(offset: a.binds[dj].offset, msg: "this field is destructured more than once — a pattern names each field exactly once (spec/05,11)")
+            while dj < a.binds.len {
+                val other: Bind = self.bindAt(binds: a.binds, index: dj)
+                if spansEqual(c: inout self, aStart: bind.fieldStart, aLen: bind.fieldLen, bStart: other.fieldStart, bLen: other.fieldLen) {
+                    self.errorAt(offset: other.offset, msg: "this field is destructured more than once — a pattern names each field exactly once (spec/05,11)")
                 }
                 dj += 1
             }
@@ -740,7 +746,7 @@ pub impl Comp {
         // an enum payload destructure `E.V(val a, b: _)`: when the arm binds ANY payload
         // field it must cover EVERY field of the variant (bind or discard) — spec/05,11. A
         // bare tag match `E.V =>` (no binds) matches only the tag and is left alone.
-        if a.binds.count() == 0U64 {
+        if a.binds.len == 0U64 {
             return
         }
         val ei: U64 = self.enumIdxByName(start: a.enumStart, len: a.enumLen)
@@ -751,7 +757,7 @@ pub impl Comp {
                 mut val fi: U64 = 0
                 while fi < fs.count() {
                     if !(self.bindsCoverField(binds: a.binds, fieldStart: fs[fi].nameStart, fieldLen: fs[fi].nameLen)) {
-                        self.errorAt(offset: a.binds[0].offset, msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
+                        self.errorAt(offset: self.bindAt(binds: a.binds, index: 0U64).offset, msg: "variant payload destructure must bind or discard every field (a field is missing — bind it or use `field: _`); or match only the tag with a bare `E.V =>`")
                     }
                     fi += 1
                 }
@@ -784,7 +790,7 @@ pub impl Comp {
             val st: TypeInfo = self.typeOf(id: scrut)
             if st.nameLen > 0U64 {
                 if !(spansEqual(c: inout self, aStart: st.nameStart, aLen: st.nameLen, bStart: a.enumStart, bLen: a.enumLen)) {
-                    self.errorAt(offset: armDiagOffset(a: a), msg: "struct destructure pattern type does not match the scrutinee type")
+                    self.errorAt(offset: armDiagOffset(c: inout self, a: a), msg: "struct destructure pattern type does not match the scrutinee type")
                 }
             }
         }
@@ -803,8 +809,8 @@ pub impl Comp {
         val generic: Bool = self.isGenericInst(ref: st.ref)
         mut val bi: U64 = 0
         if a.isStruct {
-            while bi < a.binds.count() {
-                val bd: Bind = a.binds[bi]
+            while bi < a.binds.len {
+                val bd: Bind = self.bindAt(binds: a.binds, index: bi)
                 if bd.nameLen == 0U64 {
                     bi += 1
                     continue
@@ -819,8 +825,8 @@ pub impl Comp {
                 bi += 1
             }
         } else {
-            while bi < a.binds.count() {
-                val bd: Bind = a.binds[bi]
+            while bi < a.binds.len {
+                val bd: Bind = self.bindAt(binds: a.binds, index: bi)
                 if bd.nameLen == 0U64 {
                     bi += 1
                     continue

@@ -39,8 +39,8 @@ pub impl Comp {
             match self.arena.stmts[si] {
                 Stmt.Match(val scrut, val arms) => {
                     mut val ai: U64 = 0
-                    while ai < arms.count() {
-                        self.checkArmBinds(a: arms[ai])
+                    while ai < arms.len {
+                        self.checkArmBinds(a: self.matchArmAt(arms: arms, index: ai))
                         ai += 1
                     }
                 }
@@ -53,8 +53,8 @@ pub impl Comp {
             match self.arena.exprs[xi] {
                 Expr.MatchExpr(val scrut, val arms) => {
                     mut val ai: U64 = 0
-                    while ai < arms.count() {
-                        self.checkArmBinds(a: arms[ai])
+                    while ai < arms.len {
+                        self.checkArmBinds(a: self.matchArmAt(arms: arms, index: ai))
                         ai += 1
                     }
                 }

@@ -91,10 +91,10 @@ pub impl Comp {
         }
     }
 
-    inout fn checkBindsInFields(binds: Array[Bind], fields: Array[FieldDef]) {
+    inout fn checkBindsInFields(binds: BindRange, fields: Array[FieldDef]) {
         mut val i: U64 = 0
-        while i < binds.count() {
-            val bd: Bind = binds[i]
+        while i < binds.len {
+            val bd: Bind = self.bindAt(binds: binds, index: i)
             val qBd: U64 = intern(c: inout self, start: bd.fieldStart, len: bd.fieldLen)
             mut val found: Bool = false
             mut val fj: U64 = 0

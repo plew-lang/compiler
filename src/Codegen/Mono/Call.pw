@@ -2470,7 +2470,7 @@ pub impl Comp {
         val someBlk: U64 = self.pushBlock(stmts: someStmts)
         mut val someBinds: Array[Bind] = []
         someBinds.append(<Bind nameStart=cvN.nameStart nameLen=cvN.nameLen nameId=cvN.nameId fieldStart=vFieldN.nameStart fieldLen=vFieldN.nameLen offset=memberStart />)
-        val someArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=someN.nameStart variantLen=someN.nameLen binds=someBinds body=someBlk isStruct=false isDiverge=false />
+        val someArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=someN.nameStart variantLen=someN.nameLen binds=self.pushBinds(binds: someBinds) body=someBlk isStruct=false isDiverge=false />
         // None => <Head.empty />
         val emptyRecv: U64 = self.pushExpr(e: <Expr.Ident start=headStart len=headLen />)
         self.recordSyntheticExprType(exprId: emptyRecv, ref: stageRef)
@@ -2484,8 +2484,7 @@ pub impl Comp {
         mut val noneStmts: Array[U64] = []
         noneStmts.append(self.pushStmt(s: <Stmt.Give value=emptyCall />))
         val noneBlk: U64 = self.pushBlock(stmts: noneStmts)
-        val noBinds: Array[Bind] = []
-        val noneArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=noneN.nameStart variantLen=noneN.nameLen binds=noBinds body=noneBlk isStruct=false isDiverge=false />
+        val noneArm: MatchArm = <MatchArm isWildcard=false enumStart=optN.nameStart enumLen=optN.nameLen variantStart=noneN.nameStart variantLen=noneN.nameLen binds=<BindRange start=0U64 len=0U64 /> body=noneBlk isStruct=false isDiverge=false />
         mut val arms: Array[MatchArm] = []
         arms.append(someArm)
         arms.append(noneArm)
@@ -2496,7 +2495,7 @@ pub impl Comp {
         val fromValueCallee: U64 = self.chainAssocWitness(recvStart: headStart, recvLen: headLen, nameStart: fromValueN.nameStart, nameLen: fromValueN.nameLen)
         val emptyCallee: U64 = self.chainAssocWitness(recvStart: headStart, recvLen: headLen, nameStart: emptyN.nameStart, nameLen: emptyN.nameLen)
         self.setChainSiteImplicitCalls(exprId: exprId, fromValueExprId: fromCall, fromValueCallee: fromValueCallee, emptyExprId: emptyCall, emptyCallee: emptyCallee)
-        self.arena.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=arms />
+        self.arena.exprs[exprId] = <Expr.MatchExpr scrut=scrut arms=self.pushMatchArms(arms: arms) />
     }
 
     // Which type-argument position of a `Chain` conformer named (headStart,headLen) is
@@ -3016,8 +3015,8 @@ pub impl Comp {
                     scrutTi = self.typeInfoOfRef(ref: groundedScrut)
                 }
                 mut val ai: U64 = 0
-                while ai < arms.count() {
-                    val a: MatchArm = arms[ai]
+                while ai < arms.len {
+                    val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: scrutTi)
                     self.scanBlockInsts(blkId: a.body)
@@ -3067,8 +3066,8 @@ pub impl Comp {
         }
         val genericMatch: Bool = self.isGenericEnumInst(ref: scrutTi.ref)
         mut val bi: U64 = 0
-        while bi < a.binds.count() {
-            val bd: Bind = a.binds[bi]
+        while bi < a.binds.len {
+            val bd: Bind = self.bindAt(binds: a.binds, index: bi)
             if bd.nameLen == 0U64 {
                 bi += 1
                 continue
@@ -3394,8 +3393,8 @@ pub impl Comp {
                     scrutTi = self.typeInfoOfRef(ref: groundedScrut)
                 }
                 mut val ai: U64 = 0
-                while ai < arms.count() {
-                    val a: MatchArm = arms[ai]
+                while ai < arms.len {
+                    val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: scrutTi)
                     self.scanBlockInsts(blkId: a.body)

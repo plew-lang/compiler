@@ -42,14 +42,14 @@ pub impl Comp {
         }
     }
 
-    inout fn checkMatchAccessMode(scrut: U64, arms: Array[MatchArm]) {
+    inout fn checkMatchAccessMode(scrut: U64, arms: MatchArmRange) {
         if self.matchScrutIsBorrow(scrut: scrut) {
             self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match borrow` is not part of v1; match a copyable value directly, or use `match move` to consume a unique enum (spec/11)")
             return
         }
         if self.matchScrutIsMove(scrut: scrut) {
-            if arms.count() > 0U64 {
-                if arms[0].isStruct {
+            if arms.len > 0U64 {
+                if self.matchArmAt(arms: arms, index: 0U64).isStruct {
                     self.errorAt(offset: self.exprOffset(id: scrut), msg: "`match move` is consuming enum match; struct destructuring by move would be aggregate partial move, which v1 rejects (spec/11)")
                 }
             }

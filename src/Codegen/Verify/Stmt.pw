@@ -244,8 +244,8 @@ pub impl Comp {
                                 self.errorAt(offset: patStart, msg: "for-loop destructure pattern type does not match the element type")
                             }
                             mut val bi: U64 = 0
-                            while bi < binds.count() {
-                                val bd: Bind = binds[bi]
+                            while bi < binds.len {
+                                val bd: Bind = self.bindAt(binds: binds, index: bi)
                                 val ft: TypeInfo = self.forBindFieldType(et: et, bd: bd)
                                 self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
                                 bi += 1
@@ -283,13 +283,14 @@ pub impl Comp {
                     self.errorAt(offset: self.exprOffset(id: scrut), msg: "match must be exhaustive: cover all variants or add a wildcard")
                 }
                 mut val ai: U64 = 0
-                while ai < arms.count() {
+                while ai < arms.len {
+                    val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val armMark: U64 = self.scopeMark()
                     val savedArmBB: U64 = self.cur.branchBase
                     self.cur.branchBase = armMark
-                    self.checkDestructureComplete(a: arms[ai])
-                    self.verifyAddArmBinds(a: arms[ai], scrut: scrut)
-                    self.verifyBlock(blockId: arms[ai].body)
+                    self.checkDestructureComplete(a: arm)
+                    self.verifyAddArmBinds(a: arm, scrut: scrut)
+                    self.verifyBlock(blockId: arm.body)
                     self.cur.branchBase = savedArmBB
                     self.popLocals(mark: armMark)
                     ai += 1

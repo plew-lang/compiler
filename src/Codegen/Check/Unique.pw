@@ -291,8 +291,8 @@ pub impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 if self.exprContainsAwait(exprId: scrut) { return true }
                 mut val i: U64 = 0
-                while i < arms.count() {
-                    if self.blockContainsAwait(blockId: arms[i].body) { return true }
+                while i < arms.len {
+                    if self.blockContainsAwait(blockId: self.matchArmAt(arms: arms, index: i).body) { return true }
                     i += 1U64
                 }
                 return false
@@ -368,8 +368,8 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 if self.exprContainsAwait(exprId: scrut) { return true }
                 mut val i: U64 = 0
-                while i < arms.count() {
-                    if self.blockContainsAwait(blockId: arms[i].body) { return true }
+                while i < arms.len {
+                    if self.blockContainsAwait(blockId: self.matchArmAt(arms: arms, index: i).body) { return true }
                     i += 1U64
                 }
                 return false

@@ -247,7 +247,7 @@ pub impl Comp {
                         result = self.lowerEnumMatchCaptureExpr(scrut: scrut, arms: arms, span: span)
                     } else {
                         val s: U64 = self.lowerExpr(e: scrut)
-                        val ma: Array[MatchArm] = self.lowerMatchArms(arms: arms, isExpr: true)
+                        val ma: MatchArmRange = self.lowerMatchArms(arms: arms, isExpr: true)
                         result = self.pushExpr(e: <Expr.MatchExpr scrut=s arms=ma />)
                     }
                 } else {

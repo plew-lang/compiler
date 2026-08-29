@@ -64,7 +64,7 @@ pub impl LlvmCtx {
 
     // Value-position `match scrut { Pat => exprValue, ... }`: each arm body is an
     // expression; a PHI over the arm blocks merges their values.
-    inout fn genLlvmMatchExpr(c: inout Comp, scrut: U64, arms: Array[MatchArm], exprId: U64) -> LLVMValueRef {
+    inout fn genLlvmMatchExpr(c: inout Comp, scrut: U64, arms: MatchArmRange, exprId: U64) -> LLVMValueRef {
         // the match's expected result type (from the enclosing let/return/arg) propagates
         // to each arm's give-value so a context-only construction in an arm grounds — e.g.
         // the Chain desugar's `None => give <Head.empty/>`, whose no-arg factory's type
@@ -84,8 +84,9 @@ pub impl LlvmCtx {
         val sty: LLVMTypeRef = LLVMTypeOf(sv)
         // a value-position struct destructuring match (irrefutable, one arm): bind the
         // scrutinee's fields (under any generic env), then evaluate the arm expression.
-        if arms.count() > 0U64 {
-            if arms[0].isStruct {
+        if arms.len > 0U64 {
+            val firstArm: MatchArm = c.matchArmAt(arms: arms, index: 0U64)
+            if firstArm.isStruct {
                 val ssidx: U64 = self.exprStructIdx(c: inout c, id: scrut)
                 val structScrutRef: U64 = self.exprTypeRef(c: inout c, id: scrut)
                 val savedSP: Array[Bind] = c.cur.typeParams
@@ -102,10 +103,10 @@ pub impl LlvmCtx {
                     sStructTempLi = self.nLocals - 1U64
                 }
                 val mark0: U64 = self.nLocals
-                self.bindStructPattern(c: inout c, sidx: ssidx, binds: arms[0].binds, scrutTy: sty, scrutSlot: sslot0)
+                self.bindStructPattern(c: inout c, sidx: ssidx, binds: firstArm.binds, scrutTy: sty, scrutSlot: sslot0)
                 self.terminated = false
                 self.expectedTy = matchExpectedTy
-                self.genLlvmBlock(c: inout c, id: arms[0].body)
+                self.genLlvmBlock(c: inout c, id: firstArm.body)
                 val rv: LLVMValueRef = self.giveValue
                 // release the retained field binds (they co-own the scrutinee's heap;
                 // the give value is already independent) before popping them.
@@ -134,11 +135,12 @@ pub impl LlvmCtx {
         val savedVA: Array[U64] = c.cur.typeArgs
         mut val eid: U64 = c.arena.enums.count()
         mut val ai0: U64 = 0
-        while ai0 < arms.count() {
-            if !(arms[ai0].isWildcard) {
-                if !(arms[ai0].isStruct) {
+        while ai0 < arms.len {
+            val arm: MatchArm = c.matchArmAt(arms: arms, index: ai0)
+            if !(arm.isWildcard) {
+                if !(arm.isStruct) {
                     if eid == c.arena.enums.count() {
-                        eid = c.enumIdxByName(start: arms[ai0].enumStart, len: arms[ai0].enumLen)
+                        eid = c.enumIdxByName(start: arm.enumStart, len: arm.enumLen)
                     }
                 }
             }
@@ -173,8 +175,8 @@ pub impl LlvmCtx {
         mut val phiVals: Array[LLVMValueRef] = []
         mut val phiBlocks: Array[LLVMBasicBlockRef] = []
         mut val ai: U64 = 0
-        while ai < arms.count() {
-            val arm: MatchArm = arms[ai]
+        while ai < arms.len {
+            val arm: MatchArm = c.matchArmAt(arms: arms, index: ai)
             val armBB: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "varm"))
             LLVMPositionBuilderAtEnd(self.b, checkBB)
             if arm.isWildcard {

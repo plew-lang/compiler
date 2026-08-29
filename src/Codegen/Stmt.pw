@@ -343,10 +343,10 @@ pub impl Comp {
     // Add a for-loop struct-destructure's binds as locals (element type `et`), so the
     // body's references to the bound names resolve. Used by the check and mono scans
     // and by codegen (which also emits the C initializers).
-    inout fn addForStructBinds(et: TypeInfo, binds: Array[Bind]) {
+    inout fn addForStructBinds(et: TypeInfo, binds: BindRange) {
         mut val bi: U64 = 0
-        while bi < binds.count() {
-            val bd: Bind = binds[bi]
+        while bi < binds.len {
+            val bd: Bind = self.bindAt(binds: binds, index: bi)
             val ft: TypeInfo = self.forBindFieldType(et: et, bd: bd)
             self.addLocal(nameStart: bd.nameStart, nameLen: bd.nameLen, tyStart: ft.nameStart, tyLen: ft.nameLen, isArray: ft.kind == 3, ty: ft.ref, isInout: false, isMut: false, owned: false)
             bi += 1

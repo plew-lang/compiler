@@ -307,6 +307,24 @@ export struct MakeFieldRange {
 }
 pub impl MakeFieldRange { factory }
 
+// Immutable pattern-bind slice. Match arms, destructuring `for` headers, and
+// destructure sites all refer to the same Arena pool: these bindings are AST
+// children with arena lifetime, never independently owned values.
+export struct BindRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl BindRange { factory }
+
+// Immutable match-arm slice. A match node therefore carries scalar payload
+// only; inspecting it cannot retain/drop an Array of arms (or each arm's
+// pattern-bind buffer) during the many frontend/backend walks.
+export struct MatchArmRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl MatchArmRange { factory }
+
 
 export enum Expr {
     // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
@@ -343,7 +361,7 @@ export enum Expr {
     // value-position `match scrut { Pat => expr, ... }`: like Stmt.Match but each
     // arm yields an expression (MatchArm.body is an Expr index, not a Block).
     // Lowers to a C statement-expression.
-    MatchExpr(scrut: U64, arms: Array[MatchArm])
+    MatchExpr(scrut: U64, arms: MatchArmRange)
     // value-position `if cond { ... give a } else { ... give b }`: each branch is
     // a block ending in `give`. Lowers to a C statement-expression (like
     // MatchExpr). `else` is mandatory in value position (it must always yield).
@@ -400,7 +418,7 @@ export struct MatchArm {
     pub val enumLen: U64
     pub val variantStart: U64
     pub val variantLen: U64
-    pub val binds: Array[Bind]
+    pub val binds: BindRange
     // body is always a Block index (for both Stmt.Match and Expr.MatchExpr). A
     // value-match arm's block ends in `give <expr>` (the arm value); a diverging
     // arm's block ends in `panic`/`return` and is excluded from the result PHI.
@@ -422,7 +440,7 @@ export struct PatInfo {
     pub val enumLen: U64
     pub val variantStart: U64
     pub val variantLen: U64
-    pub val binds: Array[Bind]
+    pub val binds: BindRange
     pub val isStruct: Bool
 }
 
@@ -457,8 +475,8 @@ export enum Stmt {
     // arr` — patStart/patLen name the written struct type and binds list the
     // fields to bind from each element (varStart/varLen unused then). isStruct
     // false is the single-binding form (binds empty).
-    For(varStart: U64, varLen: U64, varTyStart: U64, varTyLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64, isStruct: Bool, patStart: U64, patLen: U64, binds: Array[Bind])
-    Match(scrut: U64, arms: Array[MatchArm])
+    For(varStart: U64, varLen: U64, varTyStart: U64, varTyLen: U64, isRange: Bool, inclusive: Bool, iter: U64, rangeHi: U64, body: U64, isStruct: Bool, patStart: U64, patLen: U64, binds: BindRange)
+    Match(scrut: U64, arms: MatchArmRange)
     // `panic <msg>`: a diverging statement (spec: unrecoverable, never returns).
     // msg is a String expression; offset is the `panic` keyword for diagnostics.
     Panic(msg: U64, offset: U64)
@@ -1272,6 +1290,11 @@ export struct Arena {
     // Flat immutable construction-field pool. MakeFieldRange is the only
     // AST-side handle; consumers read through Comp.makeFieldAt.
     pub mut val makeFieldPool: Array[MakeField] = []
+    // Pattern payload pools. Their scalar ranges are held by MatchArm/For/
+    // DestructureSite and match expressions/statements; no AST node owns an
+    // Array of these arena-lifetime children.
+    pub mut val bindPool: Array[Bind] = []
+    pub mut val matchArmPool: Array[MatchArm] = []
     // Complete semantic type entry per expression node. Kept with the expression
     // arena rather than Comp so every public user of Comp depends only on Arena,
     // and so the entry has the same lifetime/identity as its Expr.
@@ -1529,7 +1552,7 @@ export struct DestructureSite {
     pub val isElem: Bool
     pub val typeStart: U64 = 0
     pub val typeLen: U64 = 0
-    pub val binds: Array[Bind]
+    pub val binds: BindRange
 }
 pub impl DestructureSite { factory }
 

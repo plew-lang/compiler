@@ -389,10 +389,10 @@ pub impl Comp {
 
     // Does some arm cover the variant (variantStart,variantLen)? A wildcard arm
     // covers everything.
-    inout fn armCovers(arms: Array[MatchArm], variantStart: U64, variantLen: U64) -> Bool {
+    inout fn armCovers(arms: MatchArmRange, variantStart: U64, variantLen: U64) -> Bool {
         mut val i: U64 = 0
-        while i < arms.count() {
-            val a: MatchArm = arms[i]
+        while i < arms.len {
+            val a: MatchArm = self.matchArmAt(arms: arms, index: i)
             if a.isWildcard {
                 return true
             }
@@ -408,12 +408,12 @@ pub impl Comp {
     // match is exhaustive iff it has a `_` wildcard, or every variant of the
     // scrutinee's enum is covered by some arm. (This compiler's match is always
     // over an enum, and has no `val x` catch-all arm, so those are the only cases.)
-    inout fn matchExhaustive(arms: Array[MatchArm]) -> Bool {
+    inout fn matchExhaustive(arms: MatchArmRange) -> Bool {
         mut val enumStart: U64 = 0
         mut val enumLen: U64 = 0
         mut val i: U64 = 0
-        while i < arms.count() {
-            val a: MatchArm = arms[i]
+        while i < arms.len {
+            val a: MatchArm = self.matchArmAt(arms: arms, index: i)
             if a.isWildcard {
                 return true
             }

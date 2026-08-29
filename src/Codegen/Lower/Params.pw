@@ -35,7 +35,7 @@ pub impl Comp {
         return out
     }
 
-    inout fn lowerBinds(binds: Array[BindAst]) -> Array[Bind] {
+    inout fn lowerBinds(binds: Array[BindAst]) -> BindRange {
         mut val out: Array[Bind] = []
         mut val i: U64 = 0
         while i < binds.count() {
@@ -45,14 +45,13 @@ pub impl Comp {
             out.append(<Bind nameStart=nm.nameStart nameLen=nm.nameLen nameId=nm.nameId fieldStart=fd.nameStart fieldLen=fd.nameLen offset=b.span.start />)
             i += 1
         }
-        return out
+        return self.pushBinds(binds: out)
     }
 
     // Lower a pattern into the arena MatchArm fields (minus the body).
     inout fn lowerPatternInfo(p: PatternAst) -> PatInfo {
         if p.isWildcard {
-            val noBinds: Array[Bind] = []
-            return <PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=noBinds isStruct=false />
+            return <PatInfo isWildcard=true enumStart=0 enumLen=0 variantStart=0 variantLen=0 binds=<BindRange start=0U64 len=0U64 /> isStruct=false />
         }
         val en: Bind = self.internBytes(s: p.typeName)
         mut val vStart: U64 = 0
@@ -62,7 +61,7 @@ pub impl Comp {
             vStart = vb.nameStart
             vLen = vb.nameLen
         }
-        val binds: Array[Bind] = self.lowerBinds(binds: p.binds)
+        val binds: BindRange = self.lowerBinds(binds: p.binds)
         return <PatInfo isWildcard=false enumStart=en.nameStart enumLen=en.nameLen variantStart=vStart variantLen=vLen binds=binds isStruct=p.isStruct />
     }
 }

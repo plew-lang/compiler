@@ -71,14 +71,15 @@ pub impl Comp {
             }
             Expr.MatchExpr(scrut: _, val arms) => {
                 mut val ai: U64 = 0
-                while ai < arms.count() {
+                while ai < arms.len {
                     // skip an arm that binds payload fields: its binds are not in scope at
                     // this (the match-expr) position and may shadow an outer name, so
                     // inferType on the arm body would resolve the shadowed name wrongly.
                     // a diverging arm (`=> panic`) yields no value to check.
-                    if !(arms[ai].isDiverge) {
-                        if arms[ai].binds.count() == 0U64 {
-                            val g: U64 = self.blockGiveExpr(blkId: arms[ai].body)
+                    val arm: MatchArm = self.matchArmAt(arms: arms, index: ai)
+                    if !(arm.isDiverge) {
+                        if arm.binds.len == 0U64 {
+                            val g: U64 = self.blockGiveExpr(blkId: arm.body)
                             if g < self.arena.exprs.count() {
                                 self.tcCheckValue(expectedRef: expectedRef, valueExpr: g, pos: "match-branch")
                             }

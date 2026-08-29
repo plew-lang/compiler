@@ -226,7 +226,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkMatchArmsEnum(scrut: U64, arms: Array[MatchArm]) {
+    inout fn checkMatchArmsEnum(scrut: U64, arms: MatchArmRange) {
         val st0: TypeInfo = self.typeOf(id: scrut)
         if st0.kind != 2 {
             return
@@ -236,8 +236,8 @@ pub impl Comp {
             return
         }
         mut val ai: U64 = 0
-        while ai < arms.count() {
-            val a: MatchArm = arms[ai]
+        while ai < arms.len {
+            val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
             if !(a.isWildcard || a.isStruct || a.enumLen == 0U64) {
                 val aId: U64 = self.knownNamedTypeId(start: a.enumStart, len: a.enumLen)
                 if aId != 0U64 && aId != sId {

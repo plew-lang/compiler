@@ -241,8 +241,8 @@ pub impl LlvmCtx {
             Expr.MatchExpr(val scrut, val arms) => {
                 self.scanExprClosures(c: inout c, id: scrut)
                 mut val i: U64 = 0
-                while i < arms.count() {
-                    self.scanBlockClosures(c: inout c, id: arms[i].body)
+                while i < arms.len {
+                    self.scanBlockClosures(c: inout c, id: c.matchArmAt(arms: arms, index: i).body)
                     i += 1
                 }
             }
@@ -285,8 +285,8 @@ pub impl LlvmCtx {
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprClosures(c: inout c, id: scrut)
                 mut val i: U64 = 0
-                while i < arms.count() {
-                    self.scanBlockClosures(c: inout c, id: arms[i].body)
+                while i < arms.len {
+                    self.scanBlockClosures(c: inout c, id: c.matchArmAt(arms: arms, index: i).body)
                     i += 1
                 }
             }

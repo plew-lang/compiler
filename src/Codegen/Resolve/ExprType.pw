@@ -1280,9 +1280,10 @@ pub impl Comp {
                 }
                 // the result type is the give value of the first non-diverging arm.
                 mut val mai: U64 = 0
-                while mai < arms.count() {
-                    if !(arms[mai].isDiverge) {
-                        val mg: U64 = self.blockGiveExpr(blkId: arms[mai].body)
+                while mai < arms.len {
+                    val arm: MatchArm = self.matchArmAt(arms: arms, index: mai)
+                    if !(arm.isDiverge) {
+                        val mg: U64 = self.blockGiveExpr(blkId: arm.body)
                         if mg < self.arena.exprs.count() {
                             return self.exprTypeWithChainHole(id: mg, chainHoleRef: chainHoleRef)
                         }

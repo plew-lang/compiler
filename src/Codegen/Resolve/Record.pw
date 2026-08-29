@@ -651,8 +651,8 @@ pub impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 self.recordExpr(exprId: scrut, chainHoleRef: chainHoleRef)
                 mut val ai: U64 = 0
-                while ai < arms.count() {
-                    val a: MatchArm = arms[ai]
+                while ai < arms.len {
+                    val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.recordBlock(blkId: a.body)
@@ -664,10 +664,11 @@ pub impl Comp {
                 // term; resolving it after `popLocals` would lose arm payload
                 // binders such as `Choice.First(value: Box[T])`.
                 mut val resultArm: U64 = 0U64
-                while resultArm < arms.count() {
-                    if !(arms[resultArm].isDiverge) {
-                        self.recordValueBlockResult(exprId: exprId, blockId: arms[resultArm].body)
-                        resultArm = arms.count()
+                while resultArm < arms.len {
+                    val arm: MatchArm = self.matchArmAt(arms: arms, index: resultArm)
+                    if !(arm.isDiverge) {
+                        self.recordValueBlockResult(exprId: exprId, blockId: arm.body)
+                        resultArm = arms.len
                     } else {
                         resultArm += 1U64
                     }
@@ -934,8 +935,8 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 self.recordExpr(exprId: scrut)
                 mut val ai: U64 = 0
-                while ai < arms.count() {
-                    val a: MatchArm = arms[ai]
+                while ai < arms.len {
+                    val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
                     val mark: U64 = self.scopeMark()
                     self.scanAddArmBinds(a: a, scrutTi: self.typeOf(id: scrut))
                     self.recordBlock(blkId: a.body)

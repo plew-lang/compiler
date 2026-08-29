@@ -248,17 +248,18 @@ pub impl Comp {
             Expr.MatchExpr(val scrut, val arms) => {
                 self.checkLitCtx(id: scrut, eKind: 0, eBits: 0, eSgn: false)
                 mut val i: U64 = 0
-                while i < arms.count() {
+                while i < arms.len {
+                    val arm: MatchArm = self.matchArmAt(arms: arms, index: i)
                     // context flows to each value arm's `give` value; diverging arms have none.
-                    if !(arms[i].isDiverge) {
-                        val g: U64 = self.blockGiveExpr(blkId: arms[i].body)
+                    if !(arm.isDiverge) {
+                        val g: U64 = self.blockGiveExpr(blkId: arm.body)
                         if g < self.arena.exprs.count() {
                             // bring the arm's payload binds into scope so a give-value that
                             // references them (`Shape.Square(val s) => s * s`) resolves to
                             // their real type, not a shadowing outer name — the operator /
                             // literal typing below reads operand types.
                             val armMark: U64 = self.scopeMark()
-                            self.addArmBinds(a: arms[i], scrut: scrut)
+                            self.addArmBinds(a: arm, scrut: scrut)
                             self.checkLitCtx(id: g, eKind: eKind, eBits: eBits, eSgn: eSgn)
                             self.popLocals(mark: armMark)
                         }

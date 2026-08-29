@@ -55,7 +55,7 @@ pub impl LlvmCtx {
     // iterator protocol — `it = iterable.iterator(); loop { match it.next() { Some(v)
     // => { x = v; body }, None => break } }`. The iterator is stored in a mutable slot
     // (next() is `inout`); each next() yields an Optional[Item] matched by tag.
-    inout fn genLlvmForIterable(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64) {
+    inout fn genLlvmForIterable(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: BindRange, iter: U64, body: U64) {
         // an existential iterator (`for x in (it: any Iter[Item=I64])`): each iteration
         // dynamically dispatches `next()` on the any value (spec/08). The box is shared
         // via the fat pointer's data field, so the iterator state advances across calls.
@@ -147,7 +147,7 @@ pub impl LlvmCtx {
     // instance ref is recovered by grounding iterator()'s return type under the
     // receiver's env, and the Optional[Item] return by grounding next()'s under the
     // iterator instance's env.
-    inout fn genLlvmForGenIterable(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, body: U64, recvRef: U64) {
+    inout fn genLlvmForGenIterable(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: BindRange, iter: U64, body: U64, recvRef: U64) {
         val gt: TypeRef = c.arena.types[recvRef]
         val noArgs: Array[Arg] = []
         mut val iterVal: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -232,7 +232,7 @@ pub impl LlvmCtx {
     // Drive the iterator-protocol loop: store `iterVal` in a mutable slot (next() is
     // `inout`), and on each `next()` call (callee `nextTy`/`nextVal`) match the ground
     // `optRef` Optional[Item] — bind x to the Some payload + run body, else break.
-    inout fn emitIterNextLoop(c: inout Comp, iterVal: LLVMValueRef, iterInstRef: U64, ownsIter: Bool, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], body: U64) {
+    inout fn emitIterNextLoop(c: inout Comp, iterVal: LLVMValueRef, iterInstRef: U64, ownsIter: Bool, optRef: U64, nextTy: LLVMTypeRef, nextVal: LLVMValueRef, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: BindRange, body: U64) {
         val iterTy: LLVMTypeRef = LLVMTypeOf(iterVal)
         val iterSlot: LLVMValueRef = self.entryAlloca(ty: iterTy)
         LLVMBuildStore(self.b, iterVal, iterSlot)
@@ -310,7 +310,7 @@ pub impl LlvmCtx {
         // a struct-destructure pattern (`for S { val a } in …`) binds the element's
         // fields directly (mirroring the match struct pattern); otherwise bind the whole
         // element to the single loop variable.
-        if binds.count() > 0U64 {
+        if binds.len > 0U64 {
             val psidx: U64 = self.localStructIdxFor(c: inout c, start: patStart, len: patLen)
             if psidx >= c.arena.structs.count() {
                 if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
@@ -384,7 +384,7 @@ pub impl LlvmCtx {
     // `for x in anyIter` where the receiver is an existential `any Iter[Item=…]`: loop
     // dynamically dispatching `next()` on the any value (the box's iterator state
     // advances in place), binding `x` to each `Some` payload until `None`.
-    inout fn genLlvmForAnyIter(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: Array[Bind], iter: U64, anyRef: U64, body: U64) {
+    inout fn genLlvmForAnyIter(c: inout Comp, stmtId: U64, varStart: U64, varLen: U64, patStart: U64, patLen: U64, binds: BindRange, iter: U64, anyRef: U64, body: U64) {
         if c.bodyCalleeTargetKind(exprId: stmtId, siteIsStmt: true, slot: 2U64) != 1U64 {
             compileErrorAt(line: 0, msg: "internal error: final existential iterator callable was not recorded")
             return
@@ -448,7 +448,7 @@ pub impl LlvmCtx {
                 xLen = c.arena.types[gx].nameLen
             }
         }
-        if binds.count() > 0U64 {
+        if binds.len > 0U64 {
             val psidx: U64 = self.localStructIdxFor(c: inout c, start: patStart, len: patLen)
             if psidx >= c.arena.structs.count() {
                 if didSet { c.cur.typeParams = savedP  c.cur.typeArgs = savedA }
@@ -488,7 +488,7 @@ pub impl LlvmCtx {
     // same iterator protocol as the single-variable form, but binds each element's
     // fields (per the struct pattern) directly — mirroring the match struct pattern —
     // rather than binding the whole element to one variable.
-    inout fn genLlvmForArrayStruct(c: inout Comp, stmtId: U64, patStart: U64, patLen: U64, iter: U64, binds: Array[Bind], body: U64) {
+    inout fn genLlvmForArrayStruct(c: inout Comp, stmtId: U64, patStart: U64, patLen: U64, iter: U64, binds: BindRange, body: U64) {
         self.genLlvmForIterable(c: inout c, stmtId: stmtId, varStart: 0U64, varLen: 0U64, patStart: patStart, patLen: patLen, binds: binds, iter: iter, body: body)
     }
 }

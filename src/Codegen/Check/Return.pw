@@ -41,8 +41,8 @@ pub impl Comp {
             }
             Stmt.Match(val scrut, val arms) => {
                 mut val i: U64 = 0
-                while i < arms.count() {
-                    if self.blockHasLoopBreak(blkId: arms[i].body) {
+                while i < arms.len {
+                    if self.blockHasLoopBreak(blkId: self.matchArmAt(arms: arms, index: i).body) {
                         return true
                     }
                     i += 1
@@ -68,12 +68,12 @@ pub impl Comp {
             Stmt.Match(val scrut, val arms) => {
                 // match is exhaustive (checkMatchBinds / structural exhaustiveness), so
                 // it diverges iff every arm's block diverges.
-                if arms.count() == 0 {
+                if arms.len == 0U64 {
                     return false
                 }
                 mut val i: U64 = 0
-                while i < arms.count() {
-                    if !(self.blockDiverges(blkId: arms[i].body)) {
+                while i < arms.len {
+                    if !(self.blockDiverges(blkId: self.matchArmAt(arms: arms, index: i).body)) {
                         return false
                     }
                     i += 1

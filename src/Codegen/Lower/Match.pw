@@ -6,7 +6,7 @@
 // (`=> panic`/`=> return`) is flagged so the backend excludes it from the PHI.
 
 pub impl Comp {
-    inout fn lowerMatchArms(arms: Array[MatchArmAst], isExpr: Bool) -> Array[MatchArm] {
+    inout fn lowerMatchArms(arms: Array[MatchArmAst], isExpr: Bool) -> MatchArmRange {
         mut val out: Array[MatchArm] = []
         mut val i: U64 = 0
         while i < arms.count() {
@@ -25,7 +25,7 @@ pub impl Comp {
             out.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=body isStruct=pi.isStruct isDiverge=diverge />)
             i += 1
         }
-        return out
+        return self.pushMatchArms(arms: out)
     }
 }
 
@@ -247,7 +247,7 @@ pub impl Comp {
         val tmp: Bind = self.internBytes(s: "__scap")
         val sv: U64 = self.lowerExpr(e: scrut)
         stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=sv />))
-        val ma: Array[MatchArm] = self.lowerCaptureArms(arms: arms, isExpr: false, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
+        val ma: MatchArmRange = self.lowerCaptureArms(arms: arms, isExpr: false, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
         val scrutId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
         stmts.append(self.pushStmt(s: <Stmt.Match scrut=scrutId arms=ma />))
     }
@@ -255,7 +255,7 @@ pub impl Comp {
     // Lower enum-dispatch arms with capture support: each arm's lowered body block gets
     // `val <name> = __scap` prepended for a capture arm. `scapStart`/`scapLen` name the
     // already-bound scrutinee temp. Shared by the statement and expression capture paths.
-    inout fn lowerCaptureArms(arms: Array[MatchArmAst], isExpr: Bool, scapStart: U64, scapLen: U64) -> Array[MatchArm] {
+    inout fn lowerCaptureArms(arms: Array[MatchArmAst], isExpr: Bool, scapStart: U64, scapLen: U64) -> MatchArmRange {
         mut val ma: Array[MatchArm] = []
         mut val i: U64 = 0
         while i < arms.count() {
@@ -282,7 +282,7 @@ pub impl Comp {
             ma.append(<MatchArm isWildcard=pi.isWildcard enumStart=pi.enumStart enumLen=pi.enumLen variantStart=pi.variantStart variantLen=pi.variantLen binds=pi.binds body=bodyIdx isStruct=pi.isStruct isDiverge=diverge />)
             i += 1
         }
-        return ma
+        return self.pushMatchArms(arms: ma)
     }
 
     // Desugar a value-position enum-dispatch match with a capture arm into a give-block
@@ -292,7 +292,7 @@ pub impl Comp {
     inout fn lowerEnumMatchCaptureExpr(scrut: ExprAst, arms: Array[MatchArmAst], span: Span) -> U64 {
         val tmp: Bind = self.internBytes(s: "__scap")
         val sv: U64 = self.lowerExpr(e: scrut)
-        val ma: Array[MatchArm] = self.lowerCaptureArms(arms: arms, isExpr: true, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
+        val ma: MatchArmRange = self.lowerCaptureArms(arms: arms, isExpr: true, scapStart: tmp.nameStart, scapLen: tmp.nameLen)
         val scrutId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
         val matchExpr: U64 = self.pushExpr(e: <Expr.MatchExpr scrut=scrutId arms=ma />)
         mut val thenStmts: Array[U64] = []
@@ -489,7 +489,7 @@ pub impl Comp {
                         ob += 1
                     }
                     val bd2: U64 = self.pushBlock(stmts: bstmts)
-                    result = self.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=[] />)
+                    result = self.pushStmt(s: <Stmt.For varStart=fe.nameStart varLen=fe.nameLen varTyStart=0 varTyLen=0 isRange=false inclusive=false iter=lo2 rangeHi=0 body=bd2 isStruct=false patStart=0 patLen=0 binds=<BindRange start=0U64 len=0U64 /> />)
                     return result
                 }
                 mut val vStart: U64 = 0
@@ -519,12 +519,12 @@ pub impl Comp {
                     pStart = pb.nameStart
                     pLen = pb.nameLen
                 }
-                val bnds: Array[Bind] = self.lowerBinds(binds: binds)
+                val bnds: BindRange = self.lowerBinds(binds: binds)
                 result = self.pushStmt(s: <Stmt.For varStart=vStart varLen=vLen varTyStart=vtStart varTyLen=vtLen isRange=isRange inclusive=inclusive iter=lo rangeHi=hi body=bd isStruct=isStruct patStart=pStart patLen=pLen binds=bnds />)
             }
             StmtAst.Match(val scrut, val arms, val span) => {
                 val sc: U64 = self.lowerExpr(e: scrut)
-                val ma: Array[MatchArm] = self.lowerMatchArms(arms: arms, isExpr: false)
+                val ma: MatchArmRange = self.lowerMatchArms(arms: arms, isExpr: false)
                 result = self.pushStmt(s: <Stmt.Match scrut=sc arms=ma />)
             }
             StmtAst.Panic(val msg, val span) => {
@@ -601,7 +601,7 @@ pub impl Comp {
 
     // The Bind list of a destructure site: bound-local span (len 0 = discard), the
     // field's SOURCE span, and the bind's source offset for diagnostics.
-    inout fn destructureSiteBinds(binds: Array[BindAst]) -> Array[Bind] {
+    inout fn destructureSiteBinds(binds: Array[BindAst]) -> BindRange {
         mut val out: Array[Bind] = []
         mut val bi: U64 = 0
         while bi < binds.count() {
@@ -615,7 +615,7 @@ pub impl Comp {
             out.append(<Bind nameStart=nameStart nameLen=nameLen fieldStart=binds[bi].fieldStart fieldLen=binds[bi].field.bytes().count() offset=binds[bi].span.start />)
             bi += 1
         }
-        return out
+        return self.pushBinds(binds: out)
     }
 
     inout fn lowerBlock(b: BlockAst) -> U64 {

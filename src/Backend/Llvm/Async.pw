@@ -71,8 +71,8 @@ pub impl LlvmCtx {
                 }
                 Stmt.Match(scrut: _, val arms) => {
                     mut val ai: U64 = 0
-                    while ai < arms.count() {
-                        val a: MatchArm = arms[ai]
+                    while ai < arms.len {
+                        val a: MatchArm = c.matchArmAt(arms: arms, index: ai)
                         if !(a.isWildcard) {
                             if !(a.isStruct) {
                                 self.collectAsyncMatchBindTys(c: inout c, arm: a, tys: inout tys)
@@ -98,10 +98,10 @@ pub impl LlvmCtx {
         }
         val vi: U64 = c.variantIndex(enumStart: arm.enumStart, enumLen: arm.enumLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
         val fs: Array[FieldDef] = c.arena.enums[eid].variants[vi].fields
-        val binds: Array[Bind] = arm.binds
+        val binds: BindRange = arm.binds
         mut val bi: U64 = 0
-        while bi < binds.count() {
-            val b: Bind = binds[bi]
+        while bi < binds.len {
+            val b: Bind = c.bindAt(binds: binds, index: bi)
             mut val fidx: U64 = fs.count()
             mut val fj: U64 = 0
             while fj < fs.count() {
