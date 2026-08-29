@@ -1,9 +1,11 @@
 import @Std/Io with { print }
+import @Std/Core with { Iterator }
 
-// A String accumulator (a non-scalar own type param) folded over a lazy adapter is not
-// yet emittable (the item-B / accumulator-B name collision is only observably harmless
-// when both share the i64/double representation). It must loud-reject, never crash.
+// A method-owned generic parameter can be a non-scalar value.  The final
+// CallResolution carries it separately from the generic iterator receiver, so
+// `fold` may use String as its accumulator while Item remains I64.
 struct Counter { pub mut val n: I64  pub val limit: I64 }
+pub impl Counter { factory }
 pub impl Counter as Iterator {
     type Item = I64
     inout fn next() -> Optional[I64] {

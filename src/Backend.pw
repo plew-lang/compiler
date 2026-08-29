@@ -832,43 +832,6 @@ fn sameParamTypeHeads(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
     return true
 }
 
-// The method-own type arguments of a call — those of the method's type params that
-// the receiver instance does NOT ground. Empty for an ordinary method (all its type
-// params are the receiver's). For a provided terminal copied onto a generic receiver
-// (`fold[B]` on `MapIter[I, F, B]`: own param B), infer the full arg list from the
-// call (inferFnArgs) and return the entries beyond the receiver's arg count.
-fn methodOwnArgs(c: inout Comp, mfi: U64, instRef: U64, args: ArgRange) -> Array[U64] {
-    val mf: Func = c.arena.funcs[mfi]
-    val rcount: U64 = c.arena.types[instRef].args.count()
-    if mf.typeParams.count() <= rcount {
-        return []
-    }
-    val inferred: Array[U64] = c.inferFnArgs(f: mf, args: args)
-    mut val out: Array[U64] = []
-    mut val i: U64 = rcount
-    while i < inferred.count() {
-        // a failed inference (0) or out-of-range ref would seed the env with the index-0
-        // dummy type and crash emission; bail to an empty list so the caller leaves the
-        // method undeclared and reports the honest "not emittable yet" instead.
-        if inferred[i] == 0U64 || inferred[i] >= c.arena.types.count() {
-            return []
-        }
-        // only a primitive (int / float) own argument is supported for now: a scalar
-        // accumulator shares the item's i64/double representation, so the receiver-`B`
-        // (item) / own-`B` (accumulator) name collision is observably harmless. A
-        // String / struct / array accumulator (a different LLVM representation) is not
-        // yet emitted correctly through the collided env, so bail to the loud reject
-        // rather than miscompile.
-        val owt: TypeRef = c.arena.types[inferred[i]]
-        if !(c.isIntType(start: owt.nameStart, len: owt.nameLen) || c.isFloatType(start: owt.nameStart, len: owt.nameLen)) {
-            return []
-        }
-        out.append(inferred[i])
-        i += 1
-    }
-    return out
-}
-
 // Emit a call argument for a parameter `p`: an array-literal arg is built with the
 // parameter's element type (so `[10,20]` for an `Array[I32]` param uses i32, not
 // i64-defaulted elements); a scalar arg is width-coerced to the parameter type.
