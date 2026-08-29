@@ -1,0 +1,16 @@
+// `P` and `P#Extra` share an ABI but are distinct semantic types.  A single
+// generic parameter must not erase the extension-view provenance while
+// inferring its substitution from multiple arguments.
+struct P {}
+pub impl P { factory }
+
+extension Extra {
+    impl P { fn marker() {} }
+}
+
+fn requireSame[T](first: T, second: T) {}
+
+fn main() {
+    val plain: P = <P />
+    requireSame(first: plain, second: plain#Extra)
+}
