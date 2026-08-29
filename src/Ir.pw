@@ -964,6 +964,10 @@ export struct CallSiteSelection {
     // this immutable arena slice instead of pattern-matching the shared AST
     // again to rediscover arguments.
     pub val args: ArgRange = <ArgRange start=0U64 len=0U64 />
+    // The same argument shape with semantic type sources. `args` is retained
+    // only as backend navigation anchors and default-argument mapping; generic
+    // inference must consume this field rather than re-type the Expr ids.
+    pub val argumentSources: Array[CallTemplateArgument] = []
     // Parametric call-template substitutions, grounded by the source
     // resolver under the caller BodyInstance before final construction.
     pub val calleeTypeArgs: Array[U64] = []
@@ -1454,24 +1458,45 @@ export enum CallTemplateReceiver {
     PriorProtocolResult(slot: U64)
 }
 
-// One operator operand is semantic input, not a request to inspect a shared
-// Expr later.  A literal whose type is intentionally context-sensitive keeps
-// its Record-time TypeInfo adapter; every other value carries either its closed
-// TypeTerm or the completed result of an earlier call site.
-export enum OperatorOperandSource {
+// One call argument is semantic input, not a request to inspect a shared Expr
+// later. A literal whose type is intentionally context-sensitive keeps its
+// Record-time TypeInfo adapter; every other value carries either its closed
+// TypeTerm or the completed result of an earlier call site. Operators, direct
+// calls, protocol calls, and future Mid `ResolvedCall`s share this one source
+// algebra so no site kind acquires a private AST recovery path.
+export enum CallArgumentSource {
     Term(exprId: U64, term: U64)
+    // A lexical local can acquire a more precise concrete type while its body
+    // instance is finalized (notably a `for` item from an Iterator proof).
+    // `localIndex` is recorded in the same body walk and is therefore an
+    // identity, not a later name lookup; `term` is the declaration-time
+    // fallback for synthetic/incomplete scopes.
+    Local(exprId: U64, localIndex: U64, term: U64)
     PriorCallResult(exprId: U64, siteKey: CallSiteKey)
     Legacy(exprId: U64, info: TypeInfo)
 }
+
+// The call-site ABI shape is source provenance too: labels and `inout` belong
+// to the selected parameter mapping, while ExprId remains only the backend
+// navigation anchor for value evaluation.  Keeping them beside the semantic
+// type source prevents Mono from reopening an Expr solely to recover them.
+export struct CallTemplateArgument {
+    pub val source: CallArgumentSource
+    pub val isInout: Bool
+    pub val labelStart: U64
+    pub val labelLen: U64
+    pub val hasLabel: Bool
+}
+pub impl CallTemplateArgument { factory }
 
 // The template is a site-kind sum.  These alternatives deliberately cannot
 // mix an ordinary call's declared callee with an operator's symbolic proof or
 // a protocol receiver.  Finalization consumes exactly the selected variant.
 export enum CallTemplateKind {
     Pending
-    Direct(callee: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64])
+    Direct(callee: U64, receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], calleeTypeArgs: Array[U64])
     Protocol(receiver: CallTemplateReceiver)
-    Operator(op: I64, operands: Array[OperatorOperandSource], resolution: StaticMemberResolution, resultTerm: U64)
+    Operator(op: I64, operands: Array[CallArgumentSource], resolution: StaticMemberResolution, resultTerm: U64)
 }
 
 // Parametric call semantics are owned by a declaration body and CallSiteKey,

@@ -3,7 +3,58 @@
 
 // Whether c.arena.funcs[fi] is a generic free function (no receiver, has type params).
 
+import ../../Ir with { CallTemplateArgument }
+
 pub impl Comp {
+
+    // Concrete generic inference for a selected Direct CallTemplate.  The
+    // argument range supplies only label/default mapping and ExprId diagnostic
+    // anchors; every type comes from the template's semantic source, grounded
+    // in this BodyInstance.  This is the finalizer counterpart of
+    // inferParametricFnArgs, not a second AST type-recovery pass.
+    inout fn inferFnArgsFromTemplate(f: Func, args: ArgRange, sources: Array[CallTemplateArgument]) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val ti: U64 = 0U64
+        while ti < f.typeParams.count() {
+            val tp: Bind = f.typeParams[ti]
+            mut val found: U64 = 0U64
+            mut val pi: U64 = 0U64
+            while pi < f.params.count() {
+                val p: Param = f.params[pi]
+                val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
+                mut val candidate: U64 = 0U64
+                if ai < sources.count() {
+                    val argument: CallTemplateArgument = sources[ai]
+                    val argRef: U64 = self.groundCallArgumentSource(source: argument.source)
+                    if p.tyIsArray {
+                        if p.tyNameId == tp.nameId && argRef != 0U64 && argRef < self.arena.types.count() {
+                            val array: TypeRef = self.arena.types[argRef]
+                            if array.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: array.nameStart, len: array.nameLen, kw: "Array") {
+                                candidate = array.args[0]
+                            }
+                        }
+                    } else if argRef != 0U64 {
+                        candidate = self.unifyTypeParam(paramRef: p.ty, argRef: argRef, tpStart: tp.nameStart, tpLen: tp.nameLen)
+                    }
+                }
+                if candidate != 0U64 {
+                    if found == 0U64 {
+                        found = candidate
+                    } else if self.tyRefIsGround(ref: found) && self.tyRefIsGround(ref: candidate) && !(self.sameMangle(refA: found, refB: candidate)) {
+                        mut val offset: U64 = f.nameStart
+                        if ai < sources.count() {
+                            offset = self.exprOffset(id: self.callArgumentExprId(source: sources[ai].source))
+                        }
+                        self.errorAt(offset: offset, msg: "conflicting type arguments: this argument requires a different type for the same generic parameter (spec/06)")
+                    }
+                }
+                pi += 1U64
+            }
+            out.append(found)
+            ti += 1U64
+        }
+        return out
+    }
 
     // Infer a generic free-call substitution from declaration-time semantic
     // expression terms.  Unlike inferFnArgs this deliberately has no

@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): expression type-cache table
 // construction.
 
-import ../../Ir with { SemanticTypeRecipe, OperatorOperandSource, StaticMemberResolution }
+import ../../Ir with { SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, StaticMemberResolution }
 
 pub impl Comp {
 
@@ -407,15 +407,31 @@ pub impl Comp {
         return self.decls.callTemplates.count()
     }
 
-    inout fn recordCallTemplate(exprId: U64, callee: U64, receiverTerm: U64, calleeTypeArgs: Array[U64]) {
+    // Direct calls use the same source algebra as operators. The argument
+    // syntax is copied once at Record time; Mono later grounds this immutable
+    // template and must not inspect a shared Expr to rediscover labels, inout,
+    // or an argument's parametric type.
+    inout fn directCallTemplateArgs(args: ArgRange) -> Array[CallTemplateArgument] {
+        mut val out: Array[CallTemplateArgument] = []
+        mut val i: U64 = 0U64
+        while i < args.len {
+            val arg: Arg = self.argAt(args: args, index: i)
+            out.append(<CallTemplateArgument source=self.callArgumentSource(exprId: arg.expr) isInout=arg.isInout labelStart=arg.labelStart labelLen=arg.labelLen hasLabel=arg.hasLabel />)
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64]) {
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.Term term=receiverTerm /> calleeTypeArgs=calleeTypeArgs /> expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs /> expectedResultTerm=prior.expectedResultTerm />)
             return
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.Term term=receiverTerm /> calleeTypeArgs=calleeTypeArgs /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs /> />)
     }
 
     inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver) {
@@ -429,25 +445,49 @@ pub impl Comp {
         self.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Protocol receiver=receiver /> />)
     }
 
-    // A written operator operand is an explicit semantic source. Calls keep a
+    // A written call argument is an explicit semantic source. Calls keep a
     // dependency on their completed descriptor; an untyped literal retains its
     // Record-time adapter rather than inviting Mono to inspect the Expr.
-    inout fn operatorOperandSource(exprId: U64) -> OperatorOperandSource {
+    inout fn callArgumentSource(exprId: U64) -> CallArgumentSource {
         match self.arena.exprs[exprId] {
+            Expr.Ident(start: val start, len: val len) => {
+                val localIndex: U64 = self.localIndexByName(start: start, len: len)
+                if localIndex < self.cur.locals.count() {
+                    return <CallArgumentSource.Local exprId=exprId localIndex=localIndex term=self.parametricExprTerm(exprId: exprId) />
+                }
+            }
             Expr.Call(nameStart: _, nameLen: _, args: _) => {
-                return <OperatorOperandSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
             }
             Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
-                return <OperatorOperandSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
             }
             Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
-                return <OperatorOperandSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+            }
+            // Operators publish CallResolution entries too. A surrounding
+            // direct call must depend on that finalized result exactly as it
+            // depends on a written call: `print(!false)` cannot infer Print's
+            // generic argument from the unary Expr's legacy TypeInfo.
+            Expr.Unary(op: _, operand: _) => {
+                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+            }
+            Expr.Binary(op: _, lhs: _, rhs: _) => {
+                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
             }
             _ => {}
         }
         val term: U64 = self.parametricExprTerm(exprId: exprId)
-        if term != 0U64 { return <OperatorOperandSource.Term exprId=exprId term=term /> }
-        return <OperatorOperandSource.Legacy exprId=exprId info=self.semanticExprTypeInfo(exprId: exprId) />
+        if term != 0U64 { return <CallArgumentSource.Term exprId=exprId term=term /> }
+        // Some older structural forms have not yet installed their own
+        // SemanticExprType producer, but Record still has their exact
+        // declaration-time type while the lexical scope is live (for example
+        // `newtypeString.bytes()[0]`). Convert that query to a TypeTerm here;
+        // finalization consumes the stored term and never repeats the query.
+        val legacy: TypeInfo = self.exprTypeWithChainHole(id: exprId, chainHoleRef: 0U64)
+        val legacyTerm: U64 = self.typedIrRefOfInfo(ti: legacy)
+        if legacyTerm != 0U64 { return <CallArgumentSource.Term exprId=exprId term=legacyTerm /> }
+        return <CallArgumentSource.Legacy exprId=exprId info=self.semanticExprTypeInfo(exprId: exprId) />
     }
 
     inout fn staticOperatorTemplateResolution(op: I64, receiverTerm: U64, isUnary: Bool) -> StaticMemberResolution {
@@ -471,10 +511,10 @@ pub impl Comp {
     }
 
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) {
-        mut val operands: Array[OperatorOperandSource] = []
+        mut val operands: Array[CallArgumentSource] = []
         mut val i: U64 = 0U64
         while i < operandExprs.count() {
-            operands.append(self.operatorOperandSource(exprId: operandExprs[i]))
+            operands.append(self.callArgumentSource(exprId: operandExprs[i]))
             i += 1U64
         }
         mut val receiverTerm: U64 = 0U64
@@ -634,7 +674,7 @@ pub impl Comp {
     // Record selection evidence independently from the expression result
     // TypeTerm.  A later body-instance ground reads the term for type equality
     // and the provenance for CallResolution; neither reader needs AST recovery.
-    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiverTerm: U64, calleeTypeArgs: Array[U64], resultTerm: U64) {
+    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext />
@@ -643,7 +683,7 @@ pub impl Comp {
             next = <SemanticExprType term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />
         }
         self.arena.semanticExprTypes.set(i: exprId, value: next)
-        self.recordCallTemplate(exprId: exprId, callee: callee, receiverTerm: receiverTerm, calleeTypeArgs: calleeTypeArgs)
+        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs)
     }
 
     // Record the expected result at a semantic statement boundary.  It is not
@@ -695,7 +735,7 @@ pub impl Comp {
         mut val out: Array[U64] = []
         mut val args: Array[U64] = []
         match self.callTemplateForCurrentBody(exprId: exprId).kind {
-            CallTemplateKind.Direct(callee: _, receiver: _, calleeTypeArgs: val stored) => { args = stored }
+            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val stored) => { args = stored }
             _ => {}
         }
         mut val i: U64 = 0U64

@@ -77,6 +77,15 @@ pub impl Comp {
         return <CallTemplateReceiver.Term term=self.parametricExprTerm(exprId: exprId) />
     }
 
+    // Written direct methods have exactly the same receiver provenance as a
+    // protocol call: a nested written call supplies its completed descriptor;
+    // every other receiver contributes its closed declaration-time TypeTerm.
+    // Keep the site kinds separate in CallTemplate, but not their value-source
+    // algebra.
+    inout fn directReceiverTemplateForExpr(exprId: U64) -> CallTemplateReceiver {
+        return self.protocolReceiverTemplateForExpr(exprId: exprId)
+    }
+
     // `for` introduces a source-level binding just like `val`: its type must
     // be the iterator proof's associated `Item` term, not the legacy
     // TypeInfo name recovered from the iterator head.  An adapter such as
@@ -97,7 +106,7 @@ pub impl Comp {
         if iterExpr < self.arena.exprs.count() {
             val template: CallTemplate = self.callTemplateForCurrentBody(exprId: iterExpr)
             match template.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, calleeTypeArgs: _) => {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _) => {
                     if callee < self.arena.funcs.count() {
                         val selected: Func = self.arena.funcs[callee]
                         if selected.originTraitOwner != 0U64 {
@@ -201,21 +210,43 @@ pub impl Comp {
             self.cur.typeParams = savedParams
             self.cur.typeArgs = savedArgs
         }
-        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiverTerm: 0U64, calleeTypeArgs: calleeArgs, resultTerm: result)
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result)
         // The existing SemanticExprType is still consumed by the abstract
         // checker, so it retains its established abstract substitution. The
         // final-call template is independent provenance and may carry the
         // receiver-pattern completion needed solely for body-instance
         // grounding.
         val templateArgs: Array[U64] = self.completeRecordedFreeCallArgs(f: f, args: args, inferred: calleeArgs)
-        self.recordCallTemplate(exprId: exprId, callee: callee, receiverTerm: 0U64, calleeTypeArgs: templateArgs)
+        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: templateArgs)
     }
 
-    inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverTerm: U64, args: ArgRange) {
+    inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverExpr: U64, receiverTerm: U64, args: ArgRange) {
         if callee >= self.arena.funcs.count() || receiverTerm == 0U64 || receiverTerm >= self.arena.types.count() { return }
         val f: Func = self.arena.funcs[callee]
-        val result: U64 = self.groundFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args)
-        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiverTerm: receiverTerm, calleeTypeArgs: [], resultTerm: result)
+        // Newtype member selection deliberately chooses the underlying
+        // declaration, so its return-term environment must use the same
+        // normalized receiver. The source value remains the newtype; this is
+        // only the callee's `Self` substitution for signature grounding.
+        mut val returnReceiver: U64 = receiverTerm
+        val receiver: TypeRef = self.arena.types[receiverTerm]
+        val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
+        if underlying != 0U64 && underlying < self.arena.types.count() {
+            val under: TypeRef = self.arena.types[underlying]
+            if spansEqual(c: inout self, aStart: under.nameStart, aLen: under.nameLen, bStart: f.recvStart, bLen: f.recvLen) {
+                returnReceiver = underlying
+            }
+        }
+        mut val result: U64 = self.groundFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: returnReceiver), args: args)
+        // `groundFinalMethodReturn` preserves symbolic receiver binders. A
+        // non-generic receiver has no such environment, and is instead the
+        // concrete half of the same final-callable calculation. Both are
+        // frontend type facts; leaving the latter to exprType would make an
+        // ordinary `String.bytes()[0]` force Mono to reconstruct a method
+        // result from the shared AST.
+        if result == 0U64 {
+            result = self.groundConcreteFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: returnReceiver), args: args)
+        }
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: self.directReceiverTemplateForExpr(exprId: receiverExpr), args: args, calleeTypeArgs: [], resultTerm: result)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
@@ -413,8 +444,30 @@ pub impl Comp {
                     self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
-                val methodCallee: U64 = self.resolvedCallee(id: exprId)
-                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverTerm: self.parametricExprTerm(exprId: recv), args: args)
+                val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
+                mut val methodCallee: U64 = self.resolvedCallee(id: exprId)
+                // Some valid inherited surfaces (notably a newtype's
+                // underlying methods) have no early type-cache callee. Record
+                // still owns the one frontend selection: resolve it now from
+                // the already-recorded receiver, rather than leaving Mono to
+                // reopen this method Expr during finalization.
+                if methodCallee >= self.arena.funcs.count() {
+                    methodCallee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
+                // Newtype member inheritance selects the underlying surface
+                // while preserving the authored newtype as the value term.
+                // The finalizer already normalizes that receiver for the
+                // selected declaration; Record must make the same frontend
+                // selection so it can publish a Direct template first.
+                if methodCallee >= self.arena.funcs.count() && receiverTerm != 0U64 && receiverTerm < self.arena.types.count() {
+                    val receiver: TypeRef = self.arena.types[receiverTerm]
+                    val underlying: U64 = self.newtypeUnderRef(start: receiver.nameStart, len: receiver.nameLen)
+                    if underlying != 0U64 && underlying < self.arena.types.count() {
+                        val under: TypeRef = self.arena.types[underlying]
+                        methodCallee = self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId))
+                    }
+                }
+                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverExpr: recv, receiverTerm: receiverTerm, args: args)
                 // context-type an array-literal argument from the resolved method's
                 // declared param (mirrors the Call arm). A kind-3 receiver's methods
                 // live on `Array`; a generic-receiver param (`append(value: T)`) is
@@ -458,7 +511,7 @@ pub impl Comp {
                     i += 1
                 }
                 val methodCallee: U64 = self.resolvedCallee(id: exprId)
-                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverTerm: self.parametricExprTerm(exprId: recv), args: args)
+                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverExpr: recv, receiverTerm: self.parametricExprTerm(exprId: recv), args: args)
             }
             Expr.ExtView(val recv, val source, val strip) => {
                 self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
@@ -569,7 +622,15 @@ pub impl Comp {
                 // element term is an existing child of the recorded receiver.
                 // Other index forms lower through a final method callable and
                 // intentionally remain outside this direct type-term rule.
-                val baseTerm: U64 = self.parametricExprTerm(exprId: base)
+                mut val baseTerm: U64 = self.parametricExprTerm(exprId: base)
+                // A selected inherited method can expose its exact result to
+                // the frontend type query before its CallTemplate result has
+                // been recorded as a direct TypeTerm. Normalize that query at
+                // this producer boundary: `u.bytes()[0]` is structurally the
+                // U8 child of Array[U8], never a Mono inference problem.
+                if baseTerm == 0U64 {
+                    baseTerm = self.typedIrRefOfInfo(ti: self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
+                }
                 if baseTerm != 0U64 && baseTerm < self.arena.types.count() {
                     val baseTy: TypeRef = self.arena.types[baseTerm]
                     if baseTy.args.count() == 1U64 {

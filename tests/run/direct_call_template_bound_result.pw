@@ -1,0 +1,27 @@
+// A Direct CallTemplate must carry the result of a requirement selected by a
+// generic `where` proof into the next generic direct call.  The latter cannot
+// infer U from the source spelling alone: `parsed()` returns the associated
+// output of Convert[String], which becomes concrete only for the BodyInstance.
+import @Std/Io with { print }
+
+trait Convert[From] {
+    type Output
+    fn parsed(value: From) -> Output
+}
+
+struct Parser {}
+pub impl Parser { factory }
+pub impl Parser as Convert[String] {
+    type Output = I64
+    fn parsed(value: String) -> I64 { return 42I64 }
+}
+
+fn keep[U](value: U) -> U { return value }
+
+fn parseAndKeep[T](parser: T, text: String) -> T#Convert[String].Output where T: Convert[String] {
+    return keep(value: parser.parsed(value: text))
+}
+
+fn main() {
+    print(parseAndKeep(parser: <Parser />, text: "answer"))
+}

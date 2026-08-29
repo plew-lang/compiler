@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, OperatorOperandSource, CallTemplateKind }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind }
 
 // Walk an expression, registering any generic free function calls it contains
 // (args before self, so a nested generic call is registered before the outer one
@@ -398,6 +398,24 @@ pub impl Comp {
             _ => { self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has the wrong site kind") }
         }
         return 0U64
+    }
+
+    // Direct and protocol calls use the same receiver source algebra. Keeping
+    // this reader independent of syntax is what lets a method receiver be the
+    // completed result of an earlier call in a shared generic body.
+    inout fn groundCallTemplateReceiver(receiver: CallTemplateReceiver) -> U64 {
+        match receiver {
+            CallTemplateReceiver.None => { return 0U64 }
+            CallTemplateReceiver.Term(val term) => {
+                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            }
+            CallTemplateReceiver.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
+                return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
+            }
+            CallTemplateReceiver.PriorProtocolResult(slot: val slot) => {
+                return self.bodyCalleeResultRef(exprId: self.cur.bodyFnIdx, siteIsStmt: true, slot: slot)
+            }
+        }
     }
 
     // Resolve a receiver dependency only through the immutable descriptor
@@ -902,7 +920,16 @@ pub impl Comp {
             // template slot independently; replacing the whole vector would
             // discard receiver-pattern substitutions that no value argument
             // mentions.
-            val inferredFromBody: Array[U64] = self.inferFnArgs(f: f, args: callArgs)
+            // A Direct template carries semantic argument sources. Dynamic
+            // closure/existential fallbacks have no declaration-time Direct
+            // selection yet and retain the legacy reader until their own
+            // template variants are introduced.
+            mut val inferredFromBody: Array[U64] = []
+            if selection.argumentSources.count() > 0U64 {
+                inferredFromBody = self.inferFnArgsFromTemplate(f: f, args: callArgs, sources: selection.argumentSources)
+            } else {
+                inferredFromBody = self.inferFnArgs(f: f, args: callArgs)
+            }
             if inferred.count() == 0U64 {
                 inferred = inferredFromBody
             } else {
@@ -1011,38 +1038,59 @@ pub impl Comp {
         self.enqueueSelectedCallee(selection: selection)
     }
 
-    // Ground one explicitly-recorded operator operand.  This is intentionally
-    // separate from groundedBodyReceiverRef: that helper is a compatibility
-    // reader for arbitrary Expr navigation, whereas an operator template owns
-    // its complete semantic input and must not rediscover it from shared AST.
-    inout fn groundOperatorOperand(source: OperatorOperandSource) -> U64 {
+    // Ground one explicitly-recorded call argument. This is intentionally
+    // separate from groundedBodyReceiverRef: that helper remains a migration
+    // reader for arbitrary Expr navigation, whereas a CallTemplate owns its
+    // complete semantic input and must not rediscover it from shared AST.
+    inout fn groundCallArgumentSource(source: CallArgumentSource) -> U64 {
         match source {
-            OperatorOperandSource.Term(exprId: _, val term) => {
+            CallArgumentSource.Term(exprId: _, val term) => {
                 return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             }
-            OperatorOperandSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
+            CallArgumentSource.Local(exprId: _, localIndex: val localIndex, term: val term) => {
+                if localIndex < self.cur.locals.count() {
+                    val local: Local = self.cur.locals[localIndex]
+                    if local.ty != 0U64 {
+                        return self.groundTermForBody(ref: local.ty, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                    }
+                }
+                return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+            }
+            CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
                 return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
             }
-            OperatorOperandSource.Legacy(exprId: _, val info) => {
+            CallArgumentSource.Legacy(exprId: _, val info) => {
                 return self.typedIrRefOfInfo(ti: info)
             }
         }
     }
 
-    fn operatorOperandExprId(source: OperatorOperandSource) -> U64 {
+    fn callArgumentExprId(source: CallArgumentSource) -> U64 {
         match source {
-            OperatorOperandSource.Term(val exprId, term: _) => { return exprId }
-            OperatorOperandSource.PriorCallResult(val exprId, siteKey: _) => { return exprId }
-            OperatorOperandSource.Legacy(val exprId, info: _) => { return exprId }
+            CallArgumentSource.Term(val exprId, term: _) => { return exprId }
+            CallArgumentSource.Local(val exprId, localIndex: _, term: _) => { return exprId }
+            CallArgumentSource.PriorCallResult(val exprId, siteKey: _) => { return exprId }
+            CallArgumentSource.Legacy(val exprId, info: _) => { return exprId }
         }
     }
 
-    inout fn operatorTemplateArgs(operands: Array[OperatorOperandSource]) -> ArgRange {
+    inout fn templateArgumentRange(arguments: Array[CallTemplateArgument]) -> ArgRange {
+        mut val args: Array[Arg] = []
+        mut val i: U64 = 0U64
+        while i < arguments.count() {
+            val argument: CallTemplateArgument = arguments[i]
+            args.append(<Arg expr=self.callArgumentExprId(source: argument.source) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+            i += 1U64
+        }
+        return self.pushArgs(args: args)
+    }
+
+    inout fn operatorTemplateArgs(operands: Array[CallArgumentSource]) -> ArgRange {
         val noLabel: Bind = self.kwSpan(kw: "", kwLen: 0U64)
         mut val args: Array[Arg] = []
         mut val i: U64 = 0U64
         while i < operands.count() {
-            args.append(<Arg expr=self.operatorOperandExprId(source: operands[i]) isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
+            args.append(<Arg expr=self.callArgumentExprId(source: operands[i]) isInout=false labelStart=noLabel.nameStart labelLen=noLabel.nameLen hasLabel=false />)
             i += 1U64
         }
         return self.pushArgs(args: args)
@@ -1084,7 +1132,7 @@ pub impl Comp {
     inout fn recordBodyOperatorCallee(exprId: U64) {
         val template: CallTemplate = self.callTemplateForCurrentBody(exprId: exprId)
         mut val op: I64 = 0
-        mut val operands: Array[OperatorOperandSource] = []
+        mut val operands: Array[CallArgumentSource] = []
         mut val resultTerm: U64 = 0U64
         match template.kind {
             CallTemplateKind.Operator(op: val storedOp, operands: val storedOperands, resolution: _, resultTerm: val storedResult) => {
@@ -1115,7 +1163,7 @@ pub impl Comp {
         mut val operandRefs: Array[U64] = []
         mut val oi: U64 = 0U64
         while oi < operands.count() {
-            operandRefs.append(self.groundOperatorOperand(source: operands[oi]))
+            operandRefs.append(self.groundCallArgumentSource(source: operands[oi]))
             oi += 1U64
         }
         mut val selectedReceiverRef: U64 = 0U64
@@ -1723,6 +1771,16 @@ pub impl Comp {
         return 0U64
     }
 
+    // Build the finalizer input from a Direct CallTemplate alone. The ExprId
+    // remains a navigation anchor for backend value emission, but callee,
+    // receiver, argument shape, substitutions, and expected result all come
+    // from frontend semantic facts recorded before BodyInstance finalization.
+    inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument]) -> CallSiteSelection {
+        val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val calleeArgs: Array[U64] = self.groundSemanticCallTypeArgs(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        return <CallSiteSelection exprId=exprId callee=callee receiverRef=self.groundCallTemplateReceiver(receiver: receiver) args=self.templateArgumentRange(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs resultHintRef=expected resultRef=self.groundedTypeOf(id: exprId) />
+    }
+
     // Resolve once under Mono's concrete body environment, then retain that
     // decision for every downstream consumer (instance registration, type
     // recovery, and LLVM emission).
@@ -1747,6 +1805,21 @@ pub impl Comp {
             }
             self.materializeImplicitAssocTemplate(exprId: exprId, callee: chainTemplate, recvRef: stageRef)
             return chainTemplate
+        }
+        // A written static call was selected during Record. Its Direct
+        // template is authoritative for the concrete BodyInstance: reopening
+        // Expr.Call/Method/ExtMethod here would duplicate candidate selection
+        // and lose a receiver/result dependency carried by CallSiteKey.
+        match self.callTemplateForCurrentBody(exprId: exprId).kind {
+            CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: _) => {
+                if storedCallee < self.arena.funcs.count() {
+                    val selection: CallSiteSelection = self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: arguments)
+                    self.recordSelectedBodyCallee(selection: selection)
+                    self.enqueueSelectedCallee(selection: selection)
+                    return storedCallee
+                }
+            }
+            _ => {}
         }
         // Non-generic verification may provide an instance-invariant final
         // callable, including generic free-call substitutions.  Keep that
