@@ -4,17 +4,17 @@ unique struct File { pub val fd: I64 }
 pub impl File { factory }
 
 impl File {
-    deinit { write(s: "drop\\n") }
+    deinit { write(s: "drop\n") }
 }
 
 fn sink(file: move File) {
-    write(s: "got\\n")
+    write(s: "got\n")
 }
 
 fn handOff(condition: Bool) {
     val file: File = <File fd=9 />
     if condition { sink(file: move file) }
-    write(s: "end\\n")
+    write(s: "end\n")
 }
 
 fn main() {
