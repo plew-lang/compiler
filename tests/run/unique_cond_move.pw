@@ -11,8 +11,12 @@ fn sink(file: move File) {
     write(s: "got\n")
 }
 
+fn makeFile() -> File {
+    return <File fd=9I64 />
+}
+
 fn handOff(condition: Bool) {
-    val file: File = <File fd=9 />
+    val file: File = makeFile()
     if condition { sink(file: move file) }
     write(s: "end\n")
 }

@@ -1668,6 +1668,10 @@ export struct Decls {
     pub mut val callTemplateIndexSlots: Array[U64] = []
     pub mut val destructureSites: Array[DestructureSite] = []
     pub mut val forTypeRecipes: Array[ForTypeRecipe] = []
+    // Semantic lowering requirement, not a source-language restriction.  A
+    // body with a conditional unique move must not fall back to the legacy
+    // path-insensitive AST emitter while Mid migration is incremental.
+    pub mut val ownershipCfgFunctions: Array[U64] = []
     pub mut val kwCache: Array[Bind] = []
 }
 pub impl Decls { factory }

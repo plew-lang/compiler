@@ -33,6 +33,13 @@ fn main() {
         MidStatement.ConditionalDrop(place: _, flag: _) => { write(s: "conditional-drop\n") }
         _ => { write(s: "missing-conditional-drop\n") }
     }
+    match elaborated.blocks[3U64].statements[1U64] {
+        MidStatement.SetDropFlag(local: _, isSet: val isSet) => {
+            if !isSet { write(s: "conditional-drop-clears-flag\n") }
+            else { write(s: "conditional-drop-keeps-flag\n") }
+        }
+        _ => { write(s: "conditional-drop-keeps-flag\n") }
+    }
     match verifyMidBody(body: body).error {
         MidVerifyError.None => { write(s: "valid\n") }
         _ => { write(s: "invalid\n") }

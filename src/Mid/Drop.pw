@@ -407,6 +407,52 @@ fn midRvalueMovedRoot(value: MidRvalue) -> U64 {
     match value { MidRvalue.Use(operand: val operand) => { return midOperandMovedRoot(operand: operand) } }
 }
 
+// A conditional move makes a root MaybeOwned/Unavailable at the first join
+// which loses a uniform source-level owner.  A later block can inherit that
+// same pair only because an earlier cliff has already discharged the remaining
+// ownership obligation.  Insert one ConditionalDrop at the boundary, rather
+// than once per downstream block.  This is deliberately phrased in CFG terms:
+// lexical block order is not a dominance relation and is wrong for loops.
+fn midIsAccessibilityCliff(body: MidBody, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]], block: U64, local: U64) -> Bool {
+    if block >= body.blocks.count() || block >= ownership.count() || block >= accessibility.count() { return false }
+    if local >= ownership[block].count() || local >= accessibility[block].count() { return false }
+    match ownership[block][local] {
+        MidOwnership.MaybeOwned => {}
+        _ => { return false }
+    }
+    match accessibility[block][local] {
+        MidAccessibility.Unavailable => {}
+        _ => { return false }
+    }
+    if block == body.entry { return true }
+    mut val sawPredecessor: Bool = false
+    mut val predecessor: U64 = 0U64
+    while predecessor < body.blocks.count() {
+        val successors: Array[U64] = midSuccessors(term: body.blocks[predecessor].terminator)
+        mut val successorI: U64 = 0U64
+        while successorI < successors.count() {
+            if successors[successorI] == block {
+                sawPredecessor = true
+                val predecessorOwnership: Array[MidOwnership] = midTransferBlock(body: body, block: body.blocks[predecessor], input: ownership[predecessor])
+                val predecessorAccessibility: Array[MidAccessibility] = midAccessibilityTransfer(body: body, block: body.blocks[predecessor], input: accessibility[predecessor])
+                if local >= predecessorOwnership.count() || local >= predecessorAccessibility.count() { return false }
+                match predecessorOwnership[local] {
+                    MidOwnership.MaybeOwned => {
+                        match predecessorAccessibility[local] {
+                            MidAccessibility.Unavailable => {}
+                            _ => { return true }
+                        }
+                    }
+                    _ => { return true }
+                }
+            }
+            successorI += 1U64
+        }
+        predecessor += 1U64
+    }
+    return !sawPredecessor
+}
+
 // Elaborate a parametric Mid body after its control-flow lowering. The body has
 // no raw retain/release: this pass alone creates flag maintenance and conditional
 // drops. A later instantiate pass grounds the type terms but does not alter this
@@ -417,6 +463,7 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
     val originalCount: U64 = body.locals.count()
     mut val needsFlag: Array[Bool] = []
     mut val flagFor: Array[U64] = []
+    mut val cliffAtEntry: Array[Array[Bool]] = []
     mut val li: U64 = 0U64
     while li < originalCount {
         needsFlag.append(false)
@@ -425,8 +472,11 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
     }
     mut val bi: U64 = 0U64
     while bi < body.blocks.count() {
+        mut val blockCliffs: Array[Bool] = []
         li = 0U64
         while li < originalCount {
+            val cliff: Bool = midIsAccessibilityCliff(body: body, ownership: ownership, accessibility: accessibility, block: bi, local: li)
+            blockCliffs.append(cliff)
             match ownership[bi][li] {
                 MidOwnership.MaybeOwned => {
                     match accessibility[bi][li] {
@@ -438,6 +488,7 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
             }
             li += 1U64
         }
+        cliffAtEntry.append(blockCliffs)
         // A scope exit consumes every root in that scope. A root which is
         // MaybeOwned on entry needs the same flag as an accessibility cliff;
         // elaboration below decides whether this concrete path emits it.
@@ -461,6 +512,34 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
         }
         bi += 1U64
     }
+
+    // Re-run ownership over the planned cliff drops before choosing lexical
+    // cleanup.  The original analysis necessarily leaves every downstream
+    // block MaybeOwned; using it after inserting a drop would manufacture a
+    // second consume at a later ScopeExit.  This temporary body is still
+    // backend-independent and only models the ownership effect of the exact
+    // drops selected above; actual flags are allocated below.
+    mut val cliffBlocks: Array[MidBlock] = []
+    bi = 0U64
+    while bi < body.blocks.count() {
+        mut val statements: Array[MidStatement] = []
+        li = 0U64
+        while li < originalCount {
+            if cliffAtEntry[bi][li] {
+                statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=li typeTerm=body.locals[li].typeTerm /> flag=0U64 />)
+            }
+            li += 1U64
+        }
+        li = 0U64
+        while li < body.blocks[bi].statements.count() {
+            statements.append(body.blocks[bi].statements[li])
+            li += 1U64
+        }
+        cliffBlocks.append(<MidBlock statements=statements terminator=body.blocks[bi].terminator />)
+        bi += 1U64
+    }
+    val cliffBody: MidBody = <MidBody bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=body.locals scopes=body.scopes blocks=cliffBlocks entry=body.entry />
+    val ownershipAfterCliffs: Array[Array[MidOwnership]] = analyzeMidOwnership(body: cliffBody)
     mut val locals: Array[MidLocalDecl] = body.locals
     li = 0U64
     while li < originalCount {
@@ -475,7 +554,7 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
     while bi < body.blocks.count() {
         val source: MidBlock = body.blocks[bi]
         mut val statements: Array[MidStatement] = []
-        mut val currentOwnership: Array[MidOwnership] = ownership[bi]
+        mut val currentOwnership: Array[MidOwnership] = ownershipAfterCliffs[bi]
         mut val currentAccessibility: Array[MidAccessibility] = accessibility[bi]
         // The entry flag state reflects ownership at function entry. Flags for
         // locals initialized later are set by their Assign, not here.
@@ -490,23 +569,16 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
         }
         // An accessibility cliff is a block-entry property: all predecessors
         // have already evaluated their branch/call operands, so the inserted
-        // conditional drop cannot race source evaluation on either edge.
+        // conditional drop cannot race source evaluation on either edge.  A
+        // consumed flag must be cleared after either arm: without it a loop
+        // that re-enters this block could run the same runtime drop twice.
         li = 0U64
         while li < originalCount {
-            if needsFlag[li] {
-                match ownership[bi][li] {
-                    MidOwnership.MaybeOwned => {
-                        match accessibility[bi][li] {
-                            MidAccessibility.Unavailable => {
-                                statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=li typeTerm=body.locals[li].typeTerm /> flag=flagFor[li] />)
-                                currentOwnership.set(i: li, value: <MidOwnership.Consumed />)
-                                currentAccessibility.set(i: li, value: <MidAccessibility.Unavailable />)
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => {}
-                }
+            if needsFlag[li] && cliffAtEntry[bi][li] {
+                statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=li typeTerm=body.locals[li].typeTerm /> flag=flagFor[li] />)
+                statements.append(<MidStatement.SetDropFlag local=flagFor[li] isSet=false />)
+                currentOwnership.set(i: li, value: <MidOwnership.Consumed />)
+                currentAccessibility.set(i: li, value: <MidAccessibility.Unavailable />)
             }
             li += 1U64
         }

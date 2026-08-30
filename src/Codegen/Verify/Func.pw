@@ -2,6 +2,25 @@
 // per-block verification plus the move-tracking bookkeeping it relies on.
 
 pub impl Comp {
+    inout fn requireOwnershipCfgForCurrentFunction() {
+        val fnIdx: U64 = self.cur.checkFn
+        mut val i: U64 = 0U64
+        while i < self.decls.ownershipCfgFunctions.count() {
+            if self.decls.ownershipCfgFunctions[i] == fnIdx { return }
+            i += 1U64
+        }
+        self.decls.ownershipCfgFunctions.append(fnIdx)
+    }
+
+    inout fn functionRequiresOwnershipCfg(fnIdx: U64) -> Bool {
+        mut val i: U64 = 0U64
+        while i < self.decls.ownershipCfgFunctions.count() {
+            if self.decls.ownershipCfgFunctions[i] == fnIdx { return true }
+            i += 1U64
+        }
+        return false
+    }
+
     inout fn verifyFunc(f: Func) {
         if f.hasRet {
             self.cur.retVoid = false

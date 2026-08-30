@@ -1,6 +1,7 @@
 maybe
 unavailable
 conditional-drop
+conditional-drop-clears-flag
 valid
 elaborated-valid
 move-unavailable

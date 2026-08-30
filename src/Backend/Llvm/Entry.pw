@@ -132,17 +132,39 @@ pub impl LlvmCtx {
                                         if self.midInitialLlvmSupported(c: inout c, body: elaborated) {
                                             midBody = elaborated
                                             midReady = true
+                                        } else { if c.traceCodegen { eprint(text: "[trace-codegen] Mid main: LLVM preflight unsupported\n") } }
+                                    }
+                                    _ => {
+                                        if c.traceCodegen {
+                                            eprint(text: "[trace-codegen] Mid main: verifier error=")
+                                            match verification.error {
+                                                MidVerifyError.InvalidTarget => { eprint(text: "invalid-target") }
+                                                MidVerifyError.PartialMove => { eprint(text: "partial-move") }
+                                                MidVerifyError.MoveUnavailable => { eprint(text: "move-unavailable") }
+                                                MidVerifyError.DropUnavailable => { eprint(text: "drop-unavailable") }
+                                                MidVerifyError.InvalidDropFlag => { eprint(text: "invalid-drop-flag") }
+                                                MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
+                                                _ => { eprint(text: "unknown") }
+                                            }
+                                            eprint(text: " block=")
+                                            self.traceCodegenU64(n: verification.block)
+                                            eprint(text: " local=")
+                                            self.traceCodegenU64(n: verification.local)
+                                            eprint(text: "\n")
                                         }
                                     }
-                                    _ => {}
                                 }
                             }
-                            _ => {}
+                            _ => { if c.traceCodegen { eprint(text: "[trace-codegen] Mid main: instantiation failed\n") } }
                         }
-                    }
+                    } else { if c.traceCodegen { eprint(text: "[trace-codegen] Mid main: missing body instance\n") } }
                 }
-                _ => {}
+                _ => { if c.traceCodegen { eprint(text: "[trace-codegen] Mid main: build unsupported\n") } }
             }
+        }
+        if c.functionRequiresOwnershipCfg(fnIdx: fi) && !midReady {
+            val mainDef: Func = c.arena.funcs[fi]
+            c.errorAt(offset: mainDef.nameStart, msg: "internal error: conditional unique move requires Mid CFG lowering, but this body is not yet representable in Mid")
         }
         self.beginFnBody(fv: mainFn)
         // plew_set_args(argc, argv).

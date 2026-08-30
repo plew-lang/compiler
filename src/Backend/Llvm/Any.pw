@@ -804,6 +804,7 @@ pub impl LlvmCtx {
         // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
         // can infer the concrete instance.
         self.curRetRef = c.groundTypeRef(ref: f.retTy)
+        val requiresOwnershipCfg: Bool = c.functionRequiresOwnershipCfg(fnIdx: fi)
         // Select a complete Mid body before beginning LLVM emission.  The
         // initial ordinary-body slice is deliberately exact: source receiver
         // (when by-value) and parameters form the checked Mid-local ABI prefix.
@@ -830,17 +831,22 @@ pub impl LlvmCtx {
                                         if self.midInitialLlvmSupported(c: inout c, body: elaborated, abiParameterCount: abiParameterCount) {
                                             midBody = elaborated
                                             midReady = true
+                                        } else {
+                                            if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: LLVM preflight unsupported\n") }
                                         }
                                     }
-                                    _ => {}
+                                    _ => { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: verifier error\n") } }
                                 }
                             }
-                            _ => {}
+                            _ => { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: instantiation failed\n") } }
                         }
-                    }
+                    } else { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: missing body instance\n") } }
                 }
-                _ => {}
+                _ => { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: build unsupported\n") } }
             }
+        } else { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: ABI unsupported\n") } }
+        if requiresOwnershipCfg && !midReady {
+            c.errorAt(offset: f.nameStart, msg: "internal error: conditional unique move requires Mid CFG lowering, but this body is not yet representable in Mid")
         }
         self.beginFnBody(fv: fv)
         if midReady {

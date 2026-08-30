@@ -64,6 +64,10 @@ export enum MidAccessibility {
 // children; they never fall back to source recovery.
 export enum MidConstant {
     Integer(value: U64, isNegative: Bool, isBool: Bool, typeTerm: U64)
+    // The lexer-validated literal token is immutable source value data.  It is
+    // not an ExprId and carries no type/call/name decision; lowering may decode
+    // its bytes but must not reopen semantic expression resolution.
+    StringLiteral(start: U64, len: U64, typeTerm: U64)
 }
 
 // Every produced Mid value has explicit ownership provenance.

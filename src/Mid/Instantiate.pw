@@ -63,6 +63,9 @@ fn instantiateMidOperand(c: inout Comp, operand: MidOperand, environment: BodyIn
                 MidConstant.Integer(value: val integer, isNegative: val isNegative, isBool: val isBool, typeTerm: val typeTerm) => {
                     return <MidOperand.Constant value=<MidConstant.Integer value=integer isNegative=isNegative isBool=isBool typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) /> />
                 }
+                MidConstant.StringLiteral(start: val start, len: val len, typeTerm: val typeTerm) => {
+                    return <MidOperand.Constant value=<MidConstant.StringLiteral start=start len=len typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) /> />
+                }
             }
         }
     }

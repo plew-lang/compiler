@@ -65,8 +65,8 @@ pub impl LlvmCtx {
     // Decompose a String value to (i8* data, i64 len) and call a 2-arg runtime sink
     // (`plew_write_raw` / `plew_eprint_raw` / `plew_panic_raw`). Passing scalars, not
     // the struct by value, sidesteps the C struct-by-value ABI until it is modeled.
-    inout fn emitStrSink(c: inout Comp, rtName: String, rtId: U64, argExpr: U64) -> LLVMValueRef {
-        val sv: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: argExpr)
+    inout fn emitStrSinkValue(c: inout Comp, rtName: String, rtId: U64, value: LLVMValueRef) -> LLVMValueRef {
+        val sv: LLVMValueRef = value
         val ptr: LLVMValueRef = self.arrValData(c: inout c, arr: sv)
         val len: LLVMValueRef = self.arrValCount(c: inout c, arr: sv)
         mut val ptys: Array[LLVMTypeRef] = []
@@ -78,6 +78,14 @@ pub impl LlvmCtx {
         av.append(ptr)
         av.append(len)
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 2U64, anon())
+    }
+
+    // AST callers retain this convenience wrapper.  Mid callers already have
+    // a closed String value and must use emitStrSinkValue directly so the
+    // backend does not reopen expression semantics after frontend freeze.
+    inout fn emitStrSink(c: inout Comp, rtName: String, rtId: U64, argExpr: U64) -> LLVMValueRef {
+        val value: LLVMValueRef = self.genBorrowedArg(c: inout c, argExpr: argExpr)
+        return self.emitStrSinkValue(c: inout c, rtName: rtName, rtId: rtId, value: value)
     }
 
     // A path-taking runtime intrinsic (`readFile`/`readFileBytes`/`fileExists`): the

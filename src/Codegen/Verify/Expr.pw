@@ -539,7 +539,11 @@ pub impl Comp {
                                     self.errorAt(offset: self.exprOffset(id: operand), msg: "moving `self` is not yet supported")
                                 }
                                 if self.localIndexByName(start: start, len: len) < self.cur.branchBase {
-                                    self.errorAt(offset: self.exprOffset(id: operand), msg: "cannot `move` a variable declared outside the enclosing conditional/loop (the move would be conditional); move it unconditionally")
+                                    // Conditional move is valid affine ownership.
+                                    // Record its required lowering capability so an
+                                    // incompletely migrated backend cannot silently
+                                    // select the path-insensitive AST emitter.
+                                    self.requireOwnershipCfgForCurrentFunction()
                                 }
                             }
                             _ => {

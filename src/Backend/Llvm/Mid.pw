@@ -4,6 +4,16 @@
 
 pub impl LlvmCtx {
 
+    // Runtime intrinsics are selected by the frozen declaration identity in
+    // CallResolution.  The spelling below is an ABI mapping for that selected
+    // extern declaration, never a source-call lookup or overload retry.
+    inout fn midPlewIntrinsicKind(c: inout Comp, callee: Func) -> U64 {
+        if !(callee.isExtern) || callee.isCExtern { return 0U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: callee.nameStart, len: callee.nameLen, kw: "write") { return 1U64 }
+        if rangeEquals(bytes: c.arena.bytes, start: callee.nameStart, len: callee.nameLen, kw: "eprint") { return 2U64 }
+        return 0U64
+    }
+
     // Path 1 deliberately selects a closed subset *before* emitting any LLVM.
     // It is not an AST fallback: a selected body has already crossed the
     // frontend freeze as Mid, and an unsupported body remains on the legacy
@@ -15,7 +25,17 @@ pub impl LlvmCtx {
         match selected.target { CallTarget.Direct => {} _ => { return false } }
         if selected.callee >= c.arena.funcs.count() { return false }
         val callee: Func = c.arena.funcs[selected.callee]
-        if callee.hasRecv || callee.isAssoc || callee.isExtern || callee.isAsync { return false }
+        if callee.hasRecv || callee.isAssoc || callee.isAsync { return false }
+        if callee.isExtern {
+            val intrinsic: U64 = self.midPlewIntrinsicKind(c: inout c, callee: callee)
+            if intrinsic == 0U64 || callee.hasRet || args.count() != 1U64 { return false }
+            match args[0U64] {
+                MidOperand.Copy(place: val place) => { if place.projections.count() != 0U64 { return false } }
+                MidOperand.Constant(value: _) => {}
+                _ => { return false }
+            }
+            return true
+        }
         if callee.typeParams.count() != selected.calleeTypeArgs.count() { return false }
         if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: selected.calleeTypeArgs)) { return false }
         if args.count() != callee.params.count() || selected.parameterTypeRefs.count() != args.count() { return false }
@@ -139,6 +159,20 @@ pub impl LlvmCtx {
     inout fn midEmitInitialDirectCall(c: inout Comp, body: MidBody, resolution: U64, args: Array[MidOperand], destination: MidPlace) -> Bool {
         if !(self.midInitialDirectCallSupported(c: inout c, resolution: resolution, args: args, destination: destination)) { return false }
         val selected: CallResolution = c.arena.finalCallees[resolution]
+        val calleeDef: Func = c.arena.funcs[selected.callee]
+        if calleeDef.isExtern {
+            val intrinsic: U64 = self.midPlewIntrinsicKind(c: inout c, callee: calleeDef)
+            val argument: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
+            if intrinsic == 1U64 {
+                self.emitStrSinkValue(c: inout c, rtName: "plew_write_raw", rtId: 2U64, value: argument)
+                return true
+            }
+            if intrinsic == 2U64 {
+                self.emitStrSinkValue(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, value: argument)
+                return true
+            }
+            return false
+        }
         val slot: U64 = self.ensureFnInst(c: inout c, fnIdx: selected.callee, args: selected.calleeTypeArgs, recvInstRef: selected.recvTypeRef)
         if slot >= self.genFnK.count() { return false }
         mut val values: Array[LLVMValueRef] = []
@@ -217,14 +251,17 @@ pub impl LlvmCtx {
             }
             MidOperand.Constant(value: val value) => {
                 match value {
-                    MidConstant.Integer(value: val integer, isNegative: val isNegative, isBool: val isBool, typeTerm: val term) => {
+                MidConstant.Integer(value: val integer, isNegative: val isNegative, isBool: val isBool, typeTerm: val term) => {
                         mut val ty: LLVMTypeRef = self.i64ty
                         if isBool { ty = self.i1ty }
                         else if term != 0U64 && term < c.arena.types.count() { ty = self.llvmTypeOfRef(c: inout c, ref: term) }
                         val literal: LLVMValueRef = LLVMConstInt(ty, integer, 0I32)
-                        if isNegative { return LLVMBuildNeg(self.b, literal, anon()) }
-                        return literal
-                    }
+                    if isNegative { return LLVMBuildNeg(self.b, literal, anon()) }
+                    return literal
+                }
+                MidConstant.StringLiteral(start: val start, len: val len, typeTerm: _) => {
+                    return self.genLlvmStr(c: inout c, start: start, len: len)
+                }
                 }
             }
         }
