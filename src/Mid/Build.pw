@@ -3,8 +3,8 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { TypeRef, Expr, Stmt, Param, Func, CallTemplate, CallTemplateKind, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
-import ./Ir with { MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+import ../Ir with { TypeRef, SemanticExprType, Expr, Stmt, Param, Func, CallTemplate, CallTemplateKind, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 export struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
@@ -121,6 +121,38 @@ export fn midPlaceForRecordedIdent(c: Comp, state: MidBuildState, exprId: U64, t
     return <MidPlaceLookup found=true place=<MidPlace local=local.local typeTerm=typeTerm /> />
 }
 
+// Build the place shape from source syntax only after the frontend recorded
+// every semantic choice.  Ident uses a resolver-selected declaration target;
+// Field uses the stored layout slot and stored result TypeTerm.  In particular,
+// this function never consults a field name, a StructDef, or a type recovery
+// query.
+fn midPlaceForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
+    if exprId >= c.arena.exprs.count() { return <MidPlaceLookup /> }
+    match c.arena.exprs[exprId] {
+        Expr.Ident(start: _, len: _) => {
+            return midPlaceForRecordedIdent(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
+        }
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => {
+            if exprId >= c.arena.semanticExprTypes.count() { return <MidPlaceLookup /> }
+            val semantic: SemanticExprType = c.arena.semanticExprTypes[exprId]
+            if !(semantic.hasFieldProjection) { return <MidPlaceLookup /> }
+            // This is a frozen semantic-table read. Do not call the mutable
+            // convenience accessor here: Mid construction must not mutate or
+            // synthesize semantic state.
+            mut val baseTerm: U64 = 0U64
+            if base < c.arena.semanticExprTypes.count() {
+                baseTerm = c.arena.semanticExprTypes[base].term
+            }
+            val basePlace: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: base, typeTerm: baseTerm)
+            if !basePlace.found { return <MidPlaceLookup /> }
+            mut val projections: Array[MidProjection] = basePlace.place.projections
+            projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=typeTerm />)
+            return <MidPlaceLookup found=true place=<MidPlace local=basePlace.place.local projections=projections typeTerm=typeTerm /> />
+        }
+        _ => { return <MidPlaceLookup /> }
+    }
+}
+
 fn midAppendStatement(state: inout MidBuildState, statement: MidStatement) {
     if state.currentBlock >= state.blocks.count() { return }
     val current: MidBlock = state.blocks[state.currentBlock]
@@ -192,8 +224,13 @@ fn midOperandForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm:
     }
     match c.arena.exprs[exprId] {
         Expr.Ident(start: _, len: _) => {
-            val lookup: MidPlaceLookup = midPlaceForRecordedIdent(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
+            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
             if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnboundLocalIdentifier /> /> }
+            return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
+        }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => {
+            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
+            if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnsupportedStatement /> /> }
             return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
         }
         Expr.Move(operand: val operand, isBorrow: val isBorrow) => {

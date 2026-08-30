@@ -808,6 +808,11 @@ pub impl Comp {
                 val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseTerm, fieldStart: nameStart, fieldLen: nameLen)
                 if fieldTerm != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: fieldTerm)
+                    val fieldIndex: U64 = self.fieldIndexOfReceiver(receiverRef: baseTerm, fieldStart: nameStart, fieldLen: nameLen)
+                    val structIndex: U64 = self.anyStructIndex(nameStart: self.arena.types[baseTerm].nameStart, nameLen: self.arena.types[baseTerm].nameLen)
+                    if structIndex < self.arena.structs.count() && fieldIndex < self.arena.structs[structIndex].fields.count() {
+                        self.recordSemanticExprFieldProjection(exprId: exprId, index: fieldIndex)
+                    }
                 }
             }
             Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {

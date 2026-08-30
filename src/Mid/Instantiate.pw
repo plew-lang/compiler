@@ -6,7 +6,7 @@
 
 import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, CallResolution }
-import ./Ir with { MidPlace, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidProjection, MidPlace, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -34,8 +34,23 @@ fn midFinalResolution(c: Comp, bodyId: U64, site: CallSiteKey) -> U64 {
     return 0U64
 }
 
+fn instantiateMidProjection(c: inout Comp, projection: MidProjection, environment: BodyInstance, itemRef: U64) -> MidProjection {
+    match projection {
+        MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
+            return <MidProjection.Field index=index typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+        }
+        MidProjection.Index => { return <MidProjection.Index /> }
+    }
+}
+
 fn instantiateMidPlace(c: inout Comp, place: MidPlace, environment: BodyInstance, itemRef: U64) -> MidPlace {
-    return <MidPlace local=place.local projections=place.projections typeTerm=c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
+    mut val projections: Array[MidProjection] = []
+    mut val i: U64 = 0U64
+    while i < place.projections.count() {
+        projections.append(instantiateMidProjection(c: inout c, projection: place.projections[i], environment: environment, itemRef: itemRef))
+        i += 1U64
+    }
+    return <MidPlace local=place.local projections=projections typeTerm=c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />
 }
 
 fn instantiateMidOperand(c: inout Comp, operand: MidOperand, environment: BodyInstance, itemRef: U64) -> MidOperand {

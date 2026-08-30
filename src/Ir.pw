@@ -226,6 +226,12 @@ export struct SemanticExprType {
     // Integer/float context code. This is a semantic constraint recorded by
     // checking, not a source span and not part of TypeTerm identity.
     pub val literalContext: U64 = 0
+    // A field expression carries the frontend-selected physical field slot.
+    // `term` carries the selected, possibly-parametric field type; this slot
+    // carries only layout identity.  Keeping both prevents Mid/backend from
+    // reopening a field spelling after the frontend freeze.
+    pub val hasFieldProjection: Bool = false
+    pub val fieldProjectionIndex: U64 = 0U64
 }
 pub impl SemanticExprType { factory }
 

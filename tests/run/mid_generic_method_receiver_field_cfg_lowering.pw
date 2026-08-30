@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+val mainPathAnchor: I64 = 0I64
+
+// The Field projection's type is itself parametric in the shared body.  Each
+// selected BodyInstance must ground both the root receiver and projection
+// payload before LLVM creates the typed GEP/load.
+struct Box[T] {
+    pub val value: T
+}
+
+pub impl[T] Box[T] { factory }
+
+pub impl[T] Box[T] {
+    fn choose(early: Bool) -> T {
+        if early {
+            return self.value
+        }
+        return self.value
+    }
+}
+
+fn main() {
+    val number: Box[I64] = <Box[I64] value=41I64 />
+    val text: Box[String] = <Box[String] value="generic field" />
+    print(number.choose(early: true))
+    print(text.choose(early: false))
+}

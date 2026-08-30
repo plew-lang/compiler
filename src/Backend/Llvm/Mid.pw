@@ -114,6 +114,25 @@ pub impl LlvmCtx {
         return true
     }
 
+    // Validate only the closed semantic projection vocabulary understood by
+    // the initial LLVM lowering.  Field identity and its resulting TypeTerm
+    // were selected in the frontend; this is structural verification, not a
+    // lookup from source spelling or declaration name.
+    inout fn midPlaceLlvmSupported(c: inout Comp, body: MidBody, place: MidPlace) -> Bool {
+        if place.local >= body.locals.count() { return false }
+        mut val i: U64 = 0U64
+        while i < place.projections.count() {
+            match place.projections[i] {
+                MidProjection.Field(index: _, typeTerm: val typeTerm) => {
+                    if typeTerm == 0U64 || typeTerm >= c.arena.types.count() { return false }
+                }
+                MidProjection.Index => { return false }
+            }
+            i += 1U64
+        }
+        return true
+    }
+
     // Initial Call terminator lowering consumes a complete final descriptor,
     // never a source Expr/ArgRange. Receiver, aggregate, return-value and
     // dynamic variants extend this one entry rather than reopening syntax.
@@ -157,19 +176,44 @@ pub impl LlvmCtx {
         return self.llvmTypeOfRef(c: inout c, ref: declaration.typeTerm)
     }
 
+    inout fn midPlaceTy(c: inout Comp, body: MidBody, place: MidPlace) -> LLVMTypeRef {
+        if place.typeTerm != 0U64 && place.typeTerm < c.arena.types.count() {
+            return self.llvmTypeOfRef(c: inout c, ref: place.typeTerm)
+        }
+        return self.midLocalTy(c: inout c, body: body, local: place.local)
+    }
+
+    inout fn midPlacePtr(c: inout Comp, body: MidBody, place: MidPlace) -> LLVMValueRef {
+        if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return LLVMConstNull(self.ptrty) }
+        mut val pointer: LLVMValueRef = self.midLocalPtr(body: body, local: place.local)
+        mut val currentTy: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: place.local)
+        mut val i: U64 = 0U64
+        while i < place.projections.count() {
+            match place.projections[i] {
+                MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
+                    pointer = LLVMBuildStructGEP2(self.b, currentTy, pointer, index, anon())
+                    currentTy = self.llvmTypeOfRef(c: inout c, ref: typeTerm)
+                }
+                MidProjection.Index => { return LLVMConstNull(self.ptrty) }
+            }
+            i += 1U64
+        }
+        return pointer
+    }
+
     inout fn midEmitOperand(c: inout Comp, body: MidBody, operand: MidOperand) -> LLVMValueRef {
         match operand {
             MidOperand.Copy(place: val place) => {
-                return LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+                return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
             }
             MidOperand.Move(place: val place) => {
-                return LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+                return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
             }
             MidOperand.Borrow(place: val place, capability: _) => {
                 // The first lowering slice has no by-reference consumer yet.
                 // Keep the value load here only for copyable scalar control
                 // operands; call/inout lowering will consume the place itself.
-                return LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+                return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
             }
             MidOperand.Constant(value: val value) => {
                 match value {

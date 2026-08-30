@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+// Keep main on the legacy entry while the by-value method itself must cross
+// the Mid boundary.  `self.value` is a semantic field projection, not a
+// backend name lookup: the selected field index and grounded field term must
+// travel through MidPlace.
+val mainPathAnchor: I64 = 0I64
+
+struct Counter {
+    pub val value: I64
+}
+
+pub impl Counter { factory }
+
+pub impl Counter {
+    fn choose(early: Bool) -> I64 {
+        if early {
+            return self.value
+        }
+        return self.value
+    }
+}
+
+fn main() {
+    val counter: Counter = <Counter value=31I64 />
+    print(counter.choose(early: true))
+}

@@ -14,7 +14,10 @@ import ../Ir with { CallSiteKey }
 // Field/index paths are already needed for assignments and future borrow/access
 // analysis; partial unique moves stay rejected by the frontend.
 export enum MidProjection {
-    Field(index: U64)
+    // `typeTerm` is the frontend-selected type after this projection.  It is
+    // needed for a nested GEP walk and prevents LLVM from reconstructing a
+    // field declaration/type from a source spelling.
+    Field(index: U64, typeTerm: U64)
     Index
 }
 

@@ -227,6 +227,28 @@ pub impl Comp {
         return 0U64
     }
 
+    // The same frontend field selection also supplies a physical slot for
+    // MidPlace.Field.  A missing field returns the field-count sentinel; the
+    // caller records it only after `fieldTypeRefOfReceiver` established that
+    // the source field is valid.  Record/tuple projections have a separate
+    // layout path and intentionally do not enter the first nominal-struct Mid
+    // slice.
+    inout fn fieldIndexOfReceiver(receiverRef: U64, fieldStart: U64, fieldLen: U64) -> U64 {
+        if receiverRef == 0U64 || receiverRef >= self.arena.types.count() { return 0U64 }
+        val t: TypeRef = self.arena.types[receiverRef]
+        if t.isRecord { return 0U64 }
+        val si: U64 = self.anyStructIndex(nameStart: t.nameStart, nameLen: t.nameLen)
+        if si >= self.arena.structs.count() { return 0U64 }
+        val fields: Array[FieldDef] = self.arena.structs[si].fields
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        mut val i: U64 = 0U64
+        while i < fields.count() {
+            if fields[i].nameId == qField { return i }
+            i += 1U64
+        }
+        return fields.count()
+    }
+
     inout fn genericEnumFieldTypeInfo(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
         val t: TypeRef = self.arena.types[instRef]
         val ei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)

@@ -700,7 +700,7 @@ pub impl Comp {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         val term: U64 = self.typedIrRefOfInfo(ti: ti)
-        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />)
     }
 
     // A context or synthetic lowering can refine an already-recorded type term.
@@ -711,14 +711,24 @@ pub impl Comp {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         val ti: TypeInfo = self.typeInfoOfRef(ref: term)
-        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=term shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />)
     }
 
     inout fn recordSemanticExprLiteralContext(exprId: U64, context: U64) {
         if context == 0U64 { return }
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
-        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=context />)
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=context hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />)
+    }
+
+    // The frontend resolves a field name once, while the receiver's complete
+    // TypeTerm still identifies its nominal layout.  Mid uses this selected
+    // slot together with the expression's recorded result term; it never
+    // re-runs a spelling-to-field lookup during code generation.
+    inout fn recordSemanticExprFieldProjection(exprId: U64, index: U64) {
+        self.ensureSemanticExprType(exprId: exprId)
+        val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
+        self.arena.semanticExprTypes.set(i: exprId, value: <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=true fieldProjectionIndex=index />)
     }
 
     // Record selection evidence independently from the expression result
@@ -727,10 +737,10 @@ pub impl Comp {
     inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
-        mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext />
+        mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />
         if resultTerm != 0U64 && resultTerm < self.arena.types.count() {
             val ti: TypeInfo = self.typeInfoOfRef(ref: resultTerm)
-            next = <SemanticExprType term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />
+            next = <SemanticExprType term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext hasFieldProjection=prior.hasFieldProjection fieldProjectionIndex=prior.fieldProjectionIndex />
         }
         self.arena.semanticExprTypes.set(i: exprId, value: next)
         // Every Direct producer (including one whose callee was cached by
