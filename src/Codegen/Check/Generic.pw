@@ -57,7 +57,7 @@ pub impl Comp {
     // resolution layer (spec/04).
     inout fn resolveIdent(start: U64, len: U64, tpFn: U64) -> IdentBinding {
         if self.isSelfRef(start: start, len: len) {
-            return <IdentBinding code=identValueCode() target=identNoTarget() />
+            return <IdentBinding code=identValueCode() target=identSelfTarget() />
         }
         val li: U64 = self.localIndexByName(start: start, len: len)
         if li < self.cur.locals.count() {
@@ -361,6 +361,7 @@ pub impl Comp {
                                 val resolution: StaticMemberResolution = self.staticOperatorResolution(fnIdx: self.cur.checkFn, receiverRef: receiverRef, traitName: need, memberName: binTraitMethodName(op: op), arity: 2U64)
                                 match resolution {
                                     StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {}
+                                    StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {}
                                     StaticMemberResolution.Missing => {
                                         self.errorAt(offset: self.exprOffset(id: lhs), msg: "this operator on a type parameter needs the matching bound (e.g. `where T: Add` for `+`, `: Eq`/`: Ord` for comparison) (spec/12)")
                                     }
@@ -477,6 +478,9 @@ pub impl Comp {
                                     }
                                     bk += 1U64
                                 }
+                            }
+                            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+                                staticBoundMember = true
                             }
                             _ => {}
                         }

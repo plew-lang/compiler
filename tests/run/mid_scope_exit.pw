@@ -1,0 +1,22 @@
+// A lexical scope boundary is not an LLVM-side cleanup convention.  It is a
+// Mid CFG marker which drop-elaboration must turn into the explicit root Drop
+// required by the ownership verifier.
+import @Std/Io with { write }
+import /Mid with { MidPlace, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, elaborateMidDrops, verifyMidBody, MidVerifyError }
+
+fn main() {
+    val file: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false ownsAtEntry=true />
+    val boundary: MidBlock = <MidBlock statements=[<MidStatement.ScopeExit scope=0U64 />] terminator=<MidTerminator.Return /> />
+    val body: MidBody = <MidBody locals=[file] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[boundary] entry=0U64 />
+    val elaborated: MidBody = elaborateMidDrops(body: body)
+    match elaborated.blocks[0U64].statements[0U64] {
+        MidStatement.Drop(place: val place) => {
+            if place.local == 0U64 { write(s: "scope-drop\n") }
+        }
+        _ => { write(s: "missing-scope-drop\n") }
+    }
+    match verifyMidBody(body: elaborated).error {
+        MidVerifyError.None => { write(s: "valid\n") }
+        _ => { write(s: "invalid\n") }
+    }
+}

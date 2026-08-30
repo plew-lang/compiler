@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+val mainPathAnchor: I64 = 0I64
+
+// `relay` has a Mid Call terminator. Main is deliberately legacy, so `mid:`
+// proves this nested call was lowered from final CallResolution rather than
+// reopening the source call expression in the backend.
+fn relay(value: I64) {
+    print(value)
+}
+
+fn main() {
+    relay(value: 23I64)
+}

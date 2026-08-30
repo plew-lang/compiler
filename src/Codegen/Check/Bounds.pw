@@ -133,7 +133,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < self.decls.funcBounds.count() {
             val bound: FuncBound = self.decls.funcBounds[i]
-            if bound.fnIdx == fnIdx && bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: receiverRef) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
+            if bound.fnIdx == fnIdx && bound.constraint.key.owner == constraint.key.owner && bound.paramTy != 0U64 && self.typeRefEq(a: bound.paramTy, b: self.typeRefWithoutOuterViews(ref: receiverRef)) && bound.constraint.key.positionalArgs.count() == constraint.key.positionalArgs.count() {
                 mut val same: Bool = true
                 mut val ai: U64 = 0U64
                 while ai < constraint.key.positionalArgs.count() {
@@ -162,6 +162,55 @@ pub impl Comp {
             }
         }
         return self.concreteTraitPatternProof(baseRef: receiverRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs, patternParams: patternParams)
+    }
+
+    // A `where T: Sub` bound entails members of Sub's declared supertrait
+    // closure.  Keep the declaration path as proof data: the body instance
+    // later obtains the concrete target conformance, while Record never has
+    // to reopen syntax or pretend that the user authored `T: Super`.
+    inout fn staticMemberInSupertraits(boundIdx: U64, traitIdx: U64, memberId: U64, args: ArgRange, path: Array[U64], depth: U64 = 0U64) -> StaticMemberResolution {
+        if depth > 64U64 || traitIdx >= self.decls.traits.count() { return <StaticMemberResolution.Missing /> }
+        val traitDef: TraitDef = self.decls.traits[traitIdx]
+        mut val si: U64 = 0U64
+        while si < traitDef.supertraits.count() {
+            val superBind: Bind = traitDef.supertraits[si]
+            val superId: U64 = intern(c: inout self, start: superBind.nameStart, len: superBind.nameLen)
+            mut val nextTrait: U64 = self.decls.traits.count()
+            mut val ti: U64 = 0U64
+            while ti < self.decls.traits.count() {
+                if self.decls.traits[ti].nameId == superId && self.traitArityMatches(actual: self.decls.traits[ti].typeParams.count(), expected: 4000000000U64) { nextTrait = ti }
+                ti += 1U64
+            }
+            if nextTrait < self.decls.traits.count() {
+                mut val nextPath: Array[U64] = path
+                nextPath.append(nextTrait)
+                val proof: StaticConformanceProof = <StaticConformanceProof.AssumedSupertraitPath boundIdx=boundIdx traits=nextPath />
+                val target: TraitDef = self.decls.traits[nextTrait]
+                mut val ri: U64 = 0U64
+                while ri < target.reqs.count() {
+                    val req: Func = target.reqs[ri]
+                    if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
+                        return <StaticMemberResolution.Requirement proof=proof traitIdx=nextTrait reqIdx=ri />
+                    }
+                    ri += 1U64
+                }
+                mut val fi: U64 = 0U64
+                while fi < self.arena.funcs.count() {
+                    val candidate: Func = self.arena.funcs[fi]
+                    if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == target.nameId && candidate.provTraitOwner == target.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
+                        return <StaticMemberResolution.Provided proof=proof traitIdx=nextTrait callee=fi />
+                    }
+                    fi += 1U64
+                }
+                val nested: StaticMemberResolution = self.staticMemberInSupertraits(boundIdx: boundIdx, traitIdx: nextTrait, memberId: memberId, args: args, path: nextPath, depth: depth + 1U64)
+                match nested {
+                    StaticMemberResolution.Missing => {}
+                    _ => { return nested }
+                }
+            }
+            si += 1U64
+        }
+        return <StaticMemberResolution.Missing />
     }
 
     // Resolve a requirement through declaration-time proof, without consulting
@@ -197,6 +246,19 @@ pub impl Comp {
                                     }
                                     ri += 1U64
                                 }
+                                // A provided trait member is not a requirement
+                                // slot, but a bound selects it through the
+                                // same trait instance. Keep its declaration
+                                // identity rather than asking Mono to recover
+                                // it from the call spelling later.
+                                mut val fi: U64 = 0U64
+                                while fi < self.arena.funcs.count() {
+                                    val candidate: Func = self.arena.funcs[fi]
+                                    if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
+                                        return <StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi />
+                                    }
+                                    fi += 1U64
+                                }
                             }
                             ti += 1U64
                         }
@@ -205,6 +267,123 @@ pub impl Comp {
                 }
             }
             i += 1U64
+        }
+        // The direct-bound search above intentionally handles only the
+        // authored trait itself.  Search declared supertraits separately so
+        // the proof records the derivation rather than collapsing it into an
+        // indistinguishable direct bound.
+        i = 0U64
+        while i < self.decls.funcBounds.count() {
+            val bound: FuncBound = self.decls.funcBounds[i]
+            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
+                val direct: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint)
+                match direct {
+                    StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
+                        mut val ti: U64 = 0U64
+                        while ti < self.decls.traits.count() {
+                            if self.decls.traits[ti].nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: self.decls.traits[ti].typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
+                                val inherited: StaticMemberResolution = self.staticMemberInSupertraits(boundIdx: boundIdx, traitIdx: ti, memberId: memberId, args: args, path: [])
+                                match inherited {
+                                    StaticMemberResolution.Missing => {}
+                                    _ => { return inherited }
+                                }
+                            }
+                            ti += 1U64
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            i += 1U64
+        }
+        // A generic bound may entail another trait through a declared,
+        // owner-module trait-subject edge. This is symbolic evidence: Record
+        // stores the exact edge id and BodyInstance later grounds the receiver.
+        i = 0U64
+        while i < self.decls.funcBounds.count() {
+            val bound: FuncBound = self.decls.funcBounds[i]
+            if bound.fnIdx == fnIdx && bound.paramTy != 0U64 {
+                val baseProof: StaticConformanceProof = self.assumedBoundProof(fnIdx: fnIdx, receiverRef: receiverRef, constraint: bound.constraint)
+                match baseProof {
+                    StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
+                        mut val ci: U64 = 0U64
+                        while ci < self.decls.conforms.count() {
+                            val edge: Conform = self.decls.conforms[ci]
+                            if self.isTraitName(start: edge.typeStart, len: edge.typeLen) && edge.typeStart == bound.constraint.key.owner && self.proofSourceIsActive(baseRef: receiverRef, extId: edge.extId) {
+                                mut val ti: U64 = 0U64
+                                while ti < self.decls.traits.count() {
+                                    val traitDef: TraitDef = self.decls.traits[ti]
+                                    if traitDef.nameStart == edge.traitStart && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: edge.traitArgs.count()) {
+                                        val proof: StaticConformanceProof = <StaticConformanceProof.AssumedTraitPath boundIdx=boundIdx edges=[ci] />
+                                        mut val fi: U64 = 0U64
+                                        while fi < self.arena.funcs.count() {
+                                            val candidate: Func = self.arena.funcs[fi]
+                                            if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
+                                                return <StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi />
+                                            }
+                                            fi += 1U64
+                                        }
+                                        mut val ri: U64 = 0U64
+                                        while ri < traitDef.reqs.count() {
+                                            val req: Func = traitDef.reqs[ri]
+                                            if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
+                                                return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
+                                            }
+                                            ri += 1U64
+                                        }
+                                    }
+                                    ti += 1U64
+                                }
+                            }
+                            ci += 1U64
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            i += 1U64
+        }
+        // A provided trait body is checked once against an abstract `Self`.
+        // Its declaring trait is an implicit bound, not a concrete witness and
+        // not an ambient lookup: `impl P { self.p() }` has exactly `Self: P`
+        // in scope.  Preserve that proof in the same carrier as an authored
+        // `where T: P`, so BodyInstance later grounds the receiver once.
+        if fnIdx < self.arena.funcs.count() && receiverRef < self.arena.types.count() {
+            val f: Func = self.arena.funcs[fnIdx]
+            val receiver: TypeRef = self.arena.types[receiverRef]
+            if self.methodRecvIsTrait(f: f) && rangeEquals(bytes: self.arena.bytes, start: receiver.nameStart, len: receiver.nameLen, kw: "Self") {
+                mut val ti: U64 = 0U64
+                while ti < self.decls.traits.count() {
+                    val traitDef: TraitDef = self.decls.traits[ti]
+                    // In `impl B as A`, the implementation's conformance
+                    // target is A (`provTraitOwner`), but its body receiver is
+                    // B.  The implicit proof for `self.base()` is therefore
+                    // `Self: B`, not `Self: A`.  Receiver trait identity is
+                    // carried by `recvId`/`recvTraitArgs`; provenance remains
+                    // relevant to dispatch but must not rewrite this local
+                    // body constraint.
+                    if traitDef.nameId == f.recvId && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: f.recvTraitArgs.count()) {
+                        val proof: StaticConformanceProof = <StaticConformanceProof.TraitSelf traitIdx=ti receiverRef=receiverRef traitArgs=f.recvTraitArgs />
+                        mut val ri: U64 = 0U64
+                        while ri < traitDef.reqs.count() {
+                            val req: Func = traitDef.reqs[ri]
+                            if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
+                                return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
+                            }
+                            ri += 1U64
+                        }
+                        mut val fi: U64 = 0U64
+                        while fi < self.arena.funcs.count() {
+                            val candidate: Func = self.arena.funcs[fi]
+                            if !(candidate.isProvided) && candidate.hasRecv && candidate.body != 0U64 && candidate.recvId == traitDef.nameId && candidate.provTraitOwner == traitDef.nameStart && candidate.nameId == memberId && self.paramsLabelsOk(params: candidate.params, args: args) {
+                                return <StaticMemberResolution.Provided proof=proof traitIdx=ti callee=fi />
+                            }
+                            fi += 1U64
+                        }
+                    }
+                    ti += 1U64
+                }
+            }
         }
         return <StaticMemberResolution.Missing />
     }
@@ -274,6 +453,33 @@ pub impl Comp {
                         val savedArgs: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = traitDef.typeParams
                         self.cur.typeArgs = bound.constraint.key.positionalArgs
+                        val out: U64 = self.groundTypeRef(ref: req.params[paramIdx].ty)
+                        self.cur.typeParams = savedParams
+                        self.cur.typeArgs = savedArgs
+                        return out
+                    }
+                    StaticConformanceProof.AssumedSupertraitPath(boundIdx: val boundIdx, traits: _) => {
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
+                        val req: Func = traitDef.reqs[reqIdx]
+                        val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
+                        if paramIdx >= req.params.count() { return 0U64 }
+                        // Supertrait declarations are currently bare names in
+                        // the grammar, so their member signature has no
+                        // inherited positional argument substitution.
+                        return req.params[paramIdx].ty
+                    }
+                    StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
+                        if traitIdx >= self.decls.traits.count() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        val req: Func = traitDef.reqs[reqIdx]
+                        val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
+                        if paramIdx >= req.params.count() { return 0U64 }
+                        val savedParams: Array[Bind] = self.cur.typeParams
+                        val savedArgs: Array[U64] = self.cur.typeArgs
+                        self.cur.typeParams = traitDef.typeParams
+                        self.cur.typeArgs = traitArgs
                         val out: U64 = self.groundTypeRef(ref: req.params[paramIdx].ty)
                         self.cur.typeParams = savedParams
                         self.cur.typeArgs = savedArgs
@@ -367,6 +573,20 @@ pub impl Comp {
                         val req: Func = traitDef.reqs[reqIdx]
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.paramTy, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
+                    }
+                    StaticConformanceProof.AssumedSupertraitPath(boundIdx: val boundIdx, traits: _) => {
+                        if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
+                        val req: Func = traitDef.reqs[reqIdx]
+                        val bound: FuncBound = self.decls.funcBounds[boundIdx]
+                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.paramTy, traitArgs: [], predicates: [])
+                    }
+                    StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
+                        if traitIdx >= self.decls.traits.count() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return 0U64 }
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        val req: Func = traitDef.reqs[reqIdx]
+                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: proofReceiver, traitArgs: traitArgs, predicates: [])
                     }
                     _ => { return 0U64 }
                 }

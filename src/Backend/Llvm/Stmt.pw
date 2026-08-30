@@ -232,7 +232,14 @@ pub impl LlvmCtx {
                         // a struct value bound from a place deep-copies its array fields
                         // (`val y = x` then `x.items[0]=…` leaves y.items unchanged; a
                         // generic field grounding to an array is handled under the env).
-                        v = self.copyValueIfPlace(c: inout c, rv: v, valueExpr: init)
+                        // The destination binding's closed semantic type is the ARC
+                        // classifier authority here.  Re-reading a source pattern bind
+                        // (`Optional.Some(val v)` in a provided `Iterator` body) asks the
+                        // backend to reconstruct the shared body's `Item` environment and
+                        // can recurse through the very descriptor already being lowered.
+                        // `clsRef` is the annotation grounded in this body, or (for an
+                        // unannotated binding) the initializer's recorded concrete result.
+                        v = self.consumeIntoOwned(c: inout c, v: v, expr: init, typeRef: clsRef)
                     }
                 }
                 mut val kind: U64 = self.valueKind(c: inout c, id: init)

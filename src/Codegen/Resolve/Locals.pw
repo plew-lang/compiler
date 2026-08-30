@@ -388,6 +388,17 @@ pub impl Comp {
                     return
                 }
             }
+            // A trait-provided member is authored in the trait's own module
+            // before any concrete conformance copy exists. Its non-public
+            // helpers are therefore private to that owner module, including
+            // calls from a sibling `pub impl Trait` provided body. Testing only
+            // `isProvided` misses the authored template (which is copied later)
+            // and makes lexical cache completeness change visibility.
+            if mf.provTraitOwner != 0U64 {
+                if self.moduleOf(offset: offset) == self.traitModuleByOwner(owner: mf.provTraitOwner) {
+                    return
+                }
+            }
             if !(self.inAnonImplOf(ownerStart: ownerStart, ownerLen: ownerLen)) {
                 self.errorAt(offset: offset, msg: "method is private (callable only in its type's anonymous impl; put it in a `pub impl`)")
             }

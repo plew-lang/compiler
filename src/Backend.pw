@@ -10,8 +10,12 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, runFrontend }
+// Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
+// body-by-body; keeping this edge one-way prevents Mid from becoming another
+// frontend `part` or from reaching LLVM through ambient AST recovery.
+import ./Mid with { MidPlace, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerification, MidVerifyError, MidBuildError, MidBodyBuild, MidInstantiateError, MidInstantiation, buildParametricMidBody, instantiateMidBody, elaborateMidDrops, verifyMidBody }
 export ./Frontend with { Comp }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
@@ -136,6 +140,9 @@ struct LlvmCtx {
     pub mut val genMethInst: Array[U64]
     pub mut val genMethVal: Array[LLVMValueRef]
     pub mut val genMethTy: Array[LLVMTypeRef]
+    // Semantic callee BodyInstance for each method slot. Zero is used only by
+    // backend-originated helpers with no selected call descriptor.
+    pub mut val genMethBody: Array[U64]
     // method-own type arguments for each gen-method slot (parallel to genMethK):
     // a provided terminal with its own type params (`fold[B]` copied onto a generic
     // receiver) instantiates per (mfi, instRef, ownArgs), since the same receiver
@@ -951,7 +958,7 @@ export fn emitLlvm(c: inout Comp) {
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
         curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
-        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethOwn=[]
+        fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitSidx=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
         promiseTy=promiseTy curAsync=false
         curFrameBase=LLVMConstNull(ptrty) curFrameTy=i64ty

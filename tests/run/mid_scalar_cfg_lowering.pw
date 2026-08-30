@@ -1,0 +1,12 @@
+// Closed scalar control flow is the first production Mid-to-LLVM slice.  The
+// test has no observable output; its `.ll.expect` companion requires a Mid CFG
+// block in the generated LLVM, in addition to successful execution.
+fn main() {
+    val condition: Bool = true
+    val source: I64 = 7I64
+    if condition {
+        val selected: I64 = source
+    } else {
+        val rejected: I64 = source
+    }
+}

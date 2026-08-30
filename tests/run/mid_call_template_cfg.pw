@@ -1,0 +1,64 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
+import /Mid with { MidBlock, MidBuildError, MidBuildState, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    c.arena.exprs.append(<Expr.Call nameStart=0U64 nameLen=0U64 args=<ArgRange start=0U64 len=0U64 /> />)
+    val key = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).siteKey
+    c.appendCallTemplate(template: <CallTemplate siteKey=key kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=[] calleeTypeArgs=[] proof=<StaticConformanceProof.Missing /> /> />)
+    c.arena.stmts.append(<Stmt.ExprStmt expr=0U64 />)
+    c.arena.blockStmtPool.append(0U64)
+    c.arena.blocks.append(<Block stmtStart=0U64 stmtLen=1U64 />)
+    mut val state: MidBuildState = <MidBuildState blocks=[<MidBlock />] sourceFunction=0U64 />
+    val result = buildMidBlock(c: inout c, state: inout state, blockId: 0U64)
+    mut val built: Bool = false
+    match result { MidBuildError.None => { built = true } _ => {} }
+    match state.blocks[0U64].terminator {
+        MidTerminator.Call(callee: val callee, args: val args, destination: _, target: val target) => {
+            match callee {
+                MidCallTarget.Template(site: val site) => {
+                    if built && args.count() == 0U64 && target == 1U64 && site.ownerFnIdx == key.ownerFnIdx && site.originKind == key.originKind {
+                        write(s: "template-call\n")
+                    } else {
+                        write(s: "wrong-call\n")
+                    }
+                }
+                _ => { write(s: "resolved-too-early\n") }
+            }
+        }
+        _ => { write(s: "missing-call\n") }
+    }
+    // A template argument remains a source value anchor, but ownership prefix
+    // is materialized as an explicit Mid operand rather than recovered later.
+    c.arena.exprs.append(<Expr.Ident start=90U64 len=4U64 />)
+    c.arena.exprs.append(<Expr.Move operand=1U64 isBorrow=false />)
+    c.arena.argPool.append(<Arg labelStart=0U64 labelLen=0U64 expr=2U64 isInout=false hasLabel=false />)
+    c.typeCache.identBind.append(0I64)
+    c.typeCache.identTarget.append(0U64)
+    c.typeCache.identBind.append(identValueCode())
+    c.typeCache.identTarget.append(90U64)
+    c.arena.exprs.set(i: 0U64, value: <Expr.Call nameStart=0U64 nameLen=0U64 args=<ArgRange start=0U64 len=1U64 /> />)
+    val moveKey = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: 0U64).siteKey
+    c.decls.callTemplates = []
+    c.decls.callTemplateIndexSlots = []
+    c.appendCallTemplate(template: <CallTemplate siteKey=moveKey kind=<CallTemplateKind.Direct callee=0U64 receiver=<CallTemplateReceiver.None /> args=[<CallTemplateArgument source=<CallArgumentSource.Term exprId=2U64 term=1U64 /> isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />] calleeTypeArgs=[] proof=<StaticConformanceProof.Missing /> /> />)
+    mut val moveState: MidBuildState = <MidBuildState blocks=[<MidBlock />] sourceFunction=0U64 />
+    val file = addMidLocal(state: inout moveState, declarationTarget: 90U64, typeTerm: 1U64, isUnique: true, isParameter: false, ownsAtEntry: true)
+    val moveResult = buildMidBlock(c: inout c, state: inout moveState, blockId: 0U64)
+    mut val moved: Bool = false
+    match moveState.blocks[0U64].terminator {
+        MidTerminator.Call(callee: _, args: val args, destination: _, target: _) => {
+            match args[0U64] { MidOperand.Move(place: val place) => { moved = place.local == 0U64 } _ => {} }
+        }
+        _ => {}
+    }
+    mut val moveBuilt: Bool = false
+    match moveResult { MidBuildError.None => { moveBuilt = true } _ => {} }
+    if file == 0U64 && moveBuilt && moved {
+        write(s: "template-move\n")
+    } else {
+        write(s: "wrong-template-move\n")
+    }
+}

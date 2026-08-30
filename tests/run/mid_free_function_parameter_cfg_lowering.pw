@@ -1,0 +1,15 @@
+// Keep main on the legacy entry path so `mid:` below can only have been
+// emitted for `choose`, not for main itself.  The global is intentionally not
+// read by the function: a Mid free function must not inherit ambient backend
+// global locals merely because its module declares one.
+val mainPathAnchor: I64 = 0I64
+
+fn choose(value: Bool) {
+    if value {
+        return
+    }
+}
+
+fn main() {
+    choose(value: true)
+}

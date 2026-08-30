@@ -804,7 +804,57 @@ pub impl LlvmCtx {
         // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
         // can infer the concrete instance.
         self.curRetRef = c.groundTypeRef(ref: f.retTy)
+        // Select a complete Mid body before beginning LLVM emission.  The
+        // initial ordinary-body slice is deliberately exact: source receiver
+        // (when by-value) and parameters form the checked Mid-local ABI prefix.
+        // Inout/move receiver, globals, and field projection do not silently
+        // recover through legacy backend state; each gains a Mid form before it
+        // joins this path.
+        mut val midReady: Bool = false
+        mut val midBody: MidBody = <MidBody />
+        if !(f.isAsync) && !(f.isExtern) && !(f.hasRecv && (f.selfInout || f.selfMove)) {
+            val parametric: MidBodyBuild = buildParametricMidBody(c: inout c, fnIdx: fi)
+            match parametric.error {
+                MidBuildError.None => {
+                    val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: environment)
+                    if bodyId != 0U64 {
+                        val instantiated: MidInstantiation = instantiateMidBody(c: inout c, body: parametric.body, bodyId: bodyId)
+                        match instantiated.error {
+                            MidInstantiateError.None => {
+                                val elaborated: MidBody = elaborateMidDrops(body: instantiated.body)
+                                val verification: MidVerification = verifyMidBody(body: elaborated)
+                                match verification.error {
+                                    MidVerifyError.None => {
+                                        mut val abiParameterCount: U64 = f.params.count()
+                                        if f.hasRecv { abiParameterCount += 1U64 }
+                                        if self.midInitialLlvmSupported(c: inout c, body: elaborated, abiParameterCount: abiParameterCount) {
+                                            midBody = elaborated
+                                            midReady = true
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         self.beginFnBody(fv: fv)
+        if midReady {
+            // Preflight completed before `beginFnBody`; a failure is an
+            // invariant violation, never permission to reopen the AST after
+            // partially emitting this function.
+            if !(self.genLlvmMidBody(c: inout c, body: midBody)) {
+                c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid function failed LLVM lowering")
+            }
+            if didSelf { c.clearSelfItemEnv() }
+            c.cur.selfRef = savedSelfFB
+            c.cur.itemRef = savedItemFB
+            return
+        }
         // fresh local scope; bind each param into an alloca (so it reads/writes
         // uniformly with locals).
         self.nLocals = 0
@@ -848,6 +898,13 @@ pub impl LlvmCtx {
                     // NOT generic): keep the receiver-name's struct so `self.a` resolves.
                     recvSidx = self.localStructIdxFor(c: inout c, start: f.recvStart, len: f.recvLen)
                 }
+            }
+            // `curRecvInstRef` selects the ABI layout, but is not necessarily
+            // the semantic receiver: a provided body can carry a normalized
+            // trait/view proof on the same concrete layout.  Preserve Mono's
+            // exact BodyInstance receiver for nested CallResolution lookup.
+            if environment.receiverRef != 0U64 {
+                recvRef = environment.receiverRef
             }
             // an `Array[T]` receiver (a user method `impl[T] Array[T]`): self is the
             // `{ptr}` array value, bound as an array so `self.get`/`self.count()` resolve.

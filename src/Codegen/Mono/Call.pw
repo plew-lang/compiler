@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution }
 
 // Walk an expression, registering any generic free function calls it contains
 // (args before self, so a nested generic call is registered before the outer one
@@ -390,6 +390,16 @@ pub impl Comp {
                         }
                         return result
                     }
+                    CallTemplateReceiver.PriorCallResultWithViews(exprId: val exprId, siteKey: val dependency, views: val views) => {
+                        return self.typeRefWithAddedViewSources(ref: self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: dependency), additions: views)
+                    }
+                    CallTemplateReceiver.PriorProtocolResultWithViews(slot: val priorSlot, views: val views) => {
+                        val result: U64 = self.bodyCalleeResultRef(exprId: stmtId, siteIsStmt: true, slot: priorSlot)
+                        if result == 0U64 {
+                            self.errorAt(offset: 0U64, msg: "internal error: implicit viewed protocol dependency was not finalized")
+                        }
+                        return self.typeRefWithAddedViewSources(ref: result, additions: views)
+                    }
                     CallTemplateReceiver.None => {
                         self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has no receiver")
                     }
@@ -414,6 +424,14 @@ pub impl Comp {
             }
             CallTemplateReceiver.PriorProtocolResult(slot: val slot) => {
                 return self.bodyCalleeResultRef(exprId: self.cur.bodyFnIdx, siteIsStmt: true, slot: slot)
+            }
+            CallTemplateReceiver.PriorCallResultWithViews(exprId: val exprId, siteKey: val siteKey, views: val views) => {
+                val base: U64 = self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
+                return self.typeRefWithAddedViewSources(ref: base, additions: views)
+            }
+            CallTemplateReceiver.PriorProtocolResultWithViews(slot: val slot, views: val views) => {
+                val base: U64 = self.bodyCalleeResultRef(exprId: self.cur.bodyFnIdx, siteIsStmt: true, slot: slot)
+                return self.typeRefWithAddedViewSources(ref: base, additions: views)
             }
         }
     }
@@ -511,20 +529,150 @@ pub impl Comp {
         val ci: U64 = f.originConformIdx - 1U64
         if ci >= self.decls.conforms.count() { return <StaticConformanceProof.Missing /> }
         val cf: Conform = self.decls.conforms[ci]
+        // A copy can be placed through a concrete edge while its shared body
+        // originates in a distinct trait-subject edge:
+        //
+        //   P as Greet     (placement)
+        //   Greet as Show  (source)
+        //
+        // The body is meaningful only under the complete P -> Greet -> Show
+        // proof. `originConformIdx` identifies the placement, while
+        // `sourceConformIdx` identifies the source impl's binders and target.
+        // Do not validate the placement against `originTrait`: they differ in
+        // exactly this legitimate two-edge case.
+        if f.sourceConformIdx != 0U64 {
+            val sourceIdx: U64 = f.sourceConformIdx - 1U64
+            if sourceIdx >= self.decls.conforms.count() { return <StaticConformanceProof.Missing /> }
+            val source: Conform = self.decls.conforms[sourceIdx]
+            if source.traitId != f.originTraitId || source.traitStart != f.originTraitOwner { return <StaticConformanceProof.Missing /> }
+            mut val proofReceiver: U64 = receiverRef
+            if source.extId != 0U64 {
+                val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.extId />]
+                proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
+            }
+            return self.concreteConformanceProof(baseRef: proofReceiver, traitId: source.traitId, traitOwner: source.traitStart, traitArgs: source.traitArgs)
+        }
+        // `originConformIdx` pins the placement edge that created this copy.
+        // Its target must be the callable's origin trait. `srcTrait*` is the
+        // source witness/binder owner and is deliberately not used to infer
+        // the edge subject: a provided `impl A { fn double }` copied through
+        // `impl B as A` has source trait A but placement subject B.
+        val placementIsTraitSubject: Bool = self.isTraitName(start: cf.typeStart, len: cf.typeLen)
         if cf.traitId != f.originTraitId || cf.traitStart != f.originTraitOwner { return <StaticConformanceProof.Missing /> }
         // A direct implementation owns its output through its own witness;
         // keep that precise substitution rather than rediscovering a wider
         // path. Only a trait-subject origin (`impl B as A`) needs closure
         // traversal because the concrete receiver may reach A via S:B.
-        if !(self.isTraitName(start: cf.typeStart, len: cf.typeLen)) {
+        if !placementIsTraitSubject {
             val witness: WitnessMatch = self.conformanceWitnessMatch(conformIdx: ci, typeRef: receiverRef, traitArgs: [], traitArgsOpen: true)
             if witness.conformIdx == 0U64 { return <StaticConformanceProof.Missing /> }
             return <StaticConformanceProof.ConcreteWitness witness=witness />
         }
-        return self.concreteConformanceProof(baseRef: receiverRef, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: cf.traitArgs)
+        // The body key intentionally normalizes a caller's view away when it
+        // denotes the same executable Func.  Proof construction must still
+        // receive that Func's selected extension facet: `f.extId` is
+        // declaration identity, not syntax to rediscover.  Without it, an
+        // `extension E { impl B as A }` copy can no longer reify the concrete
+        // `S#E: A` path required by its shared body.
+        mut val proofReceiver: U64 = receiverRef
+        if f.extId != 0U64 {
+            val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=f.extId />]
+            proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
+        }
+        return self.concreteConformanceProof(baseRef: proofReceiver, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: cf.traitArgs)
     }
 
-    inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64) -> InstanceEnvironment {
+    inout fn proofIsMissing(proof: StaticConformanceProof) -> Bool {
+        match proof { StaticConformanceProof.Missing => { return true } _ => {} }
+        return false
+    }
+
+    inout fn sameWitnessMatch(a: WitnessMatch, b: WitnessMatch) -> Bool {
+        if a.conformIdx != b.conformIdx || a.binds.count() != b.binds.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.binds.count() {
+            val left: WitnessBind = a.binds[i]
+            val right: WitnessBind = b.binds[i]
+            if left.binder != right.binder || left.paramId != right.paramId || !(self.typeRefEq(a: left.term, b: right.term)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn sameProofTerms(a: Array[U64], b: Array[U64]) -> Bool {
+        if a.count() != b.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.count() {
+            if !(self.typeRefEq(a: a[i], b: b[i])) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    // Proof is semantic body input: two copies of the same executable method
+    // with different conformance paths can resolve `Self` projections and
+    // nested requirements differently.  ABI receiver equality alone is not a
+    // valid BodyInstance identity.
+    inout fn sameStaticConformanceProof(a: StaticConformanceProof, b: StaticConformanceProof) -> Bool {
+        match a {
+            StaticConformanceProof.Missing => { match b { StaticConformanceProof.Missing => { return true } _ => {} } }
+            StaticConformanceProof.ConcreteWitness(witness: val left) => { match b { StaticConformanceProof.ConcreteWitness(witness: val right) => { return self.sameWitnessMatch(a: left, b: right) } _ => {} } }
+            StaticConformanceProof.AssumedBound(boundIdx: val left) => { match b { StaticConformanceProof.AssumedBound(boundIdx: val right) => { return left == right } _ => {} } }
+            StaticConformanceProof.AssumedTraitPath(boundIdx: val leftBound, edges: val leftEdges) => {
+                match b {
+                    StaticConformanceProof.AssumedTraitPath(boundIdx: val rightBound, edges: val rightEdges) => {
+                        if leftBound != rightBound || leftEdges.count() != rightEdges.count() { return false }
+                        mut val i: U64 = 0U64
+                        while i < leftEdges.count() { if leftEdges[i] != rightEdges[i] { return false } i += 1U64 }
+                        return true
+                    }
+                    _ => {}
+                }
+            }
+            StaticConformanceProof.AssumedSupertraitPath(boundIdx: val leftBound, traits: val leftTraits) => {
+                match b {
+                    StaticConformanceProof.AssumedSupertraitPath(boundIdx: val rightBound, traits: val rightTraits) => {
+                        if leftBound != rightBound || leftTraits.count() != rightTraits.count() { return false }
+                        mut val i: U64 = 0U64
+                        while i < leftTraits.count() { if leftTraits[i] != rightTraits[i] { return false } i += 1U64 }
+                        return true
+                    }
+                    _ => {}
+                }
+            }
+            StaticConformanceProof.TraitSelf(traitIdx: val leftTrait, receiverRef: val leftReceiver, traitArgs: val leftArgs) => {
+                match b { StaticConformanceProof.TraitSelf(traitIdx: val rightTrait, receiverRef: val rightReceiver, traitArgs: val rightArgs) => { return leftTrait == rightTrait && self.typeRefEq(a: leftReceiver, b: rightReceiver) && self.sameProofTerms(a: leftArgs, b: rightArgs) } _ => {} }
+            }
+            StaticConformanceProof.TraitPath(edges: val leftEdges, terminalConformIdx: val leftTerminal) => {
+                match b {
+                    StaticConformanceProof.TraitPath(edges: val rightEdges, terminalConformIdx: val rightTerminal) => {
+                        if leftTerminal != rightTerminal || leftEdges.count() != rightEdges.count() { return false }
+                        mut val i: U64 = 0U64
+                        while i < leftEdges.count() { if !(self.sameWitnessMatch(a: leftEdges[i], b: rightEdges[i])) { return false } i += 1U64 }
+                        return true
+                    }
+                    _ => {}
+                }
+            }
+        }
+        return false
+    }
+
+    // A CallTemplate proof has become concrete at its selected receiver.  The
+    // resulting evidence is part of a provided body's semantic environment,
+    // not an implementation detail that may be reconstructed from its ABI
+    // receiver after view normalization.
+    inout fn concreteStaticMemberProof(proof: StaticConformanceProof, traitIdx: U64, receiverRef: U64) -> StaticConformanceProof {
+        match proof {
+            StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => { return self.cur.bodyEnvironment.proof }
+            _ => {}
+        }
+        if traitIdx >= self.decls.traits.count() { return <StaticConformanceProof.Missing /> }
+        val traitDef: TraitDef = self.decls.traits[traitIdx]
+        return self.concreteConformanceProof(baseRef: receiverRef, traitId: traitDef.nameId, traitOwner: traitDef.nameStart, traitArgs: [])
+    }
+
+    inout fn bodyInstanceEnvironment(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> InstanceEnvironment {
         mut val params: Array[Bind] = []
         mut val values: Array[U64] = []
         val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
@@ -537,7 +685,16 @@ pub impl Comp {
                 values.append(args[i])
                 i += 1U64
             }
-            proof = self.providedBodyProof(f: f, receiverRef: canonicalRecv)
+            // The selected proof is part of a provided body's semantic
+            // identity. LLVM consumes this exact BodyInstance through the
+            // final descriptor; it must not replace it by a receiver-only
+            // re-query. When a body is reached without a call descriptor,
+            // its placement conformance supplies the canonical fallback.
+            if !(self.proofIsMissing(proof: selectedProof)) {
+                proof = selectedProof
+            } else {
+                proof = self.providedBodyProof(f: f, receiverRef: canonicalRecv)
+            }
         }
         if canonicalRecv != 0U64 && canonicalRecv < self.arena.types.count() {
             val recv: TypeRef = self.arena.types[canonicalRecv]
@@ -568,6 +725,7 @@ pub impl Comp {
 
     inout fn sameInstanceEnvironment(a: InstanceEnvironment, b: InstanceEnvironment) -> Bool {
         if !(self.sameBodyReceiver(a: a.receiverRef, b: b.receiverRef)) { return false }
+        if !(self.sameStaticConformanceProof(a: a.proof, b: b.proof)) { return false }
         if a.params.count() != b.params.count() || a.args.count() != b.args.count() { return false }
         mut val i: U64 = 0U64
         while i < a.params.count() {
@@ -593,6 +751,21 @@ pub impl Comp {
         return self.arena.bodyInstances.count()
     }
 
+    // Read the frontend-frozen identity without interning.  Backend consumers
+    // use this at the Mid boundary: creating a BodyInstance after callable
+    // finalization would make a semantic descriptor that was never scanned.
+    inout fn findBodyInstance(fnIdx: U64, environment: InstanceEnvironment) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.arena.bodyInstances.count() {
+            val prior: BodyInstance = self.arena.bodyInstances[i]
+            if prior.fnIdx == fnIdx && self.sameInstanceEnvironment(a: prior.environment, b: environment) {
+                return i + 1U64
+            }
+            i += 1U64
+        }
+        return 0U64
+    }
+
     // This is the only normal entry point for the semantic body identity used
     // by Mono and LLVM.  Closure/global synthetic body keys are valid fnIdx
     // values too: their empty environment still needs a distinct call surface.
@@ -606,18 +779,25 @@ pub impl Comp {
     // separate from FnInst: FnInst is a code-generation/mangling detail, while
     // this list is the semantic reachability closure whose bodies must have all
     // final call selections recorded.
-    inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64) {
-        if fnIdx >= self.arena.funcs.count() { return }
+    inout fn enqueueFinalBody(fnIdx: U64, args: Array[U64], recvInstRef: U64, selectedProof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> U64 {
+        if fnIdx >= self.arena.funcs.count() { return 0U64 }
         val f: Func = self.arena.funcs[fnIdx]
-        if f.isExtern || f.body == 0U64 { return }
-        val environment: InstanceEnvironment = self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef)
+        if f.isExtern || f.body == 0U64 { return 0U64 }
+        val environment: InstanceEnvironment = self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof)
+        // A provided copy has no standalone semantic body: its `Self`,
+        // associated outputs and nested requirements are defined by the
+        // conformance that selected it.  Never materialize one with Missing
+        // evidence; abstract checking records its template, while a concrete
+        // call re-enters here with a reified proof.
+        if f.isProvided && self.proofIsMissing(proof: environment.proof) { return 0U64 }
         val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
         mut val i: U64 = 0U64
         while i < self.monoWork.bodyInstances.count() {
-            if self.monoWork.bodyInstances[i] == bodyId { return }
+            if self.monoWork.bodyInstances[i] == bodyId { return bodyId }
             i += 1U64
         }
         self.monoWork.bodyInstances.append(bodyId)
+        return bodyId
     }
 
     // An associated callable uses the generic-function ABI path even when it
@@ -712,6 +892,44 @@ pub impl Comp {
                 }
             }
             ci += 1U64
+        }
+        return out
+    }
+
+    // A conferred provided copy retains the declaration-local impl binders of
+    // the conformance that created it. Those binders are not inferred from a
+    // result projection: in `impl[E] B[E] as A { type Output = E }`, Output
+    // is a result while the callable body needs the proof substitution
+    // `E -> I64`. Recover it only from the exact selected edge and pair the
+    // values by ParamId, never by spelling or receiver position.
+    inout fn providedProofArgsForFinalCallee(callee: U64, proof: StaticConformanceProof) -> Array[U64] {
+        mut val out: Array[U64] = []
+        if callee >= self.arena.funcs.count() { return out }
+        val f: Func = self.arena.funcs[callee]
+        if !(f.isProvided) || f.sourceConformIdx == 0U64 { return out }
+        mut val witness: WitnessMatch = <WitnessMatch />
+        match proof {
+            StaticConformanceProof.ConcreteWitness(witness: val direct) => {
+                if direct.conformIdx == f.sourceConformIdx { witness = direct }
+            }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                mut val i: U64 = 0U64
+                while i < edges.count() {
+                    if edges[i].conformIdx == f.sourceConformIdx { witness = edges[i] }
+                    i += 1U64
+                }
+            }
+            _ => {}
+        }
+        mut val pi: U64 = 0U64
+        while pi < f.typeParams.count() {
+            mut val value: U64 = 0U64
+            if witness.conformIdx != 0U64 {
+                val bi: U64 = self.witnessBindParamIndex(binds: witness.binds, paramId: f.typeParams[pi].paramId)
+                if bi < witness.binds.count() { value = witness.binds[bi].term }
+            }
+            out.append(value)
+            pi += 1U64
         }
         return out
     }
@@ -888,6 +1106,17 @@ pub impl Comp {
                 }
             }
         }
+        // Every provided callable enters its shared body through concrete
+        // conformance evidence. Direct and StaticMethod templates can both
+        // legitimately carry symbolic or absent proof at declaration time;
+        // once this finalizer has the selected callee and grounded receiver,
+        // close it here for all downstream uses. This is the single concrete
+        // CallResolution boundary, so body reachability, generic arguments,
+        // and the backend's calleeBodyId cannot observe different evidence.
+        mut val calleeProof: StaticConformanceProof = selection.proof
+        if f.isProvided && self.proofIsMissing(proof: calleeProof) {
+            calleeProof = self.providedBodyProof(f: f, receiverRef: recvInst)
+        }
         self.scanOmittedDefaultArgs(f: f, args: callArgs)
         if f.typeParams.count() > 0U64 {
             // An associated callable whose complete generic signature is its
@@ -898,8 +1127,8 @@ pub impl Comp {
             if f.isAssoc && recvInst != 0U64 && recvInst < self.arena.types.count() {
                 val recvArgs: Array[U64] = self.arena.types[recvInst].args
                 if recvArgs.count() == f.typeParams.count() && self.fnArgsAllGround(args: recvArgs) {
-                    self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: recvArgs, siteIsStmt: siteIsStmt, slot: slot)
-                    self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst)
+                    val calleeBodyId: U64 = self.enqueueFinalBody(fnIdx: callee, args: recvArgs, recvInstRef: recvInst, selectedProof: calleeProof)
+                    self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: recvArgs, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
                     self.enqueueSelectedAssocInstance(callee: callee, args: recvArgs, recvInstRef: recvInst)
                     self.enqueueSelectedFreeInstance(callee: callee, args: recvArgs)
                     return
@@ -998,16 +1227,27 @@ pub impl Comp {
                 }
                 tai += 1U64
             }
+            // The selected proof is more precise than return-position
+            // inference. In particular a trait-path witness may bind a
+            // conformance-local `Element` while the call result is the
+            // unrelated projection `A.Output`; preserve the former in the
+            // final callable key.
+            val proofArgs: Array[U64] = self.providedProofArgsForFinalCallee(callee: callee, proof: calleeProof)
+            mut val pai: U64 = 0U64
+            while pai < proofArgs.count() && pai < finalArgs.count() {
+                if proofArgs[pai] != 0U64 { finalArgs[pai] = proofArgs[pai] }
+                pai += 1U64
+            }
             if finalArgs.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: finalArgs)) {
                 // An incomplete generic call has no emittable final instance.
                 self.traceIncompleteFinalCallee(exprId: exprId, f: f, args: finalArgs, recvRef: recvInst, expectedRef: selection.resultHintRef)
                 return
             }
         }
-        self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, siteIsStmt: siteIsStmt, slot: slot)
+        val calleeBodyId: U64 = self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst, selectedProof: calleeProof)
+        self.completeStaticBodyCallee(exprId: exprId, callee: callee, recvRef: recvInst, calleeArgs: finalArgs, siteIsStmt: siteIsStmt, slot: slot, calleeBodyId: calleeBodyId)
         val finalResult: U64 = self.bodyCalleeResultRef(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.traceProvidedFinalCallee(f: f, args: finalArgs, recvRef: recvInst, resultRef: finalResult)
-        self.enqueueFinalBody(fnIdx: callee, args: finalArgs, recvInstRef: recvInst)
         self.enqueueSelectedAssocInstance(callee: callee, args: finalArgs, recvInstRef: recvInst)
         self.enqueueSelectedFreeInstance(callee: callee, args: finalArgs)
     }
@@ -1294,11 +1534,11 @@ pub impl Comp {
         }
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], target: CallTarget = <CallTarget.Direct />) {
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64) {
         val bodyId: U64 = self.currentBodyInstanceId()
         val siteKey: CallSiteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
-        self.arena.finalCallees.append(<CallResolution bodyId=bodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=parameterTypeRefs recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef target=target />)
+        self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=parameterTypeRefs recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef target=target />)
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
         mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
         while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
@@ -1403,6 +1643,13 @@ pub impl Comp {
     // this helper deliberately performs no name, overload, or source lookup.
     inout fn cachedInvariantCallee(exprId: U64, siteIsStmt: Bool, slot: U64) -> U64 {
         if siteIsStmt || slot != 0U64 || self.cur.bodyEnvironment.params.count() != 0U64 {
+            return self.arena.funcs.count()
+        }
+        // A provided body is shared source syntax but not necessarily an
+        // instance-invariant semantic body: its selected concrete receiver and
+        // conformance proof determine nested requirement calls. Never let an
+        // AST-global cache from (say) B-as-Show answer A-as-Show.
+        if self.cur.bodyFnIdx < self.arena.funcs.count() && self.arena.funcs[self.cur.bodyFnIdx].isProvided {
             return self.arena.funcs.count()
         }
         if exprId < self.typeCache.callee.count() {
@@ -1521,7 +1768,7 @@ pub impl Comp {
         return self.callTargetIsDirect(target: e.target) && e.callee == callee && self.typeRefEq(a: e.recvTypeRef, b: recvRef) && self.typeRefEq(a: e.resultTypeRef, b: resultRef) && self.sameResolvedTypeRefs(a: e.calleeTypeArgs, b: calleeArgs) && self.sameResolvedTypeRefs(a: e.parameterTypeRefs, b: parameterTypeRefs)
     }
 
-    inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], siteIsStmt: Bool = false, slot: U64 = 0U64) {
+    inout fn completeStaticBodyCallee(exprId: U64, callee: U64, recvRef: U64, calleeArgs: Array[U64], siteIsStmt: Bool = false, slot: U64 = 0U64, calleeBodyId: U64 = 0U64) {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         val params: Array[U64] = self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
         val result: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
@@ -1536,7 +1783,7 @@ pub impl Comp {
             }
             return
         }
-        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, calleeTypeArgs: calleeArgs, parameterTypeRefs: params)
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, calleeTypeArgs: calleeArgs, parameterTypeRefs: params, calleeBodyId: calleeBodyId)
     }
 
     fn callTargetIsDirect(target: CallTarget) -> Bool {
@@ -1560,6 +1807,12 @@ pub impl Comp {
 
     inout fn bodyCalleeTargetTypeRef(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
         return self.bodyCalleeTargetPart(exprId: exprId, part: 3U64, siteIsStmt: siteIsStmt, slot: slot)
+    }
+
+    inout fn bodyCalleeBodyId(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
+        val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
+        if i < self.finalCalleeCount() { return self.arena.finalCallees[i].calleeBodyId }
+        return 0U64
     }
 
     inout fn bodyCalleeTargetBindingDeclStart(exprId: U64, siteIsStmt: Bool = false, slot: U64 = 0U64) -> U64 {
@@ -1775,10 +2028,274 @@ pub impl Comp {
     // remains a navigation anchor for backend value emission, but callee,
     // receiver, argument shape, substitutions, and expected result all come
     // from frontend semantic facts recorded before BodyInstance finalization.
-    inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument]) -> CallSiteSelection {
+    inout fn selectDirectTemplateCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> CallSiteSelection {
         val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
         val calleeArgs: Array[U64] = self.groundSemanticCallTypeArgs(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
-        return <CallSiteSelection exprId=exprId callee=callee receiverRef=self.groundCallTemplateReceiver(receiver: receiver) args=self.templateArgumentRange(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs resultHintRef=expected resultRef=self.groundedTypeOf(id: exprId) />
+        val receiverRef: U64 = self.groundCallTemplateReceiver(receiver: receiver)
+        mut val concreteProof: StaticConformanceProof = proof
+        // A Direct template has already selected its callable.  When that
+        // callable is a provided copy, the template must nevertheless carry
+        // the concrete conformance which makes the shared body meaningful.
+        // Non-generic Record can legitimately have no symbolic proof to
+        // preserve, so close that omission here from the selected copy's
+        // placement identity and the already-ground receiver.  This is the
+        // frontend's proof-construction boundary, not a backend re-selection:
+        // the declaration and receiver were fixed by the template.
+        if self.proofIsMissing(proof: concreteProof) && callee < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[callee]
+            if f.isProvided {
+                concreteProof = self.providedBodyProof(f: f, receiverRef: receiverRef)
+            }
+        }
+        if !(self.proofIsMissing(proof: proof)) && callee < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[callee]
+            if f.originTraitOwner != 0U64 {
+                mut val traitIdx: U64 = 0U64
+                while traitIdx < self.decls.traits.count() {
+                    if self.decls.traits[traitIdx].nameStart == f.originTraitOwner && self.decls.traits[traitIdx].nameId == f.originTraitId {
+                        concreteProof = self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef)
+                    }
+                    traitIdx += 1U64
+                }
+            }
+        }
+        val resultRef: U64 = self.groundSemanticExprTypeRef(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        return <CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=self.templateArgumentRange(arguments: arguments) argumentSources=arguments calleeTypeArgs=calleeArgs proof=concreteProof resultHintRef=expected resultRef=resultRef />
+    }
+
+    // Complete a dynamic call solely from its symbolic source template.  The
+    // only per-instance operation is grounding the carried TypeTerm/receiver;
+    // lexical lookup, field lookup, and existential requirement selection have
+    // already happened in Record.
+    inout fn selectDynamicTemplateCall(exprId: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], target: DynamicCallTemplateTarget) -> CallSiteSelection {
+        val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        val receiverRef: U64 = self.groundCallTemplateReceiver(receiver: receiver)
+        val args: ArgRange = self.templateArgumentRange(arguments: arguments)
+        val noCallee: U64 = self.arena.funcs.count()
+        match target {
+            DynamicCallTemplateTarget.ClosureLocal(bindingDeclStart: val bindingDeclStart, fnTypeTerm: val fnTypeTerm) => {
+                val fnTypeRef: U64 = self.groundTermForBody(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                if fnTypeRef == 0U64 || !(self.isFnType(ref: fnTypeRef)) {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic closure-local template did not ground to a function")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
+                }
+                val fnTy: TypeRef = self.arena.types[fnTypeRef]
+                mut val resultRef: U64 = 0U64
+                if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
+                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureLocal bindingDeclStart=bindingDeclStart fnTypeRef=fnTypeRef /> />
+            }
+            DynamicCallTemplateTarget.ClosureField(fieldIndex: val fieldIndex, fnTypeTerm: val fnTypeTerm) => {
+                val fnTypeRef: U64 = self.groundTermForBody(ref: fnTypeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                if fnTypeRef == 0U64 || !(self.isFnType(ref: fnTypeRef)) {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: dynamic closure-field template did not ground to a function")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
+                }
+                val fnTy: TypeRef = self.arena.types[fnTypeRef]
+                mut val resultRef: U64 = 0U64
+                if fnTy.args.count() > 0U64 { resultRef = fnTy.args[0] }
+                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ClosureField fieldIndex=fieldIndex fnTypeRef=fnTypeRef /> />
+            }
+            DynamicCallTemplateTarget.ExistentialRequirement(traitIdx: val traitIdx, slot: val slot) => {
+                if receiverRef == 0U64 || receiverRef >= self.arena.types.count() || traitIdx >= self.decls.traits.count() || slot == 0U64 || slot > self.decls.traits[traitIdx].reqs.count() {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: existential template has invalid receiver or requirement")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
+                }
+                val req: Func = self.decls.traits[traitIdx].reqs[slot - 1U64]
+                val resultRef: U64 = self.anyMemberRetInfo(anyRef: receiverRef, req: req).ref
+                return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> />
+            }
+        }
+    }
+
+    // Ground a declaration-time trait requirement selected from a `where`
+    // proof.  The requirement identity is carried by the template; the only
+    // concrete lookup is its implementation on the already-ground receiver.
+    // A provided trait body carries the exact concrete conformance that made
+    // it callable in its BodyInstance.  Its nested `self.requirement()` must
+    // retain that conformance's selected extension facet (`S#E` -> A), rather
+    // than resolving from the bare receiver spelling.  The returned TypeRef
+    // remains a value type; only the proof-selected source set is added.
+    inout fn traitSelfBodyReceiver(ref: U64, requestedTraitOwner: U64) -> U64 {
+        mut val conformIdx: U64 = 0U64
+        match self.cur.bodyEnvironment.proof {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => { conformIdx = witness.conformIdx }
+            StaticConformanceProof.TraitPath(edges: _, terminalConformIdx: val terminal) => { conformIdx = terminal }
+            _ => {}
+        }
+        if ref == 0U64 || conformIdx == 0U64 || conformIdx > self.decls.conforms.count() { return ref }
+        val conform: Conform = self.decls.conforms[conformIdx - 1U64]
+        // A selected extension path proves this body's terminal trait only.
+        // It must not retag an unrelated subject-trait requirement in the
+        // witness body: in `impl B as A { self.base() }`, E selects A while
+        // `base` remains B's ordinary requirement. Conversely an A-provided
+        // body calling `self.value()` must retain E, because A is the terminal
+        // trait whose witness lives in that extension.
+        if conform.extId != 0U64 && conform.traitStart == requestedTraitOwner {
+            val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=conform.extId />]
+            return self.typeRefWithAddedViewSources(ref: ref, additions: additions)
+        }
+        return ref
+    }
+
+    // Pick the proof edge that establishes one particular trait instance.
+    // A trait-subject proof retains every edge: in `S: B` followed by
+    // `B as A`, an A requirement uses the latter edge while `self.base()` in
+    // its witness body uses the former.  Selecting the terminal unconditionally
+    // loses that distinction and makes nested requirement dispatch impossible.
+    inout fn bodyProofConformanceForTrait(traitIdx: U64) -> U64 {
+        if traitIdx >= self.decls.traits.count() { return 0U64 }
+        val requested: TraitDef = self.decls.traits[traitIdx]
+        match self.cur.bodyEnvironment.proof {
+            StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+                if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conforms.count() {
+                    val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
+                    if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness.conformIdx }
+                }
+            }
+            StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: _) => {
+                // The path is ordered from the direct receiver conformance to
+                // its derived target.  Each trait can occur at most once in a
+                // validated acyclic proof, so its matching edge is exact.
+                mut val edgeIdx: U64 = 0U64
+                while edgeIdx < edges.count() {
+                    val witness: WitnessMatch = edges[edgeIdx]
+                    if witness.conformIdx != 0U64 && witness.conformIdx <= self.decls.conforms.count() {
+                        val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
+                        if conform.traitId == requested.nameId && conform.traitStart == requested.nameStart { return witness.conformIdx }
+                    }
+                    edgeIdx += 1U64
+                }
+            }
+            _ => {}
+        }
+        return 0U64
+    }
+
+    // Select a concrete member through the exact proof edge, not by
+    // re-ranking the receiver surface.  The edge's witnessFuncIds names the
+    // declaration which supplied the requirement; a trait-subject edge then
+    // contributes one conferred copy with the same body/definition and the
+    // selected path's source trait/extension identity.
+    inout fn traitSelfConcreteWitness(traitIdx: U64, reqIdx: U64) -> U64 {
+        if traitIdx >= self.decls.traits.count() || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return self.arena.funcs.count() }
+        val conformIdx: U64 = self.bodyProofConformanceForTrait(traitIdx: traitIdx)
+        if conformIdx == 0U64 || conformIdx > self.decls.conforms.count() { return self.arena.funcs.count() }
+        val conform: Conform = self.decls.conforms[conformIdx - 1U64]
+        val req: Func = self.decls.traits[traitIdx].reqs[reqIdx]
+        mut val wi: U64 = 0U64
+        while wi < conform.witnessFuncIds.count() {
+            val sourceIdx: U64 = conform.witnessFuncIds[wi]
+            if sourceIdx < self.arena.funcs.count() {
+                val source: Func = self.arena.funcs[sourceIdx]
+                if source.nameId == req.nameId && source.params.count() == req.params.count() {
+                    // A concrete impl owns its witness body directly.  The
+                    // proof's witnessFuncIds is already the exact semantic
+                    // selection, so do not require an imaginary provided
+                    // copy merely because another edge in the enclosing path
+                    // is trait-subject.  Trait-subject witnesses themselves
+                    // still need the conferred copy below: their receiver is
+                    // abstract (for example `impl B as A`) and cannot be
+                    // emitted for S without the preceding S-as-B edge.
+                    if !(self.methodRecvIsTrait(f: source)) && source.originTraitId == self.decls.traits[traitIdx].nameId && source.originTraitOwner == self.decls.traits[traitIdx].nameStart {
+                        return sourceIdx
+                    }
+                    mut val ci: U64 = 0U64
+                    while ci < self.arena.funcs.count() {
+                        val candidate: Func = self.arena.funcs[ci]
+                        // A trait-subject witness is emitted only through the
+                        // copy conferred by this exact proof edge.  The copy's
+                        // sourceConformIdx is the stable source-edge identity; it is
+                        // stronger than matching receiver spelling, extension
+                        // name, or srcTraitId (the latter denotes the edge's
+                        // target trait, not its subject).  This keeps a
+                        // B-as-A witness distinct from another A witness that
+                        // happens to have the same member name.
+                        if candidate.isProvided && candidate.sourceWitnessFuncId == sourceIdx + 1U64 && candidate.sourceConformIdx == conformIdx && candidate.originTraitId == self.decls.traits[traitIdx].nameId && candidate.originTraitOwner == self.decls.traits[traitIdx].nameStart {
+                            return ci
+                        }
+                        ci += 1U64
+                    }
+                }
+            }
+            wi += 1U64
+        }
+        return self.arena.funcs.count()
+    }
+
+    inout fn selectStaticMethodTemplateCall(exprId: U64, receiver: CallTemplateReceiver, arguments: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64) -> CallSiteSelection {
+        val noCallee: U64 = self.arena.funcs.count()
+        val receiverRef: U64 = self.groundCallTemplateReceiver(receiver: receiver)
+        val args: ArgRange = self.templateArgumentRange(arguments: arguments)
+        val expected: U64 = self.groundSemanticCallExpectedResult(exprId: exprId, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        mut val resultRef: U64 = self.groundTermForBody(ref: resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        if resultRef == 0U64 { resultRef = expected }
+        match resolution {
+            StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
+                if receiverRef == 0U64 || receiverRef >= self.arena.types.count() || traitIdx >= self.decls.traits.count() || reqIdx >= self.decls.traits[traitIdx].reqs.count() {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method template has invalid proof or receiver")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
+                }
+                val req: Func = self.decls.traits[traitIdx].reqs[reqIdx]
+                mut val callee: U64 = self.arena.funcs.count()
+                match proof {
+                    StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => {
+                        callee = self.traitSelfConcreteWitness(traitIdx: traitIdx, reqIdx: reqIdx)
+                        if callee >= self.arena.funcs.count() {
+                            val proofReceiver: U64 = self.traitSelfBodyReceiver(ref: receiverRef, requestedTraitOwner: self.decls.traits[traitIdx].nameStart)
+                            val proofSource: U64 = if proofReceiver != receiverRef && proofReceiver < self.arena.types.count() { give self.arena.types[proofReceiver].viewExtId } else { give 0U64 }
+                            if req.isAssoc {
+                                callee = self.resolveAssocForResolvedReceiver(surfaceRef: proofReceiver, sourceId: proofSource, sourceOwner: proofSource, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                            } else {
+                                callee = self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: proofReceiver, sourceId: proofSource, sourceOwner: proofSource, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId), readReceiverSyntax: false)
+                            }
+                        }
+                    }
+                    _ => {
+                        if req.isAssoc {
+                            callee = self.resolveAssocForResolvedReceiver(surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                        } else {
+                            callee = self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: req.nameStart, nameLen: req.nameLen, args: args, useOffset: self.exprOffset(id: exprId), readReceiverSyntax: false)
+                        }
+                    }
+                }
+                if callee >= self.arena.funcs.count() {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method proof has no concrete implementation")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
+                }
+                val f: Func = self.arena.funcs[callee]
+                if f.originTraitId != self.decls.traits[traitIdx].nameId || f.originTraitOwner != self.decls.traits[traitIdx].nameStart {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method selected a callable outside its proved trait")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
+                }
+                return <CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef) resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> />
+            }
+            StaticMemberResolution.Provided(proof: val proof, traitIdx: val traitIdx, callee: val declaration) => {
+                if receiverRef == 0U64 || receiverRef >= self.arena.types.count() || traitIdx >= self.decls.traits.count() || declaration >= self.arena.funcs.count() {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method template has invalid proof or receiver")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
+                }
+                val declared: Func = self.arena.funcs[declaration]
+                val callee: U64 = if declared.isAssoc {
+                    give self.resolveAssocForResolvedReceiver(surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: declared.nameStart, nameLen: declared.nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                } else {
+                    give self.resolveMethodForResolvedReceiver(recv: 0U64, surfaceRef: receiverRef, sourceId: 0U64, sourceOwner: 0U64, nameStart: declared.nameStart, nameLen: declared.nameLen, args: args, useOffset: self.exprOffset(id: exprId), readReceiverSyntax: false)
+                }
+                if callee >= self.arena.funcs.count() {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided-method proof has no concrete implementation")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
+                }
+                val f: Func = self.arena.funcs[callee]
+                if f.originTraitId != self.decls.traits[traitIdx].nameId || f.originTraitOwner != self.decls.traits[traitIdx].nameStart {
+                    self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static provided method selected a callable outside its proved trait")
+                    return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
+                }
+                if resultRef == 0U64 { resultRef = self.groundedSelectedCalleeReturn(callee: callee, recvRef: receiverRef, calleeArgs: []) }
+                return <CallSiteSelection exprId=exprId callee=callee receiverRef=receiverRef args=args argumentSources=arguments proof=self.concreteStaticMemberProof(proof: proof, traitIdx: traitIdx, receiverRef: receiverRef) resultHintRef=expected resultRef=resultRef target=<CallTarget.Direct /> />
+            }
+            _ => {}
+        }
+        self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method template has no requirement")
+        return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
     }
 
     // Resolve once under Mono's concrete body environment, then retain that
@@ -1811,15 +2328,35 @@ pub impl Comp {
         // Expr.Call/Method/ExtMethod here would duplicate candidate selection
         // and lose a receiver/result dependency carried by CallSiteKey.
         match self.callTemplateForCurrentBody(exprId: exprId).kind {
-            CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: _) => {
+            CallTemplateKind.Direct(callee: val storedCallee, receiver: val receiver, args: val arguments, calleeTypeArgs: _, proof: val proof) => {
                 if storedCallee < self.arena.funcs.count() {
-                    val selection: CallSiteSelection = self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: arguments)
+                    val selection: CallSiteSelection = self.selectDirectTemplateCall(exprId: exprId, callee: storedCallee, receiver: receiver, arguments: arguments, proof: proof)
                     self.recordSelectedBodyCallee(selection: selection)
                     self.enqueueSelectedCallee(selection: selection)
                     return storedCallee
                 }
             }
+            CallTemplateKind.Dynamic(receiver: val receiver, args: val arguments, target: val target) => {
+                val selection: CallSiteSelection = self.selectDynamicTemplateCall(exprId: exprId, receiver: receiver, arguments: arguments, target: target)
+                self.recordSelectedBodyCallee(selection: selection)
+                return selection.callee
+            }
+            CallTemplateKind.StaticMethod(receiver: val receiver, args: val arguments, resolution: val resolution, resultTerm: val resultTerm) => {
+                val selection: CallSiteSelection = self.selectStaticMethodTemplateCall(exprId: exprId, receiver: receiver, arguments: arguments, resolution: resolution, resultTerm: resultTerm)
+                self.recordSelectedBodyCallee(selection: selection)
+                self.enqueueSelectedCallee(selection: selection)
+                return selection.callee
+            }
             _ => {}
+        }
+        if self.callTemplatesClosed {
+            // Instance discovery precedes Record and may inspect the syntax to
+            // enqueue reachable generic bodies.  It does not publish a call
+            // descriptor.  After Record closes templates, however, reopening
+            // a written call here would permit a BodyInstance to select a
+            // different lexical target, field, trait slot, or view.
+            self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: written call CallTemplate was not recorded")
+            return self.arena.funcs.count()
         }
         // Non-generic verification may provide an instance-invariant final
         // callable, including generic free-call substitutions.  Keep that
@@ -1994,6 +2531,27 @@ pub impl Comp {
         }
         val instance: BodyInstance = self.arena.bodyInstances[bodyId - 1U64]
         val f: Func = self.arena.funcs[instance.fnIdx]
+        // Shared provided bodies are keyed by concrete conformance proof as
+        // well as receiver. Keep that key observable in trace mode: it is the
+        // shortest diagnostic for a descriptor written for one witness and
+        // read from another, without affecting the normal compilation path.
+        if self.traceCodegen && f.isProvided {
+            mut val name: Array[U8] = []
+            mut val ni: U64 = 0U64
+            while ni < f.nameLen {
+                name.append(self.arena.bytes[f.nameStart + ni])
+                ni += 1U64
+            }
+            eprint(text: "[trace-codegen] scan provided body=")
+            eprint(text: stringFromBytesUnchecked(name))
+            eprint(text: " fn=")
+            eprint(text: digitStrU(d: instance.fnIdx))
+            eprint(text: " body=")
+            eprint(text: digitStrU(d: bodyId))
+            eprint(text: " receiver=")
+            self.traceMonoTypeHead(ref: instance.environment.receiverRef)
+            eprint(text: "\n")
+        }
         self.cur.locals = []
         self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
         self.cur.hasRecv = f.hasRecv
@@ -2249,7 +2807,13 @@ pub impl Comp {
                 mut val mfi: U64 = 0U64
                 while mfi < self.arena.funcs.count() {
                     val mf: Func = self.arena.funcs[mfi]
-                    if !(mf.isProvided) && !(mf.isExtern) && mf.body != 0U64 {
+                    // A trait receiver is an abstract interface, never a
+                    // concrete generic instance. Its authored witness body is
+                    // finalized only through the conferred/provided copy on a
+                    // real conformer; enqueueing `B[Element]` here loses that
+                    // conformance proof and makes `self.base()` impossible to
+                    // resolve.
+                    if !(mf.isProvided) && !(self.methodRecvIsTrait(f: mf)) && !(mf.isExtern) && mf.body != 0U64 {
                         if mf.hasRecv && mf.typeParams.count() == inst.args.count() {
                             if self.methodMatchesInst(f: mf, instRef: instRef) {
                                 self.enqueueFinalBody(fnIdx: mfi, args: inst.args, recvInstRef: instRef)
@@ -3432,7 +3996,7 @@ pub impl Comp {
                 val mf: Func = self.arena.funcs[mfi]
                 if self.methodMatchesInst(f: mf, instRef: instRef) {
                     // provided combinators (`map[B]`) instantiate from call sites, not here.
-                    if !(mf.isProvided) {
+                    if !(mf.isProvided) && !(self.methodRecvIsTrait(f: mf)) {
                         if mf.body != 0 {
                             self.cur.locals = []
                             self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: mf))

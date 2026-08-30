@@ -53,4 +53,5 @@ part ./Llvm/StmtMatch
 part ./Llvm/StmtFor
 part ./Llvm/StmtDeinit
 part ./Llvm/Entry
+part ./Llvm/Mid
 part ./Llvm/Async

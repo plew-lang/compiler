@@ -1,6 +1,7 @@
 
 
 pub impl Comp {
+
     inout fn nameIsMain(f: Func) -> Bool {
         if f.hasRecv {
             return false
@@ -23,6 +24,11 @@ pub impl Comp {
 
     inout fn methodRecvIsTrait(f: Func) -> Bool {
         if f.hasRecv {
+            // Provenance and receiver kind are distinct.  A generated
+            // concrete witness retains `provTraitOwner` so proof-driven
+            // dispatch can identify its trait origin, but its receiver is
+            // still the concrete type.  Only the receiver declaration itself
+            // decides whether this is an abstract trait method.
             return self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity) != 4000000000U64
         }
         return false
@@ -623,7 +629,7 @@ pub impl Comp {
                                         vr = cf.typeId
                                     }
                                 }
-                                self.applyBlanketTo(blanket: cf, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, viewRoot: vr)
+                                self.applyBlanketTo(blanket: cf, blanketConformIdx: ci + 1U64, recvStart: cand.typeStart, recvLen: cand.typeLen, guardHi: guardHi, viewRoot: vr)
                             }
                         }
                         cj += 1
@@ -668,7 +674,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn applyBlanketTo(blanket: Conform, recvStart: U64, recvLen: U64, guardHi: U64, viewRoot: U64) {
+    inout fn applyBlanketTo(blanket: Conform, blanketConformIdx: U64, recvStart: U64, recvLen: U64, guardHi: U64, viewRoot: U64) {
         val recvId: U64 = intern(c: inout self, start: recvStart, len: recvLen)
         mut val srcTag: U64 = blanket.typeId
         if viewRoot != 0U64 {
@@ -698,6 +704,16 @@ pub impl Comp {
                         if !(f.isPub) {
                             providedOwnerMod = self.traitModuleByOwner(owner: f.provTraitOwner)
                         }
+                        // This copy exists because `blanket` reaches its
+                        // target trait.  That target, rather than the source
+                        // method's receiver trait, owns its requirement/proof
+                        // semantics.  In `impl B as A { fn value }`, a copy
+                        // on S is an A witness reached through B; retaining B
+                        // here makes a proof-carrying `self.value()` appear to
+                        // implement the wrong trait.
+                        val originTraitId: U64 = blanket.traitId
+                        val originTraitOwner: U64 = blanket.traitStart
+                        val originTraitArity: U64 = blanket.traitArgs.count()
                         val copyIdx: U64 = self.arena.funcs.count()
                         // `srcTraitId` identifies this conferred copy's path
                         // (and may therefore be the blanket subject such as
@@ -707,7 +723,7 @@ pub impl Comp {
                         // pair `(owner: Iterator, id: FilterIter)`, so an
                         // otherwise selected Iterator witness could never
                         // ground a provided method's associated output.
-                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=f.recvId originTraitOwner=f.provTraitOwner originTraitArity=f.provTraitArity providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
+                        self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=recvId recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=recvStart recvLen=recvLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=srcTag srcTraitOwner=f.provTraitOwner originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=blanketConformIdx sourceConformIdx=f.sourceConformIdx providedOwnerMod=providedOwnerMod provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner viewOnly=(viewRoot != 0U64) defOffset=f.defOffset />)
                         self.registerCallable(funcIdx: copyIdx)
                     }
                 }
@@ -715,7 +731,7 @@ pub impl Comp {
             fi += 1
         }
         if !(self.conformWithRootExists(typeId: recvId, traitId: blanket.traitId, viewRootId: viewRoot)) {
-            self.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed viewRootId=viewRoot defOffset=blanket.defOffset />)
+            self.decls.conforms.append(<Conform typeStart=recvStart typeLen=recvLen typeId=recvId traitStart=blanket.traitStart traitLen=blanket.traitLen traitId=blanket.traitId traitArgs=blanket.traitArgs derived=true witnessed=blanket.witnessed witnessFuncIds=blanket.witnessFuncIds viewRootId=viewRoot defOffset=blanket.defOffset />)
         }
     }
 
@@ -775,8 +791,38 @@ pub impl Comp {
                             if !(f.isPub) {
                                 providedOwnerMod = copyOwnerMod
                             }
+                            // A direct trait-subject witness can be copied
+                            // onto a concrete conformer so an extension path
+                            // has a callable surface. Its proof owner is the
+                            // conformance that declared this source Func, not
+                            // the concrete conformer's immediate trait.
+                            mut val originTraitId: U64 = cf.traitId
+                            mut val originTraitOwner: U64 = cf.traitStart
+                            mut val originTraitArity: U64 = cf.traitArgs.count()
+                            // A copy may be placed on S through S-as-B while
+                            // its source witness was authored by B-as-A. The
+                            // two edges have separate roles: placement selects
+                            // the body's receiver environment, while the
+                            // source edge owns the source impl binders.
+                            val originConformIdx: U64 = ci + 1U64
+                            mut val sourceConformIdx: U64 = 0U64
+                            mut val sourceConform: U64 = 0U64
+                            while sourceConform < self.decls.conforms.count() {
+                                val sourceIds: Array[U64] = self.decls.conforms[sourceConform].witnessFuncIds
+                                mut val sourceWi: U64 = 0U64
+                                while sourceWi < sourceIds.count() {
+                                    if sourceIds[sourceWi] == fi {
+                                        originTraitId = self.decls.conforms[sourceConform].traitId
+                                        originTraitOwner = self.decls.conforms[sourceConform].traitStart
+                                        originTraitArity = self.decls.conforms[sourceConform].traitArgs.count()
+                                        sourceConformIdx = sourceConform + 1U64
+                                    }
+                                    sourceWi += 1U64
+                                }
+                                sourceConform += 1U64
+                            }
                             val copyIdx: U64 = self.arena.funcs.count()
-                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy recvPatternParams=cf.typeParams recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=cf.traitId originTraitOwner=cf.traitStart originTraitArity=cf.traitArgs.count() originConformIdx=ci + 1U64 providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
+                            self.arena.funcs.append(<Func nameStart=f.nameStart nameLen=f.nameLen nameId=f.nameId recvId=intern(c: inout self, start: cf.typeStart, len: cf.typeLen) recvTy=cf.subjectTy recvPatternParams=cf.typeParams recvTraitArgs=f.recvTraitArgs typeParams=copiedTP params=f.params hasRet=f.hasRet retStart=f.retStart retLen=f.retLen retIsArray=f.retIsArray retTy=f.retTy body=f.body hasRecv=true recvStart=cf.typeStart recvLen=cf.typeLen selfInout=f.selfInout selfMove=f.selfMove isAssoc=f.isAssoc isAsync=f.isAsync isExtern=f.isExtern isPub=f.isPub isProvided=true sourceWitnessFuncId=f.sourceWitnessFuncId srcTraitId=cf.traitId srcTraitOwner=cf.traitStart originTraitId=originTraitId originTraitOwner=originTraitOwner originTraitArity=originTraitArity originConformIdx=originConformIdx sourceConformIdx=sourceConformIdx providedOwnerMod=providedOwnerMod extId=effectiveExtId provTraitArity=f.provTraitArity provTraitOwner=f.provTraitOwner defOffset=f.defOffset />)
                             self.registerCallable(funcIdx: copyIdx)
                     }
                 }

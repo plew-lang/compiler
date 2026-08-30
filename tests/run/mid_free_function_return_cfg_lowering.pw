@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// As with the parameter test, the global keeps main on legacy emission. The
+// `mid:` label must therefore belong to `echo`, whose return value is copied
+// into an explicit Mid ABI return place before local cleanup.
+val mainPathAnchor: I64 = 0I64
+
+fn echo(value: I64, early: Bool) -> I64 {
+    if early {
+        return value
+    }
+    return value
+}
+
+fn main() {
+    val result: I64 = echo(value: 17I64, early: true)
+    print(result)
+}

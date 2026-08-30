@@ -1,0 +1,8 @@
+import @Std/Io with { print }
+
+// `print` is a generic direct callable. Its inferred concrete argument lives
+// in CallResolution; Mid must not recover `T` from the source argument.
+fn main() {
+    val number: I64 = 8I64
+    print(number)
+}

@@ -1,7 +1,7 @@
 // Part of name/type resolution (root: _.pw): expression type-cache table
 // construction.
 
-import ../../Ir with { SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, StaticMemberResolution }
+import ../../Ir with { SemanticTypeRecipe, CallArgumentSource, CallTemplateArgument, DynamicCallTemplateTarget, StaticMemberResolution }
 
 pub impl Comp {
 
@@ -343,6 +343,17 @@ pub impl Comp {
         return a.ownerFnIdx == b.ownerFnIdx && a.originKind == b.originKind && a.originStart == b.originStart && a.originEnd == b.originEnd && a.originSerial == b.originSerial && a.slot == b.slot
     }
 
+    // A CallTemplate's selection belongs to its lexical source declaration,
+    // whereas a final CallResolution belongs to the BodyInstance that happens
+    // to evaluate it.  These normally have the same owner.  They deliberately
+    // differ for a parameter default: its expression is declared on the callee
+    // but evaluated in each caller.  Origin is therefore the stable bridge for
+    // that one cross-body execution case; `ownerFnIdx` remains part of the
+    // full key used for template storage and final-resolution publication.
+    fn sameCallSiteOrigin(a: CallSiteKey, b: CallSiteKey) -> Bool {
+        return a.originKind == b.originKind && a.originStart == b.originStart && a.originEnd == b.originEnd && a.originSerial == b.originSerial && a.slot == b.slot
+    }
+
     fn callTemplateHash(siteKey: CallSiteKey) -> U64 {
         // See finalCalleeHash: every intermediate remains below 2^32 because
         // arithmetic overflow is checked in the self-hosted compiler.
@@ -422,19 +433,52 @@ pub impl Comp {
         return out
     }
 
-    inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64]) {
+    inout fn recordCallTemplate(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) {
+        if !(self.cur.recordCallTemplates) { return }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs /> expectedResultTerm=prior.expectedResultTerm />)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof /> expectedResultTerm=prior.expectedResultTerm />)
             return
         }
-        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs /> />)
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof /> />)
+    }
+
+    // A dynamic call is selected at Record too.  It carries the same receiver
+    // and argument provenance as a direct call, while the target remains a
+    // symbolic closure type or existential witness until a BodyInstance
+    // grounds it.  Mono must never reopen the call expression to rediscover
+    // lexical scope, field identity, or requirement overload selection.
+    inout fn recordDynamicCallTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, target: DynamicCallTemplateTarget) {
+        if !(self.cur.recordCallTemplates) { return }
+        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
+        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        if index < self.decls.callTemplates.count() {
+            val prior: CallTemplate = self.decls.callTemplates[index]
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> expectedResultTerm=prior.expectedResultTerm />)
+            return
+        }
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Dynamic receiver=receiver args=templateArgs target=target /> />)
+    }
+
+    inout fn recordStaticMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, args: ArgRange, resolution: StaticMemberResolution, resultTerm: U64) {
+        if !(self.cur.recordCallTemplates) { return }
+        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
+        val templateArgs: Array[CallTemplateArgument] = self.directCallTemplateArgs(args: args)
+        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        if index < self.decls.callTemplates.count() {
+            val prior: CallTemplate = self.decls.callTemplates[index]
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> expectedResultTerm=prior.expectedResultTerm />)
+            return
+        }
+        self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.StaticMethod receiver=receiver args=templateArgs resolution=resolution resultTerm=resultTerm /> />)
     }
 
     inout fn recordProtocolCallTemplate(stmtId: U64, slot: U64, receiver: CallTemplateReceiver) {
+        if !(self.cur.recordCallTemplates) { return }
         val key: CallSiteKey = self.templateProtocolSiteKey(fnIdx: self.cur.checkFn, stmtId: stmtId, slot: slot)
         val index: U64 = self.callTemplateIndex(siteKey: key)
         if index < self.decls.callTemplates.count() {
@@ -479,14 +523,11 @@ pub impl Comp {
         }
         val term: U64 = self.parametricExprTerm(exprId: exprId)
         if term != 0U64 { return <CallArgumentSource.Term exprId=exprId term=term /> }
-        // Some older structural forms have not yet installed their own
-        // SemanticExprType producer, but Record still has their exact
-        // declaration-time type while the lexical scope is live (for example
-        // `newtypeString.bytes()[0]`). Convert that query to a TypeTerm here;
-        // finalization consumes the stored term and never repeats the query.
-        val legacy: TypeInfo = self.exprTypeWithChainHole(id: exprId, chainHoleRef: 0U64)
-        val legacyTerm: U64 = self.typedIrRefOfInfo(ti: legacy)
-        if legacyTerm != 0U64 { return <CallArgumentSource.Term exprId=exprId term=legacyTerm /> }
+        // Record's post-order fallback has already captured every remaining
+        // context-sensitive shape in SemanticExprType.  Do not reopen the AST
+        // here: a missing TypeTerm is specifically the intentional legacy
+        // adapter case (notably an unsuffixed integer), not a request for a
+        // second declaration-time type recovery.
         return <CallArgumentSource.Legacy exprId=exprId info=self.semanticExprTypeInfo(exprId: exprId) />
     }
 
@@ -522,6 +563,7 @@ pub impl Comp {
         val resolution: StaticMemberResolution = self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary)
         val staticResult: U64 = self.staticRequirementResultType(resolution: resolution)
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
+        if !(self.cur.recordCallTemplates) { return }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
@@ -534,6 +576,7 @@ pub impl Comp {
     }
 
     inout fn recordCallTemplateExpectedResult(exprId: U64, expectedTerm: U64) {
+        if !(self.cur.recordCallTemplates) { return }
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         // Context can be known before declaration-time call selection. This
@@ -550,6 +593,36 @@ pub impl Comp {
 
     inout fn callTemplateForCurrentBody(exprId: U64) -> CallTemplate {
         val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.bodyFnIdx, exprId: exprId)
+        val index: U64 = self.callTemplateIndex(siteKey: siteKey)
+        if index < self.decls.callTemplates.count() { return self.decls.callTemplates[index] }
+        // See sameCallSiteOrigin: a callee-owned default expression is
+        // materialized under its caller BodyInstance.  Reusing its immutable
+        // declaration-time template is not a second lookup; it is the one
+        // lexical selection identified by the source origin.  Source spans
+        // plus parser origin serial make the fallback unique.  If it is not
+        // unique, retain the missing sentinel and fail closed at the consumer.
+        mut val found: U64 = self.decls.callTemplates.count()
+        mut val i: U64 = 0U64
+        while i < self.decls.callTemplates.count() {
+            val candidate: CallTemplate = self.decls.callTemplates[i]
+            if self.sameCallSiteOrigin(a: candidate.siteKey, b: siteKey) {
+                if found < self.decls.callTemplates.count() { return <CallTemplate siteKey=siteKey /> }
+                found = i
+            }
+            i += 1U64
+        }
+        if found < self.decls.callTemplates.count() { return self.decls.callTemplates[found] }
+        return <CallTemplate siteKey=siteKey />
+    }
+
+    // Read the immutable Record result for one lexical source body without
+    // installing a BodyInstance/Cursor. Mid's parametric builder uses this
+    // exact-key query; it must not pretend to be the current Mono body or
+    // recover a call from Expr spelling. Default-expression origin fallback is
+    // deliberately excluded here: it belongs to the materializing caller,
+    // whereas a parametric source body owns only its own recorded templates.
+    inout fn callTemplateForSourceBody(fnIdx: U64, exprId: U64) -> CallTemplate {
+        val siteKey: CallSiteKey = self.templateCallSiteKey(fnIdx: fnIdx, exprId: exprId)
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() { return self.decls.callTemplates[index] }
         return <CallTemplate siteKey=siteKey />
@@ -576,29 +649,6 @@ pub impl Comp {
                 val localIdx: U64 = self.localIndexByName(start: start, len: len)
                 if localIdx < self.cur.locals.count() {
                     return self.cur.locals[localIdx].ty
-                }
-            }
-            // The legacy arena keeps anonymous-record component terms in a
-            // StructDef rather than as TypeRef children. Until the semantic
-            // TypeTerm record node replaces that carrier, field/index remain
-            // structural recovery queries: their recorded flat term alone
-            // cannot ground an iterator's `(index: U64, value: E)` component.
-            Expr.Field(val base, val nameStart, val nameLen) => {
-                val baseRef: U64 = self.groundedTypeOf(id: base)
-                if baseRef != 0U64 && baseRef < self.arena.types.count() {
-                    val fieldRef: U64 = self.fieldTypeRefOfReceiver(receiverRef: baseRef, fieldStart: nameStart, fieldLen: nameLen)
-                    if fieldRef != 0U64 { return fieldRef }
-                }
-            }
-            Expr.Index(val base, index: _) => {
-                val baseRef: U64 = self.groundedTypeOf(id: base)
-                if baseRef != 0U64 && baseRef < self.arena.types.count() {
-                    val baseTy: TypeRef = self.arena.types[baseRef]
-                    if baseTy.args.count() == 1U64 {
-                        if rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Array") || rangeEquals(bytes: self.arena.bytes, start: baseTy.nameStart, len: baseTy.nameLen, kw: "Buffer") {
-                            return baseTy.args[0]
-                        }
-                    }
                 }
             }
             _ => {}
@@ -674,7 +724,7 @@ pub impl Comp {
     // Record selection evidence independently from the expression result
     // TypeTerm.  A later body-instance ground reads the term for type equality
     // and the provenance for CallResolution; neither reader needs AST recovery.
-    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64) {
+    inout fn recordSemanticExprCall(exprId: U64, callee: U64, receiver: CallTemplateReceiver, args: ArgRange, calleeTypeArgs: Array[U64], resultTerm: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         mut val next: SemanticExprType = <SemanticExprType term=prior.term shape=prior.shape legacyKind=prior.legacyKind legacyNameStart=prior.legacyNameStart legacyNameLen=prior.legacyNameLen legacyRef=prior.legacyRef legacyViewExtId=prior.legacyViewExtId literalContext=prior.literalContext />
@@ -683,7 +733,29 @@ pub impl Comp {
             next = <SemanticExprType term=resultTerm shape=self.semanticExprShape(ti: ti) legacyKind=ti.kind legacyNameStart=ti.nameStart legacyNameLen=ti.nameLen legacyRef=ti.ref legacyViewExtId=ti.viewExtId literalContext=prior.literalContext />
         }
         self.arena.semanticExprTypes.set(i: exprId, value: next)
-        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs)
+        // Every Direct producer (including one whose callee was cached by
+        // verification) crosses this single semantic boundary.  If the
+        // selected declaration is a provided copy, attach its static proof
+        // here from the already-recorded receiver term; Mono must never infer
+        // it from syntax again.
+        mut val selectedProof: StaticConformanceProof = proof
+        if self.proofIsMissing(proof: selectedProof) && callee < self.arena.funcs.count() {
+            val f: Func = self.arena.funcs[callee]
+            if f.isProvided {
+                match receiver {
+                    CallTemplateReceiver.Term(term: val receiverTerm) => {
+                        val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args)
+                        match resolution {
+                            StaticMemberResolution.Requirement(proof: val resolved, traitIdx: _, reqIdx: _) => { selectedProof = resolved }
+                            StaticMemberResolution.Provided(proof: val resolved, traitIdx: _, callee: _) => { selectedProof = resolved }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: receiver, args: args, calleeTypeArgs: calleeTypeArgs, proof: selectedProof)
     }
 
     // Record the expected result at a semantic statement boundary.  It is not
@@ -735,7 +807,7 @@ pub impl Comp {
         mut val out: Array[U64] = []
         mut val args: Array[U64] = []
         match self.callTemplateForCurrentBody(exprId: exprId).kind {
-            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val stored) => { args = stored }
+            CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val stored, proof: _) => { args = stored }
             _ => {}
         }
         mut val i: U64 = 0U64

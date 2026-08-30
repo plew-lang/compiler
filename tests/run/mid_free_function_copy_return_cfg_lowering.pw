@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+// The returned String comes from a non-move parameter. Mid must copy it into
+// the ABI return place (retain), not transfer a borrowed parameter ownership.
+// The global keeps main legacy so the CFG label proves the callee used Mid.
+val mainPathAnchor: I64 = 0I64
+
+fn identity(value: String, early: Bool) -> String {
+    if early {
+        return value
+    }
+    return value
+}
+
+fn main() {
+    val result: String = identity(value: "mid return", early: true)
+    print(result)
+}

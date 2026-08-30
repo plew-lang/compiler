@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+// A generic body is shared by both instances below.  Calling a closure local
+// and a closure stored in a generic field must use the selected lexical/field
+// target and its concrete function type, rather than re-resolving the shared
+// call expression from its spelling during Mono.
+struct Transform[T] {
+    pub val apply: fn(value: T) -> T
+}
+pub impl Transform { factory }
+
+pub impl[T] Transform[T] {
+    fn run(value: T) -> T {
+        return self.apply(value: value)
+    }
+}
+
+fn throughLocal[T](value: T, transform: fn(value: T) -> T) -> T {
+    return transform(value: value)
+}
+
+fn main() {
+    val doubled: Transform[I64] = <Transform[I64] apply=fn(value: I64) -> I64 { return value * 2I64 } />
+    val greeted: Transform[String] = <Transform[String] apply=fn(value: String) -> String { return value + "!" } />
+    print(doubled.run(value: 21I64))
+    print(greeted.run(value: "hi"))
+    print(throughLocal(value: 7I64, transform: fn(value: I64) -> I64 { return value + 1I64 }))
+    print(throughLocal(value: "go", transform: fn(value: String) -> String { return value + "!" }))
+}

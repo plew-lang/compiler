@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+fn observe(value: I64) {
+    print(value)
+}
+
+// The call in main is selected by frontend CallResolution and lowered as a Mid
+// Call terminator. `observe` itself still uses the legacy body path because it
+// contains a call outside this first ABI slice.
+fn main() {
+    val number: I64 = 7I64
+    observe(value: number)
+}

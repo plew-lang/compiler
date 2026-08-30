@@ -1,0 +1,28 @@
+import @Std/Io with { write }
+
+val mainPathAnchor: I64 = 0I64
+
+unique struct File { pub val fd: I64 }
+pub impl File { factory }
+
+impl File {
+    deinit { write(s: "drop\n") }
+}
+
+fn pass(file: move File, early: Bool) -> File {
+    if early {
+        val branchMarker: I64 = 1I64
+    }
+    return move file
+}
+
+fn sink(file: move File) {
+    write(s: "got\n")
+}
+
+// main stays legacy because of the global, while pass must lower through Mid.
+fn main() {
+    val file: File = <File fd=9I64 />
+    val transferred: File = pass(file: move file, early: true)
+    sink(file: move transferred)
+}

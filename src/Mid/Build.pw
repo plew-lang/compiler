@@ -1,0 +1,477 @@
+// Mid builder state. Source bindings are mapped once to Mid local identities;
+// later passes consume the frontend resolver's declaration identity rather than
+// recovering a place by spelling from the AST.
+
+import ../Frontend with { Comp }
+import ../Ir with { TypeRef, Expr, Stmt, Param, Func, CallTemplate, CallTemplateKind, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ./Ir with { MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+
+export struct MidSourceBinding {
+    // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
+    // resolver defines it as the declaration's source offset, so it preserves
+    // lexical shadowing even when declarations have the same spelling.  It is
+    // deliberately not a use span and not an interned name id.
+    pub val declarationTarget: U64
+    pub val local: U64
+    pub val scope: U64
+}
+pub impl MidSourceBinding { factory }
+
+export struct MidBindingLookup {
+    pub val found: Bool = false
+    pub val local: U64 = 0U64
+}
+pub impl MidBindingLookup { factory }
+
+export struct MidPlaceLookup {
+    pub val found: Bool = false
+    pub val place: MidPlace = <MidPlace local=0U64 />
+}
+pub impl MidPlaceLookup { factory }
+
+export enum MidBuildError {
+    None
+    InvalidStatement
+    InvalidBlock
+    InvalidFunction
+    MissingSemanticType
+    UnboundLocalIdentifier
+    UnsupportedStatement
+    MissingTerminator
+    MissingCallTemplate
+    UnsupportedCallTemplate
+}
+
+export struct MidBodyBuild {
+    pub val body: MidBody
+    pub val error: MidBuildError = <MidBuildError.None />
+}
+pub impl MidBodyBuild { factory }
+
+struct MidOperandBuild {
+    pub val operand: MidOperand
+    pub val error: MidBuildError = <MidBuildError.None />
+}
+pub impl MidOperandBuild { factory }
+
+export struct MidBuildState {
+    pub mut val locals: Array[MidLocalDecl] = []
+    pub mut val scopes: Array[MidScope] = []
+    pub mut val blocks: Array[MidBlock] = []
+    pub mut val bindings: Array[MidSourceBinding] = []
+    pub mut val currentBlock: U64 = 0U64
+    pub mut val currentScope: U64 = 0U64
+    pub mut val hasReturnPlace: Bool = false
+    pub mut val returnPlace: U64 = 0U64
+    // Lexical function identity of this parametric source body. It is used
+    // solely to read its already-recorded CallTemplate by CallSiteKey.
+    pub val sourceFunction: U64 = 0U64
+}
+pub impl MidBuildState { factory }
+
+export fn emptyMidBody(sourceFunction: U64) -> MidBody {
+    return <MidBody sourceFunction=sourceFunction scopes=[<MidScope />] blocks=[<MidBlock />] entry=0U64 />
+}
+
+// Register a declaration-time local exactly once. `declarationTarget` comes
+// from the same resolver record later read at each identifier use. The caller
+// supplies the already-recorded TypeTerm; this builder never calls a type
+// recovery query or lexical name lookup.
+export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool) -> U64 {
+    val local: U64 = state.locals.count()
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
+    state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
+    return local
+}
+
+fn addMidTemporary(state: inout MidBuildState, typeTerm: U64) -> U64 {
+    val local: U64 = state.locals.count()
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=false isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+    return local
+}
+
+// Convert a resolver-selected local/parameter declaration into a Mid local.
+// A missing binding is intentionally explicit: globals/self/callables have
+// different Mid lowering forms and must never be misclassified as a lexical
+// local through a spelling fallback.
+export fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> MidBindingLookup {
+    mut val i: U64 = 0U64
+    while i < state.bindings.count() {
+        val binding: MidSourceBinding = state.bindings[i]
+        if binding.declarationTarget == declarationTarget {
+            return <MidBindingLookup found=true local=binding.local />
+        }
+        i += 1U64
+    }
+    return <MidBindingLookup />
+}
+
+// The builder's only source-identifier boundary. Record/Verify has already
+// selected the lexical binding and stored it in TypeCache. A value category
+// alone is insufficient (`self` and globals are values too), so a Mid local is
+// produced only when that exact declaration target is registered in this body.
+// No source spelling, scope scan, or AST pattern match is permitted here.
+export fn midPlaceForRecordedIdent(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
+    if exprId >= c.typeCache.identBind.count() || exprId >= c.typeCache.identTarget.count() {
+        return <MidPlaceLookup />
+    }
+    if c.typeCache.identBind[exprId] != identValueCode() { return <MidPlaceLookup /> }
+    val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: c.typeCache.identTarget[exprId])
+    if !local.found { return <MidPlaceLookup /> }
+    return <MidPlaceLookup found=true place=<MidPlace local=local.local typeTerm=typeTerm /> />
+}
+
+fn midAppendStatement(state: inout MidBuildState, statement: MidStatement) {
+    if state.currentBlock >= state.blocks.count() { return }
+    val current: MidBlock = state.blocks[state.currentBlock]
+    mut val statements: Array[MidStatement] = current.statements
+    statements.append(statement)
+    state.blocks.set(i: state.currentBlock, value: <MidBlock statements=statements terminator=current.terminator />)
+}
+
+fn midSetTerminator(state: inout MidBuildState, terminator: MidTerminator) {
+    if state.currentBlock >= state.blocks.count() { return }
+    val current: MidBlock = state.blocks[state.currentBlock]
+    state.blocks.set(i: state.currentBlock, value: <MidBlock statements=current.statements terminator=terminator />)
+}
+
+fn midTerminatorIsOpen(terminator: MidTerminator) -> Bool {
+    match terminator { MidTerminator.Unreachable => { return true } _ => { return false } }
+}
+
+fn midNewBlock(state: inout MidBuildState) -> U64 {
+    val index: U64 = state.blocks.count()
+    state.blocks.append(<MidBlock />)
+    return index
+}
+
+fn midEnsureRootScope(state: inout MidBuildState) {
+    if state.scopes.count() == 0U64 {
+        state.scopes.append(<MidScope firstLocal=state.locals.count() />)
+        state.currentScope = 0U64
+    }
+}
+
+fn midOpenScope(state: inout MidBuildState) -> U64 {
+    midEnsureRootScope(state: inout state)
+    val scope: U64 = state.scopes.count()
+    state.scopes.append(<MidScope parent=state.currentScope firstLocal=state.locals.count() />)
+    state.currentScope = scope
+    return scope
+}
+
+fn midCloseScope(state: inout MidBuildState, scope: U64) {
+    if scope >= state.scopes.count() { return }
+    val current: MidScope = state.scopes[scope]
+    state.scopes.set(i: scope, value: <MidScope parent=current.parent firstLocal=current.firstLocal localCount=state.locals.count() - current.firstLocal />)
+    state.currentScope = current.parent
+}
+
+// A flat CFG does not retain a structured block's implicit lifetime.  Record
+// the boundary explicitly and leave ownership decisions to drop elaboration;
+// source lowering must never choose Drop versus ConditionalDrop itself.
+fn midEmitScopeExit(state: inout MidBuildState, scope: U64) {
+    midAppendStatement(state: inout state, statement: <MidStatement.ScopeExit scope=scope />)
+}
+
+// Return leaves every currently active lexical scope, innermost first. Scope
+// zero owns receiver/parameters; nested source blocks own their own bindings.
+fn midEmitAllScopeExits(state: inout MidBuildState) {
+    mut val scope: U64 = state.currentScope
+    while true {
+        midEmitScopeExit(state: inout state, scope: scope)
+        if scope == 0U64 { return }
+        if scope >= state.scopes.count() { return }
+        scope = state.scopes[scope].parent
+    }
+}
+
+fn midOperandForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidOperandBuild {
+    if exprId >= c.arena.exprs.count() {
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
+    }
+    match c.arena.exprs[exprId] {
+        Expr.Ident(start: _, len: _) => {
+            val lookup: MidPlaceLookup = midPlaceForRecordedIdent(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
+            if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnboundLocalIdentifier /> /> }
+            return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
+        }
+        Expr.Move(operand: val operand, isBorrow: val isBorrow) => {
+            val lookup: MidPlaceLookup = midPlaceForRecordedIdent(c: c, state: state, exprId: operand, typeTerm: typeTerm)
+            if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnboundLocalIdentifier /> /> }
+            if isBorrow { return <MidOperandBuild operand=<MidOperand.Borrow place=lookup.place capability=<MidBorrowCapability.Read /> /> /> }
+            return <MidOperandBuild operand=<MidOperand.Move place=lookup.place /> />
+        }
+        Expr.Int(value: val value, offset: _, isBool: val isBool, tyStart: _, tyLen: _, isNeg: val isNegative) => {
+            return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=value isNegative=isNegative isBool=isBool typeTerm=typeTerm /> /> />
+        }
+        _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnsupportedStatement /> /> }
+    }
+}
+
+fn midTemplateArgumentOperand(c: inout Comp, state: MidBuildState, argument: CallTemplateArgument) -> MidOperandBuild {
+    mut val built: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.UnsupportedCallTemplate /> />
+    match argument.source {
+        CallArgumentSource.Term(exprId: val exprId, term: val term) => { built = midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: term) }
+        CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: val term) => { built = midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: term) }
+        CallArgumentSource.Legacy(exprId: val exprId, info: _) => { built = midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: c.semanticExprTerm(exprId: exprId)) }
+        CallArgumentSource.PriorCallResult(exprId: _, siteKey: _) => {}
+    }
+    match built.error { MidBuildError.None => {} _ => { return built } }
+    if argument.isInout {
+        // `inout` is an ABI/ownership fact selected by the frontend template,
+        // not an LLVM-side interpretation of a copied value.  The verifier has
+        // already required a writable place, so only a lexical Copy place may
+        // be reified as this capability-bearing borrow.
+        match built.operand {
+            MidOperand.Copy(place: val place) => {
+                return <MidOperandBuild operand=<MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> /> />
+            }
+            _ => {
+                return <MidOperandBuild operand=built.operand error=<MidBuildError.UnsupportedCallTemplate /> />
+            }
+        }
+    }
+    return built
+}
+
+fn midTemplateArguments(template: CallTemplate) -> Array[CallTemplateArgument] {
+    match template.kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proof: _) => { return args }
+        CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return args }
+        CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return args }
+        _ => { return [] }
+    }
+}
+
+fn midTemplateIsCallable(template: CallTemplate) -> Bool {
+    match template.kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proof: _) => { return true }
+        CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { return true }
+        CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => { return true }
+        _ => { return false }
+    }
+}
+
+fn midExprIsCall(c: Comp, exprId: U64) -> Bool {
+    if exprId >= c.arena.exprs.count() { return false }
+    match c.arena.exprs[exprId] {
+        Expr.Call(nameStart: _, nameLen: _, args: _) => { return true }
+        Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return true }
+        Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { return true }
+        _ => { return false }
+    }
+}
+
+// A source call is a terminator in Mid. Its semantic target and argument
+// provenance come entirely from the frozen CallTemplate; source Expr ids are
+// used only to materialize those already-selected value operands.
+fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> MidBuildError {
+    val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+    if !midTemplateIsCallable(template: template) {
+        match template.kind { CallTemplateKind.Pending => { return <MidBuildError.MissingCallTemplate /> } _ => { return <MidBuildError.UnsupportedCallTemplate /> } }
+    }
+    val sources: Array[CallTemplateArgument] = midTemplateArguments(template: template)
+    mut val args: Array[MidOperand] = []
+    mut val i: U64 = 0U64
+    while i < sources.count() {
+        val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: state, argument: sources[i])
+        match argument.error { MidBuildError.None => {} _ => { return argument.error } }
+        args.append(argument.operand)
+        i += 1U64
+    }
+    val next: U64 = midNewBlock(state: inout state)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> args=args destination=destination target=next />)
+    state.currentBlock = next
+    return <MidBuildError.None />
+}
+
+// First source builder slice: an already recorded `val`/`mut val` becomes one
+// Mid local plus an explicit assignment.  It is intentionally narrow, but it
+// is a real frontend consumer: types come from Stmt/Record, identifier operands
+// come from TypeCache, and no legacy type recovery is reachable from this path.
+export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
+    match c.arena.stmts[stmtId] {
+        Stmt.Let(mutable: val mutable, nameStart: val nameStart, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: val declaredTerm, init: val init) => {
+            mut val term: U64 = declaredTerm
+            if term == 0U64 { term = c.semanticExprTerm(exprId: init) }
+            if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
+            mut val isUnique: Bool = false
+            if term < c.arena.types.count() {
+                val t: TypeRef = c.arena.types[term]
+                isUnique = c.typeIsUnique(start: t.nameStart, len: t.nameLen)
+            }
+            val destinationLocal: U64 = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false)
+            val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
+            if midExprIsCall(c: c, exprId: init) {
+                return buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: destination)
+            }
+            val operandResult: MidOperandBuild = midOperandForSourceExpr(c: c, state: state, exprId: init, typeTerm: term)
+            match operandResult.error { MidBuildError.None => {} _ => { return operandResult.error } }
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+            return <MidBuildError.None />
+        }
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
+}
+
+// Return is a terminator rather than an ad-hoc cleanup action.  Its operand
+// owns the transfer to the ABI return place; later drop elaboration sees only
+// the normal CFG exit and is responsible for the remaining locals.
+export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
+    match c.arena.stmts[stmtId] {
+        Stmt.Return(value: val value, hasValue: val hasValue, offset: _) => {
+            if !hasValue {
+                midEmitAllScopeExits(state: inout state)
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
+                return <MidBuildError.None />
+            }
+            val term: U64 = c.semanticExprTerm(exprId: value)
+            val operand: MidOperandBuild = midOperandForSourceExpr(c: c, state: state, exprId: value, typeTerm: term)
+            match operand.error { MidBuildError.None => {} _ => { return operand.error } }
+            // Copy retains into the ABI result place and Move transfers there;
+            // only then may lexical cleanup destroy the source locals.
+            if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
+            val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=term />
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operand.operand /> />)
+            midEmitAllScopeExits(state: inout state)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
+            return <MidBuildError.None />
+        }
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
+}
+
+// Build a lexical source block into the current Mid block. The current slice
+// supports statements whose ownership/evaluation form is already explicit;
+// unsupported source forms fail at the builder boundary rather than being sent
+// through the legacy LLVM emitter.
+export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64) -> MidBuildError {
+    if blockId >= c.arena.blocks.count() { return <MidBuildError.InvalidBlock /> }
+    val scope: U64 = midOpenScope(state: inout state)
+    val block = c.arena.blocks[blockId]
+    mut val result: MidBuildError = <MidBuildError.None />
+    mut val i: U64 = 0U64
+    while i < block.stmtLen {
+        val stmtId: U64 = c.arena.blockStmtPool[block.stmtStart + i]
+        match c.arena.stmts[stmtId] {
+            Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
+                result = buildMidLet(c: inout c, state: inout state, stmtId: stmtId)
+            }
+            Stmt.If(cond: _, thenBlk: _, elseBlk: _, hasElse: _) => {
+                result = buildMidIf(c: inout c, state: inout state, stmtId: stmtId)
+            }
+            Stmt.Return(value: _, hasValue: _, offset: _) => {
+                result = buildMidReturn(c: inout c, state: inout state, stmtId: stmtId)
+            }
+            Stmt.ExprStmt(expr: val expr) => {
+                if midExprIsCall(c: c, exprId: expr) {
+                    val destinationLocal: U64 = addMidTemporary(state: inout state, typeTerm: c.semanticExprTerm(exprId: expr))
+                    result = buildMidCallInto(c: inout c, state: inout state, exprId: expr, destination: <MidPlace local=destinationLocal typeTerm=c.semanticExprTerm(exprId: expr) />)
+                } else {
+                    result = <MidBuildError.UnsupportedStatement />
+                }
+            }
+            _ => { result = <MidBuildError.UnsupportedStatement /> }
+        }
+        if !midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+            i = block.stmtLen
+        }
+        match result { MidBuildError.None => {} _ => { i = block.stmtLen } }
+        i += 1U64
+    }
+    if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+        midEmitScopeExit(state: inout state, scope: scope)
+    }
+    midCloseScope(state: inout state, scope: scope)
+    return result
+}
+
+// A statement `if` becomes a normal Switch plus then/else/join blocks. There
+// is no conditional-move special case: a Move emitted by `buildMidLet` in one
+// branch reaches the join through the same CFG used by every other statement.
+export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
+    match c.arena.stmts[stmtId] {
+        Stmt.If(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk, hasElse: val hasElse) => {
+            if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
+            val condTerm: U64 = c.semanticExprTerm(exprId: cond)
+            val condition: MidOperandBuild = midOperandForSourceExpr(c: c, state: state, exprId: cond, typeTerm: condTerm)
+            match condition.error { MidBuildError.None => {} _ => { return condition.error } }
+            val thenTarget: U64 = midNewBlock(state: inout state)
+            val elseTarget: U64 = midNewBlock(state: inout state)
+            val joinTarget: U64 = midNewBlock(state: inout state)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[thenTarget] otherwise=elseTarget />)
+            state.currentBlock = thenTarget
+            val thenResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: thenBlk)
+            match thenResult { MidBuildError.None => {} _ => { return thenResult } }
+            if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+            }
+            state.currentBlock = elseTarget
+            if hasElse {
+                val elseResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: elseBlk)
+                match elseResult { MidBuildError.None => {} _ => { return elseResult } }
+            }
+            if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+            }
+            state.currentBlock = joinTarget
+            return <MidBuildError.None />
+        }
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
+}
+
+fn midTermIsUnique(c: inout Comp, term: U64) -> Bool {
+    if term >= c.arena.types.count() { return false }
+    val t: TypeRef = c.arena.types[term]
+    return c.typeIsUnique(start: t.nameStart, len: t.nameLen)
+}
+
+// Build the parametric body once from the frozen frontend AST/semantic table.
+// Parameters and receiver are represented by the same declaration identities
+// used at identifier sites; only instantiateMidBody may subsequently ground
+// their TypeTerms. This function intentionally does not install Cursor state.
+export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
+    if fnIdx >= c.arena.funcs.count() {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
+    }
+    val f: Func = c.arena.funcs[fnIdx]
+    mut val state: MidBuildState = <MidBuildState scopes=[<MidScope />] blocks=[<MidBlock />] sourceFunction=fnIdx />
+    if f.hasRecv {
+        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: f.recvTy, isUnique: midTermIsUnique(c: inout c, term: f.recvTy), isParameter: true, ownsAtEntry: f.selfMove)
+    }
+    mut val paramI: U64 = 0U64
+    while paramI < f.params.count() {
+        val param: Param = f.params[paramI]
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: param.isMove)
+        paramI += 1U64
+    }
+    // Scope zero is the lifetime of receiver/parameters only. Its range must
+    // be sealed before body scope creation so a return can elaborate their
+    // move-owned drops without swallowing function-local declarations.
+    val root: MidScope = state.scopes[0U64]
+    state.scopes.set(i: 0U64, value: <MidScope parent=root.parent firstLocal=root.firstLocal localCount=state.locals.count() - root.firstLocal />)
+    // Do not put ABI result storage in root scope. It must survive all source
+    // cleanup until the ReturnValue terminator transfers ownership to caller.
+    if f.hasRet {
+        val resultLocal: U64 = state.locals.count()
+        state.locals.append(<MidLocalDecl typeTerm=f.retTy sourceScope=0U64 isUnique=midTermIsUnique(c: inout c, term: f.retTy) isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=true sourceNameStart=0U64 />)
+        state.hasReturnPlace = true
+        state.returnPlace = resultLocal
+    }
+    val result: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: f.body)
+    match result {
+        MidBuildError.None => {}
+        _ => { return <MidBodyBuild body=<MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=result /> }
+    }
+    if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+        if f.hasRet { return <MidBodyBuild body=<MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> error=<MidBuildError.MissingTerminator /> /> }
+        midEmitScopeExit(state: inout state, scope: 0U64)
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Return />)
+    }
+    return <MidBodyBuild body=<MidBody sourceFunction=fnIdx locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 /> />
+}

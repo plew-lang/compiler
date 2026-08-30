@@ -449,7 +449,7 @@ export struct PatInfo {
 // and, for the backend to locate it without re-deriving by name, the `target`
 // (identTarget's value): a resolved free-function index for a callable declaration, the
 // DECLARATION's source offset (locals[li].nameStart) for a local/param value,
-// identNoTarget() for `self`, a global, a type qualifier, or an undef. This is the
+// identSelfTarget() for `self`; identNoTarget() for a global, a type qualifier, or an undef. This is the
 // single source both the classification query (classifyIdent/bindIsValue) and the
 // recorder (recordIdent) read, so the resolver never scans a name table twice.
 export struct IdentBinding {
@@ -755,6 +755,11 @@ export struct Conform {
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.
     pub val witnessed: Array[Func]
+    // Exact declarations that supplied the non-`via` witnesses, in member
+    // order. `witnessed` intentionally remains a signature-only validation
+    // carrier; final call/proof resolution must use these stable Func ids
+    // rather than reconstructing a member from spelling and receiver surface.
+    pub val witnessFuncIds: Array[U64] = []
 }
 
 // A `via` alias `fn req(...) -> T via real` inside a trait impl (spec/08: the
@@ -873,6 +878,22 @@ export enum StaticConformanceProof {
     Missing
     ConcreteWitness(witness: WitnessMatch)
     AssumedBound(boundIdx: U64)
+    // A declaration-time entailment from an authored bound. `edges` are
+    // zero-based Conform indices for trait-subject edges, ordered from the
+    // bound trait to the selected target trait. They are symbolic patterns;
+    // BodyInstance grounds/validates the receiver later.
+    AssumedTraitPath(boundIdx: U64, edges: Array[U64])
+    // A generic bound also entails every declared supertrait. `traits` is
+    // the ordered TraitDef-index path after the authored bound's trait; it
+    // makes that derivation explicit instead of mislabeling `T: Sub` as an
+    // authored `T: Super` bound.
+    AssumedSupertraitPath(boundIdx: U64, traits: Array[U64])
+    // Every trait-provided body is abstract over its receiver, but unlike an
+    // ordinary generic function it has an implicit `Self: ThisTrait`
+    // constraint.  Carry that declaration-time evidence explicitly so Record
+    // can select `self.requirement()` without pretending a concrete conformer
+    // has already been chosen.
+    TraitSelf(traitIdx: U64, receiverRef: U64, traitArgs: Array[U64])
     // Ordered direct witness and trait-subject edges. `terminalConformIdx` is
     // one-based and names the edge that owns the selected trait instance's
     // associated outputs; every edge retains its own impl-binder substitution.
@@ -935,6 +956,11 @@ export struct CallResolution {
     // canonical semantic body instance; duplicating its function/environment
     // here made every lookup re-compare the whole substitution map.
     pub val bodyId: U64
+    // 1-based identity of the selected callee body. This differs from the
+    // caller body above: provided copies can share an ABI key yet have distinct
+    // placement/source proofs. LLVM must consume this identity rather than
+    // reconstructing a body environment from ABI arguments.
+    pub val calleeBodyId: U64 = 0U64
     // Semantic identity of the call occurrence. `exprId` below is retained
     // solely as the backend navigation anchor; it is not a semantic key.
     pub val siteKey: CallSiteKey = <CallSiteKey />
@@ -989,6 +1015,11 @@ export struct CallSiteSelection {
     // Parametric call-template substitutions, grounded by the source
     // resolver under the caller BodyInstance before final construction.
     pub val calleeTypeArgs: Array[U64] = []
+    // Static trait dispatch selects evidence together with its callable.  A
+    // provided body may invoke another requirement through that same path, so
+    // the selected concrete proof must cross the BodyInstance boundary rather
+    // than being rediscovered from a normalized ABI receiver.
+    pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
     pub val resultHintRef: U64 = 0U64
     pub val resultRef: U64 = 0U64
     pub val target: CallTarget = <CallTarget.Direct />
@@ -1092,6 +1123,11 @@ export struct Func {
     // (its body/signature may mention `Self`/`Item`; its generic instances come from
     // call sites). Default false = an ordinary inherent/conformance/free method.
     pub val isProvided: Bool = false
+    // One-based identity of the declaration that originally supplied this
+    // trait witness. Direct methods point to themselves; every conferred copy
+    // preserves that identity so proof-driven dispatch never reconstructs a
+    // member from names, spans, or receiver surfaces.
+    pub val sourceWitnessFuncId: U64 = 0U64
     // the enclosing extension's interned name id (spec/09), 0 for a bare method.
     // An extension method is tagged with its extension so it is excluded from bare
     // resolution and reachable only through a `value#Ext.m()` view (findExtMethod).
@@ -1111,10 +1147,15 @@ export struct Func {
     pub val originTraitId: U64 = 0
     pub val originTraitOwner: U64 = 0
     pub val originTraitArity: U64 = 0
-    // Exact selected conformance for a provided copy, one-based so 0 remains
-    // the absent/trait-path sentinel. This carries witness provenance through
-    // finalization; receiver spelling must never re-select an associated output.
+    // The conformance that placed this copy on its concrete receiver, one-based
+    // so 0 remains absent.  It selects the body's receiver environment and
+    // must not be replaced by a source witness edge.
     pub val originConformIdx: U64 = 0
+    // When the source witness was authored by a trait-subject conformance,
+    // that distinct conformance owns the source method's impl binders.  It is
+    // used only to substitute those binders at the final call; 0 means the
+    // provided template has no such source-edge substitution.
+    pub val sourceConformIdx: U64 = 0
     // for a non-public provided-method copy (`impl Trait { ... }`, not
     // `pub impl Trait`): the trait owner's module id. Such helper copies are
     // callable only from that module. The sentinel means "no module-only gate"
@@ -1197,6 +1238,11 @@ pub impl UnifyBind { factory }
 export enum StaticMemberResolution {
     Missing
     Requirement(proof: StaticConformanceProof, traitIdx: U64, reqIdx: U64)
+    // A trait default body is a declaration-selected static member just like
+    // a requirement, but it has no requirement slot. `callee` names the
+    // lexical trait declaration; finalization selects its concrete copy under
+    // the carried proof.
+    Provided(proof: StaticConformanceProof, traitIdx: U64, callee: U64)
 }
 
 // A path-local substitution used by the trait-subject cycle validator.  Unlike
@@ -1479,6 +1525,12 @@ export enum CallTemplateReceiver {
     Term(term: U64)
     PriorCallResult(exprId: U64, siteKey: CallSiteKey)
     PriorProtocolResult(slot: U64)
+    // `#Source` decorates the value yielded by an earlier call; it is not a
+    // fresh lexical lookup.  Keep the dependency and the view transform in
+    // one semantic source so body-instance grounding can apply provenance
+    // after reading the already-published result.
+    PriorCallResultWithViews(exprId: U64, siteKey: CallSiteKey, views: Array[ResolvedViewSource])
+    PriorProtocolResultWithViews(slot: U64, views: Array[ResolvedViewSource])
 }
 
 // One call argument is semantic input, not a request to inspect a shared Expr
@@ -1512,12 +1564,28 @@ export struct CallTemplateArgument {
 }
 pub impl CallTemplateArgument { factory }
 
+// Dynamic dispatch has source-selected identity just as direct dispatch does,
+// but its callable is a value or a witness slot rather than a Func declaration.
+// Keep the symbolic template distinct from CallTarget: its function TypeTerm is
+// still parametric here and becomes the ground CallTarget only per BodyInstance.
+export enum DynamicCallTemplateTarget {
+    ClosureLocal(bindingDeclStart: U64, fnTypeTerm: U64)
+    ClosureField(fieldIndex: U64, fnTypeTerm: U64)
+    ExistentialRequirement(traitIdx: U64, slot: U64)
+}
+
 // The template is a site-kind sum.  These alternatives deliberately cannot
 // mix an ordinary call's declared callee with an operator's symbolic proof or
 // a protocol receiver.  Finalization consumes exactly the selected variant.
 export enum CallTemplateKind {
     Pending
-    Direct(callee: U64, receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], calleeTypeArgs: Array[U64])
+    // Direct means the declaration is already selected.  It may still be a
+    // provided trait copy, in which case `proof` is the declaration-time
+    // evidence that selected its conformance path; it is grounded only when
+    // the enclosing BodyInstance grounds `receiver`.
+    Direct(callee: U64, receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], calleeTypeArgs: Array[U64], proof: StaticConformanceProof)
+    StaticMethod(receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], resolution: StaticMemberResolution, resultTerm: U64)
+    Dynamic(receiver: CallTemplateReceiver, args: Array[CallTemplateArgument], target: DynamicCallTemplateTarget)
     Protocol(receiver: CallTemplateReceiver)
     Operator(op: I64, operands: Array[CallArgumentSource], resolution: StaticMemberResolution, resultTerm: U64)
 }
@@ -1824,6 +1892,11 @@ export struct Cursor {
     pub mut val asyncVarSeq: U64 = 0
     pub mut val lowerRetTy: U64 = 0
     pub mut val checkFn: U64 = 0
+    // Record's first walk writes parametric TypeTerms before generic checking;
+    // its second walk runs after verification and is the sole producer of
+    // CallTemplates.  Keeping this phase bit in the transient cursor prevents
+    // an early, incompletely-resolved call from becoming semantic provenance.
+    pub mut val recordCallTemplates: Bool = false
     // monotonic gensym counter for lowering-synthesized temp locals (compound-assign
     // place bindings etc.), so names are globally unique across statements.
     pub mut val lowerTmpSeq: U64 = 0
@@ -1876,6 +1949,10 @@ pub impl NewtypeDef { factory }
 export fn identUnfilledCode() -> I64 { return 0I64 }
 // Sentinel `typeCache.identTarget` value marking "no resolved target recorded".
 export fn identNoTarget() -> U64 { return 18446744073709551615U64 }
+// `self` is a lexical receiver binding, not an unaddressable value. Give it a
+// dedicated identity so downstream semantic consumers never need to recover it
+// from spelling; this stays distinct from the no-target sentinel used by globals.
+export fn identSelfTarget() -> U64 { return 18446744073709551614U64 }
 export fn identValueCode() -> I64 { return 1I64 }
 export fn identFnCode() -> I64 { return 2I64 }
 export fn identTypeQualCode() -> I64 { return 3I64 }

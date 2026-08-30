@@ -129,18 +129,26 @@ pub impl Comp {
     inout fn groundTermForBody(ref: U64, environment: InstanceEnvironment, selfRef: U64, itemRef: U64) -> U64 {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
+        val outerViews: Array[ResolvedViewSource] = self.typeRefViewSources(ref: ref)
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
         // consulting the explicit binder map.
         if t.args.count() == 0U64 {
             if environment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
-                return environment.receiverRef
+                return self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: outerViews)
             }
             if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
-                return itemRef
+                return self.typeRefWithAddedViewSources(ref: itemRef, additions: outerViews)
             }
         }
-        val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+        mut val explicit: U64 = self.groundTermInEnvironment(ref: ref, params: environment.params, values: environment.args, selfRef: selfRef, itemRef: itemRef)
+        // Substitution replaces the outer nominal/binder head but never the
+        // source-set written on this term. `T#E` therefore grounds to `S#E`,
+        // not raw `S`; nested argument views remain the responsibility of the
+        // recursive term grounder and are intentionally not flattened here.
+        if explicit != ref && outerViews.count() != 0U64 {
+            explicit = self.typeRefWithAddedViewSources(ref: explicit, additions: outerViews)
+        }
         // Substitution alone does not close `T#Trait.Output`: the projection
         // receiver may now be concrete, but only a static conformance proof
         // owns the associated output.  Do this before the legacy Cursor
@@ -1135,7 +1143,7 @@ pub impl Comp {
                                 // skip copied provided methods (`map[B] -> MapIter[Self,…]`):
                                 // their instances come from call sites, and expanding one here
                                 // under Self=this inst would recurse forever (MapIter[MapIter[…]]).
-                                if !(mf.isProvided) {
+                                if !(mf.isProvided) && !(self.methodRecvIsTrait(f: mf)) {
                                 if mf.recvId == qInst {
                                     // a non-generic method may still mention `Self`/`Item`
                                     // (`fn iterator() -> Self`); resolve them to this inst.

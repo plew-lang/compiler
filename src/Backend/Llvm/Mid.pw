@@ -1,0 +1,341 @@
+// Part of the LLVM backend (root: _.pw): lowering of already-elaborated Mid
+// CFG. This path owns no syntax/type/call resolution. It consumes only typed
+// places, semantic constants, and explicit ownership operations.
+
+pub impl LlvmCtx {
+
+    // Path 1 deliberately selects a closed subset *before* emitting any LLVM.
+    // It is not an AST fallback: a selected body has already crossed the
+    // frontend freeze as Mid, and an unsupported body remains on the legacy
+    // path until its ABI/value form has a corresponding Mid operation.  This
+    // preflight makes it impossible to partially emit Mid then reopen the AST.
+    inout fn midInitialDirectCallSupported(c: inout Comp, resolution: U64, args: Array[MidOperand], destination: MidPlace) -> Bool {
+        if resolution >= c.arena.finalCallees.count() { return false }
+        val selected: CallResolution = c.arena.finalCallees[resolution]
+        match selected.target { CallTarget.Direct => {} _ => { return false } }
+        if selected.callee >= c.arena.funcs.count() { return false }
+        val callee: Func = c.arena.funcs[selected.callee]
+        if callee.hasRecv || callee.isAssoc || callee.isExtern || callee.isAsync { return false }
+        if callee.typeParams.count() != selected.calleeTypeArgs.count() { return false }
+        if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: selected.calleeTypeArgs)) { return false }
+        if args.count() != callee.params.count() || selected.parameterTypeRefs.count() != args.count() { return false }
+        if callee.hasRet {
+            if destination.projections.count() != 0U64 || selected.resultTypeRef == 0U64 { return false }
+        }
+        mut val i: U64 = 0U64
+        while i < args.count() {
+            if selected.parameterTypeRefs[i] >= c.arena.types.count() { return false }
+            if callee.params[i].isInout { return false }
+            if callee.params[i].isMove {
+                match args[i] {
+                    MidOperand.Move(place: val place) => { if place.projections.count() != 0U64 { return false } }
+                    _ => { return false }
+                }
+            } else {
+                match args[i] {
+                    MidOperand.Copy(place: val place) => { if place.projections.count() != 0U64 { return false } }
+                    MidOperand.Constant(value: _) => {}
+                    _ => { return false }
+                }
+            }
+            i += 1U64
+        }
+        return true
+    }
+
+    // The ABI-facing entry supplies the exact number of source parameters it
+    // has exposed to LLVM.  Parameter locals must be the contiguous prefix of
+    // a body: that invariant is established once by the Mid builder (receiver,
+    // then source parameters), rather than reconstructed from source names by
+    // the backend.  Main has zero parameters; the first free-function slice
+    // has `f.params.count()` and no receiver.
+    inout fn midInitialLlvmSupported(c: inout Comp, body: MidBody, abiParameterCount: U64 = 0U64) -> Bool {
+        mut val parameter: U64 = 0U64
+        mut val local: U64 = 0U64
+        while local < body.locals.count() {
+            if body.locals[local].isParameter {
+                if local != parameter || parameter >= abiParameterCount { return false }
+                parameter += 1U64
+            } else if parameter < abiParameterCount {
+                return false
+            }
+            local += 1U64
+        }
+        if parameter != abiParameterCount { return false }
+        mut val block: U64 = 0U64
+        while block < body.blocks.count() {
+            val current: MidBlock = body.blocks[block]
+            mut val statement: U64 = 0U64
+            while statement < current.statements.count() {
+                match current.statements[statement] {
+                    MidStatement.Assign(destination: val destination, value: _) => {
+                        if destination.projections.count() != 0U64 { return false }
+                    }
+                    MidStatement.Drop(place: val place) => {
+                        if place.projections.count() != 0U64 { return false }
+                    }
+                    MidStatement.ConditionalDrop(place: val place, flag: _) => {
+                        if place.projections.count() != 0U64 { return false }
+                    }
+                    MidStatement.SetDropFlag(local: _, isSet: _) => {}
+                    MidStatement.Nop => {}
+                    MidStatement.ScopeExit(scope: _) => { return false }
+                }
+                statement += 1U64
+            }
+            match current.terminator {
+                MidTerminator.Goto(target: _) => {}
+                MidTerminator.Switch(discriminant: _, values: val values, targets: val targets, otherwise: _) => {
+                    if values.count() != 1U64 || targets.count() != 1U64 || values[0U64] != 1I64 { return false }
+                }
+                MidTerminator.Call(callee: val callee, args: val args, destination: val destination, target: _) => {
+                    match callee {
+                        MidCallTarget.Resolved(resolution: val resolution) => {
+                            if !(self.midInitialDirectCallSupported(c: inout c, resolution: resolution, args: args, destination: destination)) { return false }
+                        }
+                        _ => { return false }
+                    }
+                }
+                MidTerminator.Return => {}
+                MidTerminator.ReturnValue(value: val value) => {
+                    match value {
+                        MidOperand.Move(place: val place) => {
+                            if place.projections.count() != 0U64 || place.local >= body.locals.count() || !(body.locals[place.local].isReturnPlace) { return false }
+                        }
+                        _ => { return false }
+                    }
+                }
+                MidTerminator.Unreachable => {}
+                MidTerminator.Abort => {}
+                _ => { return false }
+            }
+            block += 1U64
+        }
+        return true
+    }
+
+    // Initial Call terminator lowering consumes a complete final descriptor,
+    // never a source Expr/ArgRange. Receiver, aggregate, return-value and
+    // dynamic variants extend this one entry rather than reopening syntax.
+    inout fn midEmitInitialDirectCall(c: inout Comp, body: MidBody, resolution: U64, args: Array[MidOperand], destination: MidPlace) -> Bool {
+        if !(self.midInitialDirectCallSupported(c: inout c, resolution: resolution, args: args, destination: destination)) { return false }
+        val selected: CallResolution = c.arena.finalCallees[resolution]
+        val slot: U64 = self.ensureFnInst(c: inout c, fnIdx: selected.callee, args: selected.calleeTypeArgs, recvInstRef: selected.recvTypeRef)
+        if slot >= self.genFnK.count() { return false }
+        mut val values: Array[LLVMValueRef] = []
+        mut val i: U64 = 0U64
+        while i < args.count() {
+            mut val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[i])
+            if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
+                val parameter: TypeRef = c.arena.types[selected.parameterTypeRefs[i]]
+                value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: selected.parameterTypeRefs[i]), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
+            }
+            values.append(value)
+            i += 1U64
+        }
+        val result: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[slot], self.genFnVal[slot], arrayCPtr(values), values.count(), anon())
+        if c.arena.funcs[selected.callee].hasRet {
+            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+        }
+        return true
+    }
+
+    // Mid local indices are stable IR identities.  They are intentionally not
+    // looked up by source spelling or declaration offset at this boundary.
+    inout fn midLocalPtr(body: MidBody, local: U64) -> LLVMValueRef {
+        if local < body.locals.count() && local < self.nLocals {
+            return self.locPtr[local]
+        }
+        return LLVMConstNull(self.ptrty)
+    }
+
+    inout fn midLocalTy(c: inout Comp, body: MidBody, local: U64) -> LLVMTypeRef {
+        if local >= body.locals.count() { return self.i64ty }
+        val declaration: MidLocalDecl = body.locals[local]
+        if declaration.isDropFlag { return self.i1ty }
+        if declaration.typeTerm == 0U64 || declaration.typeTerm >= c.arena.types.count() { return self.i64ty }
+        return self.llvmTypeOfRef(c: inout c, ref: declaration.typeTerm)
+    }
+
+    inout fn midEmitOperand(c: inout Comp, body: MidBody, operand: MidOperand) -> LLVMValueRef {
+        match operand {
+            MidOperand.Copy(place: val place) => {
+                return LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+            }
+            MidOperand.Move(place: val place) => {
+                return LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+            }
+            MidOperand.Borrow(place: val place, capability: _) => {
+                // The first lowering slice has no by-reference consumer yet.
+                // Keep the value load here only for copyable scalar control
+                // operands; call/inout lowering will consume the place itself.
+                return LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+            }
+            MidOperand.Constant(value: val value) => {
+                match value {
+                    MidConstant.Integer(value: val integer, isNegative: val isNegative, isBool: val isBool, typeTerm: val term) => {
+                        mut val ty: LLVMTypeRef = self.i64ty
+                        if isBool { ty = self.i1ty }
+                        else if term != 0U64 && term < c.arena.types.count() { ty = self.llvmTypeOfRef(c: inout c, ref: term) }
+                        val literal: LLVMValueRef = LLVMConstInt(ty, integer, 0I32)
+                        if isNegative { return LLVMBuildNeg(self.b, literal, anon()) }
+                        return literal
+                    }
+                }
+            }
+        }
+    }
+
+    inout fn midOperandIsCopy(operand: MidOperand) -> Bool {
+        match operand { MidOperand.Copy(place: _) => { return true } _ => { return false } }
+    }
+
+    inout fn midEmitDrop(c: inout Comp, body: MidBody, place: MidPlace) {
+        if place.local >= body.locals.count() || place.projections.count() != 0U64 { return }
+        val typeRef: U64 = body.locals[place.local].typeTerm
+        val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+        self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: false)
+    }
+
+    // ConditionalDrop is the only ownership-generated branch in Path 1.  It
+    // is produced by drop-elaboration, never by source-specific lowering.
+    inout fn midEmitConditionalDrop(c: inout Comp, body: MidBody, place: MidPlace, flag: U64) {
+        if flag >= body.locals.count() { return }
+        val flagValue: LLVMValueRef = LLVMBuildLoad2(self.b, self.i1ty, self.midLocalPtr(body: body, local: flag), anon())
+        val thenBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop"))
+        val continueBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop.cont"))
+        LLVMBuildCondBr(self.b, flagValue, thenBlock, continueBlock)
+        LLVMPositionBuilderAtEnd(self.b, thenBlock)
+        self.midEmitDrop(c: inout c, body: body, place: place)
+        LLVMBuildBr(self.b, continueBlock)
+        LLVMPositionBuilderAtEnd(self.b, continueBlock)
+    }
+
+    inout fn midEmitStatement(c: inout Comp, body: MidBody, statement: MidStatement) {
+        match statement {
+            MidStatement.Assign(destination: val destination, value: val rvalue) => {
+                match rvalue {
+                    MidRvalue.Use(operand: val operand) => {
+                        mut val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: operand)
+                        val ty: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: destination.local)
+                        if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: ty, unsigned: false) }
+                        if self.midOperandIsCopy(operand: operand) && destination.local < body.locals.count() {
+                            self.valueArc(c: inout c, v: value, typeRef: body.locals[destination.local].typeTerm, retain: true)
+                        }
+                        LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
+                    }
+                }
+            }
+            MidStatement.Drop(place: val place) => { self.midEmitDrop(c: inout c, body: body, place: place) }
+            MidStatement.ConditionalDrop(place: val place, flag: val flag) => { self.midEmitConditionalDrop(c: inout c, body: body, place: place, flag: flag) }
+            MidStatement.SetDropFlag(local: val local, isSet: val isSet) => {
+                mut val bit: U64 = 0U64
+                if isSet { bit = 1U64 }
+                LLVMBuildStore(self.b, LLVMConstInt(self.i1ty, bit, 0I32), self.midLocalPtr(body: body, local: local))
+            }
+            // A verified body must have erased every ScopeExit. Leave a loud
+            // unreachable marker if this invariant is violated in a release
+            // build where diagnostics continue after c.errorAt.
+            MidStatement.ScopeExit(scope: _) => { LLVMBuildUnreachable(self.b) }
+            MidStatement.Nop => {}
+        }
+    }
+
+    // Allocate each Mid local once in the function entry. Source parameters
+    // are bound from the ABI by their checked contiguous Mid-local prefix;
+    // globals and receivers deliberately remain distinct Mid forms rather
+    // than ambient backend locals or name-based recovery.
+    inout fn midPrepareLocals(c: inout Comp, body: MidBody, abiParameterStart: U64 = 0U64) -> Bool {
+        self.nLocals = 0U64
+        self.locStart = []
+        self.locLen = []
+        self.locPtr = []
+        self.locTy = []
+        self.locKind = []
+        self.locStructIdx = []
+        self.locIsArr = []
+        self.locElemTy = []
+        self.locElemKind = []
+        self.locTypeRef = []
+        self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+        self.locCellHome = []
+        mut val local: U64 = 0U64
+        while local < body.locals.count() {
+            val declaration: MidLocalDecl = body.locals[local]
+            val ty: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: local)
+            val slot: LLVMValueRef = self.entryAlloca(ty: ty)
+            if declaration.isParameter {
+                val abiIndex: U64 = abiParameterStart + local
+                LLVMBuildStore(self.b, LLVMGetParam(self.curFn, abiIndex), slot)
+            }
+            self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
+            self.setLocalOwned(owned: declaration.ownsAtEntry)
+            local += 1U64
+        }
+        return true
+    }
+
+    // Lower a verified, elaborated Mid CFG. The input is intentionally a Mid
+    // body rather than `(Func, AST block)`: all semantic decisions were frozen
+    // before this boundary.
+    inout fn genLlvmMidBody(c: inout Comp, body: MidBody, abiParameterStart: U64 = 0U64) -> Bool {
+        val verification: MidVerification = verifyMidBody(body: body)
+        match verification.error {
+            MidVerifyError.None => {}
+            _ => { return false }
+        }
+        if body.entry >= body.blocks.count() { return false }
+        if !self.midPrepareLocals(c: inout c, body: body, abiParameterStart: abiParameterStart) { return false }
+        mut val blocks: Array[LLVMBasicBlockRef] = []
+        mut val block: U64 = 0U64
+        while block < body.blocks.count() {
+            if block == body.entry { blocks.append(LLVMGetInsertBlock(self.b)) }
+            else { blocks.append(LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid"))) }
+            block += 1U64
+        }
+        block = 0U64
+        while block < body.blocks.count() {
+            LLVMPositionBuilderAtEnd(self.b, blocks[block])
+            mut val statement: U64 = 0U64
+            while statement < body.blocks[block].statements.count() {
+                self.midEmitStatement(c: inout c, body: body, statement: body.blocks[block].statements[statement])
+                statement += 1U64
+            }
+            match body.blocks[block].terminator {
+                MidTerminator.Goto(target: val target) => { LLVMBuildBr(self.b, blocks[target]) }
+                MidTerminator.Switch(discriminant: val discriminant, values: val values, targets: val targets, otherwise: val otherwise) => {
+                    if targets.count() == 1U64 && values.count() == 1U64 && values[0U64] == 1I64 {
+                        LLVMBuildCondBr(self.b, self.midEmitOperand(c: inout c, body: body, operand: discriminant), blocks[targets[0U64]], blocks[otherwise])
+                    } else { return false }
+                }
+                MidTerminator.Call(callee: val callee, args: val args, destination: val destination, target: val target) => {
+                    match callee {
+                        MidCallTarget.Resolved(resolution: val resolution) => {
+                            if !(self.midEmitInitialDirectCall(c: inout c, body: body, resolution: resolution, args: args, destination: destination)) { return false }
+                            LLVMBuildBr(self.b, blocks[target])
+                        }
+                        _ => { return false }
+                    }
+                }
+                MidTerminator.Return => {
+                    if self.curIsMain { LLVMBuildRet(self.b, LLVMConstInt(self.i32ty, 0U64, 0I32)) }
+                    else if self.curRetVoid { LLVMBuildRetVoid(self.b) }
+                    else { LLVMBuildUnreachable(self.b) }
+                }
+                MidTerminator.ReturnValue(value: val value) => {
+                    if self.curIsMain || self.curRetVoid { return false }
+                    LLVMBuildRet(self.b, self.midEmitOperand(c: inout c, body: body, operand: value))
+                }
+                MidTerminator.Unreachable => { LLVMBuildUnreachable(self.b) }
+                MidTerminator.Abort => { LLVMBuildUnreachable(self.b) }
+                // Value returns and suspend need their final ABI/value forms.
+                // Do not route them through the legacy AST path.
+                _ => { return false }
+            }
+            block += 1U64
+        }
+        return true
+    }
+}

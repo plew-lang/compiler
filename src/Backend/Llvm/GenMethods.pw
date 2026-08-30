@@ -84,7 +84,7 @@ pub impl LlvmCtx {
         eprint(text: "]\n")
     }
 
-    inout fn genMethSlotFor(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
+    inout fn genMethSlotFor(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) -> U64 {
         mut val i: U64 = 0
         while i < self.genMethK.count() {
             if self.genMethK[i] == mfi {
@@ -92,7 +92,7 @@ pub impl LlvmCtx {
                     // a method-own-param terminal (`fold[B]`) is keyed by its own args too,
                     // so the same receiver instance folding into different accumulators maps
                     // to distinct slots.
-                    if typeArgsEq(c: inout c, a: self.genMethOwn[i], b: ownArgs) {
+                    if self.genMethBody[i] == bodyId && typeArgsEq(c: inout c, a: self.genMethOwn[i], b: ownArgs) {
                         return i
                     }
                 }
@@ -115,7 +115,7 @@ pub impl LlvmCtx {
                 while mfi < c.arena.funcs.count() {
                     val mf: Func = c.arena.funcs[mfi]
                     if c.methodMatchesInst(f: mf, instRef: instRef) {
-                        if !(mf.isProvided) {
+                        if !(mf.isProvided) && !(c.methodRecvIsTrait(f: mf)) {
                             if c.methodInEntryModule(f: mf) {
                                 if self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: []) == self.genMethK.count() {
                                     self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: [])
@@ -130,7 +130,7 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn declareOneGenMethod(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64]) {
+    inout fn declareOneGenMethod(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) {
         self.traceGenMethod(c: inout c, event: "declare", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
         val mf: Func = c.arena.funcs[mfi]
         val savedP: Array[Bind] = c.cur.typeParams
@@ -146,7 +146,8 @@ pub impl LlvmCtx {
         // witness / trait-path substitution that Mono used for the final
         // descriptor, allowing `Array[Item]` and `Array[I64]` to become
         // distinct LLVM nominal instances for one callable.
-        val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
+        mut val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
+        if bodyId != 0U64 && bodyId <= c.arena.bodyInstances.count() { environment = c.arena.bodyInstances[bodyId - 1U64].environment }
         // bind Self/Item to the receiver instance for a provided method, so a param/return
         // type naming `Item` resolves to the receiver's real item: a terminal returning
         // `Optional[Item]` (`first`/`reduce`) grounds its signature, and an own-param
@@ -183,6 +184,7 @@ pub impl LlvmCtx {
         self.genMethInst.append(instRef)
         self.genMethVal.append(fv)
         self.genMethTy.append(fty)
+        self.genMethBody.append(bodyId)
         self.genMethOwn.append(ownArgs)
         self.traceGenMethod(c: inout c, event: "registered", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
         c.cur.selfRef = sDs
@@ -205,7 +207,9 @@ pub impl LlvmCtx {
         c.cur.typeParams = mf.typeParams
         c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot])
         self.curRecvInstRef = instRef
-        val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
+        mut val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
+        val bodyId: U64 = self.genMethBody[slot]
+        if bodyId != 0U64 && bodyId <= c.arena.bodyInstances.count() { environment = c.arena.bodyInstances[bodyId - 1U64].environment }
         // a provided method with method-own type params (`fold[B]` on a generic receiver):
         // its body refers to the element by the associated `Item`, while the env carries
         // two same-named params (the receiver's `B` = item, the method-own `B` = accumulator)
@@ -244,9 +248,9 @@ pub impl LlvmCtx {
     // for the post-pass drain. Returns the genMeth* slot, or genMethK.count() if it
     // can't be declared (the method has its own type params beyond the receiver
     // instance's — provided map[B]/filter is handled separately). Idempotent.
-    inout fn ensureGenMethodDeclared(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64]) -> U64 {
+    inout fn ensureGenMethodDeclared(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) -> U64 {
         self.traceGenMethod(c: inout c, event: "request", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
-        val existing: U64 = self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+        val existing: U64 = self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
         if existing < self.genMethK.count() {
             self.traceGenMethod(c: inout c, event: "reuse", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
             return existing
@@ -262,7 +266,7 @@ pub impl LlvmCtx {
         if mf.typeParams.count() != 0U64 && mf.typeParams.count() != c.arena.types[instRef].args.count() + ownArgs.count() {
             return self.genMethK.count()
         }
-        self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+        self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
         val slot: U64 = self.genMethK.count() - 1U64
         self.genMethEmit.append(slot)
         self.traceGenMethod(c: inout c, event: "enqueue", mfi: mfi, instRef: instRef, ownArgs: ownArgs)

@@ -1,0 +1,56 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Block, Expr, Stmt, identValueCode }
+import /Mid with { MidBlock, MidBuildError, MidBuildState, MidBody, MidOwnership, MidStatement, MidTerminator, MidVerifyError, addMidLocal, analyzeMidOwnership, buildMidBlock, buildMidIf, elaborateMidDrops, verifyMidBody }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    // if true { val transferred = move file } else {}
+    c.arena.exprs.append(<Expr.Int value=1U64 offset=0U64 isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
+    c.arena.exprs.append(<Expr.Ident start=60U64 len=4U64 />)
+    c.arena.exprs.append(<Expr.Move operand=1U64 isBorrow=false />)
+    c.typeCache.identBind.append(0I64)
+    c.typeCache.identTarget.append(0U64)
+    c.typeCache.identBind.append(identValueCode())
+    c.typeCache.identTarget.append(60U64)
+    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=70U64 nameLen=11U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=1U64 init=2U64 />)
+    c.arena.blockStmtPool.append(0U64)
+    c.arena.blocks.append(<Block stmtStart=0U64 stmtLen=1U64 />)
+    c.arena.blocks.append(<Block stmtStart=1U64 stmtLen=0U64 />)
+    c.arena.stmts.append(<Stmt.If cond=0U64 thenBlk=0U64 elseBlk=1U64 hasElse=true />)
+    mut val state: MidBuildState = <MidBuildState blocks=[<MidBlock />] />
+    val fileLocal = addMidLocal(state: inout state, declarationTarget: 60U64, typeTerm: 1U64, isUnique: true, isParameter: false, ownsAtEntry: true)
+    val result = buildMidIf(c: inout c, state: inout state, stmtId: 1U64)
+    val body: MidBody = <MidBody locals=state.locals scopes=state.scopes blocks=state.blocks entry=0U64 />
+    val joinState: MidOwnership = analyzeMidOwnership(body: body)[3U64][0U64]
+    val elaborated = elaborateMidDrops(body: body)
+    mut val hasConditionalDrop: Bool = false
+    match elaborated.blocks[3U64].statements[0U64] {
+        MidStatement.ConditionalDrop(place: _, flag: _) => { hasConditionalDrop = true }
+        _ => {}
+    }
+    mut val elaboratedValid: Bool = false
+    match verifyMidBody(body: elaborated).error {
+        MidVerifyError.None => { elaboratedValid = true }
+        _ => {}
+    }
+    c.arena.stmts.append(<Stmt.Return value=0U64 hasValue=false offset=0U64 />)
+    c.arena.blockStmtPool.append(2U64)
+    c.arena.blocks.append(<Block stmtStart=1U64 stmtLen=1U64 />)
+    mut val returnState: MidBuildState = <MidBuildState blocks=[<MidBlock />] />
+    val returnResult = buildMidBlock(c: inout c, state: inout returnState, blockId: 2U64)
+    mut val returned: Bool = false
+    match returnResult { MidBuildError.None => { match returnState.blocks[0U64].terminator { MidTerminator.Return => { returned = true } _ => {} } } _ => {} }
+    mut val built: Bool = false
+    match result { MidBuildError.None => { built = true } _ => {} }
+    match joinState {
+        MidOwnership.MaybeOwned => {
+            if built && fileLocal == 0U64 && state.blocks.count() == 4U64 && hasConditionalDrop && elaboratedValid && returned {
+                write(s: "if-move-cfg\n")
+            } else {
+                write(s: "wrong-cfg\n")
+            }
+        }
+        _ => { write(s: "wrong-ownership\n") }
+    }
+}

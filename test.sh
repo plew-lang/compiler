@@ -70,9 +70,13 @@ count_cases() {
 #     would otherwise silently drop that test from coverage — the runners skip
 #     unpaired files without a word. ---
 hygiene=""
-for f in tests/run/*.out tests/run/*.in tests/run/*.c; do
+for f in tests/run/*.out tests/run/*.in tests/run/*.c tests/run/*.ll.expect; do
     [ -f "$f" ] || continue
-    [ -f "${f%.*}.pw" ] || hygiene="$hygiene orphan:$f"
+    case "$f" in
+        *.ll.expect) pw="${f%.ll.expect}.pw" ;;
+        *) pw="${f%.*}.pw" ;;
+    esac
+    [ -f "$pw" ] || hygiene="$hygiene orphan:$f"
 done
 for pw in tests/run/*.pw; do
     [ -f "${pw%.pw}.out" ] || hygiene="$hygiene no-golden:$pw"
@@ -93,6 +97,12 @@ run_results=$(printf '%s\n' tests/run/*.pw | xargs -P "$JOBS" -n 1 sh -c '
     [ -f "$out" ] || exit 0
     ll="/tmp/t_$name.ll"; bin="/tmp/t_$name"
     if ! ./plewc "$f" > "$ll" 2>/dev/null; then echo "FAIL $name(reject)"; exit 0; fi
+    # A run test may pin a backend-facing invariant whose observable runtime
+    # behaviour is intentionally identical to an older lowering.  `.ll.expect`
+    # contains one stable literal required in the generated LLVM; normal run
+    # tests need no such companion.
+    ir_expect="tests/run/$name.ll.expect"
+    if [ -f "$ir_expect" ] && ! grep -qF "$(cat "$ir_expect")" "$ll"; then echo "FAIL $name(ir)"; exit 0; fi
     extra_c=""
     [ -f "tests/run/$name.c" ] && extra_c="tests/run/$name.c"
     if ! clang -w "$ll" "$PLEW_RT" $extra_c $PLEW_LD -o "$bin" 2>/dev/null; then echo "FAIL $name(link)"; exit 0; fi

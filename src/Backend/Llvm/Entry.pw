@@ -109,6 +109,41 @@ pub impl LlvmCtx {
         self.curFn = mainFn
         self.curIsMain = true
         self.curRetVoid = false
+        // Build and freeze a Mid body before LLVM emission begins.  This first
+        // production slice admits only a closed main with no module globals:
+        // globals, ABI parameters, calls and aggregate values gain explicit
+        // Mid forms rather than being recovered through legacy backend state.
+        mut val midReady: Bool = false
+        mut val midBody: MidBody = <MidBody />
+        if c.arena.globals.count() == 0U64 {
+            val parametric: MidBodyBuild = buildParametricMidBody(c: inout c, fnIdx: fi)
+            match parametric.error {
+                MidBuildError.None => {
+                    val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />
+                    val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: rootEnvironment)
+                    if bodyId != 0U64 {
+                        val instantiated: MidInstantiation = instantiateMidBody(c: inout c, body: parametric.body, bodyId: bodyId)
+                        match instantiated.error {
+                            MidInstantiateError.None => {
+                                val elaborated: MidBody = elaborateMidDrops(body: instantiated.body)
+                                val verification: MidVerification = verifyMidBody(body: elaborated)
+                                match verification.error {
+                                    MidVerifyError.None => {
+                                        if self.midInitialLlvmSupported(c: inout c, body: elaborated) {
+                                            midBody = elaborated
+                                            midReady = true
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         self.beginFnBody(fv: mainFn)
         // plew_set_args(argc, argv).
         mut val saTys: Array[LLVMTypeRef] = []
@@ -122,6 +157,15 @@ pub impl LlvmCtx {
         LLVMBuildCall2(self.b, saTy, saFn, arrayCPtr(saArgs), 2U64, anon())
         // initialize module-level variables (spec/15) before the body runs.
         self.callInitGlobals(c: inout c)
+        if midReady {
+            // `midInitialLlvmSupported` completed before beginFnBody, so this
+            // call cannot fail into an AST fallback after partially emitting a
+            // function.  A failure here is therefore a backend invariant bug.
+            if !(self.genLlvmMidBody(c: inout c, body: midBody)) {
+                c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid body failed LLVM lowering")
+            }
+            return
+        }
         // fresh local scope.
         self.nLocals = 0
         self.locStart = []

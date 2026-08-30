@@ -26,6 +26,16 @@
 
 pub impl Comp {
 
+    inout fn syntheticCallReceiverTerm(exprId: U64, fallback: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.syntheticCallSites.count() {
+            val site: SyntheticCallSite = self.decls.syntheticCallSites[i]
+            if site.exprId == exprId && site.receiverTerm != 0U64 { return site.receiverTerm }
+            i += 1U64
+        }
+        return fallback
+    }
+
     // Preserve an expression's semantic type source without placing a call
     // result inside TypeTerm. A written call is identified by its template key;
     // every other expression is an ordinary parametric term.
@@ -86,6 +96,26 @@ pub impl Comp {
         return self.protocolReceiverTemplateForExpr(exprId: exprId)
     }
 
+    // `Expr.ExtMethod` stores its `#` selector on the outer node rather than
+    // manufacturing an `Expr.ExtView` receiver. Preserve that selector in the
+    // receiver source itself. A prior call must remain a dependency, with the
+    // view applied after its body-instance result is read; a plain value can
+    // carry the already-decorated TypeTerm directly.
+    inout fn viewedReceiverTemplateForExpr(exprId: U64, viewedTerm: U64) -> CallTemplateReceiver {
+        val base: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: exprId)
+        match base {
+            CallTemplateReceiver.Term(term: _) => { return <CallTemplateReceiver.Term term=viewedTerm /> }
+            CallTemplateReceiver.PriorCallResult(exprId: val priorExpr, siteKey: val priorKey) => {
+                return <CallTemplateReceiver.PriorCallResultWithViews exprId=priorExpr siteKey=priorKey views=self.typeRefViewSources(ref: viewedTerm) />
+            }
+            CallTemplateReceiver.PriorProtocolResult(slot: val priorSlot) => {
+                return <CallTemplateReceiver.PriorProtocolResultWithViews slot=priorSlot views=self.typeRefViewSources(ref: viewedTerm) />
+            }
+            _ => {}
+        }
+        return base
+    }
+
     // `for` introduces a source-level binding just like `val`: its type must
     // be the iterator proof's associated `Item` term, not the legacy
     // TypeInfo name recovered from the iterator head.  An adapter such as
@@ -106,7 +136,7 @@ pub impl Comp {
         if iterExpr < self.arena.exprs.count() {
             val template: CallTemplate = self.callTemplateForCurrentBody(exprId: iterExpr)
             match template.kind {
-                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _) => {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
                     if callee < self.arena.funcs.count() {
                         val selected: Func = self.arena.funcs[callee]
                         if selected.originTraitOwner != 0U64 {
@@ -220,9 +250,154 @@ pub impl Comp {
         self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: templateArgs)
     }
 
-    inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverExpr: U64, receiverTerm: U64, args: ArgRange) {
-        if callee >= self.arena.funcs.count() || receiverTerm == 0U64 || receiverTerm >= self.arena.types.count() { return }
+    // Resolve the lexical closure target while Record owns the source scope.
+    // `bindingDeclStart` is the lowered declaration identity, so the final
+    // descriptor cannot accidentally select a same-spelled shadow later.
+    inout fn recordDynamicLocalCall(exprId: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+        val localIndex: U64 = self.localIndexByName(start: nameStart, len: nameLen)
+        if localIndex >= self.cur.locals.count() { return }
+        val local: Local = self.cur.locals[localIndex]
+        if !(self.isFnType(ref: local.ty)) { return }
+        self.recordDynamicCallTemplate(exprId: exprId, receiver: <CallTemplateReceiver.None />, args: args, target: <DynamicCallTemplateTarget.ClosureLocal bindingDeclStart=local.nameStart fnTypeTerm=local.ty />)
+    }
+
+    // An `any` type has an already-resolved declaration identity in TypeRef.
+    // Prefer that owner over a spelling scan so an import/re-export cannot
+    // redirect an existential slot after the source resolver selected it.
+    inout fn recordAnyTraitIndex(anyRef: U64) -> U64 {
+        if anyRef == 0U64 || anyRef >= self.arena.types.count() { return self.decls.traits.count() }
+        val anyTy: TypeRef = self.arena.types[anyRef]
+        if !(anyTy.isAny) { return self.decls.traits.count() }
+        if anyTy.hasDecl {
+            mut val i: U64 = 0U64
+            while i < self.decls.traits.count() {
+                if self.decls.traits[i].nameStart == anyTy.declOffset { return i }
+                i += 1U64
+            }
+        }
+        return self.findTraitIdxByName(start: anyTy.nameStart, len: anyTy.nameLen)
+    }
+
+    inout fn recordAnyRequirementSlot(anyRef: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> U64 {
+        val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: anyRef)
+        if traitIndex >= self.decls.traits.count() { return 0U64 }
+        val nameId: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val tr: TraitDef = self.decls.traits[traitIndex]
+        mut val i: U64 = 0U64
+        while i < tr.reqs.count() {
+            if tr.reqs[i].nameId == nameId && self.paramsLabelsOk(params: tr.reqs[i].params, args: args) { return i + 1U64 }
+            i += 1U64
+        }
+        return 0U64
+    }
+
+    // A method expression whose receiver is a function-valued field or an
+    // existential has no static Func callee.  Record its selected target while
+    // the parametric receiver and source selector are both available; the
+    // function TypeTerm is grounded only when the shared body is instantiated.
+    inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+        if receiverTerm == 0U64 || receiverTerm >= self.arena.types.count() { return }
+        val receiver: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: receiverExpr)
+        val recvTy: TypeRef = self.arena.types[receiverTerm]
+        if recvTy.isAny {
+            val traitIndex: U64 = self.recordAnyTraitIndex(anyRef: receiverTerm)
+            val slot: U64 = self.recordAnyRequirementSlot(anyRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+            if traitIndex < self.decls.traits.count() && slot != 0U64 {
+                self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ExistentialRequirement traitIdx=traitIndex slot=slot />)
+            }
+            return
+        }
+        val structIndex: U64 = self.structDefByNameAny(start: recvTy.nameStart, len: recvTy.nameLen)
+        if structIndex >= self.arena.structs.count() { return }
+        val fieldName: U64 = intern(c: inout self, start: nameStart, len: nameLen)
+        val fields: Array[FieldDef] = self.arena.structs[structIndex].fields
+        mut val fieldIndex: U64 = 0U64
+        while fieldIndex < fields.count() {
+            if fields[fieldIndex].nameId == fieldName { break }
+            fieldIndex += 1U64
+        }
+        if fieldIndex >= fields.count() { return }
+        val fieldTerm: U64 = self.fieldTypeRefOfReceiver(receiverRef: receiverTerm, fieldStart: nameStart, fieldLen: nameLen)
+        // A generic field such as `p: P` can be called only after P grounds
+        // to a function type in its BodyInstance.  Call syntax has already
+        // been validated by the frontend; preserve the symbolic field term
+        // here and let the dynamic finalizer enforce the concrete fn shape.
+        if fieldTerm != 0U64 {
+            self.recordDynamicCallTemplate(exprId: exprId, receiver: receiver, args: args, target: <DynamicCallTemplateTarget.ClosureField fieldIndex=fieldIndex fnTypeTerm=fieldTerm />)
+        }
+    }
+
+    // A method whose concrete declaration is unavailable during the
+    // declaration-time walk is not a dynamic call by default: it can still be
+    // a statically selected requirement or provided trait member under a
+    // generic bound.  Both ordinary and source-qualified (`#…`) method syntax
+    // reach this one finalization point so they cannot diverge by silently
+    // treating a view-qualified static call as a closure-field call.
+    inout fn recordUnresolvedMethodTemplate(exprId: U64, receiver: CallTemplateReceiver, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+        val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+        match staticResolution {
+            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.staticRequirementResultType(resolution: staticResolution))
+            }
+            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+                self.recordStaticMethodTemplate(exprId: exprId, receiver: receiver, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+            }
+            _ => {
+                self.recordDynamicMethodCall(exprId: exprId, receiverExpr: receiverExpr, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+            }
+        }
+    }
+
+    inout fn recordParametricMethodCall(exprId: U64, callee: U64, receiverSource: CallTemplateReceiver, receiverTerm: U64, args: ArgRange) {
+        if callee >= self.arena.funcs.count() { return }
         val f: Func = self.arena.funcs[callee]
+        // Associated factories are syntactically method-shaped but have a
+        // type qualifier, not a value receiver.  Their selected declaration
+        // is complete without a receiver TypeTerm; the finalizer supplies the
+        // declaration receiver (or an explicitly-recorded result hint for a
+        // generic associated factory).  Do not discard that source selection.
+        if receiverTerm == 0U64 {
+            if !(f.isAssoc) { return }
+            self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
+            return
+        }
+        if receiverTerm >= self.arena.types.count() { return }
+        // A resolver can find the authored declaration of a trait-subject
+        // witness while checking a provided body. That declaration is not a
+        // concrete callee: `impl B as A` is abstract over B and must be
+        // selected through the current static proof. Recording it as Direct
+        // loses the proof and later enqueues the abstract body. A normal
+        // requirement retains the established Direct-template route, whose
+        // final descriptor owns the concrete implementation. `originTraitId`
+        // distinguishes the former from `impl A { … }` and direct `S as A`.
+        // The source body of `impl Named as Show` is checked once with a
+        // symbolic trait receiver. `resolvedCallee` may incidentally see a
+        // concrete copied witness loaded elsewhere (A.nm/B.nm), but that is
+        // not a lexical selection for this shared body. Ask the source body's
+        // trait proof first; a successful Requirement/Provided result becomes
+        // a StaticMethod template and is reified per BodyInstance later.
+        // Retain the selected-callee predicate for ordinary trait-receiver
+        // declarations reached through their requirement surface.
+        mut val sourceTraitReceiver: Bool = false
+        if self.cur.checkFn < self.arena.funcs.count() {
+            sourceTraitReceiver = self.methodRecvIsTrait(f: self.arena.funcs[self.cur.checkFn])
+        }
+        if (sourceTraitReceiver || self.methodRecvIsTrait(f: f)) && (sourceTraitReceiver || f.originTraitId != 0U64) {
+            val staticResolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args)
+            match staticResolution {
+                StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                    val result: U64 = self.staticRequirementResultType(resolution: staticResolution)
+                    if result != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: result) }
+                    self.recordStaticMethodTemplate(exprId: exprId, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: result)
+                    return
+                }
+                StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+                    self.recordStaticMethodTemplate(exprId: exprId, receiver: receiverSource, args: args, resolution: staticResolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+                    return
+                }
+                _ => {}
+            }
+        }
         // Newtype member selection deliberately chooses the underlying
         // declaration, so its return-term environment must use the same
         // normalized receiver. The source value remains the newtype; this is
@@ -246,7 +421,23 @@ pub impl Comp {
         if result == 0U64 {
             result = self.groundConcreteFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: returnReceiver), args: args)
         }
-        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: self.directReceiverTemplateForExpr(exprId: receiverExpr), args: args, calleeTypeArgs: [], resultTerm: result)
+        // An associated factory's syntactic qualifier can itself lower through
+        // method-shaped nodes (for example `MutableRef[Cell]`).  It is never a
+        // value produced by that node: its semantic receiver is the selected
+        // type term.  Using the ordinary receiver source would misclassify it
+        // as PriorCallResult and create a nonexistent descriptor dependency.
+        mut val finalReceiverSource: CallTemplateReceiver = receiverSource
+        if f.isAssoc { finalReceiverSource = <CallTemplateReceiver.Term term=receiverTerm /> }
+        mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
+        if f.isProvided {
+            val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: receiverTerm, nameStart: f.nameStart, nameLen: f.nameLen, args: args)
+            match resolution {
+                StaticMemberResolution.Requirement(proof: val selected, traitIdx: _, reqIdx: _) => { proof = selected }
+                StaticMemberResolution.Provided(proof: val selected, traitIdx: _, callee: _) => { proof = selected }
+                _ => {}
+            }
+        }
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: [], resultTerm: result, proof: proof)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
@@ -390,13 +581,43 @@ pub impl Comp {
                 self.recordExpr(exprId: lhs, chainHoleRef: chainHoleRef)
                 self.recordExpr(exprId: rhs, chainHoleRef: chainHoleRef)
             }
-            Expr.Call(nameStart: _, nameLen: _, val args) => {
+            Expr.Call(nameStart: val callStart, nameLen: val callLen, args: val args) => {
                 mut val i: U64 = 0
                 while i < args.len {
                     self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
-                val cfi: U64 = self.resolvedCallee(id: exprId)
+                // `pow(base:, exp:)` has free-call syntax but is a static
+                // associated member selected from its first argument's
+                // conformance.  Record it through the same CallTemplate
+                // producers as every other static call; Mono must not reopen
+                // the spelling and rediscover its witness.
+                mut val cfi: U64 = self.arena.funcs.count()
+                if rangeEquals(bytes: self.arena.bytes, start: callStart, len: callLen, kw: "pow") && args.len == 2U64 {
+                    val baseExpr: U64 = self.argAt(args: args, index: 0U64).expr
+                    val baseTerm: U64 = self.parametricExprTerm(exprId: baseExpr)
+                    if baseTerm != 0U64 && baseTerm < self.arena.types.count() {
+                        val baseReceiver: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: baseExpr)
+                        val resolution: StaticMemberResolution = self.staticMemberResolution(fnIdx: self.cur.checkFn, receiverRef: baseTerm, nameStart: callStart, nameLen: callLen, args: args)
+                        match resolution {
+                            StaticMemberResolution.Requirement(proof: _, traitIdx: _, reqIdx: _) => {
+                                self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.staticRequirementResultType(resolution: resolution))
+                                return
+                            }
+                            StaticMemberResolution.Provided(proof: _, traitIdx: _, callee: _) => {
+                                self.recordStaticMethodTemplate(exprId: exprId, receiver: baseReceiver, args: args, resolution: resolution, resultTerm: self.parametricExprTerm(exprId: exprId))
+                                return
+                            }
+                            _ => {}
+                        }
+                        cfi = self.resolveAssocForResolvedReceiver(surfaceRef: baseTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: callStart, nameLen: callLen, args: args, useOffset: self.exprOffset(id: exprId))
+                        if cfi < self.arena.funcs.count() {
+                            self.recordParametricMethodCall(exprId: exprId, callee: cfi, receiverSource: baseReceiver, receiverTerm: baseTerm, args: args)
+                            return
+                        }
+                    }
+                }
+                cfi = self.resolvedCallee(id: exprId)
                 if cfi < self.arena.funcs.count() {
                     self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
                     val cf: Func = self.arena.funcs[cfi]
@@ -435,6 +656,8 @@ pub impl Comp {
                         }
                         k += 1
                     }
+                } else {
+                    self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
@@ -444,15 +667,25 @@ pub impl Comp {
                     self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
-                val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
+                val receiverTerm: U64 = self.syntheticCallReceiverTerm(exprId: exprId, fallback: self.parametricExprTerm(exprId: recv))
                 mut val methodCallee: U64 = self.resolvedCallee(id: exprId)
+                // A factory is lowered to Expr.Method but its receiver is a
+                // type spelling, not a value receiver.  Select its associated
+                // callable here while Record still owns that lexical/type-name
+                // source; Mono must only ground the resulting Direct template.
+                if methodCallee >= self.arena.funcs.count() {
+                    val assocRecv: Bind = self.assocRecvName(recv: recv)
+                    if assocRecv.nameLen != 0U64 {
+                        methodCallee = self.findAssoc(recvStart: assocRecv.nameStart, recvLen: assocRecv.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+                    }
+                }
                 // Some valid inherited surfaces (notably a newtype's
                 // underlying methods) have no early type-cache callee. Record
                 // still owns the one frontend selection: resolve it now from
                 // the already-recorded receiver, rather than leaving Mono to
                 // reopen this method Expr during finalization.
-                if methodCallee >= self.arena.funcs.count() {
-                    methodCallee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                if methodCallee >= self.arena.funcs.count() && receiverTerm != 0U64 {
+                    methodCallee = self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                 }
                 // Newtype member inheritance selects the underlying surface
                 // while preserving the authored newtype as the value term.
@@ -467,7 +700,10 @@ pub impl Comp {
                         methodCallee = self.findMethod(recvStart: under.nameStart, recvLen: under.nameLen, nameStart: nameStart, nameLen: nameLen, args: args, recvRef: underlying, useOffset: self.exprOffset(id: exprId))
                     }
                 }
-                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverExpr: recv, receiverTerm: receiverTerm, args: args)
+                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: self.directReceiverTemplateForExpr(exprId: recv), receiverTerm: receiverTerm, args: args)
+                if methodCallee >= self.arena.funcs.count() {
+                    self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: self.directReceiverTemplateForExpr(exprId: recv), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
                 // context-type an array-literal argument from the resolved method's
                 // declared param (mirrors the Call arm). A kind-3 receiver's methods
                 // live on `Array`; a generic-receiver param (`append(value: T)`) is
@@ -503,15 +739,36 @@ pub impl Comp {
                     }
                 }
             }
-            Expr.ExtMethod(val recv, source: _, nameStart: _, nameLen: _, val args) => {
+            Expr.ExtMethod(recv: val recv, source: val source, nameStart: val nameStart, nameLen: val nameLen, args: val args) => {
                 self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
                 mut val i: U64 = 0
                 while i < args.len {
                     self.recordExpr(exprId: self.argAt(args: args, index: i).expr, chainHoleRef: chainHoleRef)
                     i += 1
                 }
-                val methodCallee: U64 = self.resolvedCallee(id: exprId)
-                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverExpr: recv, receiverTerm: self.parametricExprTerm(exprId: recv), args: args)
+                mut val receiverTerm: U64 = self.parametricExprTerm(exprId: recv)
+                if source.surfaceId != 0U64 && receiverTerm != 0U64 {
+                    val additions: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.surfaceId traitOwner=source.traitOwner />]
+                    receiverTerm = self.typeRefWithAddedViewSources(ref: receiverTerm, additions: additions)
+                }
+                val receiverSource: CallTemplateReceiver = self.viewedReceiverTemplateForExpr(exprId: recv, viewedTerm: receiverTerm)
+                mut val methodCallee: U64 = self.resolvedCallee(id: exprId)
+                // `#` fixes a trait/view source at the syntax site.  Its
+                // selected member must be recorded while that source is still
+                // present in Record; the ordinary TypeCache intentionally
+                // leaves some extension-path selections unfilled because the
+                // final concrete receiver is not known during the early pass.
+                if methodCallee >= self.arena.funcs.count() {
+                    methodCallee = self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: source.surfaceId, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+                }
+                if methodCallee >= self.arena.funcs.count() && source.surfaceId != 0U64 && source.surfaceId <= self.interner.entries.count() {
+                    val surface: InternedSpan = self.interner.entries[source.surfaceId - 1U64]
+                    methodCallee = self.resolveExtMethodFinal(recv: recv, srcStart: surface.start, srcLen: surface.len, sourceOwner: source.traitOwner, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
+                self.recordParametricMethodCall(exprId: exprId, callee: methodCallee, receiverSource: receiverSource, receiverTerm: receiverTerm, args: args)
+                if methodCallee >= self.arena.funcs.count() {
+                    self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: receiverSource, receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
             }
             Expr.ExtView(val recv, val source, val strip) => {
                 self.recordExpr(exprId: recv, chainHoleRef: chainHoleRef)
@@ -967,7 +1224,7 @@ pub impl Comp {
     // would overwrite the template's `Self` forms with one conformer's concrete
     // types and corrupt every other conformer. The template's recording (Self/T
     // parametric) serves all of them via groundTypeRef at read.
-    inout fn recordParametricTypes() {
+    inout fn recordParametricTypes(recordCallTemplates: Bool = false) {
         val noParams: Array[Bind] = []
         val noArgs: Array[U64] = []
         // global initializers first (`val nums: Array[I64] = [...]` at module level):
@@ -983,6 +1240,7 @@ pub impl Comp {
         self.cur.itemRef = 0
         self.cur.typeParams = noParams
         self.cur.typeArgs = noArgs
+        self.cur.recordCallTemplates = recordCallTemplates
         self.cur.checkFn = self.arena.funcs.count()
         mut val gvi: U64 = 0
         while gvi < self.arena.globals.count() {
@@ -997,7 +1255,7 @@ pub impl Comp {
             // `srcTraitId` body left operators in provided methods without the
             // semantic template that Mono is required to consume.  Record the
             // source declaration once and skip only generated provided copies.
-            if !(f.isExtern) && f.body != 0U64 && !(f.isProvided) {
+            if !(f.isExtern) && f.body != 0U64 && !(f.isProvided && f.srcTraitId != 0U64) {
                 self.cur.locals = []
                 self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
                 self.cur.hasRecv = f.hasRecv
@@ -1040,5 +1298,6 @@ pub impl Comp {
         self.cur.typeParams = []
         self.cur.typeArgs = []
         self.cur.checkFn = self.arena.funcs.count()
+        self.cur.recordCallTemplates = false
     }
 }

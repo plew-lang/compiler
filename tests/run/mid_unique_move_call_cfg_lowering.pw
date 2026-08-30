@@ -1,0 +1,23 @@
+import @Std/Io with { write }
+
+unique struct File { pub val fd: I64 }
+pub impl File { factory }
+
+impl File {
+    deinit { write(s: "drop\n") }
+}
+
+fn makeFile() -> File {
+    return <File fd=9I64 />
+}
+
+fn sink(file: move File) {
+    write(s: "got\n")
+}
+
+// Mid owns the result destination, then transfers it to a move parameter. The
+// source local must not be dropped a second time at the enclosing scope exit.
+fn main() {
+    val file: File = makeFile()
+    sink(file: move file)
+}

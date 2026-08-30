@@ -1,0 +1,51 @@
+import @Std/Io with { write }
+import /Mid with { MidPlace, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops, verifyMidBody }
+
+fn printState(state: MidOwnership) {
+    match state {
+        MidOwnership.Owned => { write(s: "owned\n") }
+        MidOwnership.Consumed => { write(s: "consumed\n") }
+        MidOwnership.MaybeOwned => { write(s: "maybe\n") }
+    }
+}
+
+fn printAccessibility(state: MidAccessibility) {
+    match state {
+        MidAccessibility.Available => { write(s: "available\n") }
+        MidAccessibility.Unavailable => { write(s: "unavailable\n") }
+    }
+}
+
+fn main() {
+    val file: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false ownsAtEntry=true />
+    val result: MidLocalDecl = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />
+    val place: MidPlace = <MidPlace local=0U64 />
+    val resultPlace: MidPlace = <MidPlace local=1U64 />
+    val entry: MidBlock = <MidBlock terminator=<MidTerminator.Switch discriminant=<MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> /> values=[1I64] targets=[1U64] otherwise=2U64 /> />
+    val moved: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> args=[<MidOperand.Move place=place />] destination=resultPlace target=3U64 /> />
+    val kept: MidBlock = <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />
+    val join: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
+    val body: MidBody = <MidBody locals=[file, result] blocks=[entry, moved, kept, join] entry=0U64 />
+    printState(state: analyzeMidOwnership(body: body)[3U64][0U64])
+    printAccessibility(state: analyzeMidAccessibility(body: body)[3U64][0U64])
+    val elaborated: MidBody = elaborateMidDrops(body: body)
+    match elaborated.blocks[3U64].statements[0U64] {
+        MidStatement.ConditionalDrop(place: _, flag: _) => { write(s: "conditional-drop\n") }
+        _ => { write(s: "missing-conditional-drop\n") }
+    }
+    match verifyMidBody(body: body).error {
+        MidVerifyError.None => { write(s: "valid\n") }
+        _ => { write(s: "invalid\n") }
+    }
+    match verifyMidBody(body: elaborated).error {
+        MidVerifyError.None => { write(s: "elaborated-valid\n") }
+        _ => { write(s: "elaborated-invalid\n") }
+    }
+    val badEntry: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> args=[<MidOperand.Move place=place />, <MidOperand.Move place=place />] destination=resultPlace target=1U64 /> />
+    val badReturn: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
+    val bad: MidBody = <MidBody locals=[file, result] blocks=[badEntry, badReturn] entry=0U64 />
+    match verifyMidBody(body: bad).error {
+        MidVerifyError.MoveUnavailable => { write(s: "move-unavailable\n") }
+        _ => { write(s: "wrong-error\n") }
+    }
+}

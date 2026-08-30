@@ -1,0 +1,13 @@
+import @Std/Io with { print }
+
+fn double(value: I64) -> I64 {
+    return value + value
+}
+
+// The Call terminator owns `result` as its destination place.  A backend must
+// store the returned LLVM value there; it must not re-open the call expression.
+fn main() {
+    val input: I64 = 9I64
+    val result: I64 = double(value: input)
+    print(result)
+}

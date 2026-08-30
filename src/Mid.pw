@@ -1,0 +1,16 @@
+// @Mid — ownership-aware, non-SSA CFG between the frozen frontend and LLVM.
+// `Mid/Ir` owns only the vocabulary.  Build / instantiate / drop-elaboration /
+// verification will live in child modules so the dependency DAG remains
+// `Ir <- Frontend <- Mid <- Backend`.
+
+import ./Mid/Ir with { MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
+import ./Mid/Drop with { analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops }
+import ./Mid/Verify with { MidVerifyError, MidVerification, verifyMidBody }
+import ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidBuildError, MidBodyBuild, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody }
+import ./Mid/Instantiate with { MidInstantiateError, MidInstantiation, instantiateMidBody }
+
+export ./Mid/Ir with { MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
+export ./Mid/Drop with { analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops }
+export ./Mid/Verify with { MidVerifyError, MidVerification, verifyMidBody }
+export ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidBuildError, MidBodyBuild, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody }
+export ./Mid/Instantiate with { MidInstantiateError, MidInstantiation, instantiateMidBody }

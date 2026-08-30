@@ -1,0 +1,13 @@
+// A bare `pow` call has free-call syntax, but is the associated Pow requirement
+// selected from its first argument.  The template must retain that symbolic
+// trait proof until this generic body is instantiated.
+import @Std/Io with { print }
+import @Std/Core with { Pow }
+
+fn square[T](value: T) -> T#Pow[U64].Output where T: Pow[U64] {
+    return pow(base: value, exp: 2U64)
+}
+
+fn main() {
+    print(square(value: 6I64))
+}

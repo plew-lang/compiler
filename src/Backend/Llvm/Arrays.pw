@@ -696,6 +696,23 @@ pub impl LlvmCtx {
     // place paths, shifting instance numbering. Over-copying is observably harmless;
     // under-copying miscompiles.
     inout fn consumeIntoOwned(c: inout Comp, v: LLVMValueRef, expr: U64, typeRef: U64) -> LLVMValueRef {
+        // A caller that already owns a closed semantic type must stay on this
+        // TypeRef-only path.  ARC is a representation action on the destination
+        // value type; it is not entitled to re-run source-expression typing.  In
+        // particular, a pattern bind in a shared provided body may spell `Item`
+        // while its destination has already been grounded to I64/String by the
+        // selected body instance.  Re-reading that AST term both duplicates the
+        // frontend authority and can recurse through the in-progress callable.
+        // `valueArc` is the single classifier/action table for every owning
+        // class (including Array as its ordinary struct representation).
+        if typeRef != 0U64 {
+            if exprAliasesPlace(c: inout c, id: expr) {
+                if c.arcNeedsRelease(ref: typeRef) {
+                    self.valueArc(c: inout c, v: v, typeRef: typeRef, retain: true)
+                }
+            }
+            return v
+        }
         // 1-3a (String class): CoW-SHARE a String PLACE — a String's value IS an
         // rc-managed Array[U8] buffer (immutable, so sharing never needs a write-time
         // CoW), so copying a String place RETAINS the buffer (rc++) instead of aliasing

@@ -16,7 +16,7 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget }
+import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
@@ -75,6 +75,11 @@ export struct Comp {
     // work amplification without changing its worklist or generated LLVM.
     pub mut val traceExprInstScans: U64 = 0
     pub mut val traceFinalBodyScans: U64 = 0
+    // Instance discovery runs before Record has produced CallTemplates and
+    // may inspect syntax only to find reachable generic bodies.  Once Record
+    // finishes its verified second walk, all written calls must instead be
+    // finalized from those templates; a miss is then an internal error.
+    pub mut val callTemplatesClosed: Bool = false
     // ASan mode (`plewc --asan <file>`): the backend tags the module with the host target
     // triple and marks every DEFINED function `sanitize_address`, so a downstream
     // `opt -passes=asan` actually instruments loads/stores (a bare `.ll` has no
@@ -365,6 +370,17 @@ pub impl Comp {
         // run at the authored syntax node (or the outermost value-view), so an
         // intermediate `T#E#F` erased later by `#!F` must not be rechecked.
         return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms viewExtId=mirror viewIds=ids viewSources=sources isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=0U64 />)
+    }
+
+    // A view augments the outer receiver surface without invalidating a bound
+    // already proved for that receiver: `T: B` remains usable for `T#E`.
+    // This is deliberately not a recursive erasure: views inside type
+    // arguments remain part of those arguments' semantic identity.
+    inout fn typeRefWithoutOuterViews(ref: U64) -> U64 {
+        if ref == 0U64 || ref >= self.arena.types.count() { return ref }
+        val base: TypeRef = self.arena.types[ref]
+        if base.viewExtId == 0U64 && base.viewIds.count() == 0U64 && base.viewSources.count() == 0U64 { return ref }
+        return self.pushType(t: <TypeRef nameStart=base.nameStart nameLen=base.nameLen nameId=base.nameId paramId=base.paramId args=base.args isRecord=base.isRecord recordFieldLabels=base.recordFieldLabels recordFieldTerms=base.recordFieldTerms isAny=base.isAny argLabels=base.argLabels assocTraitStart=base.assocTraitStart assocTraitLen=base.assocTraitLen assocTraitId=base.assocTraitId assocTraitArgs=base.assocTraitArgs assocTraitArgLabels=base.assocTraitArgLabels assocNameStart=base.assocNameStart assocNameLen=base.assocNameLen assocNameId=base.assocNameId isSendable=base.isSendable hasDecl=base.hasDecl declOffset=base.declOffset hasAssocTraitDecl=base.hasAssocTraitDecl assocTraitDeclOffset=base.assocTraitDeclOffset siteOffset=base.siteOffset />)
     }
 
     inout fn typeRefWithViews(ref: U64, viewExtId: U64, viewIds: Array[U64]) -> U64 {
@@ -1222,6 +1238,16 @@ export fn runFrontend(c: inout Comp) {
     tracePhase(c: inout c, label: "generic-checks:start")
     c.checkFnBounds()
     recordSemanticExpressionTypes(c: inout c)
+    // Allocate the persistent expression cache before abstract generic checking.
+    // `checkGenericBodies` resolves each lexical identifier under its symbolic
+    // parameter scope and `recordIdent` is the one authoritative producer of
+    // identBind/identTarget. Building this table afterwards discarded those
+    // bindings, leaving generic bodies without the same lexical provenance as
+    // non-generic bodies. The table is allocation-only here; semantic types and
+    // final call descriptors are still produced by their later explicit phases.
+    tracePhase(c: inout c, label: "type-cache:start")
+    c.buildExprTyTable()
+    tracePhase(c: inout c, label: "type-cache:done")
     // eager generic type-check (#9): every generic template body is checked once
     // against its `where` bounds — a method/operator on a type parameter must be
     // provided by its bounds (no C++-style "errors only at instantiation").
@@ -1232,11 +1258,6 @@ export fn runFrontend(c: inout Comp) {
     // after instantiation discovery since it scans the concrete genInsts.
     c.checkGenericUniqueArgs()
     tracePhase(c: inout c, label: "generic-checks:done")
-    // typed-AST cache (Phase B): one type slot per expression node, filled lazily
-    // by `typeOf` during non-generic emission. Built now — expr ids are stable.
-    tracePhase(c: inout c, label: "type-cache:start")
-    c.buildExprTyTable()
-    tracePhase(c: inout c, label: "type-cache:done")
     // backend-independent acceptance pass (spec/15): run the per-expr/stmt checks
     // that were historically done inline during emission (rebuilding the local
     // symbol table as it walks), so acceptance soundness does not depend on how
@@ -1245,6 +1266,14 @@ export fn runFrontend(c: inout Comp) {
     tracePhase(c: inout c, label: "verify:start")
     c.verifyProgram()
     tracePhase(c: inout c, label: "verify:done")
+    // TypeTerm recording deliberately precedes generic checking, but a
+    // CallTemplate is source-selection evidence and needs the verified
+    // callable cache/visibility decisions.  Produce templates in this second
+    // lexical walk only; the early walk never publishes a provisional callee.
+    tracePhase(c: inout c, label: "call-template-record:start")
+    c.recordParametricTypes(recordCallTemplates: true)
+    tracePhase(c: inout c, label: "call-template-record:done")
+    c.callTemplatesClosed = true
     // Close the per-instance final-callable table only after verification and
     // typed-IR recording are available.  This semantic worklist is independent
     // of LLVM's lazy declaration queues: all backend call emission consumes the

@@ -143,7 +143,7 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < self.arena.exprs.count() {
             match self.arena.exprs[i] {
-                Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: _, val fields) => {
+                Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, ty: val ty, val fields) => {
                     if isEnum {
                         if self.typeHasAssocFn(typeStart: typeStart, typeLen: typeLen, nameStart: variantStart, nameLen: variantLen) {
                             val recv: U64 = self.pushExpr(e: <Expr.Ident start=typeStart len=typeLen />)
@@ -155,6 +155,10 @@ pub impl Comp {
                                 fi += 1
                             }
                             self.arena.exprs[i] = <Expr.Method recv=recv nameStart=variantStart nameLen=variantLen args=self.pushArgs(args: args) />
+                            val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
+                            val originSerial: U64 = self.nextExprOriginSerial
+                            self.nextExprOriginSerial += 1U64
+                            self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
                         }
                     } else {
                         // Anonymous factory form (spec/05): `factory(label: T)` lowers as an
@@ -169,6 +173,10 @@ pub impl Comp {
                                 mut val fargs: Array[Arg] = []
                                 fargs.append(<Arg expr=field.value isInout=false labelStart=field.nameStart labelLen=field.nameLen hasLabel=true />)
                                 self.arena.exprs[i] = <Expr.Method recv=recv nameStart=field.nameStart nameLen=field.nameLen args=self.pushArgs(args: fargs) />
+                                val receiverTerm: U64 = if ty != 0U64 { give ty } else { give self.simpleTypeRef(nameStart: typeStart, nameLen: typeLen) }
+                                val originSerial: U64 = self.nextExprOriginSerial
+                                self.nextExprOriginSerial += 1U64
+                                self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=i originSerial=originSerial receiverTerm=receiverTerm />)
                             }
                         }
                     }

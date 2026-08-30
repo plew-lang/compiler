@@ -1,0 +1,28 @@
+import @Std/Io with { write }
+
+unique struct File { pub val fd: I64 }
+pub impl File { factory }
+
+impl File {
+    deinit { write(s: "drop\n") }
+}
+
+fn makeFile() -> File {
+    return <File fd=9I64 />
+}
+
+fn sink(file: move File) {
+    write(s: "got\n")
+}
+
+// The first path transfers ownership; the second leaves ownership to the
+// enclosing scope. Mid drop-elaboration must produce exactly one drop in each.
+fn main() {
+    val transferred: File = makeFile()
+    val yes: Bool = true
+    if yes { sink(file: move transferred) }
+
+    val retained: File = makeFile()
+    val no: Bool = false
+    if no { sink(file: move retained) }
+}

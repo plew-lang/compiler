@@ -783,6 +783,33 @@ pub impl Comp {
         return callee
     }
 
+    // The associated-callable twin of resolveMethodForResolvedReceiver. A
+    // bare `pow(base:, exp:)` is syntactically a free call, but its semantic
+    // subject is the base value and its target is an associated trait member.
+    // Keep view/newtype normalization in this one frontend query so static
+    // associated calls and explicit `Type#View.member()` cannot drift.
+    inout fn resolveAssocForResolvedReceiver(surfaceRef: U64, sourceId: U64, sourceOwner: U64, nameStart: U64, nameLen: U64, args: ArgRange, useOffset: U64) -> U64 {
+        if surfaceRef == 0U64 || surfaceRef >= self.arena.types.count() {
+            return self.arena.funcs.count()
+        }
+        mut val resolvedRef: U64 = surfaceRef
+        val original: TypeRef = self.arena.types[surfaceRef]
+        val underlying: U64 = self.newtypeUnderRef(start: original.nameStart, len: original.nameLen)
+        if underlying != 0U64 && underlying < self.arena.types.count() {
+            resolvedRef = underlying
+        }
+        val rt: TypeRef = self.arena.types[resolvedRef]
+        val sources: Array[ViewSource] = self.collectViewSources(recv: 0U64, recvStart: rt.nameStart, recvLen: rt.nameLen, recvRef: surfaceRef, finalSourceId: sourceId, finalSourceOwner: sourceOwner, readReceiverSyntax: false)
+        mut val callee: U64 = self.arena.funcs.count()
+        if sources.count() > 0U64 {
+            callee = self.findCallableInViewSet(recvStart: rt.nameStart, recvLen: rt.nameLen, sources: sources, nameStart: nameStart, nameLen: nameLen, args: args, associated: true, recvRef: resolvedRef)
+        }
+        if callee >= self.arena.funcs.count() {
+            callee = self.findAssoc(recvStart: rt.nameStart, recvLen: rt.nameLen, nameStart: nameStart, nameLen: nameLen, args: args)
+        }
+        return callee
+    }
+
     inout fn viewSetHasTrait(sources: Array[ViewSource]) -> Bool {
         mut val i: U64 = 0U64
         while i < sources.count() {

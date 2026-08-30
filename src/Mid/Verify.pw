@@ -1,0 +1,137 @@
+// Structural and ownership verification for Mid IR. This consumes only Mid
+// dataflow, never source AST or LLVM state. Backend entry will call it before
+// lowering once Mid bodies become the production input.
+
+import ./Ir with { MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBody, MidOwnership }
+import ./Drop with { analyzeMidOwnership }
+
+export enum MidVerifyError {
+    None
+    InvalidTarget
+    PartialMove
+    MoveUnavailable
+    DropUnavailable
+    InvalidDropFlag
+    UnelaboratedScopeExit
+}
+
+export struct MidVerification {
+    pub val error: MidVerifyError = <MidVerifyError.None />
+    pub val block: U64 = 0U64
+    pub val local: U64 = 0U64
+}
+pub impl MidVerification { factory }
+
+fn midVerifyConsumeOperand(states: inout Array[MidOwnership], operand: MidOperand, block: U64) -> MidVerification {
+    match operand {
+        MidOperand.Move(place: val place) => {
+            if place.projections.count() != 0U64 {
+                return <MidVerification error=<MidVerifyError.PartialMove /> block=block local=place.local />
+            }
+            if place.local >= states.count() {
+                return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local />
+            }
+            match states[place.local] {
+                MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+                _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=block local=place.local /> }
+            }
+        }
+        _ => {}
+    }
+    return <MidVerification />
+}
+
+fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, block: U64) -> MidVerification {
+    match value {
+        MidRvalue.Use(operand: val operand) => { return midVerifyConsumeOperand(states: inout states, operand: operand, block: block) }
+    }
+}
+
+fn midTargetIsValid(body: MidBody, target: U64) -> Bool {
+    return target < body.blocks.count()
+}
+
+// Validate pre-drop-elaboration Mid. A `MaybeOwned` source is deliberately not
+// movable: the accessibility-cliff insertion must first make both incoming paths
+// uniformly consumed. This is what prevents a conditional move from becoming a
+// use-after-move dependent on runtime branch history.
+export fn verifyMidBody(body: MidBody) -> MidVerification {
+    val incoming: Array[Array[MidOwnership]] = analyzeMidOwnership(body: body)
+    mut val bi: U64 = 0U64
+    while bi < body.blocks.count() {
+        mut val states: Array[MidOwnership] = incoming[bi]
+        mut val si: U64 = 0U64
+        while si < body.blocks[bi].statements.count() {
+            match body.blocks[bi].statements[si] {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    val result: MidVerification = midVerifyConsumeRvalue(states: inout states, value: value, block: bi)
+                    match result.error { MidVerifyError.None => {} _ => { return result } }
+                    if destination.projections.count() == 0U64 && destination.local < states.count() {
+                        states.set(i: destination.local, value: <MidOwnership.Owned />)
+                    }
+                }
+                MidStatement.Drop(place: val place) => {
+                    if place.projections.count() != 0U64 || place.local >= states.count() {
+                        return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local />
+                    }
+                    match states[place.local] {
+                        MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+                        _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local /> }
+                    }
+                }
+                MidStatement.ConditionalDrop(place: val place, flag: val flag) => {
+                    if place.projections.count() != 0U64 || place.local >= states.count() {
+                        return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local />
+                    }
+                    if flag >= body.locals.count() || !(body.locals[flag].isDropFlag) {
+                        return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=bi local=flag />
+                    }
+                    match states[place.local] {
+                        MidOwnership.MaybeOwned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+                        _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local /> }
+                    }
+                }
+                MidStatement.ScopeExit(scope: _) => { return <MidVerification error=<MidVerifyError.UnelaboratedScopeExit /> block=bi /> }
+                _ => {}
+            }
+            si += 1U64
+        }
+        match body.blocks[bi].terminator {
+            MidTerminator.Goto(target: val target) => {
+                if !(midTargetIsValid(body: body, target: target)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
+            }
+            MidTerminator.Switch(discriminant: val discriminant, values: _, targets: val targets, otherwise: val otherwise) => {
+                val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: discriminant, block: bi)
+                match result.error { MidVerifyError.None => {} _ => { return result } }
+                mut val ti: U64 = 0U64
+                while ti < targets.count() {
+                    if !(midTargetIsValid(body: body, target: targets[ti])) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
+                    ti += 1U64
+                }
+                if !(midTargetIsValid(body: body, target: otherwise)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
+            }
+            MidTerminator.Call(callee: _, args: val args, destination: val destination, target: val target) => {
+                mut val ai: U64 = 0U64
+                while ai < args.count() {
+                    val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: args[ai], block: bi)
+                    match result.error { MidVerifyError.None => {} _ => { return result } }
+                    ai += 1U64
+                }
+                if destination.projections.count() == 0U64 && destination.local < states.count() {
+                    states.set(i: destination.local, value: <MidOwnership.Owned />)
+                }
+                if !(midTargetIsValid(body: body, target: target)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
+            }
+            MidTerminator.Suspend(state: _, resume: val resume) => {
+                if !(midTargetIsValid(body: body, target: resume)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
+            }
+            MidTerminator.ReturnValue(value: val value) => {
+                val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: value, block: bi)
+                match result.error { MidVerifyError.None => {} _ => { return result } }
+            }
+            _ => {}
+        }
+        bi += 1U64
+    }
+    return <MidVerification />
+}

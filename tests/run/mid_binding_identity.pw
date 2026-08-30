@@ -1,0 +1,57 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Expr, Stmt, identValueCode }
+import /Mid with { MidBlock, MidBuildState, MidBuildError, MidOperand, MidRvalue, MidStatement, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    mut val state: MidBuildState = <MidBuildState />
+    val firstLocal = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: 1U64, isUnique: false, isParameter: false, ownsAtEntry: false)
+    val secondLocal = addMidLocal(state: inout state, declarationTarget: 20U64, typeTerm: 1U64, isUnique: false, isParameter: false, ownsAtEntry: false)
+    val outer = midLocalForBinding(state: state, declarationTarget: 10U64)
+    val inner = midLocalForBinding(state: state, declarationTarget: 20U64)
+    val missing = midLocalForBinding(state: state, declarationTarget: 30U64)
+    c.typeCache.identBind.append(identValueCode())
+    c.typeCache.identTarget.append(20U64)
+    val place = midPlaceForRecordedIdent(c: c, state: state, exprId: 0U64, typeTerm: 1U64)
+    c.typeCache.identTarget.set(i: 0U64, value: 30U64)
+    val absentPlace = midPlaceForRecordedIdent(c: c, state: state, exprId: 0U64, typeTerm: 1U64)
+    c.arena.exprs.append(<Expr.Int value=1U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=40U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=1U64 init=0U64 />)
+    mut val letState: MidBuildState = <MidBuildState blocks=[<MidBlock />] />
+    val letResult = buildMidLet(c: inout c, state: inout letState, stmtId: 0U64)
+    mut val hasAssign: Bool = false
+    match letState.blocks[0U64].statements[0U64] {
+        MidStatement.Assign(destination: _, value: _) => { hasAssign = true }
+        _ => {}
+    }
+    c.arena.exprs.append(<Expr.Ident start=40U64 len=1U64 />)
+    c.arena.exprs.append(<Expr.Move operand=1U64 isBorrow=false />)
+    c.typeCache.identBind.append(identValueCode())
+    c.typeCache.identTarget.append(40U64)
+    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=50U64 nameLen=1U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=1U64 init=2U64 />)
+    val moveResult = buildMidLet(c: inout c, state: inout letState, stmtId: 1U64)
+    mut val hasMove: Bool = false
+    match letState.blocks[0U64].statements[1U64] {
+        MidStatement.Assign(destination: _, value: val value) => {
+            match value {
+                MidRvalue.Use(operand: val operand) => {
+                    match operand {
+                        MidOperand.Move(place: val moved) => { hasMove = moved.local == 0U64 }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    mut val letBuilt: Bool = false
+    match letResult { MidBuildError.None => { letBuilt = true } _ => {} }
+    mut val moveBuilt: Bool = false
+    match moveResult { MidBuildError.None => { moveBuilt = true } _ => {} }
+    if firstLocal == 0U64 && secondLocal == 1U64 && outer.found && outer.local == 0U64 && inner.found && inner.local == 1U64 && !missing.found && place.found && place.place.local == 1U64 && !absentPlace.found && letBuilt && moveBuilt && letState.locals.count() == 2U64 && hasAssign && hasMove {
+        write(s: "binding-identity\n")
+    } else {
+        write(s: "wrong-binding\n")
+    }
+}

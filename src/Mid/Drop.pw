@@ -1,0 +1,583 @@
+// Ownership dataflow for Mid IR. This module deliberately imports only Mid/Ir:
+// it cannot inspect AST, recover a type, or emit LLVM. Build creates operations;
+// this pass computes their ownership consequences for drop elaboration and the
+// always-on verifier.
+
+import ./Ir with { MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
+
+fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
+    if scope >= body.scopes.count() { return body.locals.count() }
+    return body.scopes[scope].firstLocal
+}
+
+fn midScopeEnd(body: MidBody, scope: U64) -> U64 {
+    if scope >= body.scopes.count() { return body.locals.count() }
+    val definition: MidScope = body.scopes[scope]
+    return definition.firstLocal + definition.localCount
+}
+
+// The join for an affine root local. Once paths disagree, later joins cannot
+// recover a single state without a new dominating Assign, which transfer handles
+// before propagating to successors.
+fn midOwnershipJoin(left: MidOwnership, right: MidOwnership) -> MidOwnership {
+    match left {
+        MidOwnership.Owned => {
+            match right {
+                MidOwnership.Owned => { return <MidOwnership.Owned /> }
+                _ => { return <MidOwnership.MaybeOwned /> }
+            }
+        }
+        MidOwnership.Consumed => {
+            match right {
+                MidOwnership.Consumed => { return <MidOwnership.Consumed /> }
+                _ => { return <MidOwnership.MaybeOwned /> }
+            }
+        }
+        MidOwnership.MaybeOwned => { return <MidOwnership.MaybeOwned /> }
+    }
+}
+
+fn midOwnershipStateChanged(before: Array[MidOwnership], after: Array[MidOwnership]) -> Bool {
+    if before.count() != after.count() { return true }
+    mut val i: U64 = 0U64
+    while i < before.count() {
+        match before[i] {
+            MidOwnership.Owned => {
+                match after[i] { MidOwnership.Owned => {} _ => { return true } }
+            }
+            MidOwnership.Consumed => {
+                match after[i] { MidOwnership.Consumed => {} _ => { return true } }
+            }
+            MidOwnership.MaybeOwned => {
+                match after[i] { MidOwnership.MaybeOwned => {} _ => { return true } }
+            }
+        }
+        i += 1U64
+    }
+    return false
+}
+
+fn midConsumeOperand(states: inout Array[MidOwnership], operand: MidOperand) {
+    match operand {
+        MidOperand.Move(place: val place) => {
+            // v1 has no partial unique move. Keeping the projection test here
+            // makes a malformed Mid body fail its later verifier rather than
+            // silently treating a field move as a root consume.
+            if place.projections.count() == 0U64 {
+                if place.local < states.count() {
+                    states.set(i: place.local, value: <MidOwnership.Consumed />)
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
+    match value {
+        MidRvalue.Use(operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
+    }
+}
+
+// Transfer a single block. Drop/Assign are consumes/producers; all call/return
+// arguments are evaluated before the terminator edge and therefore consume their
+// Move operands in this block's outgoing state.
+fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) -> Array[MidOwnership] {
+    mut val out: Array[MidOwnership] = input
+    mut val si: U64 = 0U64
+    while si < block.statements.count() {
+        match block.statements[si] {
+            MidStatement.Assign(destination: val destination, value: val value) => {
+                midConsumeRvalue(states: inout out, value: value)
+                if destination.projections.count() == 0U64 && destination.local < out.count() {
+                    out.set(i: destination.local, value: <MidOwnership.Owned />)
+                }
+            }
+            MidStatement.Drop(place: val place) => {
+                if place.projections.count() == 0U64 && place.local < out.count() {
+                    out.set(i: place.local, value: <MidOwnership.Consumed />)
+                }
+            }
+            MidStatement.ConditionalDrop(place: val place, flag: _) => {
+                if place.projections.count() == 0U64 && place.local < out.count() {
+                    // True drops the value; false proves an earlier Move. Either
+                    // way no source owner remains after this operation.
+                    out.set(i: place.local, value: <MidOwnership.Consumed />)
+                }
+            }
+            MidStatement.ScopeExit(scope: val scope) => {
+                mut val local: U64 = midScopeFirst(body: body, scope: scope)
+                val end: U64 = midScopeEnd(body: body, scope: scope)
+                while local < end && local < out.count() {
+                    out.set(i: local, value: <MidOwnership.Consumed />)
+                    local += 1U64
+                }
+            }
+            _ => {}
+        }
+        si += 1U64
+    }
+    match block.terminator {
+        MidTerminator.Switch(discriminant: val discriminant, values: _, targets: _, otherwise: _) => {
+            midConsumeOperand(states: inout out, operand: discriminant)
+        }
+        MidTerminator.Call(callee: _, args: val args, destination: val destination, target: _) => {
+            mut val ai: U64 = 0U64
+            while ai < args.count() {
+                midConsumeOperand(states: inout out, operand: args[ai])
+                ai += 1U64
+            }
+            // A normal-returning call writes one owned result into its destination.
+            // Void calls use a compiler-generated unit place, which is harmlessly
+            // marked Owned and never needs a Drop.
+            if destination.projections.count() == 0U64 && destination.local < out.count() {
+                out.set(i: destination.local, value: <MidOwnership.Owned />)
+            }
+        }
+        MidTerminator.ReturnValue(value: val value) => {
+            midConsumeOperand(states: inout out, operand: value)
+        }
+        _ => {}
+    }
+    return out
+}
+
+fn midSuccessors(term: MidTerminator) -> Array[U64] {
+    match term {
+        MidTerminator.Goto(target: val target) => { return [target] }
+        MidTerminator.Switch(discriminant: _, values: _, targets: val targets, otherwise: val otherwise) => {
+            mut val out: Array[U64] = targets
+            out.append(otherwise)
+            return out
+        }
+        MidTerminator.Call(callee: _, args: _, destination: _, target: val target) => { return [target] }
+        MidTerminator.Suspend(state: _, resume: val resume) => { return [resume] }
+        _ => { return [] }
+    }
+}
+
+// Forward fixed point over flat CFG. Result[i] is the incoming state of block i;
+// an unreachable block remains all-Consumed. The separate `reachable` array is
+// kept internal because the verifier distinguishes an unreachable block from a
+// reachable block whose every local is consumed.
+export fn analyzeMidOwnership(body: MidBody) -> Array[Array[MidOwnership]] {
+    mut val incoming: Array[Array[MidOwnership]] = []
+    mut val reachable: Array[Bool] = []
+    mut val initial: Array[MidOwnership] = []
+    mut val li: U64 = 0U64
+    while li < body.locals.count() {
+        if body.locals[li].ownsAtEntry {
+            initial.append(<MidOwnership.Owned />)
+        } else {
+            initial.append(<MidOwnership.Consumed />)
+        }
+        li += 1U64
+    }
+    mut val bi: U64 = 0U64
+    while bi < body.blocks.count() {
+        mut val empty: Array[MidOwnership] = []
+        mut val ei: U64 = 0U64
+        while ei < body.locals.count() {
+            empty.append(<MidOwnership.Consumed />)
+            ei += 1U64
+        }
+        incoming.append(empty)
+        reachable.append(false)
+        bi += 1U64
+    }
+    if body.entry >= body.blocks.count() { return incoming }
+    incoming.set(i: body.entry, value: initial)
+    reachable.set(i: body.entry, value: true)
+    mut val changed: Bool = true
+    while changed {
+        changed = false
+        bi = 0U64
+        while bi < body.blocks.count() {
+            if reachable[bi] {
+                val out: Array[MidOwnership] = midTransferBlock(body: body, block: body.blocks[bi], input: incoming[bi])
+                val successors: Array[U64] = midSuccessors(term: body.blocks[bi].terminator)
+                mut val si: U64 = 0U64
+                while si < successors.count() {
+                    val successor: U64 = successors[si]
+                    if successor < body.blocks.count() {
+                        if !(reachable[successor]) {
+                            incoming.set(i: successor, value: out)
+                            reachable.set(i: successor, value: true)
+                            changed = true
+                        } else {
+                            val before: Array[MidOwnership] = incoming[successor]
+                            mut val merged: Array[MidOwnership] = []
+                            mut val mi: U64 = 0U64
+                            while mi < before.count() {
+                                merged.append(midOwnershipJoin(left: before[mi], right: out[mi]))
+                                mi += 1U64
+                            }
+                            if midOwnershipStateChanged(before: before, after: merged) {
+                                incoming.set(i: successor, value: merged)
+                                changed = true
+                            }
+                        }
+                    }
+                    si += 1U64
+                }
+            }
+            bi += 1U64
+        }
+    }
+    return incoming
+}
+
+fn midAccessibilityJoin(left: MidAccessibility, right: MidAccessibility) -> MidAccessibility {
+    match left {
+        MidAccessibility.Available => {
+            match right {
+                MidAccessibility.Available => { return <MidAccessibility.Available /> }
+                _ => { return <MidAccessibility.Unavailable /> }
+            }
+        }
+        MidAccessibility.Unavailable => { return <MidAccessibility.Unavailable /> }
+    }
+}
+
+fn midAccessibilityStateChanged(before: Array[MidAccessibility], after: Array[MidAccessibility]) -> Bool {
+    if before.count() != after.count() { return true }
+    mut val i: U64 = 0U64
+    while i < before.count() {
+        match before[i] {
+            MidAccessibility.Available => {
+                match after[i] { MidAccessibility.Available => {} _ => { return true } }
+            }
+            MidAccessibility.Unavailable => {
+                match after[i] { MidAccessibility.Unavailable => {} _ => { return true } }
+            }
+        }
+        i += 1U64
+    }
+    return false
+}
+
+fn midMakeOperandUnavailable(states: inout Array[MidAccessibility], operand: MidOperand) {
+    match operand {
+        MidOperand.Move(place: val place) => {
+            if place.projections.count() == 0U64 && place.local < states.count() {
+                states.set(i: place.local, value: <MidAccessibility.Unavailable />)
+            }
+        }
+        _ => {}
+    }
+}
+
+fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAccessibility]) -> Array[MidAccessibility] {
+    mut val out: Array[MidAccessibility] = input
+    mut val si: U64 = 0U64
+    while si < block.statements.count() {
+        match block.statements[si] {
+            MidStatement.Assign(destination: val destination, value: val value) => {
+                match value { MidRvalue.Use(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) } }
+                if destination.projections.count() == 0U64 && destination.local < out.count() {
+                    out.set(i: destination.local, value: <MidAccessibility.Available />)
+                }
+            }
+            MidStatement.Drop(place: val place) => {
+                if place.projections.count() == 0U64 && place.local < out.count() {
+                    out.set(i: place.local, value: <MidAccessibility.Unavailable />)
+                }
+            }
+            MidStatement.ConditionalDrop(place: val place, flag: _) => {
+                if place.projections.count() == 0U64 && place.local < out.count() {
+                    out.set(i: place.local, value: <MidAccessibility.Unavailable />)
+                }
+            }
+            MidStatement.ScopeExit(scope: val scope) => {
+                mut val local: U64 = midScopeFirst(body: body, scope: scope)
+                val end: U64 = midScopeEnd(body: body, scope: scope)
+                while local < end && local < out.count() {
+                    out.set(i: local, value: <MidAccessibility.Unavailable />)
+                    local += 1U64
+                }
+            }
+            _ => {}
+        }
+        si += 1U64
+    }
+    match block.terminator {
+        MidTerminator.Switch(discriminant: val discriminant, values: _, targets: _, otherwise: _) => {
+            midMakeOperandUnavailable(states: inout out, operand: discriminant)
+        }
+        MidTerminator.Call(callee: _, args: val args, destination: val destination, target: _) => {
+            mut val ai: U64 = 0U64
+            while ai < args.count() {
+                midMakeOperandUnavailable(states: inout out, operand: args[ai])
+                ai += 1U64
+            }
+            if destination.projections.count() == 0U64 && destination.local < out.count() {
+                out.set(i: destination.local, value: <MidAccessibility.Available />)
+            }
+        }
+        MidTerminator.ReturnValue(value: val value) => {
+            midMakeOperandUnavailable(states: inout out, operand: value)
+        }
+        _ => {}
+    }
+    return out
+}
+
+// Forward must-analysis: a root is Available at a join only when every incoming
+// path still names it as an owner. This is separate from ownership because an
+// unexecuted conditional move leaves a real value which nevertheless has no
+// legal source-level name after the join.
+export fn analyzeMidAccessibility(body: MidBody) -> Array[Array[MidAccessibility]] {
+    mut val incoming: Array[Array[MidAccessibility]] = []
+    mut val reachable: Array[Bool] = []
+    mut val initial: Array[MidAccessibility] = []
+    mut val li: U64 = 0U64
+    while li < body.locals.count() {
+        if body.locals[li].ownsAtEntry {
+            initial.append(<MidAccessibility.Available />)
+        } else {
+            initial.append(<MidAccessibility.Unavailable />)
+        }
+        li += 1U64
+    }
+    mut val bi: U64 = 0U64
+    while bi < body.blocks.count() {
+        mut val empty: Array[MidAccessibility] = []
+        mut val ei: U64 = 0U64
+        while ei < body.locals.count() {
+            empty.append(<MidAccessibility.Unavailable />)
+            ei += 1U64
+        }
+        incoming.append(empty)
+        reachable.append(false)
+        bi += 1U64
+    }
+    if body.entry >= body.blocks.count() { return incoming }
+    incoming.set(i: body.entry, value: initial)
+    reachable.set(i: body.entry, value: true)
+    mut val changed: Bool = true
+    while changed {
+        changed = false
+        bi = 0U64
+        while bi < body.blocks.count() {
+            if reachable[bi] {
+                val out: Array[MidAccessibility] = midAccessibilityTransfer(body: body, block: body.blocks[bi], input: incoming[bi])
+                val successors: Array[U64] = midSuccessors(term: body.blocks[bi].terminator)
+                mut val si: U64 = 0U64
+                while si < successors.count() {
+                    val successor: U64 = successors[si]
+                    if successor < body.blocks.count() {
+                        if !(reachable[successor]) {
+                            incoming.set(i: successor, value: out)
+                            reachable.set(i: successor, value: true)
+                            changed = true
+                        } else {
+                            val before: Array[MidAccessibility] = incoming[successor]
+                            mut val merged: Array[MidAccessibility] = []
+                            mut val mi: U64 = 0U64
+                            while mi < before.count() {
+                                merged.append(midAccessibilityJoin(left: before[mi], right: out[mi]))
+                                mi += 1U64
+                            }
+                            if midAccessibilityStateChanged(before: before, after: merged) {
+                                incoming.set(i: successor, value: merged)
+                                changed = true
+                            }
+                        }
+                    }
+                    si += 1U64
+                }
+            }
+            bi += 1U64
+        }
+    }
+    return incoming
+}
+
+fn midOperandMovedRoot(operand: MidOperand) -> U64 {
+    match operand {
+        MidOperand.Move(place: val place) => {
+            if place.projections.count() == 0U64 { return place.local }
+        }
+        _ => {}
+    }
+    return 18446744073709551615U64
+}
+
+fn midRvalueMovedRoot(value: MidRvalue) -> U64 {
+    match value { MidRvalue.Use(operand: val operand) => { return midOperandMovedRoot(operand: operand) } }
+}
+
+// Elaborate a parametric Mid body after its control-flow lowering. The body has
+// no raw retain/release: this pass alone creates flag maintenance and conditional
+// drops. A later instantiate pass grounds the type terms but does not alter this
+// ownership topology.
+export fn elaborateMidDrops(body: MidBody) -> MidBody {
+    val ownership: Array[Array[MidOwnership]] = analyzeMidOwnership(body: body)
+    val accessibility: Array[Array[MidAccessibility]] = analyzeMidAccessibility(body: body)
+    val originalCount: U64 = body.locals.count()
+    mut val needsFlag: Array[Bool] = []
+    mut val flagFor: Array[U64] = []
+    mut val li: U64 = 0U64
+    while li < originalCount {
+        needsFlag.append(false)
+        flagFor.append(0U64)
+        li += 1U64
+    }
+    mut val bi: U64 = 0U64
+    while bi < body.blocks.count() {
+        li = 0U64
+        while li < originalCount {
+            match ownership[bi][li] {
+                MidOwnership.MaybeOwned => {
+                    match accessibility[bi][li] {
+                        MidAccessibility.Unavailable => { needsFlag.set(i: li, value: true) }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+            li += 1U64
+        }
+        // A scope exit consumes every root in that scope. A root which is
+        // MaybeOwned on entry needs the same flag as an accessibility cliff;
+        // elaboration below decides whether this concrete path emits it.
+        mut val statementI: U64 = 0U64
+        while statementI < body.blocks[bi].statements.count() {
+            match body.blocks[bi].statements[statementI] {
+                MidStatement.ScopeExit(scope: val scope) => {
+                    li = midScopeFirst(body: body, scope: scope)
+                    val end: U64 = midScopeEnd(body: body, scope: scope)
+                    while li < end && li < originalCount {
+                        match ownership[bi][li] {
+                            MidOwnership.MaybeOwned => { needsFlag.set(i: li, value: true) }
+                            _ => {}
+                        }
+                        li += 1U64
+                    }
+                }
+                _ => {}
+            }
+            statementI += 1U64
+        }
+        bi += 1U64
+    }
+    mut val locals: Array[MidLocalDecl] = body.locals
+    li = 0U64
+    while li < originalCount {
+        if needsFlag[li] {
+            flagFor.set(i: li, value: locals.count())
+            locals.append(<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=false isDropFlag=true isReturnPlace=false sourceNameStart=0U64 />)
+        }
+        li += 1U64
+    }
+    mut val blocks: Array[MidBlock] = []
+    bi = 0U64
+    while bi < body.blocks.count() {
+        val source: MidBlock = body.blocks[bi]
+        mut val statements: Array[MidStatement] = []
+        mut val currentOwnership: Array[MidOwnership] = ownership[bi]
+        mut val currentAccessibility: Array[MidAccessibility] = accessibility[bi]
+        // The entry flag state reflects ownership at function entry. Flags for
+        // locals initialized later are set by their Assign, not here.
+        if bi == body.entry {
+            li = 0U64
+            while li < originalCount {
+                if needsFlag[li] && body.locals[li].ownsAtEntry {
+                    statements.append(<MidStatement.SetDropFlag local=flagFor[li] isSet=true />)
+                }
+                li += 1U64
+            }
+        }
+        // An accessibility cliff is a block-entry property: all predecessors
+        // have already evaluated their branch/call operands, so the inserted
+        // conditional drop cannot race source evaluation on either edge.
+        li = 0U64
+        while li < originalCount {
+            if needsFlag[li] {
+                match ownership[bi][li] {
+                    MidOwnership.MaybeOwned => {
+                        match accessibility[bi][li] {
+                            MidAccessibility.Unavailable => {
+                                statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=li typeTerm=body.locals[li].typeTerm /> flag=flagFor[li] />)
+                                currentOwnership.set(i: li, value: <MidOwnership.Consumed />)
+                                currentAccessibility.set(i: li, value: <MidAccessibility.Unavailable />)
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            li += 1U64
+        }
+        mut val si: U64 = 0U64
+        while si < source.statements.count() {
+            val statement: MidStatement = source.statements[si]
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    statements.append(statement)
+                    val moved: U64 = midRvalueMovedRoot(value: value)
+                    if moved < originalCount && needsFlag[moved] {
+                        statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
+                    }
+                    if destination.projections.count() == 0U64 && destination.local < originalCount && needsFlag[destination.local] {
+                        statements.append(<MidStatement.SetDropFlag local=flagFor[destination.local] isSet=true />)
+                    }
+                    midConsumeRvalue(states: inout currentOwnership, value: value)
+                    if destination.projections.count() == 0U64 && destination.local < currentOwnership.count() {
+                        currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
+                        currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />)
+                    }
+                }
+                MidStatement.ScopeExit(scope: val scope) => {
+                    mut val local: U64 = midScopeEnd(body: body, scope: scope)
+                    val first: U64 = midScopeFirst(body: body, scope: scope)
+                    while local > first {
+                        local -= 1U64
+                        if local < originalCount && local < currentOwnership.count() {
+                            match currentOwnership[local] {
+                                MidOwnership.Owned => { statements.append(<MidStatement.Drop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> />) }
+                                MidOwnership.MaybeOwned => {
+                                    if needsFlag[local] { statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=local typeTerm=body.locals[local].typeTerm /> flag=flagFor[local] />) }
+                                }
+                                _ => {}
+                            }
+                            currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
+                            currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />)
+                        }
+                    }
+                }
+                _ => { statements.append(statement) }
+            }
+            si += 1U64
+        }
+        // A terminator evaluates after its statements. Flag changes are internal
+        // bookkeeping; placing them immediately before the terminator preserves
+        // user-visible evaluation and abort behavior.
+        match source.terminator {
+            MidTerminator.Call(callee: _, args: val args, destination: val destination, target: _) => {
+                mut val ai: U64 = 0U64
+                while ai < args.count() {
+                    val moved: U64 = midOperandMovedRoot(operand: args[ai])
+                    if moved < originalCount && needsFlag[moved] {
+                        statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
+                    }
+                    ai += 1U64
+                }
+                if destination.projections.count() == 0U64 && destination.local < originalCount && needsFlag[destination.local] {
+                    statements.append(<MidStatement.SetDropFlag local=flagFor[destination.local] isSet=true />)
+                }
+            }
+            MidTerminator.ReturnValue(value: val value) => {
+                val moved: U64 = midOperandMovedRoot(operand: value)
+                if moved < originalCount && needsFlag[moved] {
+                    statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
+                }
+            }
+            _ => {}
+        }
+        blocks.append(<MidBlock statements=statements terminator=source.terminator />)
+        bi += 1U64
+    }
+    return <MidBody bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=locals scopes=body.scopes blocks=blocks entry=body.entry />
+}

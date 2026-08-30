@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+val mainPathAnchor: I64 = 0I64
+
+// Each selected BodyInstance grounds this one parametric Mid body separately.
+// The return place must not retain a bare T or reuse the first instance's type.
+fn echo[T](value: T, early: Bool) -> T {
+    if early {
+        return value
+    }
+    return value
+}
+
+fn main() {
+    val number: I64 = echo(value: 29I64, early: true)
+    val text: String = echo(value: "generic Mid", early: false)
+    print(number)
+    print(text)
+}
