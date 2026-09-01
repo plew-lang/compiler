@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+// Keep main on legacy emission. `overwrite` isolates a root-place assignment:
+// Mid must use the frontend-bound local place, not recover an identifier in
+// LLVM or conflate this with field/index access elaboration.
+val midLocalAssignAnchor: I64 = 0I64
+
+fn overwrite() -> I64 {
+    mut val value: I64 = 1I64
+    value = 42I64
+    return value
+}
+
+fn main() {
+    print(overwrite())
+}

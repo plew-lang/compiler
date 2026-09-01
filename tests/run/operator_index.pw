@@ -9,13 +9,14 @@ pub impl Grid as Index[U64] {
 }
 pub impl Grid as IndexSet[U64] {
     type Value = I64
-    inout fn indexSet(key: U64, value: I64) { self.cells[key] = value }
+    inout fn indexSet(key: U64, value~: I64) { self.cells[key] = value }
 }
 fn main() {
     mut val g: Grid = <Grid cells=[0I64, 0I64, 0I64] />
     g[0U64] = 7I64
     g[2U64] = 9I64
-    print(g[0U64])   // 7
+    g[0U64] += 3I64
+    print(g[0U64])   // 10
     print(g[1U64])   // 0
     print(g[2U64])   // 9
 }

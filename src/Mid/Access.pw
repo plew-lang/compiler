@@ -1,0 +1,359 @@
+// Instance-specific get-modify-set elaboration.  Parametric Mid retains an
+// Access marker because the selected inout ABI belongs to a BodyInstance;
+// this pass consumes only frozen SemanticAccess and already-resolved calls.
+
+import ../Frontend with { Comp }
+import ../Ir with { Expr, SemanticExprType, SemanticAccess, CallResolution }
+import ../Diag with { eprintU64 }
+import @Std/Io with { eprint }
+import ./Ir with { MidProjection, MidPlace, MidConstant, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+
+export enum MidAccessError {
+    None
+    MissingOuterSemanticAccess
+    AccessRoleMismatch
+    UnresolvedAccessCall
+    ParentAccessArgumentMissing
+    ParentAccessArgumentMismatch
+    InvalidAccessChain
+    UnsupportedAccessBase
+    UnsupportedAccessKey
+    UnsupportedAccessProjection
+    UnsupportedSetterReceiver
+}
+
+export struct MidAccessElaboration {
+    pub val body: MidBody
+    pub val error: MidAccessError = <MidAccessError.None />
+}
+pub impl MidAccessElaboration { factory }
+
+fn midAccessFor(c: Comp, bodyId: U64, parentResolution: U64, candidate: U64) -> U64 {
+    mut val i: U64 = 0U64
+    while i < c.arena.semanticAccesses.count() {
+        val access: SemanticAccess = c.arena.semanticAccesses[i]
+        if access.bodyId == bodyId && access.parentResolution == parentResolution && access.candidateIndex == candidate && access.write {
+            return i
+        }
+        i += 1U64
+    }
+    return c.arena.semanticAccesses.count()
+}
+
+fn midAccessLocalOperand(c: Comp, body: MidBody, exprId: U64) -> MidOperand {
+    if exprId >= c.typeCache.identTarget.count() { return <MidOperand.Access candidate=body.locals.count() /> }
+    val target: U64 = c.typeCache.identTarget[exprId]
+    mut val i: U64 = 0U64
+    while i < body.locals.count() {
+        if body.locals[i].sourceNameStart == target { return <MidOperand.Copy place=<MidPlace local=i typeTerm=body.locals[i].typeTerm /> /> }
+        i += 1U64
+    }
+    return <MidOperand.Access candidate=body.locals.count() />
+}
+
+// Reconstruct only a frozen local/field place after instantiation. Unlike the
+// parametric builder this has no lexical binding table, so it joins an Ident
+// to MidBody.locals by the resolver's declaration identity, then follows the
+// frontend-selected field slots. No name or type lookup is performed here.
+fn midAccessPlace(c: Comp, body: MidBody, exprId: U64, term: U64) -> MidPlace {
+    if exprId >= c.arena.exprs.count() { return <MidPlace local=body.locals.count() typeTerm=term /> }
+    match c.arena.exprs[exprId] {
+        Expr.Ident(start: _, len: _) => {
+            if exprId >= c.typeCache.identTarget.count() { return <MidPlace local=body.locals.count() typeTerm=term /> }
+            val target: U64 = c.typeCache.identTarget[exprId]
+            mut val i: U64 = 0U64
+            while i < body.locals.count() {
+                if body.locals[i].sourceNameStart == target { return <MidPlace local=i typeTerm=term /> }
+                i += 1U64
+            }
+        }
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => {
+            if exprId >= c.arena.semanticExprTypes.count() || base >= c.arena.semanticExprTypes.count() { return <MidPlace local=body.locals.count() typeTerm=term /> }
+            val semantic: SemanticExprType = c.arena.semanticExprTypes[exprId]
+            if !(semantic.hasFieldProjection) { return <MidPlace local=body.locals.count() typeTerm=term /> }
+            val basePlace: MidPlace = midAccessPlace(c: c, body: body, exprId: base, term: c.arena.semanticExprTypes[base].term)
+            if basePlace.local >= body.locals.count() { return basePlace }
+            mut val projections: Array[MidProjection] = basePlace.projections
+            projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=term />)
+            return <MidPlace local=basePlace.local projections=projections typeTerm=term />
+        }
+        _ => {}
+    }
+    return <MidPlace local=body.locals.count() typeTerm=term />
+}
+
+fn midAccessInput(c: Comp, body: MidBody, exprId: U64, term: U64) -> MidOperand {
+    if exprId >= c.arena.exprs.count() { return <MidOperand.Access candidate=body.locals.count() /> }
+    match c.arena.exprs[exprId] {
+        Expr.Ident(start: _, len: _) => { return midAccessLocalOperand(c: c, body: body, exprId: exprId) }
+        Expr.Field(base: _, nameStart: _, nameLen: _) => {
+            val place: MidPlace = midAccessPlace(c: c, body: body, exprId: exprId, term: term)
+            if place.local < body.locals.count() { return <MidOperand.Copy place=place /> }
+            return <MidOperand.Access candidate=body.locals.count() />
+        }
+        Expr.Int(value: val value, offset: _, isBool: val isBool, tyStart: _, tyLen: _, isNeg: val isNegative) => {
+            return <MidOperand.Constant value=<MidConstant.Integer value=value isNegative=isNegative isBool=isBool typeTerm=term /> />
+        }
+        _ => { return <MidOperand.Access candidate=body.locals.count() /> }
+    }
+}
+
+fn midAccessCandidateForExpr(c: Comp, exprId: U64) -> U64 {
+    mut val i: U64 = 0U64
+    while i < c.decls.accessCandidates.count() {
+        val candidate = c.decls.accessCandidates[i]
+        if candidate.readExpr == exprId || candidate.placeExpr == exprId { return i }
+        i += 1U64
+    }
+    return c.decls.accessCandidates.count()
+}
+
+// Reconstruct a projection *only* from the frontend-selected field slots
+// between a candidate's getter result and the value its parent consumes. The
+// root remains the complete getter value for the eventual IndexSet writeback;
+// only the parent borrow is projected. This is deliberately narrower than a
+// general place recovery: casts/views need no physical projection, and any
+// future value transform must publish its own Mid projection rather than make
+// access elaboration rediscover it from spelling.
+fn midAccessProjectedValuePlace(c: Comp, rootExpr: U64, accessExpr: U64, accessTerm: U64, root: MidPlace) -> MidPlace {
+    if accessExpr == rootExpr { return <MidPlace local=root.local projections=root.projections typeTerm=accessTerm /> }
+    if accessExpr >= c.arena.exprs.count() || accessExpr >= c.arena.semanticExprTypes.count() {
+        return <MidPlace local=root.local + 1U64 typeTerm=root.typeTerm />
+    }
+    match c.arena.exprs[accessExpr] {
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => {
+            val basePlace: MidPlace = midAccessProjectedValuePlace(c: c, rootExpr: rootExpr, accessExpr: base, accessTerm: root.typeTerm, root: root)
+            if basePlace.local != root.local { return basePlace }
+            val semantic: SemanticExprType = c.arena.semanticExprTypes[accessExpr]
+            if !(semantic.hasFieldProjection) { return <MidPlace local=root.local + 1U64 typeTerm=root.typeTerm /> }
+            mut val projections: Array[MidProjection] = basePlace.projections
+            projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=semantic.term />)
+            return <MidPlace local=root.local projections=projections typeTerm=semantic.term />
+        }
+        _ => {}
+    }
+    return <MidPlace local=root.local + 1U64 typeTerm=root.typeTerm />
+}
+
+// The returned order is outermost to innermost.  An inner access is used by
+// the outer setter, so its frozen SemanticAccess is keyed by that setter's
+// resolution—not by source spelling or a type query.
+fn midAccessChain(c: Comp, body: MidBody, outer: U64) -> Array[U64] {
+    mut val chain: Array[U64] = []
+    mut val current: U64 = outer
+    while current < c.arena.semanticAccesses.count() {
+        mut val seen: Bool = false
+        mut val i: U64 = 0U64
+        while i < chain.count() {
+            if chain[i] == current { seen = true }
+            i += 1U64
+        }
+        if seen { return [] }
+        chain.append(current)
+        val access: SemanticAccess = c.arena.semanticAccesses[current]
+        val nestedCandidate: U64 = midAccessCandidateForExpr(c: c, exprId: access.baseExpr)
+        if nestedCandidate >= c.decls.accessCandidates.count() { return chain }
+        val nested: U64 = midAccessFor(c: c, bodyId: body.bodyInstance, parentResolution: access.writeResolution, candidate: nestedCandidate)
+        if nested >= c.arena.semanticAccesses.count() { return [] }
+        current = nested
+    }
+    return []
+}
+
+// Materialize `outer.base ... inner.base` as a single continuation chain.
+// Getter evaluation runs inner-to-outer; setters and drops run outer-to-inner.
+// Thus a nested index is never reinterpreted as a raw addressable projection.
+fn elaborateMidAccessChain(c: inout Comp, body: MidBody, source: MidBlock, blockI: U64, parentResolution: U64, candidate: U64, role: U64, receiver: MidCallReceiver, args: Array[MidOperand], destination: MidPlace, target: U64, locals: inout Array[MidLocalDecl], blocks: inout Array[MidBlock]) -> MidAccessError {
+    val outer: U64 = midAccessFor(c: c, bodyId: body.bodyInstance, parentResolution: parentResolution, candidate: candidate)
+    if outer >= c.arena.semanticAccesses.count() {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid access missing outer body=")
+            eprintU64(n: body.bodyInstance)
+            eprint(text: " parent=")
+            eprintU64(n: parentResolution)
+            eprint(text: " candidate=")
+            eprintU64(n: candidate)
+            eprint(text: " available=")
+            eprintU64(n: c.arena.semanticAccesses.count())
+            eprint(text: "\n")
+            mut val traceI: U64 = 0U64
+            while traceI < c.arena.semanticAccesses.count() {
+                val available: SemanticAccess = c.arena.semanticAccesses[traceI]
+                eprint(text: "[trace-codegen] Mid access available index=")
+                eprintU64(n: traceI)
+                eprint(text: " body=")
+                eprintU64(n: available.bodyId)
+                eprint(text: " parent=")
+                eprintU64(n: available.parentResolution)
+                eprint(text: " candidate=")
+                eprintU64(n: available.candidateIndex)
+                eprint(text: "\n")
+                traceI += 1U64
+            }
+        }
+        return <MidAccessError.MissingOuterSemanticAccess />
+    }
+    val chain: Array[U64] = midAccessChain(c: c, body: body, outer: outer)
+    if chain.count() == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+    val outerAccess: SemanticAccess = c.arena.semanticAccesses[outer]
+    if outerAccess.role != role { return <MidAccessError.AccessRoleMismatch /> }
+    mut val values: Array[MidPlace] = []
+    mut val setterPlaces: Array[MidPlace] = []
+    mut val dropSetter: Array[Bool] = []
+    mut val i: U64 = 0U64
+    while i < chain.count() {
+        val access: SemanticAccess = c.arena.semanticAccesses[chain[i]]
+        if !access.write || access.readResolution >= c.arena.finalCallees.count() || access.writeResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+        val valueLocal: U64 = locals.count()
+        val valuePlace: MidPlace = <MidPlace local=valueLocal typeTerm=access.valueTerm />
+        locals.append(<MidLocalDecl typeTerm=access.valueTerm sourceScope=0U64 isUnique=false isParameter=false />)
+        values.append(valuePlace)
+        val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+        mut val setterPlace: MidPlace = valuePlace
+        mut val needsDrop: Bool = false
+        if setter.callee < c.arena.funcs.count() && c.arena.funcs[setter.callee].hasRet {
+            val resultLocal: U64 = locals.count()
+            setterPlace = <MidPlace local=resultLocal typeTerm=setter.resultTypeRef />
+            locals.append(<MidLocalDecl typeTerm=setter.resultTypeRef sourceScope=0U64 isUnique=false isParameter=false />)
+            needsDrop = true
+        }
+        setterPlaces.append(setterPlace)
+        dropSetter.append(needsDrop)
+        i += 1U64
+    }
+    val getterExtraCount: U64 = chain.count() - 1U64
+    val getterStart: U64 = blocks.count()
+    val parentBlock: U64 = getterStart + getterExtraCount
+    val setterStart: U64 = parentBlock + 1U64
+    val totalNew: U64 = getterExtraCount + 1U64 + chain.count() * 2U64
+    while blocks.count() < getterStart + totalNew { blocks.append(<MidBlock />) }
+    mut val stage: U64 = chain.count()
+    while stage > 0U64 {
+        stage -= 1U64
+        val access: SemanticAccess = c.arena.semanticAccesses[chain[stage]]
+        mut val base: MidOperand = <MidOperand.Access candidate=c.decls.accessCandidates.count() />
+        if stage + 1U64 < chain.count() {
+            base = <MidOperand.Copy place=values[stage + 1U64] />
+        } else {
+            base = midAccessInput(c: c, body: body, exprId: access.baseExpr, term: access.baseTerm)
+        }
+        val key: MidOperand = midAccessInput(c: c, body: body, exprId: access.keyExpr, term: access.keyTerm)
+        match base { MidOperand.Access(candidate: _) => { return <MidAccessError.UnsupportedAccessBase /> } _ => {} }
+        match key { MidOperand.Access(candidate: _) => { return <MidAccessError.UnsupportedAccessKey /> } _ => {} }
+        val next: U64 = if stage == 0U64 { give parentBlock } else { give getterStart + chain.count() - 1U64 - stage }
+        val read: MidTerminator = <MidTerminator.Call callee=<MidCallTarget.Resolved resolution=access.readResolution /> receiver=<MidCallReceiver.Value operand=base /> args=[key] destination=values[stage] target=next />
+        if stage + 1U64 == chain.count() {
+            blocks.set(i: blockI, value: <MidBlock statements=source.statements terminator=read />)
+        } else {
+            val getterBlock: U64 = getterStart + chain.count() - 2U64 - stage
+            blocks.set(i: getterBlock, value: <MidBlock terminator=read />)
+        }
+    }
+    mut val parentReceiver: MidCallReceiver = receiver
+    mut val parentArgs: Array[MidOperand] = args
+    val parentPlace: MidPlace = midAccessProjectedValuePlace(c: c, rootExpr: c.decls.accessCandidates[outerAccess.candidateIndex].readExpr, accessExpr: outerAccess.accessExpr, accessTerm: outerAccess.accessTerm, root: values[0U64])
+    if parentPlace.local != values[0U64].local { return <MidAccessError.UnsupportedAccessProjection /> }
+    val borrowedOuter: MidOperand = <MidOperand.Borrow place=parentPlace capability=<MidBorrowCapability.Inout /> />
+    if role == 1U64 {
+        parentReceiver = <MidCallReceiver.Value operand=borrowedOuter />
+    } else {
+        if outerAccess.parameterIndex >= parentArgs.count() { return <MidAccessError.ParentAccessArgumentMissing /> }
+        match parentArgs[outerAccess.parameterIndex] {
+            MidOperand.Access(candidate: val marked) => { if marked != candidate { return <MidAccessError.ParentAccessArgumentMismatch /> } }
+            _ => { return <MidAccessError.ParentAccessArgumentMismatch /> }
+        }
+        parentArgs.set(i: outerAccess.parameterIndex, value: borrowedOuter)
+    }
+    blocks.set(i: parentBlock, value: <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=parentResolution /> receiver=parentReceiver args=parentArgs destination=destination target=setterStart /> />)
+    i = 0U64
+    while i < chain.count() {
+        val access: SemanticAccess = c.arena.semanticAccesses[chain[i]]
+        mut val base: MidOperand = <MidOperand.Access candidate=c.decls.accessCandidates.count() />
+        if i + 1U64 < chain.count() {
+            base = <MidOperand.Copy place=values[i + 1U64] />
+        } else {
+            base = midAccessInput(c: c, body: body, exprId: access.baseExpr, term: access.baseTerm)
+        }
+        val key: MidOperand = midAccessInput(c: c, body: body, exprId: access.keyExpr, term: access.keyTerm)
+        match base { MidOperand.Access(candidate: _) => { return <MidAccessError.UnsupportedAccessBase /> } _ => {} }
+        match key { MidOperand.Access(candidate: _) => { return <MidAccessError.UnsupportedAccessKey /> } _ => {} }
+        val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+        mut val receiverOperand: MidOperand = base
+        if setter.callee < c.arena.funcs.count() && c.arena.funcs[setter.callee].selfInout {
+            match base {
+                MidOperand.Copy(place: val place) => { receiverOperand = <MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> /> }
+                _ => { return <MidAccessError.UnsupportedSetterReceiver /> }
+            }
+        }
+        val setterBlock: U64 = setterStart + i * 2U64
+        val afterSetter: U64 = setterBlock + 1U64
+        val setterTerm: MidTerminator = <MidTerminator.Call callee=<MidCallTarget.Resolved resolution=access.writeResolution /> receiver=<MidCallReceiver.Value operand=receiverOperand /> args=[key, <MidOperand.Copy place=values[i] />] destination=setterPlaces[i] target=afterSetter />
+        blocks.set(i: setterBlock, value: <MidBlock terminator=setterTerm />)
+        mut val cleanup: Array[MidStatement] = [<MidStatement.Drop place=values[i] />]
+        if dropSetter[i] { cleanup.append(<MidStatement.Drop place=setterPlaces[i] />) }
+        val continuation: MidTerminator = if i + 1U64 < chain.count() { give <MidTerminator.Goto target=setterStart + (i + 1U64) * 2U64 /> } else { give <MidTerminator.Goto target=target /> }
+        blocks.set(i: afterSetter, value: <MidBlock statements=cleanup terminator=continuation />)
+        i += 1U64
+    }
+    return <MidAccessError.None />
+}
+
+// Expand each selected access into read -> parent(inout temp) -> writeback ->
+// cleanup.  The input and descriptor identities have all been frozen; this
+// code never resolves a collection method or reads a source type.  A parent
+// can contain several access markers; processing the growing block list makes
+// those nested expansions explicit instead of silently choosing one.
+export fn elaborateMidAccesses(c: inout Comp, body: MidBody) -> MidAccessElaboration {
+    mut val locals: Array[MidLocalDecl] = body.locals
+    mut val blocks: Array[MidBlock] = body.blocks
+    mut val blockI: U64 = 0U64
+    while blockI < blocks.count() {
+        val source: MidBlock = blocks[blockI]
+        match source.terminator {
+            MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
+                match callee {
+                    MidCallTarget.Resolved(resolution: val parentResolution) => {
+                        mut val candidate: U64 = c.decls.accessCandidates.count()
+                        mut val role: U64 = 0U64
+                        match receiver {
+                            MidCallReceiver.Value(operand: val receiverOperand) => {
+                                match receiverOperand {
+                                    MidOperand.Access(candidate: val receiverCandidate) => {
+                                        candidate = receiverCandidate
+                                        role = 1U64
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                        if role == 0U64 {
+                            mut val argI: U64 = 0U64
+                            while argI < args.count() {
+                                match args[argI] {
+                                    MidOperand.Access(candidate: val argumentCandidate) => {
+                                        candidate = argumentCandidate
+                                        role = 2U64
+                                        argI = args.count()
+                                    }
+                                    _ => { argI += 1U64 }
+                                }
+                            }
+                        }
+                        if role != 0U64 {
+                            val error: MidAccessError = elaborateMidAccessChain(c: inout c, body: body, source: source, blockI: blockI, parentResolution: parentResolution, candidate: candidate, role: role, receiver: receiver, args: args, destination: destination, target: target, locals: inout locals, blocks: inout blocks)
+                            match error {
+                                MidAccessError.None => {}
+                                _ => { return <MidAccessElaboration body=body error=error /> }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        blockI += 1U64
+    }
+    return <MidAccessElaboration body=<MidBody bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=locals scopes=body.scopes blocks=blocks entry=body.entry /> />
+}

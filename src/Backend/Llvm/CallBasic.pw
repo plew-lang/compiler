@@ -8,6 +8,32 @@
 // fn TypeRef args = [retTy, paramTy0, paramTy1, ...].
 
 pub impl LlvmCtx {
+    // Both legacy expression lowering and Mid CFG lowering consume the same
+    // final descriptor.  Keep the carrier-to-source-value projection here as
+    // the legacy counterpart of `midProjectCallResult`; neither path may
+    // inspect an operator spelling to rediscover it.
+    inout fn projectFinalCallResult(c: inout Comp, callId: U64, value: LLVMValueRef) -> LLVMValueRef {
+        val resolution: U64 = c.bodyCalleeIndex(exprId: callId)
+        if resolution >= c.arena.finalCallees.count() { return value }
+        val selected: CallResolution = c.arena.finalCallees[resolution]
+        match selected.resultProjection {
+            CallResultProjection.Identity => { return value }
+            CallResultProjection.BoolNot => { return LLVMBuildNot(self.b, value, anon()) }
+            CallResultProjection.OrderingTest(op: val op) => {
+                val tag: LLVMValueRef = LLVMBuildExtractValue(self.b, value, 0U64, anon())
+                val tagTy: LLVMTypeRef = LLVMTypeOf(tag)
+                val less: LLVMValueRef = LLVMConstInt(tagTy, 0U64, 0I32)
+                val greater: LLVMValueRef = LLVMConstInt(tagTy, 2U64, 0I32)
+                if op == opLt() { return LLVMBuildICmp(self.b, llvmIntEq(), tag, less, anon()) }
+                if op == opLe() { return LLVMBuildICmp(self.b, llvmIntNe(), tag, greater, anon()) }
+                if op == opGt() { return LLVMBuildICmp(self.b, llvmIntEq(), tag, greater, anon()) }
+                if op == opGe() { return LLVMBuildICmp(self.b, llvmIntNe(), tag, less, anon()) }
+                c.errorAt(offset: c.exprOffset(id: callId), msg: "internal error: OrderingTest carries a non-ordering operator")
+                return LLVMConstInt(self.i1ty, 0U64, 0I32)
+            }
+        }
+    }
+
     inout fn closureLlvmFnTy(c: inout Comp, fnRef: U64) -> LLVMTypeRef {
         val t: TypeRef = c.arena.types[fnRef]
         mut val ptys: Array[LLVMTypeRef] = []
@@ -138,7 +164,7 @@ pub impl LlvmCtx {
             self.emitInoutOverlapChecks(c: inout c, f: cf, av: av2, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: pinMark)
             val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[gslot], self.genFnVal[gslot], arrayCPtr(av2), av2.count(), anon())
             self.releaseInoutPins(c: inout c, mark: pinMark)
-            return rv
+            return self.projectFinalCallResult(c: inout c, callId: callId, value: rv)
         }
         // ensureFnInst declined: an `async fn` whose promise-returning entry is declared by
         // declareAsyncFns into the dedicated async-entry table. Resolve it.
@@ -169,6 +195,52 @@ pub impl LlvmCtx {
             val cloVal: LLVMValueRef = LLVMBuildLoad2(self.b, self.closureTy, self.locPtr[cli], anon())
             return self.emitClosureCallValue(c: inout c, cloVal: cloVal, fnRef: fnRef, args: args)
         }
+        // Runtime ABI calls are already closed by the frontend-selected
+        // declaration. Keep this before the ordinary direct-call dispatcher:
+        // neither legacy nor Mid lowering may rediscover Write/Eprint by name.
+        val resolution: U64 = c.bodyCalleeIndex(exprId: callId)
+        if resolution < c.arena.finalCallees.count() {
+            match c.arena.finalCallees[resolution].target {
+                CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                    match intrinsic {
+                        RuntimeIntrinsic.Write => {
+                            if args.len != 1U64 {
+                                c.errorAt(offset: nameStart, msg: "internal error: write runtime intrinsic has an invalid ABI arity")
+                                return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                            }
+                            val argument: U64 = c.argAt(args: args, index: 0U64).expr
+                            return self.emitStrSink(c: inout c, rtName: "plew_write_raw", rtId: 2U64, argExpr: argument)
+                        }
+                        RuntimeIntrinsic.Eprint => {
+                            if args.len != 1U64 {
+                                c.errorAt(offset: nameStart, msg: "internal error: eprint runtime intrinsic has an invalid ABI arity")
+                                return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                            }
+                            val argument: U64 = c.argAt(args: args, index: 0U64).expr
+                            return self.emitStrSink(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: argument)
+                        }
+                        RuntimeIntrinsic.ArgCount => {
+                            if args.len != 0U64 {
+                                c.errorAt(offset: nameStart, msg: "internal error: argCount runtime intrinsic has an invalid ABI arity")
+                                return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                            }
+                            mut val ptys: Array[LLVMTypeRef] = []
+                            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
+                            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: fty)
+                            mut val av: Array[LLVMValueRef] = []
+                            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
+                        }
+                        RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
+                            return self.genNumericIntrinsic(c: inout c, intrinsic: numeric, args: args, errorOffset: nameStart)
+                        }
+                        RuntimeIntrinsic.Buffer(intrinsic: val buffer) => {
+                            return self.genBufferIntrinsic(c: inout c, intrinsic: buffer, args: args)
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         // Resolve the callee up front and dispatch by IDENTITY, not by raw name (audit-3 P0,
         // spec/12): a real Plew function — user OR std, isExtern=false, including std's own
         // `print` and Format wrappers — is emitted through its real body. The intrinsic floor
@@ -195,78 +267,6 @@ pub impl LlvmCtx {
             resolvedPlewIntrinsic = cfIntrinsic.isExtern && !(cfIntrinsic.isCExtern)
         }
         if resolvedPlewIntrinsic {
-        // numeric intrinsic floor (`i8Add`, `u32Lt`, `i64Neg`, …): the primitive op the
-        // std operator-trait witness bodies bottom out in. Lowered by intrinsic-function
-        // IDENTITY (like the Buffer floor below) — this is the ONE place a primitive op is
-        // known; `+`/`<`/`~`/… reach it only through those witness bodies (spec/12, O6).
-        val numIv: LLVMValueRef = self.genNumIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-        if LLVMIsNull(numIv) == 0I32 {
-            return numIv
-        }
-        // Buffer floor intrinsics in free-function form, lowered by intrinsic-function
-        // IDENTITY (not by receiver-type recognition): the `Buffer[T]` methods are now
-        // ordinary monomorphized generic methods whose bodies call these intrinsics, so
-        // each `buffer*(buffer: …, …)` lowers to the same header op as the old call-site
-        // interception did. The element type is recovered from the buffer argument; args
-        // arrive in the extern declaration's parameter order. (collections.md §3-付録3.)
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferNew") {
-            return self.genLlvmBufferNew(c: inout c)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferCount") {
-            return self.genLlvmBufferCount(c: inout c, recv: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferCapacity") {
-            return self.genLlvmBufferCapacity(c: inout c, recv: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferReserve") {
-            return self.genLlvmBufferReserve(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, addCapExpr: c.argAt(args: args, index: 1U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferAppend") {
-            return self.genLlvmBufferAppend(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, valueExpr: c.argAt(args: args, index: 1U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferInsertAt") {
-            return self.genLlvmBufferInsertAt(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr, valueExpr: c.argAt(args: args, index: 2U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferGet") {
-            return self.genLlvmBufferGet(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferSet") {
-            return self.genLlvmBufferSet(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr, valueExpr: c.argAt(args: args, index: 2U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferRemoveLast") {
-            return self.genLlvmBufferRemoveLast(c: inout c, recv: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferRemoveAt") {
-            return self.genLlvmBufferRemoveAt(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferSwapRemove") {
-            return self.genLlvmBufferSwapRemove(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferClear") {
-            return self.genLlvmBufferClear(c: inout c, recv: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferTruncate") {
-            return self.genLlvmBufferTruncate(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, countExpr: c.argAt(args: args, index: 1U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferEq") {
-            return self.genLlvmBufferEq(c: inout c, lhs: c.argAt(args: args, index: 0U64).expr, rhs: c.argAt(args: args, index: 1U64).expr)
-        }
-        // COMPILE-TIME constant: is the element type byte-comparable (memcmp == value eq)?
-        // True ONLY for an INTEGER element (LLVM kind 8) — its bit pattern is its value, so
-        // memcmp matches `iN.eq` exactly. FLOATS are excluded (kinds 2/3): memcmp of the raw
-        // bits diverges from the element's real `F64`/`F32` witness — `-0.0`/`+0.0` are equal
-        // under IEEE `oeq` but differ bytewise, and a NaN element must PANIC (spec/02) yet
-        // memcmp silently reports NaN==NaN equal. A struct/enum/pointer element likewise has
-        // padding or heap-owned fields. All non-integer elements fall to the element-wise
-        // witness loop (each element's own `eq`), so array `==` never diverges from scalar
-        // `==`. The constant `i1` folds the source-level `if` to a single static path.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bufferBytewiseComparable") {
-            val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
-            val k: U32 = LLVMGetTypeKind(elemTy)
-            mut val bytewise: U64 = 0
-            if k == 8U32 { bytewise = 1U64 }
-            return LLVMConstInt(self.i1ty, bytewise, 0I32)
-        }
         // Reference-cell control-block intrinsics (spec/03), backing weak()/upgrade()/asRef().
         // The
         // cell value IS the argument's value (an opaque pointer); each op touches a counter.
@@ -319,12 +319,6 @@ pub impl LlvmCtx {
             mut val sargs: Array[LLVMValueRef] = []
             sargs.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
             return LLVMBuildCall2(self.b, sleepTy, sleepFn, arrayCPtr(sargs), 1U64, anon())
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "write") {
-            return self.emitStrSink(c: inout c, rtName: "plew_write_raw", rtId: 2U64, argExpr: c.argAt(args: args, index: 0U64).expr)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") {
-            return self.emitStrSink(c: inout c, rtName: "plew_eprint_raw", rtId: 3U64, argExpr: c.argAt(args: args, index: 0U64).expr)
         }
         // @Std/Io writeByte(b: U8): putchar.
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "writeByte") {

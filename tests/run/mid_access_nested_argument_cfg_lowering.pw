@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+// Main remains legacy for construction. The helper forces a completed inout
+// method call to become the argument of a second Mid call.
+val midAccessNestedArgumentAnchor: I64 = 0I64
+
+struct Counter {
+    pub mut val n: I32
+}
+pub impl Counter { factory }
+
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0I32
+        return old
+    }
+}
+
+fn showFirst(xs: inout Array[Counter]) {
+    print(xs[0I64].takeAndReset())
+}
+
+fn main() {
+    mut val xs: Array[Counter] = []
+    xs.append(<Counter n=7I32 />)
+    showFirst(xs: inout xs)
+    print(xs[0I64].n)
+}

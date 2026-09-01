@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+val midAccessNestedIndexAnchor: I64 = 0I64
+
+struct Counter { pub mut val n: I32 }
+pub impl Counter { factory }
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0I32
+        return old
+    }
+}
+
+fn resetNested(rows: inout Array[Array[Counter]]) -> I32 {
+    return rows[0I64][0I64].takeAndReset()
+}
+
+fn main() {
+    mut val rows: Array[Array[Counter]] = []
+    rows.append([<Counter n=7I32 />])
+    print(resetNested(rows: inout rows))
+    print(rows[0I64][0I64].n)
+}

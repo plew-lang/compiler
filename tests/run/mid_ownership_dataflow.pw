@@ -1,5 +1,5 @@
 import @Std/Io with { write }
-import /Mid with { MidPlace, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops, verifyMidBody }
+import /Mid with { MidPlace, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidCallReceiver, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerifyError, analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops, verifyMidBody }
 
 fn printState(state: MidOwnership) {
     match state {
@@ -22,7 +22,7 @@ fn main() {
     val place: MidPlace = <MidPlace local=0U64 />
     val resultPlace: MidPlace = <MidPlace local=1U64 />
     val entry: MidBlock = <MidBlock terminator=<MidTerminator.Switch discriminant=<MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> /> values=[1I64] targets=[1U64] otherwise=2U64 /> />
-    val moved: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> args=[<MidOperand.Move place=place />] destination=resultPlace target=3U64 /> />
+    val moved: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Move place=place />] destination=resultPlace target=3U64 /> />
     val kept: MidBlock = <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />
     val join: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
     val body: MidBody = <MidBody locals=[file, result] blocks=[entry, moved, kept, join] entry=0U64 />
@@ -48,7 +48,7 @@ fn main() {
         MidVerifyError.None => { write(s: "elaborated-valid\n") }
         _ => { write(s: "elaborated-invalid\n") }
     }
-    val badEntry: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> args=[<MidOperand.Move place=place />, <MidOperand.Move place=place />] destination=resultPlace target=1U64 /> />
+    val badEntry: MidBlock = <MidBlock terminator=<MidTerminator.Call callee=<MidCallTarget.Resolved resolution=0U64 /> receiver=<MidCallReceiver.None /> args=[<MidOperand.Move place=place />, <MidOperand.Move place=place />] destination=resultPlace target=1U64 /> />
     val badReturn: MidBlock = <MidBlock terminator=<MidTerminator.Return /> />
     val bad: MidBody = <MidBody locals=[file, result] blocks=[badEntry, badReturn] entry=0U64 />
     match verifyMidBody(body: bad).error {

@@ -1,0 +1,24 @@
+// An inout method on an indexed element may itself be nested in a value
+// expression. Lower must materialize the element, preserve the call result,
+// write the element back, then continue with the enclosing expression.
+import @Std/Io with { print }
+
+struct Counter {
+    pub mut val n: I32
+}
+pub impl Counter { factory }
+
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0
+        return old
+    }
+}
+
+fn main() {
+    mut val xs: Array[Counter] = []
+    xs.append(<Counter n=7 />)
+    print(xs[0].takeAndReset())
+    print(xs[0].n)
+}

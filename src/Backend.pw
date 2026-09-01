@@ -8,19 +8,88 @@
 import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileBytes, eprint, fileExists }
 import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
-import @Std/Core with { stringFromBytesUnchecked, truncU8 }
+import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
-import ./Frontend with { Comp, intern, spansEqual, runFrontend }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import ./Frontend with { Comp, intern, spansEqual, runFrontend, tracePhase, tracePhaseCount }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
 // frontend `part` or from reaching LLVM through ambient AST recovery.
-import ./Mid with { MidPlace, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerification, MidVerifyError, MidBuildError, MidBodyBuild, MidInstantiateError, MidInstantiation, buildParametricMidBody, instantiateMidBody, elaborateMidDrops, verifyMidBody }
+import ./Mid with { MidPlace, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody, MidVerification, MidVerifyError, MidUnsupportedBuild, MidBuildError, MidBodyBuild, MidInstantiateError, MidInstantiation, MidAccessError, MidAccessElaboration, buildParametricMidBody, instantiateMidBody, elaborateMidAccesses, elaborateMidDrops, verifyMidBody }
 export ./Frontend with { Comp }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, Bind, BindRange, Arg, ArgRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Diag with { compileErrorAt, digitStrU }
 import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opDiv, opRem, opAnd, opOr, opNot, opBitAnd, opBitOr, opBitXor, opShl, opShr, opBitNot, opAssign, isBinTraitOp, binTraitMethodName, unaryMethodName }
+
+// The initial backend subset is deliberately fail-closed. Keep the reason as
+// a closed value rather than an anonymous Bool so coverage can account for
+// every legacy fallback without inspecting source syntax.
+//
+// A call needs a second closed layer: `Call` is a boundary between Mid and an
+// ABI, not one implementation feature.  Conflating its independent admission
+// facts made coverage incapable of selecting the next lowering slice.
+export enum MidCallPreflight {
+    None
+    Resolution
+    Target
+    Callee
+    Async
+    Receiver
+    RuntimeAbi
+    Buffer
+    Extern
+    GenericArguments
+    ArgumentShape
+    Result
+    Argument
+}
+
+export enum MidLlvmPreflight {
+    Ready
+    AbiLocals
+    AssignmentProjection
+    UnsupportedRvalue
+    ConversionOperand
+    DropProjection
+    ScopeExit
+    Switch
+    Call(reason: MidCallPreflight)
+    ReturnValue
+    Terminator
+}
+
+// These are frontend/ABI admission facts, separate from a Mid or LLVM
+// preflight failure.  A body can report more than one reason; coverage uses
+// that fact set to prioritize the next representation slice without guessing
+// from function spelling.
+export enum MidEligibilityReason {
+    Async
+    Extern
+    InoutReceiver
+    MoveReceiver
+    Globals
+}
+
+// One frozen body instance that did not take the Mid LLVM path. `bodyId` is
+// the frontend's canonical BodyInstance identity; no source spelling or AST
+// recovery is retained in this report.
+export enum MidCoverageCategory {
+    Build(reason: MidBuildError)
+    MissingBodyInstance
+    Instantiate
+    Access
+    Verify(reason: MidVerifyError)
+    Preflight(reason: MidLlvmPreflight)
+    Eligibility(reason: MidEligibilityReason)
+}
+
+export struct MidCoverageRecord {
+    pub val bodyId: U64 = 0U64
+    pub val fnIdx: U64 = 0U64
+    pub val category: MidCoverageCategory = <MidCoverageCategory.Build reason=<MidBuildError.InvalidFunction /> />
+}
+pub impl MidCoverageRecord { factory }
 
 // ---- backend state (threaded inout through the emitters) ----
 //
@@ -30,6 +99,7 @@ import ./Ops with { opEq, opNe, opLt, opLe, opGt, opGe, opAdd, opSub, opMul, opD
 // shadowing redeclaration wins). `terminated` tracks whether the current basic
 // block already has a terminator, so we never append after a ret/br.
 struct LlvmCtx {
+    pub mut val midCoverage: Array[MidCoverageRecord]
     pub val ctx: LLVMContextRef
     pub val mod: LLVMModuleRef
     pub mut val b: LLVMBuilderRef
@@ -919,6 +989,7 @@ fn closureSupported(c: inout Comp, cloId: U64) -> Bool {
 }
 
 export fn emitLlvm(c: inout Comp) {
+    tracePhase(c: inout c, label: "backend:emit:start")
     val ctx: LLVMContextRef = LLVMContextCreate()
     val m: LLVMModuleRef = LLVMModuleCreateWithNameInContext(cstr(s: "plew"), ctx)
     val ptrty: LLVMTypeRef = LLVMPointerTypeInContext(ctx, 0U32)
@@ -956,7 +1027,7 @@ export fn emitLlvm(c: inout Comp) {
         i1ty=LLVMInt1TypeInContext(ctx) i8ty=LLVMInt8TypeInContext(ctx) i16ty=LLVMInt16TypeInContext(ctx)
         i32ty=LLVMInt32TypeInContext(ctx) i64ty=i64ty f64ty=LLVMDoubleTypeInContext(ctx)
         voidty=LLVMVoidTypeInContext(ctx) ptrty=ptrty strty=strty arrayTy=arrayTy closureTy=closureTy anyTy=anyTy anyVtType=[] anyVtTrait=[] anyVtBindKey=[] anyVtVal=[]
-        curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false
+        curFn=LLVMConstInt(LLVMInt32TypeInContext(ctx), 0U64, 0I32) terminated=false midCoverage=[]
         curIsMain=false curRetVoid=true curRetTy=LLVMVoidTypeInContext(ctx) curRetTyStart=0 curRetTyLen=0 giveValue=LLVMConstInt(LLVMInt64TypeInContext(ctx), 0U64, 0I32) genStructRefs=[] genStructTys=[] genStructDefs=[] genEnumRefs=[] genEnumTys=[] genEnumDefs=[] selfStart=0 selfLen=0 curRecvInstRef=0 expectedTy=0 curRetRef=0 curBodyMark=0 nLocals=0
         fnIdx=[] fnVal=[] fnTy=[] genFnK=[] genFnVal=[] genFnTy=[] genFnEmit=[] genMethK=[] genMethInst=[] genMethVal=[] genMethTy=[] genMethBody=[] genMethOwn=[]
         locStart=[] locLen=[] locPtr=[] locTy=[] locKind=[] locStructIdx=[] locIsArr=[] locElemTy=[] locElemKind=[] locTypeRef=[] locElemTypeRef=[] locOwned=[] locMoved=[] locCellHome=[] declId=[] declFn=[] declTy=[] cloIdx=[] cloVal=[] cloTy=[] thunkIdx=[] thunkVal=[] thunkTy=[] dropWitReg=[] dropWitVal=[] dropWitTy=[] retWitSidx=[] retWitVal=[] retWitTy=[] copyWitSidx=[] copyWitVal=[] copyWitTy=[] enumRelWitReg=[] enumRelWitVal=[] enumRelWitTy=[] enumRetWitEid=[] enumRetWitVal=[] enumRetWitTy=[] enumCopyWitEid=[] enumCopyWitVal=[] enumCopyWitTy=[] dropWitDone=0 retWitDone=0 copyWitDone=0 enumRelWitDone=0 enumRetWitDone=0 enumCopyWitDone=0 provEmit=[] genMethEmit=[]
@@ -984,6 +1055,7 @@ export fn emitLlvm(c: inout Comp) {
     st.registerGenStructNames(c: inout c)
     st.registerGenEnums(c: inout c)
     st.registerGenStructBodies(c: inout c)
+    tracePhase(c: inout c, label: "backend:types:done")
 
     // pass 1: declare generic free-fn instances + generic method instances (one per
     // receiver instantiation). Non-generic free/assoc fns and methods are no longer
@@ -998,12 +1070,14 @@ export fn emitLlvm(c: inout Comp) {
     // declare lambda-lifted closures (after the named types + functions they may
     // reference exist), so a closure literal can build its {fn, env} value.
     st.collectClosures(c: inout c)
+    tracePhase(c: inout c, label: "backend:declarations:done")
 
     // module-level variables (spec/15): emit `plew_init_globals` (one body that runs
     // every global's initializer once) and record each global's metadata, BEFORE any
     // function body so `seedGlobals` can re-bind them at every body entry. Done after
     // pass-1 declarations so an initializer may call a user function.
     st.genLlvmInitGlobals(c: inout c)
+    tracePhase(c: inout c, label: "backend:globals:done")
 
     // pass 2: emit `main` and every plain user function's body.
     mut val fi: U64 = 0
@@ -1034,11 +1108,14 @@ export fn emitLlvm(c: inout Comp) {
         // calls macro-generated functions absent from this build, is simply never reached.)
         fi += 1
     }
+    tracePhase(c: inout c, label: "backend:entry:done")
     // async fn entry + resume bodies (main's entry drains the loop).
     st.emitAsyncFns(c: inout c)
+    tracePhase(c: inout c, label: "backend:async:done")
     // generic-method instance bodies. (Free-function instance bodies — eager `gf` plus any
     // lazily declared via ensureFnInst — drain through genFnEmit in the fixpoint loop below.)
     st.emitGenMethods(c: inout c)
+    tracePhase(c: inout c, label: "backend:generic-methods:done")
     // `emitGenMethods` has consumed every slot available through main/async
     // emission. Closure bodies are emitted next and may enqueue additional
     // methods; remember this boundary before they run so the fixpoint drains
@@ -1049,6 +1126,7 @@ export fn emitLlvm(c: inout Comp) {
     // named declarations are not first-class values.
     st.emitClosures(c: inout c)
     st.emitThunks(c: inout c)
+    tracePhase(c: inout c, label: "backend:closures-thunks:done")
     // provided trait methods + lazily-declared std/generic methods reached during
     // the passes above. Both queues can grow as bodies emit (a provided body calls
     // a std generic method, a generic body reaches a provided one), so drain to a
@@ -1061,7 +1139,13 @@ export fn emitLlvm(c: inout Comp) {
     // a shared provided-method AST observe another instance's ambient state.
     mut val genfDone: U64 = 0
     mut val draining: Bool = true
+    tracePhase(c: inout c, label: "backend:drain:start")
+    mut val drainRound: U64 = 0U64
     while draining {
+        tracePhaseCount(c: inout c, label: "backend:drain:round", count: drainRound)
+        tracePhaseCount(c: inout c, label: "backend:drain:provided-queued", count: st.provEmit.count())
+        tracePhaseCount(c: inout c, label: "backend:drain:generic-method-queued", count: st.genMethEmit.count())
+        tracePhaseCount(c: inout c, label: "backend:drain:generic-function-queued", count: st.genFnEmit.count())
         while provDone < st.provEmit.count() {
             st.genLlvmFuncBody(c: inout c, fi: st.provEmit[provDone], fv: st.fnVal[st.userFnSlot(idx: st.provEmit[provDone])], environment: c.bodyInstanceEnvironment(fnIdx: st.provEmit[provDone], args: [], recvInstRef: 0U64))
             provDone += 1
@@ -1081,6 +1165,9 @@ export fn emitLlvm(c: inout Comp) {
         // genMethEmit — so emitWitnessBodies must run INSIDE this fixpoint loop, not after it,
         // or those deinit method bodies would be declared but never emitted (link error).
         st.emitWitnessBodies(c: inout c)
+        tracePhaseCount(c: inout c, label: "backend:drain:provided-after-witness", count: st.provEmit.count())
+        tracePhaseCount(c: inout c, label: "backend:drain:generic-method-after-witness", count: st.genMethEmit.count())
+        tracePhaseCount(c: inout c, label: "backend:drain:generic-function-after-witness", count: st.genFnEmit.count())
         if provDone >= st.provEmit.count() {
             if genmDone >= st.genMethEmit.count() {
                 if genfDone >= st.genFnEmit.count() {
@@ -1088,7 +1175,9 @@ export fn emitLlvm(c: inout Comp) {
                 }
             }
         }
+        drainRound += 1U64
     }
+    tracePhase(c: inout c, label: "backend:drain:done")
     if !(foundMain) {
         compileErrorAt(line: 0, msg: "LLVM backend: no `main` function found")
     }
@@ -1114,9 +1203,23 @@ export fn emitLlvm(c: inout Comp) {
             fh = LLVMGetNextFunction(fh)
         }
     }
+    tracePhase(c: inout c, label: "backend:print-module:start")
     val ir: CPtr[U8] = LLVMPrintModuleToString(st.mod)
+    tracePhase(c: inout c, label: "backend:print-module:done")
+    tracePhase(c: inout c, label: "backend:write:start")
     write(s: stringFromCString(ir))
+    tracePhase(c: inout c, label: "backend:write:done")
     LLVMDisposeMessage(ir)
+    if c.emitMidCoverage || c.requireMid {
+        mut val coverage: U64 = 0U64
+        while coverage < st.midCoverage.count() {
+            st.emitMidCoverageRecord(c: inout c, record: st.midCoverage[coverage])
+            coverage += 1U64
+        }
+        if c.requireMid && st.midCoverage.count() != 0U64 {
+            exit(code: 1)
+        }
+    }
 }
 
 // A unique, stable LLVM symbol for the module-level variable at lowering index `idx`

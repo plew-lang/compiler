@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+// A generic return crosses its declared existential ABI boundary in two body
+// instances. The selected bound proof must be frozen per BodyInstance; Mid
+// must not rediscover it from the return expression.
+trait Metric { fn value() -> I64 }
+
+struct Left { pub val number: I64 }
+pub impl Left { factory }
+pub impl Left as Metric { fn value() -> I64 { return self.number } }
+
+struct Right { pub val number: I64 }
+pub impl Right { factory }
+pub impl Right as Metric { fn value() -> I64 { return self.number } }
+
+fn erase[T](value: T) -> any Metric where T: Metric {
+    return value
+}
+
+fn main() {
+    print(erase(value: <Left number=5I64 />).value())
+    print(erase(value: <Right number=8I64 />).value())
+}

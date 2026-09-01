@@ -1,0 +1,25 @@
+import @Std/Io with { write }
+import /Ir with { RuntimeIntrinsic, CallTarget }
+
+fn main() {
+    val writeTarget: CallTarget = <CallTarget.RuntimeIntrinsic intrinsic=<RuntimeIntrinsic.Write /> />
+    val eprintTarget: CallTarget = <CallTarget.RuntimeIntrinsic intrinsic=<RuntimeIntrinsic.Eprint /> />
+    match writeTarget {
+        CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+            match intrinsic {
+                RuntimeIntrinsic.Write => { write(s: "write\n") }
+                _ => { write(s: "wrong-write\n") }
+            }
+        }
+        _ => { write(s: "wrong-write\n") }
+    }
+    match eprintTarget {
+        CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+            match intrinsic {
+                RuntimeIntrinsic.Eprint => { write(s: "eprint\n") }
+                _ => { write(s: "wrong-eprint\n") }
+            }
+        }
+        _ => { write(s: "wrong-eprint\n") }
+    }
+}

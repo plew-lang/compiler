@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+
+// Keep main on the legacy path. `relay` can use Mid only when a Call
+// terminator carries its resolved value receiver separately from formal args.
+val mainPathAnchor: I64 = 0I64
+
+struct Marker {}
+pub impl Marker { factory }
+
+pub impl Marker {
+    fn decide(early: Bool) -> I64 {
+        // Keep the callee itself outside the currently supported Mid subset.
+        // The `mid:` marker must therefore come from `relay`'s receiver call,
+        // not from this independent method body.
+        val ignored: Array[I64] = [1I64]
+        if early {
+            return 31I64
+        }
+        return 32I64
+    }
+}
+
+fn relay(marker: Marker) -> I64 {
+    val result: I64 = marker.decide(early: true)
+    return result
+}
+
+fn main() {
+    print(relay(marker: <Marker />))
+}

@@ -1,0 +1,10 @@
+import @Std/Io with { write }
+
+fn ignoredValue() {
+    1I64
+}
+
+fn main() {
+    ignoredValue()
+    write(s: "ok\n")
+}

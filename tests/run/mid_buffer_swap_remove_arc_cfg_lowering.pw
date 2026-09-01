@@ -1,0 +1,24 @@
+import @Std/Io with { write }
+import @Std/Core with { Buffer, MutableRef, bufferAppend, bufferSwapRemove }
+
+unique struct Cell {
+    pub val id: I64
+    deinit { write(s: self.id.format(format: "") + "\n") }
+}
+pub impl Cell { factory }
+
+// Swap removal returns the first owner and relocates the last owner into the
+// buffer's remaining live range without ARC traffic for that relocation.
+val midBufferSwapRemoveArcAnchor: I64 = 0I64
+
+fn takeFirst(buffer: inout Buffer[MutableRef[Cell]]) -> MutableRef[Cell] {
+    return bufferSwapRemove(buffer: inout buffer, index: 0U64)
+}
+
+fn main() {
+    mut val buffer: Buffer[MutableRef[Cell]] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: <MutableRef[Cell] value=<Cell id=1I64 /> />)
+    bufferAppend(buffer: inout buffer, value: <MutableRef[Cell] value=<Cell id=2I64 /> />)
+    val removed: MutableRef[Cell] = takeFirst(buffer: inout buffer)
+    write(s: "after\n")
+}

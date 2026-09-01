@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+// Keep construction in legacy main. The helper's return expression is the
+// minimal value continuation after an indexed inout receiver call.
+val midAccessNestedReturnAnchor: I64 = 0I64
+
+struct Counter {
+    pub mut val n: I32
+}
+pub impl Counter { factory }
+
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0I32
+        return old
+    }
+}
+
+fn takeFirst(xs: inout Array[Counter]) -> I32 {
+    return xs[0I64].takeAndReset()
+}
+
+fn main() {
+    mut val xs: Array[Counter] = []
+    xs.append(<Counter n=7I32 />)
+    print(takeFirst(xs: inout xs))
+    print(xs[0I64].n)
+}

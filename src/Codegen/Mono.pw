@@ -18,4 +18,3 @@ part ./Mono/Ground
 part ./Mono/Scan
 part ./Mono/FreeFn
 part ./Mono/Call
-part ./Mono/Collect

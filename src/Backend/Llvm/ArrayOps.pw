@@ -5,6 +5,23 @@
 // `{ ptr data, i64 count }` value.
 
 pub impl LlvmCtx {
+    // Mid's array construction has already evaluated, typed, and ownership-
+    // classified its operands. Keep this value-based entry separate from the
+    // source ExprRange entry above it: it cannot accidentally reopen source
+    // expression/type recovery during backend lowering.
+    inout fn genLlvmArrayValues(c: inout Comp, values: Array[LLVMValueRef], elemTy: LLVMTypeRef, elemRef: U64) -> LLVMValueRef {
+        if values.count() == 0U64 {
+            return self.arrValMake(c: inout c, data: LLVMConstNull(self.ptrty), count: LLVMConstInt(self.i64ty, 0U64, 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
+        }
+        val data: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(elemTy), cap: LLVMConstInt(self.i64ty, values.count(), 0I32))
+        mut val i: U64 = 0U64
+        while i < values.count() {
+            LLVMBuildStore(self.b, self.coerceElem(v: values[i], elemTy: elemTy), self.arrElemPtr(elemTy: elemTy, data: data, idx: LLVMConstInt(self.i64ty, i, 0I32)))
+            i += 1U64
+        }
+        return self.arrValMake(c: inout c, data: data, count: LLVMConstInt(self.i64ty, values.count(), 0I32), aggTy: self.arrayInstTy(c: inout c, elemRef: elemRef))
+    }
+
     inout fn genLlvmArrayLit(c: inout Comp, elems: ExprRange, elemTy: LLVMTypeRef, elemRef: U64 = 0) -> LLVMValueRef {
         val n: U64 = elems.len
         if n == 0U64 {
@@ -213,6 +230,32 @@ pub impl LlvmCtx {
     // it). The element size is irrelevant at cap=0, so a unit elemSize suffices.
     inout fn genLlvmBufferNew(c: inout Comp) -> LLVMValueRef {
         return self.rawbufAlloc(c: inout c, elemSize: LLVMConstInt(self.i64ty, 1U64, 0I32), cap: LLVMConstInt(self.i64ty, 0U64, 0I32))
+    }
+
+    // The legacy endpoint for the closed Buffer ABI descriptor.  The frontend
+    // selected both the declaration and its generic call facts; this match
+    // never observes a source function spelling.
+    inout fn genBufferIntrinsic(c: inout Comp, intrinsic: BufferIntrinsic, args: ArgRange) -> LLVMValueRef {
+        match intrinsic {
+            BufferIntrinsic.New => { return self.genLlvmBufferNew(c: inout c) }
+            BufferIntrinsic.Count => { return self.genLlvmBufferCount(c: inout c, recv: c.argAt(args: args, index: 0U64).expr) }
+            BufferIntrinsic.Capacity => { return self.genLlvmBufferCapacity(c: inout c, recv: c.argAt(args: args, index: 0U64).expr) }
+            BufferIntrinsic.Reserve => { return self.genLlvmBufferReserve(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, addCapExpr: c.argAt(args: args, index: 1U64).expr) }
+            BufferIntrinsic.Append => { return self.genLlvmBufferAppend(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, valueExpr: c.argAt(args: args, index: 1U64).expr) }
+            BufferIntrinsic.InsertAt => { return self.genLlvmBufferInsertAt(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr, valueExpr: c.argAt(args: args, index: 2U64).expr) }
+            BufferIntrinsic.Get => { return self.genLlvmBufferGet(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr) }
+            BufferIntrinsic.Set => { return self.genLlvmBufferSet(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr, valueExpr: c.argAt(args: args, index: 2U64).expr) }
+            BufferIntrinsic.RemoveLast => { return self.genLlvmBufferRemoveLast(c: inout c, recv: c.argAt(args: args, index: 0U64).expr) }
+            BufferIntrinsic.RemoveAt => { return self.genLlvmBufferRemoveAt(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr) }
+            BufferIntrinsic.SwapRemove => { return self.genLlvmBufferSwapRemove(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, indexExpr: c.argAt(args: args, index: 1U64).expr) }
+            BufferIntrinsic.Clear => { return self.genLlvmBufferClear(c: inout c, recv: c.argAt(args: args, index: 0U64).expr) }
+            BufferIntrinsic.Truncate => { return self.genLlvmBufferTruncate(c: inout c, recv: c.argAt(args: args, index: 0U64).expr, countExpr: c.argAt(args: args, index: 1U64).expr) }
+            BufferIntrinsic.Eq => { return self.genLlvmBufferEq(c: inout c, lhs: c.argAt(args: args, index: 0U64).expr, rhs: c.argAt(args: args, index: 1U64).expr) }
+            BufferIntrinsic.BytewiseComparable => {
+                val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
+                return self.genLlvmBufferBytewiseComparable(elemTy: elemTy)
+            }
+        }
     }
 
     // `buf.count()`: the live-element count, read from the heap header.
@@ -469,11 +512,16 @@ pub impl LlvmCtx {
     // `Eq` witness; POD is the common floor case handled here.)
     inout fn genLlvmBufferEq(c: inout Comp, lhs: U64, rhs: U64) -> LLVMValueRef {
         val elemTy: LLVMTypeRef = self.bufElemTyOf(c: inout c, id: lhs)
+        return self.genLlvmBufferEqValues(c: inout c, elemTy: elemTy, lhs: self.genLlvmExpr(c: inout c, id: lhs), rhs: self.genLlvmExpr(c: inout c, id: rhs))
+    }
+
+    // Buffer byte equality is a physical ABI operation. Both legacy and Mid
+    // callers have selected the descriptor and materialized operands already;
+    // this helper performs no expression/type lookup or equality selection.
+    inout fn genLlvmBufferEqValues(c: inout Comp, elemTy: LLVMTypeRef, lhs: LLVMValueRef, rhs: LLVMValueRef) -> LLVMValueRef {
         val size: LLVMValueRef = LLVMSizeOf(elemTy)
-        val pa: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)
-        val la: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: pa), size, anon())
-        val pb: LLVMValueRef = self.genLlvmExpr(c: inout c, id: rhs)
-        val lb: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: pb), size, anon())
+        val leftBytes: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: lhs), size, anon())
+        val rightBytes: LLVMValueRef = LLVMBuildMul(self.b, self.rawbufCount(c: inout c, data: rhs), size, anon())
         mut val ptys: Array[LLVMTypeRef] = []
         ptys.append(self.ptrty)
         ptys.append(self.i64ty)
@@ -482,12 +530,21 @@ pub impl LlvmCtx {
         val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 4U64, 0I32)
         val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_str_eq", nameId: 9U64, fnTy: fty)
         mut val av: Array[LLVMValueRef] = []
-        av.append(pa)
-        av.append(la)
-        av.append(pb)
-        av.append(lb)
+        av.append(lhs)
+        av.append(leftBytes)
+        av.append(rhs)
+        av.append(rightBytes)
         val r: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 4U64, anon())
         return LLVMBuildICmp(self.b, llvmIntNe(), r, LLVMConstInt(self.i64ty, 0U64, 0I32), anon())
+    }
+
+    // The ABI fast-path is legal only for LLVM integer element types. Float
+    // bit patterns are not language equality, so they use the selected Eq
+    // witness instead.
+    fn genLlvmBufferBytewiseComparable(elemTy: LLVMTypeRef) -> LLVMValueRef {
+        mut val bytewise: U64 = 0U64
+        if LLVMGetTypeKind(elemTy) == 8U32 { bytewise = 1U64 }
+        return LLVMConstInt(self.i1ty, bytewise, 0I32)
     }
 
     // `buf.insertAt(index, value)`: shift [index, count) right by one and insert a copy of

@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+// One conversion proof crosses enum -> array -> existential box at a function
+// boundary. Construction remains in the producer; the caller owns the Mid
+// conversion and its call-scoped temporary.
+trait Shape { fn area() -> I64 }
+struct Sq { pub val side: I64 }
+pub impl Sq { factory }
+pub impl Sq as Shape { fn area() -> I64 { return self.side * self.side } }
+
+fn make() -> Optional[Array[Sq]] {
+    return <Optional[Array[Sq]].Some v=[<Sq side=2I64 />, <Sq side=3I64 />] />
+}
+
+fn total(value: Optional[Array[any Shape]]) -> I64 {
+    match value {
+        Optional.Some(v: val v) => { return v[0U64].area() + v[1U64].area() }
+        Optional.None => { return 0I64 }
+    }
+}
+
+fn main() { print(total(value: make())) }

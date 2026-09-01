@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferAppend, bufferCount, bufferGet, bufferSwapRemove }
+
+// Swap removal transfers the indexed element and relocates the final slot
+// into its hole without preserving order.
+val midBufferSwapRemoveAnchor: I64 = 0I64
+
+fn takeFirst(buffer: inout Buffer[I64]) -> I64 {
+    return bufferSwapRemove(buffer: inout buffer, index: 0U64)
+}
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: 10I64)
+    bufferAppend(buffer: inout buffer, value: 20I64)
+    bufferAppend(buffer: inout buffer, value: 30I64)
+    print(takeFirst(buffer: inout buffer).format(format: ""))
+    print(bufferGet(buffer: buffer, index: 0U64).format(format: ""))
+    print(bufferCount(buffer: buffer).format(format: ""))
+}

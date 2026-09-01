@@ -9,6 +9,28 @@
 // Everything else falls through to the plain lowerExpr.
 
 pub impl Comp {
+    // Value-position subscript syntax is an Index requirement call.  The
+    // generated node has no source spelling of its own, so give it an explicit
+    // synthetic origin before any semantic pass records templates.
+    inout fn lowerIndexRead(recv: U64, key: U64) -> U64 {
+        // Preserve storage provenance beside the synthetic value read. A later
+        // Record/freeze access elaborator decides whether this is a pure read
+        // or get-modify-set; Lower never guesses from a method name.
+        val place: U64 = self.pushExpr(e: <Expr.Index base=recv index=key />)
+        val call: U64 = self.synthMethodCall(recv: recv, name: "index", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: false, arg1Label: "", arg1: 0U64, arg1HasLabel: false)
+        val originSerial: U64 = self.arena.exprOriginSerial[call]
+        self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=0U64 />)
+        // The write facet intentionally uses the read result only as a
+        // declaration-time Value type anchor. It is detached from executable
+        // source and cannot be scanned/emitted as a second call; access
+        // elaboration replaces it with the materialized temporary after the
+        // selected parent ABI says writeback is necessary.
+        val write: U64 = self.synthMethodCall(recv: recv, name: "indexSet", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: true, arg1Label: "value", arg1: call, arg1HasLabel: false)
+        self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=write originSerial=self.arena.exprOriginSerial[write] receiverTerm=0U64 />)
+        self.decls.accessCandidates.append(<AccessCandidate readExpr=call writeExpr=write placeExpr=place originSerial=originSerial />)
+        return call
+    }
+
     inout fn lowerExprWithCtx(e: ExprAst, ctxRef: U64) -> U64 {
         if ctxRef != 0 {
             if ctxRef < self.arena.types.count() {
@@ -189,7 +211,7 @@ pub impl Comp {
             ExprAst.Index(val base, val index, val span) => {
                 val b: U64 = self.lowerExpr(e: base)
                 val idx: U64 = self.lowerExpr(e: index)
-                result = self.pushExpr(e: <Expr.Index base=b index=idx />)
+                result = self.lowerIndexRead(recv: b, key: idx)
             }
             ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
                 val tn: Bind = self.internBytes(s: typeName)

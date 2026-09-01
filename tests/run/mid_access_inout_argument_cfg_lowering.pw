@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+
+// Keep main on legacy emission; the helper isolates an explicit inout argument
+// access so `mid:` proves that semantic access role=argument reaches Mid.
+val midAccessArgumentAnchor: I64 = 0I64
+
+fn append99(item: inout Array[I32]) {
+    item.append(99I32)
+}
+
+fn appendFirst(rows: inout Array[Array[I32]]) {
+    append99(item: inout rows[0I64])
+}
+
+fn main() {
+    mut val rows: Array[Array[I32]] = []
+    rows.append([1I32, 2I32])
+    appendFirst(rows: inout rows)
+    print(rows[0I64].count())
+    print(rows[0I64][2I64])
+}

@@ -16,9 +16,9 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
+import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, BodyInstance, EnumDef, Func, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -71,6 +71,11 @@ export struct Comp {
     // only coarse boundaries, so an external timestamping wrapper can attribute a
     // self-host build without the voluminous generic-codegen trace.
     pub mut val tracePhases: Bool = false
+    // Internal Mid migration observability. These flags never affect source
+    // resolution or generated LLVM; Backend consumes the frozen body facts and
+    // reports any legacy fallback on stderr after emission.
+    pub mut val emitMidCoverage: Bool = false
+    pub mut val requireMid: Bool = false
     // Optional counters paired with --trace-phases. They isolate monomorphization
     // work amplification without changing its worklist or generated LLVM.
     pub mut val traceExprInstScans: U64 = 0
@@ -659,7 +664,11 @@ fn idInSet(set: Array[U64], id: U64) -> Bool {
 // Sentinel for "no defining module found" (a value no real module id takes).
 fn importCycleSentinel() -> U64 { return 4000000000U64 }
 
-fn tracePhase(c: inout Comp, label: String) {
+// Shared pipeline observation boundary. Backend imports this through the
+// existing Frontend dependency rather than duplicating the CLI flag or
+// inventing an unstructured debug print. Labels are stable phase identities;
+// they are not source-level diagnostics and do not affect generated LLVM.
+export fn tracePhase(c: inout Comp, label: String) {
     if c.tracePhases {
         eprint(text: "[trace-phase] ")
         eprint(text: label)
@@ -674,7 +683,7 @@ fn traceU64(n: U64) {
     eprint(text: digitStrU(d: n % 10U64))
 }
 
-fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
+export fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
     if c.tracePhases {
         eprint(text: "[trace-phase] ")
         eprint(text: label)
@@ -695,7 +704,9 @@ fn recordSemanticExpressionTypes(c: inout Comp) {
         i += 1U64
     }
     tracePhase(c: inout c, label: "semantic-expression-record:start")
+    c.traceExprInstScans = 0U64
     c.recordParametricTypes()
+    tracePhaseCount(c: inout c, label: "semantic-expression-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "semantic-expression-record:done")
 }
 
@@ -711,6 +722,8 @@ export fn runFrontend(c: inout Comp) {
     mut val asan: Bool = false
     mut val traceCodegen: Bool = false
     mut val tracePhases: Bool = false
+    mut val emitMidCoverage: Bool = false
+    mut val requireMid: Bool = false
     mut val entryArgIdx: I64 = 1
     if argCount() > 1 {
         if argAt(1) == "--gen" {
@@ -738,6 +751,14 @@ export fn runFrontend(c: inout Comp) {
             tracePhases = true
             entryArgIdx = 2
         }
+        if argAt(1) == "--emit-mid-coverage" {
+            emitMidCoverage = true
+            entryArgIdx = 2
+        }
+        if argAt(1) == "--require-mid" {
+            requireMid = true
+            entryArgIdx = 2
+        }
     }
     // The caller creates the compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
     // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to
@@ -759,6 +780,8 @@ export fn runFrontend(c: inout Comp) {
     c.asan = asan
     c.traceCodegen = traceCodegen
     c.tracePhases = tracePhases
+    c.emitMidCoverage = emitMidCoverage
+    c.requireMid = requireMid
     tracePhase(c: inout c, label: "load:start")
     mut val pendingItems: Array[TopItemAst] = []
     mut val nextModuleId: U64 = 1
@@ -846,16 +869,24 @@ export fn runFrontend(c: inout Comp) {
             loaded.append(<Bind nameStart=hps nameLen=hashPath.count() fieldStart=nextModuleId fieldLen=hashPath.count() />)
             nextModuleId = nextModuleId + 1
         }
-        // gen mode: force-load @Std/Io as its own module so the synthesized harness
-        // `main` can call `write` even if the target file doesn't import it.
+        // Remember the bundled Io path. It is not force-loaded: the loader
+        // records its module identity if and when an ordinary import reaches it.
+        mut val ioPath: Array[U8] = []
+        appendBytes(into: inout ioPath, from: stdRoot)
+        appendBytes(into: inout ioPath, from: "Io.pw".bytes())
+        mut val processPath: Array[U8] = []
+        appendBytes(into: inout processPath, from: stdRoot)
+        appendBytes(into: inout processPath, from: "Process.pw".bytes())
         if genMode {
-            mut val ioPath: Array[U8] = []
-            appendBytes(into: inout ioPath, from: stdRoot)
-            appendBytes(into: inout ioPath, from: "Io.pw".bytes())
+            // The synthesized derive-runner calls `write` even when the target file
+            // does not import @Std/Io itself.  Load the real bundled declaration in
+            // this mode only; normal builds retain ordinary import-driven loading.
+            // The BFS records its module id below, so this is still the same
+            // declaration-identity path as a source import.
             if fileExists(path: ioPath) {
-                val ios: U64 = pathBuf.count()
+                val iops: U64 = pathBuf.count()
                 appendBytes(into: inout pathBuf, from: ioPath)
-                loaded.append(<Bind nameStart=ios nameLen=ioPath.count() fieldStart=nextModuleId fieldLen=ioPath.count() />)
+                loaded.append(<Bind nameStart=iops nameLen=ioPath.count() fieldStart=nextModuleId fieldLen=ioPath.count() />)
                 nextModuleId = nextModuleId + 1
             }
             // force-load @Plew/Syntax too: the harness calls `parseItem` and the derive
@@ -893,6 +924,32 @@ export fn runFrontend(c: inout Comp) {
             qi += 1
             val moduleId: U64 = ent.fieldStart
             val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
+            if path.count() == ioPath.count() {
+                mut val pathMatchesIo: Bool = true
+                mut val pathIndex: U64 = 0U64
+                while pathIndex < path.count() {
+                    if path[pathIndex] != ioPath[pathIndex] {
+                        pathMatchesIo = false
+                    }
+                    pathIndex += 1U64
+                }
+                if pathMatchesIo {
+                    c.modules.ioModule = moduleId
+                }
+            }
+            if path.count() == processPath.count() {
+                mut val pathMatchesProcess: Bool = true
+                mut val pathIndex: U64 = 0U64
+                while pathIndex < path.count() {
+                    if path[pathIndex] != processPath[pathIndex] {
+                        pathMatchesProcess = false
+                    }
+                    pathIndex += 1U64
+                }
+                if pathMatchesProcess {
+                    c.modules.processModule = moduleId
+                }
+            }
             mut val hasPkgRoot: Bool = false
             mut val pri: U64 = 0
             while pri < c.modules.packageRoots.count() {
@@ -1224,19 +1281,20 @@ export fn runFrontend(c: inout Comp) {
     // top-down grounding (done during lowering) and before collection.
     tracePhase(c: inout c, label: "instantiation-collection:start")
     c.traceExprInstScans = 0U64
+    tracePhase(c: inout c, label: "instantiation-collection:infer-construct:start")
     c.inferConstructTypeArgs()
+    tracePhase(c: inout c, label: "instantiation-collection:infer-construct:done")
     c.inCollection = true
+    tracePhase(c: inout c, label: "instantiation-collection:collect-generic:start")
     c.collectGenInsts()
-    // discover concrete instantiations of generic free functions from call sites
-    // (each emitted as a specialized C function `f_<arg-mangle>`).
-    c.collectFnInsts()
+    tracePhase(c: inout c, label: "instantiation-collection:collect-generic:done")
     c.inCollection = false
     tracePhaseCount(c: inout c, label: "instantiation-collection:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "instantiation-collection:done")
-    // enforce `where T: Trait` bounds (spec/08): each instantiation's concrete
-    // type argument must conform to the trait its parameter is bound to.
+    // Generic bodies are checked abstractly below. Concrete `where` bounds are
+    // checked only when finalization enqueues their grounded BodyInstance; that
+    // is the one semantic edge Mono and LLVM will actually consume.
     tracePhase(c: inout c, label: "generic-checks:start")
-    c.checkFnBounds()
     recordSemanticExpressionTypes(c: inout c)
     // Allocate the persistent expression cache before abstract generic checking.
     // `checkGenericBodies` resolves each lexical identifier under its symbolic
@@ -1271,7 +1329,9 @@ export fn runFrontend(c: inout Comp) {
     // callable cache/visibility decisions.  Produce templates in this second
     // lexical walk only; the early walk never publishes a provisional callee.
     tracePhase(c: inout c, label: "call-template-record:start")
+    c.traceExprInstScans = 0U64
     c.recordParametricTypes(recordCallTemplates: true)
+    tracePhaseCount(c: inout c, label: "call-template-record:scan-exprs", count: c.traceExprInstScans)
     tracePhase(c: inout c, label: "call-template-record:done")
     c.callTemplatesClosed = true
     // Close the per-instance final-callable table only after verification and

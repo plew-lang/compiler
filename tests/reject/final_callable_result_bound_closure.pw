@@ -1,0 +1,19 @@
+// T is inferred only from the call's expected result.  Concrete `where`
+// checking must therefore happen when the final CallTemplate edge grounds
+// marker[T], not only in the retired provisional source-walk worklist.
+trait Label {}
+
+enum Token[T] {
+    Mark
+}
+
+struct Unlabeled {}
+pub impl Unlabeled { factory }
+
+fn marker[T]() -> Token[T] where T: Label {
+    return <Token.Mark />
+}
+
+fn main() {
+    val token: Token[Unlabeled] = marker()
+}

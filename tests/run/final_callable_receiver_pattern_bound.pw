@@ -1,0 +1,26 @@
+import @Std/Io with { print }
+
+// The receiver's outer argument is Array[Yes], while the impl binder T is
+// Yes. Final-body bound checking must use the receiver-pattern witness rather
+// than treating generic arguments as positional aliases.
+trait Label {}
+
+struct Yes {}
+pub impl Yes { factory }
+pub impl Yes as Label {}
+
+struct Packed[T] {
+    pub val value: T
+}
+pub impl Packed { factory }
+
+pub impl[T] Packed[Array[T]] {
+    fn labelCount() -> I64 where T: Label {
+        return 1I64
+    }
+}
+
+fn main() {
+    val packed: Packed[Array[Yes]] = <Packed[Array[Yes]] value=[<Yes />] />
+    print(packed.labelCount())
+}

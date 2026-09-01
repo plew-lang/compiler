@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+
+// A direct-call result crosses the enclosing function's existential return
+// boundary. The call result is not an ABI return value until the enclosing
+// FinalReturnResolution converts it.
+trait Metric { fn value() -> I64 }
+
+struct Item { pub val number: I64 }
+pub impl Item { factory }
+pub impl Item as Metric { fn value() -> I64 { return self.number } }
+
+fn concrete() -> Item { return <Item number=34I64 /> }
+fn erase() -> any Metric { return concrete() }
+
+fn main() { print(erase().value()) }

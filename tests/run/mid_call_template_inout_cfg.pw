@@ -23,7 +23,7 @@ fn main() {
     val result = buildMidBlock(c: inout c, state: inout state, blockId: 0U64)
     mut val isInoutBorrow: Bool = false
     match state.blocks[0U64].terminator {
-        MidTerminator.Call(callee: _, args: val args, destination: _, target: _) => {
+        MidTerminator.Call(callee: _, receiver: _, args: val args, destination: _, target: _) => {
             match args[0U64] {
                 MidOperand.Borrow(place: val place, capability: val capability) => {
                     match capability { MidBorrowCapability.Inout => { isInoutBorrow = place.local == 0U64 } _ => {} }

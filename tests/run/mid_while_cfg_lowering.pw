@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+
+// Keep `main` on the legacy path. `loopNoop` is the Mid candidate: even an
+// empty loop must re-evaluate its condition through a CFG backedge rather
+// than relying on a structured-loop backend path.
+val midWhileAnchor: I64 = 0I64
+
+fn loopNoop() -> I64 {
+    while false {}
+    return 42I64
+}
+
+fn main() {
+    print(loopNoop())
+}

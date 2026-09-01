@@ -249,6 +249,32 @@ pub impl Comp {
         return fields.count()
     }
 
+    // The physical destination type of one already-selected aggregate slot.
+    // Record has consumed the authored field/variant spelling to choose
+    // `fieldIndex`; from here on the aggregate result TypeTerm plus that slot
+    // identity are sufficient.  In particular this must not route through
+    // Check.makeFieldType/TypeInfo: those are contextual checking adapters and
+    // reopening them while freezing semantic facts changes the recording
+    // environment.
+    inout fn aggregateSlotTypeRef(resultRef: U64, isEnum: Bool, variantIndex: U64, fieldIndex: U64) -> U64 {
+        if resultRef == 0U64 || resultRef >= self.arena.types.count() { return 0U64 }
+        val result: TypeRef = self.arena.types[resultRef]
+        if rangeEquals(bytes: self.arena.bytes, start: result.nameStart, len: result.nameLen, kw: "Array") {
+            if result.args.count() == 1U64 { return result.args[0U64] }
+            return 0U64
+        }
+        if isEnum {
+            val enumIndex: U64 = self.anyEnumIndex(nameStart: result.nameStart, nameLen: result.nameLen)
+            if enumIndex >= self.arena.enums.count() || variantIndex >= self.arena.enums[enumIndex].variants.count() { return 0U64 }
+            val fields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
+            if fieldIndex >= fields.count() { return 0U64 }
+            return self.groundUnderInst(instRef: resultRef, tyRef: fields[fieldIndex].ty)
+        }
+        val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
+        if structIndex >= self.arena.structs.count() || fieldIndex >= self.arena.structs[structIndex].fields.count() { return 0U64 }
+        return self.groundUnderInst(instRef: resultRef, tyRef: self.arena.structs[structIndex].fields[fieldIndex].ty)
+    }
+
     inout fn genericEnumFieldTypeInfo(instRef: U64, variantStart: U64, variantLen: U64, fieldStart: U64, fieldLen: U64) -> TypeInfo {
         val t: TypeRef = self.arena.types[instRef]
         val ei: U64 = self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen)

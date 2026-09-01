@@ -1143,10 +1143,10 @@ pub impl Comp {
         return false
     }
 
-    // The `where` bounds of ONE free-function instance — callable per instance so a
-    // DEMAND-registered instance (ensureFnInst during emission, after the collection-time
-    // checkFnBounds sweep already ran) gets the same soundness check as an eagerly
-    // collected one, instead of silently escaping it.
+    // The `where` bounds of one fully-grounded body instance. Call finalization
+    // invokes this before the instance enters the semantic worklist, so every
+    // emitted generic body is checked by the same path regardless of whether
+    // its substitutions came from arguments, a receiver, or an expected result.
     inout fn checkOneFnInstBounds(fin: FnInst) {
         val f: Func = self.arena.funcs[fin.fnIdx]
         mut val bi: U64 = 0
@@ -1191,92 +1191,64 @@ pub impl Comp {
         }
     }
 
-    inout fn checkFnBounds() {
-        mut val ii: U64 = 0
-        while ii < self.monoWork.fnInsts.count() {
-            self.checkOneFnInstBounds(fin: self.monoWork.fnInsts[ii])
-            ii += 1
-        }
-        self.checkMethodBounds()
-    }
-
-    // A generic method's substitutions are not positional aliases for the
-    // receiver declaration's substitutions.  Derive the method environment by
-    // matching its declared receiver pattern against this concrete instance;
-    // the resulting WitnessMatch is the same directional binder map used by
-    // conformance proofs.  This is the first concrete InstanceEnvironment
-    // consumer while the flat Cursor arrays are being retired.
+    // Shared declaration-receiver matcher. It is also the source of truth for
+    // grounding a method result under a structural receiver pattern.
     inout fn methodReceiverEnvironment(f: Func, instRef: U64) -> WitnessMatch {
         if f.recvTy == 0U64 || instRef == 0U64 { return <WitnessMatch /> }
         val noArgs: Array[U64] = []
         return self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: noArgs, typeParams: f.typeParams, declaredTraitArgs: noArgs, typeRef: instRef, traitArgs: noArgs)
     }
 
-    inout fn checkMethodBounds() {
-        mut val gi: U64 = 0
-        while gi < self.monoWork.genInsts.count() {
-            val instRef: U64 = self.monoWork.genInsts[gi]
-            val inst: TypeRef = self.arena.types[instRef]
-            mut val mfi: U64 = 0
-            while mfi < self.arena.funcs.count() {
-                if self.methodMatchesInst(f: self.arena.funcs[mfi], instRef: instRef) {
-                    val f: Func = self.arena.funcs[mfi]
-                    mut val bi: U64 = 0
-                    while bi < self.decls.funcBounds.count() {
-                        val fb: FuncBound = self.decls.funcBounds[bi]
-                        if fb.fnIdx == mfi {
-                            val receiverEnv: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: instRef)
-                            mut val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: f.typeParams, args: inst.args)
-                            if receiverEnv.conformIdx != 0U64 {
-                                mut val positional: Array[U64] = []
-                                mut val bai: U64 = 0U64
-                                while bai < constraint.key.positionalArgs.count() {
-                                    positional.append(self.groundWitnessTypeTerm(ref: constraint.key.positionalArgs[bai], params: f.typeParams, matchResult: receiverEnv))
-                                    bai += 1U64
-                                }
-                                mut val predicates: Array[TraitAssocPredicate] = []
-                                bai = 0U64
-                                while bai < constraint.assocPredicates.count() {
-                                    val predicate: TraitAssocPredicate = constraint.assocPredicates[bai]
-                                    predicates.append(<TraitAssocPredicate member=predicate.member value=self.groundWitnessTypeTerm(ref: predicate.value, params: f.typeParams, matchResult: receiverEnv) span=predicate.span />)
-                                    bai += 1U64
-                                }
-                                constraint = <TraitConstraint key=<TraitInstanceKey owner=constraint.key.owner positionalArgs=positional /> positionalArgsOpen=constraint.positionalArgsOpen assocPredicates=predicates />
-                            }
-                            if fb.paramTy != 0U64 {
-                                mut val lhs: U64 = 0U64
-                                if receiverEnv.conformIdx != 0U64 {
-                                    lhs = self.groundWitnessTypeTerm(ref: fb.paramTy, params: f.typeParams, matchResult: receiverEnv)
-                                } else {
-                                    lhs = self.groundTermInEnvironment(ref: fb.paramTy, params: f.typeParams, values: inst.args)
-                                }
-                                if lhs < self.arena.types.count() {
-                                    val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)
-                                    if !ok {
-                                        self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
-                                    }
-                                }
-                            } else {
-                            mut val pi: U64 = 0
-                            while pi < f.typeParams.count() {
-                                val tp: Bind = f.typeParams[pi]
-                                if tp.nameId == fb.paramNameId {
-                                    if pi < inst.args.count() {
-                                        if !(self.conformsTraitConstraint(ref: inst.args[pi], constraint: constraint)) {
-                                            self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
-                                        }
-                                    }
-                                }
-                                pi += 1
-                            }
-                            }
+    // A receiver pattern such as `impl[T] Box[Array[T]]` does not map the
+    // concrete receiver's argument positionally to the method's T. Derive its
+    // substitution by the same directional pattern match used for conformance
+    // proofs, but run it for the one BodyInstance that finalization enqueues
+    // rather than sweeping every discovered generic layout up front.
+    inout fn checkOneMethodReceiverBounds(fnIdx: U64, f: Func, args: Array[U64], instRef: U64) {
+        if f.recvTy == 0U64 || instRef == 0U64 || instRef >= self.arena.types.count() { return }
+        val receiverEnv: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: instRef)
+        if receiverEnv.conformIdx == 0U64 { return }
+        // Start with method-owned substitutions carried by the final callable,
+        // then replace only binders proven by the receiver pattern. This keeps
+        // `impl[T] Box[Array[T]]` structural while still checking a method's
+        // own generic parameters from its concrete call edge.
+        mut val values: Array[U64] = args
+        while values.count() < f.typeParams.count() { values.append(0U64) }
+        mut val mi: U64 = 0U64
+        while mi < receiverEnv.binds.count() {
+            val matchBind: WitnessBind = receiverEnv.binds[mi]
+            mut val pi: U64 = 0U64
+            while pi < f.typeParams.count() {
+                if f.typeParams[pi].paramId == matchBind.paramId { values.set(i: pi, value: matchBind.term) }
+                pi += 1U64
+            }
+            mi += 1U64
+        }
+        mut val bi: U64 = 0U64
+        while bi < self.decls.funcBounds.count() {
+            val fb: FuncBound = self.decls.funcBounds[bi]
+            if fb.fnIdx == fnIdx {
+                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: f.typeParams, args: values)
+                mut val lhs: U64 = 0U64
+                if fb.paramTy != 0U64 {
+                    lhs = self.groundTermInEnvironment(ref: fb.paramTy, params: f.typeParams, values: values)
+                } else {
+                    mut val pi: U64 = 0U64
+                    while pi < f.typeParams.count() {
+                        if f.typeParams[pi].nameId == fb.paramNameId {
+                            if pi < values.count() { lhs = values[pi] }
                         }
-                        bi += 1
+                        pi += 1U64
                     }
                 }
-                mfi += 1
+                if lhs != 0U64 && lhs < self.arena.types.count() {
+                    if !(self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)) {
+                        self.errorAt(offset: fb.paramStart, msg: "receiver type argument does not conform to the trait required by the method's `where`")
+                    }
+                }
             }
-            gi += 1
+            bi += 1U64
         }
     }
+
 }

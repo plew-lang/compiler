@@ -1,0 +1,24 @@
+import @Std/Io with { write }
+import @Std/Core with { Buffer, MutableRef, bufferAppend, bufferRemoveAt }
+
+unique struct Cell {
+    pub val id: I64
+    deinit { write(s: self.id.format(format: "") + "\n") }
+}
+pub impl Cell { factory }
+
+// The returned first element and the relocated suffix element each keep one
+// owner after removal; neither can be released by the relocation itself.
+val midBufferRemoveAtArcAnchor: I64 = 0I64
+
+fn takeFirst(buffer: inout Buffer[MutableRef[Cell]]) -> MutableRef[Cell] {
+    return bufferRemoveAt(buffer: inout buffer, index: 0U64)
+}
+
+fn main() {
+    mut val buffer: Buffer[MutableRef[Cell]] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: <MutableRef[Cell] value=<Cell id=1I64 /> />)
+    bufferAppend(buffer: inout buffer, value: <MutableRef[Cell] value=<Cell id=2I64 /> />)
+    val removed: MutableRef[Cell] = takeFirst(buffer: inout buffer)
+    write(s: "after\n")
+}

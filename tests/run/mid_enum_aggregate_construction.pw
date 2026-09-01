@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// The producer constructs an enum through Mid using the frontend-selected enum
+// declaration and variant slots; main may remain legacy while matching it.
+enum Signal {
+    Set(value: I64)
+    Empty
+}
+
+fn make() -> Signal {
+    return <Signal.Set value=21I64 />
+}
+
+fn main() {
+    match make() {
+        Signal.Set(value: val value) => { print(value) }
+        Signal.Empty => { print(0I64) }
+    }
+}

@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer }
+
+struct Box[T] {
+    pub mut val data: Buffer[T]
+}
+
+pub impl[T] Box[T] {
+    factory
+
+    inout fn replaceFirst(value: T) {
+        self.data.set(index: 0U64, value)
+    }
+}
+
+fn main() {
+    mut val box: Box[String] = <Box data=Buffer.new() />
+    box.data.append("old")
+    box.replaceFirst(value: "new")
+    print(box.data.get(index: 0U64))
+}

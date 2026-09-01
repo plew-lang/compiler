@@ -1,0 +1,32 @@
+import @Std/Io with { print }
+
+// The global intentionally keeps main on legacy emission. `resetFirst` has
+// only a parameter, an indexed inout receiver call, and a value return, so its
+// emitted `mid:` blocks prove the access elaborator rather than aggregate
+// construction.
+val midAccessAnchor: I64 = 0I64
+
+struct Counter {
+    pub mut val n: I32
+}
+pub impl Counter { factory }
+
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0I32
+        return old
+    }
+}
+
+fn resetFirst(xs: inout Array[Counter]) -> I32 {
+    val old: I32 = xs[0I64].takeAndReset()
+    return old
+}
+
+fn main() {
+    mut val xs: Array[Counter] = []
+    xs.append(<Counter n=7I32 />)
+    print(resetFirst(xs: inout xs))
+    print(xs[0I64].n)
+}

@@ -1,0 +1,34 @@
+import @Std/Io with { write }
+
+// Keep main on the legacy path: each helper's Mid coverage is independently
+// observable, while the program output asserts the language-level short
+// circuit contract.
+val midShortCircuitAnchor: I64 = 0I64
+
+fn rhs() -> Bool {
+    write(s: "rhs\n")
+    return true
+}
+
+fn andFalse() -> Bool {
+    return false && rhs()
+}
+
+fn andTrue() -> Bool {
+    return true && rhs()
+}
+
+fn orTrue() -> Bool {
+    return true || rhs()
+}
+
+fn orFalse() -> Bool {
+    return false || rhs()
+}
+
+fn main() {
+    if !andFalse() { write(s: "and-false\n") }
+    if andTrue() { write(s: "and-true\n") }
+    if orTrue() { write(s: "or-true\n") }
+    if orFalse() { write(s: "or-false\n") }
+}

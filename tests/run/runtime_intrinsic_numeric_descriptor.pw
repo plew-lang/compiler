@@ -1,0 +1,40 @@
+import @Std/Io with { write }
+import /Ir with { RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, NumericOverflow, CallTarget }
+
+fn main() {
+    val target: CallTarget = <CallTarget.RuntimeIntrinsic intrinsic=<RuntimeIntrinsic.Numeric intrinsic=<NumericIntrinsic.Integer width=<NumericWidth.W64 /> unsigned=false operation=<IntegerOperation.Add /> overflow=<NumericOverflow.Checked /> /> /> />
+    match target {
+        CallTarget.RuntimeIntrinsic(intrinsic: val runtime) => {
+            match runtime {
+                RuntimeIntrinsic.Numeric(intrinsic: val numeric) => {
+                    match numeric {
+                        NumericIntrinsic.Integer(width: val width, unsigned: val unsigned, operation: val operation, overflow: val overflow) => {
+                            match width {
+                                NumericWidth.W64 => {
+                                    match unsigned {
+                                        false => {
+                                            match operation {
+                                                IntegerOperation.Add => {
+                                                    match overflow {
+                                                        NumericOverflow.Checked => { write(s: "i64-add\n") }
+                                                        _ => { write(s: "wrong\n") }
+                                                    }
+                                                }
+                                                _ => { write(s: "wrong\n") }
+                                            }
+                                        }
+                                        _ => { write(s: "wrong\n") }
+                                    }
+                                }
+                                _ => { write(s: "wrong\n") }
+                            }
+                        }
+                        _ => { write(s: "wrong\n") }
+                    }
+                }
+                _ => { write(s: "wrong\n") }
+            }
+        }
+        _ => { write(s: "wrong\n") }
+    }
+}

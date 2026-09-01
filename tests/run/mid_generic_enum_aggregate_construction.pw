@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// The generic body constructs Optional[T]. Mid receives the selected enum
+// declaration identity and grounds only the frozen result TypeTerm.
+fn some[T](value: T) -> Optional[T] {
+    return <Optional[T].Some v=value />
+}
+
+fn main() {
+    match some(value: 37I64) {
+        Optional.Some(v: val value) => { print(value) }
+        Optional.None => { print(0I64) }
+    }
+}

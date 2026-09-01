@@ -1,0 +1,21 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferAppend, bufferCapacity, bufferCount, bufferGet, bufferTruncate }
+
+// The first call shrinks and the second one is an intentional no-op because
+// requested count exceeds the current live range.
+val midBufferTruncateAnchor: I64 = 0I64
+
+fn shrinkThenKeep(buffer: inout Buffer[I64]) {
+    bufferTruncate(buffer: inout buffer, count: 1U64)
+    bufferTruncate(buffer: inout buffer, count: 9U64)
+}
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: 10I64)
+    bufferAppend(buffer: inout buffer, value: 20I64)
+    bufferAppend(buffer: inout buffer, value: 30I64)
+    val before: U64 = bufferCapacity(buffer: buffer)
+    shrinkThenKeep(buffer: inout buffer)
+    print(bufferCount(buffer: buffer) == 1U64 && bufferGet(buffer: buffer, index: 0U64) == 10I64 && bufferCapacity(buffer: buffer) == before)
+}

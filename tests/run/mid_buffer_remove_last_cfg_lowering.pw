@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferAppend, bufferCount, bufferRemoveLast }
+
+// The result is a transfer from the retired Buffer slot, not an element read.
+// Main remains legacy so the helper's coverage is the exact Mid boundary.
+val midBufferRemoveLastAnchor: I64 = 0I64
+
+fn popOne(buffer: inout Buffer[I64]) -> I64 {
+    return bufferRemoveLast(buffer: inout buffer)
+}
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: 42I64)
+    val popped: I64 = popOne(buffer: inout buffer)
+    print(popped.format(format: ""))
+    print(bufferCount(buffer: buffer).format(format: ""))
+}

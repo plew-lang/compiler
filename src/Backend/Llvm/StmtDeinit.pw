@@ -223,32 +223,39 @@ pub impl LlvmCtx {
         }
     }
 
-    // Whether any witness table has an undrained body pending (count past its cursor).
-    inout fn witnessPending() -> Bool {
-        if self.dropWitDone < self.dropWitReg.count() { return true }
-        if self.retWitDone < self.retWitSidx.count() { return true }
-        if self.copyWitDone < self.copyWitSidx.count() { return true }
-        if self.enumRelWitDone < self.enumRelWitReg.count() { return true }
-        if self.enumRetWitDone < self.enumRetWitEid.count() { return true }
-        if self.enumCopyWitDone < self.enumCopyWitEid.count() { return true }
-        return false
-    }
-
     // Drain all 6 witness body tables to a fixpoint. The graphs cross struct<->enum within a
     // family (a struct-drop body can declare an enum-release witness and vice versa), so one
     // pass over each table is not enough: loop until no table grows. Each drain resumes from
     // its persistent cursor, so a re-entry never re-emits an already-emitted body. Families
     // (drop/release, retain, copy) don't cross each other, but a single fixpoint covers all.
     inout fn emitWitnessBodies(c: inout Comp) {
-        mut val draining: Bool = true
-        while draining {
+        // The six cursor/table comparisons are the fixed-point condition itself. Keeping
+        // the sole use at the loop header gives one source of truth for entry and re-entry:
+        // a pass which declares no further witness bodies ends without an auxiliary flag.
+        while self.dropWitDone < self.dropWitReg.count() || self.retWitDone < self.retWitSidx.count() || self.copyWitDone < self.copyWitSidx.count() || self.enumRelWitDone < self.enumRelWitReg.count() || self.enumRetWitDone < self.enumRetWitEid.count() || self.enumCopyWitDone < self.enumCopyWitEid.count() {
+            // These are phase boundaries rather than a per-witness log: the tables may be
+            // large, but each boundary identifies the one family whose current cursor made
+            // no observable progress.  `--trace-phases` therefore distinguishes a genuinely
+            // growing fixed point from a single expensive witness walk without changing the
+            // emission order or imposing an arbitrary budget.
+            tracePhaseCount(c: inout c, label: "backend:witness:drop-pending", count: self.dropWitReg.count() - self.dropWitDone)
             self.emitDropWitnessBodies(c: inout c)
+            tracePhase(c: inout c, label: "backend:witness:drop-done")
+            tracePhaseCount(c: inout c, label: "backend:witness:retain-pending", count: self.retWitSidx.count() - self.retWitDone)
             self.emitRetainWitnessBodies(c: inout c)
+            tracePhase(c: inout c, label: "backend:witness:retain-done")
+            tracePhaseCount(c: inout c, label: "backend:witness:copy-pending", count: self.copyWitSidx.count() - self.copyWitDone)
             self.emitCopyWitnessBodies(c: inout c)
+            tracePhase(c: inout c, label: "backend:witness:copy-done")
+            tracePhaseCount(c: inout c, label: "backend:witness:enum-release-pending", count: self.enumRelWitReg.count() - self.enumRelWitDone)
             self.emitEnumReleaseWitnessBodies(c: inout c)
+            tracePhase(c: inout c, label: "backend:witness:enum-release-done")
+            tracePhaseCount(c: inout c, label: "backend:witness:enum-retain-pending", count: self.enumRetWitEid.count() - self.enumRetWitDone)
             self.emitEnumRetainWitnessBodies(c: inout c)
+            tracePhase(c: inout c, label: "backend:witness:enum-retain-done")
+            tracePhaseCount(c: inout c, label: "backend:witness:enum-copy-pending", count: self.enumCopyWitEid.count() - self.enumCopyWitDone)
             self.emitEnumCopyWitnessBodies(c: inout c)
-            draining = self.witnessPending()
+            tracePhase(c: inout c, label: "backend:witness:enum-copy-done")
         }
     }
 

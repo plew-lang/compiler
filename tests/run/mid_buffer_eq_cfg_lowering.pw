@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferAppend, bufferBytewiseComparable, bufferEq }
+
+// These are the two closed fast-path operations used by Buffer's Eq witness.
+// Main remains legacy so each helper's Mid coverage is independently visible.
+val midBufferEqAnchor: I64 = 0I64
+
+fn isBytewise(buffer: Buffer[I64]) -> Bool {
+    return bufferBytewiseComparable(buffer: buffer)
+}
+
+fn same(left: Buffer[I64], right: Buffer[I64]) -> Bool {
+    return bufferEq(lhs: left, rhs: right)
+}
+
+fn main() {
+    mut val left: Buffer[I64] = Buffer.new()
+    bufferAppend(buffer: inout left, value: 42I64)
+    val right: Buffer[I64] = left
+    print(isBytewise(buffer: left))
+    print(same(left: left, right: right))
+}

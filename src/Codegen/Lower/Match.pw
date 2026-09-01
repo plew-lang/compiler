@@ -319,33 +319,100 @@ pub impl Comp {
     inout fn lowerCompoundAssignInto(op: I64, target: ExprAst, value: ExprAst, stmts: inout Array[U64]) {
         val pid: U64 = self.rebuildPlaceTemping(e: target, stmts: inout stmts)
         val vid: U64 = self.lowerExpr(e: value)
-        // Keep distinct AST nodes for the read and write facets of a compound
-        // place. Mono lowers an Index *read* to its selected method call, while
-        // the assignment target must remain an addressable Index place. Sharing
-        // one Expr id let the read rewrite turn the write target into a method
-        // result (`xs[i].field += v`), which then reached LLVM's inout path as a
-        // non-place. Index keys were already temp-bound by rebuildPlaceTemping,
-        // so cloning only the navigation nodes preserves place-once semantics.
-        val readPid: U64 = self.cloneLoweredPlace(id: pid)
-        val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=readPid rhs=vid />)
-        stmts.append(self.pushStmt(s: <Stmt.Assign target=pid value=binE />))
+        val read: U64 = self.loweredPlaceRead(id: pid)
+        val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=read rhs=vid />)
+        self.lowerPlaceAssignInto(target: pid, value: binE, stmts: inout stmts)
     }
 
-    // Clone a lowered addressable navigation path for its read facet.  Leaves
-    // (especially the already-temped index key) are deliberately shared: they
-    // are values, not navigation operations, and must not be evaluated again.
-    inout fn cloneLoweredPlace(id: U64) -> U64 {
+    // Read a lowered place as a value.  Index is source sugar, so this is the
+    // only route which turns it into the selected `Index.index` requirement;
+    // field/arrow navigation merely preserve their value form around that read.
+    inout fn loweredPlaceRead(id: U64) -> U64 {
         match self.arena.exprs[id] {
             Expr.Field(val base, val nameStart, val nameLen) => {
-                return self.pushExpr(e: <Expr.Field base=self.cloneLoweredPlace(id: base) nameStart=nameStart nameLen=nameLen />)
+                return self.pushExpr(e: <Expr.Field base=self.loweredPlaceRead(id: base) nameStart=nameStart nameLen=nameLen />)
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
-                return self.pushExpr(e: <Expr.Arrow base=self.cloneLoweredPlace(id: base) nameStart=nameStart nameLen=nameLen />)
+                return self.pushExpr(e: <Expr.Arrow base=self.loweredPlaceRead(id: base) nameStart=nameStart nameLen=nameLen />)
             }
             Expr.Index(val base, val index) => {
-                return self.pushExpr(e: <Expr.Index base=self.cloneLoweredPlace(id: base) index=index />)
+                return self.lowerIndexRead(recv: self.loweredPlaceRead(id: base), key: index)
             }
             _ => { return id }
+        }
+    }
+
+    // Whether a place contains a subscript below its outermost navigation.  A
+    // nested write cannot borrow that element's storage: `Index` is specified
+    // by value-returning `index`/`indexSet` requirements.  It must therefore
+    // use get-modify-set: read the immediate base into a mutable local, modify
+    // that local, then write it back through the same (already temp-bound) path.
+    inout fn loweredPlaceHasIndex(id: U64) -> Bool {
+        match self.arena.exprs[id] {
+            Expr.Index(base: _, index: _) => { return true }
+            Expr.Field(val base, nameStart: _, nameLen: _) => { return self.loweredPlaceHasIndex(id: base) }
+            Expr.Arrow(val base, nameStart: _, nameLen: _) => { return self.loweredPlaceHasIndex(id: base) }
+            _ => { return false }
+        }
+    }
+
+    // Assign to a lowered place after all source index keys have been bound.
+    // This completes get-modify-set recursively, rather than leaving an
+    // addressability special case to Mono/LLVM.  The base is evaluated once as
+    // a value, held in a mutable local while its child is changed, and then
+    // written back through the original IndexSet route.
+    inout fn lowerPlaceAssignInto(target: U64, value: U64, stmts: inout Array[U64]) {
+        match self.arena.exprs[target] {
+            Expr.Index(val base, val index) => {
+                if self.loweredPlaceHasIndex(id: base) {
+                    self.lowerNestedPlaceAssignInto(target: target, base: base, value: value, stmts: inout stmts)
+                } else {
+                    stmts.append(self.lowerIndexSetAssign(recv: base, key: index, value: value))
+                }
+            }
+            Expr.Field(val base, val nameStart, val nameLen) => {
+                if self.loweredPlaceHasIndex(id: base) {
+                    self.lowerNestedPlaceAssignInto(target: target, base: base, value: value, stmts: inout stmts)
+                } else {
+                    stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=value />))
+                }
+            }
+            Expr.Arrow(base: _, nameStart: _, nameLen: _) => {
+                stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=value />))
+            }
+            _ => { stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=value />)) }
+        }
+    }
+
+    inout fn lowerNestedPlaceAssignInto(target: U64, base: U64, value: U64, stmts: inout Array[U64]) {
+        self.cur.lowerTmpSeq += 1U64
+        val tmp: Bind = self.internTmpName(prefix: "__gm", n: self.cur.lowerTmpSeq)
+        val read: U64 = self.loweredPlaceRead(id: base)
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=true nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0 tyLen=0 tyIsArray=false ty=0 init=read />))
+        val tmpId: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+        mut val modified: U64 = target
+        match self.arena.exprs[target] {
+            Expr.Index(base: _, val index) => { modified = self.pushExpr(e: <Expr.Index base=tmpId index=index />) }
+            Expr.Field(base: _, val nameStart, val nameLen) => { modified = self.pushExpr(e: <Expr.Field base=tmpId nameStart=nameStart nameLen=nameLen />) }
+            _ => {}
+        }
+        self.lowerPlaceAssignInto(target: modified, value: value, stmts: inout stmts)
+        val tmpForWriteback: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+        self.lowerPlaceAssignInto(target: base, value: tmpForWriteback, stmts: inout stmts)
+    }
+
+    inout fn lowerPlainAssignInto(target: ExprAst, value: ExprAst, stmts: inout Array[U64]) {
+        val pid: U64 = self.rebuildPlaceTemping(e: target, stmts: inout stmts)
+        val vid: U64 = self.lowerExpr(e: value)
+        self.lowerPlaceAssignInto(target: pid, value: vid, stmts: inout stmts)
+    }
+
+    inout fn astPlaceHasIndex(e: ExprAst) -> Bool {
+        match e {
+            ExprAst.Index(base: _, index: _, span: _) => { return true }
+            ExprAst.Field(val base, name: _, nameSpan: _, span: _) => { return self.astPlaceHasIndex(e: base) }
+            ExprAst.Arrow(val base, name: _, nameSpan: _, span: _) => { return self.astPlaceHasIndex(e: base) }
+            _ => { return false }
         }
     }
 
@@ -393,6 +460,17 @@ pub impl Comp {
         }
     }
 
+    // A whole-element index assignment has no remaining place operation after
+    // lowering: its specified meaning is the `IndexSet.indexSet` method call.
+    // Register a synthetic origin now, while the call is still part of the
+    // frontend tree, so Record and Mono share one semantic key.
+    inout fn lowerIndexSetAssign(recv: U64, key: U64, value: U64) -> U64 {
+        val call: U64 = self.synthMethodCall(recv: recv, name: "indexSet", arg0Label: "key", arg0: key, arg0HasLabel: true, hasArg1: true, arg1Label: "value", arg1: value, arg1HasLabel: false)
+        val originSerial: U64 = self.arena.exprOriginSerial[call]
+        self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=originSerial receiverTerm=0U64 />)
+        return self.pushStmt(s: <Stmt.ExprStmt expr=call />)
+    }
+
     inout fn lowerStmt(s: StmtAst) -> U64 {
         mut val result: U64 = 0
         match s {
@@ -418,11 +496,19 @@ pub impl Comp {
                 // assign today) also desugars any compound inline as `place = place OP v`
                 // — no place-once temps here, but a temp-free target has none to bind — so
                 // NO compound Stmt.Assign ever reaches verify / codegen (single desugar model).
-                val t: U64 = self.lowerExpr(e: target)
                 if op == opAssign() {
                     val v: U64 = self.lowerExpr(e: value)
-                    result = self.pushStmt(s: <Stmt.Assign target=t value=v />)
+                    match target {
+                        ExprAst.Index(val base, val index, span: _) => {
+                            result = self.lowerIndexSetAssign(recv: self.lowerExpr(e: base), key: self.lowerExpr(e: index), value: v)
+                        }
+                        _ => {
+                            val t: U64 = self.lowerExpr(e: target)
+                            result = self.pushStmt(s: <Stmt.Assign target=t value=v />)
+                        }
+                    }
                 } else {
+                    val t: U64 = self.lowerExpr(e: target)
                     val binE: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: op) lhs=t rhs=self.lowerExpr(e: value) />)
                     result = self.pushStmt(s: <Stmt.Assign target=t value=binE />)
                 }
@@ -632,7 +718,7 @@ pub impl Comp {
                 // (place evaluated once, spec/12). A plain `=` falls to lowerStmt below.
                 StmtAst.Assign(val op, val target, val value, val span) => {
                     if op == opAssign() {
-                        stmts.append(self.lowerStmt(s: b.stmts[i]))
+                        self.lowerPlainAssignInto(target: target, value: value, stmts: inout stmts)
                     } else {
                         self.lowerCompoundAssignInto(op: op, target: target, value: value, stmts: inout stmts)
                     }

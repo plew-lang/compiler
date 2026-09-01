@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// The only concrete occurrence of Token[T] is the selected generic call's
+// result.  Mono must register Token[String] from the grounded final body and
+// its CallTemplate result, not from the old provisional AST call walk.
+enum Token[T] {
+    Mark
+}
+
+fn marker[T]() -> Token[T] {
+    return <Token.Mark />
+}
+
+fn main() {
+    val token: Token[String] = marker()
+    match token {
+        Token.Mark => { print("closed") }
+    }
+}

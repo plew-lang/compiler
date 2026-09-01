@@ -805,6 +805,10 @@ pub impl LlvmCtx {
         // can infer the concrete instance.
         self.curRetRef = c.groundTypeRef(ref: f.retTy)
         val requiresOwnershipCfg: Bool = c.functionRequiresOwnershipCfg(fnIdx: fi)
+        // Coverage identifies the frontend's concrete body instance before any
+        // Mid stage runs.  The stages below must not substitute a source-level
+        // function identity or spelling when a frozen instance is unavailable.
+        val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: environment)
         // Select a complete Mid body before beginning LLVM emission.  The
         // initial ordinary-body slice is deliberately exact: source receiver
         // (when by-value) and parameters form the checked Mid-local ABI prefix.
@@ -813,36 +817,106 @@ pub impl LlvmCtx {
         // joins this path.
         mut val midReady: Bool = false
         mut val midBody: MidBody = <MidBody />
-        if !(f.isAsync) && !(f.isExtern) && !(f.hasRecv && (f.selfInout || f.selfMove)) {
+        mut val midEligible: Bool = true
+        if f.isAsync {
+            self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Eligibility reason=<MidEligibilityReason.Async /> />)
+            midEligible = false
+        }
+        if f.isExtern {
+            self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Eligibility reason=<MidEligibilityReason.Extern /> />)
+            midEligible = false
+        }
+        if f.hasRecv && f.selfMove {
+            self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Eligibility reason=<MidEligibilityReason.MoveReceiver /> />)
+            midEligible = false
+        }
+        if midEligible {
             val parametric: MidBodyBuild = buildParametricMidBody(c: inout c, fnIdx: fi)
             match parametric.error {
                 MidBuildError.None => {
-                    val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: environment)
                     if bodyId != 0U64 {
                         val instantiated: MidInstantiation = instantiateMidBody(c: inout c, body: parametric.body, bodyId: bodyId)
                         match instantiated.error {
                             MidInstantiateError.None => {
-                                val elaborated: MidBody = elaborateMidDrops(body: instantiated.body)
-                                val verification: MidVerification = verifyMidBody(body: elaborated)
-                                match verification.error {
-                                    MidVerifyError.None => {
+                                val accesses: MidAccessElaboration = elaborateMidAccesses(c: inout c, body: instantiated.body)
+                                mut val accessReady: Bool = true
+                                match accesses.error {
+                                    MidAccessError.None => {}
+                                    _ => {
+                                        accessReady = false
+                                        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Access />)
+                                        if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: access elaboration unsupported\n") }
+                                    }
+                                }
+                                if accessReady {
+                                    val elaborated: MidBody = elaborateMidDrops(body: accesses.body)
+                                    val verification: MidVerification = verifyMidBody(body: elaborated)
+                                    match verification.error {
+                                        MidVerifyError.None => {
                                         mut val abiParameterCount: U64 = f.params.count()
                                         if f.hasRecv { abiParameterCount += 1U64 }
-                                        if self.midInitialLlvmSupported(c: inout c, body: elaborated, abiParameterCount: abiParameterCount) {
-                                            midBody = elaborated
-                                            midReady = true
-                                        } else {
-                                            if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: LLVM preflight unsupported\n") }
+                                        if c.traceCodegen {
+                                            eprint(text: "[trace-codegen] Mid function preflight name=")
+                                            self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                            eprint(text: " fn=")
+                                            self.traceCodegenU64(n: fi)
+                                            eprint(text: "\n")
                                         }
+                                        match self.midInitialLlvmPreflight(c: inout c, body: elaborated, abiParameterCount: abiParameterCount) {
+                                            MidLlvmPreflight.Ready => {
+                                                midBody = elaborated
+                                                midReady = true
+                                            }
+                                            MidLlvmPreflight.AbiLocals => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AbiLocals />) }
+                                            MidLlvmPreflight.AssignmentProjection => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AssignmentProjection />) }
+                                            MidLlvmPreflight.UnsupportedRvalue => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.UnsupportedRvalue />) }
+                                            MidLlvmPreflight.ConversionOperand => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.ConversionOperand />) }
+                                            MidLlvmPreflight.DropProjection => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.DropProjection />) }
+                                            MidLlvmPreflight.ScopeExit => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.ScopeExit />) }
+                                            MidLlvmPreflight.Switch => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.Switch />) }
+                                            MidLlvmPreflight.Call(reason: val reason) => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.Call reason=reason />) }
+                                            MidLlvmPreflight.ReturnValue => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.ReturnValue />) }
+                                            MidLlvmPreflight.Terminator => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.Terminator />) }
+                                        }
+                                        }
+                                        MidVerifyError.InvalidTarget => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.InvalidTarget /> />) }
+                                        MidVerifyError.PartialMove => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.PartialMove /> />) }
+                                        MidVerifyError.MoveUnavailable => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.MoveUnavailable /> />) }
+                                        MidVerifyError.DropUnavailable => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.DropUnavailable /> />) }
+                                        MidVerifyError.InvalidDropFlag => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.InvalidDropFlag /> />) }
+                                        MidVerifyError.UnelaboratedScopeExit => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.UnelaboratedScopeExit /> />) }
+                                        MidVerifyError.UnelaboratedAccess => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.UnelaboratedAccess /> />) }
+                                        MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.UninstantiatedReturnBoundary /> />) }
                                     }
-                                    _ => { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: verifier error\n") } }
                                 }
                             }
-                            _ => { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: instantiation failed\n") } }
+                            _ => {
+                                self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Instantiate />)
+                                if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: instantiation failed\n") }
+                            }
                         }
-                    } else { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: missing body instance\n") } }
+                    } else {
+                        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.MissingBodyInstance />)
+                        if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: missing body instance\n") }
+                    }
                 }
-                _ => { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: build unsupported\n") } }
+                MidBuildError.InvalidStatement => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.InvalidStatement /> />) }
+                MidBuildError.InvalidBlock => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.InvalidBlock /> />) }
+                MidBuildError.InvalidFunction => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.InvalidFunction /> />) }
+                MidBuildError.MissingSemanticType => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.MissingSemanticType /> />) }
+                MidBuildError.UnboundLocalIdentifier => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnboundLocalIdentifier /> />) }
+                MidBuildError.Unsupported(reason: _) => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=parametric.error />) }
+                MidBuildError.UnsupportedAssign => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedAssign /> />) }
+                MidBuildError.UnsupportedWhile => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedWhile /> />) }
+                MidBuildError.UnsupportedFor => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedFor /> />) }
+                MidBuildError.UnsupportedMatch => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedMatch /> />) }
+                MidBuildError.UnsupportedPanic => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedPanic /> />) }
+                MidBuildError.UnsupportedGive => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedGive /> />) }
+                MidBuildError.UnsupportedBreak => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedBreak /> />) }
+                MidBuildError.UnsupportedContinue => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedContinue /> />) }
+                MidBuildError.MissingTerminator => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.MissingTerminator /> />) }
+                MidBuildError.MissingCallTemplate => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.MissingCallTemplate /> />) }
+                MidBuildError.UnsupportedCallTemplate => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedCallTemplate /> />) }
             }
         } else { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: ABI unsupported\n") } }
         if requiresOwnershipCfg && !midReady {

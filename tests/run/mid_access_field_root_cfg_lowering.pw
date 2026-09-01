@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+val midAccessFieldRootAnchor: I64 = 0I64
+
+struct Counter { pub mut val n: I32 }
+pub impl Counter { factory }
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0I32
+        return old
+    }
+}
+
+struct Shelf { pub mut val counters: Array[Counter] }
+pub impl Shelf { factory }
+
+fn resetShelf(shelf: inout Shelf) -> I32 {
+    return shelf.counters[0I64].takeAndReset()
+}
+
+fn main() {
+    mut val shelf: Shelf = <Shelf counters=[] />
+    shelf.counters.append(<Counter n=7I32 />)
+    print(resetShelf(shelf: inout shelf))
+    print(shelf.counters[0I64].n)
+}

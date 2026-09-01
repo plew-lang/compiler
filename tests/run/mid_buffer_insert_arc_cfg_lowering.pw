@@ -1,0 +1,24 @@
+import @Std/Io with { write }
+import @Std/Core with { Buffer, MutableRef, bufferAppend, bufferInsertAt }
+
+unique struct Cell {
+    pub val id: I64
+    deinit { write(s: self.id.format(format: "") + "\n") }
+}
+pub impl Cell { factory }
+
+// The existing element moves right as a relocation. Both cells must retain
+// exactly one Buffer ownership share until the Buffer drops at main scope exit.
+val midBufferInsertArcAnchor: I64 = 0I64
+
+fn insertFirst(buffer: inout Buffer[MutableRef[Cell]], replacement: MutableRef[Cell]) {
+    bufferInsertAt(buffer: inout buffer, index: 0U64, value: replacement)
+}
+
+fn main() {
+    mut val buffer: Buffer[MutableRef[Cell]] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: <MutableRef[Cell] value=<Cell id=1I64 /> />)
+    val replacement: MutableRef[Cell] = <MutableRef[Cell] value=<Cell id=2I64 /> />
+    insertFirst(buffer: inout buffer, replacement: replacement)
+    write(s: "after\n")
+}

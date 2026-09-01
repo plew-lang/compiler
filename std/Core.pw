@@ -875,6 +875,25 @@ pub impl[T] Buffer[T] {
     }
 }
 
+// Buffer is a public safe collection floor, so its bracket surface is the
+// ordinary Index / IndexSet protocol as well.  The intrinsic implementation
+// stays behind `get` / `set`; no compiler-side Buffer spelling branch is needed.
+pub impl[T] Buffer[T] as Index[U64] {
+    type Output = T
+
+    fn index(key: U64) -> T {
+        return self.get(index: key)
+    }
+}
+
+pub impl[T] Buffer[T] as IndexSet[U64] {
+    type Value = T
+
+    inout fn indexSet(key: U64, value~: T) {
+        self.set(index: key, value)
+    }
+}
+
 // Buffer equality (spec/02): the floor's `==` is element-wise VALUE equality (NOT pointer
 // identity), so it requires `T: Eq` and rides each element's own witness — a `Buffer[String]`
 // compares string CONTENTS, not their `{ptr,len}` bytes. A `@[Eq]` struct over a Buffer field

@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+// The entry body must construct its Array and Counter through Mid before the
+// indexed inout call can be elaborated.  This rejects a superficial fix that
+// only lowers the helper/receiver body while `main` still takes legacy codegen.
+struct Counter { pub mut val n: I32 }
+pub impl Counter { factory }
+pub impl Counter {
+    inout fn takeAndReset() -> I32 {
+        val old: I32 = self.n
+        self.n = 0I32
+        return old
+    }
+}
+
+fn main() {
+    mut val xs: Array[Counter] = []
+    val counter: Counter = <Counter n=7I32 />
+    xs.append(counter)
+    val taken: I32 = xs[0I64].takeAndReset()
+    val after: I32 = xs[0I64].takeAndReset()
+    print(taken)
+    print(after)
+}

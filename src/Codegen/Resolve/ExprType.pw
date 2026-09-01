@@ -137,18 +137,16 @@ pub impl Comp {
         return self.typeInfoOfName(start: f.retStart, len: f.retLen, isArray: f.retIsArray)
     }
 
-    // Ground a final method callable through its receiver instance.  `a.m()` and
-    // `a#Source.m()` have already converged to the same `Func`; they must therefore
-    // derive `T` in `impl[T] Box[T]` from the same receiver TypeRef as well.  Keeping
-    // this here (rather than in either syntax arm) makes source qualification a pure
-    // selection concern, never a second generic-inference mechanism.
-    inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
-        // Declaration-time result typing must accept a symbolic generic
-        // receiver (`Box[T_outer]`) as well as a concrete one (`Box[I64]`).
-        // The receiver's argument terms still provide the complete mapping to
-        // the selected method/impl binders; only an absent TypeRef is invalid.
-        if f.retTy == 0U64 || recvTy.ref == 0U64 || recvTy.ref >= self.arena.types.count() {
-            return 0U64
+    // Build the selected method's complete lexical substitution once.  Return
+    // typing and parameter typing are two views of the same final callable:
+    // letting either reconstruct a weaker receiver-only substitution loses a
+    // method/impl binder such as Array[T].append(value: T).  An empty
+    // environment is the explicit "not a receiver-instantiated callable"
+    // outcome; a valid non-generic method has a nonzero receiverRef and no
+    // parameter entries.
+    inout fn finalMethodEnvironment(f: Func, receiverRef: U64, args: ArgRange) -> InstanceEnvironment {
+        if receiverRef == 0U64 || receiverRef >= self.arena.types.count() {
+            return <InstanceEnvironment />
         }
         // A method's generic binder list can contain the nominal declaration
         // binder, an impl receiver-pattern binder, and method-owned binders.
@@ -156,8 +154,8 @@ pub impl Comp {
         // selected receiver against the declared pattern once and use that
         // directional substitution for the return term (the same operation
         // conformance proofs use).
-        val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: recvTy.ref)
-        if receiverMatch.conformIdx == 0U64 { return 0U64 }
+        val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: receiverRef)
+        if receiverMatch.conformIdx == 0U64 { return <InstanceEnvironment /> }
         mut val fullArgs: Array[U64] = []
         mut val fi: U64 = 0U64
         while fi < f.typeParams.count() {
@@ -197,14 +195,24 @@ pub impl Comp {
         // resolved *symbolic* argument for the method's `T_impl`; requiring a
         // concrete term here discards that relation and makes `?.read()` lose
         // its outer T.  Only an absent inference slot is incomplete.
-        if fullArgs.count() != f.typeParams.count() || !(self.fnArgsAllResolved(args: fullArgs)) {
-            return 0U64
+        if fullArgs.count() != f.typeParams.count() {
+            return <InstanceEnvironment />
+        }
+        if f.typeParams.count() > 0U64 && !(self.fnArgsAllResolved(args: fullArgs)) {
+            return <InstanceEnvironment />
         }
         // Preserve ParamId identity in the result. The legacy Cursor grounding
         // path can use spelling fallback while translating a method binder;
         // an immutable map cannot, so the returned outer `T` remains the
         // caller's lexical term for later BodyInstance grounding.
-        val environment: InstanceEnvironment = <InstanceEnvironment params=f.typeParams args=fullArgs receiverRef=recvTy.ref />
+        return <InstanceEnvironment params=f.typeParams args=fullArgs receiverRef=receiverRef />
+    }
+
+    // A provided member's associated Item is selected by the same receiver
+    // proof as Self.  Keep this beside finalMethodEnvironment so every
+    // signature position (return and parameter alike) has identical proof
+    // grounding.
+    inout fn finalMethodItemRef(f: Func, receiverRef: U64) -> U64 {
         // A provided trait method's `Item` is part of its selected receiver
         // proof, just like `Self`; it is not a free declaration spelling.
         // Record-time return construction must carry both or a chain such as
@@ -214,14 +222,69 @@ pub impl Comp {
         if f.isProvided && f.originTraitOwner != 0U64 {
             val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
             val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
-            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: recvTy.ref, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: f.recvTraitArgs)
+            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: f.recvTraitArgs)
             itemRef = self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId)
         }
-        val grounded: U64 = self.groundTermForBody(ref: f.retTy, environment: environment, selfRef: recvTy.ref, itemRef: itemRef)
-        if grounded != 0U64 {
-            return grounded
+        return itemRef
+    }
+
+    // Ground any selected declaration signature term under one final method
+    // environment.  This is intentionally shared by result and argument
+    // contexts: Record is the single frontend producer of both facts.
+    inout fn groundFinalMethodSignatureTerm(f: Func, receiverRef: U64, args: ArgRange, signatureTerm: U64) -> U64 {
+        if signatureTerm == 0U64 { return 0U64 }
+        val environment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: receiverRef, args: args)
+        if environment.receiverRef == 0U64 { return 0U64 }
+        return self.groundTermForBody(ref: signatureTerm, environment: environment, selfRef: receiverRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: receiverRef))
+    }
+
+    // The concrete-receiver counterpart.  It uses the same declaration binder
+    // vector but preserves the legacy Self setup for a non-generic nominal
+    // receiver whose methodReceiverEnvironment is intentionally absent.
+    inout fn groundConcreteFinalMethodSignatureTerm(f: Func, recvTy: TypeInfo, args: ArgRange, signatureTerm: U64) -> U64 {
+        if signatureTerm == 0U64 || recvTy.nameLen == 0U64 || self.isGenericInst(ref: recvTy.ref) {
+            return 0U64
         }
+        val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
+        if f.typeParams.count() > 0U64 {
+            if inferred.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: inferred)) {
+                return 0U64
+            }
+        }
+        val savedP: Array[Bind] = self.cur.typeParams
+        val savedA: Array[U64] = self.cur.typeArgs
+        val savedSelf: U64 = self.cur.selfRef
+        val savedItem: U64 = self.cur.itemRef
+        self.setSelfItemEnv(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, recvInstRef: 0U64)
+        self.cur.typeParams = f.typeParams
+        self.cur.typeArgs = inferred
+        val grounded: U64 = self.groundTypeRef(ref: signatureTerm)
+        self.cur.typeParams = savedP
+        self.cur.typeArgs = savedA
+        self.cur.selfRef = savedSelf
+        self.cur.itemRef = savedItem
+        if grounded != 0U64 && self.tyRefIsGround(ref: grounded) { return grounded }
         return 0U64
+    }
+
+    // Ground a final method callable through its receiver instance.  `a.m()` and
+    // `a#Source.m()` have already converged to the same `Func`; they must therefore
+    // derive `T` in `impl[T] Box[T]` from the same receiver TypeRef as well.  Keeping
+    // this here (rather than in either syntax arm) makes source qualification a pure
+    // selection concern, never a second generic-inference mechanism.
+    inout fn groundFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
+        return self.groundFinalMethodSignatureTerm(f: f, receiverRef: recvTy.ref, args: args, signatureTerm: f.retTy)
+    }
+
+    // Parameter contexts are part of the same immutable CallTemplate contract
+    // as a return.  In particular this maps a method/impl ParamId, which
+    // groundUnderInst cannot see, through the receiver-selected environment.
+    inout fn groundFinalMethodParameter(f: Func, recvTy: TypeInfo, args: ArgRange, parameterTerm: U64) -> U64 {
+        mut val grounded: U64 = self.groundFinalMethodSignatureTerm(f: f, receiverRef: recvTy.ref, args: args, signatureTerm: parameterTerm)
+        if grounded == 0U64 {
+            grounded = self.groundConcreteFinalMethodSignatureTerm(f: f, recvTy: recvTy, args: args, signatureTerm: parameterTerm)
+        }
+        return grounded
     }
 
     // `fnArgsAllGround` is intentionally stricter: Mono may only enqueue a
@@ -242,31 +305,7 @@ pub impl Comp {
     // and `Item` are receiver-relative even when the receiver itself has no type
     // arguments; method-owned parameters are inferred from the call arguments.
     inout fn groundConcreteFinalMethodReturn(f: Func, recvTy: TypeInfo, args: ArgRange) -> U64 {
-        if f.retTy == 0U64 || recvTy.nameLen == 0U64 || self.isGenericInst(ref: recvTy.ref) {
-            return 0U64
-        }
-        val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
-        if f.typeParams.count() > 0U64 {
-            if inferred.count() != f.typeParams.count() || !(self.fnArgsAllGround(args: inferred)) {
-                return 0U64
-            }
-        }
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        val savedSelf: U64 = self.cur.selfRef
-        val savedItem: U64 = self.cur.itemRef
-        self.setSelfItemEnv(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, recvInstRef: 0U64)
-        self.cur.typeParams = f.typeParams
-        self.cur.typeArgs = inferred
-        val grounded: U64 = self.groundTypeRef(ref: f.retTy)
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        self.cur.selfRef = savedSelf
-        self.cur.itemRef = savedItem
-        if grounded != 0U64 && self.tyRefIsGround(ref: grounded) {
-            return grounded
-        }
-        return 0U64
+        return self.groundConcreteFinalMethodSignatureTerm(f: f, recvTy: recvTy, args: args, signatureTerm: f.retTy)
     }
 
     inout fn boundRetInfoOf(f: Func, tpStart: U64, tpLen: U64) -> TypeInfo {

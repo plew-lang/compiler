@@ -86,11 +86,7 @@ pub impl LlvmCtx {
                 if op == opEq() || op == opNe() {
                     val eqFi: U64 = self.eqWitnessFn(c: inout c, callId: id)
                     if eqFi < c.arena.funcs.count() {
-                        val wv: LLVMValueRef = self.emitWitnessCall(c: inout c, callId: id, fi: eqFi, lhs: lhs, rhs: rhs, binary: true)
-                        if op == opNe() {
-                            return LLVMBuildNot(self.b, wv, anon())
-                        }
-                        return wv
+                        return self.emitWitnessCall(c: inout c, callId: id, fi: eqFi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
                 // Arithmetic / bitwise / shift dispatch to the operator witness
@@ -110,7 +106,7 @@ pub impl LlvmCtx {
                 if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
                     val ordFi: U64 = self.ordWitnessFn(c: inout c, callId: id)
                     if ordFi < c.arena.funcs.count() {
-                        return self.emitOrdViaCompare(c: inout c, callId: id, op: op, fi: ordFi, lhs: lhs, rhs: rhs)
+                        return self.emitWitnessCall(c: inout c, callId: id, fi: ordFi, lhs: lhs, rhs: rhs, binary: true)
                     }
                 }
                 mut val l: LLVMValueRef = self.genLlvmExpr(c: inout c, id: lhs)

@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferAppend, bufferGet, bufferSet }
+
+// Keep main on the legacy path. `replaceFirst` owns the focused Mid boundary:
+// an explicit inout Buffer slot, a checked index, and a replacement value.
+// The result read proves the new element was committed before the call returns.
+val midBufferSetAnchor: I64 = 0I64
+
+fn replaceFirst(buffer: inout Buffer[I64]) -> I64 {
+    bufferSet(buffer: inout buffer, index: 0U64, value: 99I64)
+    return bufferGet(buffer: buffer, index: 0U64)
+}
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: 42I64)
+    print(replaceFirst(buffer: inout buffer).format(format: ""))
+}

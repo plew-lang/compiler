@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+
+// A concrete local crosses a function's declared any return boundary through
+// Mid Convert; LLVM must not reopen the return expression to decide boxing.
+trait Metric { fn value() -> I64 }
+struct Item { pub val number: I64 }
+pub impl Item { factory }
+pub impl Item as Metric { fn value() -> I64 { return self.number } }
+
+fn make() -> any Metric {
+    val item: Item = <Item number=42I64 />
+    return item
+}
+
+fn main() { print(make().value()) }

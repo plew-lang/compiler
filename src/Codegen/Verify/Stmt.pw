@@ -346,6 +346,13 @@ pub impl Comp {
                 self.verifyExpr(id: fbase)
             }
             Expr.Ident(val start, val len) => {
+                // An assignment target is not a value read, so it does not
+                // pass through verifyExpr below. Record the resolver's chosen
+                // declaration identity here nevertheless: Mid Overwrite must
+                // consume that frozen binding, never recover a local by name.
+                // The result is intentionally not used for acceptance; the
+                // existing binding/mutability diagnostics remain authoritative.
+                val recordedTarget: I64 = self.recordIdent(id: target, start: start, len: len, tpFn: self.arena.funcs.count())
                 // the target must name an existing binding (spec/03: assignment never
                 // declares). Without this, an undeclared name slid past the mutability
                 // check (localIsMutable defaults to true for names it cannot find) and

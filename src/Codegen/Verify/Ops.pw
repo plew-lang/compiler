@@ -368,10 +368,11 @@ pub impl Comp {
                 // — not an rvalue temporary (`<S…/>.bump()` / `mk().bump()` would mutate a
                 // value that is immediately discarded — spec/03).
                 if self.arena.funcs[mf].selfInout {
-                    if !(self.exprIsPlace(id: recv)) {
+                    val receiverPlace: U64 = self.materializablePlace(id: recv)
+                    if !(self.exprIsPlace(id: receiverPlace)) {
                         self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on a temporary value; the receiver must be a place (a variable or field) declared `mut val` (spec/03)")
                     }
-                    if !(self.placeIsMutable(id: recv)) {
+                    if !(self.placeIsMutable(id: receiverPlace)) {
                         self.errorAt(offset: self.exprOffset(id: recv), msg: "cannot call an `inout fn` method on an immutable binding; declare it with `mut val`")
                     }
                     // overlapping `inout` (spec/03): an `inout fn` self IS an inout
@@ -382,7 +383,7 @@ pub impl Comp {
                     mut val k: U64 = 0
                     while k < args.len {
                         if self.argAt(args: args, index: k).isInout {
-                            self.checkInoutPair(a: recv, b: self.argAt(args: args, index: k).expr)
+                            self.checkInoutPair(a: receiverPlace, b: self.materializablePlace(id: self.argAt(args: args, index: k).expr))
                         }
                         k += 1U64
                     }

@@ -1,0 +1,23 @@
+import @Std/Io with { print }
+
+val midOverwriteAnchor: I64 = 0I64
+
+unique struct Token { pub val id: I64 }
+pub impl Token { factory }
+impl Token {
+    deinit { print(self.id) }
+}
+
+fn makeToken(id: I64) -> Token {
+    print(id + 10I64)
+    return <Token id=id />
+}
+
+fn overwrite() {
+    mut val token: Token = <Token id=1I64 />
+    token = makeToken(id: 2I64)
+}
+
+fn main() {
+    overwrite()
+}

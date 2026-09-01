@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferCapacity, bufferReserve }
+
+// `reserveEnough` directly exercises the descriptor's inout slot without an
+// element ownership transfer. Main remains legacy so coverage can identify the
+// helper body rather than an unrelated stdlib Mid marker.
+val midBufferReserveAnchor: I64 = 0I64
+
+fn reserveEnough(buffer: inout Buffer[I64]) -> Bool {
+    bufferReserve(buffer: inout buffer, additionalCapacity: 5U64)
+    return bufferCapacity(buffer: buffer) >= 5U64
+}
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    print(reserveEnough(buffer: inout buffer))
+}

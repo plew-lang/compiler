@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// Keep main on the legacy path.  The only Mid candidate under test is `sum`,
+// whose `+` is a frontend-selected operator call rather than a backend
+// primitive or an AST-side overload lookup.
+val midOperatorAnchor: I64 = 0I64
+
+fn sum(left: I64, right: I64) -> I64 {
+    return left + right
+}
+
+fn main() {
+    print(sum(left: 20I64, right: 22I64))
+}

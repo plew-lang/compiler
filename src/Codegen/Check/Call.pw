@@ -114,10 +114,11 @@ pub impl Comp {
                 // `inout` writes through the place, so the argument must (a) BE a place —
                 // a local/field/subscript/Ref-pointee, not a literal or call result — and
                 // (b) be mutable (spec/03: `inc(x: inout n)` needs `mut val n`).
-                if !(self.exprIsPlace(id: arg.expr)) {
+                val place: U64 = self.materializablePlace(id: arg.expr)
+                if !(self.exprIsPlace(id: place)) {
                     self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a place (a variable or field), not a literal or temporary value (spec/03)")
                 }
-                if !(self.placeIsMutable(id: arg.expr)) {
+                if !(self.placeIsMutable(id: place)) {
                     self.errorAt(offset: self.exprOffset(id: arg.expr), msg: "an `inout` argument must be a mutable place; declare it `mut val` (spec/03)")
                 }
             } else {

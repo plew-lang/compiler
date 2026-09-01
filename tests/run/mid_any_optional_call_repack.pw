@@ -1,0 +1,28 @@
+import @Std/Io with { print }
+
+// A generic enum payload conversion is selected at the call boundary: Some
+// boxes its concrete payload, while None preserves the tag without a box.
+trait Named { fn name() -> String }
+struct Item { pub val value: String }
+pub impl Item { factory }
+pub impl Item as Named { fn name() -> String { return self.value } }
+
+fn describe(value: Optional[any Named]) -> String {
+    match value {
+        Optional.Some(v: val v) => { return v.name() }
+        Optional.None => { return "none" }
+    }
+}
+
+fn make() -> Optional[Item] {
+    return <Optional[Item].Some v=<Item value="yes" /> />
+}
+
+fn makeNone() -> Optional[Item] {
+    return <Optional[Item].None />
+}
+
+fn main() {
+    print(describe(value: make()))
+    print(describe(value: makeNone()))
+}

@@ -551,6 +551,20 @@ pub impl Comp {
         return <StaticMemberResolution.Missing />
     }
 
+    // Ordering syntax is a projection of the selected Ord requirement, not a
+    // direct spelling of `compare`: `a < b` selects `Ord.compare` as its
+    // witness but its own value is always Bool.  Keeping that distinction at
+    // the CallTemplate boundary prevents downstream body finalization from
+    // treating an Ordering return as the source expression's result.
+    inout fn staticOperatorTemplateResultTerm(op: I64, resolution: StaticMemberResolution) -> U64 {
+        if op == opLt() || op == opLe() || op == opGt() || op == opGe() {
+            val boolName: Bind = self.kwSpan(kw: "Bool", kwLen: 4U64)
+            if boolName.nameLen == 0U64 { return 0U64 }
+            return self.simpleTypeRef(nameStart: boolName.nameStart, nameLen: boolName.nameLen)
+        }
+        return self.staticRequirementResultType(resolution: resolution)
+    }
+
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) {
         mut val operands: Array[CallArgumentSource] = []
         mut val i: U64 = 0U64
@@ -561,7 +575,7 @@ pub impl Comp {
         mut val receiverTerm: U64 = 0U64
         if operandExprs.count() > 0U64 { receiverTerm = self.parametricExprTerm(exprId: operandExprs[0]) }
         val resolution: StaticMemberResolution = self.staticOperatorTemplateResolution(op: op, receiverTerm: receiverTerm, isUnary: isUnary)
-        val staticResult: U64 = self.staticRequirementResultType(resolution: resolution)
+        val staticResult: U64 = self.staticOperatorTemplateResultTerm(op: op, resolution: resolution)
         if staticResult != 0U64 { self.recordSemanticExprTerm(exprId: exprId, term: staticResult) }
         if !(self.cur.recordCallTemplates) { return }
         val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
@@ -778,6 +792,18 @@ pub impl Comp {
         self.ensureSemanticExprType(exprId: exprId)
         val prior: SemanticExprType = self.arena.semanticExprTypes[exprId]
         self.recordCallTemplateExpectedResult(exprId: exprId, expectedTerm: expectedTerm)
+        // Array construction is a bidirectional value form: at its explicit
+        // expected-result boundary the Array[E] term is the semantic result,
+        // not merely a hint for an empty literal. Record also refreshes its
+        // aggregate carrier, so Mid consumes the same selected E and never
+        // reconstructs it from an element literal or method receiver query.
+        match self.arena.exprs[exprId] {
+            Expr.Array(elems: _) => {
+                self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                self.recordSemanticAggregate(exprId: exprId)
+            }
+            _ => {}
+        }
         // Bidirectional literal typing belongs to Record, not to Mono.  An
         // arithmetic subtree made solely of contextless literals has no
         // operand TypeTerm until its enclosing annotation supplies one (for

@@ -5,8 +5,8 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
-import ../Ir with { CallSiteKey, BodyInstance, Func, CallResolution }
-import ./Ir with { MidProjection, MidPlace, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ../Ir with { CallSiteKey, BodyInstance, Func, CallResolution, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
+import ./Ir with { MidProjection, MidPlace, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -68,19 +68,99 @@ fn instantiateMidOperand(c: inout Comp, operand: MidOperand, environment: BodyIn
                 }
             }
         }
+        MidOperand.Access(candidate: val candidate) => { return <MidOperand.Access candidate=candidate /> }
     }
 }
 
-fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstance, itemRef: U64) -> MidRvalue {
+fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstance, bodyId: U64, itemRef: U64, missing: inout Bool) -> MidRvalue {
     match value {
         MidRvalue.Use(operand: val operand) => { return <MidRvalue.Use operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) /> }
+        MidRvalue.ReturnBoundary(exprId: val exprId, targetTerm: val targetTerm, operand: val rawOperand) => {
+            val operand: MidOperand = instantiateMidOperand(c: inout c, operand: rawOperand, environment: environment, itemRef: itemRef)
+            val resolutionIndex: U64 = c.finalReturnIndex(bodyId: bodyId, exprId: exprId)
+            if resolutionIndex >= c.arena.finalReturns.count() {
+                missing = true
+                return <MidRvalue.Use operand=operand />
+            }
+            val resolution: FinalReturnResolution = c.arena.finalReturns[resolutionIndex]
+            val expectedTarget: U64 = c.groundTermForBody(ref: targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+            if !(c.typeRefEq(a: resolution.targetTypeRef, b: expectedTarget)) {
+                missing = true
+                return <MidRvalue.Use operand=operand />
+            }
+            match resolution.conversion {
+                ValueConversionProof.Identity => {
+                    if !(c.typeRefEq(a: midOperandTypeRef(operand: operand), b: resolution.targetTypeRef)) { missing = true }
+                    // Keep an identity return boundary explicit. Structural
+                    // TypeRef equality is not LLVM nominal-layout equality;
+                    // the ABI target must remain available when freezing the
+                    // return local and emitting its store.
+                    return <MidRvalue.ReturnBoundary exprId=exprId targetTerm=resolution.targetTypeRef operand=operand />
+                }
+                ValueConversionProof.Missing => {
+                    missing = true
+                    return <MidRvalue.Use operand=operand />
+                }
+                _ => {
+                    if !(c.typeRefEq(a: midOperandTypeRef(operand: operand), b: midConversionSourceRef(conversion: resolution.conversion))) || !(c.typeRefEq(a: resolution.targetTypeRef, b: midConversionTargetRef(conversion: resolution.conversion))) {
+                        missing = true
+                        return <MidRvalue.Use operand=operand />
+                    }
+                    return <MidRvalue.Convert operand=operand conversion=resolution.conversion />
+                }
+            }
+        }
+        MidRvalue.Aggregate(exprId: val exprId, kind: val kind, resultTerm: val resultTerm, fieldCount: val fieldCount, elements: val elements) => {
+            mut val instantiated: Array[MidAggregateElement] = []
+            val resolutionIndex: U64 = c.finalAggregateIndex(bodyId: bodyId, exprId: exprId)
+            val hasResolution: Bool = resolutionIndex < c.arena.finalAggregates.count()
+            mut val resultRef: U64 = c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+            if hasResolution {
+                val resolution: FinalAggregateResolution = c.arena.finalAggregates[resolutionIndex]
+                resultRef = resolution.resultTypeRef
+            } else {
+                missing = true
+            }
+            mut val i: U64 = 0U64
+            while i < elements.count() {
+                val element: MidAggregateElement = elements[i]
+                val operand: MidOperand = instantiateMidOperand(c: inout c, operand: element.operand, environment: environment, itemRef: itemRef)
+                mut val targetTerm: U64 = 0U64
+                mut val conversion: ValueConversionProof = <ValueConversionProof.Missing />
+                if hasResolution {
+                    val resolution: FinalAggregateResolution = c.arena.finalAggregates[resolutionIndex]
+                    if i < resolution.elementTargetRefs.count() && i < resolution.elementConversions.count() {
+                        targetTerm = resolution.elementTargetRefs[i]
+                        conversion = resolution.elementConversions[i]
+                    } else {
+                        missing = true
+                    }
+                }
+                instantiated.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand targetTerm=targetTerm conversion=conversion />)
+                i += 1U64
+            }
+            return <MidRvalue.Aggregate exprId=exprId kind=kind resultTerm=resultRef fieldCount=fieldCount elements=instantiated />
+        }
+        MidRvalue.Convert(operand: val operand, conversion: val conversion) => {
+            return <MidRvalue.Convert operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) conversion=conversion />
+        }
     }
 }
 
-fn instantiateMidStatement(c: inout Comp, statement: MidStatement, environment: BodyInstance, itemRef: U64) -> MidStatement {
+fn instantiateMidCallReceiver(c: inout Comp, receiver: MidCallReceiver, environment: BodyInstance, itemRef: U64) -> MidCallReceiver {
+    match receiver {
+        MidCallReceiver.None => { return <MidCallReceiver.None /> }
+        MidCallReceiver.Value(operand: val operand) => { return <MidCallReceiver.Value operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) /> }
+    }
+}
+
+fn instantiateMidStatement(c: inout Comp, statement: MidStatement, environment: BodyInstance, bodyId: U64, itemRef: U64, missing: inout Bool) -> MidStatement {
     match statement {
         MidStatement.Assign(destination: val destination, value: val value) => {
-            return <MidStatement.Assign destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) value=instantiateMidRvalue(c: inout c, value: value, environment: environment, itemRef: itemRef) />
+            return <MidStatement.Assign destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) value=instantiateMidRvalue(c: inout c, value: value, environment: environment, bodyId: bodyId, itemRef: itemRef, missing: inout missing) />
+        }
+        MidStatement.Overwrite(destination: val destination, source: val source) => {
+            return <MidStatement.Overwrite destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) source=instantiateMidPlace(c: inout c, place: source, environment: environment, itemRef: itemRef) />
         }
         MidStatement.Drop(place: val place) => { return <MidStatement.Drop place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) /> }
         MidStatement.ConditionalDrop(place: val place, flag: val flag) => { return <MidStatement.ConditionalDrop place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) flag=flag /> }
@@ -109,14 +189,14 @@ fn instantiateMidTerminator(c: inout Comp, term: MidTerminator, environment: Bod
         MidTerminator.Switch(discriminant: val discriminant, values: val values, targets: val targets, otherwise: val otherwise) => {
             return <MidTerminator.Switch discriminant=instantiateMidOperand(c: inout c, operand: discriminant, environment: environment, itemRef: itemRef) values=values targets=targets otherwise=otherwise />
         }
-        MidTerminator.Call(callee: val callee, args: val args, destination: val destination, target: val target) => {
+        MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
             mut val instantiatedArgs: Array[MidOperand] = []
             mut val i: U64 = 0U64
             while i < args.count() {
                 instantiatedArgs.append(instantiateMidOperand(c: inout c, operand: args[i], environment: environment, itemRef: itemRef))
                 i += 1U64
             }
-            return <MidTerminator.Call callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) args=instantiatedArgs destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) target=target />
+            return <MidTerminator.Call callee=instantiateMidCallTarget(c: c, target: callee, bodyId: bodyId) receiver=instantiateMidCallReceiver(c: inout c, receiver: receiver, environment: environment, itemRef: itemRef) args=instantiatedArgs destination=instantiateMidPlace(c: inout c, place: destination, environment: environment, itemRef: itemRef) target=target />
         }
         MidTerminator.Return => { return <MidTerminator.Return /> }
         MidTerminator.ReturnValue(value: val value) => { return <MidTerminator.ReturnValue value=instantiateMidOperand(c: inout c, operand: value, environment: environment, itemRef: itemRef) /> }
@@ -124,6 +204,73 @@ fn instantiateMidTerminator(c: inout Comp, term: MidTerminator, environment: Bod
         MidTerminator.Abort => { return <MidTerminator.Abort /> }
         MidTerminator.Suspend(state: val state, resume: val resume) => { return <MidTerminator.Suspend state=state resume=resume /> }
     }
+}
+
+// The source builder records a parametric call operand, while the frozen
+// CallResolution owns the ABI conversion chosen for it.  This helper reads no
+// syntax: it merely exposes the already-ground operand term so instantiation
+// can check that the proof and the Mid operand still describe the same value.
+fn midOperandTypeRef(operand: MidOperand) -> U64 {
+    match operand {
+        MidOperand.Copy(place: val place) => { return place.typeTerm }
+        MidOperand.Move(place: val place) => { return place.typeTerm }
+        MidOperand.Borrow(place: val place, capability: _) => { return place.typeTerm }
+        MidOperand.Constant(value: val value) => {
+            match value {
+                MidConstant.Integer(value: _, isNegative: _, isBool: _, typeTerm: val typeTerm) => { return typeTerm }
+                MidConstant.StringLiteral(start: _, len: _, typeTerm: val typeTerm) => { return typeTerm }
+            }
+        }
+        MidOperand.Access(candidate: _) => { return 0U64 }
+    }
+}
+
+fn midConversionIsIdentity(conversion: ValueConversionProof) -> Bool {
+    match conversion { ValueConversionProof.Identity => { return true } _ => {} }
+    return false
+}
+
+fn midConversionSourceRef(conversion: ValueConversionProof) -> U64 {
+    match conversion {
+        ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: _, traitIdx: _, proof: _) => { return sourceRef }
+        ValueConversionProof.ArrayRepack(sourceRef: val sourceRef, targetRef: _, element: _) => { return sourceRef }
+        ValueConversionProof.EnumRepack(sourceRef: val sourceRef, targetRef: _, enumIdx: _, payloads: _) => { return sourceRef }
+        _ => {}
+    }
+    return 0U64
+}
+
+fn midConversionTargetRef(conversion: ValueConversionProof) -> U64 {
+    match conversion {
+        ValueConversionProof.ExistentialBox(sourceRef: _, targetRef: val targetRef, traitIdx: _, proof: _) => { return targetRef }
+        ValueConversionProof.ArrayRepack(sourceRef: _, targetRef: val targetRef, element: _) => { return targetRef }
+        ValueConversionProof.EnumRepack(sourceRef: _, targetRef: val targetRef, enumIdx: _, payloads: _) => { return targetRef }
+        _ => {}
+    }
+    return 0U64
+}
+
+// An instantiated rvalue carries the concrete type of the value it produces.
+// A root Mid local is the owned home for that value, so its declaration must
+// be frozen from this fact before LLVM allocates the local.  This is an IR
+// typing rule, not inference: Aggregate/Convert/ReturnBoundary already obtain
+// their result type solely from frontend-finalized resolutions.
+fn midRvalueResultType(value: MidRvalue) -> U64 {
+    match value {
+        MidRvalue.Use(operand: val operand) => { return midOperandTypeRef(operand: operand) }
+        MidRvalue.ReturnBoundary(exprId: _, targetTerm: val targetTerm, operand: _) => { return targetTerm }
+        MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: val resultTerm, fieldCount: _, elements: _) => { return resultTerm }
+        MidRvalue.Convert(operand: _, conversion: val conversion) => {
+            match conversion {
+                ValueConversionProof.Identity => { return 0U64 }
+                _ => { return midConversionTargetRef(conversion: conversion) }
+            }
+        }
+    }
+}
+
+fn midWithTypeTerm(local: MidLocalDecl, typeTerm: U64) -> MidLocalDecl {
+    return <MidLocalDecl typeTerm=typeTerm sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />
 }
 
 // Ground a parametric Mid body exactly once for one frontend BodyInstance.
@@ -143,10 +290,15 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
     mut val localI: U64 = 0U64
     while localI < body.locals.count() {
         val local: MidLocalDecl = body.locals[localI]
-        locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
+        locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
         localI += 1U64
     }
     mut val blocks: Array[MidBlock] = []
+    // A conversion temporary has statement-end lifetime.  Give every call its
+    // own continuation rather than prepending drops to the source continuation:
+    // source targets may have multiple predecessors, while this generated block
+    // has exactly the call as its predecessor.
+    mut val cleanupBlocks: Array[MidBlock] = []
     mut val blockI: U64 = 0U64
     mut val missing: Bool = false
     while blockI < body.blocks.count() {
@@ -154,18 +306,85 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
         mut val statements: Array[MidStatement] = []
         mut val statementI: U64 = 0U64
         while statementI < block.statements.count() {
-            statements.append(instantiateMidStatement(c: inout c, statement: block.statements[statementI], environment: environment, itemRef: itemRef))
+            mut val statement: MidStatement = instantiateMidStatement(c: inout c, statement: block.statements[statementI], environment: environment, bodyId: bodyId, itemRef: itemRef, missing: inout missing)
+            // The parametric builder gives a temporary the source aggregate's
+            // TypeTerm.  Final aggregate/return resolution can make that term
+            // concrete (for example `(first:T, second:T)` -> String fields).
+            // Freeze the root owned home from the instantiated rvalue before
+            // any subsequent operand or LLVM allocation observes it.
+            match statement {
+                MidStatement.Assign(destination: val destination, value: val value) => {
+                    if destination.projections.count() == 0U64 && destination.local < locals.count() {
+                        val resultType: U64 = midRvalueResultType(value: value)
+                        if resultType != 0U64 {
+                            val declaration: MidLocalDecl = locals[destination.local]
+                            if declaration.isParameter {
+                                if declaration.typeTerm != resultType { missing = true }
+                            } else {
+                                locals.set(i: destination.local, value: midWithTypeTerm(local: declaration, typeTerm: resultType))
+                                statement = <MidStatement.Assign destination=<MidPlace local=destination.local projections=destination.projections typeTerm=resultType /> value=value />
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            statements.append(statement)
             statementI += 1U64
         }
-        val terminator: MidTerminator = instantiateMidTerminator(c: inout c, term: block.terminator, environment: environment, bodyId: bodyId, itemRef: itemRef)
+        mut val terminator: MidTerminator = instantiateMidTerminator(c: inout c, term: block.terminator, environment: environment, bodyId: bodyId, itemRef: itemRef)
         match terminator {
-            MidTerminator.Call(callee: val callee, args: _, destination: _, target: _) => {
-                match callee { MidCallTarget.Template(site: _) => { missing = true } _ => {} }
+            MidTerminator.Call(callee: val callee, receiver: val receiver, args: val rawArgs, destination: val destination, target: val target) => {
+                match callee {
+                    MidCallTarget.Template(site: _) => { missing = true }
+                    MidCallTarget.Resolved(resolution: val resolution) => {
+                        if resolution >= c.arena.finalCallees.count() {
+                            missing = true
+                        } else {
+                            val selected: CallResolution = c.arena.finalCallees[resolution]
+                            if selected.argumentConversions.count() != rawArgs.count() || selected.parameterTypeRefs.count() != rawArgs.count() {
+                                missing = true
+                            } else {
+                                mut val args: Array[MidOperand] = rawArgs
+                                mut val cleanup: Array[MidStatement] = []
+                                mut val argumentI: U64 = 0U64
+                                while argumentI < args.count() {
+                                    val conversion: ValueConversionProof = selected.argumentConversions[argumentI]
+                                    if !(midConversionIsIdentity(conversion: conversion)) {
+                                        val sourceRef: U64 = midConversionSourceRef(conversion: conversion)
+                                        val targetRef: U64 = midConversionTargetRef(conversion: conversion)
+                                        if sourceRef == 0U64 || targetRef == 0U64 || !(c.typeRefEq(a: midOperandTypeRef(operand: args[argumentI]), b: sourceRef)) || !(c.typeRefEq(a: selected.parameterTypeRefs[argumentI], b: targetRef)) {
+                                            missing = true
+                                        } else {
+                                            val temporary: U64 = locals.count()
+                                            locals.append(<MidLocalDecl typeTerm=targetRef sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />)
+                                            val temporaryPlace: MidPlace = <MidPlace local=temporary typeTerm=targetRef />
+                                            statements.append(<MidStatement.Assign destination=temporaryPlace value=<MidRvalue.Convert operand=args[argumentI] conversion=conversion /> />)
+                                            args.set(i: argumentI, value: <MidOperand.Copy place=temporaryPlace />)
+                                            cleanup.append(<MidStatement.Drop place=temporaryPlace />)
+                                        }
+                                    }
+                                    argumentI += 1U64
+                                }
+                                if cleanup.count() > 0U64 {
+                                    val cleanupTarget: U64 = body.blocks.count() + cleanupBlocks.count()
+                                    cleanupBlocks.append(<MidBlock statements=cleanup terminator=<MidTerminator.Goto target=target /> />)
+                                    terminator = <MidTerminator.Call callee=callee receiver=receiver args=args destination=destination target=cleanupTarget />
+                                }
+                            }
+                        }
+                    }
+                }
             }
             _ => {}
         }
         blocks.append(<MidBlock statements=statements terminator=terminator />)
         blockI += 1U64
+    }
+    mut val cleanupI: U64 = 0U64
+    while cleanupI < cleanupBlocks.count() {
+        blocks.append(cleanupBlocks[cleanupI])
+        cleanupI += 1U64
     }
     val instantiated: MidBody = <MidBody bodyInstance=bodyId sourceFunction=body.sourceFunction locals=locals scopes=body.scopes blocks=blocks entry=body.entry />
     if missing { return <MidInstantiation body=instantiated error=<MidInstantiateError.MissingCallResolution /> /> }

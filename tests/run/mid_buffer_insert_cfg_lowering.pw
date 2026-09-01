@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferAppend, bufferGet, bufferInsertAt }
+
+// Insert has a distinct boundary from append: its inclusive index <= count
+// rule and relocation of the suffix must be preserved by Mid.
+val midBufferInsertAnchor: I64 = 0I64
+
+fn insertMiddle(buffer: inout Buffer[I64]) -> I64 {
+    bufferInsertAt(buffer: inout buffer, index: 1U64, value: 20I64)
+    bufferInsertAt(buffer: inout buffer, index: 3U64, value: 40I64)
+    return bufferGet(buffer: buffer, index: 1U64) * 100I64 + bufferGet(buffer: buffer, index: 2U64) * 10I64 + bufferGet(buffer: buffer, index: 3U64)
+}
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: 10I64)
+    bufferAppend(buffer: inout buffer, value: 30I64)
+    print(insertMiddle(buffer: inout buffer).format(format: ""))
+}

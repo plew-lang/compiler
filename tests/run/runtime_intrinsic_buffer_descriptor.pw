@@ -1,0 +1,20 @@
+import @Std/Io with { write }
+import /Ir with { RuntimeIntrinsic, BufferIntrinsic, CallTarget }
+
+fn main() {
+    val target: CallTarget = <CallTarget.RuntimeIntrinsic intrinsic=<RuntimeIntrinsic.Buffer intrinsic=<BufferIntrinsic.Append /> /> />
+    match target {
+        CallTarget.RuntimeIntrinsic(intrinsic: val runtime) => {
+            match runtime {
+                RuntimeIntrinsic.Buffer(intrinsic: val buffer) => {
+                    match buffer {
+                        BufferIntrinsic.Append => { write(s: "buffer-append\n") }
+                        _ => { write(s: "wrong\n") }
+                    }
+                }
+                _ => { write(s: "wrong\n") }
+            }
+        }
+        _ => { write(s: "wrong\n") }
+    }
+}

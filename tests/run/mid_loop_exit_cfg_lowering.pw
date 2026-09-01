@@ -1,0 +1,31 @@
+import @Std/Io with { print }
+
+// Keep `main` on the legacy path. The helpers below must lower through Mid:
+// `break` and `continue` leave only the nested loop-body scope, then branch to
+// the loop exit/header respectively.
+val midLoopExitAnchor: I64 = 0I64
+
+fn breakAtThree() -> I64 {
+    mut val n: I64 = 0I64
+    while true {
+        n = n + 1I64
+        if n == 3I64 { break }
+    }
+    return n
+}
+
+fn skipThree() -> I64 {
+    mut val n: I64 = 0I64
+    mut val sum: I64 = 0I64
+    while n < 5I64 {
+        n = n + 1I64
+        if n == 3I64 { continue }
+        sum = sum + n
+    }
+    return sum
+}
+
+fn main() {
+    print(breakAtThree())
+    print(skipThree())
+}

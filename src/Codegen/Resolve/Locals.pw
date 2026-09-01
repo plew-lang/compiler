@@ -481,6 +481,12 @@ pub impl Comp {
     }
 
     inout fn exprIsPlace(id: U64) -> Bool {
+        // Nested indexing is lowered into nested synthetic Index.index calls.
+        // Each candidate restores one authored Index place; recurse before
+        // inspecting shape so an outer candidate does not leave its inner
+        // candidate looking like a temporary.
+        val materialized: U64 = self.materializablePlace(id: id)
+        if materialized != id { return self.exprIsPlace(id: materialized) }
         match self.arena.exprs[id] {
             Expr.Ident(start: _, len: _) => { return true }
             Expr.Field(val base, nameStart: _, nameLen: _) => { return self.exprIsPlace(id: base) }
@@ -495,6 +501,21 @@ pub impl Comp {
             Expr.ExtView(val recv, source: _, strip: _) => { return self.exprIsPlace(id: recv) }
             _ => { return false }
         }
+    }
+
+    // Lower represents an indexed read as a synthetic Index.index call, but
+    // retains the original storage path in AccessCandidate.  This is not a
+    // second lookup: it only recovers the Lower-published place so checking
+    // can accept a later selected `inout` use which Mid will materialize and
+    // write back through that exact candidate.
+    inout fn materializablePlace(id: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.accessCandidates.count() {
+            val candidate: AccessCandidate = self.decls.accessCandidates[i]
+            if candidate.readExpr == id { return candidate.placeExpr }
+            i += 1U64
+        }
+        return id
     }
 
     inout fn placeIsMutable(id: U64) -> Bool {

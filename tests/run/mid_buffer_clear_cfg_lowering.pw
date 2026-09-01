@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+import @Std/Core with { Buffer, bufferAppend, bufferCapacity, bufferClear, bufferCount }
+
+// Clear drops the live range while retaining the allocation and its capacity.
+val midBufferClearAnchor: I64 = 0I64
+
+fn clearAll(buffer: inout Buffer[I64]) -> Bool {
+    bufferClear(buffer: inout buffer)
+    return bufferCount(buffer: buffer) == 0U64
+}
+
+fn main() {
+    mut val buffer: Buffer[I64] = Buffer.new()
+    bufferAppend(buffer: inout buffer, value: 1I64)
+    bufferAppend(buffer: inout buffer, value: 2I64)
+    val before: U64 = bufferCapacity(buffer: buffer)
+    val empty: Bool = clearAll(buffer: inout buffer)
+    print(empty && bufferCapacity(buffer: buffer) == before)
+}

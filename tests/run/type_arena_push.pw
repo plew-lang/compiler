@@ -1,0 +1,43 @@
+// TypeTerm arena invariant: pushType appends exactly one entry and returns its
+// usable arena index. Generic receiver Func.recvTy relies on this directly.
+import @Std/Io with { write }
+import @Plew/Syntax with { Span, TypeAst }
+import /Frontend with { Comp }
+import /Ir with { Bind, TypeRef }
+
+fn pushThroughHelper(c: inout Comp) -> U64 {
+    return c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)
+}
+
+fn main() {
+    mut val c: Comp = <Comp />
+    c.arena.types.append(<TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)
+    val before = c.arena.types.count()
+    val id = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)
+    val helperId = pushThroughHelper(c: inout c)
+    val foo: TypeAst = <TypeAst name="Foo" args=[<TypeAst name="Bar" args=[] span=<Span start=0U64 end=0U64 /> />] span=<Span start=0U64 end=0U64 /> />
+    val lowered = c.lowerType(t: foo)
+    val after = c.arena.types.count()
+    mut val projected: Comp = <Comp />
+    projected.arena.types.append(<TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)
+    val projectedRef = projected.lowerType(t: foo).ref
+    val projectedCount = projected.arena.types.count()
+    mut val generic: Comp = <Comp />
+    generic.arena.types.append(<TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)
+    val tName = generic.internBytes(s: "T")
+    generic.cur.typeParams.append(<Bind nameStart=tName.nameStart nameLen=tName.nameLen nameId=tName.nameId paramId=1U64 fieldStart=0U64 fieldLen=0U64 />)
+    val genericType: TypeAst = <TypeAst name="Box" args=[<TypeAst name="T" args=[] span=<Span start=0U64 end=0U64 /> />] span=<Span start=0U64 end=0U64 /> />
+    val genericRef = generic.lowerType(t: genericType).ref
+    val genericCount = generic.arena.types.count()
+    mut val extra: U64 = 0U64
+    while extra < 8U64 {
+        c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=false />)
+        extra += 1U64
+    }
+    val expanded = c.arena.types.count()
+    if before == 1U64 && id == 1U64 && helperId == 2U64 && lowered.ref == 4U64 && after == 5U64 && projectedRef == 2U64 && projectedCount == 3U64 && genericRef == 2U64 && genericCount == 3U64 && expanded == 13U64 && c.arena.types[id].nameLen == 0U64 && c.arena.types[helperId].nameLen == 0U64 {
+        write(s: "type-arena-push\n")
+    } else {
+        write(s: "wrong-type-arena-push\n")
+    }
+}

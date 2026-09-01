@@ -2,7 +2,7 @@
 // dataflow, never source AST or LLVM state. Backend entry will call it before
 // lowering once Mid bodies become the production input.
 
-import ./Ir with { MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBody, MidOwnership }
+import ./Ir with { MidPlace, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
 import ./Drop with { analyzeMidOwnership }
 
 export enum MidVerifyError {
@@ -13,6 +13,8 @@ export enum MidVerifyError {
     DropUnavailable
     InvalidDropFlag
     UnelaboratedScopeExit
+    UnelaboratedAccess
+    UninstantiatedReturnBoundary
 }
 
 export struct MidVerification {
@@ -24,6 +26,9 @@ pub impl MidVerification { factory }
 
 fn midVerifyConsumeOperand(states: inout Array[MidOwnership], operand: MidOperand, block: U64) -> MidVerification {
     match operand {
+        MidOperand.Access(candidate: _) => {
+            return <MidVerification error=<MidVerifyError.UnelaboratedAccess /> block=block />
+        }
         MidOperand.Move(place: val place) => {
             if place.projections.count() != 0U64 {
                 return <MidVerification error=<MidVerifyError.PartialMove /> block=block local=place.local />
@@ -41,9 +46,27 @@ fn midVerifyConsumeOperand(states: inout Array[MidOwnership], operand: MidOperan
     return <MidVerification />
 }
 
-fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, block: U64) -> MidVerification {
+fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, block: U64, isGrounded: Bool) -> MidVerification {
     match value {
         MidRvalue.Use(operand: val operand) => { return midVerifyConsumeOperand(states: inout states, operand: operand, block: block) }
+        // Parametric bodies are never verifier input in the production path;
+        // their ABI target has not been selected yet.  After BodyInstance
+        // grounding, however, ReturnBoundary deliberately remains explicit so
+        // LLVM uses the final nominal ABI layout even for Identity conversion.
+        MidRvalue.ReturnBoundary(exprId: _, targetTerm: val targetTerm, operand: val operand) => {
+            if !isGrounded || targetTerm == 0U64 { return <MidVerification error=<MidVerifyError.UninstantiatedReturnBoundary /> block=block /> }
+            return midVerifyConsumeOperand(states: inout states, operand: operand, block: block)
+        }
+        MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
+            mut val i: U64 = 0U64
+            while i < elements.count() {
+                val verified: MidVerification = midVerifyConsumeOperand(states: inout states, operand: elements[i].operand, block: block)
+                match verified.error { MidVerifyError.None => {} _ => { return verified } }
+                i += 1U64
+            }
+            return <MidVerification />
+        }
+        MidRvalue.Convert(operand: val operand, conversion: _) => { return midVerifyConsumeOperand(states: inout states, operand: operand, block: block) }
     }
 }
 
@@ -64,10 +87,23 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
         while si < body.blocks[bi].statements.count() {
             match body.blocks[bi].statements[si] {
                 MidStatement.Assign(destination: val destination, value: val value) => {
-                    val result: MidVerification = midVerifyConsumeRvalue(states: inout states, value: value, block: bi)
+                    val result: MidVerification = midVerifyConsumeRvalue(states: inout states, value: value, block: bi, isGrounded: body.bodyInstance != 0U64)
                     match result.error { MidVerifyError.None => {} _ => { return result } }
                     if destination.projections.count() == 0U64 && destination.local < states.count() {
                         states.set(i: destination.local, value: <MidOwnership.Owned />)
+                    }
+                }
+                MidStatement.Overwrite(destination: val destination, source: val source) => {
+                    if destination.projections.count() != 0U64 || source.projections.count() != 0U64 || destination.local >= states.count() || source.local >= states.count() || destination.local == source.local {
+                        return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local />
+                    }
+                    match states[source.local] {
+                        MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
+                        _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local /> }
+                    }
+                    match states[destination.local] {
+                        MidOwnership.MaybeOwned => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local /> }
+                        _ => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
                     }
                 }
                 MidStatement.Drop(place: val place) => {
@@ -110,7 +146,14 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                 }
                 if !(midTargetIsValid(body: body, target: otherwise)) { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=bi /> }
             }
-            MidTerminator.Call(callee: _, args: val args, destination: val destination, target: val target) => {
+            MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
+                match receiver {
+                    MidCallReceiver.Value(operand: val operand) => {
+                        val receiverResult: MidVerification = midVerifyConsumeOperand(states: inout states, operand: operand, block: bi)
+                        match receiverResult.error { MidVerifyError.None => {} _ => { return receiverResult } }
+                    }
+                    _ => {}
+                }
                 mut val ai: U64 = 0U64
                 while ai < args.count() {
                     val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: args[ai], block: bi)

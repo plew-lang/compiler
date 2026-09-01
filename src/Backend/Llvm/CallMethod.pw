@@ -3,6 +3,8 @@
 // A method call, including `recv#Ext.name(args)`, consumes the final callable
 // selected by Mono. Source-view spelling is never re-resolved in LLVM.
 
+import ../../Diag with { eprintU64 }
+
 pub impl LlvmCtx {
     inout fn genLlvmMethod(c: inout Comp, callId: U64, recv: U64, nameStart: U64, nameLen: U64, args: ArgRange) -> LLVMValueRef {
         // an existential `any P` receiver (spec/08): dynamic dispatch through the value's
@@ -11,9 +13,9 @@ pub impl LlvmCtx {
         val selectedRecvRef: U64 = c.bodyCalleeReceiverRef(exprId: callId)
         if c.traceCodegen {
             eprint(text: "[trace-codegen] backend method call=")
-            eprint(text: digitStrU(d: callId))
+            eprintU64(n: callId)
             eprint(text: " offset=")
-            eprint(text: digitStrU(d: c.exprOffset(id: callId)))
+            eprintU64(n: c.exprOffset(id: callId))
             eprint(text: " name=")
             mut val traceName: Array[U8] = []
             mut val traceI: U64 = 0U64
@@ -25,7 +27,7 @@ pub impl LlvmCtx {
             eprint(text: " receiver=")
             c.traceMonoTypeHead(ref: selectedRecvRef)
             eprint(text: " targetKind=")
-            eprint(text: digitStrU(d: c.bodyCalleeTargetKind(exprId: callId)))
+            eprintU64(n: c.bodyCalleeTargetKind(exprId: callId))
             eprint(text: "\n")
         }
         if selectedRecvRef != 0U64 {
@@ -64,7 +66,7 @@ pub impl LlvmCtx {
             // grounded to `I32.add(…)` / `F64.add(…)`, or an explicit `I32.add(…)` — resolves
             // to its std witness (`impl I32 as Add` in Core/Num.pw) through Mono's final callee, like
             // any other assoc fn. The witness body bottoms out in the intrinsic floor
-            // (genNumIntrinsic), so the std `impl` is the single source of truth for what the
+            // (the closed RuntimeIntrinsic.Numeric descriptor), so the std `impl` is the single source of truth for what the
             // op does (spec/12) — no primitive open-code shortcut here (mirrors the concrete
             // operator paths in Expr.pw, which route through the same witnesses).
             val afi: U64 = finalMfi
@@ -100,7 +102,7 @@ pub impl LlvmCtx {
                         self.emitInoutOverlapChecks(c: inout c, f: gaf, av: gav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: gPinMark)
                         val grv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(gav), gav.count(), anon())
                         self.releaseInoutPins(c: inout c, mark: gPinMark)
-                        return grv
+                        return self.projectFinalCallResult(c: inout c, callId: callId, value: grv)
                     }
                 }
                 val af: Func = c.arena.funcs[afi]
@@ -114,7 +116,7 @@ pub impl LlvmCtx {
                     self.emitInoutOverlapChecks(c: inout c, f: af, av: aav, args: args, hasRecv: false, recvExpr: 0U64, avArgStart: 0U64, pinMark: aPinMark)
                     val arv: LLVMValueRef = LLVMBuildCall2(self.b, self.genFnTy[agslot], self.genFnVal[agslot], arrayCPtr(aav), aav.count(), anon())
                     self.releaseInoutPins(c: inout c, mark: aPinMark)
-                    return arv
+                    return self.projectFinalCallResult(c: inout c, callId: callId, value: arv)
                 }
                 c.errorAt(offset: nameStart, msg: "LLVM backend: this assoc fn is not emittable yet (generic / std / trait)")
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -177,7 +179,7 @@ pub impl LlvmCtx {
                     self.emitInoutOverlapChecks(c: inout c, f: smf, av: sav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: sPinMark)
                     val srv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[sslot], self.fnVal[sslot], arrayCPtr(sav), sav.count(), anon())
                     self.releaseInoutPins(c: inout c, mark: sPinMark)
-                    return srv
+                    return self.projectFinalCallResult(c: inout c, callId: callId, value: srv)
                 }
             }
             c.errorAt(offset: nameStart, msg: "internal error: primitive call has no final callable")
@@ -281,7 +283,7 @@ pub impl LlvmCtx {
                             self.emitInoutOverlapChecks(c: inout c, f: emf, av: eav, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: ePinMark)
                             val erv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[eslot], self.fnVal[eslot], arrayCPtr(eav), eav.count(), anon())
                             self.releaseInoutPins(c: inout c, mark: ePinMark)
-                            return erv
+                            return self.projectFinalCallResult(c: inout c, callId: callId, value: erv)
                         }
                         c.errorAt(offset: nameStart, msg: "LLVM backend: this enum method is not emittable yet (generic / provided)")
                         return LLVMConstInt(self.i64ty, 0U64, 0I32)
@@ -383,6 +385,6 @@ pub impl LlvmCtx {
         self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
         val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.fnTy[slot], self.fnVal[slot], arrayCPtr(av), av.count(), anon())
         self.releaseInoutPins(c: inout c, mark: pinMark)
-        return rv
+        return self.projectFinalCallResult(c: inout c, callId: callId, value: rv)
     }
 }

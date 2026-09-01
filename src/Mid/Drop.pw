@@ -3,7 +3,7 @@
 // this pass computes their ownership consequences for drop elaboration and the
 // always-on verifier.
 
-import ./Ir with { MidPlace, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
+import ./Ir with { MidPlace, MidOperand, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
 
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
@@ -76,7 +76,20 @@ fn midConsumeOperand(states: inout Array[MidOwnership], operand: MidOperand) {
 fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
     match value {
         MidRvalue.Use(operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
+        MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
+        MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
+            mut val i: U64 = 0U64
+            while i < elements.count() {
+                midConsumeOperand(states: inout states, operand: elements[i].operand)
+                i += 1U64
+            }
+        }
+        MidRvalue.Convert(operand: val operand, conversion: _) => { midConsumeOperand(states: inout states, operand: operand) }
     }
+}
+
+fn midConsumeReceiver(states: inout Array[MidOwnership], receiver: MidCallReceiver) {
+    match receiver { MidCallReceiver.Value(operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) } _ => {} }
 }
 
 // Transfer a single block. Drop/Assign are consumes/producers; all call/return
@@ -92,6 +105,10 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
                 if destination.projections.count() == 0U64 && destination.local < out.count() {
                     out.set(i: destination.local, value: <MidOwnership.Owned />)
                 }
+            }
+            MidStatement.Overwrite(destination: val destination, source: val source) => {
+                if source.projections.count() == 0U64 && source.local < out.count() { out.set(i: source.local, value: <MidOwnership.Consumed />) }
+                if destination.projections.count() == 0U64 && destination.local < out.count() { out.set(i: destination.local, value: <MidOwnership.Owned />) }
             }
             MidStatement.Drop(place: val place) => {
                 if place.projections.count() == 0U64 && place.local < out.count() {
@@ -121,7 +138,8 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
         MidTerminator.Switch(discriminant: val discriminant, values: _, targets: _, otherwise: _) => {
             midConsumeOperand(states: inout out, operand: discriminant)
         }
-        MidTerminator.Call(callee: _, args: val args, destination: val destination, target: _) => {
+        MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
+            midConsumeReceiver(states: inout out, receiver: receiver)
             mut val ai: U64 = 0U64
             while ai < args.count() {
                 midConsumeOperand(states: inout out, operand: args[ai])
@@ -150,7 +168,7 @@ fn midSuccessors(term: MidTerminator) -> Array[U64] {
             out.append(otherwise)
             return out
         }
-        MidTerminator.Call(callee: _, args: _, destination: _, target: val target) => { return [target] }
+        MidTerminator.Call(callee: _, receiver: _, args: _, destination: _, target: val target) => { return [target] }
         MidTerminator.Suspend(state: _, resume: val resume) => { return [resume] }
         _ => { return [] }
     }
@@ -273,7 +291,26 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
     while si < block.statements.count() {
         match block.statements[si] {
             MidStatement.Assign(destination: val destination, value: val value) => {
-                match value { MidRvalue.Use(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) } }
+                match value {
+                    MidRvalue.Use(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+                    MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+                    MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
+                        mut val element: U64 = 0U64
+                        while element < elements.count() {
+                            midMakeOperandUnavailable(states: inout out, operand: elements[element].operand)
+                            element += 1U64
+                        }
+                    }
+                    MidRvalue.Convert(operand: val operand, conversion: _) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+                }
+                if destination.projections.count() == 0U64 && destination.local < out.count() {
+                    out.set(i: destination.local, value: <MidAccessibility.Available />)
+                }
+            }
+            MidStatement.Overwrite(destination: val destination, source: val source) => {
+                if source.projections.count() == 0U64 && source.local < out.count() {
+                    out.set(i: source.local, value: <MidAccessibility.Unavailable />)
+                }
                 if destination.projections.count() == 0U64 && destination.local < out.count() {
                     out.set(i: destination.local, value: <MidAccessibility.Available />)
                 }
@@ -304,7 +341,8 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
         MidTerminator.Switch(discriminant: val discriminant, values: _, targets: _, otherwise: _) => {
             midMakeOperandUnavailable(states: inout out, operand: discriminant)
         }
-        MidTerminator.Call(callee: _, args: val args, destination: val destination, target: _) => {
+        MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
+            match receiver { MidCallReceiver.Value(operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) } _ => {} }
             mut val ai: U64 = 0U64
             while ai < args.count() {
                 midMakeOperandUnavailable(states: inout out, operand: args[ai])
@@ -404,7 +442,20 @@ fn midOperandMovedRoot(operand: MidOperand) -> U64 {
 }
 
 fn midRvalueMovedRoot(value: MidRvalue) -> U64 {
-    match value { MidRvalue.Use(operand: val operand) => { return midOperandMovedRoot(operand: operand) } }
+    match value {
+        MidRvalue.Use(operand: val operand) => { return midOperandMovedRoot(operand: operand) }
+        MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => { return midOperandMovedRoot(operand: operand) }
+        MidRvalue.Aggregate(exprId: _, kind: _, resultTerm: _, fieldCount: _, elements: val elements) => {
+            mut val i: U64 = 0U64
+            while i < elements.count() {
+                val moved: U64 = midOperandMovedRoot(operand: elements[i].operand)
+                if moved != 18446744073709551615U64 { return moved }
+                i += 1U64
+            }
+            return 18446744073709551615U64
+        }
+        MidRvalue.Convert(operand: val operand, conversion: _) => { return midOperandMovedRoot(operand: operand) }
+    }
 }
 
 // A conditional move makes a root MaybeOwned/Unavailable at the first join
@@ -601,6 +652,34 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                         currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />)
                     }
                 }
+                MidStatement.Overwrite(destination: val destination, source: val source) => {
+                    if destination.projections.count() == 0U64 && destination.local < currentOwnership.count() {
+                        match currentOwnership[destination.local] {
+                            MidOwnership.Owned => {
+                                statements.append(<MidStatement.Drop place=destination />)
+                                if destination.local < originalCount && needsFlag[destination.local] {
+                                    statements.append(<MidStatement.SetDropFlag local=flagFor[destination.local] isSet=false />)
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    statements.append(statement)
+                    if source.projections.count() == 0U64 && source.local < currentOwnership.count() {
+                        currentOwnership.set(i: source.local, value: <MidOwnership.Consumed />)
+                        currentAccessibility.set(i: source.local, value: <MidAccessibility.Unavailable />)
+                        if source.local < originalCount && needsFlag[source.local] {
+                            statements.append(<MidStatement.SetDropFlag local=flagFor[source.local] isSet=false />)
+                        }
+                    }
+                    if destination.projections.count() == 0U64 && destination.local < currentOwnership.count() {
+                        currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
+                        currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />)
+                        if destination.local < originalCount && needsFlag[destination.local] {
+                            statements.append(<MidStatement.SetDropFlag local=flagFor[destination.local] isSet=true />)
+                        }
+                    }
+                }
                 MidStatement.ScopeExit(scope: val scope) => {
                     mut val local: U64 = midScopeEnd(body: body, scope: scope)
                     val first: U64 = midScopeFirst(body: body, scope: scope)
@@ -627,7 +706,16 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
         // bookkeeping; placing them immediately before the terminator preserves
         // user-visible evaluation and abort behavior.
         match source.terminator {
-            MidTerminator.Call(callee: _, args: val args, destination: val destination, target: _) => {
+            MidTerminator.Call(callee: _, receiver: val receiver, args: val args, destination: val destination, target: _) => {
+                match receiver {
+                    MidCallReceiver.Value(operand: val operand) => {
+                        val moved: U64 = midOperandMovedRoot(operand: operand)
+                        if moved < originalCount && needsFlag[moved] {
+                            statements.append(<MidStatement.SetDropFlag local=flagFor[moved] isSet=false />)
+                        }
+                    }
+                    _ => {}
+                }
                 mut val ai: U64 = 0U64
                 while ai < args.count() {
                     val moved: U64 = midOperandMovedRoot(operand: args[ai])

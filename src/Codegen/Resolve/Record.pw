@@ -231,14 +231,14 @@ pub impl Comp {
             calleeArgs = self.inferParametricFnArgs(f: f, args: args)
         }
         mut val result: U64 = f.retTy
-        if f.typeParams.count() > 0U64 && self.fnArgsAllGround(args: calleeArgs) {
-            val savedParams: Array[Bind] = self.cur.typeParams
-            val savedArgs: Array[U64] = self.cur.typeArgs
-            self.cur.typeParams = f.typeParams
-            self.cur.typeArgs = calleeArgs
-            result = self.groundTypeRef(ref: f.retTy)
-            self.cur.typeParams = savedParams
-            self.cur.typeArgs = savedArgs
+        // A source body may call `id[T](value: T) -> T` while its own T is
+        // still symbolic.  That is a complete *semantic* substitution even
+        // though it is not an emittable Mono instance yet.  Preserve the
+        // caller-owned T in the expression result; retaining the callee's
+        // ParamId would make a later body environment unable to ground it.
+        // `fnArgsAllGround` is deliberately reserved for reachability/codegen.
+        if f.typeParams.count() > 0U64 && self.fnArgsAllResolved(args: calleeArgs) {
+            result = self.groundTermInEnvironment(ref: f.retTy, params: f.typeParams, values: calleeArgs)
         }
         self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result)
         // The existing SemanticExprType is still consumed by the abstract
@@ -421,6 +421,11 @@ pub impl Comp {
         if result == 0U64 {
             result = self.groundConcreteFinalMethodReturn(f: f, recvTy: self.typeInfoOfRef(ref: returnReceiver), args: args)
         }
+        // The final callable's complete ParamId substitution is provenance,
+        // not a Mono inference request.  Persist it beside the selected
+        // callee so every downstream consumer sees the same method/impl
+        // environment used above for result and argument terms.
+        val finalEnvironment: InstanceEnvironment = self.finalMethodEnvironment(f: f, receiverRef: returnReceiver, args: args)
         // An associated factory's syntactic qualifier can itself lower through
         // method-shaped nodes (for example `MutableRef[Cell]`).  It is never a
         // value produced by that node: its semantic receiver is the selected
@@ -437,7 +442,7 @@ pub impl Comp {
                 _ => {}
             }
         }
-        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: [], resultTerm: result, proof: proof)
+        self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: finalEnvironment.args, resultTerm: result, proof: proof)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
@@ -497,22 +502,194 @@ pub impl Comp {
         return self.pushType(t: <TypeRef nameStart=f.recvStart nameLen=f.recvLen args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=vid />)
     }
 
-    // Context-type an array literal from its expected type (the record-pass analog of
-    // bidirectional literal typing): an EMPTY `[]` has no element to derive a type
-    // from, and Plew requires a value's type to equal its context's declared type, so
-    // the context ref IS the literal's type. A no-op for any other node / an already
-    // recorded literal / no context.
+    // An array literal is bidirectionally typed by its selected Array[E]
+    // context. This applies to a nonempty literal too: `[1, 2]` passed where
+    // Array[I32] is required must retain Array[I32], rather than freezing the
+    // temporary default I64 shape inferred from its unsuffixed elements.
     inout fn recordArrayLitCtx(exprId: U64, ctxRef: U64) {
         if ctxRef == 0U64 || exprId >= self.arena.semanticExprTypes.count() {
             return
         }
-        if self.semanticExprTerm(exprId: exprId) != 0U64 {
-            return
-        }
         match self.arena.exprs[exprId] {
-            Expr.Array(elems: _) => { self.recordSemanticExprTerm(exprId: exprId, term: ctxRef) }
+            Expr.Array(elems: val elems) => {
+                self.recordSemanticExprTerm(exprId: exprId, term: ctxRef)
+                if ctxRef < self.arena.types.count() {
+                    val array: TypeRef = self.arena.types[ctxRef]
+                    if array.args.count() == 1U64 && rangeEquals(bytes: self.arena.bytes, start: array.nameStart, len: array.nameLen, kw: "Array") {
+                        mut val i: U64 = 0U64
+                        while i < elems.len {
+                            self.recordSemanticExprExpectedResult(exprId: self.exprAt(exprs: elems, index: i), expectedTerm: array.args[0U64])
+                            i += 1U64
+                        }
+                    }
+                }
+                self.recordSemanticAggregate(exprId: exprId)
+            }
             _ => {}
         }
+    }
+
+    // `Record` is the last phase allowed to turn a construction's authored
+    // labels/variant spelling into physical layout.  Mid receives only this
+    // frozen carrier; its use of ExprId is navigation into an already-selected
+    // aggregate tree, never a second name or field lookup.
+    inout fn semanticAggregateFieldIndex(typeStart: U64, typeLen: U64, variantStart: U64, variantLen: U64, isEnum: Bool, fieldStart: U64, fieldLen: U64) -> U64 {
+        val qField: U64 = intern(c: inout self, start: fieldStart, len: fieldLen)
+        if isEnum {
+            val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+            val qVariant: U64 = intern(c: inout self, start: variantStart, len: variantLen)
+            mut val ei: U64 = 0U64
+            while ei < self.arena.enums.count() {
+                val en: EnumDef = self.arena.enums[ei]
+                if en.nameId == qType {
+                    mut val vi: U64 = 0U64
+                    while vi < en.variants.count() {
+                        val variant: Variant = en.variants[vi]
+                        if variant.nameId == qVariant {
+                            mut val fi: U64 = 0U64
+                            while fi < variant.fields.count() {
+                                if variant.fields[fi].nameId == qField { return fi }
+                                fi += 1U64
+                            }
+                        }
+                        vi += 1U64
+                    }
+                }
+                ei += 1U64
+            }
+            return 0U64
+        }
+        val qType: U64 = intern(c: inout self, start: typeStart, len: typeLen)
+        mut val si: U64 = 0U64
+        while si < self.arena.structs.count() {
+            val st: StructDef = self.arena.structs[si]
+            if st.nameId == qType {
+                mut val fi: U64 = 0U64
+                while fi < st.fields.count() {
+                    if st.fields[fi].nameId == qField { return fi }
+                    fi += 1U64
+                }
+            }
+            si += 1U64
+        }
+        return 0U64
+    }
+
+    inout fn recordSemanticAggregate(exprId: U64) {
+        if !(self.cur.recordCallTemplates) { return }
+        val resultTerm: U64 = self.parametricExprTerm(exprId: exprId)
+        if resultTerm == 0U64 { return }
+        match self.arena.exprs[exprId] {
+            Expr.Make(typeStart: val typeStart, typeLen: val typeLen, variantStart: val variantStart, variantLen: val variantLen, isEnum: val isEnum, ty: _, fields: val fields) => {
+                mut val elements: Array[SemanticAggregateElement] = []
+                mut val variantIndex: U64 = 0U64
+                mut val enumIndex: U64 = self.arena.enums.count()
+                if isEnum {
+                    variantIndex = self.variantIndex(enumStart: typeStart, enumLen: typeLen, variantStart: variantStart, variantLen: variantLen)
+                    enumIndex = self.anyEnumIndex(nameStart: typeStart, nameLen: typeLen)
+                }
+                mut val i: U64 = 0U64
+                while i < fields.len {
+                    val field: MakeField = self.makeFieldAt(fields: fields, index: i)
+                    val fieldIndex: U64 = self.semanticAggregateFieldIndex(typeStart: typeStart, typeLen: typeLen, variantStart: variantStart, variantLen: variantLen, isEnum: isEnum, fieldStart: field.nameStart, fieldLen: field.nameLen)
+                    elements.append(<SemanticAggregateElement fieldIndex=fieldIndex exprId=field.value targetTerm=self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: isEnum, variantIndex: variantIndex, fieldIndex: fieldIndex) term=self.parametricExprTerm(exprId: field.value) />)
+                    i += 1U64
+                }
+                if isEnum {
+                    mut val fieldCount: U64 = 0U64
+                    if enumIndex < self.arena.enums.count() && variantIndex < self.arena.enums[enumIndex].variants.count() { fieldCount = self.arena.enums[enumIndex].variants[variantIndex].fields.count() }
+                    self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Enum enumIdx=enumIndex variantIndex=variantIndex /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
+                } else {
+                    mut val fieldCount: U64 = 0U64
+                    val structIndex: U64 = self.anyStructIndex(nameStart: typeStart, nameLen: typeLen)
+                    if structIndex < self.arena.structs.count() { fieldCount = self.arena.structs[structIndex].fields.count() }
+                    self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Struct /> resultTerm=resultTerm fieldCount=fieldCount elements=elements />)
+                }
+            }
+            Expr.Array(elems: val elems) => {
+                mut val elements: Array[SemanticAggregateElement] = []
+                mut val i: U64 = 0U64
+                while i < elems.len {
+                    val child: U64 = self.exprAt(exprs: elems, index: i)
+                    elements.append(<SemanticAggregateElement fieldIndex=i exprId=child targetTerm=self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: false, variantIndex: 0U64, fieldIndex: i) term=self.parametricExprTerm(exprId: child) />)
+                    i += 1U64
+                }
+                self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Array /> resultTerm=resultTerm fieldCount=elems.len elements=elements />)
+            }
+            _ => {}
+        }
+    }
+
+    // Context can refine an array literal after its first post-order visit.
+    // Keep one source-body aggregate identity and replace its frozen facts as
+    // a whole; parallel "early" and "contextual" carriers would be two
+    // semantic roots for the same construction.
+    fn semanticAggregateHash(ownerFnIdx: U64, exprId: U64) -> U64 {
+        // Keep every intermediate below 2^32: checked U64 arithmetic is part
+        // of the self-hosted compiler's own execution contract.
+        val modulus: U64 = 4294967291U64
+        mut val h: U64 = ownerFnIdx % modulus
+        h = ((h + exprId % modulus) * 65537U64) % modulus
+        return h
+    }
+
+    inout fn rebuildSemanticAggregateIndex(capacity: U64) {
+        self.decls.semanticAggregateIndexSlots = []
+        mut val zeroI: U64 = 0U64
+        while zeroI < capacity {
+            self.decls.semanticAggregateIndexSlots.append(0U64)
+            zeroI += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.decls.semanticAggregates.count() {
+            val aggregate: SemanticAggregate = self.decls.semanticAggregates[entry]
+            mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
+            while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.decls.semanticAggregateIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureSemanticAggregateIndex(nextCount: U64) {
+        if self.decls.semanticAggregateIndexSlots.count() == 0U64 {
+            self.rebuildSemanticAggregateIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.decls.semanticAggregateIndexSlots.count() * 7U64 {
+            self.rebuildSemanticAggregateIndex(capacity: self.decls.semanticAggregateIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Return the canonical array index, or count() when absent. The vector is
+    // the semantic source; slots are a rebuildable reader for Record and Mid.
+    inout fn semanticAggregateIndex(ownerFnIdx: U64, exprId: U64) -> U64 {
+        val capacity: U64 = self.decls.semanticAggregateIndexSlots.count()
+        if capacity == 0U64 { return self.decls.semanticAggregates.count() }
+        mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: ownerFnIdx, exprId: exprId) % capacity
+        while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.decls.semanticAggregateIndexSlots[slot] - 1U64
+            val prior: SemanticAggregate = self.decls.semanticAggregates[entry]
+            if prior.ownerFnIdx == ownerFnIdx && prior.exprId == exprId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.decls.semanticAggregates.count()
+    }
+
+    inout fn putSemanticAggregate(aggregate: SemanticAggregate) {
+        val prior: U64 = self.semanticAggregateIndex(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId)
+        if prior < self.decls.semanticAggregates.count() {
+            self.decls.semanticAggregates.set(i: prior, value: aggregate)
+            return
+        }
+        self.ensureSemanticAggregateIndex(nextCount: self.decls.semanticAggregates.count() + 1U64)
+        self.decls.semanticAggregates.append(aggregate)
+        val capacity: U64 = self.decls.semanticAggregateIndexSlots.count()
+        mut val slot: U64 = self.semanticAggregateHash(ownerFnIdx: aggregate.ownerFnIdx, exprId: aggregate.exprId) % capacity
+        while self.decls.semanticAggregateIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.decls.semanticAggregateIndexSlots.set(i: slot, value: self.decls.semanticAggregates.count())
     }
 
     // The value of an expression block is its final `give`.  Read the term
@@ -529,11 +706,86 @@ pub impl Comp {
         return true
     }
 
+    // `readExpr` is a synthetic Index.index call made by Lower.  The candidate
+    // lets Record connect that value read back to its storage path without
+    // asking a later phase to infer anything from a method name or collection
+    // spelling.
+    inout fn accessCandidateIndex(readExpr: U64) -> U64 {
+        mut val i: U64 = 0U64
+        while i < self.decls.accessCandidates.count() {
+            val candidate: AccessCandidate = self.decls.accessCandidates[i]
+            // A method receiver is the synthetic Index.index read; an
+            // explicit `inout` argument retains the authored Index place.
+            // They are two evaluation views of one candidate, never two
+            // separately inferred storage paths.
+            if candidate.readExpr == readExpr || candidate.placeExpr == readExpr { return i }
+            i += 1U64
+        }
+        // A selected inout use may project a field from an indexed value
+        // (`items[i].field.append(...)`). The field is not a second storage
+        // candidate: it retains the exact candidate underneath it, while the
+        // access-use record carries the full projected expression separately.
+        // Peel only representation-neutral wrappers; no member/type lookup is
+        // reopened here, and an unrelated expression remains non-candidate.
+        if readExpr < self.arena.exprs.count() {
+            match self.arena.exprs[readExpr] {
+                Expr.Field(base: val base, nameStart: _, nameLen: _) => { return self.accessCandidateIndex(readExpr: base) }
+                Expr.Cast(operand: val operand, tyStart: _, tyLen: _, ty: _) => { return self.accessCandidateIndex(readExpr: operand) }
+                Expr.ExtView(recv: val recv, source: _, strip: _) => { return self.accessCandidateIndex(readExpr: recv) }
+                _ => {}
+            }
+        }
+        return self.decls.accessCandidates.count()
+    }
+
+    // Record one selected call's relationship to an indexed access candidate.
+    // This is available only in the final Record walk, so the ABI mode comes
+    // from the selected declaration rather than a Lower-time name heuristic.
+    inout fn recordAccessUse(parentExpr: U64, readExpr: U64, role: U64, argIndex: U64, parameterIndex: U64, modeKnown: Bool, write: Bool) {
+        if !(self.cur.recordCallTemplates) { return }
+        val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
+        if candidateIndex >= self.decls.accessCandidates.count() { return }
+        val parent: CallSiteKey = self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: parentExpr)
+        mut val i: U64 = 0U64
+        while i < self.decls.accessUses.count() {
+            val prior: AccessUse = self.decls.accessUses[i]
+            if prior.candidateIndex == candidateIndex && prior.role == role && prior.argIndex == argIndex && self.sameCallSiteKey(a: prior.parent, b: parent) {
+                self.decls.accessUses.set(i: i, value: <AccessUse candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+                return
+            }
+            i += 1U64
+        }
+        self.decls.accessUses.append(<AccessUse candidateIndex=candidateIndex accessExpr=readExpr parent=parent role=role argIndex=argIndex parameterIndex=parameterIndex modeKnown=modeKnown write=write />)
+    }
+
+    // Record the detached IndexSet facet under exactly the same lexical
+    // Record context as its Index read. The write node is a semantic template
+    // only: its second argument is the read result as a type anchor and Mid
+    // will later replace that value with a materialized mutable temporary.
+    // The guard prevents `write(value: read())` from recursively re-entering
+    // this routine while it records its anchor child.
+    inout fn recordAccessWriteFacet(readExpr: U64) {
+        if self.cur.recordingAccessWriteFacet { return }
+        val candidateIndex: U64 = self.accessCandidateIndex(readExpr: readExpr)
+        if candidateIndex >= self.decls.accessCandidates.count() { return }
+        val writeExpr: U64 = self.decls.accessCandidates[candidateIndex].writeExpr
+        if writeExpr >= self.arena.exprs.count() { return }
+        self.cur.recordingAccessWriteFacet = true
+        self.recordExpr(exprId: writeExpr)
+        self.cur.recordingAccessWriteFacet = false
+    }
+
     // Record an expression under an optional-chain payload supplied by its
     // unique enclosing chain stage. The payload is a structural child input,
     // not Cursor state: ordinary expressions use 0, and every continuation
     // descendant receives the same explicit parametric term.
     inout fn recordExpr(exprId: U64, chainHoleRef: U64 = 0U64) {
+        // This full lexical semantic walk is observable only in phase tracing.
+        // Reuse the existing transient work counter so normal compilation gains
+        // neither stored state nor a second diagnostic traversal.
+        if self.tracePhases {
+            self.traceExprInstScans += 1U64
+        }
         // Structural forms write their TypeTerm below.  The legacy TypeInfo
         // adapter is intentionally a post-order fallback: computing it first
         // recursively reopens children whose semantic producer has already
@@ -568,6 +820,15 @@ pub impl Comp {
             // adapter so a parametric annotation (`Optional[Box[T]]`) cannot
             // be collapsed to its head spelling by TypeInfo recovery.
             Expr.Ident(val start, val len) => {
+                // `self` is the receiver's declaration-time TypeTerm, not an
+                // ordinary local. Recording that lexical source is what lets
+                // a structural projection such as `self.items` retain
+                // `Array[T]`, so a following `.set(...)` can publish one
+                // parametric CallTemplate. Falling back to `typeOf` here
+                // loses the receiver argument and forces Mono to reopen AST.
+                if self.isSelfRef(start: start, len: len) && self.cur.selfRef != 0U64 {
+                    self.recordSemanticExprTerm(exprId: exprId, term: self.cur.selfRef)
+                }
                 val localIdx: U64 = self.localIndexByName(start: start, len: len)
                 if localIdx < self.cur.locals.count() {
                     val local: Local = self.cur.locals[localIdx]
@@ -619,7 +880,6 @@ pub impl Comp {
                 }
                 cfi = self.resolvedCallee(id: exprId)
                 if cfi < self.arena.funcs.count() {
-                    self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
                     val cf: Func = self.arena.funcs[cfi]
                     val ps: Array[Param] = cf.params
                     // a generic callee's parametric param (`xs: Array[T]`) is grounded
@@ -656,8 +916,55 @@ pub impl Comp {
                         }
                         k += 1
                     }
+                    // A call template owns the type of the value it actually
+                    // passes, not the pre-context probe used to choose a
+                    // parameter context.  In particular `[Sq]` at a selected
+                    // `Array[any Shape]` parameter is one contextual
+                    // aggregate boundary; its parent call therefore receives
+                    // the already-converted `Array[any Shape]` and records an
+                    // Identity conversion.  Recording the template before
+                    // this loop left two incompatible facts for the same
+                    // value (raw Array[Sq] in CallResolution, boxed elements
+                    // in SemanticAggregate).
+                    self.recordParametricFreeCall(exprId: exprId, callee: cfi, args: args)
                 } else {
                     self.recordDynamicLocalCall(exprId: exprId, nameStart: callStart, nameLen: callLen, args: args)
+                }
+                // Explicit `inout` arguments retain their source role in the
+                // call template. If one is an Index.index result, connect it
+                // to the storage candidate now; its write mode is known for a
+                // selected direct callee and explicitly deferred otherwise.
+                mut val accessArg: U64 = 0U64
+                while accessArg < args.len {
+                    val arg: Arg = self.argAt(args: args, index: accessArg)
+                    if arg.isInout {
+                        // The source marker says that the author requests an
+                        // access, not which ABI slot it occupies.  Preserve
+                        // the selected parameter mapping here: defaults and
+                        // labels can make source argument order differ from
+                        // the declaration order, and only that declaration
+                        // owns the final `isInout` mode.
+                        mut val accessWrite: Bool = false
+                        mut val paramIndex: U64 = args.len
+                        if cfi < self.arena.funcs.count() {
+                            val selected: Func = self.arena.funcs[cfi]
+                            paramIndex = self.paramIndexForArg(params: selected.params, args: args, argIdx: accessArg)
+                            if paramIndex < selected.params.count() {
+                                accessWrite = selected.params[paramIndex].isInout
+                            }
+                        }
+                        self.recordAccessUse(parentExpr: exprId, readExpr: arg.expr, role: 2U64, argIndex: accessArg, parameterIndex: paramIndex, modeKnown: cfi < self.arena.funcs.count(), write: accessWrite)
+                        // An explicit `inout rows[i]` owns the same detached
+                        // get-modify-set write facet as an inout method
+                        // receiver.  Record it at this producer boundary while
+                        // the selected ABI still says that writeback occurs;
+                        // Mono may then close the frozen setter call without
+                        // reopening the authored Index expression.
+                        if accessWrite {
+                            self.recordAccessWriteFacet(readExpr: arg.expr)
+                        }
+                    }
+                    accessArg += 1U64
                 }
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
@@ -687,6 +994,15 @@ pub impl Comp {
                 if methodCallee >= self.arena.funcs.count() && receiverTerm != 0U64 {
                     methodCallee = self.resolveMethodForResolvedReceiver(recv: recv, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: nameStart, nameLen: nameLen, args: args, useOffset: self.exprOffset(id: exprId))
                 }
+                // A parametric field receiver (`self.items: Array[T]`) has a
+                // complete TypeTerm but can still require the ordinary
+                // syntax-aware frontend query for its intrinsic collection
+                // surface. This is still declaration-time source selection:
+                // Record owns the lexical `self.items` scope and publishes the
+                // resulting template once; Mono only grounds it later.
+                if methodCallee >= self.arena.funcs.count() {
+                    methodCallee = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                }
                 // Newtype member inheritance selects the underlying surface
                 // while preserving the authored newtype as the value term.
                 // The finalizer already normalizes that receiver for the
@@ -704,38 +1020,42 @@ pub impl Comp {
                 if methodCallee >= self.arena.funcs.count() {
                     self.recordUnresolvedMethodTemplate(exprId: exprId, receiver: self.directReceiverTemplateForExpr(exprId: recv), receiverExpr: recv, receiverTerm: receiverTerm, nameStart: nameStart, nameLen: nameLen, args: args)
                 }
-                // context-type an array-literal argument from the resolved method's
-                // declared param (mirrors the Call arm). A kind-3 receiver's methods
-                // live on `Array`; a generic-receiver param (`append(value: T)`) is
-                // grounded under the receiver's instance first — and only a GROUND
-                // context applies (the callee's own `T` means nothing in this body's
-                // env, so recording it would mis-ground at emission).
-                val mrt: TypeInfo = self.typeOf(id: recv)
-                mut val mrS: U64 = mrt.nameStart
-                mut val mrL: U64 = mrt.nameLen
-                if mrt.kind == 3 {
-                    val mar: Bind = self.kwSpan(kw: "Array", kwLen: 5)
-                    mrS = mar.nameStart
-                    mrL = mar.nameLen
+                // A synthetic index read used as this receiver is an access
+                // candidate.  Only a selected direct method supplies a final
+                // self mode here; generic-bound/dynamic variants remain
+                // explicitly deferred until their frozen target is grounded.
+                if methodCallee < self.arena.funcs.count() {
+                    self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: true, write: self.arena.funcs[methodCallee].selfInout)
+                } else {
+                    self.recordAccessUse(parentExpr: exprId, readExpr: recv, role: 1U64, argIndex: 0U64, parameterIndex: 0U64, modeKnown: false, write: false)
                 }
-                if mrL > 0U64 && !(self.isTypeParamOf(fnIdx: self.cur.checkFn, start: mrt.nameStart, len: mrt.nameLen)) {
-                    val mmi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
-                    if mmi < self.arena.funcs.count() {
-                        val mps: Array[Param] = self.arena.funcs[mmi].params
-                        mut val mk: U64 = 0
-                        while mk < args.len {
-                            if mk < mps.count() {
-                                mut val mctx: U64 = mps[mk].ty
-                                if mrt.ref != 0U64 {
-                                    mctx = self.groundUnderInst(instRef: mrt.ref, tyRef: mctx)
-                                }
-                                if mctx != 0U64 && self.tyRefIsGround(ref: mctx) {
-                                    self.recordSemanticExprExpectedResult(exprId: self.argAt(args: args, index: mk).expr, expectedTerm: mctx)
-                                    self.recordArrayLitCtx(exprId: self.argAt(args: args, index: mk).expr, ctxRef: mctx)
-                                }
+                // The detached setter belongs to the indexed receiver, not
+                // to this parent method call. Passing `exprId` only happened
+                // to work for non-nested paths where another walk recorded
+                // the facet; nested indexes require this exact candidate
+                // identity to close every write dependency.
+                self.recordAccessWriteFacet(readExpr: recv)
+                // Context-type an array literal from the selected method
+                // parameter. `receiverTerm` is the just-recorded semantic
+                // receiver fact; reopening `typeOf(recv)` here loses an
+                // Array's nested argument and can leave `[1, 2]` without its
+                // required Array[I32] context. This is a producer boundary,
+                // so ground the declaration parameter once under that term.
+                if methodCallee < self.arena.funcs.count() {
+                    val selectedMethod: Func = self.arena.funcs[methodCallee]
+                    val mps: Array[Param] = selectedMethod.params
+                    mut val mk: U64 = 0U64
+                    while mk < args.len {
+                        val parameterIndex: U64 = self.paramIndexForArg(params: mps, args: args, argIdx: mk)
+                        if parameterIndex < mps.count() {
+                            val mctx: U64 = self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: mps[parameterIndex].ty)
+                            if mctx != 0U64 && self.tyRefIsGround(ref: mctx) {
+                                val argumentExpr: U64 = self.argAt(args: args, index: mk).expr
+                                self.recordSemanticExprExpectedResult(exprId: argumentExpr, expectedTerm: mctx)
+                                self.recordArrayLitCtx(exprId: argumentExpr, ctxRef: mctx)
                             }
-                            mk += 1
                         }
+                        mk += 1U64
                     }
                 }
             }
@@ -857,6 +1177,7 @@ pub impl Comp {
                 if ty != 0U64 {
                     self.recordSemanticExprTerm(exprId: exprId, term: ty)
                 }
+                self.recordSemanticAggregate(exprId: exprId)
             }
             Expr.Array(val elems) => {
                 mut val i: U64 = 0
@@ -876,6 +1197,7 @@ pub impl Comp {
                         }
                     }
                 }
+                self.recordSemanticAggregate(exprId: exprId)
             }
             Expr.Index(val base, val index) => {
                 self.recordExpr(exprId: base, chainHoleRef: chainHoleRef)

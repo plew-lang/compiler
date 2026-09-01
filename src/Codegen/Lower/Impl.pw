@@ -12,6 +12,182 @@
 // visibility walk (siteOffset 0). Used to seed an impl/extension's lowering-time skip scope.
 
 pub impl Comp {
+    // This is the sole source-spelling classification point for the bundled
+    // runtime ABI. After lowering, callers see only Func.runtimeIntrinsic.
+    // User declarations named write/eprint cannot enter this branch because
+    // their declaration module is not the bundled Io module.
+    inout fn runtimeIntrinsicDeclaration(sig: SigAst, isExtern: Bool, isCExtern: Bool) -> RuntimeIntrinsicDeclaration {
+        if !(isExtern) || isCExtern {
+            return <RuntimeIntrinsicDeclaration.None />
+        }
+        val nameStart: U64 = sig.nameSpan.start
+        val nameLen: U64 = sig.nameSpan.end - sig.nameSpan.start
+        val owner: U64 = self.moduleOf(offset: sig.nameSpan.start)
+        if owner == self.modules.ioModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "write") {
+                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Write /> />
+            }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") {
+                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Eprint /> />
+            }
+        }
+        if owner == self.modules.processModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }
+        }
+        if owner == self.modules.coreModule {
+            mut val numeric: NumericIntrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />
+            if self.classifyCoreNumericIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout numeric) {
+                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Numeric intrinsic=numeric /> />
+            }
+            mut val buffer: BufferIntrinsic = <BufferIntrinsic.New />
+            if self.classifyCoreBufferIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout buffer) {
+                return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Buffer intrinsic=buffer /> />
+            }
+        }
+        return <RuntimeIntrinsicDeclaration.None />
+    }
+
+    // Core is the sole declaration owner of the primitive numeric ABI.  This
+    // is intentionally a parser over the *declaration spelling* only: it runs
+    // once during frontend lowering and never becomes a backend fallback.
+    inout fn classifyCoreNumericIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout NumericIntrinsic) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "boolNot") {
+            intrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "boolEq") {
+            intrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Eq /> />
+            return true
+        }
+        if self.classifyCoreFloatIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout intrinsic) { return true }
+        return self.classifyCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout intrinsic)
+    }
+
+    inout fn classifyCoreBufferIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout BufferIntrinsic) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferNew") { intrinsic = <BufferIntrinsic.New /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferCount") { intrinsic = <BufferIntrinsic.Count /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferCapacity") { intrinsic = <BufferIntrinsic.Capacity /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferReserve") { intrinsic = <BufferIntrinsic.Reserve /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferAppend") { intrinsic = <BufferIntrinsic.Append /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferInsertAt") { intrinsic = <BufferIntrinsic.InsertAt /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferGet") { intrinsic = <BufferIntrinsic.Get /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferSet") { intrinsic = <BufferIntrinsic.Set /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferRemoveLast") { intrinsic = <BufferIntrinsic.RemoveLast /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferRemoveAt") { intrinsic = <BufferIntrinsic.RemoveAt /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferSwapRemove") { intrinsic = <BufferIntrinsic.SwapRemove /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferClear") { intrinsic = <BufferIntrinsic.Clear /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferTruncate") { intrinsic = <BufferIntrinsic.Truncate /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferEq") { intrinsic = <BufferIntrinsic.Eq /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bufferBytewiseComparable") { intrinsic = <BufferIntrinsic.BytewiseComparable /> return true }
+        return false
+    }
+
+    inout fn classifyCoreFloatIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout NumericIntrinsic) -> Bool {
+        mut val width: FloatWidth = <FloatWidth.W32 />
+        if nameLen > 3U64 && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: 3U64, kw: "f32") {
+            width = <FloatWidth.W32 />
+        } else {
+            if nameLen > 3U64 && rangeEquals(bytes: self.arena.bytes, start: nameStart, len: 3U64, kw: "f64") {
+                width = <FloatWidth.W64 />
+            } else {
+                return false
+            }
+        }
+        val suffixStart: U64 = nameStart + 3U64
+        val suffixLen: U64 = nameLen - 3U64
+        if rangeEquals(bytes: self.arena.bytes, start: suffixStart, len: suffixLen, kw: "Add") {
+            intrinsic = <NumericIntrinsic.Float width=width operation=<FloatOperation.Add /> />
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: suffixStart, len: suffixLen, kw: "Sub") {
+            intrinsic = <NumericIntrinsic.Float width=width operation=<FloatOperation.Sub /> />
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: suffixStart, len: suffixLen, kw: "Mul") {
+            intrinsic = <NumericIntrinsic.Float width=width operation=<FloatOperation.Mul /> />
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: suffixStart, len: suffixLen, kw: "Div") {
+            intrinsic = <NumericIntrinsic.Float width=width operation=<FloatOperation.Div /> />
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: suffixStart, len: suffixLen, kw: "Neg") {
+            intrinsic = <NumericIntrinsic.Float width=width operation=<FloatOperation.Neg /> />
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: suffixStart, len: suffixLen, kw: "Eq") {
+            intrinsic = <NumericIntrinsic.Float width=width operation=<FloatOperation.Eq /> />
+            return true
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: suffixStart, len: suffixLen, kw: "Lt") {
+            intrinsic = <NumericIntrinsic.Float width=width operation=<FloatOperation.Lt /> />
+            return true
+        }
+        return false
+    }
+
+    inout fn coreIntegerPrefixBeforeSuffix(nameStart: U64, nameLen: U64, suffix: String) -> U64 {
+        val suffixLen: U64 = suffix.bytes().count()
+        if nameLen <= suffixLen { return 8U64 }
+        if !(rangeEquals(bytes: self.arena.bytes, start: nameStart + nameLen - suffixLen, len: suffixLen, kw: suffix)) { return 8U64 }
+        val prefixLen: U64 = nameLen - suffixLen
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "i8") { return 0U64 }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "i16") { return 1U64 }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "i32") { return 2U64 }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "i64") { return 3U64 }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "u8") { return 4U64 }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "u16") { return 5U64 }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "u32") { return 6U64 }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: prefixLen, kw: "u64") { return 7U64 }
+        return 8U64
+    }
+
+    inout fn setCoreIntegerIntrinsic(code: U64, operation: IntegerOperation, overflow: NumericOverflow, intrinsic: inout NumericIntrinsic) {
+        val unsigned: Bool = code >= 4U64
+        if code % 4U64 == 0U64 {
+            intrinsic = <NumericIntrinsic.Integer width=<NumericWidth.W8 /> unsigned=unsigned operation=operation overflow=overflow />
+            return
+        }
+        if code % 4U64 == 1U64 {
+            intrinsic = <NumericIntrinsic.Integer width=<NumericWidth.W16 /> unsigned=unsigned operation=operation overflow=overflow />
+            return
+        }
+        if code % 4U64 == 2U64 {
+            intrinsic = <NumericIntrinsic.Integer width=<NumericWidth.W32 /> unsigned=unsigned operation=operation overflow=overflow />
+            return
+        }
+        intrinsic = <NumericIntrinsic.Integer width=<NumericWidth.W64 /> unsigned=unsigned operation=operation overflow=overflow />
+    }
+
+    inout fn trySetCoreIntegerIntrinsic(nameStart: U64, nameLen: U64, suffix: String, operation: IntegerOperation, overflow: NumericOverflow, intrinsic: inout NumericIntrinsic) -> Bool {
+        val code: U64 = self.coreIntegerPrefixBeforeSuffix(nameStart: nameStart, nameLen: nameLen, suffix: suffix)
+        if code >= 8U64 { return false }
+        self.setCoreIntegerIntrinsic(code: code, operation: operation, overflow: overflow, intrinsic: inout intrinsic)
+        return true
+    }
+
+    inout fn classifyCoreIntegerIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout NumericIntrinsic) -> Bool {
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "WrapNeg", operation: <IntegerOperation.Neg />, overflow: <NumericOverflow.Wrapping />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "WrapAdd", operation: <IntegerOperation.Add />, overflow: <NumericOverflow.Wrapping />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "WrapSub", operation: <IntegerOperation.Sub />, overflow: <NumericOverflow.Wrapping />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "WrapMul", operation: <IntegerOperation.Mul />, overflow: <NumericOverflow.Wrapping />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Neg", operation: <IntegerOperation.Neg />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "BitNot", operation: <IntegerOperation.BitNot />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Add", operation: <IntegerOperation.Add />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Sub", operation: <IntegerOperation.Sub />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Mul", operation: <IntegerOperation.Mul />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Div", operation: <IntegerOperation.Div />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Rem", operation: <IntegerOperation.Rem />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "BitAnd", operation: <IntegerOperation.BitAnd />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "BitOr", operation: <IntegerOperation.BitOr />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "BitXor", operation: <IntegerOperation.BitXor />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Shl", operation: <IntegerOperation.Shl />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Shr", operation: <IntegerOperation.Shr />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Eq", operation: <IntegerOperation.Eq />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        if self.trySetCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, suffix: "Lt", operation: <IntegerOperation.Lt />, overflow: <NumericOverflow.Checked />, intrinsic: inout intrinsic) { return true }
+        return false
+    }
+
     // Phase 1 of declaration lowering: reserve every trait declaration identity
     // before lowering any implementation.  A trait use in an entry module may
     // name a declaration imported from a module which is discovered later in
@@ -378,7 +554,8 @@ pub impl Comp {
             retRef = pt.ref
         }
         self.cur.typeParams = savedTP
-        return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern defOffset=nameStart />
+        val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclaration(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
+        return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams params=params hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart />
     }
 
     inout fn lowerTrait(t: TraitAst) {

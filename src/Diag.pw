@@ -45,6 +45,16 @@ export fn eprintInt(n: I64) {
     eprint(text: digitStr(d: n % 10))
 }
 
+// Print an unsigned integer to stderr. `digitStrU` intentionally formats one
+// digit only; trace output must recurse here rather than accidentally showing
+// just a value's final decimal digit.
+export fn eprintU64(n: U64) {
+    if n >= 10U64 {
+        eprintU64(n: n / 10U64)
+    }
+    eprint(text: digitStrU(d: n % 10U64))
+}
+
 // Report a compile error at a source line and stop (exit 1). Kept for positionless
 // backend-limitation reports (`line: 0`); offset-carrying sites use Comp.errorAt,
 // which maps the offset to file:line and calls compileErrorAtFile.

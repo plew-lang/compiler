@@ -1,0 +1,48 @@
+// A nested enum payload must stay valid while its enclosing value crosses a
+// struct field, a by-value call, and an Array copy.  This mirrors the compiler's
+// CallResolution.target carrier without depending on compiler-internal types.
+import @Std/Io with { print }
+
+enum Intrinsic {
+    Write
+    Eprint
+}
+
+enum Target {
+    Direct
+    Runtime(intrinsic: Intrinsic)
+    NoCallable
+    Closure(local: U64, typeRef: U64)
+}
+
+struct Carrier {
+    pub val target: Target
+}
+pub impl Carrier { factory }
+
+fn copyCarrier(value: Carrier) -> Carrier {
+    return value
+}
+
+fn printTarget(target: Target) {
+    match target {
+        Target.Direct => { print("direct") }
+        Target.Runtime(intrinsic: val intrinsic) => {
+            match intrinsic {
+                Intrinsic.Write => { print("write") }
+                Intrinsic.Eprint => { print("eprint") }
+            }
+        }
+        Target.NoCallable => { print("none") }
+        Target.Closure(local: val local, typeRef: val typeRef) => { print(local + typeRef) }
+    }
+}
+
+fn main() {
+    val direct: Carrier = <Carrier target=<Target.Direct /> />
+    val runtime: Carrier = <Carrier target=<Target.Runtime intrinsic=<Intrinsic.Write /> /> />
+    val copied: Carrier = copyCarrier(value: runtime)
+    val carriers: Array[Carrier] = [direct, copied]
+    printTarget(target: carriers[0].target)
+    printTarget(target: carriers[1].target)
+}

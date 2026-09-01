@@ -1,7 +1,7 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
 import /Ir with { Arg, ArgRange, Block, CallArgumentSource, CallTemplate, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, StaticConformanceProof, Stmt, identValueCode }
-import /Mid with { MidBlock, MidBuildError, MidBuildState, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
+import /Mid with { MidBlock, MidBuildError, MidBuildState, MidCallReceiver, MidCallTarget, MidOperand, MidTerminator, addMidLocal, buildMidBlock }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -16,7 +16,7 @@ fn main() {
     mut val built: Bool = false
     match result { MidBuildError.None => { built = true } _ => {} }
     match state.blocks[0U64].terminator {
-        MidTerminator.Call(callee: val callee, args: val args, destination: _, target: val target) => {
+        MidTerminator.Call(callee: val callee, receiver: _, args: val args, destination: _, target: val target) => {
             match callee {
                 MidCallTarget.Template(site: val site) => {
                     if built && args.count() == 0U64 && target == 1U64 && site.ownerFnIdx == key.ownerFnIdx && site.originKind == key.originKind {
@@ -49,7 +49,7 @@ fn main() {
     val moveResult = buildMidBlock(c: inout c, state: inout moveState, blockId: 0U64)
     mut val moved: Bool = false
     match moveState.blocks[0U64].terminator {
-        MidTerminator.Call(callee: _, args: val args, destination: _, target: _) => {
+        MidTerminator.Call(callee: _, receiver: _, args: val args, destination: _, target: _) => {
             match args[0U64] { MidOperand.Move(place: val place) => { moved = place.local == 0U64 } _ => {} }
         }
         _ => {}

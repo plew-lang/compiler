@@ -1,0 +1,11 @@
+// Only the bundled @Std/Core declaration owns the numeric runtime descriptor.
+// The same plewIntrinsic spelling elsewhere remains an ordinary Direct extern.
+import @Std/Io with { print }
+
+extern(plewIntrinsic) {
+    fn i64Add(a: I64, b: I64) -> I64
+}
+
+fn main() {
+    print(i64Add(a: 20I64, b: 22I64))
+}

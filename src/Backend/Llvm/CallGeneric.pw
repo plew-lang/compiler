@@ -96,7 +96,7 @@ pub impl LlvmCtx {
         self.emitInoutOverlapChecks(c: inout c, f: mf, av: av, args: args, hasRecv: true, recvExpr: recv, avArgStart: 1U64, pinMark: pinMark)
         val rv: LLVMValueRef = LLVMBuildCall2(self.b, self.genMethTy[slot], self.genMethVal[slot], arrayCPtr(av), av.count(), anon())
         self.releaseInoutPins(c: inout c, mark: pinMark)
-        return rv
+        return self.projectFinalCallResult(c: inout c, callId: callId, value: rv)
     }
 
     // The address of an addressable place (a struct local), for `inout` self. Falls

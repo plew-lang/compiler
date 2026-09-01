@@ -243,7 +243,7 @@ pub impl[T] Array[T] as Index[U64] {
 }
 pub impl[T] Array[T] as IndexSet[U64] {
     type Value = T
-    inout fn indexSet(key: U64, value: T) {
+    inout fn indexSet(key: U64, value~: T) {
         self.data.set(index: key, value)
     }
 }
@@ -498,5 +498,25 @@ pub impl[K, V] Dictionary[K, V] {
         val droppedVal: V = self.vals.removeLast()
         val droppedHash: U64 = self.hashes.removeLast()
         self.entryCount = self.entryCount - 1U64
+    }
+}
+
+// Surface subscripting is the Index / IndexSet protocol, including Dictionary:
+// a missing read panics through `at`, while a write inserts or updates through
+// `insert`.  Keep those policy methods private implementation details rather
+// than giving the compiler a Dictionary-specific call path.
+pub impl[K, V] Dictionary[K, V] as Index[K] {
+    type Output = V
+
+    fn index(key: K) -> V where K: Hash, K: Eq {
+        return self.at(key: key)
+    }
+}
+
+pub impl[K, V] Dictionary[K, V] as IndexSet[K] {
+    type Value = V
+
+    inout fn indexSet(key: K, value~: V) where K: Hash, K: Eq {
+        self.insert(key: key, value: value)
     }
 }

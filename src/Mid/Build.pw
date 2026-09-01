@@ -3,8 +3,9 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { TypeRef, SemanticExprType, Expr, Stmt, Param, Func, CallTemplate, CallTemplateKind, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
-import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidRvalue, MidCallTarget, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
+import ../Ir with { TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ops with { opAnd, opOr }
+import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
 export struct MidSourceBinding {
     // Exactly `IdentBinding.target` for a local/parameter value.  The frontend
@@ -29,6 +30,20 @@ export struct MidPlaceLookup {
 }
 pub impl MidPlaceLookup { factory }
 
+// A Mid build failure is part of the migration contract, not a diagnostic
+// string.  Keep the source form that cannot yet be represented so coverage
+// can select one semantic lowering slice rather than treating unrelated
+// statement and operand work as one bucket.
+export enum MidUnsupportedBuild {
+    ExpressionStatement
+    Operand
+    FieldPlace
+    UniqueAggregate
+    ShortCircuit
+    FieldProjection
+    FieldBase
+}
+
 export enum MidBuildError {
     None
     InvalidStatement
@@ -36,7 +51,15 @@ export enum MidBuildError {
     InvalidFunction
     MissingSemanticType
     UnboundLocalIdentifier
-    UnsupportedStatement
+    Unsupported(reason: MidUnsupportedBuild)
+    UnsupportedAssign
+    UnsupportedWhile
+    UnsupportedFor
+    UnsupportedMatch
+    UnsupportedPanic
+    UnsupportedGive
+    UnsupportedBreak
+    UnsupportedContinue
     MissingTerminator
     MissingCallTemplate
     UnsupportedCallTemplate
@@ -54,11 +77,38 @@ struct MidOperandBuild {
 }
 pub impl MidOperandBuild { factory }
 
+struct MidReceiverBuild {
+    pub val receiver: MidCallReceiver = <MidCallReceiver.None />
+    pub val error: MidBuildError = <MidBuildError.None />
+}
+pub impl MidReceiverBuild { factory }
+
+struct MidCallValueLookup {
+    pub val found: Bool = false
+    pub val place: MidPlace = <MidPlace local=0U64 />
+}
+pub impl MidCallValueLookup { factory }
+
 export struct MidBuildState {
     pub mut val locals: Array[MidLocalDecl] = []
     pub mut val scopes: Array[MidScope] = []
     pub mut val blocks: Array[MidBlock] = []
     pub mut val bindings: Array[MidSourceBinding] = []
+    // A call used as a value is materialized once under its immutable frontend
+    // CallSiteKey.  Reusing this identity preserves source evaluation order
+    // without falling back to an AST/name lookup when another template refers
+    // to the same completed result.
+    pub mut val callValues: Array[MidCallValue] = []
+    // Aggregate construction is likewise a first-class value dependency. This
+    // table preserves its once-only source evaluation without a backend AST
+    // fallback or a second source-name lookup.
+    pub mut val aggregateValues: Array[MidAggregateValue] = []
+    // Nested loops select only their innermost target. These parallel private
+    // stacks are deliberately separate from lexical scopes: a loop has two
+    // CFG destinations, while a scope has one cleanup obligation.
+    mut val loopBreakTargets: Array[U64] = []
+    mut val loopContinueTargets: Array[U64] = []
+    mut val loopEnclosingScopes: Array[U64] = []
     pub mut val currentBlock: U64 = 0U64
     pub mut val currentScope: U64 = 0U64
     pub mut val hasReturnPlace: Bool = false
@@ -69,6 +119,59 @@ export struct MidBuildState {
 }
 pub impl MidBuildState { factory }
 
+pub impl MidBuildState {
+    inout fn pushLoopTarget(breakTarget: U64, continueTarget: U64, enclosingScope: U64) {
+        self.loopBreakTargets.append(breakTarget)
+        self.loopContinueTargets.append(continueTarget)
+        self.loopEnclosingScopes.append(enclosingScope)
+    }
+
+    inout fn popLoopTarget() {
+        if self.loopBreakTargets.count() != 0U64 {
+            self.loopBreakTargets.removeLast()
+            self.loopContinueTargets.removeLast()
+            self.loopEnclosingScopes.removeLast()
+        }
+    }
+
+    fn hasLoopTarget() -> Bool {
+        return self.loopBreakTargets.count() != 0U64
+    }
+
+    fn currentLoopBreakTarget() -> U64 {
+        if self.loopBreakTargets.count() == 0U64 { return 0U64 }
+        return self.loopBreakTargets[self.loopBreakTargets.count() - 1U64]
+    }
+
+    fn currentLoopContinueTarget() -> U64 {
+        if self.loopContinueTargets.count() == 0U64 { return 0U64 }
+        return self.loopContinueTargets[self.loopContinueTargets.count() - 1U64]
+    }
+
+    fn currentLoopEnclosingScope() -> U64 {
+        if self.loopEnclosingScopes.count() == 0U64 { return 0U64 }
+        return self.loopEnclosingScopes[self.loopEnclosingScopes.count() - 1U64]
+    }
+}
+
+export struct MidCallValue {
+    pub val siteKey: CallSiteKey
+    pub val place: MidPlace
+}
+pub impl MidCallValue { factory }
+
+struct MidAggregateLookup {
+    pub val found: Bool = false
+    pub val aggregate: SemanticAggregate = <SemanticAggregate />
+}
+pub impl MidAggregateLookup { factory }
+
+export struct MidAggregateValue {
+    pub val exprId: U64
+    pub val place: MidPlace
+}
+pub impl MidAggregateValue { factory }
+
 export fn emptyMidBody(sourceFunction: U64) -> MidBody {
     return <MidBody sourceFunction=sourceFunction scopes=[<MidScope />] blocks=[<MidBlock />] entry=0U64 />
 }
@@ -77,9 +180,9 @@ export fn emptyMidBody(sourceFunction: U64) -> MidBody {
 // from the same resolver record later read at each identifier use. The caller
 // supplies the already-recorded TypeTerm; this builder never calls a type
 // recovery query or lexical name lookup.
-export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool) -> U64 {
+export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isInout=isInout ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
     state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
     return local
 }
@@ -218,9 +321,57 @@ fn midEmitAllScopeExits(state: inout MidBuildState) {
     }
 }
 
+// Leave all active lexical scopes strictly inside a loop's enclosing scope.
+// The enclosing function/block scope itself remains live after either break or
+// continue.  The builder records only the boundary marker; drop elaboration
+// decides whether it becomes Drop or ConditionalDrop.
+fn midEmitLoopScopeExits(state: inout MidBuildState, enclosingScope: U64) -> MidBuildError {
+    mut val scope: U64 = state.currentScope
+    while scope != enclosingScope {
+        if scope >= state.scopes.count() { return <MidBuildError.InvalidBlock /> }
+        midEmitScopeExit(state: inout state, scope: scope)
+        scope = state.scopes[scope].parent
+    }
+    return <MidBuildError.None />
+}
+
+// `break` and `continue` are ordinary CFG edges.  Their only special rule is
+// lexical cleanup of the scopes crossed to the selected loop boundary.
+fn buildMidLoopExit(state: inout MidBuildState, isContinue: Bool) -> MidBuildError {
+    if !state.hasLoopTarget() {
+        if isContinue { return <MidBuildError.UnsupportedContinue /> }
+        return <MidBuildError.UnsupportedBreak />
+    }
+    val cleanup: MidBuildError = midEmitLoopScopeExits(state: inout state, enclosingScope: state.currentLoopEnclosingScope())
+    match cleanup { MidBuildError.None => {} _ => { return cleanup } }
+    if isContinue {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=state.currentLoopContinueTarget() />)
+    } else {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=state.currentLoopBreakTarget() />)
+    }
+    return <MidBuildError.None />
+}
+
+fn midAccessCandidateForExpr(c: Comp, exprId: U64) -> U64 {
+    mut val candidate: U64 = 0U64
+    while candidate < c.decls.accessCandidates.count() {
+        val access: AccessCandidate = c.decls.accessCandidates[candidate]
+        // Calls see the lowered synthetic read, whereas an explicit inout
+        // argument remains anchored at the authored place expression.  Both
+        // spellings denote the same frozen access candidate.
+        if access.readExpr == exprId || access.placeExpr == exprId { return candidate }
+        candidate += 1U64
+    }
+    return c.decls.accessCandidates.count()
+}
+
 fn midOperandForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidOperandBuild {
     if exprId >= c.arena.exprs.count() {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
+    }
+    val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
+    if candidate < c.decls.accessCandidates.count() {
+        return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
     }
     match c.arena.exprs[exprId] {
         Expr.Ident(start: _, len: _) => {
@@ -230,7 +381,7 @@ fn midOperandForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm:
         }
         Expr.Field(base: _, nameStart: _, nameLen: _) => {
             val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
-            if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnsupportedStatement /> /> }
+            if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldPlace /> /> /> }
             return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
         }
         Expr.Move(operand: val operand, isBorrow: val isBorrow) => {
@@ -245,17 +396,251 @@ fn midOperandForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm:
         Expr.Str(start: val start, len: val len) => {
             return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.StringLiteral start=start len=len typeTerm=typeTerm /> /> />
         }
-        _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnsupportedStatement /> /> }
+        _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> /> }
     }
 }
 
-fn midTemplateArgumentOperand(c: inout Comp, state: MidBuildState, argument: CallTemplateArgument) -> MidOperandBuild {
+fn midCallValueForSite(c: Comp, state: MidBuildState, siteKey: CallSiteKey) -> MidCallValueLookup {
+    mut val i: U64 = 0U64
+    while i < state.callValues.count() {
+        val value: MidCallValue = state.callValues[i]
+        if c.sameCallSiteKey(a: value.siteKey, b: siteKey) { return <MidCallValueLookup found=true place=value.place /> }
+        i += 1U64
+    }
+    return <MidCallValueLookup />
+}
+
+// Emit a completed frontend call dependency before its consumer. The source
+// ExprId only retrieves the immutable template; CallSiteKey proves it is the
+// exact dependency the consumer recorded.
+fn materializeMidCallValue(c: inout Comp, state: inout MidBuildState, exprId: U64, siteKey: CallSiteKey) -> MidOperandBuild {
+    val prior: MidCallValueLookup = midCallValueForSite(c: c, state: state, siteKey: siteKey)
+    if prior.found { return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> /> }
+    val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+    if !(c.sameCallSiteKey(a: template.siteKey, b: siteKey)) {
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingCallTemplate /> />
+    }
+    val term: U64 = c.semanticExprTerm(exprId: exprId)
+    if term == 0U64 { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.MissingSemanticType /> /> }
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: term)
+    val place: MidPlace = <MidPlace local=local typeTerm=term />
+    val built: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: exprId, destination: place)
+    match built { MidBuildError.None => {} _ => { return <MidOperandBuild operand=<MidOperand.Copy place=place /> error=built /> } }
+    state.callValues.append(<MidCallValue siteKey=siteKey place=place />)
+    return <MidOperandBuild operand=<MidOperand.Copy place=place /> />
+}
+
+// Fetch only the frozen Record-time carrier for this lexical body. ExprId is
+// not a semantic key here: it selects one already-verified construction fact.
+fn midSemanticAggregateForSourceBody(c: inout Comp, sourceFunction: U64, exprId: U64) -> MidAggregateLookup {
+    val index: U64 = c.semanticAggregateIndex(ownerFnIdx: sourceFunction, exprId: exprId)
+    if index < c.decls.semanticAggregates.count() {
+        return <MidAggregateLookup found=true aggregate=c.decls.semanticAggregates[index] />
+    }
+    return <MidAggregateLookup />
+}
+
+fn midAggregateValueForExpr(state: MidBuildState, exprId: U64) -> MidCallValueLookup {
+    mut val i: U64 = 0U64
+    while i < state.aggregateValues.count() {
+        val value: MidAggregateValue = state.aggregateValues[i]
+        if value.exprId == exprId { return <MidCallValueLookup found=true place=value.place /> }
+        i += 1U64
+    }
+    return <MidCallValueLookup />
+}
+
+// Materialize an aggregate before a consuming call or parent aggregate. Child
+// expressions are evaluated in authored order; each child is already either a
+// selected call, another frozen aggregate, or a closed basic Mid operand.
+fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggregate: SemanticAggregate) -> MidOperandBuild {
+    val prior: MidCallValueLookup = midAggregateValueForExpr(state: state, exprId: aggregate.exprId)
+    if prior.found { return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> /> }
+    if midAggregateHasUniqueValue(c: inout c, aggregate: aggregate) {
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=aggregate.resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UniqueAggregate /> /> />
+    }
+    // An aggregate slot is not merely raw storage.  For example,
+    // [circle] as Array[any Drawable] needs the frontend-selected
+    // Circle-to-existential boxing conversion.  Path 1 has no conversion
+    // Aggregate elements carry their physical destination TypeTerm from
+    // Record.  Instantiation freezes the corresponding ValueConversionProof;
+    // do not pre-reject contextual existential elements here merely because
+    // their source term differs from the selected slot term.
+    val local: U64 = addMidTemporary(state: inout state, typeTerm: aggregate.resultTerm)
+    val writeDestination: MidPlace = <MidPlace local=local typeTerm=aggregate.resultTerm />
+    mut val elements: Array[MidAggregateElement] = []
+    mut val i: U64 = 0U64
+    while i < aggregate.elements.count() {
+        val element: SemanticAggregateElement = aggregate.elements[i]
+        val nested: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: element.exprId)
+        mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=element.term /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+        if nested.found {
+            operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: nested.aggregate)
+        } else if midExprIsCall(c: c, exprId: element.exprId) {
+            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: element.exprId)
+            operand = materializeMidCallValue(c: inout c, state: inout state, exprId: element.exprId, siteKey: template.siteKey)
+        } else {
+            operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: element.exprId, typeTerm: element.term, allowAccessMarker: false)
+        }
+        match operand.error { MidBuildError.None => {} _ => { return operand } }
+        elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand.operand targetTerm=element.targetTerm />)
+        i += 1U64
+    }
+    match aggregate.kind {
+        SemanticAggregateKind.Struct => {
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=writeDestination value=<MidRvalue.Aggregate exprId=aggregate.exprId kind=<MidAggregateKind.Struct /> resultTerm=aggregate.resultTerm fieldCount=aggregate.fieldCount elements=elements /> />)
+        }
+        SemanticAggregateKind.Enum(enumIdx: val enumIdx, variantIndex: val variantIndex) => {
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=writeDestination value=<MidRvalue.Aggregate exprId=aggregate.exprId kind=<MidAggregateKind.Enum enumIdx=enumIdx variantIndex=variantIndex /> resultTerm=aggregate.resultTerm fieldCount=aggregate.fieldCount elements=elements /> />)
+        }
+        SemanticAggregateKind.Array => {
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=writeDestination value=<MidRvalue.Aggregate exprId=aggregate.exprId kind=<MidAggregateKind.Array /> resultTerm=aggregate.resultTerm fieldCount=aggregate.fieldCount elements=elements /> />)
+        }
+    }
+    state.aggregateValues.append(<MidAggregateValue exprId=aggregate.exprId place=writeDestination />)
+    return <MidOperandBuild operand=<MidOperand.Copy place=writeDestination /> />
+}
+
+// `&&` / `||` are Bool-only control flow, not trait calls. Materialize their
+// result in an ordinary Mid local: lhs is evaluated first, a Switch enters
+// rhs only when required, and both paths assign the joined Bool place. This
+// is deliberately the same non-SSA CFG shape as a value-producing source
+// `if`; no legacy LLVM short-circuit emitter or AST re-entry is involved.
+fn materializeMidShortCircuit(c: inout Comp, state: inout MidBuildState, lhs: U64, rhs: U64, typeTerm: U64, isAnd: Bool) -> MidOperandBuild {
+    val left: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: lhs, typeTerm: c.semanticExprTerm(exprId: lhs), allowAccessMarker: false)
+    match left.error { MidBuildError.None => {} _ => { return left } }
+    val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
+    val result: MidPlace = <MidPlace local=resultLocal typeTerm=typeTerm />
+    val rhsTarget: U64 = midNewBlock(state: inout state)
+    val shortTarget: U64 = midNewBlock(state: inout state)
+    val joinTarget: U64 = midNewBlock(state: inout state)
+    if isAnd {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=left.operand values=[1I64] targets=[rhsTarget] otherwise=shortTarget />)
+    } else {
+        midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=left.operand values=[1I64] targets=[shortTarget] otherwise=rhsTarget />)
+    }
+    state.currentBlock = shortTarget
+    mut val shortValue: U64 = 0U64
+    if !isAnd { shortValue = 1U64 }
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=<MidOperand.Constant value=<MidConstant.Integer value=shortValue isNegative=false isBool=true typeTerm=typeTerm /> /> /> />)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+    state.currentBlock = rhsTarget
+    val right: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: rhs, typeTerm: c.semanticExprTerm(exprId: rhs), allowAccessMarker: false)
+    match right.error { MidBuildError.None => {} _ => { return right } }
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=right.operand /> />)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+    state.currentBlock = joinTarget
+    return <MidOperandBuild operand=<MidOperand.Copy place=result /> />
+}
+
+// Reify any already-resolved expression as a Mid value. The boolean is not a
+// source-level heuristic: callers pass it only from the frozen selected ABI
+// mode of an inout receiver/argument. A read-only index is materialized as its
+// selected getter call; an inout use remains an Access marker for the later
+// get-modify-set elaborator.
+fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64, allowAccessMarker: Bool) -> MidOperandBuild {
+    if exprId >= c.arena.exprs.count() {
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
+    }
+    val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
+    if candidate < c.decls.accessCandidates.count() {
+        if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
+        val readExpr: U64 = c.decls.accessCandidates[candidate].readExpr
+        val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: readExpr)
+        return materializeMidCallValue(c: inout c, state: inout state, exprId: readExpr, siteKey: template.siteKey)
+    }
+    val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: exprId)
+    if aggregate.found {
+        return materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
+    }
+    match c.arena.exprs[exprId] {
+        Expr.Call(nameStart: _, nameLen: _, args: _) => {
+            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+        }
+        Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => {
+            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+        }
+        Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => {
+            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+        }
+        Expr.Unary(op: _, operand: _) => {
+            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+        }
+        Expr.Binary(op: val op, lhs: val lhs, rhs: val rhs) => {
+            if op == opAnd() || op == opOr() {
+                return materializeMidShortCircuit(c: inout c, state: inout state, lhs: lhs, rhs: rhs, typeTerm: typeTerm, isAnd: op == opAnd())
+            }
+            val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
+            return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
+        }
+        Expr.Field(base: val base, nameStart: _, nameLen: _) => {
+            if exprId >= c.arena.semanticExprTypes.count() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
+            val field: SemanticExprType = c.arena.semanticExprTypes[exprId]
+            if !(field.hasFieldProjection) { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldProjection /> /> /> }
+            val baseTerm: U64 = c.semanticExprTerm(exprId: base)
+            // A field does not erase the selected inout access mode of its
+            // base. `items[i].field` still writes back the complete
+            // `items[i]` storage value; SemanticAccess carries the selected
+            // field slot for elaboration. Propagating the marker here avoids
+            // prematurely materializing a getter value with no setter path.
+            val baseValue: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: baseTerm, allowAccessMarker: allowAccessMarker)
+            match baseValue.error { MidBuildError.None => {} _ => { return baseValue } }
+            match baseValue.operand {
+                MidOperand.Copy(place: val place) => {
+                    mut val projections: Array[MidProjection] = place.projections
+                    projections.append(<MidProjection.Field index=field.fieldProjectionIndex typeTerm=typeTerm />)
+                    return <MidOperandBuild operand=<MidOperand.Copy place=<MidPlace local=place.local projections=projections typeTerm=typeTerm /> /> />
+                }
+                MidOperand.Access(candidate: val candidate) => {
+                    if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
+                    return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> />
+                }
+                _ => { return <MidOperandBuild operand=baseValue.operand error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldBase /> /> /> }
+            }
+        }
+        // An Array expression reaching Mid without a SemanticAggregate means
+        // its Record-time expected-result producer was not closed. Do not
+        // silently treat it as a generic unsupported AST form: callers can
+        // distinguish a missing semantic fact from a missing Mid operation.
+        Expr.Array(elems: _) => {
+            return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> />
+        }
+        _ => { return midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: typeTerm) }
+    }
+}
+
+fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidOperandBuild {
     mut val built: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=0U64 /> /> error=<MidBuildError.UnsupportedCallTemplate /> />
     match argument.source {
-        CallArgumentSource.Term(exprId: val exprId, term: val term) => { built = midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: term) }
-        CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: val term) => { built = midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: term) }
-        CallArgumentSource.Legacy(exprId: val exprId, info: _) => { built = midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: c.semanticExprTerm(exprId: exprId)) }
-        CallArgumentSource.PriorCallResult(exprId: _, siteKey: _) => {}
+        CallArgumentSource.Term(exprId: val exprId, term: val term) => {
+            built = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term, allowAccessMarker: argument.isInout)
+        }
+        CallArgumentSource.Local(exprId: val exprId, localIndex: _, term: val term) => {
+            built = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term, allowAccessMarker: argument.isInout)
+        }
+        CallArgumentSource.Legacy(exprId: val exprId, info: _) => {
+            built = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: c.semanticExprTerm(exprId: exprId), allowAccessMarker: argument.isInout)
+        }
+        CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
+            // A synthetic Index.index read is a completed semantic call, so
+            // its parent argument uses PriorCallResult rather than reopening
+            // the authored Index place.  It is an Access marker only when the
+            // selected parent ABI consumes an `inout` argument.  A value read
+            // (including the receiver/key of another Index.index call) must
+            // materialize the already-frozen getter, otherwise Mid would ask
+            // access elaboration to invent a writeback that frontend quite
+            // correctly never published.
+            val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
+            if argument.isInout && candidate < c.decls.accessCandidates.count() {
+                built = <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
+            } else {
+                built = materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: siteKey)
+            }
+        }
     }
     match built.error { MidBuildError.None => {} _ => { return built } }
     if argument.isInout {
@@ -266,6 +651,11 @@ fn midTemplateArgumentOperand(c: inout Comp, state: MidBuildState, argument: Cal
         match built.operand {
             MidOperand.Copy(place: val place) => {
                 return <MidOperandBuild operand=<MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> /> />
+            }
+            MidOperand.Access(candidate: val candidate) => {
+                // The instance-specific access elaborator supplies the
+                // materialized temporary and its Inout borrow.
+                return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> />
             }
             _ => {
                 return <MidOperandBuild operand=built.operand error=<MidBuildError.UnsupportedCallTemplate /> />
@@ -280,6 +670,15 @@ fn midTemplateArguments(template: CallTemplate) -> Array[CallTemplateArgument] {
         CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proof: _) => { return args }
         CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return args }
         CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return args }
+        CallTemplateKind.Operator(op: _, operands: val operands, resolution: _, resultTerm: _) => {
+            mut val args: Array[CallTemplateArgument] = []
+            mut val i: U64 = 0U64
+            while i < operands.count() {
+                args.append(<CallTemplateArgument source=operands[i] isInout=false labelStart=0U64 labelLen=0U64 hasLabel=false />)
+                i += 1U64
+            }
+            return args
+        }
         _ => { return [] }
     }
 }
@@ -289,6 +688,7 @@ fn midTemplateIsCallable(template: CallTemplate) -> Bool {
         CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: _, proof: _) => { return true }
         CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { return true }
         CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => { return true }
+        CallTemplateKind.Operator(op: _, operands: _, resolution: _, resultTerm: _) => { return true }
         _ => { return false }
     }
 }
@@ -299,8 +699,80 @@ fn midExprIsCall(c: Comp, exprId: U64) -> Bool {
         Expr.Call(nameStart: _, nameLen: _, args: _) => { return true }
         Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return true }
         Expr.ExtMethod(recv: _, source: _, nameStart: _, nameLen: _, args: _) => { return true }
+        Expr.Unary(op: _, operand: _) => { return true }
+        Expr.Binary(op: val op, lhs: _, rhs: _) => { return op != opAnd() && op != opOr() }
         _ => { return false }
     }
+}
+
+fn midExprIsShortCircuit(c: Comp, exprId: U64) -> Bool {
+    if exprId >= c.arena.exprs.count() { return false }
+    match c.arena.exprs[exprId] {
+        Expr.Binary(op: val op, lhs: _, rhs: _) => { return op == opAnd() || op == opOr() }
+        _ => { return false }
+    }
+}
+
+fn midDirectCallee(c: Comp, template: CallTemplate) -> U64 {
+    match template.kind {
+        CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => { return callee }
+        _ => { return c.arena.funcs.count() }
+    }
+}
+
+fn midDirectReceiverTerm(template: CallTemplate) -> U64 {
+    match template.kind {
+        CallTemplateKind.Direct(callee: _, receiver: val receiver, args: _, calleeTypeArgs: _, proof: _) => {
+            match receiver {
+                CallTemplateReceiver.Term(term: val term) => { return term }
+                _ => { return 0U64 }
+            }
+        }
+        _ => { return 0U64 }
+    }
+}
+
+fn midMethodReceiverExpr(c: Comp, exprId: U64) -> U64 {
+    if exprId >= c.arena.exprs.count() { return c.arena.exprs.count() }
+    match c.arena.exprs[exprId] {
+        Expr.Method(recv: val recv, nameStart: _, nameLen: _, args: _) => { return recv }
+        Expr.ExtMethod(recv: val recv, source: _, nameStart: _, nameLen: _, args: _) => { return recv }
+        _ => { return c.arena.exprs.count() }
+    }
+}
+
+// Build the value receiver from the recorded source evaluation child while
+// taking its ABI mode solely from the already selected Direct template. The
+// Expr match supplies only evaluation shape; it never performs method lookup
+// or type recovery.
+fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, template: CallTemplate) -> MidReceiverBuild {
+    val callee: U64 = midDirectCallee(c: c, template: template)
+    if callee >= c.arena.funcs.count() || !(c.arena.funcs[callee].hasRecv) {
+        return <MidReceiverBuild />
+    }
+    val receiverExpr: U64 = midMethodReceiverExpr(c: c, exprId: exprId)
+    if receiverExpr >= c.arena.exprs.count() {
+        return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> />
+    }
+    val receiverTerm: U64 = midDirectReceiverTerm(template: template)
+    val built: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: receiverExpr, typeTerm: receiverTerm, allowAccessMarker: c.arena.funcs[callee].selfInout)
+    match built.error { MidBuildError.None => {} _ => { return <MidReceiverBuild error=built.error /> } }
+    if c.arena.funcs[callee].selfInout {
+        match built.operand {
+            MidOperand.Copy(place: val place) => {
+                val borrowed: MidOperand = <MidOperand.Borrow place=place capability=<MidBorrowCapability.Inout /> />
+                val receiver: MidCallReceiver = <MidCallReceiver.Value operand=borrowed />
+                return <MidReceiverBuild receiver=receiver />
+            }
+            MidOperand.Access(candidate: val candidate) => {
+                // Access elaboration replaces this marker with the mutable
+                // temporary borrowed by the selected inout receiver.
+                return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=<MidOperand.Access candidate=candidate /> /> />
+            }
+            _ => { return <MidReceiverBuild error=<MidBuildError.UnsupportedCallTemplate /> /> }
+        }
+    }
+    return <MidReceiverBuild receiver=<MidCallReceiver.Value operand=built.operand /> />
 }
 
 // A source call is a terminator in Mid. Its semantic target and argument
@@ -312,16 +784,18 @@ fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, dest
         match template.kind { CallTemplateKind.Pending => { return <MidBuildError.MissingCallTemplate /> } _ => { return <MidBuildError.UnsupportedCallTemplate /> } }
     }
     val sources: Array[CallTemplateArgument] = midTemplateArguments(template: template)
+    val receiver: MidReceiverBuild = midCallReceiver(c: inout c, state: inout state, exprId: exprId, template: template)
+    match receiver.error { MidBuildError.None => {} _ => { return receiver.error } }
     mut val args: Array[MidOperand] = []
     mut val i: U64 = 0U64
     while i < sources.count() {
-        val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: state, argument: sources[i])
+        val argument: MidOperandBuild = midTemplateArgumentOperand(c: inout c, state: inout state, argument: sources[i])
         match argument.error { MidBuildError.None => {} _ => { return argument.error } }
         args.append(argument.operand)
         i += 1U64
     }
     val next: U64 = midNewBlock(state: inout state)
-    midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> args=args destination=destination target=next />)
+    midSetTerminator(state: inout state, terminator: <MidTerminator.Call callee=<MidCallTarget.Template site=template.siteKey /> receiver=receiver.receiver args=args destination=destination target=next />)
     state.currentBlock = next
     return <MidBuildError.None />
 }
@@ -347,9 +821,55 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             if midExprIsCall(c: c, exprId: init) {
                 return buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: destination)
             }
-            val operandResult: MidOperandBuild = midOperandForSourceExpr(c: c, state: state, exprId: init, typeTerm: term)
+            val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
+            mut val operandResult: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+            if aggregate.found {
+                operandResult = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
+            } else {
+                operandResult = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: term, allowAccessMarker: false)
+            }
             match operandResult.error { MidBuildError.None => {} _ => { return operandResult.error } }
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+            return <MidBuildError.None />
+        }
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
+}
+
+// Assignment is not initialization.  Evaluate its RHS into a fresh owned
+// temporary first, then make the old destination's destruction and the
+// consuming replacement explicit.  In particular this preserves the source
+// order of `value = value` and `value = make(value)`: neither backend lowering
+// nor drop elaboration may decide to destroy `value` before RHS evaluation.
+// Projection writes deliberately remain SemanticAccess work; treating one as
+// a root store here would bypass its selected getter/setter/writeback proof.
+export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
+    match c.arena.stmts[stmtId] {
+        Stmt.Assign(target: val target, value: val value) => {
+            val term: U64 = c.semanticExprTerm(exprId: target)
+            if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
+            val destinationLookup: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: target, typeTerm: term)
+            if !destinationLookup.found || destinationLookup.place.projections.count() != 0U64 {
+                return <MidBuildError.UnsupportedAssign />
+            }
+            val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
+            val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />
+            if midExprIsCall(c: c, exprId: value) {
+                val call: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: value, destination: temporary)
+                match call { MidBuildError.None => {} _ => { return call } }
+            } else {
+                val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: value)
+                mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.UnsupportedAssign /> />
+                if aggregate.found {
+                    operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
+                } else {
+                    operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: value, typeTerm: term, allowAccessMarker: false)
+                }
+                match operand.error { MidBuildError.None => {} _ => { return operand.error } }
+                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=temporary value=<MidRvalue.Use operand=operand.operand /> />)
+            }
+            midAppendStatement(state: inout state, statement: <MidStatement.Overwrite destination=destinationLookup.place source=temporary />)
             return <MidBuildError.None />
         }
         _ => { return <MidBuildError.InvalidStatement /> }
@@ -369,13 +889,40 @@ export fn buildMidReturn(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 return <MidBuildError.None />
             }
             val term: U64 = c.semanticExprTerm(exprId: value)
-            val operand: MidOperandBuild = midOperandForSourceExpr(c: c, state: state, exprId: value, typeTerm: term)
+            // A call used as the return value is not an operand: it owns a
+            // continuation block. Materialize its result directly in the ABI
+            // return place, then perform the same lexical cleanup and transfer
+            // as a simple returned local. This keeps call-as-value control flow
+            // explicit and lets later instance-specific access elaboration
+            // splice its writeback before the continuation.
+            if midExprIsCall(c: c, exprId: value) {
+                if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
+                // The callee result is not yet this function's ABI result.
+                // Materialize it in its own selected source-type place, then
+                // cross the enclosing return boundary explicitly.  Writing a
+                // concrete callee result directly into an `any P` return place
+                // would erase the required FinalReturnResolution conversion.
+                val resultLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
+                val callDestination: MidPlace = <MidPlace local=resultLocal typeTerm=term />
+                val callResult: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: value, destination: callDestination)
+                match callResult { MidBuildError.None => {} _ => { return callResult } }
+                val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=c.arena.funcs[state.sourceFunction].retTy />
+                mut val resultOperand: MidOperand = <MidOperand.Copy place=callDestination />
+                if midTermIsUnique(c: inout c, term: term) {
+                    resultOperand = <MidOperand.Move place=callDestination />
+                }
+                midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.funcs[state.sourceFunction].retTy operand=resultOperand /> />)
+                midEmitAllScopeExits(state: inout state)
+                midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
+                return <MidBuildError.None />
+            }
+            val operand: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: value, typeTerm: term, allowAccessMarker: false)
             match operand.error { MidBuildError.None => {} _ => { return operand.error } }
             // Copy retains into the ABI result place and Move transfers there;
             // only then may lexical cleanup destroy the source locals.
             if !state.hasReturnPlace { return <MidBuildError.InvalidFunction /> }
-            val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=term />
-            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operand.operand /> />)
+            val destination: MidPlace = <MidPlace local=state.returnPlace typeTerm=c.arena.funcs[state.sourceFunction].retTy />
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.ReturnBoundary exprId=value targetTerm=c.arena.funcs[state.sourceFunction].retTy operand=operand.operand /> />)
             midEmitAllScopeExits(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.ReturnValue value=<MidOperand.Move place=destination /> />)
             return <MidBuildError.None />
@@ -410,11 +957,23 @@ export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64)
                 if midExprIsCall(c: c, exprId: expr) {
                     val destinationLocal: U64 = addMidTemporary(state: inout state, typeTerm: c.semanticExprTerm(exprId: expr))
                     result = buildMidCallInto(c: inout c, state: inout state, exprId: expr, destination: <MidPlace local=destinationLocal typeTerm=c.semanticExprTerm(exprId: expr) />)
+                } else if midExprIsShortCircuit(c: c, exprId: expr) {
+                    val discarded: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: expr, typeTerm: c.semanticExprTerm(exprId: expr), allowAccessMarker: false)
+                    result = discarded.error
                 } else {
-                    result = <MidBuildError.UnsupportedStatement />
+                    result = <MidBuildError.Unsupported reason=<MidUnsupportedBuild.ExpressionStatement /> />
                 }
             }
-            _ => { result = <MidBuildError.UnsupportedStatement /> }
+            Stmt.Assign(target: _, value: _) => { result = buildMidAssign(c: inout c, state: inout state, stmtId: stmtId) }
+            Stmt.While(cond: _, body: _) => {
+                result = buildMidWhile(c: inout c, state: inout state, stmtId: stmtId)
+            }
+            Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, iter: _, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = <MidBuildError.UnsupportedFor /> }
+            Stmt.Match(scrut: _, arms: _) => { result = <MidBuildError.UnsupportedMatch /> }
+            Stmt.Panic(msg: _, offset: _) => { result = <MidBuildError.UnsupportedPanic /> }
+            Stmt.Give(value: _) => { result = <MidBuildError.UnsupportedGive /> }
+            Stmt.Break(offset: _) => { result = buildMidLoopExit(state: inout state, isContinue: false) }
+            Stmt.Continue(offset: _) => { result = buildMidLoopExit(state: inout state, isContinue: true) }
         }
         if !midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
             i = block.stmtLen
@@ -438,7 +997,7 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
         Stmt.If(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk, hasElse: val hasElse) => {
             if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
             val condTerm: U64 = c.semanticExprTerm(exprId: cond)
-            val condition: MidOperandBuild = midOperandForSourceExpr(c: c, state: state, exprId: cond, typeTerm: condTerm)
+            val condition: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: cond, typeTerm: condTerm, allowAccessMarker: false)
             match condition.error { MidBuildError.None => {} _ => { return condition.error } }
             val thenTarget: U64 = midNewBlock(state: inout state)
             val elseTarget: U64 = midNewBlock(state: inout state)
@@ -465,10 +1024,63 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
     }
 }
 
+// A source `while` is the ordinary three-part CFG shape: enter a header,
+// evaluate the condition on every visit, branch to its body or exit, and send
+// only the body's normal fall-through back to the header.  In particular,
+// there is no structured-loop terminator or LLVM-side AST recovery.  The body
+// remains a lexical source block, so its existing ScopeExit is emitted before
+// the backedge and drop elaboration can treat every iteration uniformly.
+//
+// `break` and `continue` need an explicit stack of lexical loop targets so
+// they can emit every intervening ScopeExit; they remain separate unsupported
+// statement forms until that full source-exit rule is introduced.
+export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
+    match c.arena.stmts[stmtId] {
+        Stmt.While(cond: val cond, body: val body) => {
+            if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
+            val headerTarget: U64 = midNewBlock(state: inout state)
+            val bodyTarget: U64 = midNewBlock(state: inout state)
+            val exitTarget: U64 = midNewBlock(state: inout state)
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=headerTarget />)
+            state.currentBlock = headerTarget
+            val condTerm: U64 = c.semanticExprTerm(exprId: cond)
+            val condition: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: cond, typeTerm: condTerm, allowAccessMarker: false)
+            match condition.error { MidBuildError.None => {} _ => { return condition.error } }
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[bodyTarget] otherwise=exitTarget />)
+            state.currentBlock = bodyTarget
+            state.pushLoopTarget(breakTarget: exitTarget, continueTarget: headerTarget, enclosingScope: state.currentScope)
+            val bodyResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: body)
+            state.popLoopTarget()
+            match bodyResult { MidBuildError.None => {} _ => { return bodyResult } }
+            if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=headerTarget />)
+            }
+            state.currentBlock = exitTarget
+            return <MidBuildError.None />
+        }
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
+}
+
 fn midTermIsUnique(c: inout Comp, term: U64) -> Bool {
     if term >= c.arena.types.count() { return false }
     val t: TypeRef = c.arena.types[term]
     return c.typeIsUnique(start: t.nameStart, len: t.nameLen)
+}
+
+// Aggregate construction currently copies its child operands into a fresh
+// destination. That is sound only for copyable values. A unique aggregate or
+// a unique child requires a consuming aggregate operation (and exact
+// drop-flag transfer), which Path 1 has not represented yet.
+fn midAggregateHasUniqueValue(c: inout Comp, aggregate: SemanticAggregate) -> Bool {
+    if midTermIsUnique(c: inout c, term: aggregate.resultTerm) { return true }
+    mut val i: U64 = 0U64
+    while i < aggregate.elements.count() {
+        if midTermIsUnique(c: inout c, term: aggregate.elements[i].term) { return true }
+        i += 1U64
+    }
+    return false
 }
 
 // Build the parametric body once from the frozen frontend AST/semantic table.
@@ -480,14 +1092,27 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
     val f: Func = c.arena.funcs[fnIdx]
+    // A Mid ABI local must have a frontend-resolved TypeTerm.  Synthetic
+    // deinit walkers currently rely on the legacy receiver spelling path and
+    // use the zero sentinel here; treating it as I64 would miscompile the
+    // receiver.  Keep them out of Mid until their semantic receiver term is
+    // published by the frontend.
+    if f.hasRecv && f.recvTy == 0U64 {
+        return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
+    }
     mut val state: MidBuildState = <MidBuildState scopes=[<MidScope />] blocks=[<MidBlock />] sourceFunction=fnIdx />
     if f.hasRecv {
-        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: f.recvTy, isUnique: midTermIsUnique(c: inout c, term: f.recvTy), isParameter: true, ownsAtEntry: f.selfMove)
+        // `self` is the first ABI parameter exactly like an ordinary source
+        // parameter.  An `inout fn` receiver is therefore a capability-bearing
+        // place supplied by the caller, not a copied value or a special LLVM
+        // side channel.  `midPrepareLocals` binds this declaration directly to
+        // ABI parameter zero when `isInout` is true.
+        val receiverLocal: U64 = addMidLocal(state: inout state, declarationTarget: identSelfTarget(), typeTerm: f.recvTy, isUnique: midTermIsUnique(c: inout c, term: f.recvTy), isParameter: true, ownsAtEntry: f.selfMove, isInout: f.selfInout)
     }
     mut val paramI: U64 = 0U64
     while paramI < f.params.count() {
         val param: Param = f.params[paramI]
-        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: param.isMove)
+        val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: param.isMove, isInout: param.isInout)
         paramI += 1U64
     }
     // Scope zero is the lifetime of receiver/parameters only. Its range must

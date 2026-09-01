@@ -1,0 +1,25 @@
+import @Std/Core with { Buffer, IndexSet }
+import @Std/Io with { print }
+
+struct Box[T] {
+    pub mut val data: Buffer[T]
+}
+
+pub impl[T] Box[T] {
+    factory
+}
+
+pub impl[T] Box[T] as IndexSet[U64] {
+    type Value = T
+
+    inout fn indexSet(key: U64, value~: T) {
+        self.data.set(index: key, value)
+    }
+}
+
+fn main() {
+    mut val box: Box[String] = <Box data=Buffer.new() />
+    box.data.append("old")
+    box[0U64] = "new"
+    print(box.data.get(index: 0U64))
+}

@@ -235,6 +235,49 @@ export struct SemanticExprType {
 }
 pub impl SemanticExprType { factory }
 
+// A construction has semantic information that a result TypeTerm alone cannot
+// carry: physical field/variant layout and the authored evaluation order of
+// child values. Record freezes it before Mid lowering so neither Mid nor LLVM
+// has to reopen JSX labels, enum spelling, or a collection API.
+export enum SemanticAggregateKind {
+    Struct
+    // Declaration identity as well as variant slot is frozen here.  The
+    // backend may consult this identity only for physical layout, never recover
+    // an enum by the construction's spelling or result-type name.
+    Enum(enumIdx: U64, variantIndex: U64)
+    Array
+}
+
+export struct SemanticAggregateElement {
+    // Struct/enum storage uses the frontend-selected physical field slot.
+    // Array elements are naturally indexed in source order and use the same
+    // value for this field. `elements` itself remains source-evaluation order.
+    pub val fieldIndex: U64
+    // Navigation anchors only. The semantic identity is owner + aggregate
+    // record; later Mid lookup may read an already-frozen call/aggregate at
+    // this child but never reselects it from spelling.
+    pub val exprId: U64
+    // The frontend-selected physical slot type after the aggregate result's
+    // own generic arguments are applied.  This makes element conversion a
+    // closed source->target fact rather than a Mid/backend field re-query.
+    pub val targetTerm: U64 = 0U64
+    pub val term: U64
+}
+pub impl SemanticAggregateElement { factory }
+
+export struct SemanticAggregate {
+    pub val ownerFnIdx: U64 = 0U64
+    pub val exprId: U64 = 0U64
+    pub val kind: SemanticAggregateKind = <SemanticAggregateKind.Struct />
+    pub val resultTerm: U64 = 0U64
+    // Number of physical storage slots. A Path-1 aggregate is emitted only
+    // when Record supplied every slot; default-field elaboration stays on the
+    // legacy path until it has an equally explicit semantic carrier.
+    pub val fieldCount: U64 = 0U64
+    pub val elements: Array[SemanticAggregateElement] = []
+}
+pub impl SemanticAggregate { factory }
+
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
 export struct MakeField {
     pub val nameStart: U64
@@ -906,6 +949,34 @@ export enum StaticConformanceProof {
     TraitPath(edges: Array[WitnessMatch], terminalConformIdx: U64)
 }
 
+// A selected value conversion is semantic evidence, not an LLVM coercion
+// request.  In particular `S -> any P` carries the exact static proof that
+// selected P's witness, while container conversions retain their recursive
+// children instead of asking a later phase to rediscover which elements erase.
+// `Missing` is fail-closed: a type-compatible conversion may not become an
+// identity merely because its semantic proof was not recorded.
+//
+// `EnumPayloadConversion` is declared below because it recursively contains a
+// ValueConversionProof; type declarations are collected before their member
+// types are checked, just as this enum can contain itself through Array.
+export enum ValueConversionProof {
+    Identity
+    Missing
+    ExistentialBox(sourceRef: U64, targetRef: U64, traitIdx: U64, proof: StaticConformanceProof)
+    ArrayRepack(sourceRef: U64, targetRef: U64, element: ValueConversionProof)
+    // One entry per physical payload field, in declaration variant order. This
+    // is the complete conversion plan; LLVM must not reconstruct a field type
+    // from enum generic arguments to discover a proof.
+    EnumRepack(sourceRef: U64, targetRef: U64, enumIdx: U64, payloads: Array[EnumPayloadConversion])
+}
+
+export struct EnumPayloadConversion {
+    pub val sourceRef: U64
+    pub val targetRef: U64
+    pub val conversion: ValueConversionProof
+}
+pub impl EnumPayloadConversion { factory }
+
 // One worklist state while resolving a concrete trait instance.  The current
 // trait key is ground; `edges` is the predecessor proof needed both for a
 // final callable and for associated-output grounding.  Keeping this state in
@@ -935,6 +1006,114 @@ export struct InstanceEnvironment {
     pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
 }
 
+// A runtime ABI operation selected from a finalized plewIntrinsic declaration.
+// It is deliberately separate from a source spelling: after frontend selection
+// neither Mid nor LLVM needs to inspect a function name to decide the ABI.
+// A bit width is shared by integer and floating-point runtime operations.  It
+// is intentionally not named IntegerWidth: a descriptor must not encode a
+// float operation with an integer-only type just because both happen to have
+// a width field.
+export enum NumericWidth {
+    W8
+    W16
+    W32
+    W64
+}
+
+export enum IntegerOperation {
+    Add
+    Sub
+    Mul
+    Div
+    Rem
+    Neg
+    BitNot
+    BitAnd
+    BitOr
+    BitXor
+    Shl
+    Shr
+    Eq
+    Ne
+    Lt
+    Le
+    Gt
+    Ge
+}
+
+export enum FloatOperation {
+    Add
+    Sub
+    Mul
+    Div
+    Neg
+    Eq
+    Lt
+}
+
+// Float widths are deliberately a distinct closed domain: the current LLVM
+// floor supports F32/F64 only, and no descriptor may accidentally request an
+// integer-only width for a floating operation.
+export enum FloatWidth {
+    W32
+    W64
+}
+
+export enum BoolOperation {
+    Not
+    Eq
+}
+
+export enum NumericOverflow {
+    Checked
+    Wrapping
+}
+
+export enum NumericIntrinsic {
+    Integer(width: NumericWidth, unsigned: Bool, operation: IntegerOperation, overflow: NumericOverflow)
+    Float(width: FloatWidth, operation: FloatOperation)
+    Bool(operation: BoolOperation)
+}
+
+// The finite safe Buffer floor.  The element type and inout/value argument
+// convention are frozen by the selected CallResolution; this enum carries the
+// operation identity only, so it cannot duplicate generic substitution state.
+export enum BufferIntrinsic {
+    New
+    Count
+    Capacity
+    Reserve
+    Append
+    InsertAt
+    Get
+    Set
+    RemoveLast
+    RemoveAt
+    SwapRemove
+    Clear
+    Truncate
+    Eq
+    BytewiseComparable
+}
+
+export enum RuntimeIntrinsic {
+    Write
+    Eprint
+    ArgCount
+    Numeric(intrinsic: NumericIntrinsic)
+    Buffer(intrinsic: BufferIntrinsic)
+}
+
+// Declaration-time classification of a bundled runtime ABI operation. None is
+// intentionally separate from RuntimeIntrinsic: it says a selected Func is an
+// ordinary declaration, not a third runtime operation. Final call resolution
+// consumes this closed declaration fact and never recovers an ABI target from
+// a source spelling.
+export enum RuntimeIntrinsicDeclaration {
+    None
+    Bound(intrinsic: RuntimeIntrinsic)
+}
+
 // The destination of a resolved call.  This is a sum type rather than a
 // `kind` plus optional parallel fields: an existential requirement cannot
 // accidentally carry a closure binding, and a closure field cannot omit its
@@ -943,10 +1122,25 @@ export struct InstanceEnvironment {
 // not a missing resolution.
 export enum CallTarget {
     Direct
+    RuntimeIntrinsic(intrinsic: RuntimeIntrinsic)
     NoCallable
     ExistentialRequirement(traitIdx: U64, slot: U64)
     ClosureLocal(bindingDeclStart: U64, fnTypeRef: U64)
     ClosureField(fieldIndex: U64, fnTypeRef: U64)
+}
+
+// A selected callable may return a carrier value while the source expression
+// denotes a closed projection of it.  This is semantic information, not a
+// backend operator special case: `<` selects Ord.compare but denotes a Bool
+// formed by inspecting its Ordering tag; `!=` selects Eq.eq but denotes the
+// logical complement of its Bool carrier.
+export enum CallResultProjection {
+    Identity
+    OrderingTest(op: I64)
+    // Append-only: this IR enum crosses bootstrap compiler generations, so
+    // existing variant tags remain stable while an older compiler emits the
+    // first binary that understands this closed Eq complement.
+    BoolNot
 }
 
 // The selected callable for one semantic call site while compiling one concrete
@@ -983,19 +1177,55 @@ export struct CallResolution {
     // order.  Argument lowering consumes these directly; it must not reopen
     // the callee's symbolic `Param.ty` under the caller's ambient environment.
     pub val parameterTypeRefs: Array[U64] = []
+    // One proof per ABI parameter, in declaration order.  It is selected
+    // together with the ground ABI type; Mid/LLVM must never infer a box or
+    // container repack from an argument expression after this boundary.
+    pub val argumentConversions: Array[ValueConversionProof] = []
     // Concrete receiver identity at source selection.  0 for an ordinary
     // free call; association/operator calls retain their subject type here.
     // Backend consumes this rather than reconstructing it from the shared AST.
     pub val recvTypeRef: U64 = 0U64
-    // The selected callable's fully-grounded result identity.  This is needed
-    // when a method owns type parameters (for example Iterator.map[B]): LLVM
-    // must consume the concrete adapter result selected by Mono, never infer it
-    // again from the receiver expression or method spelling.
+    // The fully-grounded value type observed at the source call site.  This is
+    // deliberately not necessarily the ABI return type of `callee`: an
+    // operator witness may return its carrier (`Ordering`) while the source
+    // expression observes a Bool after `resultProjection`.  Consumers use this
+    // semantic result for subsequent type/proof facts; LLVM obtains the raw
+    // ABI return from the selected callee and applies the projection.
     pub val resultTypeRef: U64 = 0U64
+    // The value type observed at the source call site.  `Identity` means it is
+    // the callee return directly; non-identity variants must be materialized
+    // before the destination is initialized.
+    pub val resultProjection: CallResultProjection = <CallResultProjection.Identity />
     // LLVM consumes this selected target directly and never re-selects it
     // from source spellings.
     pub val target: CallTarget = <CallTarget.Direct />
 }
+
+// The concrete value-conversion facts for one Record-selected aggregate in one
+// canonical BodyInstance. `SemanticAggregate` remains the parametric source
+// layout; this table is its finalization counterpart, just as CallResolution
+// is the concrete counterpart of CallTemplate. Mid consumes this record and
+// must never select a conformance proof for an aggregate element itself.
+export struct FinalAggregateResolution {
+    pub val bodyId: U64
+    pub val exprId: U64
+    pub val resultTypeRef: U64
+    pub val elementTargetRefs: Array[U64]
+    pub val elementConversions: Array[ValueConversionProof]
+}
+pub impl FinalAggregateResolution { factory }
+
+// One concrete value-conversion decision for a `return expression` in a
+// canonical BodyInstance.  A return has one ABI target but may be reached by
+// many source branches, so its key is the returned expression rather than a
+// backend return-place local.
+export struct FinalReturnResolution {
+    pub val bodyId: U64
+    pub val exprId: U64
+    pub val targetTypeRef: U64
+    pub val conversion: ValueConversionProof
+}
+pub impl FinalReturnResolution { factory }
 
 // Frontend-owned input to final call construction.  It intentionally carries
 // semantic facts selected at the source/implicit/control-flow boundary rather
@@ -1028,6 +1258,7 @@ export struct CallSiteSelection {
     pub val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
     pub val resultHintRef: U64 = 0U64
     pub val resultRef: U64 = 0U64
+    pub val resultProjection: CallResultProjection = <CallResultProjection.Identity />
     pub val target: CallTarget = <CallTarget.Direct />
 }
 pub impl CallSiteSelection { factory }
@@ -1120,6 +1351,9 @@ export struct Func {
     // prototype (still no body — the library provides it) and a call lowers to the
     // RAW name `<name>(args)` (no `plew_` prefix, no overload mangling). Default false.
     pub val isCExtern: Bool = false
+    // Set exactly once while lowering a recognized bundled runtime declaration.
+    // This is declaration identity metadata, not a backend lookup hint.
+    pub val runtimeIntrinsic: RuntimeIntrinsicDeclaration = <RuntimeIntrinsicDeclaration.None />
     // member visibility (spec/05): true when this method/assoc-fn lives in a
     // `pub impl Type { … }` block (publicly callable wherever the type is visible).
     // Default false = the method is private — visible only inside the type's
@@ -1383,6 +1617,13 @@ export struct Arena {
     // MonoWork's transient discovery queues.  LLVM consumes this immutable
     // semantic result after frontend finalization.
     pub mut val finalCallees: Array[CallResolution] = []
+    // Concrete aggregate conversions, keyed by (BodyInstance, source ExprId).
+    // This is semantic output alongside finalCallees, not a backend cache.
+    pub mut val finalAggregates: Array[FinalAggregateResolution] = []
+    // Storage/writeback provenance is deliberately separate from callable
+    // provenance. It is derived from final call descriptors after their
+    // worklist reaches a fixpoint.
+    pub mut val semanticAccesses: Array[SemanticAccess] = []
     // Canonical semantic body instances. Mono interns a complete body key here;
     // the backend consumes the same id rather than reconstructing an enclosing
     // substitution environment at every call site.
@@ -1390,6 +1631,15 @@ export struct Arena {
     // Derived open-addressed index for finalCallees. Slots hold a 1-based
     // finalCallees index and are rebuilt from CallResolution's semantic key only.
     pub mut val finalCalleeIndexSlots: Array[U64] = []
+    // Derived open-addressed index for finalAggregates. Slots hold one-based
+    // table positions and can always be rebuilt from the immutable key.
+    pub mut val finalAggregateIndexSlots: Array[U64] = []
+    // Concrete ABI return conversions, keyed by (BodyInstance, returned ExprId).
+    // Like finalAggregates this is frontend semantic output, never a Mid cache.
+    pub mut val finalReturns: Array[FinalReturnResolution] = []
+    // Derived open-addressed index for finalReturns; slots are one-based table
+    // positions and are rebuilt whenever the semantic table changes.
+    pub mut val finalReturnIndexSlots: Array[U64] = []
     // Instance-invariant final callable per expression.  Kept as a scalar
     // parallel array so a plain free call does not depend on a body worklist.
     pub mut val finalExprCallee: Array[U64] = []
@@ -1474,6 +1724,76 @@ export struct SyntheticCallSite {
     pub val receiverTerm: U64
 }
 pub impl SyntheticCallSite { factory }
+
+// A value-level `Index.index` call has a second, non-value provenance: the
+// place which would receive a later get-modify-set writeback. This carrier is
+// separate from CallTemplate: the latter selects a callable, while this
+// records storage/evaluation provenance for later access elaboration.
+export struct AccessCandidate {
+    pub val readExpr: U64
+    // A detached synthetic `IndexSet.indexSet` call with the read result as
+    // its type anchor. Record selects this facet while lexical receiver/key
+    // provenance is still available; Mid later replaces that anchor with its
+    // materialized mutable temporary and never executes this expression.
+    pub val writeExpr: U64
+    pub val placeExpr: U64
+    pub val originSerial: U64 = 0U64
+}
+pub impl AccessCandidate { factory }
+
+// A frozen use of an indexed storage candidate by a selected call. `parent`
+// is a CallSiteKey, not a syntax/name lookup: final access elaboration reads
+// the selected CallTemplate/CallResolution from it. `role` is 1=receiver,
+// 2=explicit argument. `write` is decided only when Record has a selected ABI
+// mode; it is never inferred from spelling in Lower.
+export struct AccessUse {
+    pub val candidateIndex: U64
+    // The value expression consumed by the parent call. This can be a field
+    // projection of the candidate's synthetic Index.index result (for
+    // `items[i].field.append(...)`), so candidate identity alone is not the
+    // complete inout access path.
+    pub val accessExpr: U64
+    pub val parent: CallSiteKey
+    pub val role: U64
+    pub val argIndex: U64 = 0U64
+    // Source argument index is diagnostic provenance only. Mid call operands
+    // are arranged by the selected parameter mapping, which is recorded here.
+    pub val parameterIndex: U64 = 0U64
+    pub val modeKnown: Bool = false
+    pub val write: Bool = false
+}
+pub impl AccessUse { factory }
+
+// A body-instance-specific access fact, frozen only after both the synthetic
+// Index.index read and its parent call have final CallResolutions. Resolution
+// indices are stable inside Arena's immutable final-callee table; the backend
+// never re-selects either call from a collection name or source expression.
+export struct SemanticAccess {
+    pub val bodyId: U64
+    pub val candidateIndex: U64
+    // Frozen evaluation inputs of the indexed storage path. These remain AST
+    // navigation anchors only: Mid uses them to materialize the already
+    // selected receiver/key operands and never re-resolves their meaning.
+    pub val baseExpr: U64
+    pub val keyExpr: U64
+    pub val baseTerm: U64
+    pub val keyTerm: U64
+    pub val valueTerm: U64
+    // The selected value passed to the parent. `valueTerm` above remains the
+    // storage value returned by Index.index and is what IndexSet writes back;
+    // this pair is its explicit read-only projection for the parent ABI.
+    pub val accessExpr: U64
+    pub val accessTerm: U64
+    pub val readResolution: U64
+    // `finalCallees.count()` means read-only: no IndexSet facet was finalized.
+    pub val writeResolution: U64 = 0U64
+    pub val parentResolution: U64
+    pub val role: U64
+    pub val argIndex: U64 = 0U64
+    pub val parameterIndex: U64 = 0U64
+    pub val write: Bool = false
+}
+pub impl SemanticAccess { factory }
 
 // The stable identity of a semantic call occurrence.  `ownerFnIdx` is the
 // declaration body (globals use the one-past-last Func sentinel).  originKind
@@ -1661,6 +1981,15 @@ export struct Decls {
     pub mut val importAliases: Array[Bind] = []
     pub mut val chainSites: Array[ChainSite] = []
     pub mut val syntheticCallSites: Array[SyntheticCallSite] = []
+    pub mut val accessCandidates: Array[AccessCandidate] = []
+    pub mut val accessUses: Array[AccessUse] = []
+    // Parametric aggregate facts selected by Record. Unlike AST MakeField,
+    // these carry physical layout identity and no field/variant spelling.
+    pub mut val semanticAggregates: Array[SemanticAggregate] = []
+    // Derived open-addressed index for SemanticAggregate. Slots hold one-based
+    // semanticAggregates indices and are rebuilt solely from (ownerFnIdx,
+    // exprId); this is lookup structure, never a second semantic source.
+    pub mut val semanticAggregateIndexSlots: Array[U64] = []
     pub mut val callTemplates: Array[CallTemplate] = []
     // Derived open-addressed index for CallTemplate. Slots hold one-based
     // callTemplates indices and are rebuilt solely from CallSiteKey; this is
@@ -1724,6 +2053,12 @@ export struct Modules {
     // sugar is specified in terms of these declarations, not whichever trait
     // named `Eq`/`Add` happened to be visible at a later checker site.
     pub mut val coreModule: U64 = 4000000000U64
+    // The bundled Std Io module. It is loaded for runtime ABI declaration
+    // identity only; its ordinary free functions remain non-ambient.
+    pub mut val ioModule: U64 = 4000000000U64
+    // The bundled Std Process module. Runtime ABI declaration identity is
+    // distinct from its ordinary import visibility.
+    pub mut val processModule: U64 = 4000000000U64
 }
 pub impl Modules { factory }
 
@@ -1907,6 +2242,11 @@ export struct Cursor {
     // CallTemplates.  Keeping this phase bit in the transient cursor prevents
     // an early, incompletely-resolved call from becoming semantic provenance.
     pub mut val recordCallTemplates: Bool = false
+    // While Record visits a detached access-write facet, its value type anchor
+    // points back to the candidate's read call. This guard prevents that
+    // structural dependency from recursively recording the same facet; it is
+    // traversal state only and never semantic provenance.
+    pub mut val recordingAccessWriteFacet: Bool = false
     // monotonic gensym counter for lowering-synthesized temp locals (compound-assign
     // place bindings etc.), so names are globally unique across statements.
     pub mut val lowerTmpSeq: U64 = 0

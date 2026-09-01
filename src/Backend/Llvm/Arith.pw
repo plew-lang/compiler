@@ -81,168 +81,196 @@ pub impl LlvmCtx {
         return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
     }
 
-    // 8 (a no-match sentinel, > any real code) if `start..len` is not one of the numeric
-    // type prefixes i8..u64; else its packed code `wi + (unsigned ? 4 : 0)` (wi = width
-    // bucket 0..3). All-U64 so callers derive `wi = code % 4`, `unsigned = code >= 4`
-    // without a signed cast.
-    inout fn numPrefixCode(c: inout Comp, start: U64, len: U64) -> U64 {
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i8") { return 0U64 }
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i16") { return 1U64 }
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i32") { return 2U64 }
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "i64") { return 3U64 }
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u8") { return 4U64 }
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u16") { return 5U64 }
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u32") { return 6U64 }
-        if rangeEquals(bytes: c.arena.bytes, start: start, len: len, kw: "u64") { return 7U64 }
-        return 8U64
+    // Consume the frontend's closed numeric ABI descriptor.  This is the
+    // backend endpoint: it deliberately receives neither a source function
+    // name nor a type spelling.
+    inout fn genNumericIntrinsic(c: inout Comp, intrinsic: NumericIntrinsic, args: ArgRange, errorOffset: U64) -> LLVMValueRef {
+        mut val values: Array[LLVMValueRef] = []
+        mut val i: U64 = 0U64
+        while i < args.len {
+            values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: i).expr))
+            i += 1U64
+        }
+        return self.genNumericIntrinsicValues(c: inout c, intrinsic: intrinsic, values: values, errorOffset: errorOffset)
     }
 
-    // If the tail of the call name `nameStart..nameLen` equals `opKw` AND the leading
-    // bytes form a numeric type prefix (i8..u64), return that prefix's packed code
-    // (< 8); else 8 (no match). Used to recognize a numeric-intrinsic name `<prefix><Op>`.
-    inout fn numIntrinsicPrefixFor(c: inout Comp, nameStart: U64, nameLen: U64, opKw: String) -> U64 {
-        val sl: U64 = opKw.bytes().count()
-        if nameLen <= sl { return 8U64 }
-        if !(rangeEquals(bytes: c.arena.bytes, start: nameStart + nameLen - sl, len: sl, kw: opKw)) {
-            return 8U64
-        }
-        return self.numPrefixCode(c: inout c, start: nameStart, len: nameLen - sl)
-    }
-
-    // The numeric intrinsic floor (spec/12, O6). A call to an `extern(plewIntrinsic)`
-    // numeric op (`i8Add`, `u32Lt`, `i64Neg`, …) lowers HERE to the primitive LLVM
-    // operation — this is the ONE place the compiler knows what a primitive numeric op
-    // does. Every source operator (`+`, `<`, `~`, …) reaches it only THROUGH its trait
-    // witness body (`impl I8 as Add { assoc fn add(l,r) { return i8Add(a:l, b:r) } }` in
-    // std/Core/Num.pw), so the witness body is the single source of truth and editing it
-    // changes the operator. Returns null if the name is not a numeric intrinsic.
-    inout fn genNumIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: ArgRange) -> LLVMValueRef {
-        // float floor (`f64Add`, `f32Neg`, `f64Lt`, …) and bool floor (`boolNot`,
-        // `boolEq`) are recognized first — their names don't share the iN/uN prefix
-        // shape, so the int matcher below would reject them anyway; handling them up
-        // front keeps each floor's lowering in one place.
-        val fv: LLVMValueRef = self.genFloatIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-        if LLVMIsNull(fv) == 0I32 { return fv }
-        val bv: LLVMValueRef = self.genBoolIntrinsic(c: inout c, nameStart: nameStart, nameLen: nameLen, args: args)
-        if LLVMIsNull(bv) == 0I32 { return bv }
-        // wrapping floor (`i64WrapAdd`, `u8WrapNeg`, …): raw two's-complement ops with NO
-        // overflow check — the intrinsic bodies of the `wrapping*` FixedWidthInteger
-        // witnesses (spec/02). Matched first, and off the checked `Add`/`Neg` matchers because their
-        // remaining prefix (`i64Wrap`) is not a recognized width prefix (numPrefixCode -> 8).
-        val wnegP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapNeg")
-        if wnegP < 8U64 {
-            val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wnegP % 4U64)
-            return LLVMBuildNeg(self.b, self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: ty, unsigned: wnegP >= 4U64), anon())
-        }
-        mut val wop: I64 = -1I64
-        mut val wpc: U64 = 8U64
-        wpc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapAdd")
-        if wpc < 8U64 { wop = opAdd() }
-        if wop == -1I64 { wpc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapSub")  if wpc < 8U64 { wop = opSub() } }
-        if wop == -1I64 { wpc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "WrapMul")  if wpc < 8U64 { wop = opMul() } }
-        if wop != -1I64 {
-            val wu: Bool = wpc >= 4U64
-            val wty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: wpc % 4U64)
-            val wl: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: wty, unsigned: wu)
-            val wr: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 1U64).expr), target: wty, unsigned: wu)
-            return self.buildBinOpS(c: inout c, op: wop, l: wl, r: wr, unsigned: wu)
-        }
-        // unary ops first (single `value` arg).
-        val negP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Neg")
-        if negP < 8U64 {
-            val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: negP % 4U64)
-            return self.buildNegChecked(c: inout c, v: self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: ty, unsigned: negP >= 4U64))
-        }
-        val notP: U64 = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitNot")
-        if notP < 8U64 {
-            val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: notP % 4U64)
-            return LLVMBuildNot(self.b, self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: ty, unsigned: notP >= 4U64), anon())
-        }
-        // binary ops: name tail -> Op, then the single checked entry (which routes
-        // arithmetic to the panic helpers and bitwise/shift/comparison to the raw op).
-        mut val op: I64 = -1I64
-        mut val pc: U64 = 8U64
-        pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Add")
-        if pc < 8U64 { op = opAdd() }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Sub")  if pc < 8U64 { op = opSub() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Mul")  if pc < 8U64 { op = opMul() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Div")  if pc < 8U64 { op = opDiv() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Rem")  if pc < 8U64 { op = opRem() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitAnd")  if pc < 8U64 { op = opBitAnd() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitOr")  if pc < 8U64 { op = opBitOr() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "BitXor")  if pc < 8U64 { op = opBitXor() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Shl")  if pc < 8U64 { op = opShl() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Shr")  if pc < 8U64 { op = opShr() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Eq")  if pc < 8U64 { op = opEq() } }
-        if op == -1I64 { pc = self.numIntrinsicPrefixFor(c: inout c, nameStart: nameStart, nameLen: nameLen, opKw: "Lt")  if pc < 8U64 { op = opLt() } }
-        if op == -1I64 {
-            return LLVMConstNull(self.ptrty)
-        }
-        val unsigned: Bool = pc >= 4U64
-        val ty: LLVMTypeRef = self.llvmIntTyOfIdx(wi: pc % 4U64)
-        val l: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: ty, unsigned: unsigned)
-        val r: LLVMValueRef = self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 1U64).expr), target: ty, unsigned: unsigned)
-        return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: unsigned)
-    }
-
-    // The float half of the intrinsic floor (spec/02,12): a call to `f32<Op>` / `f64<Op>`
-    // lowers HERE to the IEEE op. Arithmetic (Add/Sub/Mul/Div) -> f-op; Neg -> fneg;
-    // Eq/Lt -> a NaN-compare panic guard then an ordered fcmp -> i1 (Ord.compare rides
-    // Lt; float `%` and bitwise ops don't exist, so no Rem/Bit* here). Both F32/F64 lower
-    // to `double` for now. Returns null if the name isn't a float intrinsic.
-    inout fn genFloatIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: ArgRange) -> LLVMValueRef {
-        if nameLen <= 3U64 { return LLVMConstNull(self.ptrty) }
-        if !(rangeEquals(bytes: c.arena.bytes, start: nameStart, len: 3U64, kw: "f32")) {
-            if !(rangeEquals(bytes: c.arena.bytes, start: nameStart, len: 3U64, kw: "f64")) {
-                return LLVMConstNull(self.ptrty)
+    // The shared ABI endpoint for legacy and Mid lowering.  Both paths have
+    // already selected argument evaluation order and the closed descriptor;
+    // this routine sees only LLVM values and cannot reopen source syntax.
+    inout fn genNumericIntrinsicValues(c: inout Comp, intrinsic: NumericIntrinsic, values: Array[LLVMValueRef], errorOffset: U64) -> LLVMValueRef {
+        match intrinsic {
+            NumericIntrinsic.Integer(width: val width, unsigned: val unsigned, operation: val operation, overflow: val overflow) => {
+                val ty: LLVMTypeRef = self.llvmIntTyOfNumericWidth(width: width)
+                match operation {
+                    IntegerOperation.Neg => {
+                        if values.count() != 1U64 {
+                            c.errorAt(offset: errorOffset, msg: "internal error: integer neg runtime intrinsic has an invalid ABI arity")
+                            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                        }
+                        val v: LLVMValueRef = self.coerceInt(v: values[0U64], target: ty, unsigned: unsigned)
+                        match overflow {
+                            NumericOverflow.Checked => { return self.buildNegChecked(c: inout c, v: v) }
+                            NumericOverflow.Wrapping => { return LLVMBuildNeg(self.b, v, anon()) }
+                        }
+                    }
+                    IntegerOperation.BitNot => {
+                        if values.count() != 1U64 {
+                            c.errorAt(offset: errorOffset, msg: "internal error: integer bit-not runtime intrinsic has an invalid ABI arity")
+                            return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                        }
+                        return LLVMBuildNot(self.b, self.coerceInt(v: values[0U64], target: ty, unsigned: unsigned), anon())
+                    }
+                    _ => {}
+                }
+                if values.count() != 2U64 {
+                    c.errorAt(offset: errorOffset, msg: "internal error: integer binary runtime intrinsic has an invalid ABI arity")
+                    return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                }
+                val l: LLVMValueRef = self.coerceInt(v: values[0U64], target: ty, unsigned: unsigned)
+                val r: LLVMValueRef = self.coerceInt(v: values[1U64], target: ty, unsigned: unsigned)
+                val op: I64 = self.integerOperationCode(operation: operation)
+                match overflow {
+                    NumericOverflow.Checked => { return self.buildBinOpChecked(c: inout c, op: op, l: l, r: r, unsigned: unsigned) }
+                    NumericOverflow.Wrapping => { return self.buildBinOpS(c: inout c, op: op, l: l, r: r, unsigned: unsigned) }
+                }
+            }
+            NumericIntrinsic.Float(width: val width, operation: val operation) => {
+                self.ensureFloatWidth(width: width)
+                match operation {
+                    FloatOperation.Neg => {
+                        if values.count() != 1U64 {
+                            c.errorAt(offset: errorOffset, msg: "internal error: float neg runtime intrinsic has an invalid ABI arity")
+                            return LLVMConstNull(self.ptrty)
+                        }
+                        return LLVMBuildFNeg(self.b, self.coerceLlvmValueToF64(value: values[0U64]), anon())
+                    }
+                    _ => {}
+                }
+                if values.count() != 2U64 {
+                    c.errorAt(offset: errorOffset, msg: "internal error: float binary runtime intrinsic has an invalid ABI arity")
+                    return LLVMConstNull(self.ptrty)
+                }
+                val l: LLVMValueRef = self.coerceLlvmValueToF64(value: values[0U64])
+                val r: LLVMValueRef = self.coerceLlvmValueToF64(value: values[1U64])
+                match operation {
+                    FloatOperation.Add => { return LLVMBuildFAdd(self.b, l, r, anon()) }
+                    FloatOperation.Sub => { return LLVMBuildFSub(self.b, l, r, anon()) }
+                    FloatOperation.Mul => { return LLVMBuildFMul(self.b, l, r, anon()) }
+                    FloatOperation.Div => { return LLVMBuildFDiv(self.b, l, r, anon()) }
+                    FloatOperation.Eq => {
+                        self.emitF64NanCheck(c: inout c, l: l, r: r)
+                        return LLVMBuildFCmp(self.b, 1U32, l, r, anon())
+                    }
+                    FloatOperation.Lt => {
+                        self.emitF64NanCheck(c: inout c, l: l, r: r)
+                        return LLVMBuildFCmp(self.b, 4U32, l, r, anon())
+                    }
+                    FloatOperation.Neg => {
+                        c.errorAt(offset: errorOffset, msg: "internal error: float neg dispatch fell through")
+                        return LLVMConstNull(self.ptrty)
+                    }
+                }
+            }
+            NumericIntrinsic.Bool(operation: val operation) => {
+                match operation {
+                    BoolOperation.Not => {
+                        if values.count() != 1U64 {
+                            c.errorAt(offset: errorOffset, msg: "internal error: bool not runtime intrinsic has an invalid ABI arity")
+                            return LLVMConstInt(self.i1ty, 0U64, 0I32)
+                        }
+                        return LLVMBuildNot(self.b, values[0U64], anon())
+                    }
+                    BoolOperation.Eq => {
+                        if values.count() != 2U64 {
+                            c.errorAt(offset: errorOffset, msg: "internal error: bool eq runtime intrinsic has an invalid ABI arity")
+                            return LLVMConstInt(self.i1ty, 0U64, 0I32)
+                        }
+                        val l: LLVMValueRef = values[0U64]
+                        val r: LLVMValueRef = values[1U64]
+                        return LLVMBuildICmp(self.b, llvmIntEq(), l, r, anon())
+                    }
+                }
             }
         }
-        val ss: U64 = nameStart + 3U64
-        val sl: U64 = nameLen - 3U64
-        // unary Neg (one `value` arg). Match the suffix BEFORE touching args — an
-        // unrelated `f64<X>` name (e.g. the `f64ToU64` conversion intrinsic) shares the
-        // prefix but isn't an operator floor op, and takes a different arg shape.
-        if rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Neg") {
-            return LLVMBuildFNeg(self.b, self.coerceToF64(c: inout c, id: c.argAt(args: args, index: 0U64).expr), anon())
-        }
-        // recognized binary float ops only: identify the op from the suffix first, then
-        // (once matched) lower the two operands.
-        mut val isAdd: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Add")
-        mut val isSub: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Sub")
-        mut val isMul: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Mul")
-        mut val isDiv: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Div")
-        mut val isEq: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Eq")
-        mut val isLt: Bool = rangeEquals(bytes: c.arena.bytes, start: ss, len: sl, kw: "Lt")
-        if !isAdd { if !isSub { if !isMul { if !isDiv { if !isEq { if !isLt {
-            return LLVMConstNull(self.ptrty)
-        } } } } } }
-        val l: LLVMValueRef = self.coerceToF64(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
-        val r: LLVMValueRef = self.coerceToF64(c: inout c, id: c.argAt(args: args, index: 1U64).expr)
-        if isAdd { return LLVMBuildFAdd(self.b, l, r, anon()) }
-        if isSub { return LLVMBuildFSub(self.b, l, r, anon()) }
-        if isMul { return LLVMBuildFMul(self.b, l, r, anon()) }
-        if isDiv { return LLVMBuildFDiv(self.b, l, r, anon()) }
-        // Eq/Lt: NaN compares must panic (spec/02) before the ordered fcmp
-        // (LLVMRealOEQ=1, OLT=4).
-        self.emitF64NanCheck(c: inout c, l: l, r: r)
-        if isEq { return LLVMBuildFCmp(self.b, 1U32, l, r, anon()) }
-        return LLVMBuildFCmp(self.b, 4U32, l, r, anon())
     }
 
-    // The bool half of the intrinsic floor: `boolNot` -> `xor x, true`, `boolEq` ->
-    // `icmp eq`. Concrete `!b` / `b == b` open-code the same ops directly (Expr.pw); these
-    // exist so a generic `T.not` / `T.eq` grounded to Bool routes through the real witness.
-    // Returns null if the name isn't a bool intrinsic.
-    inout fn genBoolIntrinsic(c: inout Comp, nameStart: U64, nameLen: U64, args: ArgRange) -> LLVMValueRef {
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "boolNot") {
-            return LLVMBuildNot(self.b, self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), anon())
+    fn numericIntrinsicArity(intrinsic: NumericIntrinsic) -> U64 {
+        match intrinsic {
+            NumericIntrinsic.Integer(width: _, unsigned: _, operation: val operation, overflow: _) => {
+                match operation {
+                    IntegerOperation.Neg => { return 1U64 }
+                    IntegerOperation.BitNot => { return 1U64 }
+                    _ => { return 2U64 }
+                }
+            }
+            NumericIntrinsic.Float(width: _, operation: val operation) => {
+                match operation {
+                    FloatOperation.Neg => { return 1U64 }
+                    _ => { return 2U64 }
+                }
+            }
+            NumericIntrinsic.Bool(operation: val operation) => {
+                match operation {
+                    BoolOperation.Not => { return 1U64 }
+                    BoolOperation.Eq => { return 2U64 }
+                }
+            }
         }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "boolEq") {
-            val l: LLVMValueRef = self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr)
-            val r: LLVMValueRef = self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 1U64).expr)
-            return LLVMBuildICmp(self.b, llvmIntEq(), l, r, anon())
+    }
+
+    inout fn llvmIntTyOfNumericWidth(width: NumericWidth) -> LLVMTypeRef {
+        match width {
+            NumericWidth.W8 => { return self.i8ty }
+            NumericWidth.W16 => { return self.i16ty }
+            NumericWidth.W32 => { return self.i32ty }
+            NumericWidth.W64 => { return self.i64ty }
         }
-        return LLVMConstNull(self.ptrty)
+    }
+
+    fn ensureFloatWidth(width: FloatWidth) {
+        match width {
+            FloatWidth.W32 => {}
+            FloatWidth.W64 => {}
+        }
+    }
+
+    // Mid has already materialized its operands, so float lowering cannot use
+    // the AST-oriented `coerceToF64`.  Preserve the same ABI conversion here
+    // at the LLVM-value boundary.
+    inout fn coerceLlvmValueToF64(value: LLVMValueRef) -> LLVMValueRef {
+        if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
+            return LLVMBuildSIToFP(self.b, value, self.f64ty, anon())
+        }
+        return value
+    }
+
+    fn integerOperationCode(operation: IntegerOperation) -> I64 {
+        match operation {
+            IntegerOperation.Add => { return opAdd() }
+            IntegerOperation.Sub => { return opSub() }
+            IntegerOperation.Mul => { return opMul() }
+            IntegerOperation.Div => { return opDiv() }
+            IntegerOperation.Rem => { return opRem() }
+            IntegerOperation.BitAnd => { return opBitAnd() }
+            IntegerOperation.BitOr => { return opBitOr() }
+            IntegerOperation.BitXor => { return opBitXor() }
+            IntegerOperation.Shl => { return opShl() }
+            IntegerOperation.Shr => { return opShr() }
+            IntegerOperation.Eq => { return opEq() }
+            IntegerOperation.Ne => { return opNe() }
+            IntegerOperation.Lt => { return opLt() }
+            IntegerOperation.Le => { return opLe() }
+            IntegerOperation.Gt => { return opGt() }
+            IntegerOperation.Ge => { return opGe() }
+            IntegerOperation.Neg => {
+                compileErrorAt(line: 0, msg: "internal error: unary neg has no integer binary operation code")
+                return opAdd()
+            }
+            IntegerOperation.BitNot => {
+                compileErrorAt(line: 0, msg: "internal error: unary bit-not has no integer binary operation code")
+                return opAdd()
+            }
+        }
     }
 
     // Construct a registered struct value from a JSX `<Type field=expr ... />`: build
