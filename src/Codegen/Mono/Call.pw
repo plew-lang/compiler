@@ -4371,7 +4371,7 @@ pub impl Comp {
                     CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
                         selected = callee
                         if selected < self.arena.funcs.count() {
-                            selectedName = <Bind nameStart=self.arena.funcs[selected].nameStart nameLen=self.arena.funcs[selected].nameLen />
+                            selectedName = <Bind nameStart=self.arena.funcs[selected].nameStart nameLen=self.arena.funcs[selected].nameLen fieldStart=self.arena.funcs[selected].nameStart fieldLen=self.arena.funcs[selected].nameLen />
                             hasSelectedCall = true
                         }
                     }
