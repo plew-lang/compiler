@@ -407,6 +407,55 @@ pub impl Comp {
         self.lowerPlaceAssignInto(target: pid, value: vid, stmts: inout stmts)
     }
 
+    // SyntaxFile counterpart of the place rebuild.  It retains the same
+    // place-once guarantee as the value-AST lowering: only side-effecting
+    // index keys become temporaries, and the resulting lowered place is shared
+    // by the read and write sides of a compound assignment.
+    inout fn rebuildSyntaxPlaceTemping(id: ExprId, stmts: inout Array[U64]) -> U64 {
+        val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
+        match e.kind {
+            SyntaxExprKind.Field => {
+                return self.pushExpr(e: <Expr.Field base=self.rebuildSyntaxPlaceTemping(id: e.child0, stmts: inout stmts) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
+            }
+            SyntaxExprKind.Arrow => {
+                return self.pushExpr(e: <Expr.Arrow base=self.rebuildSyntaxPlaceTemping(id: e.child0, stmts: inout stmts) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
+            }
+            SyntaxExprKind.Index => {
+                return self.pushExpr(e: <Expr.Index base=self.rebuildSyntaxPlaceTemping(id: e.child0, stmts: inout stmts) index=self.tempSyntaxIndexKey(id: e.child1, stmts: inout stmts) />)
+            }
+            _ => { return self.lowerSyntaxExpr(id: id) }
+        }
+    }
+
+    inout fn tempSyntaxIndexKey(id: ExprId, stmts: inout Array[U64]) -> U64 {
+        val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
+        match e.kind {
+            SyntaxExprKind.Ident => { return self.lowerSyntaxExpr(id: id) }
+            SyntaxExprKind.IntLit => { return self.lowerSyntaxExpr(id: id) }
+            _ => {
+                val value: U64 = self.lowerSyntaxExpr(id: id)
+                self.cur.lowerTmpSeq += 1U64
+                val tmp: Bind = self.internTmpName(prefix: "__ce", n: self.cur.lowerTmpSeq)
+                stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=value />))
+                return self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+            }
+        }
+    }
+
+    inout fn lowerSyntaxPlainAssignInto(stmt: SyntaxStmt, stmts: inout Array[U64]) {
+        val target: U64 = self.rebuildSyntaxPlaceTemping(id: stmt.child0, stmts: inout stmts)
+        val value: U64 = self.lowerSyntaxExpr(id: stmt.child1)
+        self.lowerPlaceAssignInto(target: target, value: value, stmts: inout stmts)
+    }
+
+    inout fn lowerSyntaxCompoundAssignInto(stmt: SyntaxStmt, stmts: inout Array[U64]) {
+        val target: U64 = self.rebuildSyntaxPlaceTemping(id: stmt.child0, stmts: inout stmts)
+        val value: U64 = self.lowerSyntaxExpr(id: stmt.child1)
+        val read: U64 = self.loweredPlaceRead(id: target)
+        val combined: U64 = self.pushExpr(e: <Expr.Binary op=compoundBinOp(op: stmt.op) lhs=read rhs=value />)
+        self.lowerPlaceAssignInto(target: target, value: combined, stmts: inout stmts)
+    }
+
     inout fn astPlaceHasIndex(e: ExprAst) -> Bool {
         match e {
             ExprAst.Index(base: _, index: _, span: _) => { return true }
@@ -506,6 +555,7 @@ pub impl Comp {
             SyntaxStmtKind.While => {
                 return self.pushStmt(s: <Stmt.While cond=self.lowerSyntaxExpr(id: s.child0) body=self.lowerSyntaxBlock(id: s.block0) />)
             }
+            SyntaxStmtKind.For => { return self.lowerSyntaxFor(stmt: s) }
             SyntaxStmtKind.Panic => { return self.pushStmt(s: <Stmt.Panic msg=self.lowerSyntaxExpr(id: s.child0) offset=s.span.start />) }
             SyntaxStmtKind.Give => { return self.pushStmt(s: <Stmt.Give value=self.lowerSyntaxExpr(id: s.child0) />) }
             SyntaxStmtKind.Break => { return self.pushStmt(s: <Stmt.Break offset=s.span.start />) }
@@ -523,7 +573,19 @@ pub impl Comp {
         mut val stmts: Array[U64] = []
         mut val i: U64 = 0U64
         while i < syntaxBlockStmtCount(file: self.syntax, block: block) {
-            stmts.append(self.lowerSyntaxStmt(id: syntaxBlockStmt(file: self.syntax, block: block, index: i)))
+            val stmtId: StmtId = syntaxBlockStmt(file: self.syntax, block: block, index: i)
+            val stmt: SyntaxStmt = syntaxStmt(file: self.syntax, id: stmtId)
+            match stmt.kind {
+                SyntaxStmtKind.Assign => {
+                    if stmt.op == opAssign() {
+                        self.lowerSyntaxPlainAssignInto(stmt: stmt, stmts: inout stmts)
+                    } else {
+                        self.lowerSyntaxCompoundAssignInto(stmt: stmt, stmts: inout stmts)
+                    }
+                }
+                SyntaxStmtKind.Destructure => { self.lowerSyntaxDestructureInto(stmt: stmt, stmts: inout stmts) }
+                _ => { stmts.append(self.lowerSyntaxStmt(id: stmtId)) }
+            }
             i += 1U64
         }
         return self.pushBlock(stmts: stmts)
@@ -760,6 +822,85 @@ pub impl Comp {
             bi += 1
         }
         return self.pushBinds(binds: out)
+    }
+
+    inout fn syntaxDestructureSiteBinds(stmt: SyntaxStmt) -> BindRange {
+        mut val out: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < syntaxStmtBindCount(file: self.syntax, stmt: stmt) {
+            val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxStmtBind(file: self.syntax, stmt: stmt, index: i))
+            out.append(<Bind nameStart=bind.name.start nameLen=bind.name.end - bind.name.start fieldStart=bind.field.start fieldLen=bind.field.end - bind.field.start offset=bind.span.start />)
+            i += 1U64
+        }
+        return self.pushBinds(binds: out)
+    }
+
+    // SyntaxFile counterpart of destructure lowering. The source bind table
+    // carries both the optional local spelling and the authored field spelling,
+    // so diagnostic provenance survives without a BindAst/String adapter.
+    inout fn lowerSyntaxDestructureInto(stmt: SyntaxStmt, stmts: inout Array[U64]) {
+        self.cur.lowerTmpSeq += 1U64
+        val tmp: Bind = self.internTmpName(prefix: "__dt", n: self.cur.lowerTmpSeq)
+        val init: U64 = self.lowerSyntaxExpr(id: stmt.child0)
+        stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=init />))
+        self.decls.destructureSites.append(<DestructureSite initId=init offset=stmt.span.start isElem=false typeStart=stmt.typeName.start typeLen=stmt.typeName.end - stmt.typeName.start binds=self.syntaxDestructureSiteBinds(stmt: stmt) />)
+        mut val i: U64 = 0U64
+        while i < syntaxStmtBindCount(file: self.syntax, stmt: stmt) {
+            val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxStmtBind(file: self.syntax, stmt: stmt, index: i))
+            if bind.name.end > bind.name.start {
+                val recv: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+                val field: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=bind.field.start nameLen=bind.field.end - bind.field.start />)
+                self.arena.exprSpanStart[recv] = bind.span.start
+                self.arena.exprSpanStart[field] = bind.span.start
+                if bind.isAssign {
+                    val target: U64 = self.pushExpr(e: <Expr.Ident start=bind.name.start len=bind.name.end - bind.name.start />)
+                    self.arena.exprSpanStart[target] = bind.span.start
+                    stmts.append(self.pushStmt(s: <Stmt.Assign target=target value=field />))
+                } else {
+                    stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=bind.name.start nameLen=bind.name.end - bind.name.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
+                }
+            }
+            i += 1U64
+        }
+    }
+
+    inout fn lowerSyntaxFor(stmt: SyntaxStmt) -> U64 {
+        if stmt.isRecordPattern {
+            val element: Bind = self.internBytes(s: "__fe")
+            val iter: U64 = self.lowerSyntaxExpr(id: stmt.child0)
+            val body: U64 = self.lowerSyntaxBlock(id: stmt.block0)
+            self.decls.destructureSites.append(<DestructureSite initId=iter offset=stmt.span.start isElem=true binds=self.syntaxDestructureSiteBinds(stmt: stmt) />)
+            mut val stmts: Array[U64] = []
+            mut val i: U64 = 0U64
+            while i < syntaxStmtBindCount(file: self.syntax, stmt: stmt) {
+                val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxStmtBind(file: self.syntax, stmt: stmt, index: i))
+                if bind.name.end > bind.name.start {
+                    val recv: U64 = self.pushExpr(e: <Expr.Ident start=element.nameStart len=element.nameLen />)
+                    val field: U64 = self.pushExpr(e: <Expr.Field base=recv nameStart=bind.field.start nameLen=bind.field.end - bind.field.start />)
+                    self.arena.exprSpanStart[recv] = bind.span.start
+                    self.arena.exprSpanStart[field] = bind.span.start
+                    stmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=bind.name.start nameLen=bind.name.end - bind.name.start tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=field />))
+                }
+                i += 1U64
+            }
+            i = 0U64
+            while i < self.blockStmtCount(blkId: body) {
+                stmts.append(self.blockStmtAt(blkId: body, index: i))
+                i += 1U64
+            }
+            val expandedBody: U64 = self.pushBlock(stmts: stmts)
+            return self.pushStmt(s: <Stmt.For varStart=element.nameStart varLen=element.nameLen varTyStart=0U64 varTyLen=0U64 isRange=false inclusive=false iter=iter rangeHi=0U64 body=expandedBody isStruct=false patStart=0U64 patLen=0U64 binds=<BindRange start=0U64 len=0U64 /> />)
+        }
+        mut val varTyStart: U64 = 0U64
+        mut val varTyLen: U64 = 0U64
+        if stmt.flag0 {
+            val ty: PType = self.lowerSyntaxType(id: stmt.type0)
+            varTyStart = ty.start
+            varTyLen = ty.len
+        }
+        mut val rangeHi: U64 = 0U64
+        if stmt.flag1 { rangeHi = self.lowerSyntaxExpr(id: stmt.child1) }
+        return self.pushStmt(s: <Stmt.For varStart=stmt.name.start varLen=stmt.name.end - stmt.name.start varTyStart=varTyStart varTyLen=varTyLen isRange=stmt.flag1 inclusive=stmt.flag2 iter=self.lowerSyntaxExpr(id: stmt.child0) rangeHi=rangeHi body=self.lowerSyntaxBlock(id: stmt.block0) isStruct=stmt.flag3 patStart=stmt.typeName.start patLen=stmt.typeName.end - stmt.typeName.start binds=self.syntaxDestructureSiteBinds(stmt: stmt) />)
     }
 
     inout fn lowerBlock(b: BlockAst) -> U64 {
