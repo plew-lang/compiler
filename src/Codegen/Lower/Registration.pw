@@ -433,10 +433,12 @@ pub impl Comp {
     inout fn conformancePatternsMayOverlap(a: Conform, b: Conform) -> Bool {
         if a.traitArgs.count() != b.traitArgs.count() { return false }
         mut val binds: Array[UnifyBind] = []
-        if !(self.unifyPatterns(a: a.subjectTy, aSide: 0U64, b: b.subjectTy, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds, ignoreTopView: true)) { return false }
+        val aParams: Array[Bind] = self.copyConformBinds(binds: a.typeParams)
+        val bParams: Array[Bind] = self.copyConformBinds(binds: b.typeParams)
+        if !(self.unifyPatterns(a: a.subjectTy, aSide: 0U64, b: b.subjectTy, bSide: 1U64, aParams: aParams, bParams: bParams, binds: inout binds, ignoreTopView: true)) { return false }
         mut val i: U64 = 0U64
         while i < a.traitArgs.count() {
-            if !(self.unifyPatterns(a: a.traitArgs[i], aSide: 0U64, b: b.traitArgs[i], bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds)) { return false }
+            if !(self.unifyPatterns(a: self.conformTypeAt(types: a.traitArgs, index: i), aSide: 0U64, b: self.conformTypeAt(types: b.traitArgs, index: i), bSide: 1U64, aParams: aParams, bParams: bParams, binds: inout binds)) { return false }
             i += 1U64
         }
         return true
