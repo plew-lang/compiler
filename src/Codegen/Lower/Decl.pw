@@ -264,6 +264,70 @@ pub impl Comp {
         return <FieldDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isMut=f.isMut hasDefault=hasDefault defaultVal=defaultVal vis=f.vis />
     }
 
+    inout fn lowerSyntaxDeclTypeParams(d: SyntaxDecl) -> Array[Bind] {
+        mut val names: Array[Span] = []
+        mut val flags: Array[Bool] = []
+        mut val i: U64 = 0U64
+        while i < syntaxDeclTypeParamCount(file: self.syntax, decl: d) {
+            names.append(syntaxDeclTypeParamSpan(file: self.syntax, decl: d, index: i))
+            flags.append(syntaxDeclTypeParamIsSendable(file: self.syntax, decl: d, index: i))
+            i += 1U64
+        }
+        return self.lowerTypeParamSpans(spans: names, anchor: d.span.start, sendableFlags: flags)
+    }
+
+    inout fn lowerSyntaxFieldDef(f: SyntaxField) -> FieldDef {
+        val pt: PType = self.lowerSyntaxType(id: f.ty)
+        mut val defaultVal: U64 = 0U64
+        if f.hasDefault { defaultVal = self.lowerSyntaxExpr(id: f.defaultVal) }
+        return <FieldDef nameStart=f.name.start nameLen=f.name.end - f.name.start nameId=intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start) tyStart=pt.start tyLen=pt.len tyNameId=intern(c: inout self, start: pt.start, len: pt.len) tyIsArray=pt.isArray ty=pt.ref isMut=f.isMut hasDefault=f.hasDefault defaultVal=defaultVal vis=f.vis />
+    }
+
+    inout fn lowerSyntaxStructDecl(d: SyntaxDecl) {
+        val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
+        val savedTP: Array[Bind] = self.cur.typeParams
+        self.cur.typeParams = typeParams
+        mut val fields: Array[FieldDef] = []
+        mut val i: U64 = 0U64
+        while i < syntaxDeclFieldCount(file: self.syntax, decl: d) {
+            fields.append(self.lowerSyntaxFieldDef(f: syntaxField(file: self.syntax, id: syntaxDeclField(file: self.syntax, decl: d, index: i))))
+            i += 1U64
+        }
+        if d.hasDeinit {
+            val deinitName: Bind = self.internBytes(s: "deinit")
+            val noParams: Array[Param] = []
+            val noTypeParams: Array[Bind] = []
+            val body: U64 = self.lowerSyntaxBlock(id: d.deinitBody)
+            self.registerDeclaredFunc(f: <Func nameStart=deinitName.nameStart nameLen=deinitName.nameLen nameId=intern(c: inout self, start: deinitName.nameStart, len: deinitName.nameLen) recvId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: noTypeParams) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body hasRecv=true recvStart=d.name.start recvLen=d.name.end - d.name.start selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false defOffset=d.span.start />)
+            self.decls.deinits.append(<Bind nameStart=d.name.start nameLen=d.name.end - d.name.start fieldStart=d.name.start fieldLen=d.name.end - d.name.start />)
+        }
+        self.arena.structs.append(<StructDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams fields=fields isUnique=d.isUnique isNonsendable=d.isNonsendable isExtern=false defOffset=d.span.start />)
+        self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
+        self.cur.typeParams = savedTP
+    }
+
+    inout fn lowerSyntaxEnumDecl(d: SyntaxDecl) {
+        val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
+        val savedTP: Array[Bind] = self.cur.typeParams
+        self.cur.typeParams = typeParams
+        mut val variants: Array[Variant] = []
+        mut val i: U64 = 0U64
+        while i < syntaxDeclVariantCount(file: self.syntax, decl: d) {
+            val v: SyntaxVariant = syntaxVariant(file: self.syntax, id: syntaxDeclVariant(file: self.syntax, decl: d, index: i))
+            mut val fields: Array[FieldDef] = []
+            mut val j: U64 = 0U64
+            while j < syntaxVariantFieldCount(file: self.syntax, variant: v) {
+                fields.append(self.lowerSyntaxFieldDef(f: syntaxField(file: self.syntax, id: syntaxVariantField(file: self.syntax, variant: v, index: j))))
+                j += 1U64
+            }
+            variants.append(<Variant nameStart=v.name.start nameLen=v.name.end - v.name.start nameId=intern(c: inout self, start: v.name.start, len: v.name.end - v.name.start) fields=fields />)
+            i += 1U64
+        }
+        self.arena.enums.append(<EnumDef nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=typeParams variants=variants isUnique=d.isUnique isNonsendable=d.isNonsendable defOffset=d.span.start />)
+        self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: true, declStart: d.span.start, declEnd: d.span.end)
+        self.cur.typeParams = savedTP
+    }
+
     inout fn lowerStructDecl(d: DeclAst) {
         val nm: Bind = self.internBytes(s: d.name)
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable)
