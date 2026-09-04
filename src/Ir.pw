@@ -840,10 +840,10 @@ export struct Conform {
     // Structured arguments of the subject head. Kept separately because a trait
     // subject is not a value TypeRef and must not enter the value-type visibility
     // table merely to form a declaration key.
-    pub val subjectArgs: Array[U64] = []
+    pub val subjectArgs: ConformTypeRange = <ConformTypeRange start=0U64 len=0U64 />
     // Binders introduced by `impl[T]`; used to compare subject keys modulo
     // spelling (`impl[T] Box[T]` == `impl[U] Box[U]`).
-    pub val typeParams: Array[Bind] = []
+    pub val typeParams: ConformBindRange = <ConformBindRange start=0U64 len=0U64 />
     // arity of the impl subject. For `impl B as A`, this disambiguates same-name
     // traits such as a user `Sub` and Core's `Sub[Rhs]`; for concrete types it is
     // the receiver type-arg count. The conformance owner checks only use it when
@@ -856,7 +856,7 @@ export struct Conform {
     // bound to the trait's type parameters, positionally. Empty for a bare
     // conformance. The completeness check substitutes the trait's i-th type
     // parameter with traitArgs[i] when matching a requirement against its witness.
-    pub val traitArgs: Array[U64] = []
+    pub val traitArgs: ConformTypeRange = <ConformTypeRange start=0U64 len=0U64 />
     // synthesized by `@[Eq]`/`@[Ord]` derive: exempt from the unknown-trait and
     // completeness checks (the witness is compiler-generated and complete).
     pub val derived: Bool
