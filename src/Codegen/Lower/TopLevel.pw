@@ -188,6 +188,20 @@ pub impl Comp {
         return false
     }
 
+    // Keep namespace-call recognition in the same semantic namespace table as
+    // the value-AST path.  SyntaxFile retains source spans rather than names,
+    // so intern only the queried spelling instead of materializing a String.
+    inout fn isNamespaceNameSpan(name: Span) -> Bool {
+        mut val i: U64 = 0U64
+        while i < self.decls.namespaces.count() {
+            if spansEqual(c: inout self, aStart: self.decls.namespaces[i].nameStart, aLen: self.decls.namespaces[i].nameLen, bStart: name.start, bLen: name.end - name.start) {
+                return true
+            }
+            i += 1U64
+        }
+        return false
+    }
+
     inout fn lowerDirective(dir: DirectiveAst) {
         mut val i: U64 = 0
         while i < dir.reqs.count() {

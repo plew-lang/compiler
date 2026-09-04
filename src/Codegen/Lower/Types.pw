@@ -759,6 +759,48 @@ pub impl Comp {
         return out
     }
 
+    // SyntaxFile counterpart of lowerArgs.  The source name remains a span so
+    // contextual literal typing uses the same declaration lookup without
+    // allocating a transient call-name String.
+    inout fn lowerSyntaxArgs(expr: SyntaxExpr, fnName: Span) -> Array[Arg] {
+        mut val out: Array[Arg] = []
+        mut val i: U64 = 0U64
+        while i < syntaxExprArgCount(file: self.syntax, expr: expr) {
+            val a: SyntaxArg = syntaxArg(file: self.syntax, id: syntaxExprArg(file: self.syntax, expr: expr, index: i))
+            val actx: U64 = self.callArgTypeSpans(fnName: fnName, argLabel: a.label)
+            mut val value: U64 = 0U64
+            if actx != 0U64 {
+                value = self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx)
+            } else {
+                value = self.lowerSyntaxExpr(id: a.value)
+            }
+            out.append(self.appendLoweredArg(value: value, isInout: a.isInout, label: a.label, hasLabel: a.hasLabel))
+            i += 1U64
+        }
+        return out
+    }
+
+    // SyntaxFile counterpart of lowerMethodArgs.  It is deliberately separate
+    // from free-call context lookup: a receiver call must remain ambiguous
+    // until method candidate selection, exactly as on the value-AST path.
+    inout fn lowerSyntaxMethodArgs(expr: SyntaxExpr, methodName: Span) -> Array[Arg] {
+        mut val out: Array[Arg] = []
+        mut val i: U64 = 0U64
+        while i < syntaxExprArgCount(file: self.syntax, expr: expr) {
+            val a: SyntaxArg = syntaxArg(file: self.syntax, id: syntaxExprArg(file: self.syntax, expr: expr, index: i))
+            val actx: U64 = self.methodArgTypeSpans(methodName: methodName, argLabel: a.label)
+            mut val value: U64 = 0U64
+            if actx != 0U64 {
+                value = self.lowerSyntaxExprWithCtx(id: a.value, ctxRef: actx)
+            } else {
+                value = self.lowerSyntaxExpr(id: a.value)
+            }
+            out.append(self.appendLoweredArg(value: value, isInout: a.isInout, label: a.label, hasLabel: a.hasLabel))
+            i += 1U64
+        }
+        return out
+    }
+
     inout fn appendLoweredArg(value: U64, isInout: Bool, label: Span, hasLabel: Bool) -> Arg {
         return <Arg expr=value isInout=isInout labelStart=label.start labelLen=label.end - label.start hasLabel=hasLabel />
     }

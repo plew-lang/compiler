@@ -432,8 +432,32 @@ pub impl Comp {
                 val rhs: U64 = self.lowerSyntaxExpr(id: e.child1)
                 result = self.pushExpr(e: <Expr.Binary op=e.op lhs=lhs rhs=rhs />)
             }
+            SyntaxExprKind.Call => {
+                val args: Array[Arg] = self.lowerSyntaxArgs(expr: e, fnName: e.name)
+                result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
+            }
             SyntaxExprKind.Field => {
                 result = self.pushExpr(e: <Expr.Field base=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
+            }
+            SyntaxExprKind.Method => {
+                if self.isNamespaceNameSpan(name: syntaxExpr(file: self.syntax, id: e.child0).name) {
+                    val args: Array[Arg] = self.lowerSyntaxArgs(expr: e, fnName: e.name)
+                    self.markImport(segStart: e.name.start, segLen: e.name.end - e.name.start, nameStart: e.name.start, nameLen: e.name.end - e.name.start)
+                    result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
+                } else {
+                    val args: Array[Arg] = self.lowerSyntaxMethodArgs(expr: e, methodName: e.name)
+                    result = self.pushExpr(e: <Expr.Method recv=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
+                }
+            }
+            SyntaxExprKind.ArrowMethod => {
+                val recv: U64 = self.lowerSyntaxExpr(id: e.child0)
+                val deref: U64 = self.pushExpr(e: <Expr.Deref base=recv />)
+                val args: Array[Arg] = self.lowerSyntaxMethodArgs(expr: e, methodName: e.name)
+                result = self.pushExpr(e: <Expr.Method recv=deref nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
+            }
+            SyntaxExprKind.ExtMethod => {
+                val args: Array[Arg] = self.lowerSyntaxArgs(expr: e, fnName: <Span start=0U64 end=0U64 />)
+                result = self.pushExpr(e: <Expr.ExtMethod recv=self.lowerSyntaxExpr(id: e.child0) source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
             }
             SyntaxExprKind.Arrow => {
                 result = self.pushExpr(e: <Expr.Arrow base=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
@@ -460,8 +484,21 @@ pub impl Comp {
                 val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: typeId, variantId: variantId, isEnum: e.flag0)
                 result = self.pushExpr(e: <Expr.Make typeStart=e.name.start typeLen=e.name.end - e.name.start variantStart=e.nameSpan.start variantLen=e.nameSpan.end - e.nameSpan.start isEnum=e.flag0 ty=tyRef fields=self.pushMakeFields(fields: fields) />)
             }
+            SyntaxExprKind.ArrayLit => {
+                mut val elems: Array[U64] = []
+                mut val i: U64 = 0U64
+                while i < syntaxExprElemCount(file: self.syntax, expr: e) {
+                    elems.append(self.lowerSyntaxExpr(id: syntaxExprElem(file: self.syntax, expr: e, index: i)))
+                    i += 1U64
+                }
+                result = self.pushExpr(e: <Expr.Array elems=self.pushExprs(exprs: elems) />)
+            }
             SyntaxExprKind.DictLit => {
                 result = self.lowerSyntaxDictLit(expr: e, ctxRef: 0U64)
+            }
+            SyntaxExprKind.RecordLit => {
+                val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: 0U64, variantId: 0U64, isEnum: false)
+                result = self.pushExpr(e: <Expr.Make typeStart=0U64 typeLen=0U64 variantStart=0U64 variantLen=0U64 isEnum=false ty=0U64 fields=self.pushMakeFields(fields: fields) />)
             }
             SyntaxExprKind.Cast => {
                 val ty: PType = self.lowerSyntaxType(id: e.type0)

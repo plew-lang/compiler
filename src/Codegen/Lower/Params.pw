@@ -30,6 +30,34 @@ pub impl Comp {
         return out
     }
 
+    // SyntaxFile counterpart of lowerParams.  A parameter's default remains an
+    // expression ID until the semantic lowerer consumes it; no ParamAst or
+    // String is reconstructed from the immutable syntax arena.
+    inout fn lowerSyntaxExprParams(expr: SyntaxExpr) -> Array[Param] {
+        mut val out: Array[Param] = []
+        mut val i: U64 = 0U64
+        while i < syntaxExprParamCount(file: self.syntax, expr: expr) {
+            val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxExprParam(file: self.syntax, expr: expr, index: i))
+            mut val hasType: Bool = false
+            mut val ty: PType = <PType start=0U64 len=0U64 isArray=false ref=0U64 />
+            val syntaxTy: SyntaxType = syntaxType(file: self.syntax, id: p.ty)
+            if syntaxTy.name.end > syntaxTy.name.start || syntaxTy.isRecord {
+                ty = self.lowerSyntaxType(id: p.ty)
+                hasType = true
+            }
+            mut val hasDefault: Bool = false
+            mut val defaultExpr: U64 = 0U64
+            if p.hasDefault {
+                defaultExpr = self.lowerSyntaxExpr(id: p.defaultVal)
+                hasDefault = true
+            }
+            val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start />
+            out.append(self.appendLoweredParam(name: name, hasType: hasType, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: hasDefault, defaultExpr: defaultExpr))
+            i += 1U64
+        }
+        return out
+    }
+
     // Both value-AST and SyntaxFile parameter decoders end here.  Keeping the
     // IR construction together prevents a new input representation from
     // drifting in mode, label, or default-argument semantics.
