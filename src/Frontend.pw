@@ -957,6 +957,23 @@ export fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
     }
 }
 
+// Lowering a single top-level item can itself be the dominant unit of work.
+// Unlike aggregate counters printed after a phase completes, this is a
+// start-boundary heartbeat: if no later line arrives, `index` and `span`
+// identify the item whose lowering is still active.  It is trace-only and
+// never participates in source semantics or generated LLVM.
+fn traceLowerTopItem(c: inout Comp, index: U64, span: Span) {
+    if c.tracePhases {
+        eprint(text: "[trace-phase] lower:top-item index=")
+        traceU64(n: index)
+        eprint(text: " span=")
+        traceU64(n: span.start)
+        eprint(text: "..")
+        traceU64(n: span.end)
+        eprint(text: "\n")
+    }
+}
+
 // Record the one parametric semantic type/provenance table before any Mono
 // consumer. Keeping this as an explicit phase makes the hand-off into
 // CallTemplate finalization a real `Comp` boundary, rather than an incidental
@@ -1448,13 +1465,11 @@ export fn runFrontend(c: inout Comp) {
         val roots: SyntaxSlice = pendingRoots[rootIndex]
         mut val itemIndex: U64 = 0U64
         while itemIndex < roots.count {
-        // Source lowering is the largest frontend traversal.  Keep coarse
-        // trace progress at its ownership boundary so a pathological item can
-        // be located without adding ad-hoc prints inside individual lowerers.
-        if c.tracePhases && lowerIndex % 100U64 == 0U64 {
-            tracePhaseCount(c: inout c, label: "lower:top-item", count: lowerIndex)
-        }
-            c.lowerSyntaxTopItem(item: syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex))
+            // Emit before entering the item, rather than every N completed
+            // items. A pathological first item must be observable too.
+            val item: TopItemId = syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex)
+            traceLowerTopItem(c: inout c, index: lowerIndex, span: syntaxTopItemSpan(file: c.syntax, item: item))
+            c.lowerSyntaxTopItem(item: item)
             lowerIndex += 1U64
             itemIndex += 1U64
         }
