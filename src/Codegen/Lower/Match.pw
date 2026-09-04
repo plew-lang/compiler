@@ -471,6 +471,64 @@ pub impl Comp {
         return self.pushStmt(s: <Stmt.ExprStmt expr=call />)
     }
 
+    // SyntaxFile counterpart of the direct statement lowerer. The block path
+    // owns compound-assignment, destructuring, and match desugaring; this
+    // function deliberately handles only the statement forms that have a
+    // one-to-one semantic IR representation.
+    inout fn lowerSyntaxStmt(id: StmtId) -> U64 {
+        val s: SyntaxStmt = syntaxStmt(file: self.syntax, id: id)
+        match s.kind {
+            SyntaxStmtKind.Let => {
+                mut val tyStart: U64 = 0U64
+                mut val tyLen: U64 = 0U64
+                mut val tyIsArray: Bool = false
+                mut val tyRef: U64 = 0U64
+                if s.flag1 {
+                    val ty: PType = self.lowerSyntaxType(id: s.type0)
+                    tyStart = ty.start
+                    tyLen = ty.len
+                    tyIsArray = ty.isArray
+                    tyRef = ty.ref
+                }
+                return self.pushStmt(s: <Stmt.Let mutable=s.flag0 nameStart=s.name.start nameLen=s.name.end - s.name.start tyStart=tyStart tyLen=tyLen tyIsArray=tyIsArray ty=tyRef init=self.lowerSyntaxExprWithCtx(id: s.child0, ctxRef: tyRef) />)
+            }
+            SyntaxStmtKind.ExprStmt => { return self.pushStmt(s: <Stmt.ExprStmt expr=self.lowerSyntaxExpr(id: s.child0) />) }
+            SyntaxStmtKind.Return => {
+                mut val value: U64 = 0U64
+                if s.flag0 { value = self.lowerSyntaxExprWithCtx(id: s.child0, ctxRef: self.cur.lowerRetTy) }
+                return self.pushStmt(s: <Stmt.Return value=value hasValue=s.flag0 offset=s.span.start />)
+            }
+            SyntaxStmtKind.If => {
+                mut val elseBlock: U64 = 0U64
+                if s.flag0 { elseBlock = self.lowerSyntaxBlock(id: s.block1) }
+                return self.pushStmt(s: <Stmt.If cond=self.lowerSyntaxExpr(id: s.child0) thenBlk=self.lowerSyntaxBlock(id: s.block0) elseBlk=elseBlock hasElse=s.flag0 />)
+            }
+            SyntaxStmtKind.While => {
+                return self.pushStmt(s: <Stmt.While cond=self.lowerSyntaxExpr(id: s.child0) body=self.lowerSyntaxBlock(id: s.block0) />)
+            }
+            SyntaxStmtKind.Panic => { return self.pushStmt(s: <Stmt.Panic msg=self.lowerSyntaxExpr(id: s.child0) offset=s.span.start />) }
+            SyntaxStmtKind.Give => { return self.pushStmt(s: <Stmt.Give value=self.lowerSyntaxExpr(id: s.child0) />) }
+            SyntaxStmtKind.Break => { return self.pushStmt(s: <Stmt.Break offset=s.span.start />) }
+            SyntaxStmtKind.Continue => { return self.pushStmt(s: <Stmt.Continue offset=s.span.start />) }
+            _ => { panic "compiler bug: SyntaxFile statement desugaring is incomplete" }
+        }
+    }
+
+    // The SyntaxFile block traversal owns no alternative semantic rules: it
+    // only walks the immutable StmtId pool and delegates each one to the
+    // shared lowerer counterpart above. Complex statement desugarings are
+    // added here before this path becomes the normal loader.
+    inout fn lowerSyntaxBlock(id: BlockId) -> U64 {
+        val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: id)
+        mut val stmts: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < syntaxBlockStmtCount(file: self.syntax, block: block) {
+            stmts.append(self.lowerSyntaxStmt(id: syntaxBlockStmt(file: self.syntax, block: block, index: i)))
+            i += 1U64
+        }
+        return self.pushBlock(stmts: stmts)
+    }
+
     inout fn lowerStmt(s: StmtAst) -> U64 {
         mut val result: U64 = 0
         match s {

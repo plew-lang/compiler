@@ -445,8 +445,9 @@ pub impl Comp {
                     self.markImport(segStart: e.name.start, segLen: e.name.end - e.name.start, nameStart: e.name.start, nameLen: e.name.end - e.name.start)
                     result = self.pushExpr(e: <Expr.Call nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
                 } else {
+                    val recv: U64 = self.lowerSyntaxExpr(id: e.child0)
                     val args: Array[Arg] = self.lowerSyntaxMethodArgs(expr: e, methodName: e.name)
-                    result = self.pushExpr(e: <Expr.Method recv=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
+                    result = self.pushExpr(e: <Expr.Method recv=recv nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
                 }
             }
             SyntaxExprKind.ArrowMethod => {
@@ -456,8 +457,9 @@ pub impl Comp {
                 result = self.pushExpr(e: <Expr.Method recv=deref nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
             }
             SyntaxExprKind.ExtMethod => {
+                val recv: U64 = self.lowerSyntaxExpr(id: e.child0)
                 val args: Array[Arg] = self.lowerSyntaxArgs(expr: e, fnName: <Span start=0U64 end=0U64 />)
-                result = self.pushExpr(e: <Expr.ExtMethod recv=self.lowerSyntaxExpr(id: e.child0) source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
+                result = self.pushExpr(e: <Expr.ExtMethod recv=recv source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) nameStart=e.name.start nameLen=e.name.end - e.name.start args=self.pushArgs(args: args) />)
             }
             SyntaxExprKind.Arrow => {
                 result = self.pushExpr(e: <Expr.Arrow base=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
@@ -504,6 +506,9 @@ pub impl Comp {
                 val ty: PType = self.lowerSyntaxType(id: e.type0)
                 result = self.pushExpr(e: <Expr.Cast operand=self.lowerSyntaxExpr(id: e.child0) tyStart=ty.start tyLen=ty.len ty=ty.ref />)
             }
+            SyntaxExprKind.IfExpr => {
+                result = self.pushExpr(e: <Expr.IfExpr cond=self.lowerSyntaxExpr(id: e.child0) thenBlk=self.lowerSyntaxBlock(id: e.block0) elseBlk=self.lowerSyntaxBlock(id: e.block1) />)
+            }
             SyntaxExprKind.OptChain => {
                 result = self.pushExpr(e: <Expr.OptChain base=self.lowerSyntaxExpr(id: e.child0) cont=self.lowerSyntaxExpr(id: e.child1) />)
             }
@@ -521,6 +526,25 @@ pub impl Comp {
             }
             SyntaxExprKind.ExtView => {
                 result = self.pushExpr(e: <Expr.ExtView recv=self.lowerSyntaxExpr(id: e.child0) source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) strip=e.flag0 />)
+            }
+            SyntaxExprKind.Closure => {
+                val params: Array[Param] = self.lowerSyntaxExprParams(expr: e)
+                mut val retStart: U64 = 0U64
+                mut val retLen: U64 = 0U64
+                mut val retIsArray: Bool = false
+                mut val retTy: U64 = 0U64
+                if e.flag0 {
+                    val ret: PType = self.lowerSyntaxType(id: e.type0)
+                    retStart = ret.start
+                    retLen = ret.len
+                    retIsArray = ret.isArray
+                    retTy = ret.ref
+                }
+                val savedRet: U64 = self.cur.lowerRetTy
+                self.cur.lowerRetTy = retTy
+                val body: U64 = self.lowerSyntaxBlock(id: e.block0)
+                self.cur.lowerRetTy = savedRet
+                result = self.pushExpr(e: <Expr.Closure params=params hasRet=e.flag0 retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retTy body=body />)
             }
             _ => {
                 panic "compiler bug: incomplete SyntaxFile expression lowering was used before loader migration completed"
