@@ -223,7 +223,7 @@ pub impl Comp {
         return <ArgRange start=start len=args.count() />
     }
 
-    inout fn argAt(args: ArgRange, index: U64) -> Arg {
+    fn argAt(args: ArgRange, index: U64) -> Arg {
         return self.arena.argPool[args.start + index]
     }
 
@@ -237,7 +237,7 @@ pub impl Comp {
         return <ExprRange start=start len=exprs.count() />
     }
 
-    inout fn exprAt(exprs: ExprRange, index: U64) -> U64 {
+    fn exprAt(exprs: ExprRange, index: U64) -> U64 {
         return self.arena.exprChildPool[exprs.start + index]
     }
 
@@ -251,7 +251,7 @@ pub impl Comp {
         return <MakeFieldRange start=start len=fields.count() />
     }
 
-    inout fn makeFieldAt(fields: MakeFieldRange, index: U64) -> MakeField {
+    fn makeFieldAt(fields: MakeFieldRange, index: U64) -> MakeField {
         return self.arena.makeFieldPool[fields.start + index]
     }
 
@@ -265,7 +265,7 @@ pub impl Comp {
         return <BindRange start=start len=binds.count() />
     }
 
-    inout fn bindAt(binds: BindRange, index: U64) -> Bind {
+    fn bindAt(binds: BindRange, index: U64) -> Bind {
         return self.arena.bindPool[binds.start + index]
     }
 
@@ -279,7 +279,7 @@ pub impl Comp {
         return <MatchArmRange start=start len=arms.count() />
     }
 
-    inout fn matchArmAt(arms: MatchArmRange, index: U64) -> MatchArm {
+    fn matchArmAt(arms: MatchArmRange, index: U64) -> MatchArm {
         return self.arena.matchArmPool[arms.start + index]
     }
 
@@ -293,7 +293,7 @@ pub impl Comp {
         return <TraitBindRange start=start len=binds.count() />
     }
 
-    inout fn traitBindAt(binds: TraitBindRange, index: U64) -> Bind {
+    fn traitBindAt(binds: TraitBindRange, index: U64) -> Bind {
         return self.decls.traitBindPool[binds.start + index]
     }
 
@@ -317,7 +317,7 @@ pub impl Comp {
         return <TraitReqRange start=start len=reqs.count() />
     }
 
-    inout fn traitReqAt(reqs: TraitReqRange, index: U64) -> Func {
+    fn traitReqAt(reqs: TraitReqRange, index: U64) -> Func {
         return self.decls.traitReqPool[reqs.start + index]
     }
 
@@ -344,7 +344,7 @@ pub impl Comp {
         return <FuncBindRange start=start len=binds.count() />
     }
 
-    inout fn funcBindAt(binds: FuncBindRange, index: U64) -> Bind {
+    fn funcBindAt(binds: FuncBindRange, index: U64) -> Bind {
         return self.decls.funcBindPool[binds.start + index]
     }
 
@@ -368,7 +368,7 @@ pub impl Comp {
         return <FuncTypeRange start=start len=types.count() />
     }
 
-    inout fn funcTypeAt(types: FuncTypeRange, index: U64) -> U64 {
+    fn funcTypeAt(types: FuncTypeRange, index: U64) -> U64 {
         return self.decls.funcTypePool[types.start + index]
     }
 
@@ -392,7 +392,7 @@ pub impl Comp {
         return <FuncParamRange start=start len=params.count() />
     }
 
-    inout fn funcParamAt(params: FuncParamRange, index: U64) -> Param {
+    fn funcParamAt(params: FuncParamRange, index: U64) -> Param {
         return self.decls.funcParamPool[params.start + index]
     }
 
@@ -416,7 +416,7 @@ pub impl Comp {
         return <ConformTypeRange start=start len=types.count() />
     }
 
-    inout fn conformTypeAt(types: ConformTypeRange, index: U64) -> U64 {
+    fn conformTypeAt(types: ConformTypeRange, index: U64) -> U64 {
         return self.decls.conformTypePool[types.start + index]
     }
 
@@ -443,7 +443,7 @@ pub impl Comp {
         return <ConformBindRange start=start len=binds.count() />
     }
 
-    inout fn conformBindAt(binds: ConformBindRange, index: U64) -> Bind {
+    fn conformBindAt(binds: ConformBindRange, index: U64) -> Bind {
         return self.decls.conformBindPool[binds.start + index]
     }
 
@@ -467,7 +467,7 @@ pub impl Comp {
         return <ConformWitnessRange start=start len=witnesses.count() />
     }
 
-    inout fn conformWitnessAt(witnesses: ConformWitnessRange, index: U64) -> Func {
+    fn conformWitnessAt(witnesses: ConformWitnessRange, index: U64) -> Func {
         return self.decls.conformWitnessPool[witnesses.start + index]
     }
 
@@ -491,7 +491,7 @@ pub impl Comp {
         return <ConformFuncIdRange start=start len=ids.count() />
     }
 
-    inout fn conformFuncIdAt(ids: ConformFuncIdRange, index: U64) -> U64 {
+    fn conformFuncIdAt(ids: ConformFuncIdRange, index: U64) -> U64 {
         return self.decls.conformFuncIdPool[ids.start + index]
     }
 
@@ -531,7 +531,7 @@ pub impl Comp {
         return self.arena.blocks[blkId].stmtLen
     }
 
-    inout fn blockStmtAt(blkId: U64, index: U64) -> U64 {
+    fn blockStmtAt(blkId: U64, index: U64) -> U64 {
         if blkId >= self.arena.blocks.count() { return 0U64 }
         val block: Block = self.arena.blocks[blkId]
         if index >= block.stmtLen { return 0U64 }
