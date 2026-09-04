@@ -27,6 +27,46 @@ pub impl Comp {
         }
         return self.pushMatchArms(arms: out)
     }
+
+    inout fn lowerSyntaxPatternInfo(pattern: SyntaxPattern) -> PatInfo {
+        if pattern.isWildcard {
+            return <PatInfo isWildcard=true enumStart=0U64 enumLen=0U64 variantStart=0U64 variantLen=0U64 binds=<BindRange start=0U64 len=0U64 /> isStruct=false />
+        }
+        mut val binds: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < syntaxPatternBindCount(file: self.syntax, pattern: pattern) {
+            val bind: SyntaxBind = syntaxBind(file: self.syntax, id: syntaxPatternBind(file: self.syntax, pattern: pattern, index: i))
+            binds.append(<Bind nameStart=bind.name.start nameLen=bind.name.end - bind.name.start fieldStart=bind.field.start fieldLen=bind.field.end - bind.field.start offset=bind.span.start />)
+            i += 1U64
+        }
+        return <PatInfo isWildcard=false enumStart=pattern.typeName.start enumLen=pattern.typeName.end - pattern.typeName.start variantStart=pattern.variant.start variantLen=pattern.variant.end - pattern.variant.start binds=self.pushBinds(binds: binds) isStruct=pattern.isStruct />
+    }
+
+    inout fn syntaxArmBlockDiverges(arm: SyntaxMatchArm) -> Bool {
+        val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: arm.body)
+        val count: U64 = syntaxBlockStmtCount(file: self.syntax, block: block)
+        if count == 0U64 { return false }
+        return syntaxStmt(file: self.syntax, id: syntaxBlockStmt(file: self.syntax, block: block, index: count - 1U64)).kind != <SyntaxStmtKind.Give />
+    }
+
+    // Statement match arms from SyntaxFile share the same semantic MatchArm
+    // pool as the value-AST path. Scalar/capture desugaring chooses whether it
+    // may call this after preserving its own single-evaluation transformation.
+    inout fn lowerSyntaxStmtMatchArms(stmt: SyntaxStmt, isExpr: Bool) -> MatchArmRange {
+        mut val out: Array[MatchArm] = []
+        mut val i: U64 = 0U64
+        while i < syntaxStmtMatchArmCount(file: self.syntax, stmt: stmt) {
+            val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxStmtMatchArm(file: self.syntax, stmt: stmt, index: i))
+            val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
+            if pattern.captureName.end > pattern.captureName.start {
+                self.errorAt(offset: pattern.span.start, msg: "internal: enum-match capture binding was not desugared")
+            }
+            val info: PatInfo = self.lowerSyntaxPatternInfo(pattern: pattern)
+            out.append(<MatchArm isWildcard=info.isWildcard enumStart=info.enumStart enumLen=info.enumLen variantStart=info.variantStart variantLen=info.variantLen binds=info.binds body=self.lowerSyntaxBlock(id: arm.body) isStruct=info.isStruct isDiverge=isExpr && self.syntaxArmBlockDiverges(arm: arm) />)
+            i += 1U64
+        }
+        return self.pushMatchArms(arms: out)
+    }
 }
 
 pub impl Comp {
