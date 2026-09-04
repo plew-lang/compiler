@@ -600,6 +600,45 @@ pub impl Comp {
         return <Func nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0 hasRecv=false recvStart=0 recvLen=0 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=nameStart />
     }
 
+    inout fn lowerSyntaxSigToFunc(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> Func {
+        mut val spans: Array[Span] = []
+        mut val flags: Array[Bool] = []
+        mut val i: U64 = 0U64
+        while i < syntaxSigTypeParamCount(file: self.syntax, sig: sig) {
+            spans.append(syntaxSigTypeParamSpan(file: self.syntax, sig: sig, index: i))
+            flags.append(syntaxSigTypeParamIsSendable(file: self.syntax, sig: sig, index: i))
+            i += 1U64
+        }
+        val typeParams: Array[Bind] = self.lowerTypeParamSpans(spans: spans, anchor: sig.name.start, sendableFlags: flags)
+        val savedTP: Array[Bind] = self.cur.typeParams
+        mut val scope: Array[Bind] = savedTP
+        i = 0U64
+        while i < typeParams.count() { scope.append(typeParams[i]); i += 1U64 }
+        self.cur.typeParams = scope
+        mut val params: Array[Param] = []
+        i = 0U64
+        while i < syntaxSigParamCount(file: self.syntax, sig: sig) {
+            val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxSigParam(file: self.syntax, sig: sig, index: i))
+            val ty: PType = self.lowerSyntaxType(id: p.ty)
+            val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
+            params.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: false, defaultExpr: 0U64))
+            i += 1U64
+        }
+        mut val retStart: U64 = 0U64
+        mut val retLen: U64 = 0U64
+        mut val retIsArray: Bool = false
+        mut val retRef: U64 = 0U64
+        if sig.hasRet {
+            val ret: PType = self.lowerSyntaxType(id: sig.ret)
+            retStart = ret.start
+            retLen = ret.len
+            retIsArray = ret.isArray
+            retRef = ret.ref
+        }
+        self.cur.typeParams = savedTP
+        return <Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=<RuntimeIntrinsicDeclaration.None /> defOffset=sig.name.start />
+    }
+
     inout fn lowerTrait(t: TraitAst) {
         val nameStart: U64 = t.nameSpan.start
         val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
@@ -649,5 +688,52 @@ pub impl Comp {
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
+    }
+
+    inout fn lowerSyntaxTrait(t: SyntaxTrait) {
+        mut val supertraits: Array[Bind] = []
+        mut val assocTypes: Array[Bind] = []
+        mut val paramSpans: Array[Span] = []
+        mut val paramFlags: Array[Bool] = []
+        mut val i: U64 = 0U64
+        while i < syntaxTraitSupertraitCount(file: self.syntax, trait: t) {
+            val span: Span = syntaxTraitSupertraitSpan(file: self.syntax, trait: t, index: i)
+            supertraits.append(<Bind nameStart=span.start nameLen=span.end - span.start fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
+            i += 1U64
+        }
+        i = 0U64
+        while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: t) {
+            val span: Span = syntaxTraitAssocTypeSpan(file: self.syntax, trait: t, index: i)
+            assocTypes.append(<Bind nameStart=span.start nameLen=span.end - span.start fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
+            i += 1U64
+        }
+        i = 0U64
+        while i < syntaxTraitTypeParamCount(file: self.syntax, trait: t) {
+            paramSpans.append(syntaxTraitTypeParamSpan(file: self.syntax, trait: t, index: i))
+            paramFlags.append(syntaxTraitTypeParamIsSendable(file: self.syntax, trait: t, index: i))
+            i += 1U64
+        }
+        val typeParams: Array[Bind] = self.lowerTypeParamSpans(spans: paramSpans, anchor: t.name.start, sendableFlags: paramFlags)
+        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+        val selfParamId: U64 = self.nextParamId
+        self.nextParamId += 1U64
+        val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />
+        val savedTP: Array[Bind] = self.cur.typeParams
+        mut val scope: Array[Bind] = []
+        scope.append(selfBind)
+        i = 0U64
+        while i < typeParams.count() { scope.append(typeParams[i]); i += 1U64 }
+        i = 0U64
+        while i < assocTypes.count() { scope.append(assocTypes[i]); i += 1U64 }
+        self.cur.typeParams = scope
+        mut val reqs: Array[Func] = []
+        i = 0U64
+        while i < syntaxTraitReqCount(file: self.syntax, trait: t) {
+            reqs.append(self.lowerSyntaxSigToFunc(sig: syntaxSig(file: self.syntax, id: syntaxTraitReq(file: self.syntax, trait: t, index: i)), isExtern: false, isCExtern: false))
+            i += 1U64
+        }
+        self.cur.typeParams = savedTP
+        self.decls.traits.append(<TraitDef nameStart=t.name.start nameLen=t.name.end - t.name.start nameId=intern(c: inout self, start: t.name.start, len: t.name.end - t.name.start) selfParamId=selfParamId typeParams=self.pushTraitBinds(binds: typeParams) supertraits=self.pushTraitBinds(binds: supertraits) reqs=self.pushTraitReqs(reqs: reqs) assocTypes=self.pushTraitBinds(binds: assocTypes) />)
+        self.drainDerives(typeStart: t.name.start, typeLen: t.name.end - t.name.start, isEnum: false, declStart: t.span.start, declEnd: t.span.end)
     }
 }
