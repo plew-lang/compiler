@@ -47,6 +47,30 @@ pub impl Comp {
         return <RuntimeIntrinsicDeclaration.None />
     }
 
+    // The immutable SyntaxFile signature carries exactly the declaration span
+    // needed by ABI classification.  Keep this separate decoder thin: the
+    // classification itself remains the same owner-qualified semantic rule.
+    inout fn runtimeIntrinsicDeclarationSyntax(sig: SyntaxSig, isExtern: Bool, isCExtern: Bool) -> RuntimeIntrinsicDeclaration {
+        if !(isExtern) || isCExtern { return <RuntimeIntrinsicDeclaration.None /> }
+        val nameStart: U64 = sig.name.start
+        val nameLen: U64 = sig.name.end - sig.name.start
+        val owner: U64 = self.moduleOf(offset: nameStart)
+        if owner == self.modules.ioModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "write") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Write /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "eprint") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Eprint /> /> }
+        }
+        if owner == self.modules.processModule {
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }
+        }
+        if owner == self.modules.coreModule {
+            mut val numeric: NumericIntrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />
+            if self.classifyCoreNumericIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout numeric) { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Numeric intrinsic=numeric /> /> }
+            mut val buffer: BufferIntrinsic = <BufferIntrinsic.New />
+            if self.classifyCoreBufferIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout buffer) { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Buffer intrinsic=buffer /> /> }
+        }
+        return <RuntimeIntrinsicDeclaration.None />
+    }
+
     // Core is the sole declaration owner of the primitive numeric ABI.  This
     // is intentionally a parser over the *declaration spelling* only: it runs
     // once during frontend lowering and never becomes a backend fallback.
@@ -937,7 +961,8 @@ pub impl Comp {
             retRef = ret.ref
         }
         self.cur.typeParams = savedTP
-        return <Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=<RuntimeIntrinsicDeclaration.None /> defOffset=sig.name.start />
+        val runtimeIntrinsic: RuntimeIntrinsicDeclaration = self.runtimeIntrinsicDeclarationSyntax(sig: sig, isExtern: isExtern, isCExtern: isCExtern)
+        return <Func nameStart=sig.name.start nameLen=sig.name.end - sig.name.start nameId=intern(c: inout self, start: sig.name.start, len: sig.name.end - sig.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=sig.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=0U64 hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=sig.selfInout selfMove=false isAssoc=sig.isAssoc isAsync=false isExtern=isExtern isCExtern=isCExtern runtimeIntrinsic=runtimeIntrinsic defOffset=sig.name.start />
     }
 
     inout fn lowerTrait(t: TraitAst) {

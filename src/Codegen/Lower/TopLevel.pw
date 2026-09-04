@@ -84,11 +84,74 @@ pub impl Comp {
         }
     }
 
+    inout fn lowerSyntaxExtern(ext: SyntaxExtern) {
+        if !(ext.abiOk) {
+            self.errorAt(offset: ext.abiSpan.start, msg: "unknown ABI — only `extern(plewIntrinsic)` (intrinsic floor) and `extern(c)` (foreign C) are supported")
+        }
+        mut val i: U64 = 0U64
+        while i < syntaxExternFnCount(file: self.syntax, ext: ext) {
+            val sig: SyntaxSig = syntaxSig(file: self.syntax, id: syntaxExternFn(file: self.syntax, ext: ext, index: i))
+            if ext.abiC {
+                mut val pi: U64 = 0U64
+                while pi < syntaxSigParamCount(file: self.syntax, sig: sig) {
+                    val param: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxSigParam(file: self.syntax, sig: sig, index: pi))
+                    if !(param.noLabel) {
+                        self.errorAt(offset: param.span.start, msg: "extern(c) function parameters take no label — write `<name>~:` (C functions have no argument labels; put labels on a Plew wrapper)")
+                    }
+                    pi += 1U64
+                }
+            }
+            self.registerDeclaredFunc(f: self.lowerSyntaxSigToFunc(sig: sig, isExtern: true, isCExtern: ext.abiC))
+            i += 1U64
+        }
+        i = 0U64
+        while i < syntaxExternStructCount(file: self.syntax, ext: ext) {
+            val name: Span = syntaxExternStructNameSpan(file: self.syntax, ext: ext, index: i)
+            val defSpan: Span = syntaxExternStructSpan(file: self.syntax, ext: ext, index: i)
+            mut val paramSpans: Array[Span] = []
+            mut val paramFlags: Array[Bool] = []
+            mut val pi: U64 = 0U64
+            while pi < syntaxExternStructTypeParamCount(file: self.syntax, ext: ext, index: i) {
+                paramSpans.append(syntaxExternStructTypeParamSpan(file: self.syntax, ext: ext, structIndex: i, index: pi))
+                paramFlags.append(syntaxExternStructTypeParamIsSendable(file: self.syntax, ext: ext, structIndex: i, index: pi))
+                pi += 1U64
+            }
+            val typeParams: Array[Bind] = self.lowerTypeParamSpans(spans: paramSpans, anchor: defSpan.start, sendableFlags: paramFlags)
+            val noFields: Array[FieldDef] = []
+            mut val fields: Array[FieldDef] = noFields
+            mut val isExtern: Bool = true
+            if rangeEquals(bytes: self.arena.bytes, start: name.start, len: name.end - name.start, kw: "String") {
+                val u8: Bind = self.internBytes(s: "U8")
+                val buffer: Bind = self.internBytes(s: "buffer")
+                fields.append(<FieldDef nameStart=buffer.nameStart nameLen=buffer.nameLen nameId=intern(c: inout self, start: buffer.nameStart, len: buffer.nameLen) tyStart=u8.nameStart tyLen=u8.nameLen tyNameId=intern(c: inout self, start: u8.nameStart, len: u8.nameLen) tyIsArray=true ty=0U64 isMut=false hasDefault=false defaultVal=0U64 vis=0U64 />)
+                isExtern = false
+            }
+            self.arena.structs.append(<StructDef nameStart=name.start nameLen=name.end - name.start nameId=intern(c: inout self, start: name.start, len: name.end - name.start) typeParams=typeParams fields=fields isUnique=false isExtern=isExtern isCExtern=ext.abiC defOffset=defSpan.start />)
+            // Every extern struct has a parallel directive id.  Empty is not
+            // equivalent to a drain: pending top-level derives must not be
+            // consumed, matching the value-AST path exactly.
+            val directive: SyntaxDirective = syntaxDirective(file: self.syntax, id: syntaxExternStructDirective(file: self.syntax, ext: ext, index: i))
+            if syntaxDirectiveReqCount(file: self.syntax, directive: directive) > 0U64 {
+                self.lowerSyntaxDirective(dir: directive)
+                self.drainDerives(typeStart: name.start, typeLen: name.end - name.start, isEnum: false, declStart: defSpan.start, declEnd: defSpan.end)
+            }
+            i += 1U64
+        }
+    }
+
     inout fn lowerDecl(d: DeclAst) {
         match d.kind {
             DeclKind.Struct => { self.lowerStructDecl(d: d) }
             DeclKind.Enum => { self.lowerEnumDecl(d: d) }
             DeclKind.Func => { self.lowerFuncDecl(d: d) }
+        }
+    }
+
+    inout fn lowerSyntaxDecl(d: SyntaxDecl) {
+        match d.kind {
+            DeclKind.Struct => { self.lowerSyntaxStructDecl(d: d) }
+            DeclKind.Enum => { self.lowerSyntaxEnumDecl(d: d) }
+            DeclKind.Func => { self.lowerSyntaxFuncDecl(d: d) }
         }
     }
 
@@ -212,6 +275,22 @@ pub impl Comp {
         }
     }
 
+    inout fn lowerSyntaxDirective(dir: SyntaxDirective) {
+        mut val i: U64 = 0U64
+        while i < syntaxDirectiveReqCount(file: self.syntax, directive: dir) {
+            val req: SyntaxDeriveReq = syntaxDeriveReq(file: self.syntax, id: syntaxDirectiveReq(file: self.syntax, directive: dir, index: i))
+            mut val args: Array[MakeField] = []
+            mut val ai: U64 = 0U64
+            while ai < syntaxDeriveReqArgCount(file: self.syntax, req: req) {
+                val field: SyntaxMakeField = syntaxMakeField(file: self.syntax, id: syntaxDeriveReqArg(file: self.syntax, req: req, index: ai))
+                args.append(<MakeField nameStart=field.name.start nameLen=field.name.end - field.name.start value=self.lowerSyntaxExpr(id: field.value) offset=field.span.start />)
+                ai += 1U64
+            }
+            self.parseScratch.pendingDerives.append(<DeriveReq typeStart=0U64 typeLen=0U64 isEnum=false nameStart=req.name.start nameLen=req.name.end - req.name.start declStart=0U64 declEnd=0U64 args=args />)
+            i += 1U64
+        }
+    }
+
     inout fn lowerExportItem(inner: TopItemAst) {
         match inner {
             TopItemAst.Extern(val e) => {
@@ -285,6 +364,70 @@ pub impl Comp {
         }
     }
 
+    inout fn lowerSyntaxExportItem(item: TopItemId) {
+        match syntaxTopItemKind(file: self.syntax, item: item) {
+            SyntaxTopItemKind.Extern => {
+                val funcBefore: U64 = self.arena.funcs.count()
+                val structBefore: U64 = self.arena.structs.count()
+                self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
+                mut val i: U64 = funcBefore
+                while i < self.arena.funcs.count() {
+                    self.recordExport(nameStart: self.arena.funcs[i].nameStart, nameLen: self.arena.funcs[i].nameLen)
+                    i += 1U64
+                }
+                i = structBefore
+                while i < self.arena.structs.count() {
+                    self.recordExportFrom(nameStart: self.arena.structs[i].nameStart, nameLen: self.arena.structs[i].nameLen, moduleOffset: self.arena.structs[i].defOffset)
+                    i += 1U64
+                }
+            }
+            SyntaxTopItemKind.Decl => {
+                val d: SyntaxDecl = syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                val structBefore: U64 = self.arena.structs.count()
+                val enumBefore: U64 = self.arena.enums.count()
+                val funcBefore: U64 = self.arena.funcs.count()
+                self.lowerSyntaxDecl(d: d)
+                match d.kind {
+                    DeclKind.Struct => { self.recordExportFrom(nameStart: self.arena.structs[structBefore].nameStart, nameLen: self.arena.structs[structBefore].nameLen, moduleOffset: self.arena.structs[structBefore].defOffset) }
+                    DeclKind.Enum => { self.recordExportFrom(nameStart: self.arena.enums[enumBefore].nameStart, nameLen: self.arena.enums[enumBefore].nameLen, moduleOffset: self.arena.enums[enumBefore].defOffset) }
+                    DeclKind.Func => { self.recordExport(nameStart: self.arena.funcs[funcBefore].nameStart, nameLen: self.arena.funcs[funcBefore].nameLen) }
+                }
+            }
+            SyntaxTopItemKind.Trait => {
+                val before: U64 = self.decls.traits.count()
+                self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />))
+                self.recordExport(nameStart: self.decls.traits[before].nameStart, nameLen: self.decls.traits[before].nameLen)
+            }
+            SyntaxTopItemKind.GlobalVal => {
+                val before: U64 = self.arena.globals.count()
+                self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                if self.arena.globals.count() > before { self.recordExport(nameStart: self.arena.globals[before].nameStart, nameLen: self.arena.globals[before].nameLen) }
+            }
+            SyntaxTopItemKind.NewType => {
+                val before: U64 = self.arena.newtypes.count()
+                self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+                if self.arena.newtypes.count() > before { self.recordExportFrom(nameStart: self.arena.newtypes[before].nameStart, nameLen: self.arena.newtypes[before].nameLen, moduleOffset: self.arena.newtypes[before].defOffset) }
+            }
+            _ => { self.lowerSyntaxTopItem(item: item) }
+        }
+    }
+
+    inout fn lowerSyntaxTopItem(item: TopItemId) {
+        self.cur.typeParams = []
+        match syntaxTopItemKind(file: self.syntax, item: item) {
+            SyntaxTopItemKind.Decl => { self.lowerSyntaxDecl(d: syntaxDecl(file: self.syntax, id: <DeclId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Impl => { self.lowerSyntaxImpl(im: syntaxImpl(file: self.syntax, id: <ImplId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Trait => { self.lowerSyntaxTrait(t: syntaxTrait(file: self.syntax, id: <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Extern => { self.lowerSyntaxExtern(ext: syntaxExtern(file: self.syntax, id: <ExternId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Import => { self.lowerSyntaxImport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Export => { self.lowerSyntaxExportItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+            SyntaxTopItemKind.ReExport => { self.lowerSyntaxReExport(imp: syntaxImport(file: self.syntax, id: <ImportId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.Directive => { self.lowerSyntaxDirective(dir: syntaxDirective(file: self.syntax, id: <DirectiveId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)) }
+            SyntaxTopItemKind.GlobalVal => { self.lowerSyntaxGlobalVal(id: <StmtId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+            SyntaxTopItemKind.NewType => { self.lowerSyntaxNewtype(id: <NewtypeId raw=syntaxTopItemPayload(file: self.syntax, item: item) />) }
+        }
+    }
+
     inout fn lowerNewtype(name: String, ty: TypeAst, defOffset: U64) {
         val nm: Bind = self.internBytes(s: name)
         val under: PType = self.lowerType(t: ty)
@@ -307,9 +450,17 @@ pub impl Comp {
 
     inout fn lowerGlobalVal(s: StmtAst) {
         val stid: U64 = self.lowerStmt(s: s)
-        match self.arena.stmts[stid] {
+        self.appendLoweredGlobal(letStmt: stid)
+    }
+
+    inout fn lowerSyntaxGlobalVal(id: StmtId) {
+        self.appendLoweredGlobal(letStmt: self.lowerSyntaxStmt(id: id))
+    }
+
+    inout fn appendLoweredGlobal(letStmt: U64) {
+        match self.arena.stmts[letStmt] {
             Stmt.Let(val mutable, val nameStart, val nameLen, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
-                self.arena.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=stid mutable=mutable />)
+                self.arena.globals.append(<Global nameStart=nameStart nameLen=nameLen letStmt=letStmt mutable=mutable />)
             }
             _ => {}
         }

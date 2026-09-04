@@ -16,9 +16,12 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { SyntaxField, SyntaxVariant, syntaxDeclFieldCount, syntaxDeclField, syntaxField, syntaxDeclVariantCount, syntaxDeclVariant, syntaxVariant, syntaxVariantFieldCount, syntaxVariantField }
+import @Plew/Syntax with { DeclId, SyntaxDecl, syntaxDecl }
 import @Plew/Syntax with { syntaxDeclTypeParamCount, syntaxDeclTypeParamSpan, syntaxDeclTypeParamIsSendable }
 import @Plew/Syntax with { syntaxDeclParamCount, syntaxDeclParam, syntaxParam, syntaxDeclWhereCount, syntaxDeclWhereParamSpan, syntaxDeclWhereTraitSpan, syntaxDeclWhereType, syntaxDeclWhereTraitType }
 import @Plew/Syntax with { SigId, SyntaxSig, syntaxSig, syntaxSigTypeParamCount, syntaxSigTypeParamSpan, syntaxSigTypeParamIsSendable, syntaxSigParamCount, syntaxSigParam }
+import @Plew/Syntax with { ExternId, SyntaxExtern, syntaxExtern, syntaxExternFnCount, syntaxExternFn, syntaxExternStructCount, syntaxExternStructNameSpan, syntaxExternStructSpan, syntaxExternStructTypeParamCount, syntaxExternStructTypeParamSpan, syntaxExternStructTypeParamIsSendable }
+import @Plew/Syntax with { DirectiveId, SyntaxDirective, DeriveReqId, SyntaxDeriveReq, syntaxDirective, syntaxDirectiveReqCount, syntaxDirectiveReq, syntaxDeriveReq, syntaxDeriveReqArgCount, syntaxDeriveReqArg, syntaxExternStructDirective }
 import @Plew/Syntax with { syntaxTraitSupertraitCount, syntaxTraitSupertraitSpan, syntaxTraitAssocTypeCount, syntaxTraitAssocTypeSpan, syntaxTraitReqCount, syntaxTraitReq }
 import @Plew/Syntax with { syntaxTraitTypeParamSpan, syntaxTraitTypeParamIsSendable }
 import @Plew/Syntax with { MemberId, SyntaxMember, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberTypeParamIsSendable, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType }
