@@ -150,7 +150,7 @@ pub impl Comp {
                         // the selected trait owner/source-set and can turn an
                         // already-resolved call into a false ambiguity or a
                         // false nonconformance.
-                        if recvRef != 0U64 && !(self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: selectedFn.recvTraitArgs)) {
+                        if recvRef != 0U64 && !(self.viewedTypeConforms(ref: recvRef, traitStart: selectedFn.recvStart, traitLen: selectedFn.recvLen, traitArgs: self.copyFuncTypes(types: selectedFn.recvTraitArgs))) {
                             self.errorAt(offset: sourceSelector.writtenStart, msg: "extension does not apply to this trait instance")
                         }
                     }

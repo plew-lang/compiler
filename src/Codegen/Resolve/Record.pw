@@ -360,9 +360,20 @@ pub impl Comp {
         // declaration receiver (or an explicitly-recorded result hint for a
         // generic associated factory).  Do not discard that source selection.
         if receiverTerm == 0U64 {
-            if !(f.isAssoc) { return }
-            self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
-            self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [])
+            if f.isAssoc {
+                self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
+                self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [])
+                return
+            }
+            // A compiler-internal receiver such as `Comp` has no language
+            // TypeRef, but its method was nevertheless selected by Frontend.
+            // Preserve that lexical selection instead of leaving Mono to
+            // reopen the written call. Trait-provided calls are excluded:
+            // their proof necessarily needs a real receiver term.
+            if !(f.isProvided) {
+                self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.Opaque />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
+                self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.Opaque />, args: args, calleeTypeArgs: [])
+            }
             return
         }
         if receiverTerm >= self.arena.types.count() { return }

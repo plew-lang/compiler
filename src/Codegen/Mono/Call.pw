@@ -404,6 +404,9 @@ pub impl Comp {
                     CallTemplateReceiver.None => {
                         self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has no receiver")
                     }
+                    CallTemplateReceiver.Opaque => {
+                        self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has no semantic receiver")
+                    }
                 }
             }
             _ => { self.errorAt(offset: 0U64, msg: "internal error: implicit protocol CallTemplate has the wrong site kind") }
@@ -417,6 +420,7 @@ pub impl Comp {
     inout fn groundCallTemplateReceiver(receiver: CallTemplateReceiver) -> U64 {
         match receiver {
             CallTemplateReceiver.None => { return 0U64 }
+            CallTemplateReceiver.Opaque => { return 0U64 }
             CallTemplateReceiver.Term(val term) => {
                 return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
             }

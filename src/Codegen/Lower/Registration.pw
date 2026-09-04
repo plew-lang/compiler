@@ -29,8 +29,10 @@ pub impl Comp {
         if a.nameId != b.nameId || a.params.count() != b.params.count() { return false }
         mut val i: U64 = 0
         while i < a.params.count() {
-            if a.params[i].noLabel != b.params[i].noLabel { return false }
-            if !(a.params[i].noLabel) && a.params[i].nameId != b.params[i].nameId { return false }
+            val ap: Param = self.funcParamAt(params: a.params, index: i)
+            val bp: Param = self.funcParamAt(params: b.params, index: i)
+            if ap.noLabel != bp.noLabel { return false }
+            if !(ap.noLabel) && ap.nameId != bp.nameId { return false }
             i += 1U64
         }
         return true
@@ -155,7 +157,7 @@ pub impl Comp {
         if a.typeParams.count() != b.typeParams.count() || a.params.count() != b.params.count() { return false }
         mut val i: U64 = 0
         while i < a.params.count() {
-            if self.typeRefUsesBinders(ref: a.params[i].ty, params: a.typeParams) != self.typeRefUsesBinders(ref: b.params[i].ty, params: b.typeParams) { return false }
+            if self.typeRefUsesBinders(ref: self.funcParamAt(params: a.params, index: i).ty, params: self.copyFuncBinds(binds: a.typeParams)) != self.typeRefUsesBinders(ref: self.funcParamAt(params: b.params, index: i).ty, params: self.copyFuncBinds(binds: b.typeParams)) { return false }
             i += 1U64
         }
         return true
@@ -482,7 +484,7 @@ pub impl Comp {
     inout fn receiverPatternsMayOverlap(a: Func, b: Func) -> Bool {
         if !(a.hasRecv || a.isAssoc) { return true }
         mut val binds: Array[UnifyBind] = []
-        return self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds, ignoreTopView: true)
+        return self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: self.copyFuncBinds(binds: a.typeParams), bParams: self.copyFuncBinds(binds: b.typeParams), binds: inout binds, ignoreTopView: true)
     }
 
     // Search the two default-argument selector automata for a shared form. A
@@ -491,29 +493,31 @@ pub impl Comp {
     inout fn callableFormsMayOverlapAt(a: Func, b: Func, ai: U64, bi: U64, binds: Array[UnifyBind]) -> Bool {
         if ai == a.params.count() && bi == b.params.count() { return true }
         if ai == a.params.count() {
-            if b.params[bi].hasDefault {
+            if self.funcParamAt(params: b.params, index: bi).hasDefault {
                 return self.callableFormsMayOverlapAt(a: a, b: b, ai: ai, bi: bi + 1U64, binds: binds)
             }
             return false
         }
         if bi == b.params.count() {
-            if a.params[ai].hasDefault {
+            if self.funcParamAt(params: a.params, index: ai).hasDefault {
                 return self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi, binds: binds)
             }
             return false
         }
-        if a.params[ai].noLabel == b.params[bi].noLabel && (a.params[ai].noLabel || a.params[ai].nameId == b.params[bi].nameId) {
-            if a.params[ai].tyIsArray == b.params[bi].tyIsArray {
+        val ap: Param = self.funcParamAt(params: a.params, index: ai)
+        val bp: Param = self.funcParamAt(params: b.params, index: bi)
+        if ap.noLabel == bp.noLabel && (ap.noLabel || ap.nameId == bp.nameId) {
+            if ap.tyIsArray == bp.tyIsArray {
                 mut val matched: Array[UnifyBind] = self.copyUnifyBinds(binds: binds)
-                if self.unifyPatterns(a: a.params[ai].ty, aSide: 0U64, b: b.params[bi].ty, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout matched) {
+                if self.unifyPatterns(a: ap.ty, aSide: 0U64, b: bp.ty, bSide: 1U64, aParams: self.copyFuncBinds(binds: a.typeParams), bParams: self.copyFuncBinds(binds: b.typeParams), binds: inout matched) {
                     if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi + 1U64, binds: matched) { return true }
                 }
             }
         }
-        if a.params[ai].hasDefault {
+        if ap.hasDefault {
             if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai + 1U64, bi: bi, binds: self.copyUnifyBinds(binds: binds)) { return true }
         }
-        if b.params[bi].hasDefault {
+        if bp.hasDefault {
             if self.callableFormsMayOverlapAt(a: a, b: b, ai: ai, bi: bi + 1U64, binds: self.copyUnifyBinds(binds: binds)) { return true }
         }
         return false
@@ -525,7 +529,7 @@ pub impl Comp {
     inout fn callableFormsMayOverlap(a: Func, b: Func) -> Bool {
         mut val binds: Array[UnifyBind] = []
         if a.hasRecv || a.isAssoc {
-            if !(self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: a.typeParams, bParams: b.typeParams, binds: inout binds, ignoreTopView: true)) { return false }
+            if !(self.unifyPatterns(a: a.recvTy, aSide: 0U64, b: b.recvTy, bSide: 1U64, aParams: self.copyFuncBinds(binds: a.typeParams), bParams: self.copyFuncBinds(binds: b.typeParams), binds: inout binds, ignoreTopView: true)) { return false }
         }
         return self.callableFormsMayOverlapAt(a: a, b: b, ai: 0U64, bi: 0U64, binds: binds)
     }
@@ -719,15 +723,15 @@ pub impl Comp {
         }
         if f.recvId != recvId {
             if f.isProvided && self.methodRecvIsTrait(f: f) && recvRef != 0U64 {
-                return self.conformsInstance(ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: f.recvTraitArgs)
+                return self.conformsInstance(ref: recvRef, traitStart: f.recvStart, traitLen: f.recvLen, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))
             }
             return false
         }
         if recvRef == 0U64 || f.recvTy == 0U64 { return true }
         if recvRef >= self.arena.types.count() || f.recvTy >= self.arena.types.count() { return true }
         mut val binds: Array[UnifyBind] = []
-        mut val patternParams: Array[Bind] = f.typeParams
-        if f.recvPatternParams.count() > 0U64 { patternParams = f.recvPatternParams }
+        mut val patternParams: Array[Bind] = self.copyFuncBinds(binds: f.typeParams)
+        if f.recvPatternParams.count() > 0U64 { patternParams = self.copyFuncBinds(binds: f.recvPatternParams) }
         return self.unifyPatterns(a: f.recvTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: patternParams, bParams: [], binds: inout binds, ignoreTopView: true)
     }
 

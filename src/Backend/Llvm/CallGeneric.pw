@@ -75,7 +75,7 @@ pub impl LlvmCtx {
         // ground. Keeping both (callee shadows on name clash) satisfies both, mirroring
         // genLlvmMakeEnum's merge. Pure callee env (the prior code) dropped the caller's,
         // leaving such a construction an ungrounded template.
-        c.cur.typeParams = concatParams(add: mf.typeParams, base: savedP)
+        c.cur.typeParams = concatParams(add: c.copyFuncBinds(binds: mf.typeParams), base: savedP)
         c.cur.typeArgs = concatArgs(add: concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot]), base: savedA)
         // bind Self/Item for an own-param provided call so an argument typed by `Item`
         // coerces against the receiver's real item type (see emitOneGenMethod).
@@ -382,7 +382,7 @@ pub impl LlvmCtx {
         while ai < args.len {
             val pi: U64 = c.paramIndexForArg(params: f.params, args: args, argIdx: ai)
             if pi < f.params.count() {
-                if f.params[pi].isInout {
+                if c.funcParamAt(params: f.params, index: pi).isInout {
                     ioExpr.append(c.argAt(args: args, index: ai).expr)
                     ioPtr.append(av[avArgStart + pi])
                 }
@@ -445,15 +445,16 @@ pub impl LlvmCtx {
     inout fn appendCallArgValues(c: inout Comp, av: inout Array[LLVMValueRef], f: Func, args: ArgRange, parameterTypeRefs: Array[U64] = []) {
         mut val pi: U64 = 0
         while pi < f.params.count() {
-            mut val parameterTypeRef: U64 = f.params[pi].ty
+            val parameter: Param = c.funcParamAt(params: f.params, index: pi)
+            mut val parameterTypeRef: U64 = parameter.ty
             if pi < parameterTypeRefs.count() && parameterTypeRefs[pi] != 0U64 {
                 parameterTypeRef = parameterTypeRefs[pi]
             }
             val ai: U64 = c.argIndexForParam(params: f.params, args: args, paramIdx: pi)
             if ai < args.len {
-                av.append(self.genArgValue(c: inout c, argExpr: c.argAt(args: args, index: ai).expr, p: f.params[pi], parameterTypeRef: parameterTypeRef))
+                av.append(self.genArgValue(c: inout c, argExpr: c.argAt(args: args, index: ai).expr, p: parameter, parameterTypeRef: parameterTypeRef))
             } else {
-                av.append(self.genArgValue(c: inout c, argExpr: f.params[pi].defaultExpr, p: f.params[pi], parameterTypeRef: parameterTypeRef))
+                av.append(self.genArgValue(c: inout c, argExpr: parameter.defaultExpr, p: parameter, parameterTypeRef: parameterTypeRef))
             }
             pi += 1U64
         }

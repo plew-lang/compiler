@@ -2034,6 +2034,13 @@ pub impl ForTypeRecipe { factory }
 // type prevents a template from accidentally carrying both sources.
 export enum CallTemplateReceiver {
     None
+    // The frontend selected an ordinary instance method, but the receiver is
+    // compiler-internal and has no language TypeRef (for example `Comp` while
+    // compiling the compiler itself). The AST remains the backend value
+    // source; this variant says only that no semantic receiver substitution is
+    // available or required. It is deliberately distinct from None, which is
+    // an associated/static call with no value receiver at all.
+    Opaque
     Term(term: U64)
     PriorCallResult(exprId: U64, siteKey: CallSiteKey)
     PriorProtocolResult(slot: U64)
