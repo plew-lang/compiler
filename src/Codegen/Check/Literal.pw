@@ -338,8 +338,8 @@ pub impl Comp {
             if fi < self.arena.funcs.count() {
                 val f: Func = self.arena.funcs[fi]
                 if f.params.count() >= 2 {
-                    val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
-                    val pit: IntTy = self.spanIntTy(start: rhs.tyStart, len: rhs.tyLen)
+                    val rhsParam: Param = self.funcParamAt(params: f.params, index: 1U64)
+                    val pit: IntTy = self.spanIntTy(start: rhsParam.tyStart, len: rhsParam.tyLen)
                     if pit.known {
                         self.checkLitCtx(id: rhs, eKind: 1, eBits: pit.bits, eSgn: pit.sgn)
                     } else {
