@@ -56,7 +56,7 @@ pub impl Comp {
             val ab: AssocBinding = self.decls.assocBindings[i]
             if ab.traitId == trN.nameId {
                 if ab.nameId != 0U64 && rangeEquals(bytes: self.arena.bytes, start: ab.nameStart, len: ab.nameLen, kw: "Output") {
-                    if self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: ab.subjectArgs, typeParams: ab.typeParams, declaredTraitArgs: ab.traitArgs, typeRef: leftRef, traitArgs: requestedArgs) {
+                    if self.conformancePatternMatchesTraitInstance(subjectId: ab.recvId, subjectTy: ab.subjectTy, subjectArgs: self.copyConformTypes(types: ab.subjectArgs), typeParams: self.copyConformBinds(binds: ab.typeParams), declaredTraitArgs: self.copyConformTypes(types: ab.traitArgs), typeRef: leftRef, traitArgs: requestedArgs) {
                         if ab.ty != 0U64 && ab.ty < self.arena.types.count() {
                             return self.typeInfoOfRef(ref: self.runtimeTypeRef(ref: ab.ty))
                         }

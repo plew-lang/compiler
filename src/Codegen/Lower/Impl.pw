@@ -538,7 +538,7 @@ pub impl Comp {
                         trOwner = trN.nameStart
                     }
                     assocBindingIds.append(self.decls.assocBindings.count())
-                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId traitOwner=trOwner implOffset=im.span.start subjectTy=recvTy subjectArgs=subjectArgs typeParams=implParamBinds traitArgs=conformanceTraitArgs tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
+                    self.decls.assocBindings.append(<AssocBinding recvStart=recvN.nameStart recvLen=recvN.nameLen recvId=intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen) nameStart=atN.nameStart nameLen=atN.nameLen nameId=intern(c: inout self, start: atN.nameStart, len: atN.nameLen) traitId=trId traitOwner=trOwner implOffset=im.span.start subjectTy=recvTy subjectArgs=self.pushConformTypes(types: subjectArgs) typeParams=self.pushConformBinds(binds: implParamBinds) traitArgs=self.pushConformTypes(types: conformanceTraitArgs) tyStart=pt.start tyLen=pt.len tyIsArray=pt.isArray ty=pt.ref />)
                 }
                 MemberKind.Factory => {
                     // `factory` in a `pub impl T` publishes T's default memberwise factory

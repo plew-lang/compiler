@@ -880,7 +880,7 @@ pub impl Comp {
                         // generated/conferred witnesses). Ground through the
                         // binding's own ParamId list so the proof substitution
                         // is applied to the terms it actually binds.
-                        found = self.groundWitnessTypeTerm(ref: ab.ty, params: ab.typeParams, matchResult: witness)
+                        found = self.groundWitnessTypeTerm(ref: ab.ty, params: self.copyConformBinds(binds: ab.typeParams), matchResult: witness)
                         count += 1U64
                         }
                     }
@@ -912,7 +912,7 @@ pub impl Comp {
                     if bindingId < self.decls.assocBindings.count() {
                         val ab: AssocBinding = self.decls.assocBindings[bindingId]
                         if ab.nameId == assocId {
-                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: ab.typeParams, matchResult: terminal)
+                            found = self.groundWitnessTypeTerm(ref: ab.ty, params: self.copyConformBinds(binds: ab.typeParams), matchResult: terminal)
                             count += 1U64
                         }
                     }
