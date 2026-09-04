@@ -1,0 +1,28 @@
+import @Std/Core with { Index }
+import @Std/Io with { print }
+
+struct Shelf[T] {
+    pub val item: T
+}
+
+pub impl Shelf { factory }
+
+pub impl[T] Shelf[T] as Index[U64] {
+    type Output = T
+
+    fn index(key: U64) -> T {
+        return self.item
+    }
+}
+
+// `value[key]` is source syntax for a selected Index requirement.  Its
+// template is recorded while T is still symbolic and consumed after T is
+// grounded; Mono must not make this lexical selection later.
+fn first[T](value: T) -> T#Index[U64].Output where T: Index[U64] {
+    return value[0U64]
+}
+
+fn main() {
+    print(first(value: <Shelf[I64] item=42I64 />)) // 42
+    print(first(value: <Shelf[String] item="ok" />)) // ok
+}

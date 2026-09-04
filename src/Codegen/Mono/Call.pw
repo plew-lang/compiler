@@ -4356,45 +4356,37 @@ pub impl Comp {
             }
             Expr.Field(val base, val nameStart, val nameLen) => { self.scanExprInsts(exprId: base) }
             Expr.Index(val base, val index) => {
-                // Subscript syntax is a frontend desugar: ordinary collection
-                // reads become the same resolved `index`/`at` method call that
-                // source spelling would create.  Keeping this out of LLVM is
-                // essential: backend must consume a final callable, not create
-                // a fresh call AST and resolve it after Mono has finished.
-                val bt: TypeInfo = self.typeOf(id: base)
-                mut val headStart: U64 = bt.nameStart
-                mut val headLen: U64 = bt.nameLen
-                mut val baseRef: U64 = self.groundedTypeOf(id: base)
-                if baseRef == 0U64 {
-                    baseRef = bt.ref
+                // Record selected every non-structural subscript while the
+                // lexical body was still parametric.  Here we only lower that
+                // frozen choice to the method-shaped execution form consumed
+                // by the existing call ABI; no type/name lookup is allowed
+                // after CallTemplates close.
+                val template: CallTemplate = self.callTemplateForCurrentBody(exprId: exprId)
+                mut val selected: U64 = self.arena.funcs.count()
+                mut val selectedName: Bind = self.kwSpan(kw: "index", kwLen: 5U64)
+                mut val hasSelectedCall: Bool = false
+                match template.kind {
+                    CallTemplateKind.Direct(callee: val callee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
+                        selected = callee
+                        if selected < self.arena.funcs.count() {
+                            selectedName = <Bind nameStart=self.arena.funcs[selected].nameStart nameLen=self.arena.funcs[selected].nameLen />
+                            hasSelectedCall = true
+                        }
+                    }
+                    // A generic `T: Index` or `any Index` keeps a proof/dynamic
+                    // target rather than a declaration callee. The authored
+                    // Index surface is still fixed by Record, so use its
+                    // canonical execution spelling without reopening lookup.
+                    CallTemplateKind.StaticMethod(receiver: _, args: _, resolution: _, resultTerm: _) => { hasSelectedCall = true }
+                    CallTemplateKind.Dynamic(receiver: _, args: _, target: _) => { hasSelectedCall = true }
+                    _ => {}
                 }
-                if baseRef != 0U64 && baseRef < self.arena.types.count() {
-                    headStart = self.arena.types[baseRef].nameStart
-                    headLen = self.arena.types[baseRef].nameLen
-                }
-                if !(self.isBufferType(ti: bt)) {
-                    // Array indexing has a direct, final-type-driven LLVM
-                    // lowering. Keep its AST as an addressable Index so the
-                    // same expression can be an `inout` receiver / assignment
-                    // place; rewriting it to `index(...)` destroys that place
-                    // identity before Verify runs.
-                    if rangeEquals(bytes: self.arena.bytes, start: headStart, len: headLen, kw: "Array") {
-                        self.scanExprInsts(exprId: base)
-                        self.scanExprInsts(exprId: index)
-                        return
-                    }
-                    if rangeEquals(bytes: self.arena.bytes, start: headStart, len: headLen, kw: "Dictionary") {
-                        val m: U64 = self.synthMethodCall(recv: base, name: "at", arg0Label: "key", arg0: index, arg0HasLabel: true, hasArg1: false, arg1Label: "", arg1: 0U64, arg1HasLabel: false)
-                        self.arena.exprs.set(i: exprId, value: self.arena.exprs[m])
-                        self.scanExprInsts(exprId: exprId)
-                        return
-                    }
-                    if self.typeHasMethodNamed(typeStart: headStart, typeLen: headLen, name: "index") {
-                        val m: U64 = self.synthMethodCall(recv: base, name: "index", arg0Label: "key", arg0: index, arg0HasLabel: true, hasArg1: false, arg1Label: "", arg1: 0U64, arg1HasLabel: false)
-                        self.arena.exprs.set(i: exprId, value: self.arena.exprs[m])
-                        self.scanExprInsts(exprId: exprId)
-                        return
-                    }
+                if hasSelectedCall {
+                    val label: Bind = self.kwSpan(kw: "key", kwLen: 3U64)
+                    val args: ArgRange = self.pushArgs(args: [<Arg expr=index isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
+                    self.arena.exprs.set(i: exprId, value: <Expr.Method recv=base nameStart=selectedName.nameStart nameLen=selectedName.nameLen args=args />)
+                    self.scanExprInsts(exprId: exprId)
+                    return
                 }
                 self.scanExprInsts(exprId: base)
                 self.scanExprInsts(exprId: index)

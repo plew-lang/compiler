@@ -38,6 +38,44 @@ pub impl Comp {
         return fallback
     }
 
+    // `value[key]` remains an Expr.Index so it can also name a place, but its
+    // value read is an ordinary selected call.  Build the one argument range
+    // at the frontend selection boundary; it is semantic call input, not a
+    // request for Mono to manufacture and resolve a new method expression.
+    inout fn indexCallArgs(key: U64) -> ArgRange {
+        val label: Bind = self.kwSpan(kw: "key", kwLen: 3U64)
+        return self.pushArgs(args: [<Arg expr=key isInout=false labelStart=label.nameStart labelLen=label.nameLen hasLabel=true />])
+    }
+
+    // Select the callable denoted by a non-structural subscript while Record
+    // still owns lexical scope and the parametric receiver.  Array and Buffer
+    // stay structural places; Dictionary's `at` and an Index witness become
+    // ordinary frozen CallTemplates.  Mono may lower the already-selected
+    // value form for code generation, but must never choose it from spelling.
+    inout fn recordIndexCall(exprId: U64, base: U64, key: U64, receiverTerm: U64, receiverType: TypeInfo) {
+        if self.isBufferType(ti: receiverType) {
+            return
+        }
+        if rangeEquals(bytes: self.arena.bytes, start: receiverType.nameStart, len: receiverType.nameLen, kw: "Array") {
+            return
+        }
+        mut val name: Bind = self.kwSpan(kw: "index", kwLen: 5U64)
+        if self.isDictionaryType(ti: receiverType) {
+            name = self.kwSpan(kw: "at", kwLen: 2U64)
+        } else if !(self.typeHasMethodNamed(typeStart: receiverType.nameStart, typeLen: receiverType.nameLen, name: "index")) {
+            return
+        }
+        val args: ArgRange = self.indexCallArgs(key: key)
+        mut val callee: U64 = self.arena.funcs.count()
+        if receiverTerm != 0U64 {
+            callee = self.resolveMethodForResolvedReceiver(recv: base, surfaceRef: receiverTerm, sourceId: 0U64, sourceOwner: 0U64, nameStart: name.nameStart, nameLen: name.nameLen, args: args, useOffset: self.exprOffset(id: exprId))
+        }
+        if callee >= self.arena.funcs.count() {
+            callee = self.resolveMethodFinalForType(recv: base, receiverType: receiverType, nameStart: name.nameStart, nameLen: name.nameLen, args: args)
+        }
+        self.recordParametricMethodCall(exprId: exprId, callee: callee, receiverSource: self.directReceiverTemplateForExpr(exprId: base), receiverTerm: receiverTerm, args: args)
+    }
+
     // Preserve an expression's semantic type source without placing a call
     // result inside TypeTerm. A written call is identified by its template key;
     // every other expression is an ordinary parametric term.
@@ -1360,6 +1398,11 @@ pub impl Comp {
                         }
                     }
                 }
+                // A non-structural subscript is syntax for a selected method
+                // call.  Freeze that selection here, before CallTemplates are
+                // closed; Mono must not rewrite Expr.Index and then attempt
+                // first-time method resolution under a concrete body.
+                self.recordIndexCall(exprId: exprId, base: base, key: index, receiverTerm: baseTerm, receiverType: self.exprTypeWithChainHole(id: base, chainHoleRef: chainHoleRef))
             }
             Expr.Cast(val operand, tyStart: _, tyLen: _, val ty) => {
                 self.recordExpr(exprId: operand, chainHoleRef: chainHoleRef)

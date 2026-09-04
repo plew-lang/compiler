@@ -1429,6 +1429,12 @@ export fn runFrontend(c: inout Comp) {
     tracePhase(c: inout c, label: "lower:start")
     mut val lowerIndex: U64 = 0U64
     while lowerIndex < pendingItems.count() {
+        // Source lowering is the largest frontend traversal.  Keep coarse
+        // trace progress at its ownership boundary so a pathological item can
+        // be located without adding ad-hoc prints inside individual lowerers.
+        if c.tracePhases && lowerIndex % 100U64 == 0U64 {
+            tracePhaseCount(c: inout c, label: "lower:top-item", count: lowerIndex)
+        }
         c.lowerTopItem(item: pendingItems[lowerIndex])
         lowerIndex += 1U64
     }
