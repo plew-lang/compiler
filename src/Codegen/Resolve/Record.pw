@@ -361,6 +361,7 @@ pub impl Comp {
         if receiverTerm == 0U64 {
             if !(f.isAssoc) { return }
             self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [], resultTerm: f.retTy)
+            self.recordCallTemplate(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [])
             return
         }
         if receiverTerm >= self.arena.types.count() { return }
@@ -445,6 +446,11 @@ pub impl Comp {
             }
         }
         self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: finalEnvironment.args, resultTerm: result, proof: proof)
+        // A method selection and its CallTemplate are the same lexical fact.
+        // Free calls already publish both; omitting this counterpart left a
+        // valid `self.field.method(...)` semantic result without the immutable
+        // descriptor that Mono must consume after templates close.
+        self.recordCallTemplate(exprId: exprId, callee: callee, receiver: finalReceiverSource, args: args, calleeTypeArgs: finalEnvironment.args, proof: proof)
     }
 
     // The PARAMETRIC receiver ref for method `f` — the form `self` records as, chosen
