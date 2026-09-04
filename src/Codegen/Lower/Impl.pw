@@ -333,6 +333,15 @@ pub impl Comp {
         return out
     }
 
+    inout fn appendSyntaxMemberWhere(member: SyntaxMember, types: inout Array[TypeId], traits: inout Array[Span]) {
+        mut val i: U64 = 0U64
+        while i < syntaxMemberWhereCount(file: self.syntax, member: member) {
+            types.append(syntaxMemberWhereType(file: self.syntax, member: member, index: i))
+            traits.append(syntaxMemberWhereTraitSpan(file: self.syntax, member: member, index: i))
+            i += 1U64
+        }
+    }
+
     inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
