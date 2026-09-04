@@ -231,6 +231,113 @@ pub impl Comp {
             self.lowerSyntaxScalarMatchStmtInto(stmt: stmt, stmts: inout stmts)
         }
     }
+
+    // A value arm is represented by its terminal `give` statement.  This is the
+    // SyntaxFile equivalent of armGiveExprAst: the AST itself is never rebuilt.
+    inout fn syntaxArmGiveExpr(arm: SyntaxMatchArm) -> ExprId {
+        val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: arm.body)
+        if syntaxBlockStmtCount(file: self.syntax, block: block) > 0U64 {
+            val first: SyntaxStmt = syntaxStmt(file: self.syntax, id: syntaxBlockStmt(file: self.syntax, block: block, index: 0U64))
+            if first.kind == <SyntaxStmtKind.Give /> { return first.child0 }
+        }
+        return <ExprId raw=0U64 />
+    }
+
+    // The value-side scalar transformation deliberately mirrors
+    // lowerScalarMatchExpr.  In particular, only an identifier scrutinee may be
+    // repeated; every other scrutinee (and every capture match) receives one
+    // temporary binding before the if-expression chain is built.
+    inout fn lowerSyntaxScalarMatchExpr(scrut: ExprId, arms: SyntaxSlice, span: Span) -> U64 {
+        val source: SyntaxExpr = syntaxExpr(file: self.syntax, id: scrut)
+        mut val scrutIsIdent: Bool = source.kind == <SyntaxExprKind.Ident />
+        mut val lhsStart: U64 = source.name.start
+        mut val lhsLen: U64 = source.name.end - source.name.start
+        val tmp: Bind = self.internBytes(s: "__mtmp")
+        if self.syntaxMatchHasCapture(arms: arms) { scrutIsIdent = false }
+        if !(scrutIsIdent) {
+            lhsStart = tmp.nameStart
+            lhsLen = tmp.nameLen
+        }
+        val elseIdx: U64 = self.syntaxScalarMatchElseIdx(arms: arms)
+        val armCount: U64 = syntaxMatchArmCount(file: self.syntax, arms: arms)
+        val haveElse: Bool = elseIdx < armCount
+        if !(haveElse) {
+            self.errorAt(offset: span.start, msg: "a value `match` must end with a wildcard `_` arm (literal patterns are not exhaustive — spec/11)")
+        }
+        mut val valueGive: ExprId = <ExprId raw=0U64 />
+        mut val mi: U64 = 0U64
+        while mi < armCount {
+            val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: mi))
+            if !(self.syntaxArmBlockDiverges(arm: arm)) { valueGive = self.syntaxArmGiveExpr(arm: arm) }
+            mi += 1U64
+        }
+        mut val currentElse: U64 = 0U64
+        if haveElse {
+            currentElse = self.lowerSyntaxBlock(id: syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: elseIdx)).body)
+        } else {
+            mut val fallback: Array[U64] = []
+            fallback.append(self.pushStmt(s: <Stmt.Give value=self.pushExpr(e: <Expr.Int value=0U64 offset=span.start isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />) />))
+            currentElse = self.blockOfStmts(stmts: fallback)
+        }
+        mut val head: U64 = 0U64
+        mut val haveHead: Bool = false
+        mut val i: U64 = armCount
+        while i > 0U64 {
+            i -= 1U64
+            if i != elseIdx {
+                val arm: SyntaxMatchArm = syntaxMatchArm(file: self.syntax, id: syntaxMatchArmAt(file: self.syntax, arms: arms, index: i))
+                val cond: ScalarCond = self.lowerSyntaxScalarArmCond(lhsStart: lhsStart, lhsLen: lhsLen, arm: arm)
+                if cond.hasCond {
+                    val ifExpr: U64 = self.pushExpr(e: <Expr.IfExpr cond=cond.cond thenBlk=self.lowerSyntaxBlock(id: arm.body) elseBlk=currentElse />)
+                    head = ifExpr
+                    haveHead = true
+                    currentElse = self.blockOfGive(giveExpr: ifExpr)
+                }
+            }
+        }
+        if !(haveHead) { head = self.lowerSyntaxExpr(id: valueGive) }
+        if scrutIsIdent { return head }
+        mut val thenStmts: Array[U64] = []
+        thenStmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=self.lowerSyntaxExpr(id: scrut) />))
+        self.bindSyntaxScalarCapturesInto(arms: arms, sourceStart: tmp.nameStart, sourceLen: tmp.nameLen, stmts: inout thenStmts)
+        thenStmts.append(self.pushStmt(s: <Stmt.Give value=head />))
+        val thenBlock: U64 = self.blockOfStmts(stmts: thenStmts)
+        val msg: Bind = self.internBytes(s: "unreachable scalar-match wrapper else")
+        val msgExpr: U64 = self.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
+        mut val elseStmts: Array[U64] = []
+        elseStmts.append(self.pushStmt(s: <Stmt.Panic msg=msgExpr offset=span.start />))
+        val elseBlock: U64 = self.blockOfStmts(stmts: elseStmts)
+        val trueExpr: U64 = self.pushExpr(e: <Expr.Int value=1U64 offset=span.start isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
+        return self.pushExpr(e: <Expr.IfExpr cond=trueExpr thenBlk=thenBlock elseBlk=elseBlock />)
+    }
+
+    inout fn lowerSyntaxEnumMatchCaptureExpr(scrut: ExprId, arms: SyntaxSlice, span: Span) -> U64 {
+        val tmp: Bind = self.internBytes(s: "__scap")
+        val loweredArms: MatchArmRange = self.lowerSyntaxCaptureArms(arms: arms, isExpr: true, captureSourceStart: tmp.nameStart, captureSourceLen: tmp.nameLen)
+        val scrutinee: U64 = self.pushExpr(e: <Expr.Ident start=tmp.nameStart len=tmp.nameLen />)
+        val matchExpr: U64 = self.pushExpr(e: <Expr.MatchExpr scrut=scrutinee arms=loweredArms />)
+        mut val thenStmts: Array[U64] = []
+        thenStmts.append(self.pushStmt(s: <Stmt.Let mutable=false nameStart=tmp.nameStart nameLen=tmp.nameLen tyStart=0U64 tyLen=0U64 tyIsArray=false ty=0U64 init=self.lowerSyntaxExpr(id: scrut) />))
+        thenStmts.append(self.pushStmt(s: <Stmt.Give value=matchExpr />))
+        val thenBlock: U64 = self.blockOfStmts(stmts: thenStmts)
+        val msg: Bind = self.internBytes(s: "unreachable capture-match wrapper else")
+        val msgExpr: U64 = self.pushExpr(e: <Expr.Str start=msg.nameStart len=msg.nameLen />)
+        mut val elseStmts: Array[U64] = []
+        elseStmts.append(self.pushStmt(s: <Stmt.Panic msg=msgExpr offset=span.start />))
+        val elseBlock: U64 = self.blockOfStmts(stmts: elseStmts)
+        val trueExpr: U64 = self.pushExpr(e: <Expr.Int value=1U64 offset=span.start isBool=true tyStart=0U64 tyLen=0U64 isNeg=false />)
+        return self.pushExpr(e: <Expr.IfExpr cond=trueExpr thenBlk=thenBlock elseBlk=elseBlock />)
+    }
+
+    inout fn lowerSyntaxMatchExprInto(expr: SyntaxExpr) -> U64 {
+        if self.syntaxMatchHasEnumOrStruct(arms: expr.arms) {
+            if self.syntaxMatchHasCapture(arms: expr.arms) {
+                return self.lowerSyntaxEnumMatchCaptureExpr(scrut: expr.child0, arms: expr.arms, span: expr.span)
+            }
+            return self.pushExpr(e: <Expr.MatchExpr scrut=self.lowerSyntaxExpr(id: expr.child0) arms=self.lowerSyntaxMatchArms(arms: expr.arms, isExpr: true) />)
+        }
+        return self.lowerSyntaxScalarMatchExpr(scrut: expr.child0, arms: expr.arms, span: expr.span)
+    }
 }
 
 pub impl Comp {

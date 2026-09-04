@@ -509,6 +509,9 @@ pub impl Comp {
             SyntaxExprKind.IfExpr => {
                 result = self.pushExpr(e: <Expr.IfExpr cond=self.lowerSyntaxExpr(id: e.child0) thenBlk=self.lowerSyntaxBlock(id: e.block0) elseBlk=self.lowerSyntaxBlock(id: e.block1) />)
             }
+            SyntaxExprKind.MatchExpr => {
+                result = self.lowerSyntaxMatchExprInto(expr: e)
+            }
             SyntaxExprKind.OptChain => {
                 result = self.pushExpr(e: <Expr.OptChain base=self.lowerSyntaxExpr(id: e.child0) cont=self.lowerSyntaxExpr(id: e.child1) />)
             }
