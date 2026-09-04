@@ -306,6 +306,33 @@ pub impl Comp {
         }
     }
 
+    inout fn lowerSyntaxMemberTypeParams(member: SyntaxMember) -> Array[Bind] {
+        mut val spans: Array[Span] = []
+        mut val flags: Array[Bool] = []
+        mut val i: U64 = 0U64
+        while i < syntaxMemberTypeParamCount(file: self.syntax, member: member) {
+            spans.append(syntaxMemberTypeParamSpan(file: self.syntax, member: member, index: i))
+            flags.append(syntaxMemberTypeParamIsSendable(file: self.syntax, member: member, index: i))
+            i += 1U64
+        }
+        return self.lowerTypeParamSpans(spans: spans, anchor: member.name.start, sendableFlags: flags)
+    }
+
+    inout fn lowerSyntaxMemberParams(member: SyntaxMember) -> Array[Param] {
+        mut val out: Array[Param] = []
+        mut val i: U64 = 0U64
+        while i < syntaxMemberParamCount(file: self.syntax, member: member) {
+            val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxMemberParam(file: self.syntax, member: member, index: i))
+            val ty: PType = self.lowerSyntaxType(id: p.ty)
+            mut val defaultExpr: U64 = 0U64
+            if p.hasDefault { defaultExpr = self.lowerSyntaxExpr(id: p.defaultVal) }
+            val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
+            out.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: p.hasDefault, defaultExpr: defaultExpr))
+            i += 1U64
+        }
+        return out
+    }
+
     inout fn lowerMethodMember(im: ImplAst, m: MemberAst, recvN: Bind, recvTy: U64, recvTraitArgs: Array[U64], recvTraitOwner: U64, implParamBinds: Array[Bind], hasRecv: Bool, isAssoc: Bool, witnessed: inout Array[Func]) {
         val nameN: Bind = self.internBytes(s: m.name)
         mut val boundTypes: Array[TypeAst] = []
