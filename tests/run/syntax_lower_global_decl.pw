@@ -4,7 +4,7 @@ import /Frontend with { Comp }
 
 fn main() {
     val source = "val answer: I8 = 42I8\n"
-    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0U64 />
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
     lex(lx: inout lexer)
     mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
     val file = parseProgramSyntaxFile(p: inout parser)
