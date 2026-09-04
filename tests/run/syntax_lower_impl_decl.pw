@@ -1,0 +1,16 @@
+import @Plew/Syntax with { Lexer, P, ImplId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+
+fn main() {
+    val source = "struct Box { val value: I8 }\nimpl Box { fn value() -> I8 { return self.value } }\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    mut val c: Comp = <Comp />
+    c.appendSrc(from: source.bytes())
+    c.syntax = file
+    c.lowerSyntaxImpl(im: syntaxImpl(file: file, id: <ImplId raw=syntaxTopItemPayload(file: file, item: syntaxFileTopLevel(file: file, index: 1U64)) />))
+    print(c.arena.funcs.count())
+}
