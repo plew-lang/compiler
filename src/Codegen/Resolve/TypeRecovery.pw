@@ -306,7 +306,7 @@ pub impl Comp {
             if binding.paramId != 0U64 {
                 mut val paramI: U64 = 0U64
                 while paramI < f.typeParams.count() {
-                    if f.typeParams[paramI].paramId == binding.paramId {
+                    if self.funcBindAt(binds: f.typeParams, index: paramI).paramId == binding.paramId {
                         target = paramI
                         break
                     }
@@ -315,7 +315,7 @@ pub impl Comp {
             }
             if target >= f.typeParams.count() { target = binding.binder }
             if target < f.typeParams.count() && binding.term != 0U64 {
-                calleeParams.append(f.typeParams[target])
+                calleeParams.append(self.funcBindAt(binds: f.typeParams, index: target))
                 calleeArgs.append(binding.term)
             }
             bindI += 1U64

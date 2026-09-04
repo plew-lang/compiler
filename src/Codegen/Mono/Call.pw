@@ -703,7 +703,7 @@ pub impl Comp {
             }
             mut val i: U64 = 0U64
             while i < f.typeParams.count() && i < args.count() {
-                params.append(f.typeParams[i])
+                params.append(self.funcBindAt(binds: f.typeParams, index: i))
                 values.append(args[i])
                 i += 1U64
             }
@@ -957,7 +957,7 @@ pub impl Comp {
         while pi < f.typeParams.count() {
             mut val value: U64 = 0U64
             if witness.conformIdx != 0U64 {
-                val bi: U64 = self.witnessBindParamIndex(binds: witness.binds, paramId: f.typeParams[pi].paramId)
+                val bi: U64 = self.witnessBindParamIndex(binds: witness.binds, paramId: self.funcBindAt(binds: f.typeParams, index: pi).paramId)
                 if bi < witness.binds.count() { value = witness.binds[bi].term }
             }
             out.append(value)
@@ -2691,7 +2691,7 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < f.typeParams.count() {
             if out[i] == 0U64 || !(self.tyRefIsGround(ref: out[i])) {
-                val p: Bind = f.typeParams[i]
+                val p: Bind = self.funcBindAt(binds: f.typeParams, index: i)
                 val inferred: U64 = self.unifyTypeParam(paramRef: f.retTy, argRef: resultRef, tpStart: p.nameStart, tpLen: p.nameLen)
                 if inferred != 0U64 && self.tyRefIsGround(ref: inferred) {
                     out.set(i: i, value: inferred)

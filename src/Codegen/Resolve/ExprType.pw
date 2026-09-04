@@ -168,7 +168,7 @@ pub impl Comp {
             if binding.paramId != 0U64 {
                 mut val pi: U64 = 0U64
                 while pi < f.typeParams.count() {
-                    if f.typeParams[pi].paramId == binding.paramId {
+                    if self.funcBindAt(binds: f.typeParams, index: pi).paramId == binding.paramId {
                         target = pi
                         break
                     }
@@ -1284,7 +1284,7 @@ pub impl Comp {
                                 // an inference hole: a bare-`T` return still substitutes the
                                 // structured element ref (the pre-grounding behavior).
                                 if mf.retTy < self.arena.types.count() {
-                                    if self.arena.types[mf.retTy].nameId == mf.typeParams[0].nameId {
+                                    if self.arena.types[mf.retTy].nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
                                         return self.typeInfoOfRef(ref: elemRef)
                                     }
                                 }
@@ -1293,7 +1293,7 @@ pub impl Comp {
                             // type parameter T with the element's name (the pre-grounding
                             // behavior — serves plain named elements only).
                             if mf.retTy < self.arena.types.count() {
-                                if self.arena.types[mf.retTy].nameId == mf.typeParams[0].nameId {
+                                if self.arena.types[mf.retTy].nameId == self.funcBindAt(binds: mf.typeParams, index: 0U64).nameId {
                                     if rt.nameLen > 0U64 {
                                         return self.typeInfoOfName(start: rt.nameStart, len: rt.nameLen, isArray: false)
                                     }

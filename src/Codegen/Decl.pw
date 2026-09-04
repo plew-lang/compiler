@@ -398,7 +398,7 @@ pub impl Comp {
                 if f.recvId == cf.typeId {
                     mut val tp: U64 = 0
                     while tp < f.typeParams.count() {
-                        if f.typeParams[tp].nameId == cf.typeId {
+                        if self.funcBindAt(binds: f.typeParams, index: tp).nameId == cf.typeId {
                             return true
                         }
                         tp += 1
@@ -726,8 +726,9 @@ pub impl Comp {
                         mut val copiedTP: Array[Bind] = []
                         mut val tp: U64 = 0
                         while tp < f.typeParams.count() {
-                            if f.typeParams[tp].nameId != blanket.typeId {
-                                copiedTP.append(f.typeParams[tp])
+                            val param: Bind = self.funcBindAt(binds: f.typeParams, index: tp)
+                            if param.nameId != blanket.typeId {
+                                copiedTP.append(param)
                             }
                             tp += 1
                         }
