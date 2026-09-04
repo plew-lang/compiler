@@ -295,7 +295,7 @@ pub impl Comp {
     inout fn conformanceSubjectMatches(cf: Conform, typeRef: U64) -> Bool {
         if typeRef == 0U64 || cf.subjectTy == 0U64 { return true }
         mut val binds: Array[UnifyBind] = []
-        return self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
+        return self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: typeRef, bSide: 1U64, aParams: self.copyConformBinds(binds: cf.typeParams), bParams: [], binds: inout binds, ignoreTopView: true)
     }
 
     // The trait-argument part of a conformance key.  A trait subject such as
@@ -418,13 +418,13 @@ pub impl Comp {
     }
 
     inout fn conformanceMatchesTraitInstance(cf: Conform, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> Bool {
-        return self.conformancePatternMatchesTraitInstance(subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: cf.subjectArgs, typeParams: cf.typeParams, declaredTraitArgs: cf.traitArgs, typeRef: typeRef, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
+        return self.conformancePatternMatchesTraitInstance(subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: self.copyConformTypes(types: cf.subjectArgs), typeParams: self.copyConformBinds(binds: cf.typeParams), declaredTraitArgs: self.copyConformTypes(types: cf.traitArgs), typeRef: typeRef, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
     }
 
     inout fn conformanceWitnessMatch(conformIdx: U64, typeRef: U64, traitArgs: Array[U64], traitArgsOpen: Bool = false) -> WitnessMatch {
         if conformIdx >= self.decls.conforms.count() { return <WitnessMatch /> }
         val cf: Conform = self.decls.conforms[conformIdx]
-        return self.conformancePatternWitnessMatch(conformIdx: conformIdx, subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: cf.subjectArgs, typeParams: cf.typeParams, declaredTraitArgs: cf.traitArgs, typeRef: typeRef, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
+        return self.conformancePatternWitnessMatch(conformIdx: conformIdx, subjectId: cf.typeId, subjectTy: cf.subjectTy, subjectArgs: self.copyConformTypes(types: cf.subjectArgs), typeParams: self.copyConformBinds(binds: cf.typeParams), declaredTraitArgs: self.copyConformTypes(types: cf.traitArgs), typeRef: typeRef, traitArgs: traitArgs, traitArgsOpen: traitArgsOpen)
     }
 
     // Registration-side counterpart of `conformanceSubjectMatches`: two
@@ -453,7 +453,7 @@ pub impl Comp {
             return provider.typeId == subject.typeId && provider.subjectArgs.count() == subject.subjectArgs.count()
         }
         mut val binds: Array[UnifyBind] = []
-        return self.unifyPatterns(a: provider.subjectTy, aSide: 0U64, b: subject.subjectTy, bSide: 1U64, aParams: provider.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
+        return self.unifyPatterns(a: provider.subjectTy, aSide: 0U64, b: subject.subjectTy, bSide: 1U64, aParams: self.copyConformBinds(binds: provider.typeParams), bParams: [], binds: inout binds, ignoreTopView: true)
     }
 
     // Definition-time form of a bare conformance query.  Unlike instance
@@ -706,7 +706,7 @@ pub impl Comp {
                     val origin: Conform = self.decls.conforms[ci]
                     traitId = origin.traitId
                     traitOwner = origin.traitStart
-                    traitArgs = origin.traitArgs
+                    traitArgs = self.copyConformTypes(types: origin.traitArgs)
                 }
             }
             val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: recvRef, traitId: traitId, traitOwner: traitOwner, traitArgs: traitArgs)

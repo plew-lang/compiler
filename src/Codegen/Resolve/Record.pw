@@ -1021,7 +1021,7 @@ pub impl Comp {
                             if cctx != 0U64 && canGround && !(self.tyRefIsGround(ref: cctx)) {
                                 val savedP: Array[Bind] = self.cur.typeParams
                                 val savedA: Array[U64] = self.cur.typeArgs
-                                self.cur.typeParams = cf.typeParams
+                                self.cur.typeParams = self.copyConformBinds(binds: cf.typeParams)
                                 self.cur.typeArgs = inferred
                                 cctx = self.groundTypeRef(ref: cctx)
                                 self.cur.typeParams = savedP

@@ -269,7 +269,7 @@ pub impl Comp {
                         // Both ids are resolved during lowering.  Compare them rather
                         // than their source spans: a bound may use an imported alias.
                         if subjectOwner != 0U64 && cf.typeStart == bound.constraint.key.owner {
-                            if self.typeRefListPatternMatches(pattern: cf.subjectArgs, patternParams: cf.typeParams, actual: bound.constraint.key.positionalArgs) { return true }
+                            if self.typeRefListPatternMatches(pattern: self.copyConformTypes(types: cf.subjectArgs), patternParams: self.copyConformBinds(binds: cf.typeParams), actual: bound.constraint.key.positionalArgs) { return true }
                         }
                     }
                     bi += 1U64

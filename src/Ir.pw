@@ -408,6 +408,47 @@ export struct MatchArmRange {
 }
 pub impl MatchArmRange { factory }
 
+// Immutable payload ranges for a Conform row. Conformance lookup is among the
+// hottest frontend paths; keeping the row scalar is required so inspecting an
+// edge does not retain/drop every generic argument, binder, and witness list.
+// The pools live in Decls (rather than Arena) because these are declaration
+// facts, not source-tree children.
+export struct ConformTypeRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ConformTypeRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct ConformBindRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ConformBindRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct ConformWitnessRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ConformWitnessRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct ConformFuncIdRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl ConformFuncIdRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
 
 export enum Expr {
     // An integer (or Bool) literal. `value` is the non-negative magnitude (U64,
@@ -778,9 +819,9 @@ export struct AssocBinding {
     // Full receiver pattern and trait instance key of the owning conformance.
     // Associated-type projection is a conformance lookup, not a head-name lookup.
     pub val subjectTy: U64 = 0
-    pub val subjectArgs: Array[U64] = []
-    pub val typeParams: Array[Bind] = []
-    pub val traitArgs: Array[U64] = []
+    pub val subjectArgs: ConformTypeRange = <ConformTypeRange start=0U64 len=0U64 />
+    pub val typeParams: ConformBindRange = <ConformBindRange start=0U64 len=0U64 />
+    pub val traitArgs: ConformTypeRange = <ConformTypeRange start=0U64 len=0U64 />
     // bound concrete type (head span + structured ref + array flag).
     pub val tyStart: U64
     pub val tyLen: U64
@@ -839,16 +880,16 @@ export struct Conform {
     // Associated outputs are owned by this witness. A selected ConformId must
     // reach them directly; re-identifying them by receiver/trait spelling or
     // source-offset triples loses proof provenance.
-    pub val assocBindingIds: Array[U64] = []
+    pub val assocBindingIds: ConformFuncIdRange = <ConformFuncIdRange start=0U64 len=0U64 />
     // signatures of the members this impl witnessed (body method or `via` line),
     // so the completeness check matches requirements by selector (name + param
     // types), distinguishing same-name overloaded requirements.
-    pub val witnessed: Array[Func]
+    pub val witnessed: ConformWitnessRange = <ConformWitnessRange start=0U64 len=0U64 />
     // Exact declarations that supplied the non-`via` witnesses, in member
     // order. `witnessed` intentionally remains a signature-only validation
     // carrier; final call/proof resolution must use these stable Func ids
     // rather than reconstructing a member from spelling and receiver surface.
-    pub val witnessFuncIds: Array[U64] = []
+    pub val witnessFuncIds: ConformFuncIdRange = <ConformFuncIdRange start=0U64 len=0U64 />
 }
 
 // A `via` alias `fn req(...) -> T via real` inside a trait impl (spec/08: the
@@ -2062,6 +2103,13 @@ export struct Decls {
     pub mut val traitOwners: Array[TraitOwner] = []
     pub mut val callables: Array[Callable] = []
     pub mut val conforms: Array[Conform] = []
+    // Typed immutable payload pools for scalar Conform rows. See the range
+    // descriptors above; consumers must read them through Comp's range readers
+    // instead of copying a declaration aggregate out of conforms.
+    pub mut val conformTypePool: Array[U64] = []
+    pub mut val conformBindPool: Array[Bind] = []
+    pub mut val conformWitnessPool: Array[Func] = []
+    pub mut val conformFuncIdPool: Array[U64] = []
     pub mut val methodAliases: Array[MethodAlias] = []
     pub mut val derives: Array[DeriveReq] = []
     pub mut val funcBounds: Array[FuncBound] = []

@@ -842,7 +842,7 @@ pub impl Comp {
         self.checkSurfaceName(surfaceMod: surfaceMod, start: cf.traitStart, len: cf.traitLen, offset: cf.defOffset)
         mut val ai: U64 = 0
         while ai < cf.traitArgs.count() {
-            self.checkSurfaceType(surfaceMod: surfaceMod, ref: cf.traitArgs[ai], offset: cf.defOffset)
+            self.checkSurfaceType(surfaceMod: surfaceMod, ref: self.conformTypeAt(types: cf.traitArgs, index: ai), offset: cf.defOffset)
             ai += 1
         }
         self.checkPublicConformanceAssocBindings(surfaceMod: surfaceMod, cf: cf)

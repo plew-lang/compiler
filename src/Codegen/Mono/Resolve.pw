@@ -54,7 +54,7 @@ pub impl Comp {
         mut val out: Array[U64] = []
         mut val i: U64 = 0U64
         while i < cf.traitArgs.count() {
-            out.append(self.groundWitnessTypeTerm(ref: cf.traitArgs[i], params: cf.typeParams, matchResult: witness))
+            out.append(self.groundWitnessTypeTerm(ref: self.conformTypeAt(types: cf.traitArgs, index: i), params: self.copyConformBinds(binds: cf.typeParams), matchResult: witness))
             i += 1U64
         }
         return out
@@ -70,10 +70,10 @@ pub impl Comp {
         mut val binds: Array[UnifyBind] = []
         mut val i: U64 = 0U64
         while i < cf.subjectArgs.count() {
-            if !(self.unifyPatterns(a: cf.subjectArgs[i], aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds)) { return <WitnessMatch /> }
+            if !(self.unifyPatterns(a: self.conformTypeAt(types: cf.subjectArgs, index: i), aSide: 0U64, b: subjectArgs[i], bSide: 1U64, aParams: self.copyConformBinds(binds: cf.typeParams), bParams: [], binds: inout binds)) { return <WitnessMatch /> }
             i += 1U64
         }
-        return self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: cf.typeParams, binds: binds)
+        return self.witnessMatchFromUnify(conformIdx: conformIdx, typeParams: self.copyConformBinds(binds: cf.typeParams), binds: binds)
     }
 
     inout fn traitProofStateSeen(states: Array[TraitProofState], candidate: TraitProofState) -> Bool {

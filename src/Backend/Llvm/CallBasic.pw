@@ -149,7 +149,7 @@ pub impl LlvmCtx {
             val savedA: Array[U64] = c.cur.typeArgs
             val savedSelf: U64 = c.cur.selfRef
             val savedItem: U64 = c.cur.itemRef
-            c.cur.typeParams = cf.typeParams
+            c.cur.typeParams = c.copyConformBinds(binds: cf.typeParams)
             c.cur.typeArgs = inferred
             if cf.isAssoc && recvInstRef != 0U64 && recvInstRef < c.arena.types.count() {
                 c.setSelfItemEnv(recvStart: c.arena.types[recvInstRef].nameStart, recvLen: c.arena.types[recvInstRef].nameLen, recvInstRef: recvInstRef)

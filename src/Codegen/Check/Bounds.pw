@@ -575,7 +575,7 @@ pub impl Comp {
                         val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: conform.typeParams, matchResult: witness)
+                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: witness)
                         if receiver == 0U64 { return 0U64 }
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: traitDef.reqs[reqIdx], receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: witness), predicates: [])
                     }
@@ -596,7 +596,7 @@ pub impl Comp {
                         val conform: Conform = self.decls.conforms[terminalConformIdx - 1U64]
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: conform.typeParams, matchResult: terminal)
+                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: terminal)
                         if receiver == 0U64 { return 0U64 }
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: traitDef.reqs[reqIdx], receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: terminal), predicates: [])
                     }
@@ -646,7 +646,7 @@ pub impl Comp {
             while i < self.decls.assocBindings.count() {
                 val ab: AssocBinding = self.decls.assocBindings[i]
                 if ab.implOffset == cf.defOffset && ab.traitOwner == cf.traitStart && ab.nameId == assocNames[need] {
-                    val output: U64 = self.groundWitnessTypeTerm(ref: ab.ty, params: cf.typeParams, matchResult: matchResult)
+                    val output: U64 = self.groundWitnessTypeTerm(ref: ab.ty, params: self.copyConformBinds(binds: cf.typeParams), matchResult: matchResult)
                     if self.typesCompatible(expected: assocValues[need], inferred: output) { found = true }
                 }
                 i += 1U64
@@ -821,7 +821,7 @@ pub impl Comp {
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
             val r: Func = t.reqs[ri]
-            if !(self.witnessedHas(witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
+            if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: self.copyConformTypes(types: cf.traitArgs))) {
                 return false
             }
             ri += 1
@@ -924,7 +924,7 @@ pub impl Comp {
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
                     val r: Func = t.reqs[ri]
-                    if !(self.witnessedHas(witnessed: cf.witnessed, r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: cf.traitArgs)) {
+                    if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: self.copyConformTypes(types: cf.traitArgs))) {
                         self.errorAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                     }
                     ri += 1

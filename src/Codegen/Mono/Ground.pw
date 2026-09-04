@@ -869,7 +869,7 @@ pub impl Comp {
                 mut val count: U64 = 0U64
                 mut val ai: U64 = 0U64
                 while ai < cf.assocBindingIds.count() {
-                    val bindingId: U64 = cf.assocBindingIds[ai]
+                    val bindingId: U64 = self.conformFuncIdAt(ids: cf.assocBindingIds, index: ai)
                     if bindingId < self.decls.assocBindings.count() {
                         val ab: AssocBinding = self.decls.assocBindings[bindingId]
                         if ab.nameId == assocId {
@@ -908,7 +908,7 @@ pub impl Comp {
                 mut val count: U64 = 0U64
                 mut val ai: U64 = 0U64
                 while ai < cf.assocBindingIds.count() {
-                    val bindingId: U64 = cf.assocBindingIds[ai]
+                    val bindingId: U64 = self.conformFuncIdAt(ids: cf.assocBindingIds, index: ai)
                     if bindingId < self.decls.assocBindings.count() {
                         val ab: AssocBinding = self.decls.assocBindings[bindingId]
                         if ab.nameId == assocId {

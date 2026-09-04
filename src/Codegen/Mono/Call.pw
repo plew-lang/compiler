@@ -551,7 +551,7 @@ pub impl Comp {
                 val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=source.extId />]
                 proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
             }
-            return self.concreteConformanceProof(baseRef: proofReceiver, traitId: source.traitId, traitOwner: source.traitStart, traitArgs: source.traitArgs)
+            return self.concreteConformanceProof(baseRef: proofReceiver, traitId: source.traitId, traitOwner: source.traitStart, traitArgs: self.copyConformTypes(types: source.traitArgs))
         }
         // `originConformIdx` pins the placement edge that created this copy.
         // Its target must be the callable's origin trait. `srcTrait*` is the
@@ -580,7 +580,7 @@ pub impl Comp {
             val sources: Array[ResolvedViewSource] = [<ResolvedViewSource surfaceId=f.extId />]
             proofReceiver = self.typeRefWithAddedViewSources(ref: proofReceiver, additions: sources)
         }
-        return self.concreteConformanceProof(baseRef: proofReceiver, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: cf.traitArgs)
+        return self.concreteConformanceProof(baseRef: proofReceiver, traitId: cf.traitId, traitOwner: cf.traitStart, traitArgs: self.copyConformTypes(types: cf.traitArgs))
     }
 
     inout fn proofIsMissing(proof: StaticConformanceProof) -> Bool {
@@ -894,22 +894,22 @@ pub impl Comp {
                     // legacy zero subject sentinel.  It is an already concrete
                     // subject (conformanceSubjectMatches accepted it), so no
                     // structural binder map is needed to ground its trait args.
-                    if cf.subjectTy == 0U64 || self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: cf.typeParams, bParams: [], binds: inout binds, ignoreTopView: true) {
+                    if cf.subjectTy == 0U64 || self.unifyPatterns(a: cf.subjectTy, aSide: 0U64, b: recvRef, bSide: 1U64, aParams: self.copyConformBinds(binds: cf.typeParams), bParams: [], binds: inout binds, ignoreTopView: true) {
                         mut val subst: Array[U64] = []
                         mut val pi: U64 = 0U64
                         while pi < cf.typeParams.count() {
-                            val bi: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, binderId: self.binderIdentity(b: cf.typeParams[pi]))
+                            val bi: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, binderId: self.binderIdentity(b: self.conformBindAt(binds: cf.typeParams, index: pi)))
                             if bi < binds.count() { subst.append(binds[bi].ref) }
                             else { subst.append(0U64) }
                             pi += 1U64
                         }
                         val savedP: Array[Bind] = self.cur.typeParams
                         val savedA: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = cf.typeParams
+                        self.cur.typeParams = self.copyConformBinds(binds: cf.typeParams)
                         self.cur.typeArgs = subst
                         mut val ai: U64 = 0U64
                         while ai < cf.traitArgs.count() {
-                            out.append(self.groundTypeRef(ref: cf.traitArgs[ai]))
+                            out.append(self.groundTypeRef(ref: self.conformTypeAt(types: cf.traitArgs, index: ai)))
                             ai += 1U64
                         }
                         self.cur.typeParams = savedP
@@ -2946,7 +2946,7 @@ pub impl Comp {
         val req: Func = self.decls.traits[traitIdx].reqs[reqIdx]
         mut val wi: U64 = 0U64
         while wi < conform.witnessFuncIds.count() {
-            val sourceIdx: U64 = conform.witnessFuncIds[wi]
+            val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
             if sourceIdx < self.arena.funcs.count() {
                 val source: Func = self.arena.funcs[sourceIdx]
                 if source.nameId == req.nameId && source.params.count() == req.params.count() {
