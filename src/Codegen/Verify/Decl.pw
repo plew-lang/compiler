@@ -445,12 +445,14 @@ pub impl Comp {
                 if self.moduleOf(offset: f.nameStart) == 0U64 {
                     mut val i: U64 = 0
                     while i < f.params.count() {
-                        if !(f.params[i].noLabel) {
+                        val param: Param = self.funcParamAt(params: f.params, index: i)
+                        if !(param.noLabel) {
                             mut val j: U64 = i + 1U64
                             while j < f.params.count() {
-                                if !(f.params[j].noLabel) {
-                                    if f.params[i].nameId == f.params[j].nameId {
-                                        self.errorAt(offset: f.params[j].nameStart, msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
+                                val other: Param = self.funcParamAt(params: f.params, index: j)
+                                if !(other.noLabel) {
+                                    if param.nameId == other.nameId {
+                                        self.errorAt(offset: other.nameStart, msg: "duplicate parameter label (each labelled parameter must have a distinct name)")
                                     }
                                 }
                                 j += 1
@@ -467,7 +469,7 @@ pub impl Comp {
     inout fn fnHasDefault(f: Func) -> Bool {
         mut val i: U64 = 0
         while i < f.params.count() {
-            if f.params[i].hasDefault {
+            if self.funcParamAt(params: f.params, index: i).hasDefault {
                 return true
             }
             i += 1

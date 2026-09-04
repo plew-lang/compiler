@@ -453,7 +453,8 @@ pub impl Comp {
                         val savedArgs: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
                         self.cur.typeArgs = bound.constraint.key.positionalArgs
-                        val out: U64 = self.groundTypeRef(ref: req.params[paramIdx].ty)
+                        val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
+                        val out: U64 = self.groundTypeRef(ref: param.ty)
                         self.cur.typeParams = savedParams
                         self.cur.typeArgs = savedArgs
                         return out
@@ -468,7 +469,7 @@ pub impl Comp {
                         // Supertrait declarations are currently bare names in
                         // the grammar, so their member signature has no
                         // inherited positional argument substitution.
-                        return req.params[paramIdx].ty
+                        return self.funcParamAt(params: req.params, index: paramIdx).ty
                     }
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
                         if traitIdx >= self.decls.traits.count() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return 0U64 }
@@ -480,7 +481,8 @@ pub impl Comp {
                         val savedArgs: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
                         self.cur.typeArgs = traitArgs
-                        val out: U64 = self.groundTypeRef(ref: req.params[paramIdx].ty)
+                        val param: Param = self.funcParamAt(params: req.params, index: paramIdx)
+                        val out: U64 = self.groundTypeRef(ref: param.ty)
                         self.cur.typeParams = savedParams
                         self.cur.typeArgs = savedArgs
                         return out

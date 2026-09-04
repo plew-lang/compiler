@@ -1370,7 +1370,7 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     }
     mut val paramI: U64 = 0U64
     while paramI < f.params.count() {
-        val param: Param = f.params[paramI]
+        val param: Param = c.funcParamAt(params: f.params, index: paramI)
         val parameterLocal: U64 = addMidLocal(state: inout state, declarationTarget: param.nameStart, typeTerm: param.ty, isUnique: midTermIsUnique(c: inout c, term: param.ty), isParameter: true, ownsAtEntry: param.isMove, isInout: param.isInout)
         paramI += 1U64
     }

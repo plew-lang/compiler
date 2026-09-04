@@ -169,7 +169,7 @@ pub impl LlvmCtx {
         }
         mut val pi: U64 = 0
         while pi < mf.params.count() {
-            ptys.append(self.paramLlvmTy(c: inout c, p: mf.params[pi]))
+            ptys.append(self.paramLlvmTy(c: inout c, p: c.funcParamAt(params: mf.params, index: pi)))
             pi += 1
         }
         val fty: LLVMTypeRef = LLVMFunctionType(self.llvmFnRetTy(c: inout c, f: mf), arrayCPtr(ptys), ptys.count(), 0I32)

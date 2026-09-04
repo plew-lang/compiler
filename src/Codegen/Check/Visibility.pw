@@ -680,7 +680,7 @@ pub impl Comp {
         val f: Func = self.arena.funcs[fnIdx]
         mut val pi: U64 = 0
         while pi < f.params.count() {
-            self.checkSurfaceParam(surfaceMod: surfaceMod, p: f.params[pi], offset: offset)
+            self.checkSurfaceParam(surfaceMod: surfaceMod, p: self.funcParamAt(params: f.params, index: pi), offset: offset)
             pi += 1
         }
         if f.hasRet {
@@ -788,7 +788,7 @@ pub impl Comp {
             val req: Func = self.traitReqAt(reqs: td.reqs, index: ri)
             mut val pi: U64 = 0
             while pi < req.params.count() {
-                self.checkSurfaceParam(surfaceMod: surfaceMod, p: req.params[pi], offset: req.nameStart)
+                self.checkSurfaceParam(surfaceMod: surfaceMod, p: self.funcParamAt(params: req.params, index: pi), offset: req.nameStart)
                 pi += 1
             }
             if req.hasRet {

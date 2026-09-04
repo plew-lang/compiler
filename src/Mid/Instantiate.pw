@@ -471,7 +471,7 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
                                 while argumentI < args.count() {
                                     val conversion: ValueConversionProof = selected.argumentConversions[argumentI]
                                     val passing: CallArgumentPassing = selected.argumentPassings[argumentI]
-                                    if !(midArgumentPassingMatches(parameter: calleeDef.params[argumentI], passing: passing)) {
+                                    if !(midArgumentPassingMatches(parameter: c.funcParamAt(params: calleeDef.params, index: argumentI), passing: passing)) {
                                         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallResolutionPassing /> }
                                     }
                                     if !(midConversionIsIdentity(conversion: conversion)) {

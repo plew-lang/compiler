@@ -78,7 +78,7 @@ pub impl LlvmCtx {
         ptys.append(self.ptrty)
         mut val pi: U64 = 0
         while pi < req.params.count() {
-            ptys.append(self.paramLlvmTy(c: inout c, p: req.params[pi]))
+            ptys.append(self.paramLlvmTy(c: inout c, p: c.funcParamAt(params: req.params, index: pi)))
             pi += 1
         }
         mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
@@ -740,7 +740,7 @@ pub impl LlvmCtx {
         ptys.append(self.ptrty)
         mut val pi: U64 = 0
         while pi < req.params.count() {
-            ptys.append(self.paramLlvmTy(c: inout c, p: req.params[pi]))
+            ptys.append(self.paramLlvmTy(c: inout c, p: c.funcParamAt(params: req.params, index: pi)))
             pi += 1
         }
         mut val rty: LLVMTypeRef = self.llvmFnRetTy(c: inout c, f: req)
@@ -1195,9 +1195,10 @@ pub impl LlvmCtx {
         }
         mut val pi: U64 = 0
         while pi < f.params.count() {
-            self.bindOneParam(c: inout c, p: f.params[pi], fv: fv, argIdx: pi + base)
+            val param: Param = c.funcParamAt(params: f.params, index: pi)
+            self.bindOneParam(c: inout c, p: param, fv: fv, argIdx: pi + base)
             // a `move` param is owned (deinit'd here); inout/borrow/by-value are not.
-            self.setLocalOwned(owned: f.params[pi].isMove)
+            self.setLocalOwned(owned: param.isMove)
             pi += 1
         }
         // snapshot the BODY instance env for the typed-IR read path (groundedTypeOf):

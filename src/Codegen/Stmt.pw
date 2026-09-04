@@ -221,11 +221,12 @@ pub impl Comp {
                             firstMatch = i
                         }
                         if f.params.count() >= 2 {
-                            if f.params[1].tyNameId == rhsId {
+                            val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
+                            if rhs.tyNameId == rhsId {
                                 return i
                             }
                             if intMatch == self.arena.funcs.count() {
-                                if self.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                                if self.isIntType(start: rhs.tyStart, len: rhs.tyLen) {
                                     intMatch = i
                                 }
                             }

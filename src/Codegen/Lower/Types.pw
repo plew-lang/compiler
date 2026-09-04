@@ -665,8 +665,9 @@ pub impl Comp {
                         matchCount += 1
                         mut val pi: U64 = 0
                         while pi < self.arena.funcs[fi].params.count() {
-                            if intern(c: inout self, start: self.arena.funcs[fi].params[pi].nameStart, len: self.arena.funcs[fi].params[pi].nameLen) == labelId {
-                                resultTy = self.arena.funcs[fi].params[pi].ty
+                            val param: Param = self.funcParamAt(params: self.arena.funcs[fi].params, index: pi)
+                            if intern(c: inout self, start: param.nameStart, len: param.nameLen) == labelId {
+                                resultTy = param.ty
                             }
                             pi += 1
                         }

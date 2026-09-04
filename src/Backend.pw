@@ -642,12 +642,13 @@ fn typeRefMentionsSelf(c: inout Comp, ref: U64) -> Bool {
 fn reqUsesSelfInInput(c: inout Comp, req: Func) -> Bool {
     mut val i: U64 = 0
     while i < req.params.count() {
-        if req.params[i].ty != 0U64 {
-            if typeRefMentionsSelf(c: inout c, ref: req.params[i].ty) {
+        val param: Param = c.funcParamAt(params: req.params, index: i)
+        if param.ty != 0U64 {
+            if typeRefMentionsSelf(c: inout c, ref: param.ty) {
                 return true
             }
         } else {
-            if rangeEquals(bytes: c.arena.bytes, start: req.params[i].tyStart, len: req.params[i].tyLen, kw: "Self") {
+            if rangeEquals(bytes: c.arena.bytes, start: param.tyStart, len: param.tyLen, kw: "Self") {
                 return true
             }
         }

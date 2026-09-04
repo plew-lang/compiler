@@ -261,7 +261,7 @@ pub impl Comp {
                     val owner: Func = self.arena.funcs[self.cur.bodyFnIdx]
                     mut val pi: U64 = 0U64
                     while pi < owner.params.count() {
-                        val param: Param = owner.params[pi]
+                        val param: Param = self.funcParamAt(params: owner.params, index: pi)
                         if spansEqual(c: inout self, aStart: identStart, aLen: identLen, bStart: param.nameStart, bLen: param.nameLen) {
                             mut val ti: U64 = 0U64
                             while ti < self.cur.bodyEnvironment.params.count() {
@@ -510,8 +510,9 @@ pub impl Comp {
         val itemRef: U64 = self.bodyProvidedItemTerm(f: f, environment: environment)
         mut val i: U64 = 0U64
         while i < f.params.count() {
-            if f.params[i].ty != 0U64 {
-                out.append(self.groundTermForBody(ref: f.params[i].ty, environment: environment, selfRef: environment.receiverRef, itemRef: itemRef))
+            val param: Param = self.funcParamAt(params: f.params, index: i)
+            if param.ty != 0U64 {
+                out.append(self.groundTermForBody(ref: param.ty, environment: environment, selfRef: environment.receiverRef, itemRef: itemRef))
             } else {
                 out.append(0U64)
             }
@@ -976,7 +977,7 @@ pub impl Comp {
         while pi < f.params.count() {
             val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
             if ai >= args.len {
-                val def: U64 = f.params[pi].defaultExpr
+                val def: U64 = self.funcParamAt(params: f.params, index: pi).defaultExpr
                 if def != 0U64 {
                     self.scanExprInsts(exprId: def)
                 }
@@ -1385,8 +1386,9 @@ pub impl Comp {
             if f.isAssoc && f.recvId == qType && rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                 if firstMatch == self.arena.funcs.count() { firstMatch = i }
                 if f.params.count() >= 2U64 {
-                    if rhsId != 0U64 && f.params[1].tyNameId == rhsId { return i }
-                    if rhsUntyped && intMatch == self.arena.funcs.count() && self.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
+                    val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
+                    if rhsId != 0U64 && rhs.tyNameId == rhsId { return i }
+                    if rhsUntyped && intMatch == self.arena.funcs.count() && self.isIntType(start: rhs.tyStart, len: rhs.tyLen) {
                         intMatch = i
                     }
                 }
@@ -2012,7 +2014,7 @@ pub impl Comp {
         val f: Func = self.arena.funcs[callee]
         mut val i: U64 = 0U64
         while i < f.params.count() {
-            val parameter: Param = f.params[i]
+            val parameter: Param = self.funcParamAt(params: f.params, index: i)
             if parameter.isInout {
                 passings.append(<CallArgumentPassing.Inout />)
             } else if parameter.isMove {
@@ -3392,7 +3394,7 @@ pub impl Comp {
         // side effect before it later discarded its call decisions.
         mut val pi: U64 = 0U64
         while pi < f.params.count() {
-            val p: Param = f.params[pi]
+            val p: Param = self.funcParamAt(params: f.params, index: pi)
             self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
             self.scanType(ref: p.ty)
             pi += 1U64
@@ -4866,7 +4868,7 @@ pub impl Comp {
                             self.cur.bodyItemRef = self.cur.itemRef
                             mut val pi: U64 = 0
                             while pi < mf.params.count() {
-                                val p: Param = mf.params[pi]
+                                val p: Param = self.funcParamAt(params: mf.params, index: pi)
                                 self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                                 self.scanType(ref: p.ty)
                                 pi += 1

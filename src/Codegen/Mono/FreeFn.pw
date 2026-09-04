@@ -20,7 +20,7 @@ pub impl Comp {
             mut val found: U64 = 0U64
             mut val pi: U64 = 0U64
             while pi < f.params.count() {
-                val p: Param = f.params[pi]
+                val p: Param = self.funcParamAt(params: f.params, index: pi)
                 val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
                 mut val candidate: U64 = 0U64
                 if ai < sources.count() {
@@ -68,7 +68,7 @@ pub impl Comp {
             mut val found: U64 = 0U64
             mut val pi: U64 = 0U64
             while pi < f.params.count() {
-                val p: Param = f.params[pi]
+                val p: Param = self.funcParamAt(params: f.params, index: pi)
                 val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
                 if ai < args.len {
                     val argTerm: U64 = self.parametricExprTerm(exprId: self.argAt(args: args, index: ai).expr)
@@ -270,7 +270,7 @@ pub impl Comp {
             mut val found: U64 = 0
             mut val pi: U64 = 0
             while pi < f.params.count() {
-                val p: Param = f.params[pi]
+                val p: Param = self.funcParamAt(params: f.params, index: pi)
                 mut val cand: U64 = 0
                 if p.tyIsArray {
                     // `Array[T]` param: infer T from the argument array's element.

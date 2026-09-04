@@ -1125,7 +1125,7 @@ pub impl Comp {
                             val selected: Func = self.arena.funcs[cfi]
                             paramIndex = self.paramIndexForArg(params: selected.params, args: args, argIdx: accessArg)
                             if paramIndex < selected.params.count() {
-                                accessWrite = selected.params[paramIndex].isInout
+                                accessWrite = self.funcParamAt(params: selected.params, index: paramIndex).isInout
                             }
                         }
                         self.recordAccessUse(parentExpr: exprId, readExpr: arg.expr, role: 2U64, argIndex: accessArg, parameterIndex: paramIndex, modeKnown: cfi < self.arena.funcs.count(), write: accessWrite)

@@ -1335,8 +1335,9 @@ pub impl Comp {
                         // overload whose parameter type is `F` — head-id prefilter (the
                         // `ty == 0` floor) AND a full structural match on the generic args.
                         if f.params.count() == 1U64 {
-                            if f.params[0].tyNameId == srcNameId {
-                                if self.typesCompatible(expected: f.params[0].ty, inferred: srcRef) {
+                            val source: Param = self.funcParamAt(params: f.params, index: 0U64)
+                            if source.tyNameId == srcNameId {
+                                if self.typesCompatible(expected: source.ty, inferred: srcRef) {
                                     return cand.funcIdx
                                 }
                             }

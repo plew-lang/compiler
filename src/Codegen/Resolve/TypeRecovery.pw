@@ -328,7 +328,7 @@ pub impl Comp {
             if pi >= f.params.count() {
                 allMatch = false
             } else {
-                val expected: U64 = self.groundTermForBody(ref: f.params[pi].ty, environment: calleeEnvironment, selfRef: recvRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: recvRef))
+                val expected: U64 = self.groundTermForBody(ref: self.funcParamAt(params: f.params, index: pi).ty, environment: calleeEnvironment, selfRef: recvRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: recvRef))
                 // A method-owned binder remains abstract at this stage.  It is
                 // intentionally inferred from the argument later; receiver
                 // binders, by contrast, are concrete in calleeEnvironment.
@@ -389,7 +389,7 @@ pub impl Comp {
                 val pb: U64 = self.paramIndexForArg(params: fb.params, args: args, argIdx: i)
                 if pa < fa.params.count() {
                     if pb < fb.params.count() {
-                        if fa.params[pa].tyNameId != fb.params[pb].tyNameId {
+                        if self.funcParamAt(params: fa.params, index: pa).tyNameId != self.funcParamAt(params: fb.params, index: pb).tyNameId {
                             return true
                         }
                     }

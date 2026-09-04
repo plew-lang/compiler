@@ -140,7 +140,7 @@ pub impl LlvmCtx {
         tys.append(self.ptrty)
         mut val pi: U64 = 0
         while pi < f.params.count() {
-            tys.append(self.asyncParamTy(c: inout c, p: f.params[pi]))
+            tys.append(self.asyncParamTy(c: inout c, p: c.funcParamAt(params: f.params, index: pi)))
             pi += 1
         }
         self.collectAsyncFieldTys(c: inout c, blockId: f.body, tys: inout tys)
@@ -183,10 +183,11 @@ pub impl LlvmCtx {
                 self.asyncResumeFn.append(resumeFn)
                 // entry symbol (non-main): params -> ptr (Promise).
                 if !(c.nameIsMain(f: c.arena.funcs[fi])) {
+                    val entry: Func = c.arena.funcs[fi]
                     mut val ptys: Array[LLVMTypeRef] = []
                     mut val pi: U64 = 0
-                    while pi < c.arena.funcs[fi].params.count() {
-                        ptys.append(self.asyncParamTy(c: inout c, p: c.arena.funcs[fi].params[pi]))
+                    while pi < entry.params.count() {
+                        ptys.append(self.asyncParamTy(c: inout c, p: c.funcParamAt(params: entry.params, index: pi)))
                         pi += 1
                     }
                     val fty: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(ptys), ptys.count(), 0I32)
@@ -488,8 +489,9 @@ pub impl LlvmCtx {
         while pi < f.params.count() {
             val pv: LLVMValueRef = LLVMGetParam(entryFn, pi)
             LLVMBuildStore(self.b, pv, LLVMBuildStructGEP2(self.b, frameTy, frame, 3U64 + pi, anon()))
-            if c.arcNeedsRelease(ref: f.params[pi].ty) {
-                self.valueArc(c: inout c, v: pv, typeRef: f.params[pi].ty, retain: true)
+            val param: Param = c.funcParamAt(params: f.params, index: pi)
+            if c.arcNeedsRelease(ref: param.ty) {
+                self.valueArc(c: inout c, v: pv, typeRef: param.ty, retain: true)
             }
             pi += 1
         }
@@ -586,7 +588,7 @@ pub impl LlvmCtx {
         self.curBodyMark = self.nLocals
         mut val qi: U64 = 0
         while qi < f.params.count() {
-            self.bindAsyncParam(c: inout c, p: f.params[qi], fieldIdx: 3U64 + qi)
+            self.bindAsyncParam(c: inout c, p: c.funcParamAt(params: f.params, index: qi), fieldIdx: 3U64 + qi)
             qi += 1
         }
         self.asyncFieldNext = 3U64 + f.params.count()

@@ -305,9 +305,10 @@ pub impl Comp {
                 if f.recvId == qType {
                     if rangeEquals(bytes: self.arena.bytes, start: f.nameStart, len: f.nameLen, kw: name) {
                         if f.params.count() >= 2 {
-                            if self.isIntType(start: f.params[1].tyStart, len: f.params[1].tyLen) {
-                                if !(u64ArrayHas(a: seen, v: f.params[1].tyNameId)) {
-                                    seen.append(f.params[1].tyNameId)
+                            val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
+                            if self.isIntType(start: rhs.tyStart, len: rhs.tyLen) {
+                                if !(u64ArrayHas(a: seen, v: rhs.tyNameId)) {
+                                    seen.append(rhs.tyNameId)
                                 }
                             }
                         }
@@ -337,7 +338,8 @@ pub impl Comp {
             if fi < self.arena.funcs.count() {
                 val f: Func = self.arena.funcs[fi]
                 if f.params.count() >= 2 {
-                    val pit: IntTy = self.spanIntTy(start: f.params[1].tyStart, len: f.params[1].tyLen)
+                    val rhs: Param = self.funcParamAt(params: f.params, index: 1U64)
+                    val pit: IntTy = self.spanIntTy(start: rhs.tyStart, len: rhs.tyLen)
                     if pit.known {
                         self.checkLitCtx(id: rhs, eKind: 1, eBits: pit.bits, eSgn: pit.sgn)
                     } else {
@@ -491,7 +493,7 @@ pub impl Comp {
         while k < args.len {
             val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: k)
             if pi < f.params.count() {
-                val p: Param = f.params[pi]
+                val p: Param = self.funcParamAt(params: f.params, index: pi)
                 mut val pref: U64 = 0
                 if p.ty != 0U64 {
                     pref = self.groundTypeRef(ref: p.ty)

@@ -574,7 +574,8 @@ pub impl LlvmCtx {
                 mut val ptys: Array[LLVMTypeRef] = []
                 mut val pe: U64 = 0
                 while pe < ef.params.count() {
-                    ptys.append(self.ffiTyOf(c: inout c, tyStart: ef.params[pe].tyStart, tyLen: ef.params[pe].tyLen))
+                    val param: Param = c.funcParamAt(params: ef.params, index: pe)
+                    ptys.append(self.ffiTyOf(c: inout c, tyStart: param.tyStart, tyLen: param.tyLen))
                     pe += 1
                 }
                 mut val rty: LLVMTypeRef = self.voidty
