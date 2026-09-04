@@ -53,7 +53,7 @@ pub impl Comp {
         if fnIdx >= self.arena.funcs.count() {
             return false
         }
-        val tps: Array[Bind] = self.arena.funcs[fnIdx].typeParams
+        val tps: Array[Bind] = self.copyFuncBinds(binds: self.arena.funcs[fnIdx].typeParams)
         val qTp: U64 = intern(c: inout self, start: start, len: len)
         mut val i: U64 = 0
         while i < tps.count() {
@@ -151,7 +151,7 @@ pub impl Comp {
                 // requirement of this trait
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
-                    val r: Func = t.reqs[ri]
+                    val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
                     if r.nameId == qName {
                         if self.paramsLabelsOk(params: r.params, args: args) {
                             return true
@@ -162,7 +162,7 @@ pub impl Comp {
                 // recurse into supertraits (`trait Sub: Super + ...`)
                 mut val sti: U64 = 0
                 while sti < t.supertraits.count() {
-                    val sup: Bind = t.supertraits[sti]
+                    val sup: Bind = self.traitBindAt(binds: t.supertraits, index: sti)
                     val supId: U64 = intern(c: inout self, start: sup.nameStart, len: sup.nameLen)
                     if self.traitProvidesMember(traitNameId: supId, traitArity: 4000000000U64, qName: qName, args: args, depth: depth + 1U64, useMod: useMod) {
                         return true
@@ -245,7 +245,7 @@ pub impl Comp {
                     if bound.fnIdx == fnIdx && bound.paramNameId == tpId {
                         val boundOwner: U64 = bound.constraint.key.owner
                         if boundOwner == f.provTraitOwner {
-                            if self.typeRefListPatternMatches(pattern: recvArgs, patternParams: f.typeParams, actual: bound.constraint.key.positionalArgs) { return true }
+                            if self.typeRefListPatternMatches(pattern: recvArgs, patternParams: self.copyFuncBinds(binds: f.typeParams), actual: bound.constraint.key.positionalArgs) { return true }
                         }
                     }
                     bi += 1U64
@@ -414,10 +414,10 @@ pub impl Comp {
                 // type parameter (`f[U](x: U)`) is lenient (typesCompatible — they unify).
                 val fi: U64 = self.resolvedCallee(id: exprId)
                 if fi < self.arena.funcs.count() {
-                    val ps: Array[Param] = self.arena.funcs[fi].params
+                    val ps: Array[Param] = self.copyFuncParams(params: self.arena.funcs[fi].params)
                     mut val k: U64 = 0
                     while k < args.len {
-                        val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: k)
+                        val pi: U64 = self.paramIndexForArg(params: self.arena.funcs[fi].params, args: args, argIdx: k)
                         if pi < ps.count() {
                             if !(ps[pi].tyIsArray) {
                                 self.checkGenericTypeMatch(expectedRef: ps[pi].ty, valueExpr: self.argAt(args: args, index: k).expr)
@@ -517,10 +517,10 @@ pub impl Comp {
                         if !(staticBoundMember) && !(self.isGenericInst(ref: rt.ref)) {
                             val mi: U64 = self.resolveMethodFinal(recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
                             if mi != self.arena.funcs.count() {
-                                val mps: Array[Param] = self.arena.funcs[mi].params
+                                val mps: Array[Param] = self.copyFuncParams(params: self.arena.funcs[mi].params)
                                 mut val mk: U64 = 0
                                 while mk < args.len {
-                                    val mpi: U64 = self.paramIndexForArg(params: mps, args: args, argIdx: mk)
+                                    val mpi: U64 = self.paramIndexForArg(params: self.arena.funcs[mi].params, args: args, argIdx: mk)
                                     if mpi < mps.count() {
                                         if !(mps[mpi].tyIsArray) {
                                             self.checkGenericTypeMatch(expectedRef: mps[mpi].ty, valueExpr: self.argAt(args: args, index: mk).expr)
@@ -1010,7 +1010,7 @@ pub impl Comp {
                 // their structural cycle rule here, once per declaration.
                 mut val pi: U64 = 0U64
                 while pi < f.params.count() {
-                    val param: Param = f.params[pi]
+                    val param: Param = self.funcParamAt(params: f.params, index: pi)
                     self.checkGenericTypeViewCycles(ref: param.ty, offset: param.tyStart)
                     pi += 1U64
                 }
@@ -1027,7 +1027,7 @@ pub impl Comp {
                 // Install the declaration binders before building Self: the
                 // receiver's arguments must carry these ParamIds, not just
                 // same-spelled names from a previous body.
-                self.cur.typeParams = f.typeParams
+                self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
                 self.cur.typeArgs = noArgs
                 // Declaration-time generic checking has no selected executable
                 // body instance. Leaving a prior Record/Mono body environment
@@ -1058,7 +1058,7 @@ pub impl Comp {
                 self.cur.checkFn = fi
                 mut val pi: U64 = 0
                 while pi < f.params.count() {
-                    val p: Param = f.params[pi]
+                    val p: Param = self.funcParamAt(params: f.params, index: pi)
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                     pi += 1
                 }

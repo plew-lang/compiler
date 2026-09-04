@@ -85,11 +85,11 @@ pub impl Comp {
             while ai < args.len {
                 val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: ai)
                 if pi < f.params.count() {
-                    val p: Param = f.params[pi]
+                    val p: Param = self.funcParamAt(params: f.params, index: pi)
                     // Only a bare parameter position contributes an inverse
                     // binding.  A projection such as `T#Parser.Output` has
                     // the same legacy head spelling but cannot determine T.
-                    if self.plainBinder(ref: p.ty, params: f.typeParams) == tpi {
+                    if self.plainBinder(ref: p.ty, params: self.copyFuncBinds(binds: f.typeParams)) == tpi {
                         val ar: U64 = self.inferType(id: self.argAt(args: args, index: ai).expr)
                         if ar != 0U64 {
                             if firstRef == 0U64 {
@@ -208,10 +208,10 @@ pub impl Comp {
         }
         val f: Func = self.arena.funcs[fi]
         self.tcCheckGenericArgConsistency(f: f, args: args)
-        val ps: Array[Param] = f.params
+        val ps: Array[Param] = self.copyFuncParams(params: f.params)
         mut val i: U64 = 0
         while i < args.len {
-            val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: i)
+            val pi: U64 = self.paramIndexForArg(params: f.params, args: args, argIdx: i)
             if pi < ps.count() {
                 val p: Param = ps[pi]
                 self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
@@ -346,11 +346,11 @@ pub impl Comp {
             if mi != self.arena.funcs.count() {
                 val mf: Func = self.arena.funcs[mi]
                 self.tcCheckGenericArgConsistency(f: mf, args: args)
-                val ps: Array[Param] = mf.params
+                val ps: Array[Param] = self.copyFuncParams(params: mf.params)
                 val genericRecv: Bool = self.isGenericInst(ref: rt.ref)
                 mut val i: U64 = 0
                 while i < args.len {
-                    val pi: U64 = self.paramIndexForArg(params: ps, args: args, argIdx: i)
+                    val pi: U64 = self.paramIndexForArg(params: mf.params, args: args, argIdx: i)
                     if pi < ps.count() {
                         val p: Param = ps[pi]
                         self.checkArgInoutMode(p: p, arg: self.argAt(args: args, index: i))
@@ -365,7 +365,7 @@ pub impl Comp {
                             } else {
                                 // resolve the param's type under the receiver's
                                 // instantiation so a literal arg gets the concrete context.
-                                val pti: TypeInfo = self.substTypeInfo(instRef: rt.ref, params: mf.typeParams, tyRef: p.ty)
+                                val pti: TypeInfo = self.substTypeInfo(instRef: rt.ref, params: self.copyFuncBinds(binds: mf.typeParams), tyRef: p.ty)
                                 self.checkLitTi(id: self.argAt(args: args, index: i).expr, ti: pti)
                                 // full type-compatibility against the GROUNDED param type — a
                                 // typed value whose type disagrees with the (instantiated)
@@ -385,7 +385,7 @@ pub impl Comp {
                                     val headId: U64 = self.arena.types[p.ty].nameId
                                     mut val mk: U64 = nConf
                                     while mk < mf.typeParams.count() {
-                                        if mf.typeParams[mk].nameId == headId {
+                                        if self.funcBindAt(binds: mf.typeParams, index: mk).nameId == headId {
                                             headMethodOwn = true
                                         }
                                         mk += 1U64
@@ -466,14 +466,14 @@ pub impl Comp {
                 val ai: U64 = self.findAssoc(recvStart: rStart, recvLen: rLen, nameStart: nameStart, nameLen: nameLen, args: args)
                 if ai < self.arena.funcs.count() {
                     val af: Func = self.arena.funcs[ai]
-                    val aps: Array[Param] = af.params
+                    val aps: Array[Param] = self.copyFuncParams(params: af.params)
                     mut val ginf: Array[U64] = []
                     if af.typeParams.count() > 0U64 {
                         ginf = self.inferFnArgs(f: af, args: args)
                     }
                     mut val k: U64 = 0
                     while k < args.len {
-                        val pi: U64 = self.paramIndexForArg(params: aps, args: args, argIdx: k)
+                        val pi: U64 = self.paramIndexForArg(params: af.params, args: args, argIdx: k)
                         if pi < aps.count() {
                             val ap: Param = aps[pi]
                             self.checkArgInoutMode(p: ap, arg: self.argAt(args: args, index: k))
@@ -482,7 +482,7 @@ pub impl Comp {
                                 if ginf.count() == af.typeParams.count() {
                                     val savedP: Array[Bind] = self.cur.typeParams
                                     val savedA: Array[U64] = self.cur.typeArgs
-                                    self.cur.typeParams = af.typeParams
+                                    self.cur.typeParams = self.copyFuncBinds(binds: af.typeParams)
                                     self.cur.typeArgs = ginf
                                     val gty: U64 = self.groundTypeRef(ref: ap.ty)
                                     self.cur.typeParams = savedP

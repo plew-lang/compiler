@@ -62,7 +62,7 @@ pub impl Comp {
                 if atri < self.decls.traits.count() {
                     val nxq: Bind = self.kwSpan(kw: "next", kwLen: 4)
                     val nxId: U64 = intern(c: inout self, start: nxq.nameStart, len: nxq.nameLen)
-                    val areqs: Array[Func] = self.decls.traits[atri].reqs
+                    val areqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traits[atri].reqs)
                     mut val ari: U64 = 0
                     while ari < areqs.count() {
                         if areqs[ari].nameId == nxId {
@@ -343,7 +343,7 @@ pub impl Comp {
         // for this concrete receiver; otherwise LLVM would emit the abstract
         // `T == T` body without a witness.
         if f.originTraitOwner == 0U64 { return false }
-        val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=f.originTraitOwner positionalArgs=f.recvTraitArgs /> positionalArgsOpen=false assocPredicates=[] />
+        val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=f.originTraitOwner positionalArgs=self.copyFuncTypes(types: f.recvTraitArgs) /> positionalArgsOpen=false assocPredicates=[] />
         return self.viewedTypeConformsTraitConstraint(ref: instRef, constraint: constraint)
     }
 }

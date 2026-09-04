@@ -131,6 +131,6 @@ pub impl Comp {
         val noTP: Array[Bind] = []
         val noParams: Array[Param] = []
         self.genMainIdx = self.arena.funcs.count()
-        self.arena.funcs.append(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen nameId=intern(c: inout self, start: mainN.nameStart, len: mainN.nameLen) typeParams=noTP params=noParams hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+        self.arena.funcs.append(<Func nameStart=mainN.nameStart nameLen=mainN.nameLen nameId=intern(c: inout self, start: mainN.nameStart, len: mainN.nameLen) typeParams=self.pushFuncBinds(binds: noTP) params=self.pushFuncParams(params: noParams) hasRet=false retStart=0 retLen=0 retIsArray=false retTy=0 body=blkId hasRecv=false recvStart=0 recvLen=0 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
     }
 }

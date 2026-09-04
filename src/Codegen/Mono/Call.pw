@@ -2627,7 +2627,8 @@ pub impl Comp {
         val tr: TraitDef = self.decls.traits[traitIdx]
         mut val ri: U64 = 0U64
         while ri < tr.reqs.count() {
-            if tr.reqs[ri].nameId == nameId && self.paramsLabelsOk(params: tr.reqs[ri].params, args: args) {
+            val req: Func = self.traitReqAt(reqs: tr.reqs, index: ri)
+            if req.nameId == nameId && self.paramsLabelsOk(params: req.params, args: args) {
                 return ri + 1U64
             }
             ri += 1U64
@@ -2716,7 +2717,7 @@ pub impl Comp {
                     if traitIdx >= self.decls.traits.count() || reqSlot == 0U64 {
                         self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal diagnostic: existential call target was not finalized")
                     } else {
-                        val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
+                        val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqSlot - 1U64)
                         return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> />
                     }
                 }
@@ -2728,7 +2729,7 @@ pub impl Comp {
                     val traitIdx: U64 = self.finalAnyTraitIdx(anyRef: recvRef)
                     val reqSlot: U64 = self.finalAnyRequirementSlot(anyRef: recvRef, nameStart: ns, nameLen: nl, args: args)
                     if traitIdx < self.decls.traits.count() && reqSlot != 0U64 {
-                        val req: Func = self.decls.traits[traitIdx].reqs[reqSlot - 1U64]
+                        val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqSlot - 1U64)
                         return <CallSiteSelection exprId=exprId callee=callee receiverRef=recvRef resultHintRef=resultHintRef resultRef=self.anyMemberRetInfo(anyRef: recvRef, req: req).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=reqSlot /> />
                     }
                 }
@@ -2862,7 +2863,7 @@ pub impl Comp {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: existential template has invalid receiver or requirement")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected />
                 }
-                val req: Func = self.decls.traits[traitIdx].reqs[slot - 1U64]
+                val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: slot - 1U64)
                 val resultRef: U64 = self.anyMemberRetInfo(anyRef: receiverRef, req: req).ref
                 return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=slot /> />
             }
@@ -2943,7 +2944,7 @@ pub impl Comp {
         val conformIdx: U64 = self.bodyProofConformanceForTrait(traitIdx: traitIdx)
         if conformIdx == 0U64 || conformIdx > self.decls.conforms.count() { return self.arena.funcs.count() }
         val conform: Conform = self.decls.conforms[conformIdx - 1U64]
-        val req: Func = self.decls.traits[traitIdx].reqs[reqIdx]
+        val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqIdx)
         mut val wi: U64 = 0U64
         while wi < conform.witnessFuncIds.count() {
             val sourceIdx: U64 = self.conformFuncIdAt(ids: conform.witnessFuncIds, index: wi)
@@ -2997,7 +2998,7 @@ pub impl Comp {
                     self.errorAt(offset: self.exprOffset(id: exprId), msg: "internal error: static method template has invalid proof or receiver")
                     return <CallSiteSelection exprId=exprId callee=noCallee receiverRef=receiverRef args=args resultHintRef=expected resultRef=resultRef />
                 }
-                val req: Func = self.decls.traits[traitIdx].reqs[reqIdx]
+                val req: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: reqIdx)
                 mut val callee: U64 = self.arena.funcs.count()
                 match proof {
                     StaticConformanceProof.TraitSelf(traitIdx: _, receiverRef: _, traitArgs: _) => {
@@ -4691,7 +4692,7 @@ pub impl Comp {
                         if traitIdx >= self.decls.traits.count() || nextSlot == 0U64 {
                             self.errorAt(offset: 0U64, msg: "internal diagnostic: final existential iterator target was not finalized")
                         } else {
-                            val nextReq: Func = self.decls.traits[traitIdx].reqs[nextSlot - 1U64]
+                            val nextReq: Func = self.traitReqAt(reqs: self.decls.traits[traitIdx].reqs, index: nextSlot - 1U64)
                             self.recordSelectedBodyCallee(selection: <CallSiteSelection exprId=stmtId siteIsStmt=true slot=2U64 callee=none receiverRef=initialRef resultRef=self.anyMemberRetInfo(anyRef: initialRef, req: nextReq).ref target=<CallTarget.ExistentialRequirement traitIdx=traitIdx slot=nextSlot /> />)
                         }
                     }

@@ -779,12 +779,13 @@ pub impl Comp {
             // Supertrait names are interned; resolve them from the owning trait's
             // real declaration site rather than treating the interned span as a
             // source location.
-            self.checkSurfaceName(surfaceMod: surfaceMod, start: td.supertraits[si].nameStart, len: td.supertraits[si].nameLen, offset: td.nameStart)
+            val supertrait: Bind = self.traitBindAt(binds: td.supertraits, index: si)
+            self.checkSurfaceName(surfaceMod: surfaceMod, start: supertrait.nameStart, len: supertrait.nameLen, offset: td.nameStart)
             si += 1
         }
         mut val ri: U64 = 0
         while ri < td.reqs.count() {
-            val req: Func = td.reqs[ri]
+            val req: Func = self.traitReqAt(reqs: td.reqs, index: ri)
             mut val pi: U64 = 0
             while pi < req.params.count() {
                 self.checkSurfaceParam(surfaceMod: surfaceMod, p: req.params[pi], offset: req.nameStart)

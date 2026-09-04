@@ -173,7 +173,7 @@ pub impl Comp {
         val traitDef: TraitDef = self.decls.traits[traitIdx]
         mut val si: U64 = 0U64
         while si < traitDef.supertraits.count() {
-            val superBind: Bind = traitDef.supertraits[si]
+            val superBind: Bind = self.traitBindAt(binds: traitDef.supertraits, index: si)
             val superId: U64 = intern(c: inout self, start: superBind.nameStart, len: superBind.nameLen)
             mut val nextTrait: U64 = self.decls.traits.count()
             mut val ti: U64 = 0U64
@@ -188,7 +188,7 @@ pub impl Comp {
                 val target: TraitDef = self.decls.traits[nextTrait]
                 mut val ri: U64 = 0U64
                 while ri < target.reqs.count() {
-                    val req: Func = target.reqs[ri]
+                    val req: Func = self.traitReqAt(reqs: target.reqs, index: ri)
                     if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
                         return <StaticMemberResolution.Requirement proof=proof traitIdx=nextTrait reqIdx=ri />
                     }
@@ -240,7 +240,7 @@ pub impl Comp {
                             if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
                                 mut val ri: U64 = 0U64
                                 while ri < traitDef.reqs.count() {
-                                    val req: Func = traitDef.reqs[ri]
+                                    val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: ri)
                                     if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
                                         return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
                                     }
@@ -325,7 +325,7 @@ pub impl Comp {
                                         }
                                         mut val ri: U64 = 0U64
                                         while ri < traitDef.reqs.count() {
-                                            val req: Func = traitDef.reqs[ri]
+                                            val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: ri)
                                             if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
                                                 return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
                                             }
@@ -363,10 +363,10 @@ pub impl Comp {
                     // relevant to dispatch but must not rewrite this local
                     // body constraint.
                     if traitDef.nameId == f.recvId && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: f.recvTraitArgs.count()) {
-                        val proof: StaticConformanceProof = <StaticConformanceProof.TraitSelf traitIdx=ti receiverRef=receiverRef traitArgs=f.recvTraitArgs />
+                        val proof: StaticConformanceProof = <StaticConformanceProof.TraitSelf traitIdx=ti receiverRef=receiverRef traitArgs=self.copyFuncTypes(types: f.recvTraitArgs) />
                         mut val ri: U64 = 0U64
                         while ri < traitDef.reqs.count() {
-                            val req: Func = traitDef.reqs[ri]
+                            val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: ri)
                             if req.nameId == memberId && self.paramsLabelsOk(params: req.params, args: args) {
                                 return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
                             }
@@ -412,7 +412,7 @@ pub impl Comp {
                                 if traitDef.nameStart == bound.constraint.key.owner && self.traitArityMatches(actual: traitDef.typeParams.count(), expected: bound.constraint.key.positionalArgs.count()) {
                                     mut val ri: U64 = 0U64
                                     while ri < traitDef.reqs.count() {
-                                        val req: Func = traitDef.reqs[ri]
+                                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: ri)
                                         if req.nameId == memberId && req.params.count() == arity {
                                             return <StaticMemberResolution.Requirement proof=proof traitIdx=ti reqIdx=ri />
                                         }
@@ -445,13 +445,13 @@ pub impl Comp {
                         if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val req: Func = traitDef.reqs[reqIdx]
+                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
                         val savedParams: Array[Bind] = self.cur.typeParams
                         val savedArgs: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = traitDef.typeParams
+                        self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
                         self.cur.typeArgs = bound.constraint.key.positionalArgs
                         val out: U64 = self.groundTypeRef(ref: req.params[paramIdx].ty)
                         self.cur.typeParams = savedParams
@@ -462,7 +462,7 @@ pub impl Comp {
                         if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val req: Func = traitDef.reqs[reqIdx]
+                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
                         // Supertrait declarations are currently bare names in
@@ -473,12 +473,12 @@ pub impl Comp {
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
                         if traitIdx >= self.decls.traits.count() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
-                        val req: Func = traitDef.reqs[reqIdx]
+                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val paramIdx: U64 = self.paramIndexForArg(params: req.params, args: args, argIdx: argIdx)
                         if paramIdx >= req.params.count() { return 0U64 }
                         val savedParams: Array[Bind] = self.cur.typeParams
                         val savedArgs: Array[U64] = self.cur.typeArgs
-                        self.cur.typeParams = traitDef.typeParams
+                        self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
                         self.cur.typeArgs = traitArgs
                         val out: U64 = self.groundTypeRef(ref: req.params[paramIdx].ty)
                         self.cur.typeParams = savedParams
@@ -505,7 +505,8 @@ pub impl Comp {
         if raw.args.count() == 0U64 && raw.assocNameId == 0U64 {
             mut val ai: U64 = 0U64
             while ai < traitDef.assocTypes.count() {
-                if traitDef.assocTypes[ai].nameId == rawName {
+                val assoc: Bind = self.traitBindAt(binds: traitDef.assocTypes, index: ai)
+                if assoc.nameId == rawName {
                     mut val pi: U64 = 0U64
                     while pi < predicates.count() {
                         val predicate: TraitAssocPredicate = predicates[pi]
@@ -515,7 +516,7 @@ pub impl Comp {
                     if receiverRef >= self.arena.types.count() { return ref }
                     val receiver: TypeRef = self.arena.types[receiverRef]
                     val noLabels: Array[U64] = []
-                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen paramId=receiver.paramId args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=traitOwner assocTraitLen=self.traitNameLenByOwner(owner: traitOwner) assocTraitId=intern(c: inout self, start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) assocTraitArgs=traitArgs assocTraitArgLabels=noLabels assocNameStart=traitDef.assocTypes[ai].nameStart assocNameLen=traitDef.assocTypes[ai].nameLen assocNameId=traitDef.assocTypes[ai].nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner siteOffset=0U64 />)
+                    return self.pushType(t: <TypeRef nameStart=receiver.nameStart nameLen=receiver.nameLen paramId=receiver.paramId args=receiver.args isRecord=receiver.isRecord recordFieldLabels=receiver.recordFieldLabels recordFieldTerms=receiver.recordFieldTerms viewExtId=receiver.viewExtId viewIds=receiver.viewIds viewSources=receiver.viewSources isAny=receiver.isAny argLabels=receiver.argLabels assocTraitStart=traitOwner assocTraitLen=self.traitNameLenByOwner(owner: traitOwner) assocTraitId=intern(c: inout self, start: traitOwner, len: self.traitNameLenByOwner(owner: traitOwner)) assocTraitArgs=traitArgs assocTraitArgLabels=noLabels assocNameStart=assoc.nameStart assocNameLen=assoc.nameLen assocNameId=assoc.nameId isSendable=receiver.isSendable hasDecl=receiver.hasDecl declOffset=receiver.declOffset hasAssocTraitDecl=true assocTraitDeclOffset=traitOwner siteOffset=0U64 />)
                 }
                 ai += 1U64
             }
@@ -555,7 +556,7 @@ pub impl Comp {
         // This is a declaration-time proof query, not a body-instance read.
         // Ground only the selected trait instance's binders; consulting Cursor
         // here let an unrelated temporary receiver reinterpret abstract Self.
-        val grounded: U64 = self.groundTermInEnvironment(ref: req.retTy, params: traitDef.typeParams, values: traitArgs)
+        val grounded: U64 = self.groundTermInEnvironment(ref: req.retTy, params: self.copyTraitBinds(binds: traitDef.typeParams), values: traitArgs)
         return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitDef.nameStart, traitArgs: traitArgs, predicates: predicates)
     }
 
@@ -577,7 +578,7 @@ pub impl Comp {
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: witness)
                         if receiver == 0U64 { return 0U64 }
-                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: traitDef.reqs[reqIdx], receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: witness), predicates: [])
+                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: witness), predicates: [])
                     }
                     // A trait-to-trait path owns its associated outputs at the
                     // terminal edge.  The terminal witness supplies the same
@@ -598,13 +599,13 @@ pub impl Comp {
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
                         val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: self.copyConformBinds(binds: conform.typeParams), matchResult: terminal)
                         if receiver == 0U64 { return 0U64 }
-                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: traitDef.reqs[reqIdx], receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: terminal), predicates: [])
+                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: self.traitReqAt(reqs: traitDef.reqs, index: reqIdx), receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: terminal), predicates: [])
                     }
                     StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
                         if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val req: Func = traitDef.reqs[reqIdx]
+                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.paramTy, traitArgs: bound.constraint.key.positionalArgs, predicates: bound.constraint.assocPredicates)
                     }
@@ -612,14 +613,14 @@ pub impl Comp {
                         if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         if reqIdx >= traitDef.reqs.count() { return 0U64 }
-                        val req: Func = traitDef.reqs[reqIdx]
+                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         val bound: FuncBound = self.decls.funcBounds[boundIdx]
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: bound.paramTy, traitArgs: [], predicates: [])
                     }
                     StaticConformanceProof.TraitSelf(traitIdx: val proofTraitIdx, receiverRef: val proofReceiver, traitArgs: val traitArgs) => {
                         if traitIdx >= self.decls.traits.count() || proofTraitIdx != traitIdx || reqIdx >= self.decls.traits[traitIdx].reqs.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
-                        val req: Func = traitDef.reqs[reqIdx]
+                        val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                         return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: req, receiverRef: proofReceiver, traitArgs: traitArgs, predicates: [])
                     }
                     _ => { return 0U64 }
@@ -728,14 +729,14 @@ pub impl Comp {
         return 0U64
     }
 
-    inout fn paramSelectorEqSubst(w: Array[Param], r: Array[Param], recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
+    inout fn paramSelectorEqSubst(w: FuncParamRange, r: FuncParamRange, recvStart: U64, recvLen: U64, tps: Array[Bind], targs: Array[U64]) -> Bool {
         if w.count() != r.count() {
             return false
         }
         mut val i: U64 = 0
         while i < w.count() {
-            val pw: Param = w[i]
-            val pr: Param = r[i]
+            val pw: Param = self.funcParamAt(params: w, index: i)
+            val pr: Param = self.funcParamAt(params: r, index: i)
             if pw.nameId != pr.nameId {
                 return false
             }
@@ -820,8 +821,8 @@ pub impl Comp {
     inout fn confWitnessesAll(cf: Conform, t: TraitDef) -> Bool {
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
-            val r: Func = t.reqs[ri]
-            if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: self.copyConformTypes(types: cf.traitArgs))) {
+            val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
+            if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: self.copyConformTypes(types: cf.traitArgs))) {
                 return false
             }
             ri += 1
@@ -868,7 +869,7 @@ pub impl Comp {
                     mut val tpi: U64 = 0
                     mut val posNeed: U64 = 0
                     while tpi < tr.typeParams.count() {
-                        if !(self.anyHasNamedBinding(t: t, nameId: tr.typeParams[tpi].nameId)) {
+                        if !(self.anyHasNamedBinding(t: t, nameId: self.traitBindAt(binds: tr.typeParams, index: tpi).nameId)) {
                             posNeed += 1U64
                         }
                         tpi += 1
@@ -879,7 +880,7 @@ pub impl Comp {
                     // each associated type must be bound by name.
                     mut val asi: U64 = 0
                     while asi < tr.assocTypes.count() {
-                        if !(self.anyHasNamedBinding(t: t, nameId: tr.assocTypes[asi].nameId)) {
+                        if !(self.anyHasNamedBinding(t: t, nameId: self.traitBindAt(binds: tr.assocTypes, index: asi).nameId)) {
                             self.errorAt(offset: t.nameStart, msg: "`any P` leaves an associated type unbound — bind it as `any P[Item=Type]` (spec/08)")
                         }
                         asi += 1
@@ -923,8 +924,8 @@ pub impl Comp {
                 // Re-check the requirements of the exact declaration owner.
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
-                    val r: Func = t.reqs[ri]
-                    if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: t.typeParams, targs: self.copyConformTypes(types: cf.traitArgs))) {
+                    val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
+                    if !(self.witnessedHas(witnessed: self.copyConformWitnesses(witnesses: cf.witnessed), r: r, recvStart: cf.typeStart, recvLen: cf.typeLen, tps: self.copyTraitBinds(binds: t.typeParams), targs: self.copyConformTypes(types: cf.traitArgs))) {
                         self.errorAt(offset: cf.typeStart, msg: "incomplete trait conformance: a requirement is not witnessed (define its body or bind it with `via`)")
                     }
                     ri += 1
@@ -933,7 +934,7 @@ pub impl Comp {
                 // each Super (a constraint, not auto-implemented).
                 mut val sti: U64 = 0
                 while sti < t.supertraits.count() {
-                    val sup: Bind = t.supertraits[sti]
+                    val sup: Bind = self.traitBindAt(binds: t.supertraits, index: sti)
                     if !(self.bareConformanceCoversSubject(subject: cf, traitStart: sup.nameStart, traitLen: sup.nameLen)) {
                         self.errorAt(offset: cf.typeStart, msg: "supertrait not satisfied: this type must also conform to the trait's supertrait")
                     }
@@ -1112,7 +1113,8 @@ pub impl Comp {
         }
         // any requirement's witness carries the impl-level bounds (the lowerer duplicates them
         // onto every method of the impl), so one witness fn suffices to read them.
-        val wfi: U64 = self.witnessFnFor(typeStart: t.nameStart, typeLen: t.nameLen, nameStart: tr.reqs[0].nameStart, nameLen: tr.reqs[0].nameLen)
+        val firstReq: Func = self.traitReqAt(reqs: tr.reqs, index: 0U64)
+        val wfi: U64 = self.witnessFnFor(typeStart: t.nameStart, typeLen: t.nameLen, nameStart: firstReq.nameStart, nameLen: firstReq.nameLen)
         if wfi >= self.arena.funcs.count() {
             return true
         }
@@ -1122,8 +1124,8 @@ pub impl Comp {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == wfi {
                 if fb.paramTy != 0U64 {
-                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: wf.typeParams, values: t.args)
-                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: wf.typeParams, args: t.args)
+                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: wf.typeParams), values: t.args)
+                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: wf.typeParams), args: t.args)
                     if lhs >= self.arena.types.count() {
                         return false
                     }
@@ -1142,13 +1144,13 @@ pub impl Comp {
                 mut val pos: U64 = wf.typeParams.count()
                 mut val k: U64 = 0
                 while k < wf.typeParams.count() {
-                    if wf.typeParams[k].nameId == fb.paramNameId {
+                    if self.funcBindAt(binds: wf.typeParams, index: k).nameId == fb.paramNameId {
                         pos = k
                     }
                     k += 1
                 }
                 if pos < t.args.count() {
-                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: wf.typeParams, args: t.args)
+                    val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: wf.typeParams), args: t.args)
                     if !(self.conformsTraitConstraint(ref: t.args[pos], constraint: constraint)) {
                         return false
                     }
@@ -1187,9 +1189,9 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fin.fnIdx {
-                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: f.typeParams, args: fin.args)
+                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: f.typeParams), args: fin.args)
                 if fb.paramTy != 0U64 {
-                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: f.typeParams, values: fin.args)
+                    val lhs: U64 = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: f.typeParams), values: fin.args)
                     if lhs < self.arena.types.count() {
                         val ok: Bool = self.viewedTypeConformsTraitConstraint(ref: lhs, constraint: constraint)
                         if !ok {
@@ -1200,7 +1202,7 @@ pub impl Comp {
                 } else {
                 mut val pi: U64 = 0
                 while pi < f.typeParams.count() {
-                    val tp: Bind = f.typeParams[pi]
+                    val tp: Bind = self.funcBindAt(binds: f.typeParams, index: pi)
                     if tp.nameId == fb.paramNameId {
                         if pi < fin.args.count() {
                             // a `#`-viewed type argument (`f(a: s#P)` / `g(x#Ext)`,
@@ -1230,7 +1232,7 @@ pub impl Comp {
     inout fn methodReceiverEnvironment(f: Func, instRef: U64) -> WitnessMatch {
         if f.recvTy == 0U64 || instRef == 0U64 { return <WitnessMatch /> }
         val noArgs: Array[U64] = []
-        return self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: noArgs, typeParams: f.typeParams, declaredTraitArgs: noArgs, typeRef: instRef, traitArgs: noArgs)
+        return self.conformancePatternWitnessMatch(conformIdx: 0U64, subjectId: f.recvId, subjectTy: f.recvTy, subjectArgs: noArgs, typeParams: self.copyFuncBinds(binds: f.typeParams), declaredTraitArgs: noArgs, typeRef: instRef, traitArgs: noArgs)
     }
 
     // A receiver pattern such as `impl[T] Box[Array[T]]` does not map the
@@ -1253,7 +1255,7 @@ pub impl Comp {
             val matchBind: WitnessBind = receiverEnv.binds[mi]
             mut val pi: U64 = 0U64
             while pi < f.typeParams.count() {
-                if f.typeParams[pi].paramId == matchBind.paramId { values.set(i: pi, value: matchBind.term) }
+                if self.funcBindAt(binds: f.typeParams, index: pi).paramId == matchBind.paramId { values.set(i: pi, value: matchBind.term) }
                 pi += 1U64
             }
             mi += 1U64
@@ -1262,14 +1264,14 @@ pub impl Comp {
         while bi < self.decls.funcBounds.count() {
             val fb: FuncBound = self.decls.funcBounds[bi]
             if fb.fnIdx == fnIdx {
-                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: f.typeParams, args: values)
+                val constraint: TraitConstraint = self.groundTraitConstraintInEnvironment(constraint: fb.constraint, params: self.copyFuncBinds(binds: f.typeParams), args: values)
                 mut val lhs: U64 = 0U64
                 if fb.paramTy != 0U64 {
-                    lhs = self.groundTermInEnvironment(ref: fb.paramTy, params: f.typeParams, values: values)
+                    lhs = self.groundTermInEnvironment(ref: fb.paramTy, params: self.copyFuncBinds(binds: f.typeParams), values: values)
                 } else {
                     mut val pi: U64 = 0U64
                     while pi < f.typeParams.count() {
-                        if f.typeParams[pi].nameId == fb.paramNameId {
+                        if self.funcBindAt(binds: f.typeParams, index: pi).nameId == fb.paramNameId {
                             if pi < values.count() { lhs = values[pi] }
                         }
                         pi += 1U64

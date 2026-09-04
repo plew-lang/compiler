@@ -16,9 +16,9 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, MakeFieldId, SyntaxMakeField, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprTypeArgCount, syntaxExprTypeArg, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
+import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
-export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
+export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
 import ./Manifest with { Dep, loadManifestDeps, resolveDepImport, resolveGitDepImport, loadLock, isExternalDepImport }
 import ./Lock with { Lock }
@@ -270,6 +270,129 @@ pub impl Comp {
 
     inout fn matchArmAt(arms: MatchArmRange, index: U64) -> MatchArm {
         return self.arena.matchArmPool[arms.start + index]
+    }
+
+    inout fn pushTraitBinds(binds: Array[Bind]) -> TraitBindRange {
+        val start: U64 = self.decls.traitBindPool.count()
+        mut val i: U64 = 0U64
+        while i < binds.count() {
+            self.decls.traitBindPool.append(binds[i])
+            i += 1U64
+        }
+        return <TraitBindRange start=start len=binds.count() />
+    }
+
+    inout fn traitBindAt(binds: TraitBindRange, index: U64) -> Bind {
+        return self.decls.traitBindPool[binds.start + index]
+    }
+
+    inout fn copyTraitBinds(binds: TraitBindRange) -> Array[Bind] {
+        mut val out: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < binds.len {
+            out.append(self.traitBindAt(binds: binds, index: i))
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn pushTraitReqs(reqs: Array[Func]) -> TraitReqRange {
+        val start: U64 = self.decls.traitReqPool.count()
+        mut val i: U64 = 0U64
+        while i < reqs.count() {
+            self.decls.traitReqPool.append(reqs[i])
+            i += 1U64
+        }
+        return <TraitReqRange start=start len=reqs.count() />
+    }
+
+    inout fn traitReqAt(reqs: TraitReqRange, index: U64) -> Func {
+        return self.decls.traitReqPool[reqs.start + index]
+    }
+
+    inout fn copyTraitReqs(reqs: TraitReqRange) -> Array[Func] {
+        mut val out: Array[Func] = []
+        mut val i: U64 = 0U64
+        while i < reqs.len {
+            out.append(self.traitReqAt(reqs: reqs, index: i))
+            i += 1U64
+        }
+        return out
+    }
+
+    // Func rows are scalar declarations. These are the only owner-aware
+    // gateways for their signature payloads; compatibility copies are explicit
+    // at APIs which still require a transient Array.
+    inout fn pushFuncBinds(binds: Array[Bind]) -> FuncBindRange {
+        val start: U64 = self.decls.funcBindPool.count()
+        mut val i: U64 = 0U64
+        while i < binds.count() {
+            self.decls.funcBindPool.append(binds[i])
+            i += 1U64
+        }
+        return <FuncBindRange start=start len=binds.count() />
+    }
+
+    inout fn funcBindAt(binds: FuncBindRange, index: U64) -> Bind {
+        return self.decls.funcBindPool[binds.start + index]
+    }
+
+    inout fn copyFuncBinds(binds: FuncBindRange) -> Array[Bind] {
+        mut val out: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < binds.len {
+            out.append(self.funcBindAt(binds: binds, index: i))
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn pushFuncTypes(types: Array[U64]) -> FuncTypeRange {
+        val start: U64 = self.decls.funcTypePool.count()
+        mut val i: U64 = 0U64
+        while i < types.count() {
+            self.decls.funcTypePool.append(types[i])
+            i += 1U64
+        }
+        return <FuncTypeRange start=start len=types.count() />
+    }
+
+    inout fn funcTypeAt(types: FuncTypeRange, index: U64) -> U64 {
+        return self.decls.funcTypePool[types.start + index]
+    }
+
+    inout fn copyFuncTypes(types: FuncTypeRange) -> Array[U64] {
+        mut val out: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < types.len {
+            out.append(self.funcTypeAt(types: types, index: i))
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn pushFuncParams(params: Array[Param]) -> FuncParamRange {
+        val start: U64 = self.decls.funcParamPool.count()
+        mut val i: U64 = 0U64
+        while i < params.count() {
+            self.decls.funcParamPool.append(params[i])
+            i += 1U64
+        }
+        return <FuncParamRange start=start len=params.count() />
+    }
+
+    inout fn funcParamAt(params: FuncParamRange, index: U64) -> Param {
+        return self.decls.funcParamPool[params.start + index]
+    }
+
+    inout fn copyFuncParams(params: FuncParamRange) -> Array[Param] {
+        mut val out: Array[Param] = []
+        mut val i: U64 = 0U64
+        while i < params.len {
+            out.append(self.funcParamAt(params: params, index: i))
+            i += 1U64
+        }
+        return out
     }
 
     inout fn pushConformTypes(types: Array[U64]) -> ConformTypeRange {

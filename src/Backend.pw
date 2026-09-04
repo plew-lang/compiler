@@ -10,7 +10,7 @@ import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8, truncU32 }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
+import ./Ir with { PType, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, FuncParamRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, DeriveReq, AssocBinding, ChainSite, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, CallTarget, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, ValueConversionProof, EnumPayloadConversion, EnumDef, Func, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identNoTarget }
 import ./Frontend with { Comp, intern, spansEqual, runFrontend, tracePhase, tracePhaseCount }
 // Import the Mid vocabulary at the backend boundary now.  Lowering is migrated
 // body-by-body; keeping this edge one-way prevents Mid from becoming another
@@ -548,13 +548,13 @@ part ./Backend/Llvm
 
 // ---- relocated free helpers (were in parts; kept at module root so parts are impl-only) ----
 
-fn paramLabelsEqual(c: inout Comp, a: Array[Param], b: Array[Param]) -> Bool {
+fn paramLabelsEqual(c: inout Comp, a: FuncParamRange, b: FuncParamRange) -> Bool {
     if a.count() != b.count() {
         return false
     }
     mut val i: U64 = 0
     while i < a.count() {
-        if a[i].nameId != b[i].nameId {
+        if c.funcParamAt(params: a, index: i).nameId != c.funcParamAt(params: b, index: i).nameId {
             return false
         }
         i += 1
@@ -1458,7 +1458,7 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
     // type parameters: a named binding wins, else the next positional.
     mut val tpi: U64 = 0
     while tpi < t.typeParams.count() {
-        val tp: Bind = t.typeParams[tpi]
+        val tp: Bind = c.traitBindAt(binds: t.typeParams, index: tpi)
         mut val ref: U64 = 0
         mut val found: Bool = false
         mut val bi: U64 = 0
@@ -1488,7 +1488,7 @@ fn anyBindingEnv(c: inout Comp, anyRef: U64, traitIdx: U64, outParams: inout Arr
     // associated types: named binding only.
     mut val asi: U64 = 0
     while asi < t.assocTypes.count() {
-        val at: Bind = t.assocTypes[asi]
+        val at: Bind = c.traitBindAt(binds: t.assocTypes, index: asi)
         mut val ref2: U64 = 0
         mut val found2: Bool = false
         mut val bj: U64 = 0

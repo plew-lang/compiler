@@ -1152,7 +1152,7 @@ pub impl Comp {
                                     if mf.hasRet {
                                         self.scanType(ref: mf.retTy)
                                     }
-                                    val mps: Array[Param] = mf.params
+                                    val mps: Array[Param] = self.copyFuncParams(params: mf.params)
                                     mut val mpi: U64 = 0
                                     while mpi < mps.count() {
                                         self.scanType(ref: mps[mpi].ty)
@@ -1210,7 +1210,7 @@ pub impl Comp {
                 if f.hasRet {
                     self.scanType(ref: f.retTy)
                 }
-                val ps: Array[Param] = f.params
+                val ps: Array[Param] = self.copyFuncParams(params: f.params)
                 mut val pi: U64 = 0
                 while pi < ps.count() {
                     self.scanType(ref: ps[pi].ty)

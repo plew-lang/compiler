@@ -36,7 +36,7 @@ pub impl Comp {
                     if traitDef.nameId == traitId {
                         mut val ri: U64 = 0U64
                         while ri < traitDef.reqs.count() {
-                            val req: Func = traitDef.reqs[ri]
+                            val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: ri)
                             if req.nameId == methodId && self.paramsLabelsOk(params: req.params, args: args) {
                                 if found {
                                     self.errorAt(offset: nameStart, msg: "ambiguous method in generic bounds; select one trait source with `x#Trait.method()`")
@@ -54,7 +54,7 @@ pub impl Comp {
             bi += 1U64
         }
         if !found { return false }
-        val chosen: Func = self.decls.traits[chosenTrait].reqs[chosenReq]
+        val chosen: Func = self.traitReqAt(reqs: self.decls.traits[chosenTrait].reqs, index: chosenReq)
         mut val ai: U64 = 0U64
         while ai < args.len {
             val pi: U64 = self.paramIndexForArg(params: chosen.params, args: args, argIdx: ai)

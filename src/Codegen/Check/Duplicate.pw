@@ -5,16 +5,16 @@
 // the "selector" minus types. Used to detect a generic/concrete overload clash.
 
 pub impl Comp {
-    inout fn sameLabels(a: Array[Param], b: Array[Param]) -> Bool {
+    inout fn sameLabels(a: FuncParamRange, b: FuncParamRange) -> Bool {
         if a.count() != b.count() {
             return false
         }
         mut val i: U64 = 0
         while i < a.count() {
-            if a[i].nameId != b[i].nameId {
+            if self.funcParamAt(params: a, index: i).nameId != self.funcParamAt(params: b, index: i).nameId {
                 return false
             }
-            if a[i].noLabel != b[i].noLabel {
+            if self.funcParamAt(params: a, index: i).noLabel != self.funcParamAt(params: b, index: i).noLabel {
                 return false
             }
             i += 1
@@ -22,16 +22,18 @@ pub impl Comp {
         return true
     }
 
-    inout fn paramTypesEqual(a: Array[Param], b: Array[Param]) -> Bool {
+    inout fn paramTypesEqual(a: FuncParamRange, b: FuncParamRange) -> Bool {
         if a.count() != b.count() {
             return false
         }
         mut val i: U64 = 0
         while i < a.count() {
-            if a[i].tyIsArray != b[i].tyIsArray {
+            val ap: Param = self.funcParamAt(params: a, index: i)
+            val bp: Param = self.funcParamAt(params: b, index: i)
+            if ap.tyIsArray != bp.tyIsArray {
                 return false
             }
-            if intern(c: inout self, start: a[i].tyStart, len: a[i].tyLen) != intern(c: inout self, start: b[i].tyStart, len: b[i].tyLen) {
+            if intern(c: inout self, start: ap.tyStart, len: ap.tyLen) != intern(c: inout self, start: bp.tyStart, len: bp.tyLen) {
                 return false
             }
             i += 1
@@ -42,7 +44,7 @@ pub impl Comp {
     inout fn checkDuplicateTraitReqs() {
         mut val ti: U64 = 0
         while ti < self.decls.traits.count() {
-            val reqs: Array[Func] = self.decls.traits[ti].reqs
+            val reqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traits[ti].reqs)
             mut val a: U64 = 0
             while a < reqs.count() {
                 mut val b: U64 = a + 1U64
@@ -75,7 +77,7 @@ pub impl Comp {
                     if tr.nameId == cf.traitId {
                         mut val ri: U64 = 0
                         while ri < tr.reqs.count() {
-                            if tr.reqs[ri].nameId == qM {
+                            if self.traitReqAt(reqs: tr.reqs, index: ri).nameId == qM {
                                 return true
                             }
                             ri += 1
@@ -98,11 +100,11 @@ pub impl Comp {
         }
         mut val i: U64 = 0
         while i < a.params.count() {
-            if a.params[i].noLabel != b.params[i].noLabel {
+            if self.funcParamAt(params: a.params, index: i).noLabel != self.funcParamAt(params: b.params, index: i).noLabel {
                 return false
             }
-            if !(a.params[i].noLabel) {
-                if a.params[i].nameId != b.params[i].nameId {
+            if !(self.funcParamAt(params: a.params, index: i).noLabel) {
+                if self.funcParamAt(params: a.params, index: i).nameId != self.funcParamAt(params: b.params, index: i).nameId {
                     return false
                 }
             }

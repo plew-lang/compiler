@@ -24,7 +24,7 @@ pub impl Comp {
                 val concreteArity: U64 = t.typeParams.count()
                 mut val ri: U64 = 0
                 while ri < t.reqs.count() {
-                    val r: Func = t.reqs[ri]
+                    val r: Func = self.traitReqAt(reqs: t.reqs, index: ri)
                     if r.nameId == qName {
                         if self.paramsLabelsOk(params: r.params, args: args) {
                             return self.boundRetInfoOf(f: r, tpStart: tpStart, tpLen: tpLen)
@@ -34,7 +34,7 @@ pub impl Comp {
                 }
                 mut val sti: U64 = 0
                 while sti < t.supertraits.count() {
-                    val sup: Bind = t.supertraits[sti]
+                    val sup: Bind = self.traitBindAt(binds: t.supertraits, index: sti)
                     val supId: U64 = intern(c: inout self, start: sup.nameStart, len: sup.nameLen)
                     val sr: TypeInfo = self.traitMemberRetInfo(traitNameId: supId, traitArity: 4000000000U64, qName: qName, args: args, tpStart: tpStart, tpLen: tpLen, depth: depth + 1U64, useMod: useMod)
                     if sr.nameLen != 0U64 {
@@ -204,7 +204,7 @@ pub impl Comp {
         // path can use spelling fallback while translating a method binder;
         // an immutable map cannot, so the returned outer `T` remains the
         // caller's lexical term for later BodyInstance grounding.
-        return <InstanceEnvironment params=f.typeParams args=fullArgs receiverRef=receiverRef />
+        return <InstanceEnvironment params=self.copyFuncBinds(binds: f.typeParams) args=fullArgs receiverRef=receiverRef />
     }
 
     // A provided member's associated Item is selected by the same receiver
@@ -221,7 +221,7 @@ pub impl Comp {
         if f.isProvided && f.originTraitOwner != 0U64 {
             val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
             val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
-            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: f.recvTraitArgs)
+            val proof: StaticConformanceProof = self.concreteConformanceProof(baseRef: receiverRef, traitId: f.originTraitId, traitOwner: f.originTraitOwner, traitArgs: self.copyFuncTypes(types: f.recvTraitArgs))
             itemRef = self.associatedOutputInProof(proof: proof, traitOwner: f.originTraitOwner, assocId: itemId)
         }
         return itemRef
@@ -255,7 +255,7 @@ pub impl Comp {
         val savedSelf: U64 = self.cur.selfRef
         val savedItem: U64 = self.cur.itemRef
         self.setSelfItemEnv(recvStart: recvTy.nameStart, recvLen: recvTy.nameLen, recvInstRef: 0U64)
-        self.cur.typeParams = f.typeParams
+        self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
         self.cur.typeArgs = inferred
         val grounded: U64 = self.groundTypeRef(ref: signatureTerm)
         self.cur.typeParams = savedP
@@ -359,12 +359,12 @@ pub impl Comp {
                         val traitDef: TraitDef = self.decls.traits[traitIdx]
                         mut val reqIdx: U64 = 0U64
                         while reqIdx < traitDef.reqs.count() {
-                            val req: Func = traitDef.reqs[reqIdx]
+                            val req: Func = self.traitReqAt(reqs: traitDef.reqs, index: reqIdx)
                             if req.nameId == qName && self.paramsLabelsOk(params: req.params, args: args) {
                                 if req.hasRet && req.retTy != 0U64 {
                                     val savedParams: Array[Bind] = self.cur.typeParams
                                     val savedArgs: Array[U64] = self.cur.typeArgs
-                                    self.cur.typeParams = traitDef.typeParams
+                                    self.cur.typeParams = self.copyTraitBinds(binds: traitDef.typeParams)
                                     self.cur.typeArgs = fb.constraint.key.positionalArgs
                                     val grounded: U64 = self.groundTypeRef(ref: req.retTy)
                                     self.cur.typeParams = savedParams
@@ -417,23 +417,23 @@ pub impl Comp {
             }
             if lbl == 0U64 {
                 if pos < tr.typeParams.count() {
-                    tp.append(tr.typeParams[pos])
+                    tp.append(self.traitBindAt(binds: tr.typeParams, index: pos))
                     ta.append(t.args[ai])
                     pos += 1
                 }
             } else {
                 mut val k: U64 = 0
                 while k < tr.typeParams.count() {
-                    if tr.typeParams[k].nameId == lbl {
-                        tp.append(tr.typeParams[k])
+                    if self.traitBindAt(binds: tr.typeParams, index: k).nameId == lbl {
+                        tp.append(self.traitBindAt(binds: tr.typeParams, index: k))
                         ta.append(t.args[ai])
                     }
                     k += 1
                 }
                 k = 0
                 while k < tr.assocTypes.count() {
-                    if tr.assocTypes[k].nameId == lbl {
-                        tp.append(tr.assocTypes[k])
+                    if self.traitBindAt(binds: tr.assocTypes, index: k).nameId == lbl {
+                        tp.append(self.traitBindAt(binds: tr.assocTypes, index: k))
                         ta.append(t.args[ai])
                     }
                     k += 1
@@ -737,7 +737,7 @@ pub impl Comp {
                                     val inferred: Array[U64] = self.inferFnArgs(f: f, args: args)
                                     val savedP: Array[Bind] = self.cur.typeParams
                                     val savedA: Array[U64] = self.cur.typeArgs
-                                    self.cur.typeParams = f.typeParams
+                                    self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
                                     self.cur.typeArgs = inferred
                                     val gr: U64 = self.groundTypeRef(ref: f.retTy)
                                     self.cur.typeParams = savedP
@@ -759,7 +759,7 @@ pub impl Comp {
                                     if self.fnArgsAllGround(args: ainf) {
                                         val savedAP: Array[Bind] = self.cur.typeParams
                                         val savedAA: Array[U64] = self.cur.typeArgs
-                                        self.cur.typeParams = f.typeParams
+                                        self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
                                         self.cur.typeArgs = ainf
                                         val agr: U64 = self.groundTypeRef(ref: f.retTy)
                                         self.cur.typeParams = savedAP
@@ -1113,7 +1113,7 @@ pub impl Comp {
                                 mut val ti: U64 = 0
                                 while ti < self.decls.traits.count() {
                                     if self.decls.traits[ti].nameId == qTrait {
-                                        val reqs: Array[Func] = self.decls.traits[ti].reqs
+                                        val reqs: Array[Func] = self.copyTraitReqs(reqs: self.decls.traits[ti].reqs)
                                         mut val ri: U64 = 0
                                         while ri < reqs.count() {
                                             if reqs[ri].nameId == qMethod {

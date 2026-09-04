@@ -741,22 +741,76 @@ export struct TraitDef {
     // Bind). Empty for a non-parameterized trait. A requirement signature may use a
     // type-parameter name (`add(lhs: Self, rhs: Rhs)`); the completeness check
     // substitutes it with the conformance's matching `traitArgs` entry.
-    pub val typeParams: Array[Bind] = []
+    pub val typeParams: TraitBindRange = <TraitBindRange start=0U64 len=0U64 />
     // supertraits from `trait Sub: Super + ...` (spec/08): conforming to Sub
     // requires conforming to each Super (a constraint, not auto-impl). Each entry
     // reuses Bind as a (start,len) trait-name span.
-    pub val supertraits: Array[Bind]
+    pub val supertraits: TraitBindRange = <TraitBindRange start=0U64 len=0U64 />
     // requirement signatures (spec/08): each a body-less Func carrying the
     // requirement's name, params (labels + types), return type, and isAssoc.
     // The abstract generic type-checker reads these to resolve `x.req(...)` on a
     // bounded type parameter; the completeness check matches them to witnesses.
-    pub val reqs: Array[Func]
+    pub val reqs: TraitReqRange = <TraitReqRange start=0U64 len=0U64 />
     // associated type requirements (spec/08): `type Item` declares an output type
     // a conforming impl binds with `type Item = Concrete`. Each entry (Bind) is the
     // associated type's name span; a requirement signature may reference it by name
     // (`next() -> Optional[Item]`). The conformance's binding lives in
     // Comp.assocBindings. Default empty for traits without associated types.
-    pub val assocTypes: Array[Bind] = []
+    pub val assocTypes: TraitBindRange = <TraitBindRange start=0U64 len=0U64 />
+}
+
+// Trait declarations are read throughout resolution and checking. Keep their
+// identity row scalar, just like Conform: each variable-length semantic child
+// lives once in a typed declaration pool and is read through its owner API.
+export struct TraitBindRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TraitBindRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct TraitReqRange {
+    pub val start: U64
+    pub val len: U64
+}
+
+// A callable declaration is inspected by every semantic and backend pass. Its
+// variable-sized signature pieces must therefore not live inline in Func: a
+// value read of a Func row is routine, while a copied ARC Array is neither a
+// declaration fact nor safe to duplicate through the fixed-point compiler.
+// These pools are intentionally distinct from trait/conformance payloads: the
+// owner of a range documents the lexical declaration whose binders it names.
+export struct FuncBindRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl FuncBindRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct FuncTypeRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl FuncTypeRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct FuncParamRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl FuncParamRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+pub impl TraitReqRange {
+    factory
+    fn count() -> U64 { return self.len }
 }
 
 // Parsed declaration identity, deliberately separate from the completed
@@ -1431,17 +1485,17 @@ export struct Func {
     // Binder scope used only to match `recvTy`. A provided copy's receiver
     // pattern belongs to its source conformance, while its callable body keeps
     // its own nominal/method binder environment in `typeParams`.
-    pub val recvPatternParams: Array[Bind] = []
+    pub val recvPatternParams: FuncBindRange = <FuncBindRange start=0U64 len=0U64 />
     // Positional arguments of a trait receiver. `recvTy` is deliberately 0 for
     // trait subjects (they are not value types), so this is the complete trait
     // instance key for `impl P[Arg] { ... }`. Associated-type bindings are
     // outputs constrained after selecting that key and do not belong here.
-    pub val recvTraitArgs: Array[U64] = []
+    pub val recvTraitArgs: FuncTypeRange = <FuncTypeRange start=0U64 len=0U64 />
     // generic type parameters `fn id[T](...)` (name spans; empty if not
     // generic). For a method, an `impl[T] Type[T]`-introduced parameter also
     // lands here. Consumed by G3 monomorphization.
-    pub val typeParams: Array[Bind]
-    pub val params: Array[Param]
+    pub val typeParams: FuncBindRange = <FuncBindRange start=0U64 len=0U64 />
+    pub val params: FuncParamRange = <FuncParamRange start=0U64 len=0U64 />
     pub val hasRet: Bool
     pub val retStart: U64
     pub val retLen: U64
@@ -2100,6 +2154,8 @@ pub impl DestructureSite { factory }
 // spans (O(1) kwSpan).
 export struct Decls {
     pub mut val traits: Array[TraitDef] = []
+    pub mut val traitBindPool: Array[Bind] = []
+    pub mut val traitReqPool: Array[Func] = []
     pub mut val traitOwners: Array[TraitOwner] = []
     pub mut val callables: Array[Callable] = []
     pub mut val conforms: Array[Conform] = []
@@ -2113,6 +2169,12 @@ export struct Decls {
     pub mut val methodAliases: Array[MethodAlias] = []
     pub mut val derives: Array[DeriveReq] = []
     pub mut val funcBounds: Array[FuncBound] = []
+    // Func rows are copied throughout selection and emission. Keep every
+    // variable-sized signature child in a typed declaration pool so that row
+    // inspection is scalar and fixed-point safe.
+    pub mut val funcBindPool: Array[Bind] = []
+    pub mut val funcTypePool: Array[U64] = []
+    pub mut val funcParamPool: Array[Param] = []
     pub mut val deinits: Array[Bind] = []
     pub mut val assocBindings: Array[AssocBinding] = []
     pub mut val pubFactories: Array[U64] = []

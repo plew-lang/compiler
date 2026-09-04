@@ -377,7 +377,7 @@ pub impl LlvmCtx {
         slots.append(self.buildAnyDropThunk(c: inout c, sidx: sidx))
         mut val ri: U64 = 0
         while ri < t.reqs.count() {
-            slots.append(self.buildAnyThunk(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: t.reqs[ri], idx: ri))
+            slots.append(self.buildAnyThunk(c: inout c, sidx: sidx, anyRef: anyRef, traitIdx: traitIdx, req: c.traitReqAt(reqs: t.reqs, index: ri), idx: ri))
             ri += 1
         }
         LLVMSetInitializer(g, LLVMConstArray2(self.ptrty, arrayCPtr(slots), slots.count()))
@@ -677,7 +677,7 @@ pub impl LlvmCtx {
             c.errorAt(offset: callOffset, msg: "internal error: final existential requirement target was not recorded")
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
         }
-        val req: Func = c.decls.traits[traitIdx].reqs[slot - 1U64]
+        val req: Func = c.traitReqAt(reqs: c.decls.traits[traitIdx].reqs, index: slot - 1U64)
         // spec/08: a member with `Self` in a non-receiver INPUT position is not callable
         // through `any` (the erased concretes need not match, so a `Self` argument cannot
         // be supplied). A `-> Self` return IS callable — it is re-erased to `any P`.

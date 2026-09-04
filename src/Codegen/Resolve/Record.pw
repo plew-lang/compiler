@@ -143,7 +143,7 @@ pub impl Comp {
                         val selected: Func = self.arena.funcs[callee]
                         if selected.originTraitOwner != 0U64 {
                             val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
-                            itemTerm = self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: selected.recvTraitArgs, assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen))
+                            itemTerm = self.assocBindingFor(baseRef: iterTerm, traitId: selected.originTraitId, traitOwner: selected.originTraitOwner, traitArgs: self.copyFuncTypes(types: selected.recvTraitArgs), assocId: intern(c: inout self, start: item.nameStart, len: item.nameLen))
                         }
                     }
                 }
@@ -195,10 +195,10 @@ pub impl Comp {
             // TypeInfo still spells the provided method's template `Item`.
             // CallTemplate is the body-instance authority, so refine rather
             // than merely fill holes.
-            val tp: Bind = f.typeParams[ti]
+            val tp: Bind = self.funcBindAt(binds: f.typeParams, index: ti)
             mut val pi: U64 = 0U64
             while pi < f.params.count() {
-                val p: Param = f.params[pi]
+                val p: Param = self.funcParamAt(params: f.params, index: pi)
                 val ai: U64 = self.argIndexForParam(params: f.params, args: args, paramIdx: pi)
                 if ai < args.len {
                     val argTerm: U64 = self.parametricCallArgumentTerm(exprId: self.argAt(args: args, index: ai).expr)
@@ -240,7 +240,7 @@ pub impl Comp {
         // ParamId would make a later body environment unable to ground it.
         // `fnArgsAllGround` is deliberately reserved for reachability/codegen.
         if f.typeParams.count() > 0U64 && self.fnArgsAllResolved(args: calleeArgs) {
-            result = self.groundTermInEnvironment(ref: f.retTy, params: f.typeParams, values: calleeArgs)
+            result = self.groundTermInEnvironment(ref: f.retTy, params: self.copyFuncBinds(binds: f.typeParams), values: calleeArgs)
         }
         self.recordSemanticExprCall(exprId: exprId, callee: callee, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: calleeArgs, resultTerm: result)
         // The existing SemanticExprType is still consumed by the abstract
@@ -287,7 +287,8 @@ pub impl Comp {
         val tr: TraitDef = self.decls.traits[traitIndex]
         mut val i: U64 = 0U64
         while i < tr.reqs.count() {
-            if tr.reqs[i].nameId == nameId && self.paramsLabelsOk(params: tr.reqs[i].params, args: args) { return i + 1U64 }
+            val req: Func = self.traitReqAt(reqs: tr.reqs, index: i)
+            if req.nameId == nameId && self.paramsLabelsOk(params: req.params, args: args) { return i + 1U64 }
             i += 1U64
         }
         return 0U64
@@ -511,7 +512,8 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < rcount {
             if i < f.typeParams.count() {
-                args.append(self.simpleTypeRef(nameStart: f.typeParams[i].nameStart, nameLen: f.typeParams[i].nameLen))
+                val tp: Bind = self.funcBindAt(binds: f.typeParams, index: i)
+                args.append(self.simpleTypeRef(nameStart: tp.nameStart, nameLen: tp.nameLen))
             }
             i += 1
         }
@@ -1005,7 +1007,7 @@ pub impl Comp {
                 cfi = self.resolvedCallee(id: exprId)
                 if cfi < self.arena.funcs.count() {
                     val cf: Func = self.arena.funcs[cfi]
-                    val ps: Array[Param] = cf.params
+                    val ps: Array[Param] = self.copyFuncParams(params: cf.params)
                     // a generic callee's parametric param (`xs: Array[T]`) is grounded
                     // under THIS call's inferred type args before use as a literal
                     // context; only a GROUND context applies — the callee's own `T`
@@ -1027,7 +1029,7 @@ pub impl Comp {
                             if cctx != 0U64 && canGround && !(self.tyRefIsGround(ref: cctx)) {
                                 val savedP: Array[Bind] = self.cur.typeParams
                                 val savedA: Array[U64] = self.cur.typeArgs
-                                self.cur.typeParams = self.copyConformBinds(binds: cf.typeParams)
+                                self.cur.typeParams = self.copyFuncBinds(binds: cf.typeParams)
                                 self.cur.typeArgs = inferred
                                 cctx = self.groundTypeRef(ref: cctx)
                                 self.cur.typeParams = savedP
@@ -1167,10 +1169,10 @@ pub impl Comp {
                 // so ground the declaration parameter once under that term.
                 if methodCallee < self.arena.funcs.count() {
                     val selectedMethod: Func = self.arena.funcs[methodCallee]
-                    val mps: Array[Param] = selectedMethod.params
+                    val mps: Array[Param] = self.copyFuncParams(params: selectedMethod.params)
                     mut val mk: U64 = 0U64
                     while mk < args.len {
-                        val parameterIndex: U64 = self.paramIndexForArg(params: mps, args: args, argIdx: mk)
+                        val parameterIndex: U64 = self.paramIndexForArg(params: selectedMethod.params, args: args, argIdx: mk)
                         if parameterIndex < mps.count() {
                             val mctx: U64 = self.groundFinalMethodParameter(f: selectedMethod, recvTy: self.typeInfoOfRef(ref: receiverTerm), args: args, parameterTerm: mps[parameterIndex].ty)
                             if mctx != 0U64 && self.tyRefIsGround(ref: mctx) {
@@ -1706,12 +1708,12 @@ pub impl Comp {
                 // miss the base of a `?.` chain, after which Mono had to read
                 // an incidental concrete `typeOf` result and froze T to the
                 // first instantiated body.
-                self.cur.typeParams = f.typeParams
+                self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
                 self.cur.typeArgs = noArgs
                 self.cur.checkFn = fi
                 mut val pi: U64 = 0
                 while pi < f.params.count() {
-                    val p: Param = f.params[pi]
+                    val p: Param = self.funcParamAt(params: f.params, index: pi)
                     self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
                     if p.hasDefault {
                         self.recordExpr(exprId: p.defaultExpr)

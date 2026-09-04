@@ -452,10 +452,10 @@ pub impl Comp {
     // with by-value). `inout` is valid for both. Array params are containers
     // (copyable in v1) and not mode-checked here. `anchor` is the owning function's
     // declaration offset (Param.nameStart is interned = maps to no source file).
-    inout fn checkParamModes(params: Array[Param], anchor: U64) {
+    inout fn checkParamModes(params: FuncParamRange, anchor: U64) {
         mut val i: U64 = 0
         while i < params.count() {
-            val p: Param = params[i]
+            val p: Param = self.funcParamAt(params: params, index: i)
             if !(p.tyIsArray) {
                 if self.typeIsUnique(start: p.tyStart, len: p.tyLen) {
                     val hasMode: Bool = p.isMove || p.isBorrow || p.isInout
@@ -571,7 +571,7 @@ pub impl Comp {
     inout fn checkParamDefaults() {
         mut val i: U64 = 0
         while i < self.arena.funcs.count() {
-            val ps: Array[Param] = self.arena.funcs[i].params
+            val ps: Array[Param] = self.copyFuncParams(params: self.arena.funcs[i].params)
             // sibling parameter names + `self` — a parameter default may reference none.
             mut val forbidden: Array[U64] = []
             mut val pk: U64 = 0

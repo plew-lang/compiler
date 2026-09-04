@@ -85,12 +85,12 @@ pub impl Comp {
         return intern(c: inout self, start: arg.labelStart, len: arg.labelLen) == param.nameId
     }
 
-    inout fn paramIndexForArg(params: Array[Param], args: ArgRange, argIdx: U64) -> U64 {
+    inout fn paramIndexForArg(params: FuncParamRange, args: ArgRange, argIdx: U64) -> U64 {
         mut val ai: U64 = 0
         mut val pi: U64 = 0
         while pi < params.count() {
             if ai < args.len {
-                if self.argMatchesParamLabel(param: params[pi], arg: self.argAt(args: args, index: ai)) {
+                if self.argMatchesParamLabel(param: self.funcParamAt(params: params, index: pi), arg: self.argAt(args: args, index: ai)) {
                     if ai == argIdx {
                         return pi
                     }
@@ -102,12 +102,12 @@ pub impl Comp {
         return params.count()
     }
 
-    inout fn argIndexForParam(params: Array[Param], args: ArgRange, paramIdx: U64) -> U64 {
+    inout fn argIndexForParam(params: FuncParamRange, args: ArgRange, paramIdx: U64) -> U64 {
         mut val ai: U64 = 0
         mut val pi: U64 = 0
         while pi < params.count() {
             if ai < args.len {
-                if self.argMatchesParamLabel(param: params[pi], arg: self.argAt(args: args, index: ai)) {
+                if self.argMatchesParamLabel(param: self.funcParamAt(params: params, index: pi), arg: self.argAt(args: args, index: ai)) {
                     if pi == paramIdx {
                         return ai
                     }
@@ -119,7 +119,7 @@ pub impl Comp {
         return args.len
     }
 
-    inout fn paramsLabelsOk(params: Array[Param], args: ArgRange) -> Bool {
+    inout fn paramsLabelsOk(params: FuncParamRange, args: ArgRange) -> Bool {
         if args.len > params.count() {
             return false
         }
@@ -127,15 +127,15 @@ pub impl Comp {
         mut val pi: U64 = 0
         while pi < params.count() {
             if ai < args.len {
-                if self.argMatchesParamLabel(param: params[pi], arg: self.argAt(args: args, index: ai)) {
+                if self.argMatchesParamLabel(param: self.funcParamAt(params: params, index: pi), arg: self.argAt(args: args, index: ai)) {
                     ai += 1U64
                 } else {
-                    if !(params[pi].hasDefault) {
+                    if !(self.funcParamAt(params: params, index: pi).hasDefault) {
                         return false
                     }
                 }
             } else {
-                if !(params[pi].hasDefault) {
+                if !(self.funcParamAt(params: params, index: pi).hasDefault) {
                     return false
                 }
             }
@@ -245,12 +245,12 @@ pub impl Comp {
 
     // Whether every provided argument's type matches its parameter's declared type.
     // Defaulted positions have already been checked at the declaration.
-    inout fn paramsTypesMatch(params: Array[Param], args: ArgRange) -> Bool {
+    inout fn paramsTypesMatch(params: FuncParamRange, args: ArgRange) -> Bool {
         mut val ai: U64 = 0
         while ai < args.len {
             val pi: U64 = self.paramIndexForArg(params: params, args: args, argIdx: ai)
             if pi < params.count() {
-                if !(self.argMatchesParam(argExpr: self.argAt(args: args, index: ai).expr, p: params[pi])) {
+                if !(self.argMatchesParam(argExpr: self.argAt(args: args, index: ai).expr, p: self.funcParamAt(params: params, index: pi))) {
                     return false
                 }
             } else {

@@ -332,12 +332,12 @@ pub impl Comp {
         if self.cur.bodyFnIdx >= self.arena.funcs.count() { return 0U64 }
         val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
         if bodyFn.recvTy == 0U64 { return 0U64 }
-        val binder: U64 = self.plainBinder(ref: termRef, params: bodyFn.typeParams)
+        val binder: U64 = self.plainBinder(ref: termRef, params: self.copyFuncBinds(binds: bodyFn.typeParams))
         if binder >= bodyFn.typeParams.count() { return 0U64 }
         mut val binds: Array[UnifyBind] = []
-        val matches: Bool = self.unifyPatterns(a: bodyFn.recvTy, aSide: 0U64, b: ref, bSide: 1U64, aParams: bodyFn.typeParams, bParams: [], binds: inout binds, ignoreTopView: true)
+        val matches: Bool = self.unifyPatterns(a: bodyFn.recvTy, aSide: 0U64, b: ref, bSide: 1U64, aParams: self.copyFuncBinds(binds: bodyFn.typeParams), bParams: [], binds: inout binds, ignoreTopView: true)
         if !(matches) { return 0U64 }
-        val binderId: U64 = self.binderIdentity(b: bodyFn.typeParams[binder])
+        val binderId: U64 = self.binderIdentity(b: self.funcBindAt(binds: bodyFn.typeParams, index: binder))
         val found: U64 = self.unificationBindingIndex(binds: binds, side: 0U64, binderId: binderId)
         if found < binds.count() { return binds[found].ref }
         return 0U64
@@ -364,8 +364,9 @@ pub impl Comp {
             val bodyFn: Func = self.arena.funcs[self.cur.bodyFnIdx]
             mut val pi: U64 = 0U64
             while pi < bodyFn.typeParams.count() {
-                if bodyFn.typeParams[pi].paramId == paramId {
-                    val term: U64 = self.pushType(t: <TypeRef nameStart=bodyFn.typeParams[pi].nameStart nameLen=bodyFn.typeParams[pi].nameLen paramId=paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                val bind: Bind = self.funcBindAt(binds: bodyFn.typeParams, index: pi)
+                if bind.paramId == paramId {
+                    val term: U64 = self.pushType(t: <TypeRef nameStart=bind.nameStart nameLen=bind.nameLen paramId=paramId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
                     val matched: U64 = self.receiverPatternArgument(termRef: term)
                     if matched != 0U64 { return matched }
                 }
@@ -560,7 +561,7 @@ pub impl Comp {
         }
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
-            val tp3: Array[Bind] = self.arena.funcs[fi].typeParams
+            val tp3: Array[Bind] = self.copyFuncBinds(binds: self.arena.funcs[fi].typeParams)
             mut val k3: U64 = 0
             while k3 < tp3.count() {
                 if tp3[k3].nameId == qId {
