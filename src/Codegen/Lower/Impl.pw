@@ -292,7 +292,11 @@ pub impl Comp {
             val resolved: Bind = self.aliasReal(start: im.traitNameSpan.start, len: im.traitNameSpan.end - im.traitNameSpan.start)
             return <Bind nameStart=resolved.nameStart nameLen=resolved.nameLen nameId=intern(c: inout self, start: resolved.nameStart, len: resolved.nameLen) fieldStart=resolved.fieldStart fieldLen=resolved.fieldLen />
         }
-        return <Bind />
+        // `Bind` is also the absence carrier here, but it has four required
+        // structural fields. Keep the sentinel fully formed so every branch is
+        // valid when LLVM compiles this helper, not only the branches reached by
+        // the compiler's own source.
+        return <Bind nameStart=0U64 nameLen=0U64 fieldStart=0U64 fieldLen=0U64 />
     }
 
     inout fn checkPubMemberwiseFactory(recvN: Bind, offset: U64) {
