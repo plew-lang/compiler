@@ -1,0 +1,35 @@
+// A returned struct owns both its Array field and its omitted mixed-payload
+// enum default.  Mid aggregate lowering must preserve the default enum tag
+// across the return boundary, independently of the Array payload shape.
+import @Std/Io with { print }
+
+enum BuildState {
+    None
+    Failed(values: Array[I64])
+}
+
+struct Report {
+    pub val values: Array[I64]
+    pub val state: BuildState = <BuildState.None />
+}
+
+pub impl Report { factory }
+
+fn report(includeExtra: Bool) -> Report {
+    mut val values: Array[I64] = [1I64]
+    // Keep this body on the legacy path while Path 1's loop CFG is pending:
+    // this reproduces the compiler-internal builder's return boundary.
+    while false {}
+    if includeExtra {
+        values.append(2I64)
+    }
+    return <Report values=values />
+}
+
+fn main() {
+    val result: Report = report(includeExtra: true)
+    match result.state {
+        BuildState.None => { print(result.values.count()) }
+        BuildState.Failed(values: _) => { print(99I64) }
+    }
+}

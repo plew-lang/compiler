@@ -1,0 +1,12 @@
+import @Std/Io with { print }
+import ./Barrel with { Error, Build, build, propagate, Propagates, Carrier }
+
+fn main() {
+    val result: Build = build()
+    val carrier: Carrier = <Carrier />
+    match carrier.propagated() {
+        Error.None => { print(0U64) }
+        Error.Unsupported(reason: val reason) => { print(result.payload + reason - 6U64) }
+        _ => { print(0U64) }
+    }
+}

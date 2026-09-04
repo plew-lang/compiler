@@ -1,0 +1,11 @@
+import @Plew/Syntax with { Span, SyntaxFile, TopItemAst, TypeAst, syntaxFileTopLevelCount }
+import @Std/Io with { print }
+
+fn main() {
+    mut val file = <SyntaxFile />
+    val span = <Span start=0U64 end=5U64 />
+    val byte = <TypeAst name="U8" args=[] span=span />
+    val array = <TypeAst name="Array" args=[byte] span=span />
+    file.freezeTopItem(ast: <TopItemAst.NewType name="Bytes" nameSpan=span ty=array isPub=false span=span />)
+    print(syntaxFileTopLevelCount(file: file))
+}

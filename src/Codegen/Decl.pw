@@ -305,6 +305,37 @@ pub impl Comp {
         return found
     }
 
+    // SyntaxFile retains selector spellings as source spans, not Strings. Keep
+    // the same lexical/import/re-export resolution law while avoiding a copied
+    // String solely to query a trait view.
+    inout fn traitOwnerForSelectorSpan(siteOffset: U64, start: U64, len: U64) -> U64 {
+        val useMod: U64 = self.moduleOf(offset: siteOffset)
+        mut val found: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < self.decls.traitOwners.count() {
+            val t: TraitOwner = self.decls.traitOwners[i]
+            if self.moduleOf(offset: t.nameStart) == useMod && spansEqual(c: inout self, aStart: t.nameStart, aLen: t.nameLen, bStart: start, bLen: len) {
+                if found != 0U64 && found != t.nameStart { return 0U64 }
+                found = t.nameStart
+            }
+            i += 1U64
+        }
+        if found != 0U64 { return found }
+        i = 0U64
+        while i < self.modules.importOrigins.count() {
+            val origin: Bind = self.modules.importOrigins[i]
+            if self.moduleOf(offset: origin.nameStart) == useMod && spansEqual(c: inout self, aStart: origin.nameStart, aLen: origin.nameLen, bStart: start, bLen: len) {
+                val owner: U64 = self.traitOwnerFromSurfaceForSelector(surfaceMod: origin.fieldLen, start: origin.fieldStart, len: origin.nameId)
+                if owner != 0U64 {
+                    if found != 0U64 && found != owner { return 0U64 }
+                    found = owner
+                }
+            }
+            i += 1U64
+        }
+        return found
+    }
+
     inout fn traitModuleByOwner(owner: U64) -> U64 {
         if owner == 0U64 { return 4000000000U64 }
         return self.moduleOf(offset: owner)

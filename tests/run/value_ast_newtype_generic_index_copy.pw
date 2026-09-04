@@ -1,0 +1,17 @@
+import @Plew/Syntax with { Lexer, P, TopItemAst, lex, parseProgramAst }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "newtype Bytes = Array[U8]\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = parseProgramAst(p: inout parser)
+    val item = items[0U64]
+    match item {
+        TopItemAst.NewType(name: _, nameSpan: val nameSpan, ty: _, isPub: _, span: _) => {
+            print(nameSpan.end - nameSpan.start)
+        }
+        _ => { print(0U64) }
+    }
+}

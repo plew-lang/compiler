@@ -1,0 +1,24 @@
+import @Plew/Syntax with { parseItem, TopItemAst }
+import @Std/Io with { print }
+
+fn main() {
+    val item = parseItem(source: "fn use(value: Box[Item=Leaf]#View#Trait[Assoc=Arg].Output) {}", start: 0U64, end: 61U64)
+    match item {
+        TopItemAst.Decl(val d) => {
+            val ty = d.params[0U64].ty
+            print(ty.nameSpan.start)
+            print(ty.nameSpan.end)
+            print(ty.argLabelSpans[0U64].start)
+            print(ty.argLabelSpans[0U64].end)
+            print(ty.viewNameSpans[0U64].start)
+            print(ty.viewNameSpans[0U64].end)
+            print(ty.projectionTraitSpan.start)
+            print(ty.projectionTraitSpan.end)
+            print(ty.projectionTraitArgLabelSpans[0U64].start)
+            print(ty.projectionTraitArgLabelSpans[0U64].end)
+            print(ty.projectionAssocSpan.start)
+            print(ty.projectionAssocSpan.end)
+        }
+        _ => {}
+    }
+}

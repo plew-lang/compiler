@@ -1,0 +1,48 @@
+export enum Error {
+    None
+    Invalid
+    Unsupported(reason: U64)
+    Missing
+}
+
+export struct Build {
+    pub val payload: U64
+    pub val error: Error = <Error.None />
+}
+
+pub impl Build { factory }
+
+export fn makeError() -> Error {
+    return <Error.Unsupported reason=41U64 />
+}
+
+export fn build() -> Build {
+    val error = makeError()
+    return <Build payload=7U64 error=error />
+}
+
+// Force the return path through monomorphized function emission, as compiler
+// trait-provided methods do when they propagate a MidBuildError.
+export fn propagate[T](value: T) -> Error {
+    val result = build()
+    match result.error {
+        Error.None => { return <Error.None /> }
+        _ => { return result.error }
+    }
+}
+
+export trait Propagates {
+    fn propagated() -> Error
+}
+
+export struct Carrier {}
+pub impl Carrier { factory }
+pub impl Carrier as Propagates {
+    fn propagated() -> Error {
+        val result = build()
+        match result.error {
+            Error.None => { return <Error.None /> }
+            _ => { return result.error }
+        }
+    }
+}

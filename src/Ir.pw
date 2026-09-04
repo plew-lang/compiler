@@ -278,6 +278,40 @@ export struct SemanticAggregate {
 }
 pub impl SemanticAggregate { factory }
 
+// One selected payload projection in an enum-match arm.  `bindTarget` is the
+// declaration identity that Record/Verify gives the arm local; the physical
+// field slot and its parametric TypeTerm are frozen beside it so Mid never
+// maps a field spelling back onto an enum declaration.
+export struct SemanticMatchPayload {
+    pub val bindTarget: U64 = 0U64
+    pub val fieldIndex: U64 = 0U64
+    pub val fieldTerm: U64 = 0U64
+}
+pub impl SemanticMatchPayload { factory }
+
+// One arm in a parametric enum-match descriptor. A wildcard has
+// `hasVariant=false`; its payload list is necessarily empty. Variant indices
+// are declaration slots, not source names.
+export struct SemanticMatchArm {
+    pub val hasVariant: Bool = false
+    pub val variantIndex: U64 = 0U64
+    pub val payloads: Array[SemanticMatchPayload] = []
+}
+pub impl SemanticMatchArm { factory }
+
+// The frozen frontend meaning of one statement enum match. The AST statement
+// id remains only a body-navigation anchor: identity is `(ownerFnIdx, stmtId)`.
+// `scrutineeTerm` is parametric in a generic body and is grounded exactly once
+// into FinalMatchResolution for the concrete BodyInstance.
+export struct SemanticMatch {
+    pub val ownerFnIdx: U64 = 0U64
+    pub val stmtId: U64 = 0U64
+    pub val scrutineeTerm: U64 = 0U64
+    pub val enumIndex: U64 = 0U64
+    pub val arms: Array[SemanticMatchArm] = []
+}
+pub impl SemanticMatch { factory }
+
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
 export struct MakeField {
     pub val nameStart: U64
@@ -656,6 +690,12 @@ export struct TraitDef {
     pub val nameStart: U64
     pub val nameLen: U64
     pub val nameId: U64 = 0
+    // Every trait owns an implicit lexical `Self` binder.  This is not the
+    // spelling "Self" reinterpreted through whichever method happens to be
+    // resolving: provided-method templates and their concrete copies share
+    // this ParamId, and an InstanceEnvironment maps it to the selected
+    // conformer.
+    pub val selfParamId: U64 = 0
     // trait type parameters `trait Add[Rhs]` (spec/12): each a name span (reuses
     // Bind). Empty for a non-parameterized trait. A requirement signature may use a
     // type-parameter name (`add(lhs: Self, rhs: Rhs)`); the completeness check
@@ -1143,6 +1183,22 @@ export enum CallResultProjection {
     BoolNot
 }
 
+// Passing is part of a final call ABI, not an ownership guess made by a
+// downstream emitter. `Copy` remains a Mid operation that creates an owned
+// value; an ordinary ABI parameter/receiver is a guaranteed (+0) Borrow.
+export enum CallReceiverPassing {
+    None
+    Borrow
+    Inout
+    Move
+}
+
+export enum CallArgumentPassing {
+    Borrow
+    Inout
+    Move
+}
+
 // The selected callable for one semantic call site while compiling one concrete
 // function body instance.  A site can be a written expression or an implicit
 // call introduced by a control construct (for example `for`'s iterator/next
@@ -1181,6 +1237,11 @@ export struct CallResolution {
     // together with the ground ABI type; Mid/LLVM must never infer a box or
     // container repack from an argument expression after this boundary.
     pub val argumentConversions: Array[ValueConversionProof] = []
+    // The selected ownership ABI is frozen beside parameter types and value
+    // conversions. Mid and legacy lowering consume this record; neither may
+    // infer passing from source shape or re-read Func flags.
+    pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
+    pub val argumentPassings: Array[CallArgumentPassing] = []
     // Concrete receiver identity at source selection.  0 for an ordinary
     // free call; association/operator calls retain their subject type here.
     // Backend consumes this rather than reconstructing it from the shared AST.
@@ -1214,6 +1275,32 @@ export struct FinalAggregateResolution {
     pub val elementConversions: Array[ValueConversionProof]
 }
 pub impl FinalAggregateResolution { factory }
+
+// Concrete counterpart of SemanticMatch for one canonical BodyInstance.
+// Payload types are already grounded here; Mid instantiation and LLVM consume
+// only declaration slots and these final TypeRefs.
+export struct FinalMatchPayloadResolution {
+    pub val bindTarget: U64 = 0U64
+    pub val fieldIndex: U64 = 0U64
+    pub val fieldTypeRef: U64 = 0U64
+}
+pub impl FinalMatchPayloadResolution { factory }
+
+export struct FinalMatchArmResolution {
+    pub val hasVariant: Bool = false
+    pub val variantIndex: U64 = 0U64
+    pub val payloads: Array[FinalMatchPayloadResolution] = []
+}
+pub impl FinalMatchArmResolution { factory }
+
+export struct FinalMatchResolution {
+    pub val bodyId: U64 = 0U64
+    pub val stmtId: U64 = 0U64
+    pub val scrutineeTypeRef: U64 = 0U64
+    pub val enumIndex: U64 = 0U64
+    pub val arms: Array[FinalMatchArmResolution] = []
+}
+pub impl FinalMatchResolution { factory }
 
 // One concrete value-conversion decision for a `return expression` in a
 // canonical BodyInstance.  A return has one ABI target but may be reached by
@@ -1620,6 +1707,10 @@ export struct Arena {
     // Concrete aggregate conversions, keyed by (BodyInstance, source ExprId).
     // This is semantic output alongside finalCallees, not a backend cache.
     pub mut val finalAggregates: Array[FinalAggregateResolution] = []
+    // Concrete enum-match layouts, keyed by (BodyInstance, source Stmt).
+    // This is semantic output, not a backend cache.
+    pub mut val finalMatches: Array[FinalMatchResolution] = []
+    pub mut val finalMatchIndexSlots: Array[U64] = []
     // Storage/writeback provenance is deliberately separate from callable
     // provenance. It is derived from final call descriptors after their
     // worklist reaches a fixpoint.
@@ -1990,6 +2081,9 @@ export struct Decls {
     // semanticAggregates indices and are rebuilt solely from (ownerFnIdx,
     // exprId); this is lookup structure, never a second semantic source.
     pub mut val semanticAggregateIndexSlots: Array[U64] = []
+    // Parametric enum-match facts, keyed by (ownerFnIdx, source Stmt).
+    pub mut val semanticMatches: Array[SemanticMatch] = []
+    pub mut val semanticMatchIndexSlots: Array[U64] = []
     pub mut val callTemplates: Array[CallTemplate] = []
     // Derived open-addressed index for CallTemplate. Slots hold one-based
     // callTemplates indices and are rebuilt solely from CallSiteKey; this is

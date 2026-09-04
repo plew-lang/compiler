@@ -1,0 +1,29 @@
+import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxDecl, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxExpr, syntaxExprMatchArmCount, syntaxExprMatchArm, syntaxStmtBindCount, syntaxStmtBind, syntaxMatchArm, syntaxBind, DeclId, SyntaxExprKind, SyntaxStmtKind }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "struct Pair { val left: U64 }\nfn main() { val result = match 1U64 { 1U64 => { give 2U64 } } Pair { val left } = <Pair left=3U64 /> }\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    val decl = syntaxDecl(file: file, id: <DeclId raw=syntaxTopItemPayload(file: file, item: syntaxFileTopLevel(file: file, index: 1U64)) />)
+    val block = syntaxBlock(file: file, id: decl.body)
+    val matchStmt = syntaxStmt(file: file, id: syntaxBlockStmt(file: file, block: block, index: 0U64))
+    val matchExpr = syntaxExpr(file: file, id: matchStmt.child0)
+    val arm = syntaxMatchArm(file: file, id: syntaxExprMatchArm(file: file, expr: matchExpr, index: 0U64))
+    val destructure = syntaxStmt(file: file, id: syntaxBlockStmt(file: file, block: block, index: 1U64))
+    val bind = syntaxBind(file: file, id: syntaxStmtBind(file: file, stmt: destructure, index: 0U64))
+    match matchExpr.kind {
+        SyntaxExprKind.MatchExpr => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    print(syntaxExprMatchArmCount(file: file, expr: matchExpr))
+    print(syntaxBlockStmtCount(file: file, block: syntaxBlock(file: file, id: arm.body)))
+    match destructure.kind {
+        SyntaxStmtKind.Destructure => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    print(syntaxStmtBindCount(file: file, stmt: destructure))
+    print(bind.name.end - bind.name.start)
+}

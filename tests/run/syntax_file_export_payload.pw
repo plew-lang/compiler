@@ -1,0 +1,22 @@
+import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevelCount, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, SyntaxTopItemKind, TopItemId }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "export struct Published {}\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    print(syntaxFileTopLevelCount(file: file))
+    val exported = syntaxFileTopLevel(file: file, index: 0U64)
+    match syntaxTopItemKind(file: file, item: exported) {
+        SyntaxTopItemKind.Export => {
+            val inner = <TopItemId raw=syntaxTopItemPayload(file: file, item: exported) />
+            match syntaxTopItemKind(file: file, item: inner) {
+                SyntaxTopItemKind.Decl => { print(1U64) }
+                _ => { print(0U64) }
+            }
+        }
+        _ => { print(0U64) }
+    }
+}

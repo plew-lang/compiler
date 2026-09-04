@@ -475,6 +475,17 @@ pub impl Comp {
             }
             i += 1
         }
+        // @Std/Lang is the one ambient type surface. Its declarations are in
+        // scope without an import, but they still need the same declaration
+        // identity as an explicitly imported type: downstream TypeTerm,
+        // proof, and Mid consumers must never fall back to the spelling
+        // `Array`/`Optional`/etc. Re-exports are resolved by the surface query
+        // so Core-owned primitive lang items retain their defining identity.
+        val lang: U64 = self.modules.langModule
+        if lang != 4000000000U64 {
+            val ambient: Bind = self.typeDeclIdentityFromSurface(surfaceMod: lang, start: start, len: len)
+            if ambient.nameLen != 0U64 { return ambient }
+        }
         return self.missingDeclIdentity()
     }
 

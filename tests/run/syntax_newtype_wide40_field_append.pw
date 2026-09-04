@@ -1,0 +1,61 @@
+import @Plew/Syntax with { SyntaxNewtype, TypeId, Span }
+import @Std/Io with { print }
+
+struct Wide40Store {
+    mut val a0: Array[U64] = []
+    mut val a1: Array[U64] = []
+    mut val a2: Array[U64] = []
+    mut val a3: Array[U64] = []
+    mut val a4: Array[U64] = []
+    mut val a5: Array[U64] = []
+    mut val a6: Array[U64] = []
+    mut val a7: Array[U64] = []
+    mut val nodes: Array[SyntaxNewtype] = []
+    mut val a9: Array[U64] = []
+    mut val a10: Array[U64] = []
+    mut val a11: Array[U64] = []
+    mut val a12: Array[U64] = []
+    mut val a13: Array[U64] = []
+    mut val a14: Array[U64] = []
+    mut val a15: Array[U64] = []
+    mut val a16: Array[U64] = []
+    mut val a17: Array[U64] = []
+    mut val a18: Array[U64] = []
+    mut val a19: Array[U64] = []
+    mut val a20: Array[U64] = []
+    mut val a21: Array[U64] = []
+    mut val a22: Array[U64] = []
+    mut val a23: Array[U64] = []
+    mut val a24: Array[U64] = []
+    mut val a25: Array[U64] = []
+    mut val a26: Array[U64] = []
+    mut val a27: Array[U64] = []
+    mut val a28: Array[U64] = []
+    mut val a29: Array[U64] = []
+    mut val a30: Array[U64] = []
+    mut val a31: Array[U64] = []
+    mut val a32: Array[U64] = []
+    mut val a33: Array[U64] = []
+    mut val a34: Array[U64] = []
+    mut val a35: Array[U64] = []
+    mut val a36: Array[U64] = []
+    mut val a37: Array[U64] = []
+    mut val a38: Array[U64] = []
+    mut val a39: Array[U64] = []
+}
+
+pub impl Wide40Store {
+    inout fn appendNode() {
+        self.nodes.append(<SyntaxNewtype name=<Span start=1U64 end=2U64 /> ty=<TypeId raw=3U64 /> isPub=false span=<Span start=0U64 end=4U64 /> />)
+    }
+
+    fn firstRaw() -> U64 {
+        return self.nodes[0U64].ty.raw
+    }
+}
+
+fn main() {
+    mut val store = <Wide40Store />
+    store.appendNode()
+    print(store.firstRaw())
+}

@@ -1,0 +1,26 @@
+// A SyntaxFile call argument carries its label as a source span.  Lowering must
+// preserve that span without rebuilding the label as a String.
+import @Plew/Syntax with { ExprId, Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxArg, syntaxExpr, syntaxExprArg, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+
+fn main() {
+    val source = "val value = target(argument: 1I8)\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    val item = syntaxFileTopLevel(file: file, index: 0U64)
+    val stmt = syntaxStmt(file: file, id: <StmtId raw=syntaxTopItemPayload(file: file, item: item) />)
+    val call = syntaxExpr(file: file, id: stmt.child0)
+    val arg = syntaxArg(file: file, id: syntaxExprArg(file: file, expr: call, index: 0U64))
+
+    mut val c: Comp = <Comp />
+    c.appendSrc(from: source.bytes())
+    c.syntax = file
+    val value = c.lowerSyntaxExpr(id: arg.value)
+    val lowered = c.appendLoweredArg(value: value, isInout: arg.isInout, label: arg.label, hasLabel: arg.hasLabel)
+    print(lowered.labelLen)
+    if lowered.hasLabel { print(1U64) } else { print(0U64) }
+    if lowered.isInout { print(1U64) } else { print(0U64) }
+}

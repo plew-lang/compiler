@@ -24,6 +24,8 @@
 // exprs, and any node this walk cannot scope (they surface in the Task-#3
 // shadow and are closed there).
 
+import ../../Ir with { SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
+
 pub impl Comp {
 
     inout fn syntheticCallReceiverTerm(exprId: U64, fallback: U64) -> U64 {
@@ -461,6 +463,14 @@ pub impl Comp {
         }
         if self.methodRecvIsTrait(f: f) {
             val sb: Bind = self.kwSpan(kw: "Self", kwLen: 4)
+            mut val ti: U64 = 0U64
+            while ti < self.decls.traits.count() {
+                val traitDef: TraitDef = self.decls.traits[ti]
+                if traitDef.nameStart == f.provTraitOwner && traitDef.selfParamId != 0U64 {
+                    return self.pushType(t: <TypeRef nameStart=sb.nameStart nameLen=sb.nameLen paramId=traitDef.selfParamId args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                }
+                ti += 1U64
+            }
             return self.simpleTypeRef(nameStart: sb.nameStart, nameLen: sb.nameLen)
         }
         // An extension method's lexical `self` is `Recv#Ext`.  A conferred
@@ -690,6 +700,114 @@ pub impl Comp {
             slot = (slot + 1U64) % capacity
         }
         self.decls.semanticAggregateIndexSlots.set(i: slot, value: self.decls.semanticAggregates.count())
+    }
+
+    fn semanticMatchHash(ownerFnIdx: U64, stmtId: U64) -> U64 {
+        val modulus: U64 = 4294967291U64
+        return (((ownerFnIdx % modulus + stmtId % modulus) * 65537U64) + 29U64) % modulus
+    }
+
+    inout fn rebuildSemanticMatchIndex(capacity: U64) {
+        self.decls.semanticMatchIndexSlots = []
+        mut val zero: U64 = 0U64
+        while zero < capacity {
+            self.decls.semanticMatchIndexSlots.append(0U64)
+            zero += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.decls.semanticMatches.count() {
+            val fact: SemanticMatch = self.decls.semanticMatches[entry]
+            mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: fact.ownerFnIdx, stmtId: fact.stmtId) % capacity
+            while self.decls.semanticMatchIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.decls.semanticMatchIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureSemanticMatchIndex(nextCount: U64) {
+        if self.decls.semanticMatchIndexSlots.count() == 0U64 {
+            self.rebuildSemanticMatchIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.decls.semanticMatchIndexSlots.count() * 7U64 {
+            self.rebuildSemanticMatchIndex(capacity: self.decls.semanticMatchIndexSlots.count() * 2U64)
+        }
+    }
+
+    inout fn semanticMatchIndex(ownerFnIdx: U64, stmtId: U64) -> U64 {
+        val capacity: U64 = self.decls.semanticMatchIndexSlots.count()
+        if capacity == 0U64 { return self.decls.semanticMatches.count() }
+        mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: ownerFnIdx, stmtId: stmtId) % capacity
+        while self.decls.semanticMatchIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.decls.semanticMatchIndexSlots[slot] - 1U64
+            val fact: SemanticMatch = self.decls.semanticMatches[entry]
+            if fact.ownerFnIdx == ownerFnIdx && fact.stmtId == stmtId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.decls.semanticMatches.count()
+    }
+
+    inout fn putSemanticMatch(fact: SemanticMatch) {
+        val prior: U64 = self.semanticMatchIndex(ownerFnIdx: fact.ownerFnIdx, stmtId: fact.stmtId)
+        if prior < self.decls.semanticMatches.count() {
+            self.decls.semanticMatches.set(i: prior, value: fact)
+            return
+        }
+        self.ensureSemanticMatchIndex(nextCount: self.decls.semanticMatches.count() + 1U64)
+        self.decls.semanticMatches.append(fact)
+        val capacity: U64 = self.decls.semanticMatchIndexSlots.count()
+        mut val slot: U64 = self.semanticMatchHash(ownerFnIdx: fact.ownerFnIdx, stmtId: fact.stmtId) % capacity
+        while self.decls.semanticMatchIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.decls.semanticMatchIndexSlots.set(i: slot, value: self.decls.semanticMatches.count())
+    }
+
+    // Freeze an enum match while Record still owns all name-to-layout work.
+    // A struct pattern, invalid arm, or missing parametric term deliberately
+    // leaves no fact: Mid then fails closed instead of reconstructing it.
+    inout fn recordSemanticMatch(stmtId: U64, scrut: U64, arms: MatchArmRange) {
+        if !(self.cur.recordCallTemplates) { return }
+        val scrutineeTerm: U64 = self.parametricExprTerm(exprId: scrut)
+        if scrutineeTerm == 0U64 || scrutineeTerm >= self.arena.types.count() { return }
+        val scrutinee: TypeRef = self.arena.types[scrutineeTerm]
+        val enumIndex: U64 = self.anyEnumIndex(nameStart: scrutinee.nameStart, nameLen: scrutinee.nameLen)
+        if enumIndex >= self.arena.enums.count() { return }
+        mut val selectedArms: Array[SemanticMatchArm] = []
+        mut val armIndex: U64 = 0U64
+        while armIndex < arms.len {
+            val arm: MatchArm = self.matchArmAt(arms: arms, index: armIndex)
+            if arm.isStruct { return }
+            if arm.isWildcard {
+                selectedArms.append(<SemanticMatchArm />)
+            } else {
+                val variantIndex: U64 = self.variantIndex(enumStart: scrutinee.nameStart, enumLen: scrutinee.nameLen, variantStart: arm.variantStart, variantLen: arm.variantLen)
+                if variantIndex >= self.arena.enums[enumIndex].variants.count() { return }
+                val fields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
+                mut val payloads: Array[SemanticMatchPayload] = []
+                mut val bindIndex: U64 = 0U64
+                while bindIndex < arm.binds.len {
+                    val bind: Bind = self.bindAt(binds: arm.binds, index: bindIndex)
+                    if bind.nameLen != 0U64 {
+                        val fieldName: U64 = intern(c: inout self, start: bind.fieldStart, len: bind.fieldLen)
+                        mut val fieldIndex: U64 = 0U64
+                        while fieldIndex < fields.count() {
+                            if fields[fieldIndex].nameId == fieldName { break }
+                            fieldIndex += 1U64
+                        }
+                        if fieldIndex >= fields.count() { return }
+                        val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: scrutineeTerm, isEnum: true, variantIndex: variantIndex, fieldIndex: fieldIndex)
+                        if fieldTerm == 0U64 { return }
+                        payloads.append(<SemanticMatchPayload bindTarget=bind.nameStart fieldIndex=fieldIndex fieldTerm=fieldTerm />)
+                    }
+                    bindIndex += 1U64
+                }
+                selectedArms.append(<SemanticMatchArm hasVariant=true variantIndex=variantIndex payloads=payloads />)
+            }
+            armIndex += 1U64
+        }
+        self.putSemanticMatch(fact: <SemanticMatch ownerFnIdx=self.cur.checkFn stmtId=stmtId scrutineeTerm=scrutineeTerm enumIndex=enumIndex arms=selectedArms />)
     }
 
     // The value of an expression block is its final `give`.  Read the term
@@ -1418,26 +1536,7 @@ pub impl Comp {
                 self.recordExpr(exprId: init)
                 self.recordSemanticExprExpectedResult(exprId: init, expectedTerm: ty)
                 self.recordArrayLitCtx(exprId: init, ctxRef: ty)
-                // an UNANNOTATED let (`mut val it = self`) infers its local type from the
-                // init (rustc-style local inference, incl. an array-literal init) —
-                // without this every later read of the local is unknown. The declared
-                // annotation wins when present (inferLetType passes it through). Shared
-                // with the scan pass so both see the same local type.
-                val le: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-                // An unannotated binding is a semantic boundary: retain the
-                // exact TypeTerm produced for its initializer.  Reopening
-                // legacy `typeOf` here collapses a structurally-grounded
-                // result such as `(first: I64, second: I64)` back to the
-                // method declaration's naked `T`, so every later generic
-                // call observes the wrong argument term.  The legacy LetEff
-                // fields remain the spelling/kind adapter; `ty` is the
-                // semantic source of truth whenever Record supplied one.
-                mut val localTerm: U64 = le.ty
-                if ty == 0U64 {
-                    val initTerm: U64 = self.parametricExprTerm(exprId: init)
-                    if initTerm != 0U64 { localTerm = initTerm }
-                }
-                self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: le.start, tyLen: le.len, isArray: le.arr, ty: localTerm, isInout: false, isMut: mutable, owned: true)
+                self.addLetLocal(nameStart: nameStart, nameLen: nameLen, tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init, mutable: mutable, owned: true)
             }
             Stmt.Assign(val target, val value) => {
                 self.recordExpr(exprId: target)
@@ -1518,6 +1617,7 @@ pub impl Comp {
             }
             Stmt.Match(val scrut, val arms) => {
                 self.recordExpr(exprId: scrut)
+                self.recordSemanticMatch(stmtId: stmtId, scrut: scrut, arms: arms)
                 mut val ai: U64 = 0
                 while ai < arms.len {
                     val a: MatchArm = self.matchArmAt(arms: arms, index: ai)
@@ -1592,7 +1692,7 @@ pub impl Comp {
                 self.cur.selfInout = f.selfInout
                 self.cur.recvInstRef = 0
                 self.cur.selfRef = self.parametricSelfRef(f: f)
-                self.cur.itemRef = 0
+                self.cur.itemRef = self.abstractProvidedItemRef(f: f)
                 // This is a declaration-time walk: generic binders are in
                 // lexical scope but have no concrete arguments. Keeping the
                 // Func's ParamIds here lets `value: Optional[Box[T]]` record

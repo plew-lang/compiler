@@ -1,0 +1,23 @@
+import @Plew/Syntax with { parseExprFrom, ExprAst }
+import @Std/Io with { print }
+
+fn main() {
+    val call = parseExprFrom(source: "call(label: 1I32)", start: 0U64)
+    match call {
+        ExprAst.Call(name: _, val nameSpan, args: _, span: _) => {
+            print(nameSpan.start)
+            print(nameSpan.end)
+        }
+        _ => {}
+    }
+    val extensionCall = parseExprFrom(source: "value#Ext.method()", start: 0U64)
+    match extensionCall {
+        ExprAst.ExtMethod(recv: _, src: _, val srcSpan, name: _, val nameSpan, args: _, span: _) => {
+            print(srcSpan.start)
+            print(srcSpan.end)
+            print(nameSpan.start)
+            print(nameSpan.end)
+        }
+        _ => {}
+    }
+}

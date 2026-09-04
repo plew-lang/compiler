@@ -1,0 +1,19 @@
+// SyntaxFile binder lowering keeps source spans as the semantic spelling: it
+// must not allocate a second String just to assign a ParamId.
+import @Plew/Syntax with { Span }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    c.appendSrc(from: "T U".bytes())
+    val spans: Array[Span] = [<Span start=0U64 end=1U64 />, <Span start=2U64 end=3U64 />]
+    val params = c.lowerTypeParamSpans(spans: spans, anchor: 0U64, sendableFlags: [true, false])
+    print(params.count())
+    print(params[0].nameStart)
+    print(params[1].nameStart)
+    print(params[0].paramId)
+    print(params[1].paramId)
+    if params[0].isSendable { print(1U64) } else { print(0U64) }
+    if params[1].isSendable { print(1U64) } else { print(0U64) }
+}

@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, FinalAggregateResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, CallResultProjection, RuntimeIntrinsicDeclaration, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, CallResultProjection, CallReceiverPassing, CallArgumentPassing, RuntimeIntrinsicDeclaration, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -680,6 +680,22 @@ pub impl Comp {
         mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
         if fnIdx < self.arena.funcs.count() {
             val f: Func = self.arena.funcs[fnIdx]
+            // A copied provided body still contains the source trait's
+            // lexical `Self` ParamId.  Bind it here with the concrete
+            // conformer, alongside ordinary method/receiver binders.
+            if f.isProvided && f.provTraitOwner != 0U64 {
+                mut val ti: U64 = 0U64
+                while ti < self.decls.traits.count() {
+                    val traitDef: TraitDef = self.decls.traits[ti]
+                    if traitDef.nameStart == f.provTraitOwner && traitDef.selfParamId != 0U64 {
+                        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+                        params.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=traitDef.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
+                        values.append(canonicalRecv)
+                        break
+                    }
+                    ti += 1U64
+                }
+            }
             mut val i: U64 = 0U64
             while i < f.typeParams.count() && i < args.count() {
                 params.append(f.typeParams[i])
@@ -1561,11 +1577,11 @@ pub impl Comp {
         }
     }
 
-    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64) {
+    inout fn appendFinalCallee(exprId: U64, callee: U64, siteIsStmt: Bool, slot: U64, recvTypeRef: U64, resultTypeRef: U64, calleeTypeArgs: Array[U64] = [], parameterTypeRefs: Array[U64] = [], argumentConversions: Array[ValueConversionProof] = [], receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />, argumentPassings: Array[CallArgumentPassing] = [], resultProjection: CallResultProjection = <CallResultProjection.Identity />, target: CallTarget = <CallTarget.Direct />, calleeBodyId: U64 = 0U64) {
         val bodyId: U64 = self.currentBodyInstanceId()
         val siteKey: CallSiteKey = self.currentCallSiteKey(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         self.ensureFinalCalleeIndex(nextCount: self.finalCalleeCount() + 1U64)
-        self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=parameterTypeRefs argumentConversions=argumentConversions recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />)
+        self.arena.finalCallees.append(<CallResolution bodyId=bodyId calleeBodyId=calleeBodyId siteKey=siteKey exprId=exprId siteIsStmt=siteIsStmt slot=slot callee=callee calleeTypeArgs=calleeTypeArgs parameterTypeRefs=parameterTypeRefs argumentConversions=argumentConversions receiverPassing=receiverPassing argumentPassings=argumentPassings recvTypeRef=recvTypeRef resultTypeRef=resultTypeRef resultProjection=resultProjection target=target />)
         val capacity: U64 = self.arena.finalCalleeIndexSlots.count()
         mut val indexSlot: U64 = self.finalCalleeHash(bodyId: bodyId, siteKey: siteKey) % capacity
         while self.arena.finalCalleeIndexSlots[indexSlot] != 0U64 {
@@ -1977,8 +1993,60 @@ pub impl Comp {
         return true
     }
 
-    inout fn sameStaticCallResolution(e: CallResolution, callee: U64, recvRef: U64, calleeArgs: Array[U64], parameterTypeRefs: Array[U64], argumentConversions: Array[ValueConversionProof], resultRef: U64, resultProjection: CallResultProjection, target: CallTarget) -> Bool {
-        return self.callTargetIsDirect(target: e.target) && self.sameCallTarget(a: e.target, b: target) && e.callee == callee && self.typeRefEq(a: e.recvTypeRef, b: recvRef) && self.typeRefEq(a: e.resultTypeRef, b: resultRef) && self.sameCallResultProjection(a: e.resultProjection, b: resultProjection) && self.sameResolvedTypeRefs(a: e.calleeTypeArgs, b: calleeArgs) && self.sameResolvedTypeRefs(a: e.parameterTypeRefs, b: parameterTypeRefs) && self.sameValueConversionProofs(a: e.argumentConversions, b: argumentConversions)
+    fn selectedReceiverPassing(callee: U64) -> CallReceiverPassing {
+        if callee >= self.arena.funcs.count() { return <CallReceiverPassing.None /> }
+        val f: Func = self.arena.funcs[callee]
+        if !(f.hasRecv) { return <CallReceiverPassing.None /> }
+        if f.selfInout { return <CallReceiverPassing.Inout /> }
+        if f.selfMove { return <CallReceiverPassing.Move /> }
+        return <CallReceiverPassing.Borrow />
+    }
+
+    fn selectedArgumentPassings(callee: U64) -> Array[CallArgumentPassing] {
+        mut val passings: Array[CallArgumentPassing] = []
+        if callee >= self.arena.funcs.count() { return passings }
+        val f: Func = self.arena.funcs[callee]
+        mut val i: U64 = 0U64
+        while i < f.params.count() {
+            val parameter: Param = f.params[i]
+            if parameter.isInout {
+                passings.append(<CallArgumentPassing.Inout />)
+            } else if parameter.isMove {
+                passings.append(<CallArgumentPassing.Move />)
+            } else {
+                passings.append(<CallArgumentPassing.Borrow />)
+            }
+            i += 1U64
+        }
+        return passings
+    }
+
+    fn sameCallReceiverPassing(a: CallReceiverPassing, b: CallReceiverPassing) -> Bool {
+        match a {
+            CallReceiverPassing.None => { match b { CallReceiverPassing.None => { return true } _ => {} } }
+            CallReceiverPassing.Borrow => { match b { CallReceiverPassing.Borrow => { return true } _ => {} } }
+            CallReceiverPassing.Inout => { match b { CallReceiverPassing.Inout => { return true } _ => {} } }
+            CallReceiverPassing.Move => { match b { CallReceiverPassing.Move => { return true } _ => {} } }
+        }
+        return false
+    }
+
+    fn sameCallArgumentPassings(a: Array[CallArgumentPassing], b: Array[CallArgumentPassing]) -> Bool {
+        if a.count() != b.count() { return false }
+        mut val i: U64 = 0U64
+        while i < a.count() {
+            match a[i] {
+                CallArgumentPassing.Borrow => { match b[i] { CallArgumentPassing.Borrow => {} _ => { return false } } }
+                CallArgumentPassing.Inout => { match b[i] { CallArgumentPassing.Inout => {} _ => { return false } } }
+                CallArgumentPassing.Move => { match b[i] { CallArgumentPassing.Move => {} _ => { return false } } }
+            }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn sameStaticCallResolution(e: CallResolution, callee: U64, recvRef: U64, calleeArgs: Array[U64], parameterTypeRefs: Array[U64], argumentConversions: Array[ValueConversionProof], receiverPassing: CallReceiverPassing, argumentPassings: Array[CallArgumentPassing], resultRef: U64, resultProjection: CallResultProjection, target: CallTarget) -> Bool {
+        return self.callTargetIsDirect(target: e.target) && self.sameCallTarget(a: e.target, b: target) && e.callee == callee && self.typeRefEq(a: e.recvTypeRef, b: recvRef) && self.typeRefEq(a: e.resultTypeRef, b: resultRef) && self.sameCallResultProjection(a: e.resultProjection, b: resultProjection) && self.sameResolvedTypeRefs(a: e.calleeTypeArgs, b: calleeArgs) && self.sameResolvedTypeRefs(a: e.parameterTypeRefs, b: parameterTypeRefs) && self.sameValueConversionProofs(a: e.argumentConversions, b: argumentConversions) && self.sameCallReceiverPassing(a: e.receiverPassing, b: receiverPassing) && self.sameCallArgumentPassings(a: e.argumentPassings, b: argumentPassings)
     }
 
     // Expand an enum conversion through every physical payload field while the
@@ -2232,6 +2300,99 @@ pub impl Comp {
         self.putFinalAggregate(fact: <FinalAggregateResolution bodyId=bodyId exprId=exprId resultTypeRef=self.groundTermForBody(ref: aggregate.resultTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef) elementTargetRefs=targets elementConversions=conversions />)
     }
 
+    fn finalMatchHash(bodyId: U64, stmtId: U64) -> U64 {
+        val modulus: U64 = 4294967291U64
+        return (((bodyId % modulus + stmtId % modulus) * 65537U64) + 31U64) % modulus
+    }
+
+    inout fn rebuildFinalMatchIndex(capacity: U64) {
+        self.arena.finalMatchIndexSlots = []
+        mut val zero: U64 = 0U64
+        while zero < capacity {
+            self.arena.finalMatchIndexSlots.append(0U64)
+            zero += 1U64
+        }
+        mut val entry: U64 = 0U64
+        while entry < self.arena.finalMatches.count() {
+            val fact: FinalMatchResolution = self.arena.finalMatches[entry]
+            mut val slot: U64 = self.finalMatchHash(bodyId: fact.bodyId, stmtId: fact.stmtId) % capacity
+            while self.arena.finalMatchIndexSlots[slot] != 0U64 {
+                slot = (slot + 1U64) % capacity
+            }
+            self.arena.finalMatchIndexSlots.set(i: slot, value: entry + 1U64)
+            entry += 1U64
+        }
+    }
+
+    inout fn ensureFinalMatchIndex(nextCount: U64) {
+        if self.arena.finalMatchIndexSlots.count() == 0U64 {
+            self.rebuildFinalMatchIndex(capacity: 16U64)
+        }
+        if nextCount * 10U64 >= self.arena.finalMatchIndexSlots.count() * 7U64 {
+            self.rebuildFinalMatchIndex(capacity: self.arena.finalMatchIndexSlots.count() * 2U64)
+        }
+    }
+
+    // Returns the table-count sentinel when the active body has no frozen
+    // enum-match layout for this source statement.
+    inout fn finalMatchIndex(bodyId: U64, stmtId: U64) -> U64 {
+        val capacity: U64 = self.arena.finalMatchIndexSlots.count()
+        if capacity == 0U64 { return self.arena.finalMatches.count() }
+        mut val slot: U64 = self.finalMatchHash(bodyId: bodyId, stmtId: stmtId) % capacity
+        while self.arena.finalMatchIndexSlots[slot] != 0U64 {
+            val entry: U64 = self.arena.finalMatchIndexSlots[slot] - 1U64
+            val fact: FinalMatchResolution = self.arena.finalMatches[entry]
+            if fact.bodyId == bodyId && fact.stmtId == stmtId { return entry }
+            slot = (slot + 1U64) % capacity
+        }
+        return self.arena.finalMatches.count()
+    }
+
+    inout fn putFinalMatch(fact: FinalMatchResolution) {
+        val prior: U64 = self.finalMatchIndex(bodyId: fact.bodyId, stmtId: fact.stmtId)
+        if prior < self.arena.finalMatches.count() {
+            self.arena.finalMatches.set(i: prior, value: fact)
+            return
+        }
+        self.ensureFinalMatchIndex(nextCount: self.arena.finalMatches.count() + 1U64)
+        self.arena.finalMatches.append(fact)
+        val capacity: U64 = self.arena.finalMatchIndexSlots.count()
+        mut val slot: U64 = self.finalMatchHash(bodyId: fact.bodyId, stmtId: fact.stmtId) % capacity
+        while self.arena.finalMatchIndexSlots[slot] != 0U64 {
+            slot = (slot + 1U64) % capacity
+        }
+        self.arena.finalMatchIndexSlots.set(i: slot, value: self.arena.finalMatches.count())
+    }
+
+    // Ground one parametric SemanticMatch under the active BodyInstance. No
+    // AST spelling or legacy type recovery participates after this boundary.
+    inout fn finalizeCurrentBodyMatch(stmtId: U64) {
+        val bodyId: U64 = self.currentBodyInstanceId()
+        if bodyId == 0U64 { return }
+        val sourceIndex: U64 = self.semanticMatchIndex(ownerFnIdx: self.cur.bodyFnIdx, stmtId: stmtId)
+        if sourceIndex >= self.decls.semanticMatches.count() { return }
+        val source: SemanticMatch = self.decls.semanticMatches[sourceIndex]
+        val scrutineeTypeRef: U64 = self.groundTermForBody(ref: source.scrutineeTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+        if scrutineeTypeRef == 0U64 { return }
+        mut val arms: Array[FinalMatchArmResolution] = []
+        mut val armIndex: U64 = 0U64
+        while armIndex < source.arms.count() {
+            val sourceArm: SemanticMatchArm = source.arms[armIndex]
+            mut val payloads: Array[FinalMatchPayloadResolution] = []
+            mut val payloadIndex: U64 = 0U64
+            while payloadIndex < sourceArm.payloads.count() {
+                val sourcePayload: SemanticMatchPayload = sourceArm.payloads[payloadIndex]
+                val fieldTypeRef: U64 = self.groundTermForBody(ref: sourcePayload.fieldTerm, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                if fieldTypeRef == 0U64 { return }
+                payloads.append(<FinalMatchPayloadResolution bindTarget=sourcePayload.bindTarget fieldIndex=sourcePayload.fieldIndex fieldTypeRef=fieldTypeRef />)
+                payloadIndex += 1U64
+            }
+            arms.append(<FinalMatchArmResolution hasVariant=sourceArm.hasVariant variantIndex=sourceArm.variantIndex payloads=payloads />)
+            armIndex += 1U64
+        }
+        self.putFinalMatch(fact: <FinalMatchResolution bodyId=bodyId stmtId=stmtId scrutineeTypeRef=scrutineeTypeRef enumIndex=source.enumIndex arms=arms />)
+    }
+
     // A return is a source-level value boundary just like a call argument. The
     // selected expression term and declared ABI result are frontend facts; this
     // finalizer grounds them once in the active BodyInstance and freezes the
@@ -2321,6 +2482,8 @@ pub impl Comp {
         val i: U64 = self.bodyCalleeIndex(exprId: exprId, siteIsStmt: siteIsStmt, slot: slot)
         val params: Array[U64] = self.groundedSelectedCalleeParameterTypes(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
         val conversions: Array[ValueConversionProof] = self.callArgumentConversions(sources: argumentSources, parameterTypeRefs: params)
+        val receiverPassing: CallReceiverPassing = self.selectedReceiverPassing(callee: callee)
+        val argumentPassings: Array[CallArgumentPassing] = self.selectedArgumentPassings(callee: callee)
         val carrierResult: U64 = self.groundedSelectedCalleeReturn(callee: callee, recvRef: recvRef, calleeArgs: calleeArgs)
         mut val result: U64 = self.finalSelectedSourceResult(resultRef: resultRef, carrierRef: carrierResult)
         val f: Func = self.arena.funcs[callee]
@@ -2349,7 +2512,7 @@ pub impl Comp {
         val target: CallTarget = self.runtimeIntrinsicTarget(callee: callee)
         if i < self.finalCalleeCount() {
             val prior: CallResolution = self.arena.finalCallees[i]
-            if !(self.sameStaticCallResolution(e: prior, callee: callee, recvRef: recvRef, calleeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, resultRef: result, resultProjection: resultProjection, target: target)) {
+            if !(self.sameStaticCallResolution(e: prior, callee: callee, recvRef: recvRef, calleeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultRef: result, resultProjection: resultProjection, target: target)) {
                 if siteIsStmt {
                     self.errorAt(offset: 0U64, msg: "internal error: conflicting static CallResolution publish")
                 } else {
@@ -2358,7 +2521,7 @@ pub impl Comp {
             }
             return
         }
-        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, calleeTypeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, resultProjection: resultProjection, target: target, calleeBodyId: calleeBodyId)
+        self.appendFinalCallee(exprId: exprId, callee: callee, siteIsStmt: siteIsStmt, slot: slot, recvTypeRef: recvRef, resultTypeRef: result, calleeTypeArgs: calleeArgs, parameterTypeRefs: params, argumentConversions: conversions, receiverPassing: receiverPassing, argumentPassings: argumentPassings, resultProjection: resultProjection, target: target, calleeBodyId: calleeBodyId)
         // A call result can be the sole reachable occurrence of a generic
         // layout (for example `val token: Token[String] = marker()`).  This
         // belongs to the completed CallResolution, not to an Expr.Method-only
@@ -4478,13 +4641,16 @@ pub impl Comp {
                         // Record the iterator slot even when this value is already
                         // an Iterator.  The sentinel tells LLVM that there is no
                         // iterator() call; it must not rediscover that fact from
-                        // the receiver spelling.
-                        // A value that already conforms to Iterator has no
-                        // iterator() callable. Its slot-1 descriptor is still
-                        // an identity semantic call and must publish the same
-                        // resultTypeRef as a real iterator() call; consumers
-                        // such as deferred Item recipes never read hints.
-                        val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultRef=initialRef resultHintRef=initialRef />
+                        // the receiver spelling.  Only that sentinel case is an
+                        // identity call.  A real `iterator()` has a distinct
+                        // carrier (for example Array[T] -> ArrayIter[T]), so leave
+                        // its source result absent and let completeStaticBodyCallee
+                        // publish the selected callee return as the one result.
+                        mut val iteratorResult: U64 = 0U64
+                        if iteratorFn >= self.arena.funcs.count() {
+                            iteratorResult = initialRef
+                        }
+                        val iteratorSelection: CallSiteSelection = <CallSiteSelection exprId=stmtId siteIsStmt=true slot=1U64 callee=iteratorFn receiverRef=initialRef resultRef=iteratorResult resultHintRef=initialRef />
                         self.recordSelectedBodyCallee(selection: iteratorSelection)
                         if iteratorFn < self.arena.funcs.count() {
                             self.enqueueSelectedCallee(selection: iteratorSelection)
@@ -4627,6 +4793,7 @@ pub impl Comp {
             }
             Stmt.Match(val scrut, val arms) => {
                 self.scanExprInsts(exprId: scrut)
+                self.finalizeCurrentBodyMatch(stmtId: stmtId)
                 // Match-arm bindings are typed from the concrete scrutinee
                 // instance.  `typeOf` is AST-global and loses `Optional[I64]`
                 // for a local loop item; use the body-local/grounded recovery

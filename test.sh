@@ -198,6 +198,48 @@ for n in $(printf '%s\n' "$mid_short_circuit_results" | sed -n 's/^FAIL //p'); d
     fail=$((fail + 1)); failed="$failed $n"
 done
 
+# A statement enum match is ordinary Mid CFG: the selected arm is reached by
+# a frozen-layout tag switch and its payload bind is a Place projection.  The
+# runtime result alone would also pass through legacy lowering, so coverage
+# rejects the temporary `UnsupportedMatch` fallback explicitly.
+mid_enum_match_results=$(sh -c '
+    source="tests/run/mid_enum_match_cfg_lowering.pw"
+    coverage="/tmp/t_mid_enum_match_$$.coverage"
+    if ! "$PLEWC" --emit-mid-coverage "$source" >/tmp/t_mid_enum_match_$$.ll 2>"$coverage"; then
+        echo "FAIL mid-enum-match(emit)"; exit 0
+    fi
+    if grep -q "name=score category=build:match" "$coverage"; then
+        echo "FAIL mid-enum-match(legacy)"
+    else
+        echo "PASS mid-enum-match"
+    fi
+' sh)
+mempass=$(printf '%s\n' "$mid_enum_match_results" | grep -c '^PASS' || true)
+for n in $(printf '%s\n' "$mid_enum_match_results" | sed -n 's/^FAIL //p'); do
+    fail=$((fail + 1)); failed="$failed $n"
+done
+
+# A payloadless enum construction in a return is a semantic aggregate, even
+# though it has no payload slots.  Mid must consume Record's aggregate fact
+# and preserve MidOperandBuild's default success error; legacy fallback would
+# mask both regressions while still printing the right value.
+mid_payloadless_enum_return_results=$(sh -c '
+    source="tests/run/mid_payloadless_enum_return.pw"
+    coverage="/tmp/t_mid_payloadless_enum_return_$$.coverage"
+    if ! "$PLEWC" --emit-mid-coverage "$source" >/tmp/t_mid_payloadless_enum_return_$$.ll 2>"$coverage"; then
+        echo "FAIL mid-payloadless-enum-return(emit)"; exit 0
+    fi
+    if grep -q "name=decide category=" "$coverage"; then
+        echo "FAIL mid-payloadless-enum-return(legacy)"
+    else
+        echo "PASS mid-payloadless-enum-return"
+    fi
+' sh)
+mperpass=$(printf '%s\n' "$mid_payloadless_enum_return_results" | grep -c '^PASS' || true)
+for n in $(printf '%s\n' "$mid_payloadless_enum_return_results" | sed -n 's/^FAIL //p'); do
+    fail=$((fail + 1)); failed="$failed $n"
+done
+
 # A root assignment consumes the resolver-selected declaration identity; Mid
 # must never recover the target local by source spelling. The fixture covers
 # the ownership-sensitive Overwrite path independently of projection access.
@@ -215,6 +257,27 @@ mid_local_assign_results=$(sh -c '
 ' sh)
 mlapass=$(printf '%s\n' "$mid_local_assign_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$mid_local_assign_results" | sed -n 's/^FAIL //p'); do
+    fail=$((fail + 1)); failed="$failed $n"
+done
+
+# An authored `Array` read is lowered to a synthetic Index call for the
+# general access model, but its frozen addressable place must enter Mid as an
+# Index projection.  Runtime output and a bounds-check marker alone could
+# both be satisfied by legacy lowering, so pin the selected body separately.
+mid_index_place_results=$(sh -c '
+    source="tests/run/mid_index_place_runtime_cfg_lowering.pw"
+    coverage="/tmp/t_mid_index_place_$$.coverage"
+    if ! "$PLEWC" --emit-mid-coverage "$source" >/tmp/t_mid_index_place_$$.ll 2>"$coverage"; then
+        echo "FAIL mid-index-place(emit)"; exit 0
+    fi
+    if grep -q "name=select category=" "$coverage"; then
+        echo "FAIL mid-index-place(legacy)"
+    else
+        echo "PASS mid-index-place"
+    fi
+' sh)
+mipass=$(printf '%s\n' "$mid_index_place_results" | grep -c '^PASS' || true)
+for n in $(printf '%s\n' "$mid_index_place_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
 done
 
@@ -432,6 +495,40 @@ for n in $(printf '%s\n' "$mid_inout_receiver_results" | sed -n 's/^FAIL //p'); 
     fail=$((fail + 1)); failed="$failed $n"
 done
 
+# A normal method receiver is a guaranteed (+0) borrow, not a `Copy` merely
+# because the ABI passes its representation by value. Runtime output alone
+# cannot distinguish the two: copying Array storage makes the later append
+# CoW, yet still prints 34. The literal 34 identifies this fixture's one
+# source-level append call without pinning generated function ids; its
+# enclosing function must contain no raw-buffer retain from either count()
+# receiver. The old Mid lowering has two such retains and this is therefore a
+# real red gate for the CallResolution passing contract.
+mid_borrowed_read_receiver_results=$(sh -c '
+    source="tests/run/mid_borrowed_read_receiver_cfg_lowering.pw"
+    ll="/tmp/t_mid_borrowed_read_receiver_$$.ll"
+    if ! "$PLEWC" --emit-mid-coverage "$source" >"$ll" 2>/dev/null; then
+        echo "FAIL mid-borrowed-read-receiver(emit)"; exit 0
+    fi
+    if awk '
+        /^define / { inside=1; retain=0; marker=0 }
+        inside && /call void @plew_rawbuf_retain/ { retain=1 }
+        inside && /, i64 34\)/ { marker=1 }
+        /^}/ {
+            if (inside && marker) { seen=1; if (retain) bad=1 }
+            inside=0
+        }
+        END { exit !(seen && !bad) }
+    ' "$ll"; then
+        echo "PASS mid-borrowed-read-receiver"
+    else
+        echo "FAIL mid-borrowed-read-receiver(owned-read)"
+    fi
+' sh)
+mbrrpass=$(printf '%s\n' "$mid_borrowed_read_receiver_results" | grep -c '^PASS' || true)
+for n in $(printf '%s\n' "$mid_borrowed_read_receiver_results" | sed -n 's/^FAIL //p'); do
+    fail=$((fail + 1)); failed="$failed $n"
+done
+
 # --- panic/ : valid code that compiles and links but must die by SIGABRT
 #     (panic = abort, spec/11) with the expected panic text on stderr
 #     (overflow / div-by-zero / OOB / assert). The checked-arithmetic floor
@@ -522,6 +619,6 @@ for n in $(printf '%s\n' "$pr_results" | sed -n 's/^FAIL //p'); do
 done
 
 echo "----"
-echo "plewc: run=$pass  midcoverage=$mcpass  midbuildreason=$mbrpass  midshortcircuit=$mscpass  midlocalassign=$mlapass  midinout=$mirpass  panic=$ppass  reject=$rpass  part=$qpass  partreject=$prpass  skip=$skip  fail=$fail"
+echo "plewc: run=$pass  midcoverage=$mcpass  midbuildreason=$mbrpass  midshortcircuit=$mscpass  midenummatch=$mempass  midpayloadlessenumreturn=$mperpass  midlocalassign=$mlapass  midindexplace=$mipass  midinout=$mirpass  midborrowedread=$mbrrpass  panic=$ppass  reject=$rpass  part=$qpass  partreject=$prpass  skip=$skip  fail=$fail"
 [ -n "$failed" ] && echo "failing:$failed"
 [ "$fail" -eq 0 ]

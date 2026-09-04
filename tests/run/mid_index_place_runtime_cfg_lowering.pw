@@ -1,0 +1,14 @@
+import @Std/Io with { print }
+
+// A read-only Array index is an addressable Mid place. The element is loaded
+// through the explicit Index projection; neither the legacy AST emitter nor a
+// synthetic getter call may re-evaluate `index`.
+fn select(values: Array[I64], index: I64) {
+    val selected: I64 = values[index]
+}
+
+fn main() {
+    val values: Array[I64] = [4I64, 9I64, 16I64]
+    select(values: values, index: 1I64)
+    print(9I64)
+}

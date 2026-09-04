@@ -193,20 +193,41 @@ pub impl Comp {
     // name a declaration imported from a module which is discovered later in
     // the loader worklist; owner resolution must never depend on that order.
     inout fn predeclareTrait(t: TraitAst) {
-        val nameStart: U64 = t.nameSpan.start
+        self.predeclareTraitIdentity(nameStart: t.nameSpan.start, nameLen: t.nameSpan.end - t.nameSpan.start, arity: t.typeParams.count())
+    }
+
+    // The sole semantic mutation for trait predeclaration.  AST and SyntaxFile
+    // inputs decode to source identity/arity and then converge here.
+    inout fn predeclareTraitIdentity(nameStart: U64, nameLen: U64, arity: U64) {
         mut val i: U64 = 0U64
         while i < self.decls.traitOwners.count() {
             if self.decls.traitOwners[i].nameStart == nameStart { return }
             i += 1U64
         }
-        val nameLen: U64 = t.nameSpan.end - t.nameSpan.start
-        self.decls.traitOwners.append(<TraitOwner nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=t.typeParams.count() />)
+        self.decls.traitOwners.append(<TraitOwner nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) arity=arity />)
     }
 
     inout fn predeclareTraitItem(item: TopItemAst) {
         match item {
             TopItemAst.Trait(val t) => { self.predeclareTrait(t: t) }
             TopItemAst.Export(val inner) => { self.predeclareTraitItem(item: inner) }
+            _ => {}
+        }
+    }
+
+    // SyntaxFile counterpart of predeclareTraitItem.  The predeclare pass needs
+    // only trait identity and arity, so it must not reconstruct a TraitAst.
+    inout fn predeclareSyntaxTraitItem(item: TopItemId) {
+        match syntaxTopItemKind(file: self.syntax, item: item) {
+            SyntaxTopItemKind.Trait => {
+                val traitId: TraitId = <TraitId raw=syntaxTopItemPayload(file: self.syntax, item: item) />
+                val trait: SyntaxTrait = syntaxTrait(file: self.syntax, id: traitId)
+                val nameLen: U64 = trait.name.end - trait.name.start
+                self.predeclareTraitIdentity(nameStart: trait.name.start, nameLen: nameLen, arity: syntaxTraitTypeParamCount(file: self.syntax, trait: trait))
+            }
+            SyntaxTopItemKind.Export => {
+                self.predeclareSyntaxTraitItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+            }
             _ => {}
         }
     }
@@ -267,6 +288,21 @@ pub impl Comp {
                 }
             }
             ti += 1
+        }
+    }
+
+    // Reconstruct the implicit lexical `Self` binder of one completed trait.
+    // The source spelling is shared, but identity is declaration-owned.
+    inout fn appendTraitSelfBinder(scope: inout Array[Bind], owner: U64) {
+        mut val ti: U64 = 0U64
+        while ti < self.decls.traits.count() {
+            val td: TraitDef = self.decls.traits[ti]
+            if td.nameStart == owner && td.selfParamId != 0U64 {
+                val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+                scope.append(<Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=td.selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />)
+                return
+            }
+            ti += 1U64
         }
     }
 
@@ -430,6 +466,12 @@ pub impl Comp {
             implScope.append(implParamBinds[ipb])
             ipb += 1
         }
+        // A provided body (`impl Trait { ... }`) is lowered in the trait's
+        // lexical environment.  Its explicit `Self` annotations must carry
+        // that trait's binder identity, rather than remain an ambient keyword.
+        if recvTraitOwner != 0U64 {
+            self.appendTraitSelfBinder(scope: inout implScope, owner: recvTraitOwner)
+        }
         self.appendTraitAssocTypes(scope: inout implScope, nameId: intern(c: inout self, start: recvN.nameStart, len: recvN.nameLen))
         if im.isTraitImpl {
             val trN: Bind = self.resolvedImplTraitBind(im: im)
@@ -578,8 +620,13 @@ pub impl Comp {
             ai += 1
         }
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: t.typeParams, anchor: nameStart, sendableFlags: t.typeParamSendable)
+        val selfName: Bind = self.kwSpan(kw: "Self", kwLen: 4U64)
+        val selfParamId: U64 = self.nextParamId
+        self.nextParamId += 1U64
+        val selfBind: Bind = <Bind nameStart=selfName.nameStart nameLen=selfName.nameLen nameId=intern(c: inout self, start: selfName.nameStart, len: selfName.nameLen) paramId=selfParamId fieldStart=selfName.fieldStart fieldLen=selfName.fieldLen />
         val savedTP: Array[Bind] = self.cur.typeParams
         mut val scopeTP: Array[Bind] = []
+        scopeTP.append(selfBind)
         mut val stpi: U64 = 0
         while stpi < typeParams.count() {
             scopeTP.append(typeParams[stpi])
@@ -598,7 +645,7 @@ pub impl Comp {
             ri += 1
         }
         self.cur.typeParams = savedTP
-        self.decls.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
+        self.decls.traits.append(<TraitDef nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) selfParamId=selfParamId typeParams=typeParams supertraits=supertraits reqs=reqs assocTypes=assocTypes />)
         // attach pending `@[...]` directives to this trait (a macro on a trait);
         // declStart/declEnd = the trait's source span for the gen harness slice.
         self.drainDerives(typeStart: nameStart, typeLen: nameLen, isEnum: false, declStart: t.span.start, declEnd: t.span.end)

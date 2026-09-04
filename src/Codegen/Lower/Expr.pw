@@ -58,7 +58,7 @@ pub impl Comp {
                 }
                 if ct.args.count() > 0 {
                     match e {
-                        ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
+                        ExprAst.Make(val typeName, typeNameSpan: _, val typeArgs, val variant, variantSpan: _, val isEnum, val fields, val span) => {
                             if !(isEnum) {
                                 if typeArgs.count() == 0 {
                                     val tn: Bind = self.internBytes(s: typeName)
@@ -85,7 +85,7 @@ pub impl Comp {
     inout fn lowerExpr(e: ExprAst) -> U64 {
         mut val result: U64 = 0
         match e {
-            ExprAst.IntLit(val value, val isBool, val tySuffix, val span) => {
+            ExprAst.IntLit(val value, val isBool, val tySuffix, literalSpan: _, tySuffixSpan: _, val span) => {
                 mut val sStart: U64 = 0
                 mut val sLen: U64 = 0
                 if tySuffix.bytes().count() > 0 {
@@ -95,7 +95,7 @@ pub impl Comp {
                 }
                 result = self.pushExpr(e: <Expr.Int value=value offset=span.start isBool=isBool tyStart=sStart tyLen=sLen isNeg=false />)
             }
-            ExprAst.FloatLit(val text, val tySuffix, val span) => {
+            ExprAst.FloatLit(val text, val tySuffix, literalSpan: _, tySuffixSpan: _, val span) => {
                 val tb: Bind = self.internBytes(s: text)
                 mut val sStart: U64 = 0
                 mut val sLen: U64 = 0
@@ -123,7 +123,7 @@ pub impl Comp {
                 mut val folded: Bool = false
                 if op == opSub() {
                     match operand {
-                        ExprAst.IntLit(val value, val isBool, val tySuffix, span: val litSpan) => {
+                        ExprAst.IntLit(val value, val isBool, val tySuffix, literalSpan: _, tySuffixSpan: _, span: val litSpan) => {
                             if !(isBool) {
                                 mut val sStart: U64 = 0
                                 mut val sLen: U64 = 0
@@ -149,7 +149,7 @@ pub impl Comp {
                 val r: U64 = self.lowerExpr(e: rhs)
                 result = self.pushExpr(e: <Expr.Binary op=op lhs=l rhs=r />)
             }
-            ExprAst.Call(val name, val args, val span) => {
+            ExprAst.Call(val name, nameSpan: _, val args, val span) => {
                 // ORIGINAL offset (name is at the call's span start) — feeds moduleOf.
                 val a: Array[Arg] = self.lowerArgs(args: args, fnName: name)
                 result = self.pushExpr(e: <Expr.Call nameStart=span.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
@@ -198,13 +198,13 @@ pub impl Comp {
                 val a: Array[Arg] = self.lowerMethodArgs(args: args, methodName: name)
                 result = self.pushExpr(e: <Expr.Method recv=d nameStart=nameSpan.start nameLen=name.bytes().count() args=self.pushArgs(args: a) />)
             }
-            ExprAst.ExtMethod(val recv, val src, val name, val args, val span) => {
+            ExprAst.ExtMethod(val recv, val src, srcSpan: _, val name, nameSpan: _, val args, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
                 val a: Array[Arg] = self.lowerArgs(args: args, fnName: "")
                 val nm: Bind = self.internBytes(s: name)
                 result = self.pushExpr(e: <Expr.ExtMethod recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) nameStart=nm.nameStart nameLen=nm.nameLen args=self.pushArgs(args: a) />)
             }
-            ExprAst.ExtView(val recv, val src, val strip, val span) => {
+            ExprAst.ExtView(val recv, val src, srcSpan: _, val strip, val span) => {
                 val r: U64 = self.lowerExpr(e: recv)
                 result = self.pushExpr(e: <Expr.ExtView recv=r source=self.lowerViewSource(siteOffset: span.start, text: src) strip=strip />)
             }
@@ -213,7 +213,7 @@ pub impl Comp {
                 val idx: U64 = self.lowerExpr(e: index)
                 result = self.lowerIndexRead(recv: b, key: idx)
             }
-            ExprAst.Make(val typeName, val typeArgs, val variant, val isEnum, val fields, val span) => {
+            ExprAst.Make(val typeName, typeNameSpan: _, val typeArgs, val variant, variantSpan: _, val isEnum, val fields, val span) => {
                 val tn: Bind = self.internBytes(s: typeName)
                 mut val tyRef: U64 = 0
                 if typeArgs.count() > 0 {
@@ -337,6 +337,161 @@ pub impl Comp {
         if result < self.arena.exprSpanStart.count() {
             self.arena.exprSpanStart[result] = exprAstSpan(e: e).start
             self.arena.exprSpanEnd[result] = exprAstSpan(e: e).end
+        }
+        return result
+    }
+
+    // Context-aware SyntaxFile lowering. This mirrors lowerExprWithCtx without
+    // reconstituting value AST nodes: context is semantic data, while every
+    // child remains a stable immutable syntax ID.
+    inout fn lowerSyntaxExprWithCtx(id: ExprId, ctxRef: U64) -> U64 {
+        if ctxRef != 0U64 {
+            if ctxRef < self.arena.types.count() {
+                val ct: TypeRef = self.arena.types[ctxRef]
+                val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
+                if ct.nameLen > 0U64 {
+                    if self.arena.bytes[ct.nameStart] == '(' {
+                        match e.kind {
+                            SyntaxExprKind.RecordLit => {
+                                val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false)
+                                val result: U64 = self.pushExpr(e: <Expr.Make typeStart=ct.nameStart typeLen=ct.nameLen variantStart=0U64 variantLen=0U64 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />)
+                                self.arena.exprSpanStart[result] = e.span.start
+                                self.arena.exprSpanEnd[result] = e.span.end
+                                return result
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                if ct.args.count() > 0U64 {
+                    match e.kind {
+                        SyntaxExprKind.Make => {
+                            if !(e.flag0) {
+                                if syntaxExprTypeArgCount(file: self.syntax, expr: e) == 0U64 {
+                                    if intern(c: inout self, start: e.name.start, len: e.name.end - e.name.start) == ct.nameId {
+                                        val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: ct.nameId, variantId: 0U64, isEnum: false)
+                                        val result: U64 = self.pushExpr(e: <Expr.Make typeStart=e.name.start typeLen=e.name.end - e.name.start variantStart=0U64 variantLen=0U64 isEnum=false ty=ctxRef fields=self.pushMakeFields(fields: fields) />)
+                                        self.arena.exprSpanStart[result] = e.span.start
+                                        self.arena.exprSpanEnd[result] = e.span.end
+                                        return result
+                                    }
+                                }
+                            }
+                        }
+                        SyntaxExprKind.DictLit => {
+                            return self.lowerSyntaxDictLit(expr: e, ctxRef: ctxRef)
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        return self.lowerSyntaxExpr(id: id)
+    }
+
+    // SyntaxFile counterpart of expression lowering.  This path deliberately
+    // reads scalar node views and child IDs only: it never materializes an
+    // ExprAst/String tree from the immutable syntax arena.  More expression
+    // categories are added before the normal loader is switched to SyntaxFile.
+    inout fn lowerSyntaxExpr(id: ExprId) -> U64 {
+        val e: SyntaxExpr = syntaxExpr(file: self.syntax, id: id)
+        mut val result: U64 = 0U64
+        match e.kind {
+            SyntaxExprKind.IntLit => {
+                result = self.pushExpr(e: <Expr.Int value=e.intValue offset=e.text.start isBool=e.flag0 tyStart=e.name.start tyLen=e.name.end - e.name.start isNeg=false />)
+            }
+            SyntaxExprKind.FloatLit => {
+                result = self.pushExpr(e: <Expr.Float start=e.text.start len=e.text.end - e.text.start tyStart=e.name.start tyLen=e.name.end - e.name.start />)
+            }
+            SyntaxExprKind.StrLit => {
+                result = self.pushExpr(e: <Expr.Str start=e.text.start len=e.text.end - e.text.start />)
+            }
+            SyntaxExprKind.Ident => {
+                result = self.pushExpr(e: <Expr.Ident start=e.name.start len=e.name.end - e.name.start />)
+            }
+            SyntaxExprKind.Unary => {
+                mut val folded: Bool = false
+                if e.op == opSub() {
+                    val operand: SyntaxExpr = syntaxExpr(file: self.syntax, id: e.child0)
+                    match operand.kind {
+                        SyntaxExprKind.IntLit => {
+                            if !(operand.flag0) {
+                                result = self.pushExpr(e: <Expr.Int value=operand.intValue offset=operand.text.start isBool=false tyStart=operand.name.start tyLen=operand.name.end - operand.name.start isNeg=true />)
+                                folded = true
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if !(folded) {
+                    result = self.pushExpr(e: <Expr.Unary op=e.op operand=self.lowerSyntaxExpr(id: e.child0) />)
+                }
+            }
+            SyntaxExprKind.Binary => {
+                val lhs: U64 = self.lowerSyntaxExpr(id: e.child0)
+                val rhs: U64 = self.lowerSyntaxExpr(id: e.child1)
+                result = self.pushExpr(e: <Expr.Binary op=e.op lhs=lhs rhs=rhs />)
+            }
+            SyntaxExprKind.Field => {
+                result = self.pushExpr(e: <Expr.Field base=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
+            }
+            SyntaxExprKind.Arrow => {
+                result = self.pushExpr(e: <Expr.Arrow base=self.lowerSyntaxExpr(id: e.child0) nameStart=e.name.start nameLen=e.name.end - e.name.start />)
+            }
+            SyntaxExprKind.Index => {
+                result = self.lowerIndexRead(recv: self.lowerSyntaxExpr(id: e.child0), key: self.lowerSyntaxExpr(id: e.child1))
+            }
+            SyntaxExprKind.Make => {
+                mut val typeArgs: Array[U64] = []
+                mut val i: U64 = 0U64
+                while i < syntaxExprTypeArgCount(file: self.syntax, expr: e) {
+                    typeArgs.append(self.lowerSyntaxType(id: syntaxExprTypeArg(file: self.syntax, expr: e, index: i)).ref)
+                    i += 1U64
+                }
+                mut val tyRef: U64 = 0U64
+                if typeArgs.count() > 0U64 {
+                    tyRef = self.pushType(t: <TypeRef nameStart=e.name.start nameLen=e.name.end - e.name.start args=typeArgs isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
+                }
+                val typeId: U64 = intern(c: inout self, start: e.name.start, len: e.name.end - e.name.start)
+                mut val variantId: U64 = 0U64
+                if e.flag0 {
+                    variantId = intern(c: inout self, start: e.nameSpan.start, len: e.nameSpan.end - e.nameSpan.start)
+                }
+                val fields: Array[MakeField] = self.lowerSyntaxMakeFields(expr: e, typeId: typeId, variantId: variantId, isEnum: e.flag0)
+                result = self.pushExpr(e: <Expr.Make typeStart=e.name.start typeLen=e.name.end - e.name.start variantStart=e.nameSpan.start variantLen=e.nameSpan.end - e.nameSpan.start isEnum=e.flag0 ty=tyRef fields=self.pushMakeFields(fields: fields) />)
+            }
+            SyntaxExprKind.DictLit => {
+                result = self.lowerSyntaxDictLit(expr: e, ctxRef: 0U64)
+            }
+            SyntaxExprKind.Cast => {
+                val ty: PType = self.lowerSyntaxType(id: e.type0)
+                result = self.pushExpr(e: <Expr.Cast operand=self.lowerSyntaxExpr(id: e.child0) tyStart=ty.start tyLen=ty.len ty=ty.ref />)
+            }
+            SyntaxExprKind.OptChain => {
+                result = self.pushExpr(e: <Expr.OptChain base=self.lowerSyntaxExpr(id: e.child0) cont=self.lowerSyntaxExpr(id: e.child1) />)
+            }
+            SyntaxExprKind.ChainHole => {
+                result = self.pushExpr(e: <Expr.ChainHole />)
+            }
+            SyntaxExprKind.Try => {
+                result = self.pushExpr(e: <Expr.Try expr=self.lowerSyntaxExpr(id: e.child0) />)
+            }
+            SyntaxExprKind.Move => {
+                result = self.pushExpr(e: <Expr.Move operand=self.lowerSyntaxExpr(id: e.child0) isBorrow=e.flag0 />)
+            }
+            SyntaxExprKind.Await => {
+                result = self.pushExpr(e: <Expr.Await operand=self.lowerSyntaxExpr(id: e.child0) />)
+            }
+            SyntaxExprKind.ExtView => {
+                result = self.pushExpr(e: <Expr.ExtView recv=self.lowerSyntaxExpr(id: e.child0) source=self.lowerViewSourceSpan(siteOffset: e.span.start, start: e.text.start, len: e.text.end - e.text.start) strip=e.flag0 />)
+            }
+            _ => {
+                panic "compiler bug: incomplete SyntaxFile expression lowering was used before loader migration completed"
+            }
+        }
+        if result < self.arena.exprSpanStart.count() {
+            self.arena.exprSpanStart[result] = e.span.start
+            self.arena.exprSpanEnd[result] = e.span.end
         }
         return result
     }

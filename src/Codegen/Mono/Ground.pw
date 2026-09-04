@@ -27,7 +27,7 @@ pub impl Comp {
         // nominal constructor (`MapIter[Self, fn(Item)->B, B]`), so this must
         // be part of the recursive term substitution rather than a root-only
         // convenience in groundTermForBody.
-        if t.args.count() == 0U64 {
+        if t.paramId == 0U64 && t.args.count() == 0U64 {
             if selfRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") { return selfRef }
             if itemRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") { return itemRef }
         }
@@ -133,7 +133,7 @@ pub impl Comp {
         // Self/Item are derived projections of the selected receiver, not
         // ParamId bindings. Preserve their established semantic meaning before
         // consulting the explicit binder map.
-        if t.args.count() == 0U64 {
+        if t.paramId == 0U64 && t.args.count() == 0U64 {
             if environment.receiverRef != 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
                 return self.typeRefWithAddedViewSources(ref: environment.receiverRef, additions: outerViews)
             }
@@ -727,10 +727,11 @@ pub impl Comp {
             i += 1
         }
         if changed {
-            // rebuild with the identity facets preserved: the view (`P#Ext`) and the
-            // existential (`any P`) are part of type identity — grounding the args
-            // must not strip them.
-            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+            // Grounding changes only type children. Every identity facet —
+            // view, existential, nominal declaration and projection trait
+            // owner — survives, so later proof/Mid consumers never need to
+            // recover a declaration from spelling.
+            return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=newArgs isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
         }
         return ref
     }

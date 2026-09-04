@@ -1,0 +1,18 @@
+import @Std/Io with { print }
+
+enum Signal {
+    Stop
+    Value(number: I64)
+}
+
+fn score(signal: Signal) -> I64 {
+    match signal {
+        Signal.Value(number: val value) => { return value + 10I64 }
+        Signal.Stop => { return 0I64 }
+    }
+}
+
+fn main() {
+    print(score(signal: <Signal.Value number=32I64 />))
+    print(score(signal: <Signal.Stop />))
+}

@@ -1,0 +1,26 @@
+// A construction with an omitted default field must remain on the legacy path
+// until frontend publishes an equally explicit default-value carrier for Mid.
+// Mid must never materialize the missing field as an uninitialized LLVM slot.
+import @Std/Io with { print }
+
+enum Status {
+    Ready
+    Failed
+}
+
+struct Report {
+    pub val value: U64
+    pub val status: Status = <Status.Ready />
+}
+pub impl Report { factory }
+
+fn make(value: U64) -> Report {
+    return <Report value=value />
+}
+
+fn main() {
+    match make(value: 42U64).status {
+        Status.Ready => { print(42U64) }
+        Status.Failed => { print(0U64) }
+    }
+}

@@ -2,263 +2,244 @@
 // CFG. This path owns no syntax/type/call resolution. It consumes only typed
 // places, semantic constants, and explicit ownership operations.
 
+import @Std/Core with { truncU32, bitCastU64 }
+
 pub impl LlvmCtx {
 
-    // Coverage is a set of frozen body-instance reasons, not an emission log:
-    // generic worklist re-visits must not inflate an unsupported body shape.
-    fn sameMidCoverageCategory(a: MidCoverageCategory, b: MidCoverageCategory) -> Bool {
-        match a {
-            MidCoverageCategory.Build(reason: val left) => {
-                match b {
-                    MidCoverageCategory.Build(reason: val right) => {
-                        match left {
-                            MidBuildError.None => { match right { MidBuildError.None => { return true } _ => { return false } } }
-                            MidBuildError.InvalidStatement => { match right { MidBuildError.InvalidStatement => { return true } _ => { return false } } }
-                            MidBuildError.InvalidBlock => { match right { MidBuildError.InvalidBlock => { return true } _ => { return false } } }
-                            MidBuildError.InvalidFunction => { match right { MidBuildError.InvalidFunction => { return true } _ => { return false } } }
-                            MidBuildError.MissingSemanticType => { match right { MidBuildError.MissingSemanticType => { return true } _ => { return false } } }
-                            MidBuildError.UnboundLocalIdentifier => { match right { MidBuildError.UnboundLocalIdentifier => { return true } _ => { return false } } }
-                            MidBuildError.Unsupported(reason: val leftReason) => {
-                                match right {
-                                    MidBuildError.Unsupported(reason: val rightReason) => { return self.sameMidUnsupportedBuild(a: leftReason, b: rightReason) }
-                                    _ => { return false }
-                                }
-                            }
-                            MidBuildError.UnsupportedAssign => { match right { MidBuildError.UnsupportedAssign => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedWhile => { match right { MidBuildError.UnsupportedWhile => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedFor => { match right { MidBuildError.UnsupportedFor => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedMatch => { match right { MidBuildError.UnsupportedMatch => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedPanic => { match right { MidBuildError.UnsupportedPanic => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedGive => { match right { MidBuildError.UnsupportedGive => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedBreak => { match right { MidBuildError.UnsupportedBreak => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedContinue => { match right { MidBuildError.UnsupportedContinue => { return true } _ => { return false } } }
-                            MidBuildError.MissingTerminator => { match right { MidBuildError.MissingTerminator => { return true } _ => { return false } } }
-                            MidBuildError.MissingCallTemplate => { match right { MidBuildError.MissingCallTemplate => { return true } _ => { return false } } }
-                            MidBuildError.UnsupportedCallTemplate => { match right { MidBuildError.UnsupportedCallTemplate => { return true } _ => { return false } } }
-                        }
-                    }
-                    _ => { return false }
-                }
-            }
-            MidCoverageCategory.MissingBodyInstance => { match b { MidCoverageCategory.MissingBodyInstance => { return true } _ => { return false } } }
-            MidCoverageCategory.Instantiate => { match b { MidCoverageCategory.Instantiate => { return true } _ => { return false } } }
-            MidCoverageCategory.Access => { match b { MidCoverageCategory.Access => { return true } _ => { return false } } }
-            MidCoverageCategory.Verify(reason: val left) => {
-                match b {
-                    MidCoverageCategory.Verify(reason: val right) => {
-                        match left {
-                            MidVerifyError.None => { match right { MidVerifyError.None => { return true } _ => { return false } } }
-                            MidVerifyError.InvalidTarget => { match right { MidVerifyError.InvalidTarget => { return true } _ => { return false } } }
-                            MidVerifyError.PartialMove => { match right { MidVerifyError.PartialMove => { return true } _ => { return false } } }
-                            MidVerifyError.MoveUnavailable => { match right { MidVerifyError.MoveUnavailable => { return true } _ => { return false } } }
-                            MidVerifyError.DropUnavailable => { match right { MidVerifyError.DropUnavailable => { return true } _ => { return false } } }
-                            MidVerifyError.InvalidDropFlag => { match right { MidVerifyError.InvalidDropFlag => { return true } _ => { return false } } }
-                            MidVerifyError.UnelaboratedScopeExit => { match right { MidVerifyError.UnelaboratedScopeExit => { return true } _ => { return false } } }
-                            MidVerifyError.UnelaboratedAccess => { match right { MidVerifyError.UnelaboratedAccess => { return true } _ => { return false } } }
-                            MidVerifyError.UninstantiatedReturnBoundary => { match right { MidVerifyError.UninstantiatedReturnBoundary => { return true } _ => { return false } } }
-                        }
-                    }
-                    _ => { return false }
-                }
-            }
-            MidCoverageCategory.Eligibility(reason: val left) => {
-                match b {
-                    MidCoverageCategory.Eligibility(reason: val right) => {
-                        match left {
-                            MidEligibilityReason.Async => { match right { MidEligibilityReason.Async => { return true } _ => { return false } } }
-                            MidEligibilityReason.Extern => { match right { MidEligibilityReason.Extern => { return true } _ => { return false } } }
-                            MidEligibilityReason.InoutReceiver => { match right { MidEligibilityReason.InoutReceiver => { return true } _ => { return false } } }
-                            MidEligibilityReason.MoveReceiver => { match right { MidEligibilityReason.MoveReceiver => { return true } _ => { return false } } }
-                            MidEligibilityReason.Globals => { match right { MidEligibilityReason.Globals => { return true } _ => { return false } } }
-                        }
-                    }
-                    _ => { return false }
-                }
-            }
-            MidCoverageCategory.Preflight(reason: val left) => {
-                match b {
-                    MidCoverageCategory.Preflight(reason: val right) => {
-                        match left {
-                            MidLlvmPreflight.Ready => { match right { MidLlvmPreflight.Ready => { return true } _ => { return false } } }
-                            MidLlvmPreflight.AbiLocals => { match right { MidLlvmPreflight.AbiLocals => { return true } _ => { return false } } }
-                            MidLlvmPreflight.AssignmentProjection => { match right { MidLlvmPreflight.AssignmentProjection => { return true } _ => { return false } } }
-                            MidLlvmPreflight.UnsupportedRvalue => { match right { MidLlvmPreflight.UnsupportedRvalue => { return true } _ => { return false } } }
-                            MidLlvmPreflight.ConversionOperand => { match right { MidLlvmPreflight.ConversionOperand => { return true } _ => { return false } } }
-                            MidLlvmPreflight.DropProjection => { match right { MidLlvmPreflight.DropProjection => { return true } _ => { return false } } }
-                            MidLlvmPreflight.ScopeExit => { match right { MidLlvmPreflight.ScopeExit => { return true } _ => { return false } } }
-                            MidLlvmPreflight.Switch => { match right { MidLlvmPreflight.Switch => { return true } _ => { return false } } }
-                            MidLlvmPreflight.Call(reason: val leftReason) => {
-                                match right {
-                                    MidLlvmPreflight.Call(reason: val rightReason) => { return self.sameMidCallPreflight(a: leftReason, b: rightReason) }
-                                    _ => { return false }
-                                }
-                            }
-                            MidLlvmPreflight.ReturnValue => { match right { MidLlvmPreflight.ReturnValue => { return true } _ => { return false } } }
-                            MidLlvmPreflight.Terminator => { match right { MidLlvmPreflight.Terminator => { return true } _ => { return false } } }
-                        }
-                    }
-                    _ => { return false }
-                }
-            }
+    // Coverage is a set of frozen body-instance keys, not an emission log.
+    // Flatten at this boundary: Mid errors are short-lived internal data,
+    // whereas coverage records survive the lowering attempt and are copied by
+    // the worklist.  Keeping the former in the latter is both needless and
+    // couples diagnostics to ARC layout of every evolving error enum.
+    fn midUnsupportedBuildCoverageDetail(reason: MidUnsupportedBuild) -> U64 {
+        match reason {
+            MidUnsupportedBuild.ExpressionStatement => { return 0U64 }
+            MidUnsupportedBuild.Operand => { return 1U64 }
+            MidUnsupportedBuild.FieldPlace => { return 2U64 }
+            MidUnsupportedBuild.UniqueAggregate => { return 3U64 }
+            MidUnsupportedBuild.IncompleteAggregate => { return 4U64 }
+            MidUnsupportedBuild.ShortCircuit => { return 5U64 }
+            MidUnsupportedBuild.FieldProjection => { return 6U64 }
+            MidUnsupportedBuild.FieldBase => { return 7U64 }
         }
     }
 
-    fn sameMidCallPreflight(a: MidCallPreflight, b: MidCallPreflight) -> Bool {
-        match a {
-            MidCallPreflight.None => { match b { MidCallPreflight.None => { return true } _ => { return false } } }
-            MidCallPreflight.Resolution => { match b { MidCallPreflight.Resolution => { return true } _ => { return false } } }
-            MidCallPreflight.Target => { match b { MidCallPreflight.Target => { return true } _ => { return false } } }
-            MidCallPreflight.Callee => { match b { MidCallPreflight.Callee => { return true } _ => { return false } } }
-            MidCallPreflight.Async => { match b { MidCallPreflight.Async => { return true } _ => { return false } } }
-            MidCallPreflight.Receiver => { match b { MidCallPreflight.Receiver => { return true } _ => { return false } } }
-            MidCallPreflight.RuntimeAbi => { match b { MidCallPreflight.RuntimeAbi => { return true } _ => { return false } } }
-            MidCallPreflight.Buffer => { match b { MidCallPreflight.Buffer => { return true } _ => { return false } } }
-            MidCallPreflight.Extern => { match b { MidCallPreflight.Extern => { return true } _ => { return false } } }
-            MidCallPreflight.GenericArguments => { match b { MidCallPreflight.GenericArguments => { return true } _ => { return false } } }
-            MidCallPreflight.ArgumentShape => { match b { MidCallPreflight.ArgumentShape => { return true } _ => { return false } } }
-            MidCallPreflight.Result => { match b { MidCallPreflight.Result => { return true } _ => { return false } } }
-            MidCallPreflight.Argument => { match b { MidCallPreflight.Argument => { return true } _ => { return false } } }
+    fn midVerifyCoverageDetail(reason: MidVerifyError) -> U64 {
+        match reason {
+            MidVerifyError.None => { return 0U64 }
+            MidVerifyError.InvalidTarget => { return 1U64 }
+            MidVerifyError.PartialMove => { return 2U64 }
+            MidVerifyError.MoveUnavailable => { return 3U64 }
+            MidVerifyError.DropUnavailable => { return 4U64 }
+            MidVerifyError.InvalidDropFlag => { return 5U64 }
+            MidVerifyError.UnelaboratedScopeExit => { return 6U64 }
+            MidVerifyError.UnelaboratedAccess => { return 7U64 }
+            MidVerifyError.UninstantiatedReturnBoundary => { return 8U64 }
         }
     }
 
-    fn sameMidUnsupportedBuild(a: MidUnsupportedBuild, b: MidUnsupportedBuild) -> Bool {
-        match a {
-            MidUnsupportedBuild.ExpressionStatement => { match b { MidUnsupportedBuild.ExpressionStatement => { return true } _ => { return false } } }
-            MidUnsupportedBuild.Operand => { match b { MidUnsupportedBuild.Operand => { return true } _ => { return false } } }
-            MidUnsupportedBuild.FieldPlace => { match b { MidUnsupportedBuild.FieldPlace => { return true } _ => { return false } } }
-            MidUnsupportedBuild.UniqueAggregate => { match b { MidUnsupportedBuild.UniqueAggregate => { return true } _ => { return false } } }
-            MidUnsupportedBuild.ShortCircuit => { match b { MidUnsupportedBuild.ShortCircuit => { return true } _ => { return false } } }
-            MidUnsupportedBuild.FieldProjection => { match b { MidUnsupportedBuild.FieldProjection => { return true } _ => { return false } } }
-            MidUnsupportedBuild.FieldBase => { match b { MidUnsupportedBuild.FieldBase => { return true } _ => { return false } } }
+    fn midPreflightCoverageDetail(reason: MidLlvmPreflight) -> U64 {
+        match reason {
+            MidLlvmPreflight.Ready => { return 0U64 }
+            MidLlvmPreflight.AbiLocals => { return 1U64 }
+            MidLlvmPreflight.AssignmentProjection => { return 2U64 }
+            MidLlvmPreflight.UnsupportedRvalue => { return 3U64 }
+            MidLlvmPreflight.ConversionOperand => { return 4U64 }
+            MidLlvmPreflight.DropProjection => { return 5U64 }
+            MidLlvmPreflight.ScopeExit => { return 6U64 }
+            MidLlvmPreflight.Switch => { return 7U64 }
+            MidLlvmPreflight.Call(reason: val call) => { return 100U64 + self.midCallPreflightCoverageDetail(reason: call) }
+            MidLlvmPreflight.ReturnValue => { return 8U64 }
+            MidLlvmPreflight.Terminator => { return 9U64 }
         }
     }
 
-    inout fn recordMidCoverage(c: inout Comp, bodyId: U64, fnIdx: U64, category: MidCoverageCategory) {
+    fn midCallPreflightCoverageDetail(reason: MidCallPreflight) -> U64 {
+        match reason {
+            MidCallPreflight.None => { return 0U64 }
+            MidCallPreflight.Resolution => { return 1U64 }
+            MidCallPreflight.Target => { return 2U64 }
+            MidCallPreflight.Callee => { return 3U64 }
+            MidCallPreflight.Async => { return 4U64 }
+            MidCallPreflight.Receiver => { return 5U64 }
+            MidCallPreflight.RuntimeAbi => { return 6U64 }
+            MidCallPreflight.Buffer => { return 7U64 }
+            MidCallPreflight.Extern => { return 8U64 }
+            MidCallPreflight.GenericArguments => { return 9U64 }
+            MidCallPreflight.ArgumentShape => { return 10U64 }
+            MidCallPreflight.Result => { return 11U64 }
+            MidCallPreflight.Argument => { return 12U64 }
+        }
+    }
+
+    fn midEligibilityCoverageDetail(reason: MidEligibilityReason) -> U64 {
+        match reason {
+            MidEligibilityReason.Async => { return 0U64 }
+            MidEligibilityReason.Extern => { return 1U64 }
+            MidEligibilityReason.InoutReceiver => { return 2U64 }
+            MidEligibilityReason.MoveReceiver => { return 3U64 }
+            MidEligibilityReason.Globals => { return 4U64 }
+        }
+    }
+
+    inout fn recordMidCoverage(c: inout Comp, bodyId: U64, fnIdx: U64, stage: U64, detail: U64) {
         if !(c.emitMidCoverage) && !(c.requireMid) { return }
+        // `detail` is a closed subcode below 256.  Packing it with its stage
+        // keeps the table scalar while preserving exact de-duplication.
+        val key: U64 = stage * 256U64 + detail
         mut val existing: U64 = 0U64
-        while existing < self.midCoverage.count() {
-            val prior: MidCoverageRecord = self.midCoverage[existing]
-            if prior.bodyId == bodyId && self.sameMidCoverageCategory(a: prior.category, b: category) { return }
+        while existing < self.midCoverageBodyIds.count() {
+            if self.midCoverageBodyIds[existing] == bodyId && self.midCoverageKeys[existing] == key { return }
             existing += 1U64
         }
-        self.midCoverage.append(<MidCoverageRecord bodyId=bodyId fnIdx=fnIdx category=category />)
+        self.midCoverageBodyIds.append(bodyId)
+        self.midCoverageFnIdxs.append(fnIdx)
+        self.midCoverageKeys.append(key)
+    }
+
+    // `MidBuildError` is consumed at its match site.  Coverage retains only its
+    // closed scalar detail, so this boundary must not re-project the enclosing
+    // MidBodyBuild value or pass an error enum through a second ABI boundary.
+    inout fn recordMidBuild(c: inout Comp, bodyId: U64, fnIdx: U64, detail: U64) {
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] Mid build-fallback detail=")
+            self.traceCodegenU64(n: detail)
+            eprint(text: " fn=")
+            self.traceCodegenU64(n: fnIdx)
+            eprint(text: "\n")
+        }
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 0U64, detail: detail)
+    }
+
+    inout fn recordMidMissingBodyInstance(c: inout Comp, bodyId: U64, fnIdx: U64) {
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 1U64, detail: 0U64)
+    }
+
+    inout fn recordMidInstantiate(c: inout Comp, bodyId: U64, fnIdx: U64) {
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 2U64, detail: 0U64)
+    }
+
+    inout fn recordMidAccess(c: inout Comp, bodyId: U64, fnIdx: U64) {
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 3U64, detail: 0U64)
+    }
+
+    inout fn recordMidVerify(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidVerifyError) {
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 4U64, detail: self.midVerifyCoverageDetail(reason: reason))
+    }
+
+    inout fn recordMidEligibility(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidEligibilityReason) {
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 6U64, detail: self.midEligibilityCoverageDetail(reason: reason))
     }
 
     inout fn recordMidPreflight(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidLlvmPreflight) {
-        val category: MidCoverageCategory = <MidCoverageCategory.Preflight reason=reason />
-        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, category: category)
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 5U64, detail: self.midPreflightCoverageDetail(reason: reason))
     }
 
-    inout fn emitMidCoverageRecord(c: inout Comp, record: MidCoverageRecord) {
+    inout fn emitMidCoverageRecord(c: inout Comp, bodyId: U64, fnIdx: U64, key: U64) {
         eprint(text: "mid-coverage body=")
-        self.traceCodegenU64(n: record.bodyId)
+        self.traceCodegenU64(n: bodyId)
         eprint(text: " fn=")
-        self.traceCodegenU64(n: record.fnIdx)
+        self.traceCodegenU64(n: fnIdx)
         eprint(text: " name=")
-        if record.fnIdx < c.arena.funcs.count() {
-            val function: Func = c.arena.funcs[record.fnIdx]
+        if fnIdx < c.arena.funcs.count() {
+            val function: Func = c.arena.funcs[fnIdx]
             self.traceCodegenName(c: inout c, start: function.nameStart, len: function.nameLen)
         } else {
             eprint(text: "unknown")
         }
         eprint(text: " category=")
-        match record.category {
-            MidCoverageCategory.Build(reason: val reason) => {
-                eprint(text: "build:")
-                match reason {
-                    MidBuildError.None => { eprint(text: "none") }
-                    MidBuildError.InvalidStatement => { eprint(text: "invalid-statement") }
-                    MidBuildError.InvalidBlock => { eprint(text: "invalid-block") }
-                    MidBuildError.InvalidFunction => { eprint(text: "invalid-function") }
-                    MidBuildError.MissingSemanticType => { eprint(text: "missing-semantic-type") }
-                    MidBuildError.UnboundLocalIdentifier => { eprint(text: "unbound-local") }
-                    MidBuildError.Unsupported(reason: val unsupported) => {
-                        eprint(text: "unsupported:")
-                        match unsupported {
-                            MidUnsupportedBuild.ExpressionStatement => { eprint(text: "expression-statement") }
-                            MidUnsupportedBuild.Operand => { eprint(text: "operand") }
-                            MidUnsupportedBuild.FieldPlace => { eprint(text: "field-place") }
-                            MidUnsupportedBuild.UniqueAggregate => { eprint(text: "unique-aggregate") }
-                            MidUnsupportedBuild.ShortCircuit => { eprint(text: "short-circuit") }
-                            MidUnsupportedBuild.FieldProjection => { eprint(text: "field-projection") }
-                            MidUnsupportedBuild.FieldBase => { eprint(text: "field-base") }
-                        }
-                    }
-                    MidBuildError.UnsupportedAssign => { eprint(text: "assign") }
-                    MidBuildError.UnsupportedWhile => { eprint(text: "while") }
-                    MidBuildError.UnsupportedFor => { eprint(text: "for") }
-                    MidBuildError.UnsupportedMatch => { eprint(text: "match") }
-                    MidBuildError.UnsupportedPanic => { eprint(text: "panic") }
-                    MidBuildError.UnsupportedGive => { eprint(text: "give") }
-                    MidBuildError.UnsupportedBreak => { eprint(text: "break") }
-                    MidBuildError.UnsupportedContinue => { eprint(text: "continue") }
-                    MidBuildError.MissingTerminator => { eprint(text: "missing-terminator") }
-                    MidBuildError.MissingCallTemplate => { eprint(text: "missing-call-template") }
-                    MidBuildError.UnsupportedCallTemplate => { eprint(text: "unsupported-call-template") }
-                }
-            }
-            MidCoverageCategory.MissingBodyInstance => { eprint(text: "missing-body-instance") }
-            MidCoverageCategory.Instantiate => { eprint(text: "instantiate") }
-            MidCoverageCategory.Access => { eprint(text: "access") }
-            MidCoverageCategory.Verify(reason: val reason) => {
-                eprint(text: "verify:")
-                match reason {
-                    MidVerifyError.None => { eprint(text: "none") }
-                    MidVerifyError.InvalidTarget => { eprint(text: "invalid-target") }
-                    MidVerifyError.PartialMove => { eprint(text: "partial-move") }
-                    MidVerifyError.MoveUnavailable => { eprint(text: "move-unavailable") }
-                    MidVerifyError.DropUnavailable => { eprint(text: "drop-unavailable") }
-                    MidVerifyError.InvalidDropFlag => { eprint(text: "invalid-drop-flag") }
-                    MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
-                    MidVerifyError.UnelaboratedAccess => { eprint(text: "access") }
-                    MidVerifyError.UninstantiatedReturnBoundary => { eprint(text: "return-boundary") }
-                }
-            }
-            MidCoverageCategory.Eligibility(reason: val reason) => {
-                eprint(text: "eligibility:")
-                match reason {
-                    MidEligibilityReason.Async => { eprint(text: "async") }
-                    MidEligibilityReason.Extern => { eprint(text: "extern") }
-                    MidEligibilityReason.InoutReceiver => { eprint(text: "inout-receiver") }
-                    MidEligibilityReason.MoveReceiver => { eprint(text: "move-receiver") }
-                    MidEligibilityReason.Globals => { eprint(text: "globals") }
-                }
-            }
-            MidCoverageCategory.Preflight(reason: val reason) => {
-                eprint(text: "preflight:")
-                match reason {
-                    MidLlvmPreflight.AbiLocals => { eprint(text: "abi-locals") }
-                    MidLlvmPreflight.AssignmentProjection => { eprint(text: "assignment-projection") }
-                    MidLlvmPreflight.UnsupportedRvalue => { eprint(text: "rvalue") }
-                    MidLlvmPreflight.ConversionOperand => { eprint(text: "conversion-operand") }
-                    MidLlvmPreflight.DropProjection => { eprint(text: "drop-projection") }
-                    MidLlvmPreflight.ScopeExit => { eprint(text: "scope-exit") }
-                    MidLlvmPreflight.Switch => { eprint(text: "switch") }
-                    MidLlvmPreflight.Call(reason: val callReason) => {
-                        eprint(text: "call:")
-                        match callReason {
-                            MidCallPreflight.None => { eprint(text: "none") }
-                            MidCallPreflight.Resolution => { eprint(text: "resolution") }
-                            MidCallPreflight.Target => { eprint(text: "target") }
-                            MidCallPreflight.Callee => { eprint(text: "callee") }
-                            MidCallPreflight.Async => { eprint(text: "async") }
-                            MidCallPreflight.Receiver => { eprint(text: "receiver") }
-                            MidCallPreflight.RuntimeAbi => { eprint(text: "runtime-abi") }
-                            MidCallPreflight.Buffer => { eprint(text: "buffer") }
-                            MidCallPreflight.Extern => { eprint(text: "extern") }
-                            MidCallPreflight.GenericArguments => { eprint(text: "generic-arguments") }
-                            MidCallPreflight.ArgumentShape => { eprint(text: "argument-shape") }
-                            MidCallPreflight.Result => { eprint(text: "result") }
-                            MidCallPreflight.Argument => { eprint(text: "argument") }
-                        }
-                    }
-                    MidLlvmPreflight.ReturnValue => { eprint(text: "return-value") }
-                    MidLlvmPreflight.Terminator => { eprint(text: "terminator") }
-                    _ => { eprint(text: "ready") }
-                }
-            }
+        val stage: U64 = key / 256U64
+        val detail: U64 = key % 256U64
+        match stage {
+            0U64 => { self.emitMidCoverageBuild(detail: detail) }
+            1U64 => { eprint(text: "missing-body-instance") }
+            2U64 => { eprint(text: "instantiate") }
+            3U64 => { eprint(text: "access") }
+            4U64 => { self.emitMidCoverageVerify(detail: detail) }
+            5U64 => { self.emitMidCoveragePreflight(detail: detail) }
+            6U64 => { self.emitMidCoverageEligibility(detail: detail) }
+            _ => { eprint(text: "unknown") }
         }
         eprint(text: "\n")
+    }
+
+    fn emitMidCoverageBuild(detail: U64) {
+        eprint(text: "build:")
+        if detail >= 100U64 {
+            eprint(text: "unsupported:")
+            self.emitMidCoverageUnsupportedBuild(detail: detail - 100U64)
+            return
+        }
+        match detail {
+            0U64 => { eprint(text: "none") } 1U64 => { eprint(text: "invalid-statement") }
+            2U64 => { eprint(text: "invalid-block") } 3U64 => { eprint(text: "invalid-function") }
+            4U64 => { eprint(text: "missing-semantic-type") } 5U64 => { eprint(text: "unbound-local") }
+            6U64 => { eprint(text: "assign") } 7U64 => { eprint(text: "while") }
+            8U64 => { eprint(text: "for") } 9U64 => { eprint(text: "match") }
+            10U64 => { eprint(text: "panic") } 11U64 => { eprint(text: "give") }
+            12U64 => { eprint(text: "break") } 13U64 => { eprint(text: "continue") }
+            14U64 => { eprint(text: "missing-terminator") } 15U64 => { eprint(text: "missing-call-template") }
+            16U64 => { eprint(text: "unsupported-call-template") } _ => { eprint(text: "unknown") }
+        }
+    }
+
+    fn emitMidCoverageUnsupportedBuild(detail: U64) {
+        match detail {
+            0U64 => { eprint(text: "expression-statement") } 1U64 => { eprint(text: "operand") }
+            2U64 => { eprint(text: "field-place") } 3U64 => { eprint(text: "unique-aggregate") }
+            4U64 => { eprint(text: "incomplete-aggregate") } 5U64 => { eprint(text: "short-circuit") }
+            6U64 => { eprint(text: "field-projection") } 7U64 => { eprint(text: "field-base") }
+            _ => { eprint(text: "unknown") }
+        }
+    }
+
+    fn emitMidCoverageVerify(detail: U64) {
+        eprint(text: "verify:")
+        match detail {
+            0U64 => { eprint(text: "none") } 1U64 => { eprint(text: "invalid-target") }
+            2U64 => { eprint(text: "partial-move") } 3U64 => { eprint(text: "move-unavailable") }
+            4U64 => { eprint(text: "drop-unavailable") } 5U64 => { eprint(text: "invalid-drop-flag") }
+            6U64 => { eprint(text: "scope-exit") } 7U64 => { eprint(text: "access") }
+            8U64 => { eprint(text: "return-boundary") } _ => { eprint(text: "unknown") }
+        }
+    }
+
+    fn emitMidCoveragePreflight(detail: U64) {
+        eprint(text: "preflight:")
+        if detail >= 100U64 {
+            eprint(text: "call:")
+            self.emitMidCoverageCallPreflight(detail: detail - 100U64)
+            return
+        }
+        match detail {
+            0U64 => { eprint(text: "ready") } 1U64 => { eprint(text: "abi-locals") }
+            2U64 => { eprint(text: "assignment-projection") } 3U64 => { eprint(text: "rvalue") }
+            4U64 => { eprint(text: "conversion-operand") } 5U64 => { eprint(text: "drop-projection") }
+            6U64 => { eprint(text: "scope-exit") } 7U64 => { eprint(text: "switch") }
+            8U64 => { eprint(text: "return-value") } 9U64 => { eprint(text: "terminator") }
+            _ => { eprint(text: "unknown") }
+        }
+    }
+
+    fn emitMidCoverageCallPreflight(detail: U64) {
+        match detail {
+            0U64 => { eprint(text: "none") } 1U64 => { eprint(text: "resolution") }
+            2U64 => { eprint(text: "target") } 3U64 => { eprint(text: "callee") }
+            4U64 => { eprint(text: "async") } 5U64 => { eprint(text: "receiver") }
+            6U64 => { eprint(text: "runtime-abi") } 7U64 => { eprint(text: "buffer") }
+            8U64 => { eprint(text: "extern") } 9U64 => { eprint(text: "generic-arguments") }
+            10U64 => { eprint(text: "argument-shape") } 11U64 => { eprint(text: "result") }
+            12U64 => { eprint(text: "argument") } _ => { eprint(text: "unknown") }
+        }
+    }
+
+    fn emitMidCoverageEligibility(detail: U64) {
+        eprint(text: "eligibility:")
+        match detail {
+            0U64 => { eprint(text: "async") } 1U64 => { eprint(text: "extern") }
+            2U64 => { eprint(text: "inout-receiver") } 3U64 => { eprint(text: "move-receiver") }
+            4U64 => { eprint(text: "globals") } _ => { eprint(text: "unknown") }
+        }
     }
 
     // Aggregate support is deliberately closed until every source semantic
@@ -280,14 +261,27 @@ pub impl LlvmCtx {
         return true
     }
 
-    inout fn midInitialRvalueSupported(c: inout Comp, value: MidRvalue) -> Bool {
+    // Every operand place is validated before emission.  In particular, an
+    // `Assign(Use(Copy(place)))` must not bypass projection preflight merely
+    // because it is not a call argument or conversion input.
+    inout fn midOperandLlvmSupported(c: inout Comp, body: MidBody, operand: MidOperand) -> Bool {
+        match operand {
+            MidOperand.Copy(place: val place) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
+            MidOperand.Move(place: val place) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
+            MidOperand.Borrow(place: val place, capability: _) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
+            MidOperand.Constant(value: _) => { return true }
+            MidOperand.Access(candidate: _) => { return false }
+        }
+    }
+
+    inout fn midInitialRvalueSupported(c: inout Comp, body: MidBody, value: MidRvalue) -> Bool {
         match value {
             MidRvalue.Use(operand: val operand) => {
-                match operand { MidOperand.Access(candidate: _) => { return false } _ => { return true } }
+                return self.midOperandLlvmSupported(c: inout c, body: body, operand: operand)
             }
             MidRvalue.ReturnBoundary(exprId: _, targetTerm: val targetTerm, operand: val operand) => {
                 if targetTerm == 0U64 || targetTerm >= c.arena.types.count() { return false }
-                return c.typeRefEq(a: self.midOperandTypeTerm(operand: operand), b: targetTerm)
+                return self.midOperandLlvmSupported(c: inout c, body: body, operand: operand) && c.typeRefEq(a: self.midOperandTypeTerm(operand: operand), b: targetTerm)
             }
             MidRvalue.Aggregate(exprId: _, kind: val kind, resultTerm: val resultTerm, fieldCount: val fieldCount, elements: val elements) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
@@ -296,13 +290,14 @@ pub impl LlvmCtx {
                 while element < elements.count() {
                     val current: MidAggregateElement = elements[element]
                     if current.targetTerm == 0U64 || current.targetTerm >= c.arena.types.count() { return false }
+                    if !(self.midOperandLlvmSupported(c: inout c, body: body, operand: current.operand)) { return false }
                     match current.conversion {
                         ValueConversionProof.Identity => {
                             if !(c.typeRefEq(a: self.midOperandTypeTerm(operand: current.operand), b: current.targetTerm)) { return false }
                         }
                         ValueConversionProof.Missing => { return false }
                         _ => {
-                            if !(self.midInitialRvalueSupported(c: inout c, value: <MidRvalue.Convert operand=current.operand conversion=current.conversion />)) { return false }
+                            if !(self.midInitialRvalueSupported(c: inout c, body: body, value: <MidRvalue.Convert operand=current.operand conversion=current.conversion />)) { return false }
                         }
                     }
                     element += 1U64
@@ -315,6 +310,17 @@ pub impl LlvmCtx {
                     }
                     MidAggregateKind.Enum(enumIdx: val enumIdx, variantIndex: val variantIndex) => {
                         if enumIdx >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIdx].variants.count() { return false }
+                        // A recursive payload changes a semantic enum value into a
+                        // heap-cell owner. That ownership operation must become an
+                        // explicit Mid rvalue before this body can enter Mid; the
+                        // initial Aggregate carrier records only semantic values and
+                        // slots. Do not synthesize a hidden box in LLVM.
+                        mut val boxed: U64 = 0U64
+                        while boxed < elements.count() {
+                            val fieldIndex: U64 = elements[boxed].fieldIndex
+                            if c.fieldIsBoxed(f: c.arena.enums[enumIdx].variants[variantIndex].fields[fieldIndex]) { return false }
+                            boxed += 1U64
+                        }
                         val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: resultTerm)
                         if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != enumIdx { return false }
                         return true
@@ -322,6 +328,7 @@ pub impl LlvmCtx {
                 }
             }
             MidRvalue.Convert(operand: val operand, conversion: val conversion) => {
+                if !(self.midOperandLlvmSupported(c: inout c, body: body, operand: operand)) { return false }
                 match operand {
                     MidOperand.Copy(place: _) => {}
                     MidOperand.Move(place: _) => {}
@@ -363,16 +370,44 @@ pub impl LlvmCtx {
                     _ => { return false }
                 }
             }
+            MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: _, resultTerm: val resultTerm) => {
+                if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
+                if enumIndex >= c.arena.enums.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
+                if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+                return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
+            }
+            MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
+                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
+                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                // Recursive payload boxing is an ownership operation, not an
+                // extractvalue. Keep it outside this copy-only first slice.
+                if c.fieldIsBoxed(f: c.arena.enums[enumIndex].variants[variantIndex].fields[fieldIndex]) { return false }
+                val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+                return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
+            }
         }
     }
 
-    inout fn midInitialReceiverSupported(c: inout Comp, body: MidBody, receiver: MidCallReceiver, isInout: Bool) -> Bool {
+    inout fn midInitialReceiverSupported(c: inout Comp, body: MidBody, receiver: MidCallReceiver, passing: CallReceiverPassing) -> Bool {
         match receiver {
             MidCallReceiver.Value(operand: val operand) => {
-                match operand {
-                    MidOperand.Copy(place: val place) => { return !isInout && self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
-                    MidOperand.Borrow(place: val place, capability: val capability) => {
-                        match capability { MidBorrowCapability.Inout => { return isInout && self.midPlaceLlvmSupported(c: inout c, body: body, place: place) } _ => { return false } }
+                match passing {
+                    CallReceiverPassing.Borrow => {
+                        match operand {
+                            MidOperand.Borrow(place: val place, capability: val capability) => { match capability { MidBorrowCapability.Read => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) } _ => { return false } } }
+                            _ => { return false }
+                        }
+                    }
+                    CallReceiverPassing.Inout => {
+                        match operand {
+                            MidOperand.Borrow(place: val place, capability: val capability) => { match capability { MidBorrowCapability.Inout => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) } _ => { return false } } }
+                            _ => { return false }
+                        }
+                    }
+                    CallReceiverPassing.Move => {
+                        match operand { MidOperand.Move(place: val place) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) } _ => { return false } }
                     }
                     _ => { return false }
                 }
@@ -381,8 +416,9 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn midBufferReadOperandSupported(c: inout Comp, body: MidBody, operand: MidOperand) -> Bool {
+    inout fn midReadOperandSupported(c: inout Comp, body: MidBody, operand: MidOperand) -> Bool {
         match operand {
+            MidOperand.Borrow(place: val place, capability: val capability) => { match capability { MidBorrowCapability.Read => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) } _ => { return false } } }
             MidOperand.Copy(place: val place) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
             MidOperand.Constant(value: _) => { return true }
             _ => { return false }
@@ -440,9 +476,9 @@ pub impl LlvmCtx {
         // Async remains separate because it requires Suspend/frame lowering.
         if callee.isAsync { return <MidCallPreflight.Async /> }
         if callee.hasRecv {
-            if !(self.midInitialReceiverSupported(c: inout c, body: body, receiver: receiver, isInout: callee.selfInout)) { return <MidCallPreflight.Receiver /> }
+            if !(self.midInitialReceiverSupported(c: inout c, body: body, receiver: receiver, passing: selected.receiverPassing)) { return <MidCallPreflight.Receiver /> }
         } else {
-            match receiver { MidCallReceiver.None => {} _ => { return <MidCallPreflight.Receiver /> } }
+            match receiver { MidCallReceiver.None => { match selected.receiverPassing { CallReceiverPassing.None => {} _ => { return <MidCallPreflight.Receiver /> } } } _ => { return <MidCallPreflight.Receiver /> } }
         }
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: _) => {
@@ -457,11 +493,7 @@ pub impl LlvmCtx {
                             if !callee.hasRet || args.count() != self.numericIntrinsicArity(intrinsic: numeric) || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
                             mut val i: U64 = 0U64
                             while i < args.count() {
-                                match args[i] {
-                                    MidOperand.Copy(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } }
-                                    MidOperand.Constant(value: _) => {}
-                                    _ => { return <MidCallPreflight.Argument /> }
-                                }
+                                if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[i])) { return <MidCallPreflight.Argument /> }
                                 i += 1U64
                             }
                         }
@@ -472,45 +504,45 @@ pub impl LlvmCtx {
                                 }
                                 BufferIntrinsic.Count => {
                                     if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                 }
                                 BufferIntrinsic.Capacity => {
                                     if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                 }
                                 BufferIntrinsic.Get => {
                                     if !callee.hasRet || args.count() != 2U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                 }
                                 BufferIntrinsic.Append => {
                                     if callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.Reserve => {
                                     if callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.Set => {
                                     if callee.hasRet || args.count() != 3U64 || selected.parameterTypeRefs.count() != 3U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[2U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[2U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.InsertAt => {
                                     if callee.hasRet || args.count() != 3U64 || selected.parameterTypeRefs.count() != 3U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[2U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[2U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.RemoveLast => {
@@ -524,7 +556,7 @@ pub impl LlvmCtx {
                                     if !callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 || selected.resultTypeRef == 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                     if elementRef == 0U64 || !(c.typeRefEq(a: selected.resultTypeRef, b: elementRef)) { return <MidCallPreflight.Buffer /> }
                                 }
@@ -532,7 +564,7 @@ pub impl LlvmCtx {
                                     if !callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 || selected.resultTypeRef == 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                     if elementRef == 0U64 || !(c.typeRefEq(a: selected.resultTypeRef, b: elementRef)) { return <MidCallPreflight.Buffer /> }
                                 }
@@ -546,21 +578,21 @@ pub impl LlvmCtx {
                                     if callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.BytewiseComparable => {
                                     if !callee.hasRet || args.count() != 1U64 || selected.parameterTypeRefs.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.Eq => {
                                     if !callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
                                     val bufferRef: U64 = selected.parameterTypeRefs[0U64]
                                     if !(c.typeRefEq(a: selected.parameterTypeRefs[1U64], b: bufferRef)) { return <MidCallPreflight.Buffer /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
-                                    if !(self.midBufferReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
+                                    if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 _ => { return <MidCallPreflight.Buffer /> }
@@ -568,19 +600,11 @@ pub impl LlvmCtx {
                         }
                         RuntimeIntrinsic.Write => {
                             if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> }
-                            match args[0U64] {
-                                MidOperand.Copy(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } }
-                                MidOperand.Constant(value: _) => {}
-                                _ => { return <MidCallPreflight.Argument /> }
-                            }
+                            if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                         }
                         RuntimeIntrinsic.Eprint => {
                             if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> }
-                            match args[0U64] {
-                                MidOperand.Copy(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } }
-                                MidOperand.Constant(value: _) => {}
-                                _ => { return <MidCallPreflight.Argument /> }
-                            }
+                            if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                         }
                     }
                 }
@@ -593,31 +617,35 @@ pub impl LlvmCtx {
         if callee.isExtern { return <MidCallPreflight.Extern /> }
         if callee.typeParams.count() != selected.calleeTypeArgs.count() { return <MidCallPreflight.GenericArguments /> }
         if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: selected.calleeTypeArgs)) { return <MidCallPreflight.GenericArguments /> }
-        if args.count() != callee.params.count() || selected.parameterTypeRefs.count() != args.count() { return <MidCallPreflight.ArgumentShape /> }
+        if args.count() != callee.params.count() || selected.parameterTypeRefs.count() != args.count() || selected.argumentPassings.count() != args.count() { return <MidCallPreflight.ArgumentShape /> }
         if callee.hasRet {
             if destination.projections.count() != 0U64 || selected.resultTypeRef == 0U64 { return <MidCallPreflight.Result /> }
         }
         mut val i: U64 = 0U64
         while i < args.count() {
             if selected.parameterTypeRefs[i] >= c.arena.types.count() { return <MidCallPreflight.ArgumentShape /> }
-            if callee.params[i].isInout {
+            match selected.argumentPassings[i] {
+            CallArgumentPassing.Inout => {
                 match args[i] {
                     MidOperand.Borrow(place: val place, capability: val capability) => {
                         match capability { MidBorrowCapability.Inout => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } } _ => { return <MidCallPreflight.Argument /> } }
                     }
                     _ => { return <MidCallPreflight.Argument /> }
                 }
-            } else if callee.params[i].isMove {
+            }
+            CallArgumentPassing.Move => {
                 match args[i] {
                     MidOperand.Move(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } }
                     _ => { return <MidCallPreflight.Argument /> }
                 }
-            } else {
+            }
+            CallArgumentPassing.Borrow => {
                 match args[i] {
-                    MidOperand.Copy(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } }
+                    MidOperand.Borrow(place: val place, capability: val capability) => { match capability { MidBorrowCapability.Read => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } } _ => { return <MidCallPreflight.Argument /> } } }
                     MidOperand.Constant(value: _) => {}
                     _ => { return <MidCallPreflight.Argument /> }
                 }
+            }
             }
             i += 1U64
         }
@@ -651,7 +679,7 @@ pub impl LlvmCtx {
                 match current.statements[statement] {
                     MidStatement.Assign(destination: val destination, value: val value) => {
                         if destination.projections.count() != 0U64 { return <MidLlvmPreflight.AssignmentProjection /> }
-                        if !(self.midInitialRvalueSupported(c: inout c, value: value)) { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                        if !(self.midInitialRvalueSupported(c: inout c, body: body, value: value)) { return <MidLlvmPreflight.UnsupportedRvalue /> }
                         match value {
                             MidRvalue.Convert(operand: val operand, conversion: _) => {
                                 match operand {
@@ -682,8 +710,17 @@ pub impl LlvmCtx {
             }
             match current.terminator {
                 MidTerminator.Goto(target: _) => {}
-                MidTerminator.Switch(discriminant: _, values: val values, targets: val targets, otherwise: _) => {
-                    if values.count() != 1U64 || targets.count() != 1U64 || values[0U64] != 1I64 { return <MidLlvmPreflight.Switch /> }
+                MidTerminator.Switch(discriminant: val discriminant, values: val values, targets: val targets, otherwise: _) => {
+                    if values.count() != targets.count() || values.count() > 4294967295U64 || !(self.midOperandLlvmSupported(c: inout c, body: body, operand: discriminant)) { return <MidLlvmPreflight.Switch /> }
+                    mut val valueIndex: U64 = 0U64
+                    while valueIndex < values.count() {
+                        mut val prior: U64 = 0U64
+                        while prior < valueIndex {
+                            if values[prior] == values[valueIndex] { return <MidLlvmPreflight.Switch /> }
+                            prior += 1U64
+                        }
+                        valueIndex += 1U64
+                    }
                 }
                 MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: _) => {
                     match callee {
@@ -730,13 +767,22 @@ pub impl LlvmCtx {
     // lookup from source spelling or declaration name.
     inout fn midPlaceLlvmSupported(c: inout Comp, body: MidBody, place: MidPlace) -> Bool {
         if place.local >= body.locals.count() { return false }
+        mut val currentTerm: U64 = body.locals[place.local].typeTerm
         mut val i: U64 = 0U64
         while i < place.projections.count() {
             match place.projections[i] {
                 MidProjection.Field(index: _, typeTerm: val typeTerm) => {
                     if typeTerm == 0U64 || typeTerm >= c.arena.types.count() { return false }
+                    currentTerm = typeTerm
                 }
-                MidProjection.Index => { return false }
+                MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
+                    if indexLocal >= body.locals.count() || typeTerm == 0U64 || typeTerm >= c.arena.types.count() || currentTerm == 0U64 || currentTerm >= c.arena.types.count() { return false }
+                    val indexTy: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: indexLocal)
+                    if LLVMGetTypeKind(indexTy) != 8U32 || LLVMGetIntTypeWidth(indexTy) != 64U32 { return false }
+                    val array: TypeRef = c.arena.types[currentTerm]
+                    if array.args.count() != 1U64 || !rangeEquals(bytes: c.arena.bytes, start: array.nameStart, len: array.nameLen, kw: "Array") || !(c.typeRefEq(a: array.args[0U64], b: typeTerm)) { return false }
+                    currentTerm = typeTerm
+                }
             }
             i += 1U64
         }
@@ -855,7 +901,7 @@ pub impl LlvmCtx {
                                             val grown: LLVMValueRef = self.growBuf(c: inout c, data: data, elemTy: elemTy, count: count)
                                             LLVMBuildStore(self.b, grown, slot)
                                             mut val value: LLVMValueRef = self.coerceElem(v: self.midEmitOperand(c: inout c, body: body, operand: args[1U64]), elemTy: elemTy)
-                                            if self.midOperandIsCopy(operand: args[1U64]) && c.arcNeedsRelease(ref: elemRef) {
+                                            if self.midOperandNeedsOwnedDestination(operand: args[1U64]) && c.arcNeedsRelease(ref: elemRef) {
                                                 self.valueArc(c: inout c, v: value, typeRef: elemRef, retain: true)
                                             }
                                             LLVMBuildStore(self.b, value, self.arrElemPtr(elemTy: elemTy, data: grown, idx: count))
@@ -913,7 +959,7 @@ pub impl LlvmCtx {
                                             val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
                                             self.emitBoundsCheck(c: inout c, idx: index, count: count)
                                             mut val value: LLVMValueRef = self.coerceElem(v: self.midEmitOperand(c: inout c, body: body, operand: args[2U64]), elemTy: elemTy)
-                                            if self.midOperandIsCopy(operand: args[2U64]) && c.arcNeedsRelease(ref: elemRef) {
+                                            if self.midOperandNeedsOwnedDestination(operand: args[2U64]) && c.arcNeedsRelease(ref: elemRef) {
                                                 self.valueArc(c: inout c, v: value, typeRef: elemRef, retain: true)
                                             }
                                             val elementSlot: LLVMValueRef = self.arrElemPtr(elemTy: elemTy, data: data, idx: index)
@@ -954,7 +1000,7 @@ pub impl LlvmCtx {
                                             LLVMBuildStore(self.b, data, slot)
                                             self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elemTy), dst: LLVMBuildAdd(self.b, index, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), src: index, n: LLVMBuildSub(self.b, count, index, anon()))
                                             mut val value: LLVMValueRef = self.coerceElem(v: self.midEmitOperand(c: inout c, body: body, operand: args[2U64]), elemTy: elemTy)
-                                            if self.midOperandIsCopy(operand: args[2U64]) && c.arcNeedsRelease(ref: elemRef) {
+                                            if self.midOperandNeedsOwnedDestination(operand: args[2U64]) && c.arcNeedsRelease(ref: elemRef) {
                                                 self.valueArc(c: inout c, v: value, typeRef: elemRef, retain: true)
                                             }
                                             LLVMBuildStore(self.b, value, self.arrElemPtr(elemTy: elemTy, data: data, idx: index))
@@ -1172,35 +1218,52 @@ pub impl LlvmCtx {
         mut val values: Array[LLVMValueRef] = []
         match receiver {
             MidCallReceiver.Value(operand: val operand) => {
-                if calleeDef.selfInout {
+                match selected.receiverPassing {
+                CallReceiverPassing.Inout => {
                     match operand {
                         MidOperand.Borrow(place: val place, capability: val capability) => {
                             match capability { MidBorrowCapability.Inout => { values.append(self.midPlacePtr(c: inout c, body: body, place: place)) } _ => { return false } }
                         }
                         _ => { return false }
                     }
-                } else {
+                }
+                CallReceiverPassing.Borrow => {
                     values.append(self.midEmitOperand(c: inout c, body: body, operand: operand))
                 }
+                CallReceiverPassing.Move => {
+                    values.append(self.midEmitOperand(c: inout c, body: body, operand: operand))
+                }
+                _ => { return false }
+                }
             }
-            _ => {}
+            MidCallReceiver.None => { match selected.receiverPassing { CallReceiverPassing.None => {} _ => { return false } } }
         }
         mut val i: U64 = 0U64
         while i < args.count() {
             mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
-            if calleeDef.params[i].isInout {
+            match selected.argumentPassings[i] {
+            CallArgumentPassing.Inout => {
                 match args[i] {
                     MidOperand.Borrow(place: val place, capability: val capability) => {
                         match capability { MidBorrowCapability.Inout => { value = self.midPlacePtr(c: inout c, body: body, place: place) } _ => { return false } }
                     }
                     _ => { return false }
                 }
-            } else {
+            }
+            CallArgumentPassing.Borrow => {
                 value = self.midEmitOperand(c: inout c, body: body, operand: args[i])
                 if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
                     val parameter: TypeRef = c.arena.types[selected.parameterTypeRefs[i]]
                     value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: selected.parameterTypeRefs[i]), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
                 }
+            }
+            CallArgumentPassing.Move => {
+                value = self.midEmitOperand(c: inout c, body: body, operand: args[i])
+                if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
+                    val parameter: TypeRef = c.arena.types[selected.parameterTypeRefs[i]]
+                    value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: selected.parameterTypeRefs[i]), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
+                }
+            }
             }
             values.append(value)
             i += 1U64
@@ -1260,7 +1323,19 @@ pub impl LlvmCtx {
                     pointer = LLVMBuildStructGEP2(self.b, currentTy, pointer, index, anon())
                     currentTy = self.llvmTypeOfRef(c: inout c, ref: typeTerm)
                 }
-                MidProjection.Index => { return LLVMConstNull(self.ptrty) }
+                MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
+                    // The index local was materialized by Mid before this
+                    // place was formed. Loading it here cannot duplicate a
+                    // source effect. Array's physical `{ptr}` value is read
+                    // only from the preceding place; bounds and element ABI
+                    // use the frozen projection terms.
+                    val array: LLVMValueRef = LLVMBuildLoad2(self.b, currentTy, pointer, anon())
+                    val data: LLVMValueRef = self.arrValData(c: inout c, arr: array)
+                    val index: LLVMValueRef = LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: indexLocal), self.midLocalPtr(body: body, local: indexLocal), anon())
+                    self.emitBoundsCheck(c: inout c, idx: index, count: self.rawbufCount(c: inout c, data: data))
+                    currentTy = self.llvmTypeOfRef(c: inout c, ref: typeTerm)
+                    pointer = self.arrElemPtr(elemTy: currentTy, data: data, idx: index)
+                }
             }
             i += 1U64
         }
@@ -1270,7 +1345,14 @@ pub impl LlvmCtx {
     inout fn midEmitOperand(c: inout Comp, body: MidBody, operand: MidOperand) -> LLVMValueRef {
         match operand {
             MidOperand.Copy(place: val place) => {
-                return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
+                val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
+                // Copy is an owned value operation under Plew value semantics.
+                // The source place retains its owner; this new value receives
+                // its own ARC share before any subsequent Mid drop consumes it.
+                if place.typeTerm != 0U64 && place.typeTerm < c.arena.types.count() && c.arcNeedsRelease(ref: place.typeTerm) {
+                    self.valueArc(c: inout c, v: value, typeRef: place.typeTerm, retain: true)
+                }
+                return value
             }
             MidOperand.Move(place: val place) => {
                 return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
@@ -1305,6 +1387,18 @@ pub impl LlvmCtx {
 
     inout fn midOperandIsCopy(operand: MidOperand) -> Bool {
         match operand { MidOperand.Copy(place: _) => { return true } _ => { return false } }
+    }
+
+    // A Buffer element slot is an owning destination.  Normal calls normalize
+    // a by-value parameter to `Borrow`: that describes the call ABI (+0), not
+    // permission for an escaping store to alias the caller's owner.  Therefore
+    // every non-moving operand acquires one ARC share here.  Only an explicit
+    // Move transfers its existing share directly into the slot.
+    inout fn midOperandNeedsOwnedDestination(operand: MidOperand) -> Bool {
+        match operand {
+            MidOperand.Move(place: _) => { return false }
+            _ => { return true }
+        }
     }
 
     inout fn midOperandTypeTerm(operand: MidOperand) -> U64 {
@@ -1403,13 +1497,16 @@ pub impl LlvmCtx {
     // Constructing an aggregate is a value boundary just like a call.  The
     // semantic carrier has already selected the slot conversion; backend code
     // only realizes it and never compares declaration spellings or searches
-    // for a witness.  Identity acquires the aggregate's new ownership share;
-    // a non-identity proof returns a freshly owned converted value itself.
+    // for a witness.  Each aggregate field is an owning destination, so only
+    // an explicit Move transfers an existing share.  Borrow is the normal
+    // by-value ABI (+0), not permission for the aggregate to alias its source
+    // without retaining.  A non-identity proof returns a freshly owned
+    // converted value itself.
     inout fn midEmitAggregateElement(c: inout Comp, body: MidBody, element: MidAggregateElement) -> LLVMValueRef {
         match element.conversion {
             ValueConversionProof.Identity => {
                 val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: element.operand)
-                if self.midOperandIsCopy(operand: element.operand) {
+                if self.midOperandNeedsOwnedDestination(operand: element.operand) {
                     self.valueArc(c: inout c, v: value, typeRef: element.targetTerm, retain: true)
                 }
                 return value
@@ -1615,6 +1712,19 @@ pub impl LlvmCtx {
                         val value: LLVMValueRef = self.midEmitValueConversion(c: inout c, body: body, operand: operand, conversion: conversion)
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
+                    MidRvalue.EnumTag(place: val place, enumIndex: _, sourceStmt: _, resultTerm: _) => {
+                        val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
+                        val tagPtr: LLVMValueRef = LLVMBuildStructGEP2(self.b, enumTy, self.midPlacePtr(c: inout c, body: body, place: place), 0U64, anon())
+                        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, self.i64ty, tagPtr, anon()), self.midLocalPtr(body: body, local: destination.local))
+                    }
+                    MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: _) => {
+                        val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
+                        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
+                        val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
+                        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
+                        val field: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fieldIndex, anon())
+                        LLVMBuildStore(self.b, field, self.midLocalPtr(body: body, local: destination.local))
+                    }
                 }
             }
             MidStatement.Overwrite(destination: val destination, source: val source) => {
@@ -1709,9 +1819,19 @@ pub impl LlvmCtx {
             match body.blocks[block].terminator {
                 MidTerminator.Goto(target: val target) => { LLVMBuildBr(self.b, blocks[target]) }
                 MidTerminator.Switch(discriminant: val discriminant, values: val values, targets: val targets, otherwise: val otherwise) => {
-                    if targets.count() == 1U64 && values.count() == 1U64 && values[0U64] == 1I64 {
-                        LLVMBuildCondBr(self.b, self.midEmitOperand(c: inout c, body: body, operand: discriminant), blocks[targets[0U64]], blocks[otherwise])
-                    } else { return false }
+                    val discriminantValue: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: discriminant)
+                    // Bool conditions keep their native i1 branch. Enum tags
+                    // are I64 and use the general integer switch below.
+                    if values.count() == 1U64 && values[0U64] == 1I64 && LLVMGetIntTypeWidth(LLVMTypeOf(discriminantValue)) == 1U32 {
+                        LLVMBuildCondBr(self.b, discriminantValue, blocks[targets[0U64]], blocks[otherwise])
+                    } else {
+                        val switch: LLVMValueRef = LLVMBuildSwitch(self.b, discriminantValue, blocks[otherwise], truncU32(n: values.count()))
+                        mut val caseIndex: U64 = 0U64
+                        while caseIndex < values.count() {
+                            LLVMAddCase(switch, LLVMConstInt(self.i64ty, bitCastU64(n: values[caseIndex]), 1I32), blocks[targets[caseIndex]])
+                            caseIndex += 1U64
+                        }
+                    }
                 }
                 MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
                     match callee {

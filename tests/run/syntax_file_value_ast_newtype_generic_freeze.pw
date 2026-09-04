@@ -1,0 +1,13 @@
+import @Plew/Syntax with { Lexer, P, SyntaxFile, lex, parseProgramAst, syntaxFileTopLevelCount }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "newtype Bytes = Array[U8]\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = parseProgramAst(p: inout parser)
+    mut val file = <SyntaxFile />
+    file.freezeTopItem(ast: items[0U64])
+    print(syntaxFileTopLevelCount(file: file))
+}

@@ -1,0 +1,8 @@
+import @Plew/Syntax with { SyntaxNewtype, TypeId, Span }
+import @Std/Io with { print }
+
+fn main() {
+    mut val nodes: Array[SyntaxNewtype] = []
+    nodes.append(<SyntaxNewtype name=<Span start=1U64 end=2U64 /> ty=<TypeId raw=3U64 /> isPub=false span=<Span start=0U64 end=4U64 /> />)
+    print(nodes[0U64].ty.raw)
+}

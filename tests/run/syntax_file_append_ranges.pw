@@ -1,0 +1,26 @@
+import @Plew/Syntax with { Lexer, P, SyntaxFile, lex, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, SyntaxTopItemKind }
+import @Std/Io with { print }
+
+fn parserFor(source: String) -> P {
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    return <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+}
+
+fn main() {
+    mut val file = <SyntaxFile />
+    mut val firstParser = parserFor(source: "struct First {}\n")
+    val first = parseProgramSyntaxInto(p: inout firstParser, file: inout file)
+    mut val secondParser = parserFor(source: "trait Second {}\n")
+    val second = parseProgramSyntaxInto(p: inout secondParser, file: inout file)
+    val firstItem = syntaxFileTopLevel(file: file, index: first.start)
+    val secondItem = syntaxFileTopLevel(file: file, index: second.start)
+    match syntaxTopItemKind(file: file, item: firstItem) {
+        SyntaxTopItemKind.Decl => { print(1U64) }
+        _ => { print(0U64) }
+    }
+    match syntaxTopItemKind(file: file, item: secondItem) {
+        SyntaxTopItemKind.Trait => { print(1U64) }
+        _ => { print(0U64) }
+    }
+}

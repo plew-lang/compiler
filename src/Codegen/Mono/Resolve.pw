@@ -11,7 +11,11 @@ pub impl Comp {
         if ref == 0U64 || ref >= self.arena.types.count() { return ref }
         val t: TypeRef = self.arena.types[ref]
         if t.viewExtId == 0U64 && t.viewIds.count() == 0U64 { return ref }
-        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable />)
+        // Removing a value-view changes only the callable surface. It must
+        // retain the nominal and projection declaration identities: later
+        // proof/grounding and Mid storage consumers are not allowed to
+        // reconstruct either identity from the spelling.
+        return self.pushType(t: <TypeRef nameStart=t.nameStart nameLen=t.nameLen paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
     }
 
     inout fn plainRefOfProjection(t: TypeRef) -> U64 {
@@ -191,6 +195,13 @@ pub impl Comp {
         if !base.hasDecl && !(base.isAny) && !(self.isPrimType(start: base.nameStart, len: base.nameLen)) {
             return tyRef
         }
+        // A nominal head alone does not make a projection concrete. In
+        // `Array[Self#Iterator.Item]`, the Array declaration is known but its
+        // element remains abstract, so selecting an `Array : Iterator`
+        // witness here would invent a conformance that the source never
+        // established. Wait until every receiver child is grounded through a
+        // concrete body environment.
+        if !(self.tyRefIsGround(ref: baseRef)) { return tyRef }
         // Projection trait arguments are ordinary children of the type term.
         // Ground them under the active generic environment before selecting a
         // witness: `Parser#Convert[T].Output` in a `T = String` instance must
@@ -228,7 +239,7 @@ pub impl Comp {
             return false
         }
         val t: TypeRef = self.arena.types[ref]
-        if t.args.count() == 0 {
+        if t.paramId == 0U64 && t.args.count() == 0 {
             return false
         }
         return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enums.count()
@@ -589,7 +600,7 @@ pub impl Comp {
         // register it (the method-aware scan grounds the real instance). `Item` is NOT
         // treated this way — it is a legal user type name; resolveTy only rewrites it
         // when an Iterator method env is active (curItemRef set).
-        if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
+        if t.paramId == 0U64 && rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
             return false
         }
         mut val i: U64 = 0

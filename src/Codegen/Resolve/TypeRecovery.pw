@@ -275,20 +275,52 @@ pub impl Comp {
     // parameter types.  Overload selection must compare after substituting the
     // concrete receiver (`Optional[I32].unwrapOr` has `fallback: I32`, not
     // merely `fallback: T`); otherwise a closure can spuriously match the
-    // eager overload and reach LLVM as an integer.  This is resolver work, not
-    // a later validation repair.
+    // eager overload and reach LLVM as an integer.  The argument belongs to
+    // the *caller* body, however: never install the candidate callee cursor
+    // before reading its recorded semantic TypeTerm.
     inout fn groundedMethodArgMatchRank(f: Func, args: ArgRange, recvRef: U64) -> U64 {
         if !(self.paramsLabelsOk(params: f.params, args: args)) { return 0U64 }
         if recvRef == 0U64 || recvRef >= self.arena.types.count() {
             return self.callableArgMatchRank(f: f, args: args)
         }
-        val savedP: Array[Bind] = self.cur.typeParams
-        val savedA: Array[U64] = self.cur.typeArgs
-        val savedS: U64 = self.cur.selfRef
-        val savedI: U64 = self.cur.itemRef
-        self.cur.typeParams = f.typeParams
-        self.cur.typeArgs = self.arena.types[recvRef].args
-        self.setSelfItemEnv(recvStart: self.arena.types[recvRef].nameStart, recvLen: self.arena.types[recvRef].nameLen, recvInstRef: recvRef)
+        // Capture the caller meaning before selecting a callee. The semantic
+        // term of `v` in `out.append(v)` can be
+        // `Self#Iterator.Item`; evaluating it under Array's temporary
+        // receiver was the provenance leak that became
+        // `Array#Iterator.Item`.
+        val callerEnvironment: InstanceEnvironment = <InstanceEnvironment params=self.cur.typeParams args=self.cur.typeArgs receiverRef=self.cur.recvInstRef proof=self.cur.bodyEnvironment.proof />
+        val callerSelf: U64 = self.cur.selfRef
+        val callerItem: U64 = self.cur.itemRef
+        // This is the candidate's immutable receiver-only substitution.
+        // `methodReceiverEnvironment` is the shared structural unifier used
+        // by finalization too. Method-owned binders deliberately remain
+        // absent while ranking; final callable publication performs their
+        // one complete inference.
+        val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: recvRef)
+        mut val calleeParams: Array[Bind] = []
+        mut val calleeArgs: Array[U64] = []
+        mut val bindI: U64 = 0U64
+        while bindI < receiverMatch.binds.count() {
+            val binding: WitnessBind = receiverMatch.binds[bindI]
+            mut val target: U64 = f.typeParams.count()
+            if binding.paramId != 0U64 {
+                mut val paramI: U64 = 0U64
+                while paramI < f.typeParams.count() {
+                    if f.typeParams[paramI].paramId == binding.paramId {
+                        target = paramI
+                        break
+                    }
+                    paramI += 1U64
+                }
+            }
+            if target >= f.typeParams.count() { target = binding.binder }
+            if target < f.typeParams.count() && binding.term != 0U64 {
+                calleeParams.append(f.typeParams[target])
+                calleeArgs.append(binding.term)
+            }
+            bindI += 1U64
+        }
+        val calleeEnvironment: InstanceEnvironment = <InstanceEnvironment params=calleeParams args=calleeArgs receiverRef=recvRef />
         mut val allMatch: Bool = true
         mut val ai: U64 = 0U64
         while ai < args.len {
@@ -296,12 +328,12 @@ pub impl Comp {
             if pi >= f.params.count() {
                 allMatch = false
             } else {
-                val expected: U64 = self.groundTypeRef(ref: f.params[pi].ty)
+                val expected: U64 = self.groundTermForBody(ref: f.params[pi].ty, environment: calleeEnvironment, selfRef: recvRef, itemRef: self.finalMethodItemRef(f: f, receiverRef: recvRef))
                 // A method-owned binder remains abstract at this stage.  It is
                 // intentionally inferred from the argument later; receiver
-                // binders, by contrast, were just made concrete above.
+                // binders, by contrast, are concrete in calleeEnvironment.
                 if expected != 0U64 && self.tyRefIsGround(ref: expected) {
-                    val actual: TypeInfo = self.argResolvedTypeInfo(argExpr: self.argAt(args: args, index: ai).expr)
+                    val actual: TypeInfo = self.groundSemanticExprTypeInfo(exprId: self.argAt(args: args, index: ai).expr, environment: callerEnvironment, selfRef: callerSelf, itemRef: callerItem)
                     if actual.kind == 2I64 {
                         // Keep this discriminator congruent with argMatchesParam:
                         // a plain named type does not necessarily retain a TypeRef
@@ -329,10 +361,6 @@ pub impl Comp {
             }
             ai += 1U64
         }
-        self.cur.typeParams = savedP
-        self.cur.typeArgs = savedA
-        self.cur.selfRef = savedS
-        self.cur.itemRef = savedI
         if allMatch { return 2U64 }
         return 1U64
     }
@@ -506,9 +534,29 @@ pub impl Comp {
         self.addKwSpan(kw: "U64")
         self.addKwSpan(kw: "Bool")
         self.addKwSpan(kw: "Array")
+        self.addKwSpan(kw: "Self")
         self.addKwSpan(kw: "fn")
         self.addKwSpan(kw: "iterator")
         self.addKwSpan(kw: "next")
+        val langModule: U64 = self.modules.langModule
+        mut val i: U64 = 0U64
+        while i < self.arena.structs.count() {
+            val candidate: StructDef = self.arena.structs[i]
+            // StructDef.nameStart can be a re-interned span, whereas the
+            // keyword cache deliberately uses a synthetic span. Compare the
+            // declaration's immutable bytes here, once in the frontend, then
+            // publish only its declaration identity to later consumers.
+            if candidate.nameLen == 5U64 && rangeEquals(bytes: self.arena.bytes, start: candidate.nameStart, len: candidate.nameLen, kw: "Array") && candidate.defOffset != 0U64 && self.moduleOf(offset: candidate.defOffset) == langModule {
+                // TypeRef.declOffset is the declaration's source identity.
+                // `nameStart` is an interner span and can be reallocated while
+                // loading later modules, so comparing it to a TypeRef's
+                // declaration offset misclassifies the built-in Array as a
+                // user Index witness. Keep this identity in its native form.
+                self.langArrayDeclOffset = candidate.defOffset
+                return
+            }
+            i += 1U64
+        }
     }
 
     // Return a stable source span naming `kw`. O(1) lookup in the prebuilt cache; any

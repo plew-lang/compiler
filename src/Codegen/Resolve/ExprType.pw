@@ -150,10 +150,9 @@ pub impl Comp {
         }
         // A method's generic binder list can contain the nominal declaration
         // binder, an impl receiver-pattern binder, and method-owned binders.
-        // They are lexical identities, not positional aliases. Match the
-        // selected receiver against the declared pattern once and use that
-        // directional substitution for the return term (the same operation
-        // conformance proofs use).
+        // They are lexical identities, not positional aliases. Finalization
+        // retains the complete WitnessMatch here, including legacy binder
+        // indexes while the ParamId migration is still in flight.
         val receiverMatch: WitnessMatch = self.methodReceiverEnvironment(f: f, instRef: receiverRef)
         if receiverMatch.conformIdx == 0U64 { return <InstanceEnvironment /> }
         mut val fullArgs: Array[U64] = []

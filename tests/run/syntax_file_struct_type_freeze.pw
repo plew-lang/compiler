@@ -1,0 +1,11 @@
+import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevelCount }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "struct Bytes { val bytes: Array[U8] }\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    print(syntaxFileTopLevelCount(file: file))
+}

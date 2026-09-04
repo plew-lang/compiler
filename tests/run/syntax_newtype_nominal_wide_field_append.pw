@@ -1,0 +1,41 @@
+import @Plew/Syntax with { SyntaxNewtype, TypeId, Span }
+import @Std/Io with { print }
+
+struct A0 {}
+struct A1 {}
+struct A2 {}
+struct A3 {}
+struct A4 {}
+struct A5 {}
+struct A6 {}
+struct A7 {}
+struct A9 {}
+
+struct NominalWideStore {
+    mut val a0: Array[A0] = []
+    mut val a1: Array[A1] = []
+    mut val a2: Array[A2] = []
+    mut val a3: Array[A3] = []
+    mut val a4: Array[A4] = []
+    mut val a5: Array[A5] = []
+    mut val a6: Array[A6] = []
+    mut val a7: Array[A7] = []
+    mut val nodes: Array[SyntaxNewtype] = []
+    mut val a9: Array[A9] = []
+}
+
+pub impl NominalWideStore {
+    inout fn appendNode() {
+        self.nodes.append(<SyntaxNewtype name=<Span start=1U64 end=2U64 /> ty=<TypeId raw=3U64 /> isPub=false span=<Span start=0U64 end=4U64 /> />)
+    }
+
+    fn firstRaw() -> U64 {
+        return self.nodes[0U64].ty.raw
+    }
+}
+
+fn main() {
+    mut val store = <NominalWideStore />
+    store.appendNode()
+    print(store.firstRaw())
+}

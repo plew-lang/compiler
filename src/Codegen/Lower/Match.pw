@@ -449,7 +449,7 @@ pub impl Comp {
     inout fn tempIndexKey(e: ExprAst, stmts: inout Array[U64]) -> U64 {
         match e {
             ExprAst.Ident(name: _, span: _) => { return self.lowerExpr(e: e) }
-            ExprAst.IntLit(value: _, isBool: _, tySuffix: _, span: _) => { return self.lowerExpr(e: e) }
+            ExprAst.IntLit(value: _, isBool: _, tySuffix: _, literalSpan: _, tySuffixSpan: _, span: _) => { return self.lowerExpr(e: e) }
             _ => {
                 val iv: U64 = self.lowerExpr(e: e)
                 self.cur.lowerTmpSeq += 1U64
@@ -474,7 +474,7 @@ pub impl Comp {
     inout fn lowerStmt(s: StmtAst) -> U64 {
         mut val result: U64 = 0
         match s {
-            StmtAst.Let(val mutable, val name, val hasTy, val ty, val init, val span) => {
+            StmtAst.Let(val mutable, val name, nameSpan: _, val hasTy, val ty, val init, val span) => {
                 val nm: Bind = self.internBytes(s: name)
                 mut val tyStart: U64 = 0
                 mut val tyLen: U64 = 0
@@ -538,7 +538,7 @@ pub impl Comp {
                 val bd: U64 = self.lowerBlock(b: body)
                 result = self.pushStmt(s: <Stmt.While cond=cnd body=bd />)
             }
-            StmtAst.For(val varName, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, val binds, val span) => {
+            StmtAst.For(val varName, varNameSpan: _, val varTy, val hasVarTy, val isRange, val inclusive, val iter, val rangeHi, val body, val isStruct, val patType, patTypeSpan: _, val binds, val span) => {
                 // a record loop pattern `for (val x, val y) in xs` (patType="__rec__"): bind a
                 // fresh element local `__fe` and prepend `val x = __fe.field` per bind to the
                 // body (the `__fe` local and bound names are interned; an AST synthetic
@@ -623,7 +623,7 @@ pub impl Comp {
             }
             StmtAst.Break(val span) => { result = self.pushStmt(s: <Stmt.Break offset=span.start />) }
             StmtAst.Continue(val span) => { result = self.pushStmt(s: <Stmt.Continue offset=span.start />) }
-            StmtAst.Destructure(val binds, val typeName, val init, val span) => {
+            StmtAst.Destructure(val binds, val typeName, typeNameSpan: _, val init, val span) => {
                 // normally expanded by lowerBlock into several statements; reached only if a
                 // destructuring appears outside a statement list — lower the initializer as a
                 // plain expression statement so the value is still evaluated.
@@ -710,7 +710,7 @@ pub impl Comp {
         while i < b.stmts.count() {
             // a destructuring statement expands to several arena statements (temp + fields).
             match b.stmts[i] {
-                StmtAst.Destructure(val binds, val typeName, val init, val span) => {
+                StmtAst.Destructure(val binds, val typeName, typeNameSpan: _, val init, val span) => {
                     self.lowerDestructureInto(binds: binds, typeName: typeName, init: init, offset: span.start, stmts: inout stmts)
                 }
                 // a compound assign `place OP= v` expands to the temp bindings for its

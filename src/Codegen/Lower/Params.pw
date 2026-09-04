@@ -8,18 +8,13 @@ pub impl Comp {
         while i < params.count() {
             val p: ParamAst = params[i]
             val nm: Bind = self.internBytes(s: p.name)
-            mut val tyStart: U64 = 0
-            mut val tyLen: U64 = 0
-            mut val tyIsArray: Bool = false
-            mut val tyRef: U64 = 0
+            mut val hasType: Bool = false
+            mut val ty: PType = <PType start=0U64 len=0U64 isArray=false ref=0U64 />
             // a record type has an empty `name` (its fields ride in args/argLabels), so gate
             // on isRecord too — else a record-typed param keeps no type and `p.field` fails.
             if p.ty.name.bytes().count() > 0 || p.ty.isRecord {
-                val pt: PType = self.lowerType(t: p.ty)
-                tyStart = pt.start
-                tyLen = pt.len
-                tyIsArray = pt.isArray
-                tyRef = pt.ref
+                ty = self.lowerType(t: p.ty)
+                hasType = true
             }
             // a default argument `name: T = expr` (spec/04). Closures never carry one
             // (hasDefault is always false there), so this is a no-op for closure params.
@@ -29,10 +24,27 @@ pub impl Comp {
                 defaultExpr = self.lowerExpr(e: p.defaultVal)
                 hasDefault = true
             }
-            out.append(<Param nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=p.isInout isMove=p.isMove isBorrow=p.isBorrow noLabel=p.noLabel hasDefault=hasDefault defaultExpr=defaultExpr />)
+            out.append(self.appendLoweredParam(name: nm, hasType: hasType, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: hasDefault, defaultExpr: defaultExpr))
             i += 1
         }
         return out
+    }
+
+    // Both value-AST and SyntaxFile parameter decoders end here.  Keeping the
+    // IR construction together prevents a new input representation from
+    // drifting in mode, label, or default-argument semantics.
+    inout fn appendLoweredParam(name: Bind, hasType: Bool, ty: PType, isInout: Bool, isMove: Bool, isBorrow: Bool, noLabel: Bool, hasDefault: Bool, defaultExpr: U64) -> Param {
+        mut val tyStart: U64 = 0U64
+        mut val tyLen: U64 = 0U64
+        mut val tyIsArray: Bool = false
+        mut val tyRef: U64 = 0U64
+        if hasType {
+            tyStart = ty.start
+            tyLen = ty.len
+            tyIsArray = ty.isArray
+            tyRef = ty.ref
+        }
+        return <Param nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) tyIsArray=tyIsArray ty=tyRef isInout=isInout isMove=isMove isBorrow=isBorrow noLabel=noLabel hasDefault=hasDefault defaultExpr=defaultExpr />
     }
 
     inout fn lowerBinds(binds: Array[BindAst]) -> BindRange {

@@ -18,7 +18,12 @@ export enum MidProjection {
     // needed for a nested GEP walk and prevents LLVM from reconstructing a
     // field declaration/type from a source spelling.
     Field(index: U64, typeTerm: U64)
-    Index
+    // The subscript expression is evaluated before this place is used and its
+    // value lives in `indexLocal`.  Storing a stable local identity (rather
+    // than an Operand or source ExprId) makes the projection acyclic and
+    // preserves both evaluation order and single evaluation through CFG
+    // lowering. `typeTerm` is the already-selected element type.
+    Index(indexLocal: U64, typeTerm: U64)
 }
 
 export struct MidPlace {
@@ -119,6 +124,15 @@ export enum MidRvalue {
     // closed proof selects leaf boxing versus structural re-packing; Mid never
     // reconstructs either decision from source syntax.
     Convert(operand: MidOperand, conversion: ValueConversionProof)
+    // Read an enum tag from an already-evaluated place.  The enum declaration
+    // slot comes from SemanticMatch; this is a read-only layout operation and
+    // never owns/copies the complete enum value.
+    EnumTag(place: MidPlace, enumIndex: U64, sourceStmt: U64, resultTerm: U64)
+    // Copy exactly one selected enum payload field into an arm-local place.
+    // This is intentionally not a general Field projection: enum payload
+    // layout depends on the selected variant, and all three declaration slots
+    // are frozen by SemanticMatch rather than rediscovered by LLVM.
+    EnumPayloadCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
 }
 
 // A parametric body names a frontend CallTemplate by its semantic site identity.
@@ -170,6 +184,9 @@ export enum MidStatement {
 // has already moved/copied the source into the ABI return place before scope
 // drops are elaborated.
 export enum MidTerminator {
+    // Builder-only sentinel for a block whose control-flow edge is not chosen
+    // yet. It must be eliminated before verification/emission.
+    Open
     Goto(target: U64)
     // Source pattern cases are signed integer values. The LLVM emitter keeps
     // their two's-complement bit pattern when materializing the literal for
@@ -185,7 +202,7 @@ export enum MidTerminator {
 
 export struct MidBlock {
     pub val statements: Array[MidStatement] = []
-    pub val terminator: MidTerminator = <MidTerminator.Unreachable />
+    pub val terminator: MidTerminator = <MidTerminator.Open />
 }
 pub impl MidBlock { factory }
 

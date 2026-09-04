@@ -1,0 +1,22 @@
+// Recursive construction mirrors parseType: an inner TypeAst return is stored
+// in a local Array[TypeAst], then that array becomes a field of the outer
+// returned TypeAst.  Every boundary must preserve the one owning share.
+import @Plew/Syntax with { Span, TypeAst }
+import @Std/Io with { print }
+
+fn leafType() -> TypeAst {
+    val span = <Span start=0U64 end=2U64 />
+    val byte = <TypeAst name="U8" args=[] span=span />
+    return <TypeAst name="Inner" args=[byte] span=span />
+}
+
+fn genericType() -> TypeAst {
+    val span = <Span start=0U64 end=5U64 />
+    mut val args: Array[TypeAst] = []
+    args.append(leafType())
+    return <TypeAst name="Array" args=args span=span />
+}
+
+fn main() {
+    print(genericType().args[0U64].args.count())
+}

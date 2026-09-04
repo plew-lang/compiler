@@ -1,0 +1,52 @@
+// A SyntaxFile construction must lower directly from its type-argument and
+// field IDs.  In particular, the field value must not require rebuilding a
+// MakeFieldAst or its name as a String.
+import @Plew/Syntax with { Lexer, P, StmtId, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxStmt, syntaxTopItemPayload }
+import @Std/Io with { print }
+import /Frontend with { Comp }
+import /Ir with { Expr }
+
+fn main() {
+    val source = "val item = <Box[I8] value=1I8 />\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    val item = syntaxFileTopLevel(file: file, index: 0U64)
+    val stmt = syntaxStmt(file: file, id: <StmtId raw=syntaxTopItemPayload(file: file, item: item) />)
+
+    mut val c: Comp = <Comp />
+    c.appendSrc(from: source.bytes())
+    c.syntax = file
+    val root = c.lowerSyntaxExpr(id: stmt.child0)
+    print(c.arena.exprs.count())
+    match c.arena.exprs[root] {
+        Expr.Make(typeStart: _, typeLen: val typeLen, variantStart: _, variantLen: _, isEnum: val isEnum, ty: val ty, fields: val fields) => {
+            print(typeLen)
+            if isEnum { print(1U64) } else { print(0U64) }
+            if ty != 0U64 { print(1U64) } else { print(0U64) }
+            print(fields.len)
+            val field = c.arena.makeFieldPool[fields.start]
+            print(field.nameLen)
+            match c.arena.exprs[field.value] {
+                Expr.Int(value: val intValue, offset: _, isBool: _, tyStart: _, tyLen: val suffixLen, isNeg: _) => {
+                    print(intValue)
+                    print(suffixLen)
+                }
+                _ => {
+                    print(99U64)
+                    print(99U64)
+                }
+            }
+        }
+        _ => {
+            print(99U64)
+            print(99U64)
+            print(99U64)
+            print(99U64)
+            print(99U64)
+            print(99U64)
+            print(99U64)
+        }
+    }
+}

@@ -1,0 +1,20 @@
+// A value stored in Array must retain every ARC-bearing payload of an enum
+// variant.  TopItemAst.NewType contains TypeAst, whose generic arguments own an
+// Array[TypeAst].  This is deliberately constructed without the parser so the
+// test isolates Array's copy-into-element contract.
+import @Plew/Syntax with { Span, TopItemAst, TypeAst }
+import @Std/Io with { print }
+
+fn main() {
+    val span = <Span start=0U64 end=5U64 />
+    val byte = <TypeAst name="U8" args=[] span=span />
+    val array = <TypeAst name="Array" args=[byte] span=span />
+    mut val items: Array[TopItemAst] = []
+    items.append(<TopItemAst.NewType name="Bytes" nameSpan=span ty=array isPub=false span=span />)
+    match items[0U64] {
+        TopItemAst.NewType(name: _, nameSpan: _, ty: val ty, isPub: _, span: _) => {
+            print(ty.args.count())
+        }
+        _ => { print(0U64) }
+    }
+}

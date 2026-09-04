@@ -27,6 +27,45 @@ pub impl Comp {
         return items
     }
 
+    // New compiler path: append to Comp's one syntax store and retain only the
+    // root range for this source file.  The legacy value path stays temporarily
+    // while import scan and lowering are migrated together.
+    inout fn parseFileSyntax(fileBytes: Array[U8], fileStart: U64) -> SyntaxSlice {
+        mut val lx: Lexer = <Lexer bytes=fileBytes pos=0 toks=[] depth=0 />
+        lex(lx: inout lx)
+        mut val p: P = <P bytes=fileBytes toks=lx.toks pos=0 base=fileStart />
+        val roots: SyntaxSlice = parseProgramSyntaxInto(p: inout p, file: inout self.syntax)
+        if p.hasErr {
+            self.errorAt(offset: p.errOff, msg: p.errMsg)
+        }
+        return roots
+    }
+
+    // ID-only counterpart of checkPartImplOnly.  It deliberately needs no
+    // declaration/statement materialization: the top-level tag, source span,
+    // and Export's nested TopItemId completely determine this rule.
+    inout fn checkPartSyntaxOnly(roots: SyntaxSlice) {
+        mut val i: U64 = 0U64
+        while i < roots.count {
+            self.rejectNonImplSyntaxItem(item: syntaxFileTopLevel(file: self.syntax, index: roots.start + i))
+            i += 1U64
+        }
+    }
+
+    inout fn rejectNonImplSyntaxItem(item: TopItemId) {
+        match syntaxTopItemKind(file: self.syntax, item: item) {
+            SyntaxTopItemKind.Impl => {}
+            SyntaxTopItemKind.Import => {}
+            SyntaxTopItemKind.Directive => {}
+            SyntaxTopItemKind.Export => {
+                self.rejectNonImplSyntaxItem(item: <TopItemId raw=syntaxTopItemPayload(file: self.syntax, item: item) />)
+            }
+            _ => {
+                self.partItemError(offset: syntaxTopItemSpan(file: self.syntax, item: item).start)
+            }
+        }
+    }
+
     // spec/15 ("part の唯一の用途＝無名 impl の配置・part に書けるのは impl だけ"): a
     // `part` file may contain only `impl` blocks plus the structural directives
     // `import`/`part`/`@[...]`. A free function, type (struct/enum/trait/newtype),
@@ -54,10 +93,10 @@ pub impl Comp {
             TopItemAst.Trait(val t) => { self.partItemError(offset: t.nameSpan.start) }
             TopItemAst.Extern(val e) => { self.partItemError(offset: e.abiSpan.start) }
             TopItemAst.ReExport(val imp) => { self.partItemError(offset: imp.pathSpan.start) }
-            TopItemAst.NewType(name: _, ty: _, isPub: _, val span) => { self.partItemError(offset: span.start) }
+            TopItemAst.NewType(name: _, nameSpan: _, ty: _, isPub: _, val span) => { self.partItemError(offset: span.start) }
             TopItemAst.GlobalVal(val s) => {
                 match s {
-                    StmtAst.Let(mutable: _, name: _, hasTy: _, ty: _, init: _, val span) => { self.partItemError(offset: span.start) }
+                    StmtAst.Let(mutable: _, name: _, nameSpan: _, hasTy: _, ty: _, init: _, val span) => { self.partItemError(offset: span.start) }
                     _ => { self.partItemError(offset: 0) }
                 }
             }

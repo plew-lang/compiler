@@ -15,7 +15,7 @@ import @Std/Io with { print, write, writeByte, readStdin, readFile, readFileByte
 import @Std/Process with { argCount, argAt, exit }
 import @Std/Ffi with { cString, stringFromCString, arrayCPtr }
 import @Std/Core with { stringFromBytesUnchecked, truncU8 }
-import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
+import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, MakeFieldId, SyntaxMakeField, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprTypeArgCount, syntaxExprTypeArg, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
 import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
@@ -31,6 +31,10 @@ export struct Comp {
     // single owner of the program's data that all passes read; `c.arena.exprs`,
     // `c.arena.funcs`, `c.arena.bytes`, etc.
     pub mut val arena: Arena = <Arena />
+    // The sole compiler-owned immutable syntax store.  The loader appends each
+    // file while discovering the module graph, then all frontend passes retain
+    // only TopItemId ranges into this table (never Array[TopItemAst]).
+    pub mut val syntax: SyntaxFile = <SyntaxFile />
     // Source/synthetic call-origin allocator.  It never participates in AST
     // indexing and remains stable even if the arena representation changes.
     pub mut val nextExprOriginSerial: U64 = 1U64
@@ -51,6 +55,11 @@ export struct Comp {
     // because it uses Syntax-layer TypeAst and must not leak into Ir.pw.
     pub mut val lowerWhereTypes: Array[TypeAst] = []
     pub mut val lowerWhereTraits: Array[String] = []
+    // SyntaxFile counterpart of the legacy projection-normalization context.
+    // The ID lowerer never reconstructs value TypeAst/String just to resolve
+    // `T.Item` against an enclosing `where T: Trait` bound.
+    pub mut val lowerWhereSyntaxTypes: Array[TypeId] = []
+    pub mut val lowerWhereSyntaxTraits: Array[Span] = []
     // gen mode (spec/16 `plew gen`): set when invoked as `plewc --gen <file>`.
     // The driver then suppresses the user's own `main` and the auto-part of
     // `<Foo>.gen.pw`, and emits a synthesized harness `main` (`genMainIdx`) that
@@ -76,6 +85,10 @@ export struct Comp {
     // reports any legacy fallback on stderr after emission.
     pub mut val emitMidCoverage: Bool = false
     pub mut val requireMid: Bool = false
+    // Declaration identity of the ambient `@Std/Lang` Array type.  Storage
+    // consumers compare this offset against resolved TypeRef.declOffset;
+    // they never infer the Array ABI from a source spelling or import alias.
+    pub mut val langArrayDeclOffset: U64 = 0U64
     // Optional counters paired with --trace-phases. They isolate monomorphization
     // work amplification without changing its worklist or generated LLVM.
     pub mut val traceExprInstScans: U64 = 0
@@ -466,6 +479,24 @@ pub impl Comp {
             if reExport { self.modules.reExportOrigins.append(entry) }
             else { self.modules.importOrigins.append(entry) }
             i += 1
+        }
+    }
+
+    // SyntaxFile counterpart used by the ID-based loader.  Import names are
+    // read as source spans directly from the immutable syntax store; this must
+    // remain separate from the legacy value-AST method until lowering itself is
+    // migrated, rather than materializing an ImportAst adapter.
+    inout fn recordSyntaxImportOrigins(imp: SyntaxImport, targetMod: U64, reExport: Bool) {
+        mut val i: U64 = 0U64
+        while i < syntaxImportNameCount(file: self.syntax, imp: imp) {
+            val real: Span = syntaxImportNameSpan(file: self.syntax, imp: imp, index: i)
+            mut val local: Span = real
+            val alias: Span = syntaxImportNameAliasSpan(file: self.syntax, imp: imp, index: i)
+            if alias.end > alias.start { local = alias }
+            val entry: Bind = <Bind nameStart=local.start nameLen=local.end - local.start nameId=real.end - real.start fieldStart=real.start fieldLen=targetMod />
+            if reExport { self.modules.reExportOrigins.append(entry) }
+            else { self.modules.importOrigins.append(entry) }
+            i += 1U64
         }
     }
 }
@@ -1417,7 +1448,7 @@ fn litArmsAreBoolExhaustive(arms: Array[MatchArmAst]) -> Bool {
         }
         if p.isLiteral {
             match p.lit {
-                ExprAst.IntLit(val value, val isBool, tySuffix: _, span: _) => {
+                ExprAst.IntLit(val value, val isBool, tySuffix: _, literalSpan: _, tySuffixSpan: _, span: _) => {
                     if isBool {
                         if value == 1U64 {
                             sawTrue = true

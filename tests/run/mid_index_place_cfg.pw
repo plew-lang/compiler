@@ -1,0 +1,63 @@
+// An Array index is a first-class Mid place, not an invitation for LLVM to
+// reopen the source AST.  Its index is the already-evaluated local identity,
+// which makes the evaluation order of `items[index]` explicit in the CFG.
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Expr, SemanticExprType, Stmt, identValueCode }
+import /Mid with { MidBlock, MidBuildError, MidBuildState, MidOperand, MidProjection, MidRvalue, MidStatement, addMidLocal, buildMidLet }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    // `val selected: I64 = items[index]`, with `items` and `index` already
+    // bound by Record.  Terms only identify frozen semantic facts in this
+    // builder test; no source name lookup is involved.
+    c.arena.exprs.append(<Expr.Ident start=10U64 len=5U64 />)
+    c.arena.exprs.append(<Expr.Ident start=20U64 len=5U64 />)
+    c.arena.exprs.append(<Expr.Index base=0U64 index=1U64 />)
+    c.typeCache.identBind.append(identValueCode())
+    c.typeCache.identTarget.append(10U64)
+    c.typeCache.identBind.append(identValueCode())
+    c.typeCache.identTarget.append(20U64)
+    c.typeCache.identBind.append(0I64)
+    c.typeCache.identTarget.append(0U64)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=1U64 />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=2U64 />)
+    c.arena.semanticExprTypes.append(<SemanticExprType term=3U64 />)
+    c.arena.stmts.append(<Stmt.Let mutable=false nameStart=30U64 nameLen=8U64 tyStart=0U64 tyLen=0U64 tyIsArray=false ty=3U64 init=2U64 />)
+
+    mut val state: MidBuildState = <MidBuildState blocks=[<MidBlock />] />
+    val items = addMidLocal(state: inout state, declarationTarget: 10U64, typeTerm: 1U64, isUnique: false, isParameter: true, ownsAtEntry: true)
+    val index = addMidLocal(state: inout state, declarationTarget: 20U64, typeTerm: 2U64, isUnique: false, isParameter: true, ownsAtEntry: true)
+    val result = buildMidLet(c: inout c, state: inout state, stmtId: 0U64)
+
+    mut val correctPlace: Bool = false
+    match state.blocks[0U64].statements[0U64] {
+        MidStatement.Assign(destination: val destination, value: val value) => {
+            match value {
+                MidRvalue.Use(operand: val operand) => {
+                    match operand {
+                        MidOperand.Copy(place: val place) => {
+                            if destination.local == 2U64 && place.local == items && place.typeTerm == 3U64 && place.projections.count() == 1U64 {
+                                match place.projections[0U64] {
+                                    MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
+                                        correctPlace = indexLocal == index && typeTerm == 3U64
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    match result {
+        MidBuildError.None => {
+            if correctPlace { write(s: "index-place\n") } else { write(s: "wrong-place\n") }
+        }
+        _ => { write(s: "build-error\n") }
+    }
+}

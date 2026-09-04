@@ -1,0 +1,61 @@
+// A returned outer aggregate takes ownership of a nested aggregate assembled
+// from local arrays.  This is the ordinary value-return shape used by the
+// compiler's MidBodyBuild: every destination owner must co-own each nested
+// ARC value before the builder locals are cleaned up.
+import @Std/Io with { print }
+
+enum BuildError {
+    None
+    Unsupported(reasons: Array[I64])
+}
+
+struct Block {
+    pub val statements: Array[I64]
+}
+
+struct Body {
+    pub val locals: Array[I64]
+    pub val scopes: Array[I64]
+    pub val blocks: Array[Block]
+}
+
+struct State {
+    pub mut val locals: Array[I64]
+    pub mut val scopes: Array[I64]
+    pub mut val blocks: Array[Block]
+}
+
+struct Build {
+    pub val body: Body
+    pub val error: BuildError = <BuildError.None />
+}
+
+pub impl Block { factory }
+pub impl Body { factory }
+pub impl State { factory }
+pub impl Build { factory }
+
+fn build(includeExtra: Bool) -> Build {
+    mut val statements: Array[I64] = [3I64]
+    mut val state = <State locals=[1I64] scopes=[2I64] blocks=[<Block statements=statements />] />
+    // Keep the function on legacy lowering while the Mid while slice is not
+    // implemented.  The ownership contract must nevertheless be identical.
+    while false {}
+    if includeExtra {
+        state.locals.append(4I64)
+        state.scopes.append(5I64)
+        state.blocks.append(<Block statements=[6I64] />)
+    }
+    val body = <Body locals=state.locals scopes=state.scopes blocks=state.blocks />
+    return <Build body=body />
+}
+
+fn main() {
+    val result = build(includeExtra: true)
+    match result.error {
+        BuildError.None => {
+            print(result.body.locals.count() + result.body.scopes.count() + result.body.blocks.count() + result.body.blocks[0U64].statements.count())
+        }
+        BuildError.Unsupported(reasons: _) => { print(0I64) }
+    }
+}

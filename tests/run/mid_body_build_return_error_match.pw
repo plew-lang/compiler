@@ -1,0 +1,149 @@
+// Mirror MidBodyBuild's return ABI: a 48-byte nested Body followed by a
+// mixed-payload error enum.  Both the caller and callee are Mid-eligible.
+// The tail enum tag must survive the aggregate return and field projection.
+import @Std/Io with { print }
+
+enum Unsupported {
+    Expression
+    Operand
+    Projection
+}
+
+enum BuildError {
+    None
+    InvalidStatement
+    InvalidBlock
+    InvalidFunction
+    MissingType
+    UnboundLocal
+    Unsupported(reason: Unsupported)
+    Assign
+    While
+    For
+    Match
+    Panic
+    Give
+    Break
+    Continue
+    MissingTerminator
+    MissingCall
+    UnsupportedCall
+}
+
+struct Block {
+    pub val statements: Array[Statement]
+    pub val terminator: Terminator = <Terminator.Open />
+}
+
+enum Statement {
+    Nop
+    Value(number: I64)
+}
+
+enum Terminator {
+    Open
+    Return
+    Switch(values: Array[I64])
+}
+
+struct Local {
+    pub val typeTerm: U64
+    pub val sourceScope: U64
+    pub val isUnique: Bool
+    pub val isParameter: Bool
+    pub val isInout: Bool
+    pub val ownsAtEntry: Bool
+    pub val isDropFlag: Bool
+    pub val isReturnPlace: Bool
+    pub val sourceNameStart: U64
+}
+
+struct Scope {
+    pub val parent: U64
+    pub val firstLocal: U64
+    pub val localCount: U64
+}
+
+struct Body {
+    pub val bodyInstance: U64
+    pub val sourceFunction: U64
+    pub val locals: Array[Local]
+    pub val scopes: Array[Scope]
+    pub val blocks: Array[Block]
+    pub val entry: U64
+}
+
+struct Build {
+    pub val body: Body
+    pub val error: BuildError = <BuildError.None />
+}
+
+struct State {
+    pub mut val locals: Array[Local]
+    pub mut val scopes: Array[Scope]
+    pub mut val blocks: Array[Block]
+}
+
+pub impl Block { factory }
+pub impl Local { factory }
+pub impl Scope { factory }
+pub impl Body { factory }
+pub impl Build { factory }
+pub impl State { factory }
+
+// The error crosses two return boundaries: `makeError` → legacy `build` →
+// Mid-lowered `main`.  This is the same dynamic tail-field path used by
+// `buildParametricMidBody`, not just a factory literal in the outer record.
+fn makeError() -> BuildError {
+    return <BuildError.Unsupported reason=<Unsupported.Projection /> />
+}
+
+// Preserve the dynamic enum through the same success-versus-propagation shape
+// used by `buildParametricMidBody` before it is embedded in `Build`.
+fn propagate(error: BuildError) -> BuildError {
+    match error {
+        BuildError.None => { return <BuildError.None /> }
+        _ => { return error }
+    }
+}
+
+fn build() -> Build {
+    mut val state = <State locals=[<Local typeTerm=1U64 sourceScope=0U64 isUnique=false isParameter=false isInout=false ownsAtEntry=false isDropFlag=false isReturnPlace=false sourceNameStart=0U64 />] scopes=[<Scope parent=0U64 firstLocal=0U64 localCount=1U64 />] blocks=[<Block statements=[<Statement.Value number=9I64 />] />] />
+    // Keep the producer on legacy lowering.  The Mid caller must nevertheless
+    // receive the same aggregate ABI and error discriminant.
+    while false {}
+    val body = <Body bodyInstance=3U64 sourceFunction=4U64 locals=state.locals scopes=state.scopes blocks=state.blocks entry=5U64 />
+    val error = propagate(error: makeError())
+    return <Build body=body error=error />
+}
+
+fn main() {
+    val result = build()
+    val error: BuildError = result.error
+    match error {
+        BuildError.None => { print(result.body.bodyInstance + result.body.sourceFunction + result.body.locals.count() + result.body.scopes.count() + result.body.blocks.count() + result.body.entry + result.body.blocks[0U64].statements.count()) }
+        BuildError.InvalidStatement => { print(0U64) }
+        BuildError.InvalidBlock => { print(0U64) }
+        BuildError.InvalidFunction => { print(0U64) }
+        BuildError.MissingType => { print(0U64) }
+        BuildError.UnboundLocal => { print(0U64) }
+        BuildError.Unsupported(reason: val reason) => {
+            match reason {
+                Unsupported.Projection => { print(result.body.bodyInstance + result.body.sourceFunction + result.body.locals.count() + result.body.scopes.count() + result.body.blocks.count() + result.body.entry + result.body.blocks[0U64].statements.count()) }
+                _ => { print(0U64) }
+            }
+        }
+        BuildError.Unsupported(reason: _) => { print(0U64) }
+        BuildError.Assign => { print(0U64) }
+        BuildError.While => { print(0U64) }
+        BuildError.For => { print(0U64) }
+        BuildError.Match => { print(0U64) }
+        BuildError.Panic => { print(0U64) }
+        BuildError.Give => { print(0U64) }
+        BuildError.Break => { print(0U64) }
+        BuildError.Continue => { print(0U64) }
+        BuildError.MissingTerminator => { print(0U64) }
+        BuildError.MissingCall => { print(0U64) }
+        BuildError.UnsupportedCall => { print(0U64) }
+    }
+}

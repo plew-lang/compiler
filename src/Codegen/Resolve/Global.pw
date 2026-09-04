@@ -294,6 +294,15 @@ pub impl Comp {
         return <ResolvedViewSource writtenStart=siteOffset writtenLen=text.bytes().count() lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=written.nameId />
     }
 
+    inout fn lowerViewSourceSpan(siteOffset: U64, start: U64, len: U64) -> ResolvedViewSource {
+        val owner: U64 = self.traitOwnerForSelectorSpan(siteOffset: siteOffset, start: start, len: len)
+        if owner != 0U64 {
+            val ownerLen: U64 = self.traitNameLenByOwner(owner: owner)
+            return <ResolvedViewSource writtenStart=siteOffset writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: owner, len: ownerLen) traitOwner=owner />
+        }
+        return <ResolvedViewSource writtenStart=siteOffset writtenLen=len lexicalSurfaceModule=self.moduleOf(offset: siteOffset) surfaceId=intern(c: inout self, start: start, len: len) />
+    }
+
     // If `recv` is a bare identifier naming a type (not a local value), return that
     // type's name span as an assoc-fn receiver; else signal "not an assoc call" by
     // returning len 0. Used by call codegen/type recovery to route `Type.name(args)`.

@@ -1,0 +1,21 @@
+// A returned TypeAst is a fresh owned value.  Appending it to Array[TypeAst]
+// must preserve its nested generic-argument buffer after the return temporary
+// is cleaned up.  This isolates the parser's failing return→append boundary.
+import @Plew/Syntax with { Span, TypeAst }
+import @Std/Io with { print }
+
+fn genericType() -> TypeAst {
+    val span = <Span start=0U64 end=5U64 />
+    val byte = <TypeAst name="U8" args=[] span=span />
+    return <TypeAst name="Array" args=[byte] span=span />
+}
+
+fn storedGenericArgCount() -> U64 {
+    mut val types: Array[TypeAst] = []
+    types.append(genericType())
+    return types[0U64].args.count()
+}
+
+fn main() {
+    print(storedGenericArgCount())
+}

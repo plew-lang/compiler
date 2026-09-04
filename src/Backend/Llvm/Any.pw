@@ -781,6 +781,13 @@ pub impl LlvmCtx {
     // substitution env, if any — used for both plain functions and generic instances).
     inout fn genLlvmFuncBody(c: inout Comp, fi: U64, fv: LLVMValueRef, environment: InstanceEnvironment) {
         val f: Func = c.arena.funcs[fi]
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] function body-entry name=")
+            self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+            eprint(text: " fn=")
+            self.traceCodegenU64(n: fi)
+            eprint(text: "\n")
+        }
         // save the Self/Item env so this body fully restores it on exit — the body binds `self`
         // and sets cur.selfRef from the receiver ref (see the self-local binding below), which
         // must not leak into the next body (a pf-drain / free-fn emission has no per-call
@@ -804,6 +811,13 @@ pub impl LlvmCtx {
         // body: `Optional[T]` -> `Optional[I64]`) so return-context enum construction
         // can infer the concrete instance.
         self.curRetRef = c.groundTypeRef(ref: f.retTy)
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] function body-metadata-ready name=")
+            self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+            eprint(text: " fn=")
+            self.traceCodegenU64(n: fi)
+            eprint(text: "\n")
+        }
         val requiresOwnershipCfg: Bool = c.functionRequiresOwnershipCfg(fnIdx: fi)
         // Coverage identifies the frontend's concrete body instance before any
         // Mid stage runs.  The stages below must not substitute a source-level
@@ -819,38 +833,129 @@ pub impl LlvmCtx {
         mut val midBody: MidBody = <MidBody />
         mut val midEligible: Bool = true
         if f.isAsync {
-            self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Eligibility reason=<MidEligibilityReason.Async /> />)
+            self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Async />)
             midEligible = false
         }
         if f.isExtern {
-            self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Eligibility reason=<MidEligibilityReason.Extern /> />)
+            self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Extern />)
             midEligible = false
         }
         if f.hasRecv && f.selfMove {
-            self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Eligibility reason=<MidEligibilityReason.MoveReceiver /> />)
+            self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.MoveReceiver />)
             midEligible = false
         }
         if midEligible {
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid build-start name=")
+                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                eprint(text: " fn=")
+                self.traceCodegenU64(n: fi)
+                eprint(text: "\n")
+            }
             val parametric: MidBodyBuild = buildParametricMidBody(c: inout c, fnIdx: fi)
-            match parametric.error {
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid build-done name=")
+                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                eprint(text: " fn=")
+                self.traceCodegenU64(n: fi)
+                eprint(text: " body=")
+                self.traceCodegenU64(n: bodyId)
+                eprint(text: "\n")
+            }
+            // Keep the returned build record alive while extracting its scalar
+            // error field.  The trace boundary distinguishes a broken field
+            // projection/return ABI from a broken enum switch in the bootstrap
+            // fixed-point compiler.
+            val parametricError: MidBuildError = parametric.error
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid error-field-ready name=")
+                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                eprint(text: " fn=")
+                self.traceCodegenU64(n: fi)
+                eprint(text: "\n")
+            }
+            match parametricError {
                 MidBuildError.None => {
+                    if c.traceCodegen {
+                        eprint(text: "[trace-codegen] Mid build-success name=")
+                        self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                        eprint(text: " fn=")
+                        self.traceCodegenU64(n: fi)
+                        eprint(text: "\n")
+                    }
                     if bodyId != 0U64 {
+                        if c.traceCodegen {
+                            eprint(text: "[trace-codegen] Mid instantiate-start name=")
+                            self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                            eprint(text: " fn=")
+                            self.traceCodegenU64(n: fi)
+                            eprint(text: "\n")
+                        }
                         val instantiated: MidInstantiation = instantiateMidBody(c: inout c, body: parametric.body, bodyId: bodyId)
+                        if c.traceCodegen {
+                            eprint(text: "[trace-codegen] Mid instantiate-done name=")
+                            self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                            eprint(text: " fn=")
+                            self.traceCodegenU64(n: fi)
+                            eprint(text: "\n")
+                        }
                         match instantiated.error {
                             MidInstantiateError.None => {
+                                if c.traceCodegen {
+                                    eprint(text: "[trace-codegen] Mid access-start name=")
+                                    self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                    eprint(text: " fn=")
+                                    self.traceCodegenU64(n: fi)
+                                    eprint(text: "\n")
+                                }
                                 val accesses: MidAccessElaboration = elaborateMidAccesses(c: inout c, body: instantiated.body)
+                                if c.traceCodegen {
+                                    eprint(text: "[trace-codegen] Mid access-done name=")
+                                    self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                    eprint(text: " fn=")
+                                    self.traceCodegenU64(n: fi)
+                                    eprint(text: "\n")
+                                }
                                 mut val accessReady: Bool = true
                                 match accesses.error {
                                     MidAccessError.None => {}
                                     _ => {
                                         accessReady = false
-                                        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Access />)
+                                        self.recordMidAccess(c: inout c, bodyId: bodyId, fnIdx: fi)
                                         if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: access elaboration unsupported\n") }
                                     }
                                 }
                                 if accessReady {
+                                    if c.traceCodegen {
+                                        eprint(text: "[trace-codegen] Mid drops-start name=")
+                                        self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                        eprint(text: " fn=")
+                                        self.traceCodegenU64(n: fi)
+                                        eprint(text: "\n")
+                                    }
                                     val elaborated: MidBody = elaborateMidDrops(body: accesses.body)
+                                    if c.traceCodegen {
+                                        eprint(text: "[trace-codegen] Mid drops-done name=")
+                                        self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                        eprint(text: " fn=")
+                                        self.traceCodegenU64(n: fi)
+                                        eprint(text: "\n")
+                                    }
+                                    if c.traceCodegen {
+                                        eprint(text: "[trace-codegen] Mid verify-start name=")
+                                        self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                        eprint(text: " fn=")
+                                        self.traceCodegenU64(n: fi)
+                                        eprint(text: "\n")
+                                    }
                                     val verification: MidVerification = verifyMidBody(body: elaborated)
+                                    if c.traceCodegen {
+                                        eprint(text: "[trace-codegen] Mid verify-done name=")
+                                        self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                        eprint(text: " fn=")
+                                        self.traceCodegenU64(n: fi)
+                                        eprint(text: "\n")
+                                    }
                                     match verification.error {
                                         MidVerifyError.None => {
                                         mut val abiParameterCount: U64 = f.params.count()
@@ -866,6 +971,13 @@ pub impl LlvmCtx {
                                             MidLlvmPreflight.Ready => {
                                                 midBody = elaborated
                                                 midReady = true
+                                                if c.traceCodegen {
+                                                    eprint(text: "[trace-codegen] Mid function ready name=")
+                                                    self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                                                    eprint(text: " fn=")
+                                                    self.traceCodegenU64(n: fi)
+                                                    eprint(text: "\n")
+                                                }
                                             }
                                             MidLlvmPreflight.AbiLocals => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AbiLocals />) }
                                             MidLlvmPreflight.AssignmentProjection => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AssignmentProjection />) }
@@ -879,44 +991,44 @@ pub impl LlvmCtx {
                                             MidLlvmPreflight.Terminator => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.Terminator />) }
                                         }
                                         }
-                                        MidVerifyError.InvalidTarget => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.InvalidTarget /> />) }
-                                        MidVerifyError.PartialMove => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.PartialMove /> />) }
-                                        MidVerifyError.MoveUnavailable => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.MoveUnavailable /> />) }
-                                        MidVerifyError.DropUnavailable => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.DropUnavailable /> />) }
-                                        MidVerifyError.InvalidDropFlag => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.InvalidDropFlag /> />) }
-                                        MidVerifyError.UnelaboratedScopeExit => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.UnelaboratedScopeExit /> />) }
-                                        MidVerifyError.UnelaboratedAccess => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.UnelaboratedAccess /> />) }
-                                        MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Verify reason=<MidVerifyError.UninstantiatedReturnBoundary /> />) }
+                                        MidVerifyError.InvalidTarget => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.PartialMove => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.MoveUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.DropUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.InvalidDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.UnelaboratedScopeExit => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                     }
                                 }
                             }
                             _ => {
-                                self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Instantiate />)
+                                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fi)
                                 if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: instantiation failed\n") }
                             }
                         }
                     } else {
-                        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.MissingBodyInstance />)
+                        self.recordMidMissingBodyInstance(c: inout c, bodyId: bodyId, fnIdx: fi)
                         if c.traceCodegen { eprint(text: "[trace-codegen] Mid function: missing body instance\n") }
                     }
                 }
-                MidBuildError.InvalidStatement => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.InvalidStatement /> />) }
-                MidBuildError.InvalidBlock => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.InvalidBlock /> />) }
-                MidBuildError.InvalidFunction => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.InvalidFunction /> />) }
-                MidBuildError.MissingSemanticType => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.MissingSemanticType /> />) }
-                MidBuildError.UnboundLocalIdentifier => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnboundLocalIdentifier /> />) }
-                MidBuildError.Unsupported(reason: _) => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=parametric.error />) }
-                MidBuildError.UnsupportedAssign => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedAssign /> />) }
-                MidBuildError.UnsupportedWhile => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedWhile /> />) }
-                MidBuildError.UnsupportedFor => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedFor /> />) }
-                MidBuildError.UnsupportedMatch => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedMatch /> />) }
-                MidBuildError.UnsupportedPanic => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedPanic /> />) }
-                MidBuildError.UnsupportedGive => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedGive /> />) }
-                MidBuildError.UnsupportedBreak => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedBreak /> />) }
-                MidBuildError.UnsupportedContinue => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedContinue /> />) }
-                MidBuildError.MissingTerminator => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.MissingTerminator /> />) }
-                MidBuildError.MissingCallTemplate => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.MissingCallTemplate /> />) }
-                MidBuildError.UnsupportedCallTemplate => { self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fi, category: <MidCoverageCategory.Build reason=<MidBuildError.UnsupportedCallTemplate /> />) }
+                MidBuildError.InvalidStatement => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 1U64) }
+                MidBuildError.InvalidBlock => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 2U64) }
+                MidBuildError.InvalidFunction => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 3U64) }
+                MidBuildError.MissingSemanticType => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 4U64) }
+                MidBuildError.UnboundLocalIdentifier => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 5U64) }
+                MidBuildError.Unsupported(reason: val unsupported) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 100U64 + self.midUnsupportedBuildCoverageDetail(reason: unsupported)) }
+                MidBuildError.UnsupportedAssign => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 6U64) }
+                MidBuildError.UnsupportedWhile => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 7U64) }
+                MidBuildError.UnsupportedFor => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 8U64) }
+                MidBuildError.UnsupportedMatch => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 9U64) }
+                MidBuildError.UnsupportedPanic => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 10U64) }
+                MidBuildError.UnsupportedGive => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 11U64) }
+                MidBuildError.UnsupportedBreak => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 12U64) }
+                MidBuildError.UnsupportedContinue => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 13U64) }
+                MidBuildError.MissingTerminator => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 14U64) }
+                MidBuildError.MissingCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 15U64) }
+                MidBuildError.UnsupportedCallTemplate => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 16U64) }
             }
         } else { if c.traceCodegen && requiresOwnershipCfg { eprint(text: "[trace-codegen] Mid function: ABI unsupported\n") } }
         if requiresOwnershipCfg && !midReady {
@@ -927,12 +1039,33 @@ pub impl LlvmCtx {
             // Preflight completed before `beginFnBody`; a failure is an
             // invariant violation, never permission to reopen the AST after
             // partially emitting this function.
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid function emit-start name=")
+                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                eprint(text: " fn=")
+                self.traceCodegenU64(n: fi)
+                eprint(text: "\n")
+            }
             if !(self.genLlvmMidBody(c: inout c, body: midBody)) {
                 c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid function failed LLVM lowering")
+            }
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid function emit-done name=")
+                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                eprint(text: " fn=")
+                self.traceCodegenU64(n: fi)
+                eprint(text: "\n")
             }
             if didSelf { c.clearSelfItemEnv() }
             c.cur.selfRef = savedSelfFB
             c.cur.itemRef = savedItemFB
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid function return name=")
+                self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+                eprint(text: " fn=")
+                self.traceCodegenU64(n: fi)
+                eprint(text: "\n")
+            }
             return
         }
         // fresh local scope; bind each param into an alloca (so it reads/writes

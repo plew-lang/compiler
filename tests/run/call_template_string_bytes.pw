@@ -1,0 +1,9 @@
+import @Plew/Syntax with { Lexer, lex }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "x"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    print(lexer.toks.count())
+}

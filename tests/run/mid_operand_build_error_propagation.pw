@@ -1,0 +1,100 @@
+// `MidOperandBuild` is a tagged operand followed by MidBuildError.  A Mid
+// builder propagates its tail error after inspecting it; the first field must
+// never overwrite the following enum tag during aggregate return/copy.
+import @Std/Io with { print }
+
+enum Operand {
+    Copy(place: U64)
+    Move(place: U64)
+    Borrow(place: U64)
+    Constant(value: U64)
+    Access(candidate: U64)
+    // Force the discriminated union to the same wide-prefix shape as the
+    // compiler's MidOperand (a tag plus six machine words of payload).
+    Wide(values: Array[U64], a: U64, b: U64, c: U64, d: U64, e: U64)
+}
+
+enum Error {
+    None
+    InvalidStatement
+    InvalidBlock
+    InvalidFunction
+    MissingType
+    Unbound
+    Unsupported(reason: U64)
+    Assign
+    While
+    For
+    Match
+    Panic
+    Give
+    Break
+    Continue
+    MissingTerminator
+    MissingCall
+    UnsupportedCall
+}
+
+struct OperandBuild {
+    pub val operand: Operand
+    pub val error: Error = <Error.None />
+}
+
+pub impl OperandBuild { factory }
+
+fn makeError() -> Error {
+    return <Error.UnsupportedCall />
+}
+
+// The omitted tail field is the normal successful builder result.  It must be
+// initialized as Error.None even though Operand is a wide tagged union.
+fn buildDefaultOperand() -> OperandBuild {
+    return <OperandBuild operand=<Operand.Constant value=9U64 /> />
+}
+
+fn defaultOperandSucceeded() -> Bool {
+    val built = buildDefaultOperand()
+    match built.error {
+        Error.None => { return true }
+        _ => { return false }
+    }
+}
+
+fn replaceError() -> Error {
+    mut val error: Error = <Error.None />
+    error = makeError()
+    return error
+}
+
+fn buildOperand() -> OperandBuild {
+    // Keep the producer out of the minimal Mid set while the consumer uses a
+    // normal field projection and error-propagation return.
+    while false {}
+    val error = replaceError()
+    return <OperandBuild operand=<Operand.Constant value=7U64 /> error=error />
+}
+
+// Builder helpers seed a conservative error record, replace it with the
+// result of a nested builder, then propagate its tail error.  This exercises
+// the same overwrite-and-return ownership boundary as Mid's call arguments.
+fn replaceBuild() -> OperandBuild {
+    mut val built = <OperandBuild operand=<Operand.Constant value=0U64 /> error=<Error.UnsupportedCall /> />
+    built = buildOperand()
+    return built
+}
+
+fn propagateOperandError() -> Error {
+    val built = replaceBuild()
+    match built.error {
+        Error.None => { return <Error.None /> }
+        _ => { return built.error }
+    }
+}
+
+fn main() {
+    if !defaultOperandSucceeded() { print(0U64)  return }
+    match propagateOperandError() {
+        Error.UnsupportedCall => { print(42U64) }
+        _ => { print(0U64) }
+    }
+}

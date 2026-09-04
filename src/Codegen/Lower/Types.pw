@@ -200,6 +200,115 @@ pub impl Comp {
         return nm
     }
 
+    // SyntaxFile keeps record labels as original source spans.  These helpers
+    // deliberately parallel the legacy String path rather than materializing a
+    // transient Array[String]: record identity is still its sorted labels plus
+    // semantic field terms, while the compiler-facing parser stays copy-free.
+    inout fn sourceSpanGt(a: Span, b: Span) -> Bool {
+        val aLen: U64 = a.end - a.start
+        val bLen: U64 = b.end - b.start
+        mut val i: U64 = 0U64
+        while i < aLen && i < bLen {
+            if self.arena.bytes[a.start + i] > self.arena.bytes[b.start + i] { return true }
+            if self.arena.bytes[a.start + i] < self.arena.bytes[b.start + i] { return false }
+            i += 1U64
+        }
+        return aLen > bLen
+    }
+
+    inout fn appendSourceSpan(into: inout Array[U8], span: Span) {
+        mut val i: U64 = 0U64
+        while i < span.end - span.start {
+            into.append(self.arena.bytes[span.start + i])
+            i += 1U64
+        }
+    }
+
+    inout fn recordTypeTermSpans(name: Bind, fieldNames: Array[Span], fieldTerms: Array[U64]) -> U64 {
+        if fieldNames.count() != fieldTerms.count() { return 0U64 }
+        mut val order: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < fieldNames.count() {
+            order.append(i)
+            i += 1U64
+        }
+        mut val a: U64 = 0U64
+        while a < order.count() {
+            mut val b: U64 = a + 1U64
+            while b < order.count() {
+                if self.sourceSpanGt(a: fieldNames[order[a]], b: fieldNames[order[b]]) {
+                    val tmp: U64 = order[a]
+                    order[a] = order[b]
+                    order[b] = tmp
+                }
+                b += 1U64
+            }
+            a += 1U64
+        }
+        mut val labels: Array[U64] = []
+        mut val terms: Array[U64] = []
+        mut val oi: U64 = 0U64
+        while oi < order.count() {
+            val label: Span = fieldNames[order[oi]]
+            labels.append(intern(c: inout self, start: label.start, len: label.end - label.start))
+            terms.append(fieldTerms[order[oi]])
+            oi += 1U64
+        }
+        return self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen args=[] isRecord=true recordFieldLabels=labels recordFieldTerms=terms />)
+    }
+
+    inout fn ensureRecordStructSpans(fieldNames: Array[Span], fieldTys: Array[PType]) -> Bind {
+        mut val order: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < fieldNames.count() {
+            order.append(i)
+            i += 1U64
+        }
+        mut val a: U64 = 0U64
+        while a < order.count() {
+            mut val b: U64 = a + 1U64
+            while b < order.count() {
+                if self.sourceSpanGt(a: fieldNames[order[a]], b: fieldNames[order[b]]) {
+                    val tmp: U64 = order[a]
+                    order[a] = order[b]
+                    order[b] = tmp
+                }
+                b += 1U64
+            }
+            a += 1U64
+        }
+        mut val canonical: Array[U8] = []
+        appendBytes(into: inout canonical, from: "(".bytes())
+        mut val j: U64 = 0U64
+        while j < order.count() {
+            if j > 0U64 { appendBytes(into: inout canonical, from: ",".bytes()) }
+            self.appendSourceSpan(into: inout canonical, span: fieldNames[order[j]])
+            appendBytes(into: inout canonical, from: ":".bytes())
+            appendBytes(into: inout canonical, from: self.recordTypeKey(pty: fieldTys[order[j]]))
+            j += 1U64
+        }
+        appendBytes(into: inout canonical, from: ")".bytes())
+        val nm: Bind = self.internBytes(s: stringFromBytesUnchecked(canonical))
+        val nameId: U64 = intern(c: inout self, start: nm.nameStart, len: nm.nameLen)
+        mut val si: U64 = 0U64
+        while si < self.arena.structs.count() {
+            if self.arena.structs[si].nameId == nameId { return nm }
+            si += 1U64
+        }
+        mut val fields: Array[FieldDef] = []
+        mut val fi: U64 = 0U64
+        while fi < order.count() {
+            val label: Span = fieldNames[order[fi]]
+            val pty: PType = fieldTys[order[fi]]
+            val labelId: U64 = intern(c: inout self, start: label.start, len: label.end - label.start)
+            fields.append(<FieldDef nameStart=label.start nameLen=label.end - label.start nameId=labelId tyStart=pty.start tyLen=pty.len tyNameId=intern(c: inout self, start: pty.start, len: pty.len) tyIsArray=pty.isArray ty=pty.ref isMut=false hasDefault=false defaultVal=0 vis=2 />)
+            fi += 1U64
+        }
+        val noTypeParams: Array[Bind] = []
+        self.arena.structs.append(<StructDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=nameId typeParams=noTypeParams fields=fields isUnique=false isExtern=false />)
+        return nm
+    }
+
     inout fn lowerType(t: TypeAst) -> PType {
         return self.lowerTypeCore(t: self.normalizeProjectionTypeActive(t: t))
     }
@@ -358,6 +467,161 @@ pub impl Comp {
         return result
     }
 
+    // SyntaxFile path for type lowering. It has the same semantic output as
+    // lowerType(TypeAst), but takes an immutable node ID and reads source
+    // spellings directly from the compiler source arena. In particular, short
+    // associated projections resolve to a local trait span rather than cloning
+    // a normalized TypeAst.
+    inout fn lowerSyntaxType(id: TypeId) -> PType {
+        val t: SyntaxType = syntaxType(file: self.syntax, id: id)
+        if t.isRecord {
+            mut val fieldNames: Array[Span] = []
+            mut val fieldTys: Array[PType] = []
+            mut val fi: U64 = 0U64
+            while fi < syntaxTypeArgCount(file: self.syntax, ty: t) {
+                fieldNames.append(syntaxTypeArgLabel(file: self.syntax, ty: t, index: fi))
+                fieldTys.append(self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: t, index: fi)))
+                fi += 1U64
+            }
+            val recordName: Bind = self.ensureRecordStructSpans(fieldNames: fieldNames, fieldTys: fieldTys)
+            mut val fieldTerms: Array[U64] = []
+            mut val ti: U64 = 0U64
+            while ti < fieldTys.count() {
+                fieldTerms.append(fieldTys[ti].ref)
+                ti += 1U64
+            }
+            val recordRef: U64 = self.recordTypeTermSpans(name: recordName, fieldNames: fieldNames, fieldTerms: fieldTerms)
+            return <PType start=recordName.nameStart len=recordName.nameLen isArray=false ref=recordRef />
+        }
+
+        val nameLen: U64 = t.name.end - t.name.start
+        val name: Bind = <Bind nameStart=t.name.start nameLen=nameLen fieldStart=t.name.start fieldLen=nameLen />
+        mut val args: Array[U64] = []
+        mut val argPtys: Array[PType] = []
+        mut val i: U64 = 0U64
+        while i < syntaxTypeArgCount(file: self.syntax, ty: t) {
+            val arg: PType = self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: t, index: i))
+            argPtys.append(arg)
+            args.append(arg.ref)
+            i += 1U64
+        }
+
+        mut val viewSources: Array[ResolvedViewSource] = []
+        mut val vi: U64 = 0U64
+        while vi < syntaxTypeViewNameCount(file: self.syntax, ty: t) {
+            val viewSpan: Span = syntaxTypeViewName(file: self.syntax, ty: t, index: vi)
+            val source: ResolvedViewSource = self.lowerViewSourceSpan(siteOffset: t.span.start, start: viewSpan.start, len: viewSpan.end - viewSpan.start)
+            mut val present: Bool = false
+            mut val si: U64 = 0U64
+            while si < viewSources.count() {
+                if self.semanticViewSourceEq(a: viewSources[si], b: source) { present = true }
+                si += 1U64
+            }
+            if !present { viewSources.append(source) }
+            vi += 1U64
+        }
+        if t.extView.end > t.extView.start {
+            val source: ResolvedViewSource = self.lowerViewSourceSpan(siteOffset: t.span.start, start: t.extView.start, len: t.extView.end - t.extView.start)
+            mut val present: Bool = false
+            mut val si: U64 = 0U64
+            while si < viewSources.count() {
+                if self.semanticViewSourceEq(a: viewSources[si], b: source) { present = true }
+                si += 1U64
+            }
+            if !present { viewSources.append(source) }
+        }
+        val viewIds: Array[U64] = self.viewSourceIds(sources: viewSources)
+        mut val viewExtId: U64 = 0U64
+        if viewIds.count() == 1U64 { viewExtId = viewIds[0U64] }
+
+        mut val projectionTrait: Span = t.projectionTrait
+        if t.projectionAssoc.end > t.projectionAssoc.start {
+            if projectionTrait.end == projectionTrait.start {
+                projectionTrait = self.uniqueSyntaxProjectionTrait(t: t)
+            } else {
+                val owner: U64 = self.traitOwnerAtUse(start: projectionTrait.start, len: projectionTrait.end - projectionTrait.start, arity: syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t))
+                if owner == 0U64 {
+                    self.errorAt(offset: t.span.start, msg: "associated-type projection must specify the trait's positional type arguments")
+                }
+                mut val pi: U64 = 0U64
+                while pi < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
+                    val label: Span = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: pi)
+                    if label.end > label.start {
+                        self.errorAt(offset: t.span.start, msg: "associated-type projection source accepts positional trait type arguments only")
+                    }
+                    pi += 1U64
+                }
+            }
+        }
+
+        mut val assocTraitStart: U64 = 0U64
+        mut val assocTraitLen: U64 = 0U64
+        mut val assocTraitId: U64 = 0U64
+        if projectionTrait.end > projectionTrait.start {
+            val owner: U64 = self.traitOwnerAtUse(start: projectionTrait.start, len: projectionTrait.end - projectionTrait.start, arity: syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t))
+            if owner != 0U64 {
+                assocTraitStart = owner
+                assocTraitLen = self.traitNameLenByOwner(owner: owner)
+            } else {
+                assocTraitStart = projectionTrait.start
+                assocTraitLen = projectionTrait.end - projectionTrait.start
+            }
+            assocTraitId = intern(c: inout self, start: assocTraitStart, len: assocTraitLen)
+        }
+        mut val assocTraitArgs: Array[U64] = []
+        mut val assocTraitArgLabels: Array[U64] = []
+        mut val ati: U64 = 0U64
+        while ati < syntaxTypeProjectionTraitArgCount(file: self.syntax, ty: t) {
+            assocTraitArgs.append(self.lowerSyntaxType(id: syntaxTypeProjectionTraitArg(file: self.syntax, ty: t, index: ati)).ref)
+            val label: Span = syntaxTypeProjectionTraitArgLabel(file: self.syntax, ty: t, index: ati)
+            if label.end > label.start {
+                assocTraitArgLabels.append(intern(c: inout self, start: label.start, len: label.end - label.start))
+            } else { assocTraitArgLabels.append(0U64) }
+            ati += 1U64
+        }
+        mut val assocNameStart: U64 = 0U64
+        mut val assocNameLen: U64 = 0U64
+        mut val assocNameId: U64 = 0U64
+        if t.projectionAssoc.end > t.projectionAssoc.start {
+            assocNameStart = t.projectionAssoc.start
+            assocNameLen = t.projectionAssoc.end - t.projectionAssoc.start
+            assocNameId = intern(c: inout self, start: assocNameStart, len: assocNameLen)
+        }
+        mut val argLabels: Array[U64] = []
+        mut val li: U64 = 0U64
+        while li < syntaxTypeArgCount(file: self.syntax, ty: t) {
+            val label: Span = syntaxTypeArgLabel(file: self.syntax, ty: t, index: li)
+            if label.end > label.start { argLabels.append(intern(c: inout self, start: label.start, len: label.end - label.start)) }
+            else { argLabels.append(0U64) }
+            li += 1U64
+        }
+        mut val site: U64 = t.span.start
+        mut val paramId: U64 = 0U64
+        mut val tpi: U64 = 0U64
+        while tpi < self.cur.typeParams.count() {
+            val param: Bind = self.cur.typeParams[tpi]
+            if spansEqual(c: inout self, aStart: param.nameStart, aLen: param.nameLen, bStart: name.nameStart, bLen: name.nameLen) {
+                site = 0U64
+                paramId = param.paramId
+            }
+            tpi += 1U64
+        }
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        mut val result: PType = <PType start=name.nameStart len=name.nameLen isArray=false ref=ref />
+        if syntaxTypeArgCount(file: self.syntax, ty: t) > 0U64 {
+            if rangeEquals(bytes: self.arena.bytes, start: name.nameStart, len: name.nameLen, kw: "Array") {
+                if self.isCompoundType(ref: args[0U64]) {
+                    val mangled: Bind = self.appendMangleSpan(ref: args[0U64])
+                    result = <PType start=mangled.nameStart len=mangled.nameLen isArray=true ref=ref />
+                } else {
+                    result = <PType start=argPtys[0U64].start len=argPtys[0U64].len isArray=true ref=ref />
+                }
+                self.recordArrayElem(ty: result)
+            }
+        }
+        return result
+    }
+
     // Lower a call/construction argument list.
     // The declared TypeRef of the parameter labelled `argLabel` of the free function
     // `fnName`, or 0 when it can't be resolved unambiguously (no such function, an
@@ -375,19 +639,34 @@ pub impl Comp {
         val fnId: U64 = intern(c: inout self, start: fnB.nameStart, len: fnB.nameLen)
         val lb: Bind = self.internBytes(s: argLabel)
         val lid: U64 = intern(c: inout self, start: lb.nameStart, len: lb.nameLen)
+        return self.callArgTypeByNameIds(nameId: fnId, labelId: lid, hasReceiver: false)
+    }
+
+    // SyntaxFile owns source spelling spans already.  Do not recreate Strings
+    // merely to perform the same declaration-identity lookup.
+    inout fn callArgTypeSpans(fnName: Span, argLabel: Span) -> U64 {
+        if fnName.end <= fnName.start || argLabel.end <= argLabel.start {
+            return 0U64
+        }
+        return self.callArgTypeByNameIds(nameId: intern(c: inout self, start: fnName.start, len: fnName.end - fnName.start), labelId: intern(c: inout self, start: argLabel.start, len: argLabel.end - argLabel.start), hasReceiver: false)
+    }
+
+    // The sole lookup rule for the conservative lowering-time argument context.
+    // A free function and a method differ only in the receiver bit; ambiguous or
+    // generic candidates intentionally produce no context rather than guessing.
+    inout fn callArgTypeByNameIds(nameId: U64, labelId: U64, hasReceiver: Bool) -> U64 {
         mut val matchCount: U64 = 0
         mut val resultTy: U64 = 0
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
-            if f.nameId == fnId {
-                if !(f.hasRecv) {
-                    if f.typeParams.count() == 0U64 {
+            if self.arena.funcs[fi].nameId == nameId {
+                if self.arena.funcs[fi].hasRecv == hasReceiver {
+                    if self.arena.funcs[fi].typeParams.count() == 0U64 {
                         matchCount += 1
                         mut val pi: U64 = 0
-                        while pi < f.params.count() {
-                            if intern(c: inout self, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
-                                resultTy = f.params[pi].ty
+                        while pi < self.arena.funcs[fi].params.count() {
+                            if intern(c: inout self, start: self.arena.funcs[fi].params[pi].nameStart, len: self.arena.funcs[fi].params[pi].nameLen) == labelId {
+                                resultTy = self.arena.funcs[fi].params[pi].ty
                             }
                             pi += 1
                         }
@@ -418,31 +697,14 @@ pub impl Comp {
         val mnId: U64 = intern(c: inout self, start: mnB.nameStart, len: mnB.nameLen)
         val lb: Bind = self.internBytes(s: argLabel)
         val lid: U64 = intern(c: inout self, start: lb.nameStart, len: lb.nameLen)
-        mut val matchCount: U64 = 0
-        mut val resultTy: U64 = 0
-        mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fi]
-            if f.hasRecv {
-                if f.nameId == mnId {
-                    if f.typeParams.count() == 0U64 {
-                        matchCount += 1
-                        mut val pi: U64 = 0
-                        while pi < f.params.count() {
-                            if intern(c: inout self, start: f.params[pi].nameStart, len: f.params[pi].nameLen) == lid {
-                                resultTy = f.params[pi].ty
-                            }
-                            pi += 1
-                        }
-                    }
-                }
-            }
-            fi += 1
+        return self.callArgTypeByNameIds(nameId: mnId, labelId: lid, hasReceiver: true)
+    }
+
+    inout fn methodArgTypeSpans(methodName: Span, argLabel: Span) -> U64 {
+        if methodName.end <= methodName.start || argLabel.end <= argLabel.start {
+            return 0U64
         }
-        if matchCount == 1U64 {
-            return resultTy
-        }
-        return 0U64
+        return self.callArgTypeByNameIds(nameId: intern(c: inout self, start: methodName.start, len: methodName.end - methodName.start), labelId: intern(c: inout self, start: argLabel.start, len: argLabel.end - argLabel.start), hasReceiver: true)
     }
 
     inout fn lowerArgs(args: Array[ArgAst], fnName: String) -> Array[Arg] {
@@ -460,14 +722,12 @@ pub impl Comp {
             } else {
                 e = self.lowerExpr(e: a.value)
             }
-            mut val labelStart: U64 = 0
-            mut val labelLen: U64 = 0
+            mut val label: Span = <Span start=0U64 end=0U64 />
             if a.hasLabel {
                 val lb: Bind = self.internBytes(s: a.label)
-                labelStart = lb.nameStart
-                labelLen = lb.nameLen
+                label = <Span start=lb.nameStart end=lb.nameStart + lb.nameLen />
             }
-            out.append(<Arg expr=e isInout=a.isInout labelStart=labelStart labelLen=labelLen hasLabel=a.hasLabel />)
+            out.append(self.appendLoweredArg(value: e, isInout: a.isInout, label: label, hasLabel: a.hasLabel))
             i += 1
         }
         return out
@@ -488,17 +748,19 @@ pub impl Comp {
             } else {
                 e = self.lowerExpr(e: a.value)
             }
-            mut val labelStart: U64 = 0
-            mut val labelLen: U64 = 0
+            mut val label: Span = <Span start=0U64 end=0U64 />
             if a.hasLabel {
                 val lb: Bind = self.internBytes(s: a.label)
-                labelStart = lb.nameStart
-                labelLen = lb.nameLen
+                label = <Span start=lb.nameStart end=lb.nameStart + lb.nameLen />
             }
-            out.append(<Arg expr=e isInout=a.isInout labelStart=labelStart labelLen=labelLen hasLabel=a.hasLabel />)
+            out.append(self.appendLoweredArg(value: e, isInout: a.isInout, label: label, hasLabel: a.hasLabel))
             i += 1
         }
         return out
+    }
+
+    inout fn appendLoweredArg(value: U64, isInout: Bool, label: Span, hasLabel: Bool) -> Arg {
+        return <Arg expr=value isInout=isInout labelStart=label.start labelLen=label.end - label.start hasLabel=hasLabel />
     }
 }
 
@@ -511,7 +773,29 @@ pub impl Comp {
 pub impl Comp {
     inout fn makeFieldType(typeName: String, variant: String, isEnum: Bool, fieldName: String) -> U64 {
         val tn: Bind = self.internBytes(s: typeName)
-        mut val tid: U64 = intern(c: inout self, start: tn.nameStart, len: tn.nameLen)
+        val tid: U64 = intern(c: inout self, start: tn.nameStart, len: tn.nameLen)
+        val fn2: Bind = self.internBytes(s: fieldName)
+        val fid: U64 = intern(c: inout self, start: fn2.nameStart, len: fn2.nameLen)
+        mut val vid: U64 = 0U64
+        if isEnum {
+            val vn: Bind = self.internBytes(s: variant)
+            vid = intern(c: inout self, start: vn.nameStart, len: vn.nameLen)
+        }
+        return self.makeFieldTypeByNameIds(typeId: tid, variantId: vid, isEnum: isEnum, fieldId: fid)
+    }
+
+    inout fn makeFieldTypeSpans(typeName: Span, variant: Span, isEnum: Bool, fieldName: Span) -> U64 {
+        if typeName.end <= typeName.start || fieldName.end <= fieldName.start { return 0U64 }
+        mut val variantId: U64 = 0U64
+        if isEnum {
+            variantId = intern(c: inout self, start: variant.start, len: variant.end - variant.start)
+        }
+        return self.makeFieldTypeByNameIds(typeId: intern(c: inout self, start: typeName.start, len: typeName.end - typeName.start), variantId: variantId, isEnum: isEnum, fieldId: intern(c: inout self, start: fieldName.start, len: fieldName.end - fieldName.start))
+    }
+
+    // The sole declaration lookup for a construction field's context type.
+    inout fn makeFieldTypeByNameIds(typeId: U64, variantId: U64, isEnum: Bool, fieldId: U64) -> U64 {
+        mut val tid: U64 = typeId
         // a newtype inherits the underlying struct's factory/fields (spec/10): resolve the
         // construction type name to the underlying struct so `<Brand code=255 />` finds the
         // `code` field's type for the literal's context (Brand = Rgb).
@@ -524,20 +808,16 @@ pub impl Comp {
                 ntI += 1
             }
         }
-        val fn2: Bind = self.internBytes(s: fieldName)
-        val fid: U64 = intern(c: inout self, start: fn2.nameStart, len: fn2.nameLen)
         if isEnum {
-            val vn: Bind = self.internBytes(s: variant)
-            val vid: U64 = intern(c: inout self, start: vn.nameStart, len: vn.nameLen)
             mut val ei: U64 = 0
             while ei < self.arena.enums.count() {
                 if self.arena.enums[ei].nameId == tid {
                     mut val vi: U64 = 0
                     while vi < self.arena.enums[ei].variants.count() {
-                        if intern(c: inout self, start: self.arena.enums[ei].variants[vi].nameStart, len: self.arena.enums[ei].variants[vi].nameLen) == vid {
+                        if intern(c: inout self, start: self.arena.enums[ei].variants[vi].nameStart, len: self.arena.enums[ei].variants[vi].nameLen) == variantId {
                             mut val fj: U64 = 0
                             while fj < self.arena.enums[ei].variants[vi].fields.count() {
-                                if intern(c: inout self, start: self.arena.enums[ei].variants[vi].fields[fj].nameStart, len: self.arena.enums[ei].variants[vi].fields[fj].nameLen) == fid {
+                                if intern(c: inout self, start: self.arena.enums[ei].variants[vi].fields[fj].nameStart, len: self.arena.enums[ei].variants[vi].fields[fj].nameLen) == fieldId {
                                     return self.arena.enums[ei].variants[vi].fields[fj].ty
                                 }
                                 fj += 1
@@ -555,7 +835,7 @@ pub impl Comp {
             if self.arena.structs[si].nameId == tid {
                 mut val fk: U64 = 0
                 while fk < self.arena.structs[si].fields.count() {
-                    if intern(c: inout self, start: self.arena.structs[si].fields[fk].nameStart, len: self.arena.structs[si].fields[fk].nameLen) == fid {
+                    if intern(c: inout self, start: self.arena.structs[si].fields[fk].nameStart, len: self.arena.structs[si].fields[fk].nameLen) == fieldId {
                         return self.arena.structs[si].fields[fk].ty
                     }
                     fk += 1
@@ -576,7 +856,23 @@ pub impl Comp {
     inout fn appendOmittedMakeDefaults(out: inout Array[MakeField], typeName: String, isEnum: Bool) {
         if isEnum || typeName.bytes().count() == 0U64 { return }
         val tn: Bind = self.internBytes(s: typeName)
-        val si: U64 = self.structDefByNameAny(start: tn.nameStart, len: tn.nameLen)
+        val real: Bind = self.aliasReal(start: tn.nameStart, len: tn.nameLen)
+        self.appendOmittedMakeDefaultsByTypeId(out: inout out, typeId: intern(c: inout self, start: real.nameStart, len: real.nameLen), isEnum: isEnum)
+    }
+
+    inout fn appendOmittedMakeDefaultsSpans(out: inout Array[MakeField], typeName: Span, isEnum: Bool) {
+        if typeName.end <= typeName.start { return }
+        val real: Bind = self.aliasReal(start: typeName.start, len: typeName.end - typeName.start)
+        self.appendOmittedMakeDefaultsByTypeId(out: inout out, typeId: intern(c: inout self, start: real.nameStart, len: real.nameLen), isEnum: isEnum)
+    }
+
+    inout fn appendOmittedMakeDefaultsByTypeId(out: inout Array[MakeField], typeId: U64, isEnum: Bool) {
+        if isEnum { return }
+        mut val si: U64 = 0U64
+        while si < self.arena.structs.count() {
+            if self.arena.structs[si].nameId == typeId { break }
+            si += 1U64
+        }
         if si >= self.arena.structs.count() { return }
         val declared: Array[FieldDef] = self.arena.structs[si].fields
         mut val fi: U64 = 0U64
@@ -621,6 +917,28 @@ pub impl Comp {
             i += 1
         }
         self.appendOmittedMakeDefaults(out: inout out, typeName: typeName, isEnum: isEnum)
+        return out
+    }
+
+    // SyntaxFile counterpart of lowerMakeFields. The declaration lookup is by
+    // canonical name IDs so this also serves anonymous-record contexts, whose
+    // synthesized record name has no source spelling to reconstruct.
+    inout fn lowerSyntaxMakeFields(expr: SyntaxExpr, typeId: U64, variantId: U64, isEnum: Bool) -> Array[MakeField] {
+        mut val out: Array[MakeField] = []
+        mut val i: U64 = 0U64
+        while i < syntaxExprMakeFieldCount(file: self.syntax, expr: expr) {
+            val f: SyntaxMakeField = syntaxMakeField(file: self.syntax, id: syntaxExprMakeField(file: self.syntax, expr: expr, index: i))
+            val fctx: U64 = self.makeFieldTypeByNameIds(typeId: typeId, variantId: variantId, isEnum: isEnum, fieldId: intern(c: inout self, start: f.name.start, len: f.name.end - f.name.start))
+            mut val value: U64 = 0U64
+            if fctx != 0U64 {
+                value = self.lowerSyntaxExprWithCtx(id: f.value, ctxRef: fctx)
+            } else {
+                value = self.lowerSyntaxExpr(id: f.value)
+            }
+            out.append(<MakeField nameStart=f.name.start nameLen=f.name.end - f.name.start value=value offset=f.span.start />)
+            i += 1U64
+        }
+        self.appendOmittedMakeDefaultsByTypeId(out: inout out, typeId: typeId, isEnum: isEnum)
         return out
     }
 
@@ -684,21 +1002,58 @@ pub impl Comp {
     // binding owns it). The else branch is dead (the cond is the constant `1`) but must
     // still yield a `Dictionary[K,V]` so the value-position block type-checks.
     inout fn lowerDictLit(keys: Array[ExprAst], vals: Array[ExprAst], ctxRef: U64, span: Span) -> U64 {
-        mut val ok: Bool = false
-        if ctxRef != 0 {
+        if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
+            self.errorAt(offset: span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
+            return self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
+        }
+        mut val loweredKeys: Array[U64] = []
+        mut val loweredVals: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < keys.count() {
+            loweredKeys.append(self.lowerExpr(e: keys[i]))
+            loweredVals.append(self.lowerExpr(e: vals[i]))
+            i += 1U64
+        }
+        return self.lowerDictLitValues(keys: loweredKeys, vals: loweredVals, ctxRef: ctxRef, span: span)
+    }
+
+    // SyntaxFile decoder for a dictionary literal. Validate the contextual type
+    // before reading entries, exactly like the value-AST route: an invalid
+    // container must not cause unrelated child diagnostics first.
+    inout fn lowerSyntaxDictLit(expr: SyntaxExpr, ctxRef: U64) -> U64 {
+        if !(self.hasDictionaryLiteralContext(ctxRef: ctxRef)) {
+            self.errorAt(offset: expr.span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
+            return self.pushExpr(e: <Expr.Int value=0 offset=expr.span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
+        }
+        mut val keys: Array[U64] = []
+        mut val vals: Array[U64] = []
+        mut val i: U64 = 0U64
+        while i < syntaxExprDictEntryCount(file: self.syntax, expr: expr) {
+            keys.append(self.lowerSyntaxExpr(id: syntaxExprDictKey(file: self.syntax, expr: expr, index: i)))
+            vals.append(self.lowerSyntaxExpr(id: syntaxExprDictValue(file: self.syntax, expr: expr, index: i)))
+            i += 1U64
+        }
+        return self.lowerDictLitValues(keys: keys, vals: vals, ctxRef: ctxRef, span: expr.span)
+    }
+
+    inout fn hasDictionaryLiteralContext(ctxRef: U64) -> Bool {
+        if ctxRef != 0U64 {
             if ctxRef < self.arena.types.count() {
                 val ct: TypeRef = self.arena.types[ctxRef]
                 if rangeEquals(bytes: self.arena.bytes, start: ct.nameStart, len: ct.nameLen, kw: "Dictionary") {
-                    if ct.args.count() >= 2 {
-                        ok = true
+                    if ct.args.count() >= 2U64 {
+                        return true
                     }
                 }
             }
         }
-        if !(ok) {
-            self.errorAt(offset: span.start, msg: "cannot infer the type of a dictionary literal; annotate the binding (`: Dictionary[K, V]`)")
-            return self.pushExpr(e: <Expr.Int value=0 offset=span.start isBool=false tyStart=0 tyLen=0 isNeg=false />)
-        }
+        return false
+    }
+
+    // The shared semantic construction for an already-lowered dictionary entry
+    // sequence.  Value-AST and SyntaxFile decoders differ only in how they
+    // produce these expression IDs; the dictionary desugar itself is singular.
+    inout fn lowerDictLitValues(keys: Array[U64], vals: Array[U64], ctxRef: U64, span: Span) -> U64 {
         val ct: TypeRef = self.arena.types[ctxRef]
         val dlN: Bind = self.internBytes(s: "__dl")
         mut val stmts: Array[U64] = []
@@ -709,12 +1064,10 @@ pub impl Comp {
         val valL: Bind = self.internBytes(s: "value")
         mut val i: U64 = 0
         while i < keys.count() {
-            val kId: U64 = self.lowerExpr(e: keys[i])
-            val vId: U64 = self.lowerExpr(e: vals[i])
             val recv: U64 = self.pushExpr(e: <Expr.Ident start=dlN.nameStart len=dlN.nameLen />)
             mut val args: Array[Arg] = []
-            args.append(<Arg expr=kId isInout=false labelStart=keyL.nameStart labelLen=keyL.nameLen hasLabel=true />)
-            args.append(<Arg expr=vId isInout=false labelStart=valL.nameStart labelLen=valL.nameLen hasLabel=true />)
+            args.append(<Arg expr=keys[i] isInout=false labelStart=keyL.nameStart labelLen=keyL.nameLen hasLabel=true />)
+            args.append(<Arg expr=vals[i] isInout=false labelStart=valL.nameStart labelLen=valL.nameLen hasLabel=true />)
             val m: U64 = self.pushExpr(e: <Expr.Method recv=recv nameStart=insN.nameStart nameLen=insN.nameLen args=self.pushArgs(args: args) />)
             stmts.append(self.pushStmt(s: <Stmt.ExprStmt expr=m />))
             i += 1

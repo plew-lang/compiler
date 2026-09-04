@@ -1,0 +1,20 @@
+// A struct aggregate field is an owning destination.  The ordinary parameter
+// is represented as a Mid Borrow (+0 ABI); building TypeAst must retain it
+// before the temporary argument is cleaned up at the call boundary.
+import @Plew/Syntax with { Span, TypeAst }
+import @Std/Io with { print }
+
+fn genericArgs() -> Array[TypeAst] {
+    val span = <Span start=0U64 end=2U64 />
+    return [<TypeAst name="U8" args=[] span=span />]
+}
+
+fn wrap(args: Array[TypeAst]) -> TypeAst {
+    val span = <Span start=0U64 end=5U64 />
+    return <TypeAst name="Array" args=args span=span />
+}
+
+fn main() {
+    val result: TypeAst = wrap(args: genericArgs())
+    print(result.args.count())
+}

@@ -164,7 +164,23 @@ pub impl LlvmCtx {
                 c.setSelfItemEnv(recvStart: f.recvStart, recvLen: f.recvLen, recvInstRef: 0U64)
             }
         }
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] generic fn body-start index=")
+            self.traceCodegenU64(n: fin.fnIdx)
+            eprint(text: " name=")
+            self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
+            eprint(text: " slot=")
+            self.traceCodegenU64(n: slot)
+            eprint(text: "\n")
+        }
         self.genLlvmFuncBody(c: inout c, fi: fin.fnIdx, fv: self.genFnVal[slot], environment: c.bodyInstanceEnvironment(fnIdx: fin.fnIdx, args: fin.args, recvInstRef: fin.recvInstRef))
+        if c.traceCodegen {
+            eprint(text: "[trace-codegen] generic fn body-done index=")
+            self.traceCodegenU64(n: fin.fnIdx)
+            eprint(text: " slot=")
+            self.traceCodegenU64(n: slot)
+            eprint(text: "\n")
+        }
         c.cur.typeParams = savedP
         c.cur.typeArgs = savedA
         self.curRecvInstRef = savedR

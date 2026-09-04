@@ -1,0 +1,20 @@
+import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl, syntaxImplWhereCount, syntaxImplWhereParamSpan, syntaxImplWhereTraitSpan, syntaxImplWhereType, syntaxImplWhereTraitType, syntaxType, ImplId }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "impl[T] Box[T] as Eq where T: Eq {}\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    val impl = syntaxImpl(file: file, id: <ImplId raw=syntaxTopItemPayload(file: file, item: syntaxFileTopLevel(file: file, index: 0U64)) />)
+    val whereType = syntaxType(file: file, id: syntaxImplWhereType(file: file, impl: impl, index: 0U64))
+    val traitType = syntaxType(file: file, id: syntaxImplWhereTraitType(file: file, impl: impl, index: 0U64))
+    print(syntaxImplWhereCount(file: file, impl: impl))
+    val param = syntaxImplWhereParamSpan(file: file, impl: impl, index: 0U64)
+    val trait = syntaxImplWhereTraitSpan(file: file, impl: impl, index: 0U64)
+    print(param.end - param.start)
+    print(trait.end - trait.start)
+    print(whereType.name.end - whereType.name.start)
+    print(traitType.name.end - traitType.name.start)
+}

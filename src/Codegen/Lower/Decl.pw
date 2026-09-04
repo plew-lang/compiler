@@ -87,6 +87,55 @@ pub impl Comp {
         return ""
     }
 
+    inout fn boundLhsMatchesSyntaxType(lhs: TypeId, t: SyntaxType) -> Bool {
+        val l: SyntaxType = syntaxType(file: self.syntax, id: lhs)
+        if l.projectionAssoc.end > l.projectionAssoc.start { return false }
+        if l.extView.end > l.extView.start { return false }
+        if !(spansEqual(c: inout self, aStart: l.name.start, aLen: l.name.end - l.name.start, bStart: t.name.start, bLen: t.name.end - t.name.start)) { return false }
+        if syntaxTypeArgCount(file: self.syntax, ty: l) != syntaxTypeArgCount(file: self.syntax, ty: t) { return false }
+        mut val i: U64 = 0U64
+        while i < syntaxTypeArgCount(file: self.syntax, ty: l) {
+            val right: SyntaxType = syntaxType(file: self.syntax, id: syntaxTypeArg(file: self.syntax, ty: t, index: i))
+            if !(self.boundLhsMatchesSyntaxType(lhs: syntaxTypeArg(file: self.syntax, ty: l, index: i), t: right)) { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    // Resolve a short associated projection without allocating a replacement
+    // SyntaxType node.  The immutable raw tree remains source truth; lowering
+    // chooses the unique trait source as a local span for this semantic use.
+    inout fn uniqueSyntaxProjectionTrait(t: SyntaxType) -> Span {
+        val assocId: U64 = intern(c: inout self, start: t.projectionAssoc.start, len: t.projectionAssoc.end - t.projectionAssoc.start)
+        mut val found: Span = <Span start=0U64 end=0U64 />
+        mut val foundId: U64 = 0U64
+        mut val count: U64 = 0U64
+        mut val i: U64 = 0U64
+        while i < self.lowerWhereSyntaxTypes.count() {
+            if self.boundLhsMatchesSyntaxType(lhs: self.lowerWhereSyntaxTypes[i], t: t) {
+                if i < self.lowerWhereSyntaxTraits.count() {
+                    val traitSpan: Span = self.lowerWhereSyntaxTraits[i]
+                    val traitId: U64 = intern(c: inout self, start: traitSpan.start, len: traitSpan.end - traitSpan.start)
+                    if self.traitHasAssocId(traitId: traitId, assocId: assocId) {
+                        if foundId != traitId {
+                            found = traitSpan
+                            foundId = traitId
+                            count += 1U64
+                        }
+                    }
+                }
+            }
+            i += 1U64
+        }
+        if count == 1U64 { return found }
+        if count == 0U64 {
+            self.errorAt(offset: t.span.start, msg: "associated-type short projection has no unique trait source — write `T#Trait.Item` or add an appropriate `where T: Trait` bound (spec/08)")
+        } else {
+            self.errorAt(offset: t.span.start, msg: "associated-type short projection is ambiguous — write the canonical `T#Trait.Item` form (spec/08)")
+        }
+        return <Span start=0U64 end=0U64 />
+    }
+
     inout fn normalizeProjectionType(t: TypeAst, whereTypes: Array[TypeAst], whereTraits: Array[String]) -> TypeAst {
         mut val args: Array[TypeAst] = []
         mut val i: U64 = 0
@@ -141,15 +190,38 @@ pub impl Comp {
     }
 
     inout fn lowerTypeParamNames(names: Array[String], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
-        mut val out: Array[Bind] = []
+        mut val spans: Array[Bind] = []
         mut val i: U64 = 0
         while i < names.count() {
-            val b: Bind = self.internBytes(s: names[i])
-            // a generic's own bracket list must have distinct names (spec/06): `f[T, T]`
-            // is ambiguous. Checked per RAW list (not the merged impl++method list, where
-            // an impl param and a method param may legitimately share a name = shadowing).
-            // `anchor` is the owning declaration's source offset (the Bind spans are
-            // interned = map to no source file).
+            spans.append(self.internBytes(s: names[i]))
+            i += 1
+        }
+        return self.lowerTypeParamBinds(names: spans, anchor: anchor, sendableFlags: sendableFlags)
+    }
+
+    // SyntaxFile already owns identifier spellings in the compiler source arena.
+    // Preserve those spans instead of rebuilding String names solely to allocate
+    // the same semantic generic binders.
+    inout fn lowerTypeParamSpans(spans: Array[Span], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
+        mut val names: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < spans.count() {
+            val span: Span = spans[i]
+            names.append(<Bind nameStart=span.start nameLen=span.end - span.start fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
+            i += 1U64
+        }
+        return self.lowerTypeParamBinds(names: names, anchor: anchor, sendableFlags: sendableFlags)
+    }
+
+    // The sole semantic binder sink for both value-AST and SyntaxFile decoders.
+    // It assigns lexical ParamIds and enforces distinctness within one bracket list.
+    inout fn lowerTypeParamBinds(names: Array[Bind], anchor: U64, sendableFlags: Array[Bool] = []) -> Array[Bind] {
+        mut val out: Array[Bind] = []
+        mut val i: U64 = 0U64
+        while i < names.count() {
+            val b: Bind = names[i]
+            // A generic's own bracket list must have distinct names (spec/06): `f[T, T]`
+            // is ambiguous. Checked per raw list, not a merged enclosing scope.
             val bId: U64 = intern(c: inout self, start: b.nameStart, len: b.nameLen)
             mut val k: U64 = 0
             while k < out.count() {
@@ -164,7 +236,7 @@ pub impl Comp {
             }
             val paramId: U64 = self.nextParamId
             self.nextParamId += 1U64
-            out.append(<Bind nameStart=b.nameStart nameLen=b.nameLen nameId=b.nameId paramId=paramId fieldStart=b.fieldStart fieldLen=b.fieldLen offset=b.offset isSendable=isSendable />)
+            out.append(<Bind nameStart=b.nameStart nameLen=b.nameLen nameId=bId paramId=paramId fieldStart=b.fieldStart fieldLen=b.fieldLen offset=b.offset isSendable=isSendable />)
             i += 1
         }
         return out

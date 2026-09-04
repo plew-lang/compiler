@@ -3,7 +3,9 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
+import ../Diag with { eprintU64 }
+import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
 import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidLocalDecl, MidScope, MidBlock, MidBody }
 
@@ -30,6 +32,12 @@ export struct MidPlaceLookup {
 }
 pub impl MidPlaceLookup { factory }
 
+struct MidIndexLocalBuild {
+    pub val local: U64 = 0U64
+    pub val error: MidBuildError = <MidBuildError.None />
+}
+pub impl MidIndexLocalBuild { factory }
+
 // A Mid build failure is part of the migration contract, not a diagnostic
 // string.  Keep the source form that cannot yet be represented so coverage
 // can select one semantic lowering slice rather than treating unrelated
@@ -39,6 +47,7 @@ export enum MidUnsupportedBuild {
     Operand
     FieldPlace
     UniqueAggregate
+    IncompleteAggregate
     ShortCircuit
     FieldProjection
     FieldBase
@@ -221,7 +230,12 @@ export fn midPlaceForRecordedIdent(c: Comp, state: MidBuildState, exprId: U64, t
     if c.typeCache.identBind[exprId] != identValueCode() { return <MidPlaceLookup /> }
     val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: c.typeCache.identTarget[exprId])
     if !local.found { return <MidPlaceLookup /> }
-    return <MidPlaceLookup found=true place=<MidPlace local=local.local typeTerm=typeTerm /> />
+    if local.local >= state.locals.count() { return <MidPlaceLookup /> }
+    // The lexical binding's declared TypeTerm is the authoritative type of a
+    // root place.  An expression slot can legitimately be absent for a Lower
+    // synthesized node; letting that transient slot overwrite the local type
+    // would make a typed place lose its storage ABI on the Mid boundary.
+    return <MidPlaceLookup found=true place=<MidPlace local=local.local typeTerm=state.locals[local.local].typeTerm /> />
 }
 
 // Build the place shape from source syntax only after the frontend recorded
@@ -229,7 +243,7 @@ export fn midPlaceForRecordedIdent(c: Comp, state: MidBuildState, exprId: U64, t
 // Field uses the stored layout slot and stored result TypeTerm.  In particular,
 // this function never consults a field name, a StructDef, or a type recovery
 // query.
-fn midPlaceForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
+fn midPlaceForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
     if exprId >= c.arena.exprs.count() { return <MidPlaceLookup /> }
     match c.arena.exprs[exprId] {
         Expr.Ident(start: _, len: _) => {
@@ -246,10 +260,22 @@ fn midPlaceForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U
             if base < c.arena.semanticExprTypes.count() {
                 baseTerm = c.arena.semanticExprTypes[base].term
             }
-            val basePlace: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: base, typeTerm: baseTerm)
+            val basePlace: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: baseTerm)
             if !basePlace.found { return <MidPlaceLookup /> }
             mut val projections: Array[MidProjection] = basePlace.place.projections
             projections.append(<MidProjection.Field index=semantic.fieldProjectionIndex typeTerm=typeTerm />)
+            return <MidPlaceLookup found=true place=<MidPlace local=basePlace.place.local projections=projections typeTerm=typeTerm /> />
+        }
+        Expr.Index(base: val base, index: val index) => {
+            val baseTerm: U64 = c.semanticExprTerm(exprId: base)
+            val basePlace: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: base, typeTerm: baseTerm)
+            if !basePlace.found { return <MidPlaceLookup /> }
+            val indexTerm: U64 = c.semanticExprTerm(exprId: index)
+            if indexTerm == 0U64 { return <MidPlaceLookup /> }
+            val evaluated: MidIndexLocalBuild = midIndexLocalForSourceExpr(c: inout c, state: inout state, exprId: index, typeTerm: indexTerm)
+            match evaluated.error { MidBuildError.None => {} _ => { return <MidPlaceLookup /> } }
+            mut val projections: Array[MidProjection] = basePlace.place.projections
+            projections.append(<MidProjection.Index indexLocal=evaluated.local typeTerm=typeTerm />)
             return <MidPlaceLookup found=true place=<MidPlace local=basePlace.place.local projections=projections typeTerm=typeTerm /> />
         }
         _ => { return <MidPlaceLookup /> }
@@ -271,7 +297,7 @@ fn midSetTerminator(state: inout MidBuildState, terminator: MidTerminator) {
 }
 
 fn midTerminatorIsOpen(terminator: MidTerminator) -> Bool {
-    match terminator { MidTerminator.Unreachable => { return true } _ => { return false } }
+    match terminator { MidTerminator.Open => { return true } _ => { return false } }
 }
 
 fn midNewBlock(state: inout MidBuildState) -> U64 {
@@ -365,7 +391,71 @@ fn midAccessCandidateForExpr(c: Comp, exprId: U64) -> U64 {
     return c.decls.accessCandidates.count()
 }
 
-fn midOperandForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidOperandBuild {
+// Lower turns an authored `items[index]` read into an `Index.index` synthetic
+// call, while AccessCandidate retains its authored place.  Array's storage
+// ABI therefore belongs to that frozen place fact, not to the synthetic call
+// expression.  This recognition reads only frozen frontend facts so callers
+// can decide whether an expression needs a CFG Call terminator *before*
+// materializing its index local. A user `Index` witness stays on the ordinary
+// selected-call path; only the addressable Array storage shape is a Mid place.
+fn midDirectArrayIndexExpr(c: Comp, exprId: U64) -> U64 {
+    if exprId >= c.arena.exprs.count() { return c.arena.exprs.count() }
+    // Finalization can retain an Array read as its original Index place; the
+    // general access path instead supplies the same place through a Lower
+    // candidate. Normalize the two representation forms before inspecting
+    // the resolved storage type.
+    mut val placeExpr: U64 = exprId
+    match c.arena.exprs[exprId] {
+        Expr.Index(base: _, index: _) => {}
+        _ => {
+            val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
+            if candidate >= c.decls.accessCandidates.count() { return c.arena.exprs.count() }
+            placeExpr = c.decls.accessCandidates[candidate].placeExpr
+        }
+    }
+    if placeExpr >= c.arena.exprs.count() { return c.arena.exprs.count() }
+    match c.arena.exprs[placeExpr] {
+        Expr.Index(base: val base, index: _) => {
+            if base >= c.arena.semanticExprTypes.count() { return c.arena.exprs.count() }
+            val baseTerm: U64 = c.arena.semanticExprTypes[base].term
+            if baseTerm == 0U64 || baseTerm >= c.arena.types.count() { return c.arena.exprs.count() }
+            val array: TypeRef = c.arena.types[baseTerm]
+            if c.traceCodegen {
+                eprint(text: "[trace-codegen] Mid array-place candidate term=")
+                eprintU64(n: baseTerm)
+                eprint(text: " has-decl=")
+                if array.hasDecl { eprint(text: "1") } else { eprint(text: "0") }
+                eprint(text: " decl=")
+                eprintU64(n: array.declOffset)
+                eprint(text: " site=")
+                eprintU64(n: array.siteOffset)
+                eprint(text: " lang-array=")
+                eprintU64(n: c.langArrayDeclOffset)
+                eprint(text: " args=")
+                eprintU64(n: array.args.count())
+                eprint(text: "\n")
+            }
+            if c.langArrayDeclOffset != 0U64 && array.hasDecl && array.declOffset == c.langArrayDeclOffset && array.args.count() == 1U64 { return placeExpr }
+            return c.arena.exprs.count()
+        }
+        _ => { return c.arena.exprs.count() }
+    }
+}
+
+fn midDirectArrayIndexPlace(c: inout Comp, state: inout MidBuildState, exprId: U64) -> U64 {
+    val placeExpr: U64 = midDirectArrayIndexExpr(c: c, exprId: exprId)
+    if placeExpr >= c.arena.exprs.count() { return placeExpr }
+    // Keep the stateful part separate: materializing an arbitrary index may
+    // emit a prior Mid call/temporary, and must happen exactly once.
+    match c.arena.exprs[placeExpr] {
+        Expr.Index(base: _, index: _) => {
+            return placeExpr
+        }
+        _ => { return c.arena.exprs.count() }
+    }
+}
+
+fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64) -> MidOperandBuild {
     if exprId >= c.arena.exprs.count() {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
     }
@@ -375,12 +465,12 @@ fn midOperandForSourceExpr(c: Comp, state: MidBuildState, exprId: U64, typeTerm:
     }
     match c.arena.exprs[exprId] {
         Expr.Ident(start: _, len: _) => {
-            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
+            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
             if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.UnboundLocalIdentifier /> /> }
             return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
         }
         Expr.Field(base: _, nameStart: _, nameLen: _) => {
-            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: typeTerm)
+            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
             if !lookup.found { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.FieldPlace /> /> /> }
             return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
         }
@@ -450,12 +540,36 @@ fn midAggregateValueForExpr(state: MidBuildState, exprId: U64) -> MidCallValueLo
     return <MidCallValueLookup />
 }
 
+// Path 1 can lower only a fully authored aggregate. Record currently stores
+// source-supplied fields; an omitted field default belongs to the legacy path
+// until frontend publishes the default expression as an equally explicit
+// semantic value fact. Reject the incomplete descriptor here, before Mid IR
+// exists, rather than leaving LLVM preflight to discover a partial aggregate
+// after the builder has already selected the Mid path.
+fn midSemanticAggregateElementsComplete(aggregate: SemanticAggregate) -> Bool {
+    if aggregate.elements.count() != aggregate.fieldCount { return false }
+    mut val i: U64 = 0U64
+    while i < aggregate.elements.count() {
+        if aggregate.elements[i].fieldIndex >= aggregate.fieldCount { return false }
+        mut val prior: U64 = 0U64
+        while prior < i {
+            if aggregate.elements[prior].fieldIndex == aggregate.elements[i].fieldIndex { return false }
+            prior += 1U64
+        }
+        i += 1U64
+    }
+    return true
+}
+
 // Materialize an aggregate before a consuming call or parent aggregate. Child
 // expressions are evaluated in authored order; each child is already either a
 // selected call, another frozen aggregate, or a closed basic Mid operand.
 fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggregate: SemanticAggregate) -> MidOperandBuild {
     val prior: MidCallValueLookup = midAggregateValueForExpr(state: state, exprId: aggregate.exprId)
     if prior.found { return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> /> }
+    if !(midSemanticAggregateElementsComplete(aggregate: aggregate)) {
+        return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=aggregate.resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IncompleteAggregate /> /> />
+    }
     if midAggregateHasUniqueValue(c: inout c, aggregate: aggregate) {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=aggregate.resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.UniqueAggregate /> /> />
     }
@@ -543,6 +657,14 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.InvalidStatement /> />
     }
     val candidate: U64 = midAccessCandidateForExpr(c: c, exprId: exprId)
+    val directPlaceExpr: U64 = midDirectArrayIndexPlace(c: inout c, state: inout state, exprId: exprId)
+    if !allowAccessMarker && directPlaceExpr < c.arena.exprs.count() {
+        val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: directPlaceExpr, typeTerm: typeTerm)
+        if !lookup.found {
+            return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+        }
+        return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
+    }
     if candidate < c.decls.accessCandidates.count() {
         if allowAccessMarker { return <MidOperandBuild operand=<MidOperand.Access candidate=candidate /> /> }
         val readExpr: U64 = c.decls.accessCandidates[candidate].readExpr
@@ -577,6 +699,13 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
+        Expr.Index(base: _, index: _) => {
+            val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
+            if !lookup.found {
+                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
+            }
+            return <MidOperandBuild operand=<MidOperand.Copy place=lookup.place /> />
+        }
         Expr.Field(base: val base, nameStart: _, nameLen: _) => {
             if exprId >= c.arena.semanticExprTypes.count() { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> /> }
             val field: SemanticExprType = c.arena.semanticExprTypes[exprId]
@@ -609,8 +738,29 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
         Expr.Array(elems: _) => {
             return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> />
         }
-        _ => { return midOperandForSourceExpr(c: c, state: state, exprId: exprId, typeTerm: typeTerm) }
+        _ => { return midOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm) }
     }
+}
+
+// A projection cannot contain an arbitrary operand: that would make Place and
+// Operand mutually recursive and let an effectful index be re-evaluated by a
+// later consumer. Materialize non-root operands into a fresh Mid local first.
+// A root Copy is already a one-time evaluated value and may be referenced
+// directly. This is the same stable-local discipline used by Rust MIR index
+// projections.
+fn midIndexLocalForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U64, typeTerm: U64) -> MidIndexLocalBuild {
+    val built: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm, allowAccessMarker: false)
+    match built.error { MidBuildError.None => {} _ => { return <MidIndexLocalBuild error=built.error /> } }
+    match built.operand {
+        MidOperand.Copy(place: val place) => {
+            if place.projections.count() == 0U64 { return <MidIndexLocalBuild local=place.local /> }
+        }
+        _ => {}
+    }
+    val temporary: U64 = addMidTemporary(state: inout state, typeTerm: typeTerm)
+    val destination: MidPlace = <MidPlace local=temporary typeTerm=typeTerm />
+    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=built.operand /> />)
+    return <MidIndexLocalBuild local=temporary />
 }
 
 fn midTemplateArgumentOperand(c: inout Comp, state: inout MidBuildState, argument: CallTemplateArgument) -> MidOperandBuild {
@@ -695,6 +845,10 @@ fn midTemplateIsCallable(template: CallTemplate) -> Bool {
 
 fn midExprIsCall(c: Comp, exprId: U64) -> Bool {
     if exprId >= c.arena.exprs.count() { return false }
+    // A Lower-generated `Array.index` call is a physical Place read. It must
+    // not bypass Mid's Index projection by becoming a semantic call
+    // terminator. The test is declaration-identity based, never name based.
+    if midDirectArrayIndexExpr(c: c, exprId: exprId) < c.arena.exprs.count() { return false }
     match c.arena.exprs[exprId] {
         Expr.Call(nameStart: _, nameLen: _, args: _) => { return true }
         Expr.Method(recv: _, nameStart: _, nameLen: _, args: _) => { return true }
@@ -849,7 +1003,7 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
         Stmt.Assign(target: val target, value: val value) => {
             val term: U64 = c.semanticExprTerm(exprId: target)
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
-            val destinationLookup: MidPlaceLookup = midPlaceForSourceExpr(c: c, state: state, exprId: target, typeTerm: term)
+            val destinationLookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: target, typeTerm: term)
             if !destinationLookup.found || destinationLookup.place.projections.count() != 0U64 {
                 return <MidBuildError.UnsupportedAssign />
             }
@@ -969,7 +1123,7 @@ export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64)
                 result = buildMidWhile(c: inout c, state: inout state, stmtId: stmtId)
             }
             Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, iter: _, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = <MidBuildError.UnsupportedFor /> }
-            Stmt.Match(scrut: _, arms: _) => { result = <MidBuildError.UnsupportedMatch /> }
+            Stmt.Match(scrut: _, arms: _) => { result = buildMidMatch(c: inout c, state: inout state, stmtId: stmtId) }
             Stmt.Panic(msg: _, offset: _) => { result = <MidBuildError.UnsupportedPanic /> }
             Stmt.Give(value: _) => { result = <MidBuildError.UnsupportedGive /> }
             Stmt.Break(offset: _) => { result = buildMidLoopExit(state: inout state, isContinue: false) }
@@ -986,6 +1140,111 @@ export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64)
     }
     midCloseScope(state: inout state, scope: scope)
     return result
+}
+
+// Enum declaration slots are stored as U64 arena indices, while the fixed
+// runtime enum ABI stores the tag as I64.  Do not use a narrowing source cast:
+// this conversion is valid because a realizable declaration's variant count is
+// bounded by the compiler's addressable array length, far below I64::MAX.
+// Keeping it explicit at the ABI boundary prevents the generic Switch value
+// vocabulary from accidentally treating declaration identities as signed data.
+fn midEnumTagForVariantSlot(slot: U64) -> I64 {
+    mut val result: I64 = 0I64
+    mut val index: U64 = 0U64
+    while index < slot {
+        result += 1I64
+        index += 1U64
+    }
+    return result
+}
+
+// A statement enum match has one semantic owner: Record resolves the source
+// pattern spelling into SemanticMatch, then this builder turns that frozen
+// descriptor into ordinary CFG.  In particular, neither variant names nor
+// payload field names cross this boundary. The first slice accepts a copied
+// scalar payload only. ARC-owned payloads need a distinct borrowed-place
+// binding (with a lifetime tied to the scrutinee); treating one as a copy here
+// would silently omit its retain/drop semantics. Move matches likewise need a
+// consuming payload operation and drop-flag transfer.
+export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
+    if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
+    match c.arena.stmts[stmtId] {
+        Stmt.Match(scrut: val scrut, arms: val sourceArms) => {
+            val semanticIndex: U64 = c.semanticMatchIndex(ownerFnIdx: state.sourceFunction, stmtId: stmtId)
+            if semanticIndex >= c.decls.semanticMatches.count() { return <MidBuildError.UnsupportedMatch /> }
+            val semantic: SemanticMatch = c.decls.semanticMatches[semanticIndex]
+            if semantic.arms.count() != sourceArms.len { return <MidBuildError.UnsupportedMatch /> }
+            if midTermIsUnique(c: inout c, term: semantic.scrutineeTerm) { return <MidBuildError.UnsupportedMatch /> }
+            val scrutinee: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: scrut, typeTerm: semantic.scrutineeTerm)
+            if !scrutinee.found { return <MidBuildError.UnsupportedMatch /> }
+            val i64Name: Bind = c.kwSpan(kw: "I64", kwLen: 3U64)
+            val tagTerm: U64 = c.simpleTypeRef(nameStart: i64Name.nameStart, nameLen: i64Name.nameLen)
+            if tagTerm == 0U64 { return <MidBuildError.MissingSemanticType /> }
+            val tagLocal: U64 = addMidTemporary(state: inout state, typeTerm: tagTerm)
+            val tagPlace: MidPlace = <MidPlace local=tagLocal typeTerm=tagTerm />
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=tagPlace value=<MidRvalue.EnumTag place=scrutinee.place enumIndex=semantic.enumIndex sourceStmt=stmtId resultTerm=tagTerm /> />)
+            val joinTarget: U64 = midNewBlock(state: inout state)
+            val mismatchTarget: U64 = midNewBlock(state: inout state)
+            mut val armTargets: Array[U64] = []
+            mut val values: Array[I64] = []
+            mut val targets: Array[U64] = []
+            mut val otherwise: U64 = mismatchTarget
+            mut val joinReachable: Bool = false
+            mut val armIndex: U64 = 0U64
+            while armIndex < semantic.arms.count() {
+                val armTarget: U64 = midNewBlock(state: inout state)
+                armTargets.append(armTarget)
+                val arm: SemanticMatchArm = semantic.arms[armIndex]
+                if arm.hasVariant {
+                    values.append(midEnumTagForVariantSlot(slot: arm.variantIndex))
+                    targets.append(armTarget)
+                } else {
+                    otherwise = armTarget
+                }
+                armIndex += 1U64
+            }
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=<MidOperand.Copy place=tagPlace /> values=values targets=targets otherwise=otherwise />)
+            state.currentBlock = mismatchTarget
+            midSetTerminator(state: inout state, terminator: <MidTerminator.Abort />)
+            armIndex = 0U64
+            while armIndex < semantic.arms.count() {
+                state.currentBlock = armTargets[armIndex]
+                val bindingMark: U64 = state.bindings.count()
+                val armScope: U64 = midOpenScope(state: inout state)
+                val semanticArm: SemanticMatchArm = semantic.arms[armIndex]
+                mut val payloadIndex: U64 = 0U64
+                while payloadIndex < semanticArm.payloads.count() {
+                    val payload: SemanticMatchPayload = semanticArm.payloads[payloadIndex]
+                    if midTermIsUnique(c: inout c, term: payload.fieldTerm) || c.arcNeedsRelease(ref: payload.fieldTerm) { return <MidBuildError.UnsupportedMatch /> }
+                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false)
+                    val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
+                    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
+                    payloadIndex += 1U64
+                }
+                val sourceArm = c.matchArmAt(arms: sourceArms, index: armIndex)
+                val armResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: sourceArm.body)
+                match armResult { MidBuildError.None => {} _ => { return armResult } }
+                if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+                    midEmitScopeExit(state: inout state, scope: armScope)
+                    midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
+                    joinReachable = true
+                }
+                midCloseScope(state: inout state, scope: armScope)
+                state.bindings.truncate(count: bindingMark)
+                armIndex += 1U64
+            }
+            state.currentBlock = joinTarget
+            if !joinReachable {
+                // Every arm diverges (for example, each returns). This join is
+                // retained as the builder's post-statement cursor but has no
+                // incoming edge, so it is semantically LLVM `unreachable`, not
+                // an unterminated source return path.
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
+            }
+            return <MidBuildError.None />
+        }
+        _ => { return <MidBuildError.InvalidStatement /> }
+    }
 }
 
 // A statement `if` becomes a normal Switch plus then/else/join blocks. There

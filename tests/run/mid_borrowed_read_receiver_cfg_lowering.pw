@@ -1,0 +1,15 @@
+import @Std/Io with { print }
+
+// A read-only method receiver is a borrow.  The later append therefore writes
+// through the original Array storage; Mid must not materialize an ARC Copy of
+// `values` merely to evaluate `count()`.
+fn countThenAppend(values: inout Array[I64]) -> U64 {
+    val before: U64 = values.count()
+    values.append(34I64)
+    return before * 10U64 + values.count()
+}
+
+fn main() {
+    mut val values: Array[I64] = [1I64, 2I64, 3I64]
+    print(countThenAppend(values: inout values))
+}

@@ -1,0 +1,68 @@
+// Match a many-variant enum after extracting it from a returned aggregate.
+// This is the same value boundary as MidBodyBuild.error: a scalar field
+// projection must preserve the enum discriminant for every arm.
+import @Std/Io with { print }
+
+enum Detail {
+    Expression
+    Operand
+    Projection
+}
+
+enum BuildError {
+    None
+    InvalidStatement
+    InvalidBlock
+    InvalidFunction
+    MissingType
+    UnboundLocal
+    Unsupported(detail: Detail)
+    Assign
+    While
+    For
+    Match
+    Panic
+    Give
+    Break
+    Continue
+    MissingTerminator
+    MissingCall
+    UnsupportedCall
+}
+
+struct Report {
+    pub val values: Array[I64]
+    pub val error: BuildError
+}
+pub impl Report { factory }
+
+fn report() -> Report {
+    mut val values: Array[I64] = [1I64]
+    values.append(2I64)
+    return <Report values=values error=<BuildError.While /> />
+}
+
+fn main() {
+    val result = report()
+    val error: BuildError = result.error
+    match error {
+        BuildError.None => { print(0I64) }
+        BuildError.InvalidStatement => { print(1I64) }
+        BuildError.InvalidBlock => { print(2I64) }
+        BuildError.InvalidFunction => { print(3I64) }
+        BuildError.MissingType => { print(4I64) }
+        BuildError.UnboundLocal => { print(5I64) }
+        BuildError.Unsupported(detail: _) => { print(6I64) }
+        BuildError.Assign => { print(7I64) }
+        BuildError.While => { print(result.values.count() + 6U64) }
+        BuildError.For => { print(9I64) }
+        BuildError.Match => { print(10I64) }
+        BuildError.Panic => { print(11I64) }
+        BuildError.Give => { print(12I64) }
+        BuildError.Break => { print(13I64) }
+        BuildError.Continue => { print(14I64) }
+        BuildError.MissingTerminator => { print(15I64) }
+        BuildError.MissingCall => { print(16I64) }
+        BuildError.UnsupportedCall => { print(17I64) }
+    }
+}

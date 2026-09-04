@@ -1,0 +1,37 @@
+import @Plew/Syntax with { Lexer, P, lex, parseProgramSyntaxFile, syntaxFileTopLevel, syntaxTopItemPayload, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplTraitArgCount, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType, syntaxParam, syntaxType, syntaxTypeArgCount, ImplId }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "impl[T] Box[T] as Eq { fn same[U](value~: U) -> U where U: Eq { return value } }\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val file = parseProgramSyntaxFile(p: inout parser)
+    val item = syntaxFileTopLevel(file: file, index: 0U64)
+    val impl = syntaxImpl(file: file, id: <ImplId raw=syntaxTopItemPayload(file: file, item: item) />)
+    val receiver = syntaxType(file: file, id: impl.recvType)
+    val member = syntaxMember(file: file, id: syntaxImplMember(file: file, impl: impl, index: 0U64))
+    print(syntaxImplParamCount(file: file, impl: impl))
+    val implParam = syntaxImplParamSpan(file: file, impl: impl, index: 0U64)
+    print(implParam.end - implParam.start)
+    print(syntaxTypeArgCount(file: file, ty: receiver))
+    print(syntaxImplTraitArgCount(file: file, impl: impl))
+    print(syntaxImplMemberCount(file: file, impl: impl))
+    print(member.name.end - member.name.start)
+    if impl.isTraitImpl { print(1U64) } else { print(0U64) }
+    print(syntaxMemberTypeParamCount(file: file, member: member))
+    val memberTypeParam = syntaxMemberTypeParamSpan(file: file, member: member, index: 0U64)
+    print(memberTypeParam.end - memberTypeParam.start)
+    print(syntaxMemberParamCount(file: file, member: member))
+    val memberParam = syntaxParam(file: file, id: syntaxMemberParam(file: file, member: member, index: 0U64))
+    print(memberParam.name.end - memberParam.name.start)
+    print(syntaxMemberWhereCount(file: file, member: member))
+    val whereParam = syntaxMemberWhereParamSpan(file: file, member: member, index: 0U64)
+    val whereTrait = syntaxMemberWhereTraitSpan(file: file, member: member, index: 0U64)
+    val whereType = syntaxType(file: file, id: syntaxMemberWhereType(file: file, member: member, index: 0U64))
+    val whereTraitType = syntaxType(file: file, id: syntaxMemberWhereTraitType(file: file, member: member, index: 0U64))
+    print(whereParam.end - whereParam.start)
+    print(whereTrait.end - whereTrait.start)
+    print(whereType.name.end - whereType.name.start)
+    print(whereTraitType.name.end - whereTraitType.name.start)
+}

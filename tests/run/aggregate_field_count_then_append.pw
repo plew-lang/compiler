@@ -1,0 +1,25 @@
+import @Plew/Syntax with { SyntaxNewtype, TypeId, Span }
+import @Std/Io with { print }
+
+struct Store {
+    mut val nodes: Array[SyntaxNewtype] = []
+}
+
+pub impl Store {
+    inout fn appendNode() {
+        // Reading the field to form the inserted value must not leave a shared
+        // temporary whose later inout append aliases stale storage.
+        val raw = self.nodes.count()
+        self.nodes.append(<SyntaxNewtype name=<Span start=1U64 end=2U64 /> ty=<TypeId raw=raw /> isPub=false span=<Span start=0U64 end=4U64 /> />)
+    }
+
+    fn firstRaw() -> U64 {
+        return self.nodes[0U64].ty.raw
+    }
+}
+
+fn main() {
+    mut val store = <Store />
+    store.appendNode()
+    print(store.firstRaw())
+}

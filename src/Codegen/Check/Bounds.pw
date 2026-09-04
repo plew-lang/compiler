@@ -552,13 +552,10 @@ pub impl Comp {
     // through the selected proof's constraint.
     inout fn staticRequirementResultTypeForProof(traitDef: TraitDef, req: Func, receiverRef: U64, traitArgs: Array[U64], predicates: Array[TraitAssocPredicate]) -> U64 {
         if !(req.hasRet) || req.retTy == 0U64 || req.retTy >= self.arena.types.count() { return 0U64 }
-        val savedParams: Array[Bind] = self.cur.typeParams
-        val savedArgs: Array[U64] = self.cur.typeArgs
-        self.cur.typeParams = traitDef.typeParams
-        self.cur.typeArgs = traitArgs
-        val grounded: U64 = self.groundTypeRef(ref: req.retTy)
-        self.cur.typeParams = savedParams
-        self.cur.typeArgs = savedArgs
+        // This is a declaration-time proof query, not a body-instance read.
+        // Ground only the selected trait instance's binders; consulting Cursor
+        // here let an unrelated temporary receiver reinterpret abstract Self.
+        val grounded: U64 = self.groundTermInEnvironment(ref: req.retTy, params: traitDef.typeParams, values: traitArgs)
         return self.reifyBoundAssociatedTerms(ref: grounded, traitDef: traitDef, receiverRef: receiverRef, traitOwner: traitDef.nameStart, traitArgs: traitArgs, predicates: predicates)
     }
 
@@ -566,6 +563,43 @@ pub impl Comp {
         match resolution {
             StaticMemberResolution.Requirement(proof: val proof, traitIdx: val traitIdx, reqIdx: val reqIdx) => {
                 match proof {
+                    // A concrete requirement call is no less proof-directed
+                    // than a declaration-time bound.  Its witness fixes both
+                    // the receiver pattern and the positional trait instance
+                    // arguments (`Array[I64] : Index[U64]`, for example).
+                    // Rebuild the requirement result from those facts here;
+                    // dropping them made `Index.Output` appear as the bare
+                    // `Index[]` projection and forced later phases to guess.
+                    StaticConformanceProof.ConcreteWitness(witness: val witness) => {
+                        if witness.conformIdx == 0U64 || witness.conformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        val conform: Conform = self.decls.conforms[witness.conformIdx - 1U64]
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
+                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: conform.typeParams, matchResult: witness)
+                        if receiver == 0U64 { return 0U64 }
+                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: traitDef.reqs[reqIdx], receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: witness), predicates: [])
+                    }
+                    // A trait-to-trait path owns its associated outputs at the
+                    // terminal edge.  The terminal witness supplies the same
+                    // complete instance facts as a direct conformance; using
+                    // the path's first edge would incorrectly retain source
+                    // trait arguments after a rewriting conformance.
+                    StaticConformanceProof.TraitPath(edges: val edges, terminalConformIdx: val terminalConformIdx) => {
+                        if terminalConformIdx == 0U64 || terminalConformIdx > self.decls.conforms.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
+                        mut val terminal: WitnessMatch = <WitnessMatch />
+                        mut val edgeIdx: U64 = 0U64
+                        while edgeIdx < edges.count() {
+                            if edges[edgeIdx].conformIdx == terminalConformIdx { terminal = edges[edgeIdx] }
+                            edgeIdx += 1U64
+                        }
+                        if terminal.conformIdx == 0U64 { return 0U64 }
+                        val conform: Conform = self.decls.conforms[terminalConformIdx - 1U64]
+                        val traitDef: TraitDef = self.decls.traits[traitIdx]
+                        if reqIdx >= traitDef.reqs.count() { return 0U64 }
+                        val receiver: U64 = self.groundWitnessTypeTerm(ref: conform.subjectTy, params: conform.typeParams, matchResult: terminal)
+                        if receiver == 0U64 { return 0U64 }
+                        return self.staticRequirementResultTypeForProof(traitDef: traitDef, req: traitDef.reqs[reqIdx], receiverRef: receiver, traitArgs: self.groundedWitnessTraitArgs(cf: conform, witness: terminal), predicates: [])
+                    }
                     StaticConformanceProof.AssumedBound(boundIdx: val boundIdx) => {
                         if boundIdx >= self.decls.funcBounds.count() || traitIdx >= self.decls.traits.count() { return 0U64 }
                         val traitDef: TraitDef = self.decls.traits[traitIdx]

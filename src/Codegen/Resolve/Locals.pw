@@ -10,6 +10,22 @@ pub impl Comp {
         self.cur.locals.append(<Local nameStart=nameStart nameLen=nameLen nameId=intern(c: inout self, start: nameStart, len: nameLen) tyStart=tyStart tyLen=tyLen tyNameId=intern(c: inout self, start: tyStart, len: tyLen) isArray=isArray ty=ty isInout=isInout isMut=isMut owned=owned moved=false cnum=cnum />)
     }
 
+    // A let binding owns one semantic TypeTerm.  For an annotation that is the
+    // written type; without one it is the already-recorded initializer term.
+    // Keep this construction shared by Record and generic-body validation: an
+    // unannotated `val it = self` in a provided trait method must remain
+    // abstract `Self`, rather than degrading to a name-shaped fallback during
+    // the later checker walk.
+    inout fn addLetLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, mutable: Bool, owned: Bool) {
+        val inferred: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
+        mut val term: U64 = inferred.ty
+        if ty == 0U64 {
+            val initializerTerm: U64 = self.parametricExprTerm(exprId: init)
+            if initializerTerm != 0U64 { term = initializerTerm }
+        }
+        self.addLocal(nameStart: nameStart, nameLen: nameLen, tyStart: inferred.start, tyLen: inferred.len, isArray: inferred.arr, ty: term, isInout: false, isMut: mutable, owned: owned)
+    }
+
     // The "seed every global" sentinel for `seedGlobalLocals`: used when the referencing
     // function has no reliable module offset (a method / assoc fn — its `nameStart` is
     // re-interned to module 0), so gating would risk hiding a same-module global. Free

@@ -1,0 +1,14 @@
+import @Plew/Syntax with { Lexer, P, TopItemAst, lex, parseProgramAst }
+import @Std/Io with { print }
+
+fn main() {
+    val source = "struct Holder { val bytes: Array[U8] }\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = parseProgramAst(p: inout parser)
+    match items[0U64] {
+        TopItemAst.Decl(d: val d) => { print(d.fields[0U64].ty.args.count()) }
+        _ => { print(0U64) }
+    }
+}

@@ -1,0 +1,7 @@
+import @Plew/Syntax with { SyntaxFile }
+import @Std/Io with { print }
+
+fn main() {
+    val file = <SyntaxFile />
+    print(file.topLevelCount())
+}

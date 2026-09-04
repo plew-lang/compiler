@@ -112,15 +112,36 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < imp.names.count() {
             val nspan: Span = imp.nameSpans[i]
-            self.markImport(segStart: imp.segSpan.start, segLen: imp.segSpan.end - imp.segSpan.start, nameStart: nspan.start, nameLen: nspan.end - nspan.start)
-            // `real as alias`: record the local alias -> real-name mapping (spec/15).
-            if i < imp.nameAliasSpans.count() {
-                val al: Span = imp.nameAliasSpans[i]
-                if al.end > al.start {
-                    self.decls.importAliases.append(<Bind nameStart=al.start nameLen=al.end - al.start fieldStart=nspan.start fieldLen=nspan.end - nspan.start />)
-                }
-            }
+            mut val alias: Span = <Span start=0 end=0 />
+            if i < imp.nameAliasSpans.count() { alias = imp.nameAliasSpans[i] }
+            self.appendLoweredImportName(seg: imp.segSpan, name: nspan, alias: alias)
             i += 1
+        }
+    }
+
+    inout fn lowerSyntaxImport(imp: SyntaxImport) {
+        if imp.isImport && syntaxImportNameCount(file: self.syntax, imp: imp) == 0U64 {
+            mut val nsStart: U64 = imp.segment.start
+            mut val nsEnd: U64 = imp.segment.end
+            if imp.alias.end > imp.alias.start {
+                nsStart = imp.alias.start
+                nsEnd = imp.alias.end
+            }
+            if nsEnd > nsStart {
+                self.decls.namespaces.append(<Bind nameStart=nsStart nameLen=nsEnd - nsStart fieldStart=0 fieldLen=0 />)
+            }
+        }
+        mut val i: U64 = 0U64
+        while i < syntaxImportNameCount(file: self.syntax, imp: imp) {
+            self.appendLoweredImportName(seg: imp.segment, name: syntaxImportNameSpan(file: self.syntax, imp: imp, index: i), alias: syntaxImportNameAliasSpan(file: self.syntax, imp: imp, index: i))
+            i += 1U64
+        }
+    }
+
+    inout fn appendLoweredImportName(seg: Span, name: Span, alias: Span) {
+        self.markImport(segStart: seg.start, segLen: seg.end - seg.start, nameStart: name.start, nameLen: name.end - name.start)
+        if alias.end > alias.start {
+            self.decls.importAliases.append(<Bind nameStart=alias.start nameLen=alias.end - alias.start fieldStart=name.start fieldLen=name.end - name.start />)
         }
     }
 
@@ -128,18 +149,31 @@ pub impl Comp {
         mut val i: U64 = 0
         while i < imp.names.count() {
             val nspan: Span = imp.nameSpans[i]
-            mut val exStart: U64 = nspan.start
-            mut val exLen: U64 = nspan.end - nspan.start
+            mut val alias: Span = <Span start=0 end=0 />
             if i < imp.nameAliasSpans.count() {
-                val al: Span = imp.nameAliasSpans[i]
-                if al.end > al.start {
-                    exStart = al.start
-                    exLen = al.end - al.start
-                }
+                alias = imp.nameAliasSpans[i]
             }
-            self.recordExport(nameStart: exStart, nameLen: exLen)
+            self.appendLoweredReExportName(name: nspan, alias: alias)
             i += 1
         }
+    }
+
+    // Re-exports do not introduce a local binding.  Both input decoders only
+    // choose the source spelling; this sink records the exported spelling.
+    inout fn lowerSyntaxReExport(imp: SyntaxImport) {
+        mut val i: U64 = 0U64
+        while i < syntaxImportNameCount(file: self.syntax, imp: imp) {
+            self.appendLoweredReExportName(name: syntaxImportNameSpan(file: self.syntax, imp: imp, index: i), alias: syntaxImportNameAliasSpan(file: self.syntax, imp: imp, index: i))
+            i += 1U64
+        }
+    }
+
+    inout fn appendLoweredReExportName(name: Span, alias: Span) {
+        mut val exportName: Span = name
+        if alias.end > alias.start {
+            exportName = alias
+        }
+        self.recordExport(nameStart: exportName.start, nameLen: exportName.end - exportName.start)
     }
 
     inout fn isNamespaceName(name: String) -> Bool {
@@ -204,7 +238,7 @@ pub impl Comp {
                     self.recordExport(nameStart: self.arena.globals[gB].nameStart, nameLen: self.arena.globals[gB].nameLen)
                 }
             }
-            TopItemAst.NewType(val name, val ty, isPub: _, val span) => {
+            TopItemAst.NewType(val name, nameSpan: _, val ty, isPub: _, val span) => {
                 // `export newtype Name = Underlying` (spec/10,15): lower the distinct type,
                 // then record its name as exported so other modules can import it.
                 val ntB: U64 = self.arena.newtypes.count()
@@ -233,14 +267,28 @@ pub impl Comp {
             TopItemAst.ReExport(val imp) => { self.lowerReExport(imp: imp) }
             TopItemAst.Directive(val dir) => { self.lowerDirective(dir: dir) }
             TopItemAst.GlobalVal(val s) => { self.lowerGlobalVal(s: s) }
-            TopItemAst.NewType(val name, val ty, val isPub, val span) => { self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
+            TopItemAst.NewType(val name, nameSpan: _, val ty, val isPub, val span) => { self.lowerNewtype(name: name, ty: ty, defOffset: span.start) }
         }
     }
 
     inout fn lowerNewtype(name: String, ty: TypeAst, defOffset: U64) {
         val nm: Bind = self.internBytes(s: name)
         val under: PType = self.lowerType(t: ty)
-        self.arena.newtypes.append(<NewtypeDef nameStart=nm.nameStart nameLen=nm.nameLen nameId=intern(c: inout self, start: nm.nameStart, len: nm.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
+        self.appendLoweredNewtype(name: nm, under: under, defOffset: defOffset)
+    }
+
+    inout fn lowerSyntaxNewtype(id: NewtypeId) {
+        val item: SyntaxNewtype = syntaxNewtype(file: self.syntax, id: id)
+        val nameLen: U64 = item.name.end - item.name.start
+        val name: Bind = <Bind nameStart=item.name.start nameLen=nameLen fieldStart=item.name.start fieldLen=nameLen />
+        val under: PType = self.lowerSyntaxType(id: item.ty)
+        self.appendLoweredNewtype(name: name, under: under, defOffset: item.span.start)
+    }
+
+    // Both source decoders converge here.  The semantic mutation is deliberately
+    // shared so SyntaxFile migration cannot create a second newtype lowerer.
+    inout fn appendLoweredNewtype(name: Bind, under: PType, defOffset: U64) {
+        self.arena.newtypes.append(<NewtypeDef nameStart=name.nameStart nameLen=name.nameLen nameId=intern(c: inout self, start: name.nameStart, len: name.nameLen) underStart=under.start underLen=under.len underRef=under.ref defOffset=defOffset />)
     }
 
     inout fn lowerGlobalVal(s: StmtAst) {

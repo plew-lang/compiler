@@ -1,0 +1,20 @@
+import @Plew/Syntax with { Lexer, P, TopItemAst, TypeAst, lex, parseProgramAst }
+import @Std/Io with { print }
+
+fn childCount(ty: TypeAst) -> U64 {
+    return ty.args.count()
+}
+
+fn main() {
+    val source = "newtype Bytes = Array[U8]\n"
+    mut val lexer = <Lexer bytes=source.bytes() pos=0U64 toks=[] depth=0I64 />
+    lex(lx: inout lexer)
+    mut val parser = <P bytes=source.bytes() toks=lexer.toks pos=0U64 base=0U64 />
+    val items = parseProgramAst(p: inout parser)
+    match items[0U64] {
+        TopItemAst.NewType(name: _, nameSpan: _, ty: val ty, isPub: _, span: _) => {
+            print(childCount(ty: ty))
+        }
+        _ => { print(0U64) }
+    }
+}
