@@ -328,6 +328,61 @@ pub impl Comp {
         self.cur.typeParams = savedTP
     }
 
+    inout fn lowerSyntaxDeclParams(d: SyntaxDecl) -> Array[Param] {
+        mut val out: Array[Param] = []
+        mut val i: U64 = 0U64
+        while i < syntaxDeclParamCount(file: self.syntax, decl: d) {
+            val p: SyntaxParam = syntaxParam(file: self.syntax, id: syntaxDeclParam(file: self.syntax, decl: d, index: i))
+            val ty: PType = self.lowerSyntaxType(id: p.ty)
+            mut val defaultExpr: U64 = 0U64
+            if p.hasDefault { defaultExpr = self.lowerSyntaxExpr(id: p.defaultVal) }
+            val name: Bind = <Bind nameStart=p.name.start nameLen=p.name.end - p.name.start fieldStart=p.name.start fieldLen=p.name.end - p.name.start offset=p.name.start />
+            out.append(self.appendLoweredParam(name: name, hasType: true, ty: ty, isInout: p.isInout, isMove: p.isMove, isBorrow: p.isBorrow, noLabel: p.noLabel, hasDefault: p.hasDefault, defaultExpr: defaultExpr))
+            i += 1U64
+        }
+        return out
+    }
+
+    inout fn lowerSyntaxFuncDecl(d: SyntaxDecl) {
+        val typeParams: Array[Bind] = self.lowerSyntaxDeclTypeParams(d: d)
+        val savedTP: Array[Bind] = self.cur.typeParams
+        val savedWT: Array[TypeId] = self.lowerWhereSyntaxTypes
+        val savedWTr: Array[Span] = self.lowerWhereSyntaxTraits
+        self.cur.typeParams = typeParams
+        mut val whereTypes: Array[TypeId] = []
+        mut val whereTraits: Array[Span] = []
+        mut val i: U64 = 0U64
+        while i < syntaxDeclWhereCount(file: self.syntax, decl: d) {
+            whereTypes.append(syntaxDeclWhereType(file: self.syntax, decl: d, index: i))
+            whereTraits.append(syntaxDeclWhereTraitSpan(file: self.syntax, decl: d, index: i))
+            i += 1U64
+        }
+        self.lowerWhereSyntaxTypes = whereTypes
+        self.lowerWhereSyntaxTraits = whereTraits
+        val params: Array[Param] = self.lowerSyntaxDeclParams(d: d)
+        mut val retStart: U64 = 0U64
+        mut val retLen: U64 = 0U64
+        mut val retIsArray: Bool = false
+        mut val retRef: U64 = 0U64
+        if d.hasRet {
+            val pt: PType = self.lowerSyntaxType(id: d.ret)
+            retStart = pt.start
+            retLen = pt.len
+            retIsArray = pt.isArray
+            retRef = pt.ref
+        }
+        val savedRet: U64 = self.cur.lowerRetTy
+        self.cur.lowerRetTy = retRef
+        val body: U64 = self.lowerSyntaxBlock(id: d.body)
+        self.cur.lowerRetTy = savedRet
+        val fnIdx: U64 = self.registerDeclaredFunc(f: <Func nameStart=d.name.start nameLen=d.name.end - d.name.start nameId=intern(c: inout self, start: d.name.start, len: d.name.end - d.name.start) typeParams=self.pushFuncBinds(binds: typeParams) params=self.pushFuncParams(params: params) hasRet=d.hasRet retStart=retStart retLen=retLen retIsArray=retIsArray retTy=retRef body=body hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=d.isAsync isExtern=false defOffset=d.name.start />)
+        self.appendSyntaxFuncBounds(fnIdx: fnIdx, decl: d)
+        self.cur.typeParams = savedTP
+        self.lowerWhereSyntaxTypes = savedWT
+        self.lowerWhereSyntaxTraits = savedWTr
+        self.drainDerives(typeStart: d.name.start, typeLen: d.name.end - d.name.start, isEnum: false, declStart: d.span.start, declEnd: d.span.end)
+    }
+
     inout fn lowerStructDecl(d: DeclAst) {
         val nm: Bind = self.internBytes(s: d.name)
         val typeParams: Array[Bind] = self.lowerTypeParamNames(names: d.typeParams, anchor: d.span.start, sendableFlags: d.typeParamSendable)
@@ -505,6 +560,47 @@ pub impl Comp {
             val constraint: TraitConstraint = <TraitConstraint key=<TraitInstanceKey owner=resolvedOwner positionalArgs=boundArgs /> positionalArgsOpen=boundArgs.count() == 0U64 assocPredicates=predicates />
             self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=pn.nameStart paramLen=pn.nameLen paramTy=pty paramNameId=pn.nameId constraint=constraint />)
             i += 1
+        }
+    }
+
+    inout fn appendSyntaxFuncBounds(fnIdx: U64, decl: SyntaxDecl) {
+        mut val i: U64 = 0U64
+        while i < syntaxDeclWhereCount(file: self.syntax, decl: decl) {
+            val param: Span = syntaxDeclWhereParamSpan(file: self.syntax, decl: decl, index: i)
+            val trait: Span = syntaxDeclWhereTraitSpan(file: self.syntax, decl: decl, index: i)
+            val pty: U64 = self.lowerSyntaxType(id: syntaxDeclWhereType(file: self.syntax, decl: decl, index: i)).ref
+            val traitType: SyntaxType = syntaxType(file: self.syntax, id: syntaxDeclWhereTraitType(file: self.syntax, decl: decl, index: i))
+            mut val args: Array[U64] = []
+            mut val assocNames: Array[U64] = []
+            mut val assocValues: Array[U64] = []
+            mut val ai: U64 = 0U64
+            while ai < syntaxTypeArgCount(file: self.syntax, ty: traitType) {
+                val arg: U64 = self.lowerSyntaxType(id: syntaxTypeArg(file: self.syntax, ty: traitType, index: ai)).ref
+                val label: Span = syntaxTypeArgLabel(file: self.syntax, ty: traitType, index: ai)
+                if label.end > label.start {
+                    assocNames.append(intern(c: inout self, start: label.start, len: label.end - label.start))
+                    assocValues.append(arg)
+                } else {
+                    args.append(arg)
+                }
+                ai += 1U64
+            }
+            val traitId: U64 = intern(c: inout self, start: trait.start, len: trait.end - trait.start)
+            mut val owner: U64 = self.traitOwnerAtUse(start: trait.start, len: trait.end - trait.start, arity: args.count())
+            if owner == 0U64 && fnIdx < self.arena.funcs.count() {
+                owner = self.traitOwnerInScopeById(mod: self.moduleOf(offset: self.arena.funcs[fnIdx].defOffset), nameId: traitId, arity: args.count())
+            }
+            if owner == 0U64 && args.count() == 0U64 && fnIdx < self.arena.funcs.count() {
+                owner = self.traitOwnerInScopeOpenById(mod: self.moduleOf(offset: self.arena.funcs[fnIdx].defOffset), nameId: traitId)
+            }
+            mut val predicates: Array[TraitAssocPredicate] = []
+            ai = 0U64
+            while ai < assocNames.count() && ai < assocValues.count() {
+                predicates.append(<TraitAssocPredicate member=assocNames[ai] value=assocValues[ai] span=trait.start />)
+                ai += 1U64
+            }
+            self.decls.funcBounds.append(<FuncBound fnIdx=fnIdx paramStart=param.start paramLen=param.end - param.start paramTy=pty paramNameId=intern(c: inout self, start: param.start, len: param.end - param.start) constraint=<TraitConstraint key=<TraitInstanceKey owner=owner positionalArgs=args /> positionalArgsOpen=args.count() == 0U64 assocPredicates=predicates /> />)
+            i += 1U64
         }
     }
 }
