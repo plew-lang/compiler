@@ -46,7 +46,13 @@ pub impl Comp {
         val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: arm.body)
         val count: U64 = syntaxBlockStmtCount(file: self.syntax, block: block)
         if count == 0U64 { return false }
-        return syntaxStmt(file: self.syntax, id: syntaxBlockStmt(file: self.syntax, block: block, index: count - 1U64)).kind != <SyntaxStmtKind.Give />
+        // This is a closed parser-tag dispatch, not a user-visible equality
+        // operation.  Requiring an Eq witness for SyntaxStmtKind couples the
+        // compiler's own control decision to a derive in @Plew/Syntax.
+        match syntaxStmt(file: self.syntax, id: syntaxBlockStmt(file: self.syntax, block: block, index: count - 1U64)).kind {
+            SyntaxStmtKind.Give => { return false }
+            _ => { return true }
+        }
     }
 
     // Statement match arms from SyntaxFile share the same semantic MatchArm
@@ -101,7 +107,11 @@ pub impl Comp {
             val pattern: SyntaxPattern = syntaxPattern(file: self.syntax, id: arm.pat)
             if pattern.isWildcard || !(pattern.isLiteral) { return false }
             val literal: SyntaxExpr = syntaxExpr(file: self.syntax, id: pattern.lit)
-            if literal.kind != <SyntaxExprKind.IntLit /> || !(literal.flag0) { return false }
+            match literal.kind {
+                SyntaxExprKind.IntLit => {}
+                _ => { return false }
+            }
+            if !(literal.flag0) { return false }
             if literal.intValue == 1U64 { sawTrue = true }
             if literal.intValue == 0U64 { sawFalse = true }
             i += 1U64
@@ -238,7 +248,10 @@ pub impl Comp {
         val block: SyntaxBlock = syntaxBlock(file: self.syntax, id: arm.body)
         if syntaxBlockStmtCount(file: self.syntax, block: block) > 0U64 {
             val first: SyntaxStmt = syntaxStmt(file: self.syntax, id: syntaxBlockStmt(file: self.syntax, block: block, index: 0U64))
-            if first.kind == <SyntaxStmtKind.Give /> { return first.child0 }
+            match first.kind {
+                SyntaxStmtKind.Give => { return first.child0 }
+                _ => {}
+            }
         }
         return <ExprId raw=0U64 />
     }
@@ -249,7 +262,11 @@ pub impl Comp {
     // temporary binding before the if-expression chain is built.
     inout fn lowerSyntaxScalarMatchExpr(scrut: ExprId, arms: SyntaxSlice, span: Span) -> U64 {
         val source: SyntaxExpr = syntaxExpr(file: self.syntax, id: scrut)
-        mut val scrutIsIdent: Bool = source.kind == <SyntaxExprKind.Ident />
+        mut val scrutIsIdent: Bool = false
+        match source.kind {
+            SyntaxExprKind.Ident => { scrutIsIdent = true }
+            _ => {}
+        }
         mut val lhsStart: U64 = source.name.start
         mut val lhsLen: U64 = source.name.end - source.name.start
         val tmp: Bind = self.internBytes(s: "__mtmp")

@@ -1047,7 +1047,10 @@ export fn runFrontend(c: inout Comp) {
     c.emitMidCoverage = emitMidCoverage
     c.requireMid = requireMid
     tracePhase(c: inout c, label: "load:start")
-    mut val pendingItems: Array[TopItemAst] = []
+    // Each loaded file contributes one immutable root range into Comp.syntax.
+    // Do not retain a program-wide Array[TopItemAst]: import discovery and
+    // lowering both traverse these typed IDs after the graph is complete.
+    mut val pendingRoots: Array[SyntaxSlice] = []
     mut val nextModuleId: U64 = 1
     if argCount() > entryArgIdx {
         // Module loader: a recursive, deduplicated worklist over local includes.
@@ -1244,16 +1247,12 @@ export fn runFrontend(c: inout Comp) {
             c.modules.rangePaths.append(stringFromBytesUnchecked(path))
             // Parse now to discover edges; lower all retained items only after the complete
             // graph (and therefore all import aliases and declarations) exists.
-            val items: Array[TopItemAst] = c.parseFile(fileBytes: sb, fileStart: fileStart)
-            mut val pendingIndex: U64 = 0U64
-            while pendingIndex < items.count() {
-                pendingItems.append(items[pendingIndex])
-                pendingIndex += 1U64
-            }
+            val roots: SyntaxSlice = c.parseFileSyntax(fileBytes: sb, fileStart: fileStart)
+            pendingRoots.append(roots)
             // spec/15: a `part` file (a non-root file of an already-seen module) may
             // contain only `impl` blocks — reject any free fn / type / extern / val.
             if u64ArrayHas(a: rootSeen, v: moduleId) {
-                c.checkPartImplOnly(items: items)
+                c.checkPartSyntaxOnly(roots: roots)
             } else {
                 rootSeen.append(moduleId)
             }
@@ -1268,26 +1267,28 @@ export fn runFrontend(c: inout Comp) {
             // `@[...]` directive so the generated sibling can be auto-parted.
             mut val sawDirective: Bool = false
             mut val ii: U64 = 0
-            while ii < items.count() {
-                match items[ii] {
-                    TopItemAst.Import(val imp) => {
-                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
+            while ii < roots.count {
+                val item: TopItemId = syntaxFileTopLevel(file: c.syntax, index: roots.start + ii)
+                match syntaxTopItemKind(file: c.syntax, item: item) {
+                    SyntaxTopItemKind.Import => {
+                        val imp: SyntaxImport = syntaxImport(file: c.syntax, id: <ImportId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
+                        mut val childPath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
                         // a non-`@Std` `@dep` import is unresolved by @Path (returns
                         // empty); resolve it against this package's [dependencies] —
                         // path deps directly, git deps via the lock's pinned commit in
                         // the global cache.
                         if childPath.count() == 0 {
-                            childPath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
+                            childPath = resolveDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, deps: fDeps, pkgDir: fPkgDir)
                         }
                         if childPath.count() == 0 {
-                            childPath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
+                            childPath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
                         }
                         // phantom-dependency rule (spec/17): an external `@<name>` import
                         // that no declared dependency backs is a loud error (provenance:
                         // you may only import what the manifest declares + `@Std`).
                         if childPath.count() == 0 {
-                            if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
-                                c.errorAt(offset: imp.pathSpan.start, msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)")
+                            if isExternalDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start) {
+                                c.errorAt(offset: imp.path.start, msg: "this `@<package>` import names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies; only declared deps and `@Std` are importable)")
                             }
                         }
                         if childPath.count() != 0 {
@@ -1300,7 +1301,7 @@ export fn runFrontend(c: inout Comp) {
                             // instead: importing the same module from many places is fine.)
                             if !(imp.isImport) {
                                 if seen {
-                                    c.errorAt(offset: imp.pathSpan.start, msg: "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)")
+                                    c.errorAt(offset: imp.path.start, msg: "this file is already in the module graph — a file can be `part`ed by at most one parent (spec/15: no duplicate/diamond `part`, and a `part` file is not independently importable)")
                                 }
                             }
                             if !seen {
@@ -1308,7 +1309,7 @@ export fn runFrontend(c: inout Comp) {
                                 // import/part path — reject loudly (acceptance soundness:
                                 // never silently load nothing).
                                 if !(fileExists(path: childPath)) {
-                                    c.errorAt(offset: imp.pathSpan.start, msg: "cannot open module file: the import/part path does not resolve to an existing file")
+                                    c.errorAt(offset: imp.path.start, msg: "cannot open module file: the import/part path does not resolve to an existing file")
                                 }
                                 // a `part` (isImport=false) joins this module; an
                                 // `import` (true) starts a fresh module.
@@ -1329,35 +1330,36 @@ export fn runFrontend(c: inout Comp) {
                                 val tgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: childPath)
                                 if tgt != 4000000000U64 {
                                     c.modules.importEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=tgt />)
-                                    c.recordImportOrigins(imp: imp, targetMod: tgt, reExport: false)
+                                    c.recordSyntaxImportOrigins(imp: imp, targetMod: tgt, reExport: false)
                                 }
                             }
                         }
                     }
-                    TopItemAst.ReExport(val imp) => {
+                    SyntaxTopItemKind.ReExport => {
+                        val imp: SyntaxImport = syntaxImport(file: c.syntax, id: <ImportId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
                         // a re-export (`export <path> with { … }`, spec/15) forwards another
                         // module's names; follow its path so that origin module is LOADED
                         // (its declarations + own exports must exist for the forward to
                         // resolve). It always starts a fresh module (like an import). Binds
                         // nothing locally — that's lowerReExport's job (export surface only).
-                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
+                        mut val rePath: Array[U8] = resolveImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, importer: path, baseLen: baseLen, srcRoot: fSrcRoot, srcRootLen: fSrcRoot.count(), stdRoot: stdRoot, stdRootLen: stdRoot.count())
                         // a re-export may forward a dependency's lib face (`export @Dep
                         // with { … }`); resolve `@dep` the same way as an import.
                         if rePath.count() == 0 {
-                            rePath = resolveDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, pkgDir: fPkgDir)
+                            rePath = resolveDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, deps: fDeps, pkgDir: fPkgDir)
                         }
                         if rePath.count() == 0 {
-                            rePath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
+                            rePath = resolveGitDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start, deps: fDeps, cacheRoot: cacheRootBytes, lock: entryLock)
                         }
                         if rePath.count() == 0 {
-                            if isExternalDepImport(src: c.arena.bytes, pStart: imp.pathSpan.start, pLen: imp.pathSpan.end - imp.pathSpan.start) {
-                                c.errorAt(offset: imp.pathSpan.start, msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)")
+                            if isExternalDepImport(src: c.arena.bytes, pStart: imp.path.start, pLen: imp.path.end - imp.path.start) {
+                                c.errorAt(offset: imp.path.start, msg: "this `@<package>` re-export names no declared dependency — add it to `[dependencies]` in Plew.toml (spec/17: no phantom dependencies)")
                             }
                         }
                         if rePath.count() != 0 {
                             if !(pathSeen(buf: pathBuf, loaded: loaded, path: rePath)) {
                                 if !(fileExists(path: rePath)) {
-                                    c.errorAt(offset: imp.pathSpan.start, msg: "cannot open module file: the re-export path does not resolve to an existing file")
+                                    c.errorAt(offset: imp.path.start, msg: "cannot open module file: the re-export path does not resolve to an existing file")
                                 }
                                 val rm: U64 = nextModuleId
                                 nextModuleId = nextModuleId + 1
@@ -1371,22 +1373,24 @@ export fn runFrontend(c: inout Comp) {
                             val reTgt: U64 = moduleIdOfPath(buf: pathBuf, loaded: loaded, path: rePath)
                             if reTgt != 4000000000U64 {
                                 c.modules.reExportEdges.append(<Bind nameStart=0 nameLen=0 fieldStart=moduleId fieldLen=reTgt />)
-                                c.recordImportOrigins(imp: imp, targetMod: reTgt, reExport: true)
+                                c.recordSyntaxImportOrigins(imp: imp, targetMod: reTgt, reExport: true)
                             }
                         }
                     }
-                    TopItemAst.Directive(val dir) => { sawDirective = true }
-                    TopItemAst.Extern(val e) => {
+                    SyntaxTopItemKind.Directive => { sawDirective = true }
+                    SyntaxTopItemKind.Extern => {
                         // a `@[...]` derive on an opaque extern lang-item (spec/15,16:
                         // e.g. `@[IntTryFrom] struct I8`) lives inside the extern block,
                         // not at top level — scan its per-struct directives too so the
                         // generated sibling is auto-parted.
-                        mut val di: U64 = 0
-                        while di < e.structDirectives.count() {
-                            if e.structDirectives[di].reqs.count() > 0U64 {
+                        val ext: SyntaxExtern = syntaxExtern(file: c.syntax, id: <ExternId raw=syntaxTopItemPayload(file: c.syntax, item: item) />)
+                        mut val di: U64 = 0U64
+                        while di < syntaxExternStructCount(file: c.syntax, ext: ext) {
+                            val dir: SyntaxDirective = syntaxDirective(file: c.syntax, id: syntaxExternStructDirective(file: c.syntax, ext: ext, index: di))
+                            if syntaxDirectiveReqCount(file: c.syntax, directive: dir) > 0U64 {
                                 sawDirective = true
                             }
-                            di += 1
+                            di += 1U64
                         }
                     }
                     _ => {}
@@ -1422,32 +1426,39 @@ export fn runFrontend(c: inout Comp) {
         c.appendSrc(from: s.bytes())
         c.modules.ranges.append(<Bind nameStart=fileStart nameLen=c.arena.bytes.count() - fileStart fieldStart=0 fieldLen=0 />)
         c.modules.rangePaths.append("<stdin>")
-        val items: Array[TopItemAst] = c.parseFile(fileBytes: s.bytes(), fileStart: fileStart)
-        mut val pendingIndex: U64 = 0U64
-        while pendingIndex < items.count() {
-            pendingItems.append(items[pendingIndex])
-            pendingIndex += 1U64
-        }
+        pendingRoots.append(c.parseFileSyntax(fileBytes: s.bytes(), fileStart: fileStart))
     }
     tracePhase(c: inout c, label: "load:done")
     tracePhase(c: inout c, label: "predeclare:start")
-    mut val predeclareIndex: U64 = 0U64
-    while predeclareIndex < pendingItems.count() {
-        c.predeclareTraitItem(item: pendingItems[predeclareIndex])
-        predeclareIndex += 1U64
+    mut val rootIndex: U64 = 0U64
+    while rootIndex < pendingRoots.count() {
+        val roots: SyntaxSlice = pendingRoots[rootIndex]
+        mut val itemIndex: U64 = 0U64
+        while itemIndex < roots.count {
+            c.predeclareSyntaxTraitItem(item: syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex))
+            itemIndex += 1U64
+        }
+        rootIndex += 1U64
     }
     tracePhase(c: inout c, label: "predeclare:done")
     tracePhase(c: inout c, label: "lower:start")
+    rootIndex = 0U64
     mut val lowerIndex: U64 = 0U64
-    while lowerIndex < pendingItems.count() {
+    while rootIndex < pendingRoots.count() {
+        val roots: SyntaxSlice = pendingRoots[rootIndex]
+        mut val itemIndex: U64 = 0U64
+        while itemIndex < roots.count {
         // Source lowering is the largest frontend traversal.  Keep coarse
         // trace progress at its ownership boundary so a pathological item can
         // be located without adding ad-hoc prints inside individual lowerers.
         if c.tracePhases && lowerIndex % 100U64 == 0U64 {
             tracePhaseCount(c: inout c, label: "lower:top-item", count: lowerIndex)
         }
-        c.lowerTopItem(item: pendingItems[lowerIndex])
-        lowerIndex += 1U64
+            c.lowerSyntaxTopItem(item: syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex))
+            lowerIndex += 1U64
+            itemIndex += 1U64
+        }
+        rootIndex += 1U64
     }
     tracePhase(c: inout c, label: "lower:done")
     tracePhase(c: inout c, label: "declaration-checks:start")
