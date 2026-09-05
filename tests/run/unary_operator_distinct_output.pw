@@ -16,9 +16,11 @@ impl Number as BitNot {
 fn negativeOutput(value: Number) -> I64 { return -value }
 fn logicalOutput(value: Bool) -> Bool { return !value }
 fn bitwiseOutput(value: Number) -> I64 { return ~value }
+fn genericNegative[T](value: T) -> I64 where T: Neg[Output = I64] { return -value }
 
 fn main() {
     print(negativeOutput(value: <Number value=7I64 />))
     print(logicalOutput(value: false))
     print(bitwiseOutput(value: <Number value=11I64 />))
+    print(genericNegative(value: <Number value=9I64 />))
 }

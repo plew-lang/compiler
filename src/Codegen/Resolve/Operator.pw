@@ -3,6 +3,29 @@
 // transition so still-free-function callers (Resolve/ExprType) can reach them.
 
 pub impl Comp {
+    // One concrete unary selector for declaration-time typing and final call
+    // publication. The result comes from the selected declaration, not from
+    // an assumption that Neg/Not/BitNot return their receiver type.
+    inout fn unaryOperatorCallee(receiverRef: U64, op: I64) -> U64 {
+        if receiverRef == 0U64 || receiverRef >= self.arena.types.count() { return self.arena.funcs.count() }
+        val receiver: TypeRef = self.arena.types[receiverRef]
+        return self.findAssocByName(recvStart: receiver.nameStart, recvLen: receiver.nameLen, name: unaryMethodName(op: op))
+    }
+
+    inout fn unaryOperatorResultType(operand: TypeInfo, op: I64) -> TypeInfo {
+        val receiver: U64 = self.operatorTypeRef(t: operand)
+        if receiver == 0U64 { return operand }
+        val resolution: StaticMemberResolution = self.staticOperatorTemplateResolution(op: op, receiverTerm: receiver, isUnary: true)
+        val requiredResult: U64 = self.staticRequirementResultType(resolution: resolution)
+        if requiredResult != 0U64 { return self.typeInfoOfRef(ref: requiredResult) }
+        val callee: U64 = self.unaryOperatorCallee(receiverRef: receiver, op: op)
+        if callee < self.arena.funcs.count() {
+            val result: U64 = self.arena.funcs[callee].retTy
+            if result != 0U64 { return self.typeInfoOfRef(ref: self.groundUnderInst(instRef: receiver, tyRef: result)) }
+        }
+        return <TypeInfo kind=0 nameStart=0U64 nameLen=0U64 ref=0U64 />
+    }
+
     // Declaration-time generic operators use the bound proof, never a
     // currently-visible concrete witness.  In particular `T: Add[T,
     // Output=I64]` gives `a + b` the semantic term I64 even though T has no

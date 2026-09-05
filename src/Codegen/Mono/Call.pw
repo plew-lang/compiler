@@ -1645,7 +1645,7 @@ pub impl Comp {
         if !(op == opAnd() || op == opOr()) && selectedReceiverRef != 0U64 && selectedReceiverRef < self.arena.types.count() {
             val receiver: TypeRef = self.arena.types[selectedReceiverRef]
             if operands.count() == 1U64 {
-                callee = self.findAssocByName(recvStart: receiver.nameStart, recvLen: receiver.nameLen, name: unaryMethodName(op: op))
+                callee = self.unaryOperatorCallee(receiverRef: selectedReceiverRef, op: op)
             } else if operands.count() == 2U64 {
                 mut val method: String = ""
                 if op == opEq() || op == opNe() { method = "eq" }

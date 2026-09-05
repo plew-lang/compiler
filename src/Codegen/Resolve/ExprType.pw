@@ -696,14 +696,8 @@ pub impl Comp {
                 return scalarInfo()
             }
             Expr.Unary(val op, val operand) => {
-                // A struct operand is a trait-dispatched unary (Neg/Not/BitNot); its
-                // result is the trait's Output, which for standard operators is Self.
                 val ot: TypeInfo = self.exprTypeWithChainHole(id: operand, chainHoleRef: chainHoleRef)
-                if ot.kind == 2 { return ot }
-                // `-` / `~` preserve the operand's width; `!` is Bool (width-less).
-                if op == opSub() { return ot }
-                if op == opBitNot() { return ot }
-                return scalarInfo()
+                return self.unaryOperatorResultType(operand: ot, op: op)
             }
             Expr.Binary(val op, val lhs, val rhs) => {
                 // Arithmetic (56-60) and bitwise/shift (74-78) take the operands' shared
