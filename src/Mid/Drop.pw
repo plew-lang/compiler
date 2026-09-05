@@ -575,7 +575,10 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
     // block MaybeOwned; using it after inserting a drop would manufacture a
     // second consume at a later ScopeExit.  This temporary body is still
     // backend-independent and only models the ownership effect of the exact
-    // drops selected above; actual flags are allocated below.
+    // drops selected above; actual flags are allocated below. Candidate cliffs
+    // are not yet executable ConditionalDrops: one candidate can discharge a
+    // backedge obligation and make another candidate statically dead. Select
+    // each final drop from this new incoming state, not the original analysis.
     mut val cliffBlocks: Array[MidBlock] = []
     bi = 0U64
     while bi < body.blocks.count() {
@@ -623,7 +626,15 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
         li = 0U64
         while li < originalCount {
             if needsFlag[li] && cliffAtEntry[bi][li] {
-                statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=li typeTerm=body.locals[li].typeTerm /> flag=flagFor[li] />)
+                match currentOwnership[li] {
+                    MidOwnership.Owned => {
+                        statements.append(<MidStatement.Drop place=<MidPlace local=li typeTerm=body.locals[li].typeTerm /> />)
+                    }
+                    MidOwnership.MaybeOwned => {
+                        statements.append(<MidStatement.ConditionalDrop place=<MidPlace local=li typeTerm=body.locals[li].typeTerm /> flag=flagFor[li] />)
+                    }
+                    MidOwnership.Consumed => {}
+                }
                 statements.append(<MidStatement.SetDropFlag local=flagFor[li] isSet=false />)
                 currentOwnership.set(i: li, value: <MidOwnership.Consumed />)
                 currentAccessibility.set(i: li, value: <MidAccessibility.Unavailable />)

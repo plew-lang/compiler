@@ -26,9 +26,23 @@ fn orFalse() -> Bool {
     return false || rhs()
 }
 
+fn andLoop(limit: U64) -> U64 {
+    mut val index: U64 = 0U64
+    while index < limit && index < 3U64 { index += 1U64 }
+    return index
+}
+
+fn orLoop(limit: U64) -> U64 {
+    mut val index: U64 = 0U64
+    while index < limit || index < 3U64 { index += 1U64 }
+    return index
+}
+
 fn main() {
     if !andFalse() { write(s: "and-false\n") }
     if andTrue() { write(s: "and-true\n") }
     if orTrue() { write(s: "or-true\n") }
     if orFalse() { write(s: "or-false\n") }
+    if andLoop(limit: 2U64) == 2U64 { write(s: "and-loop\n") }
+    if orLoop(limit: 2U64) == 3U64 { write(s: "or-loop\n") }
 }

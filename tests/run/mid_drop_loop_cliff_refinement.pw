@@ -1,0 +1,48 @@
+import @Std/Io with { print }
+import /Mid/Ir with { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+import /Mid/Drop with { elaborateMidDrops }
+import /Mid/Verify with { MidVerifyError, verifyMidBody }
+
+fn position(block: U64, reversed: Bool) -> U64 {
+    if reversed { return 6U64 - block }
+    return block
+}
+
+// A value created only on one arm loses accessibility at the join. Before
+// elaboration its obligation also reaches the loop header. After the join
+// drop is planned, the header obligation is dead, not another dynamic drop.
+// Reverse the physical block order to rule out lexical-order heuristics.
+fn check(reversed: Bool) {
+    val condition: MidOperand = <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />
+    val place: MidPlace = <MidPlace local=0U64 />
+    mut val blocks: Array[MidBlock] = [<MidBlock />, <MidBlock />, <MidBlock />, <MidBlock />, <MidBlock />, <MidBlock />, <MidBlock />]
+    blocks.set(i: position(block: 0U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Goto target=position(block: 1U64, reversed: reversed) /> />)
+    blocks.set(i: position(block: 1U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Switch discriminant=condition values=[1I64] targets=[position(block: 2U64, reversed: reversed)] otherwise=position(block: 3U64, reversed: reversed) /> />)
+    blocks.set(i: position(block: 2U64, reversed: reversed), value: <MidBlock statements=[<MidStatement.Assign destination=place value=<MidRvalue.Use operand=condition /> />] terminator=<MidTerminator.Goto target=position(block: 4U64, reversed: reversed) /> />)
+    blocks.set(i: position(block: 3U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Goto target=position(block: 4U64, reversed: reversed) /> />)
+    blocks.set(i: position(block: 4U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Switch discriminant=condition values=[1I64] targets=[position(block: 5U64, reversed: reversed)] otherwise=position(block: 6U64, reversed: reversed) /> />)
+    blocks.set(i: position(block: 5U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Goto target=position(block: 1U64, reversed: reversed) /> />)
+    blocks.set(i: position(block: 6U64, reversed: reversed), value: <MidBlock terminator=<MidTerminator.Return /> />)
+    val body: MidBody = <MidBody locals=[<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false />] blocks=blocks entry=position(block: 0U64, reversed: reversed) />
+    val elaborated: MidBody = elaborateMidDrops(body: body)
+    match verifyMidBody(body: elaborated).error {
+        MidVerifyError.None => { print("valid") }
+        _ => { print("invalid") }
+    }
+    mut val drops: U64 = 0U64
+    for block in elaborated.blocks {
+        for statement in block.statements {
+            match statement {
+                MidStatement.ConditionalDrop(place: _, flag: _) => { drops += 1U64 }
+                MidStatement.Drop(place: _) => { drops += 1U64 }
+                _ => {}
+            }
+        }
+    }
+    print(drops)
+}
+
+fn main() {
+    check(reversed: false)
+    check(reversed: true)
+}

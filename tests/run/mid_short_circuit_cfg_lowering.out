@@ -4,3 +4,5 @@ and-true
 or-true
 rhs
 or-false
+and-loop
+or-loop
