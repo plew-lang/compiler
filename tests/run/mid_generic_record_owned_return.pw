@@ -1,0 +1,26 @@
+import @Std/Io with { write }
+
+struct Box[T] { pub val value: T }
+pub impl[T] Box[T] { factory }
+extension Extra {
+    pub impl[T] Box[T] {
+        fn duplicate() -> (first: T, second: T) {
+            return (first: self.value, second: self.value)
+        }
+    }
+}
+
+fn exercise() {
+    val source: Box[String] = <Box[String] value=("heap" + "\n") />
+    val pair = source#Extra.duplicate()
+    write(s: pair.first)
+    write(s: pair.second)
+    // The returned record owns its fields independently of the receiver.
+    write(s: source.value)
+}
+
+fn main() {
+    exercise()
+    exercise()
+    exercise()
+}
