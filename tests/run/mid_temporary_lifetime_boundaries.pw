@@ -58,6 +58,17 @@ fn contextTypedTemporary() {
     if positive(item: resource(tag: 12)) { write(s: "literal-body\n") }
 }
 
+fn bindingTemporary() {
+    val value: Bool = positive(item: resource(tag: 13I64))
+    if value { write(s: "binding-body\n") }
+}
+
+fn assignmentTemporary() {
+    mut val value: Bool = false
+    value = positive(item: resource(tag: 14I64))
+    if value { write(s: "assignment-body\n") }
+}
+
 fn main() {
     ifTemporary()
     whileTemporary()
@@ -67,4 +78,6 @@ fn main() {
     statementTemporary()
     if returnTemporary() { write(s: "return-after\n") }
     contextTypedTemporary()
+    bindingTemporary()
+    assignmentTemporary()
 }

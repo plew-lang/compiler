@@ -9,7 +9,7 @@ if ! "$PLEWC" --emit-mid-coverage tests/run/mid_temporary_lifetime_boundaries.pw
     echo 'FAIL mid-temporary-lifetime(emit)' >&2
     exit 1
 fi
-if grep -E 'name=(ifTemporary|whileTemporary|andTemporary|orTemporary|nestedTemporary|statementTemporary|returnTemporary|contextTypedTemporary) category=' "$directory/coverage" >&2; then
+if grep -E 'name=(ifTemporary|whileTemporary|andTemporary|orTemporary|nestedTemporary|statementTemporary|returnTemporary|contextTypedTemporary|bindingTemporary|assignmentTemporary) category=' "$directory/coverage" >&2; then
     echo 'FAIL mid-temporary-lifetime(legacy)' >&2
     exit 1
 fi

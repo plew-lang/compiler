@@ -338,6 +338,40 @@ fn midEmitScopeExit(state: inout MidBuildState, scope: U64) {
     midAppendStatement(state: inout state, statement: <MidStatement.ScopeExit scope=scope />)
 }
 
+// An evaluation scope is a normal ownership scope, not a backend cleanup
+// convention. Return/break already emitted their exits before terminating.
+fn midFinishEvaluationScope(state: inout MidBuildState, scope: U64) {
+    if midTerminatorIsOpen(terminator: state.blocks[state.currentBlock].terminator) {
+        midEmitScopeExit(state: inout state, scope: scope)
+    }
+    midCloseScope(state: inout state, scope: scope)
+    state.callValues = []
+    state.aggregateValues = []
+}
+
+// The Bool result crosses the full-expression boundary, but none of the
+// resources used to compute it do. The Switch consumes this result home.
+fn materializeMidCondition(c: inout Comp, state: inout MidBuildState, exprId: U64) -> MidOperandBuild {
+    val term: U64 = c.semanticExprTerm(exprId: exprId)
+    val result: MidPlace = <MidPlace local=addMidTemporary(state: inout state, typeTerm: term) typeTerm=term />
+    val parentCalls: Array[MidCallValue] = state.callValues
+    val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
+    state.callValues = []
+    state.aggregateValues = []
+    val scope: U64 = midOpenScope(state: inout state)
+    val value: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: term, allowAccessMarker: false)
+    match value.error {
+        MidBuildError.None => {
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=value.operand /> />)
+        }
+        _ => {}
+    }
+    midFinishEvaluationScope(state: inout state, scope: scope)
+    state.callValues = parentCalls
+    state.aggregateValues = parentAggregates
+    return <MidOperandBuild operand=<MidOperand.Move place=result /> error=value.error />
+}
+
 // Return leaves every currently active lexical scope, innermost first. Scope
 // zero owns receiver/parameters; nested source blocks own their own bindings.
 fn midEmitAllScopeExits(state: inout MidBuildState) {
@@ -662,9 +696,17 @@ fn materializeMidShortCircuit(c: inout Comp, state: inout MidBuildState, lhs: U6
     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=<MidOperand.Constant value=<MidConstant.Integer value=shortValue isNegative=false isBool=true typeTerm=typeTerm /> /> /> />)
     midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
     state.currentBlock = rhsTarget
+    val parentCalls: Array[MidCallValue] = state.callValues
+    val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
+    state.callValues = []
+    state.aggregateValues = []
+    val rhsScope: U64 = midOpenScope(state: inout state)
     val right: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: rhs, typeTerm: c.semanticExprTerm(exprId: rhs), allowAccessMarker: false)
     match right.error { MidBuildError.None => {} _ => { return right } }
     midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=result value=<MidRvalue.Use operand=right.operand /> />)
+    midFinishEvaluationScope(state: inout state, scope: rhsScope)
+    state.callValues = parentCalls
+    state.aggregateValues = parentAggregates
     midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=joinTarget />)
     state.currentBlock = joinTarget
     return <MidOperandBuild operand=<MidOperand.Copy place=result /> />
@@ -1006,8 +1048,13 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             }
             val destinationLocal: U64 = addMidLocal(state: inout state, declarationTarget: nameStart, typeTerm: term, isUnique: isUnique, isParameter: false, ownsAtEntry: false)
             val destination: MidPlace = <MidPlace local=destinationLocal typeTerm=term />
+            // The named destination belongs to the enclosing lexical scope;
+            // only its initializer dependencies belong to this full expression.
+            val evaluation: U64 = midOpenScope(state: inout state)
             if midExprIsCall(c: c, exprId: init) {
-                return buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: destination)
+                val result: MidBuildError = buildMidCallInto(c: inout c, state: inout state, exprId: init, destination: destination)
+                midFinishEvaluationScope(state: inout state, scope: evaluation)
+                return result
             }
             val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: init)
             mut val operandResult: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> />
@@ -1016,8 +1063,15 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
             } else {
                 operandResult = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: init, typeTerm: term, allowAccessMarker: false)
             }
-            match operandResult.error { MidBuildError.None => {} _ => { return operandResult.error } }
+            match operandResult.error {
+                MidBuildError.None => {}
+                _ => {
+                    midFinishEvaluationScope(state: inout state, scope: evaluation)
+                    return operandResult.error
+                }
+            }
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.Use operand=operandResult.operand /> />)
+            midFinishEvaluationScope(state: inout state, scope: evaluation)
             return <MidBuildError.None />
         }
         _ => { return <MidBuildError.InvalidStatement /> }
@@ -1143,9 +1197,12 @@ export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64)
                 result = buildMidIf(c: inout c, state: inout state, stmtId: stmtId)
             }
             Stmt.Return(value: _, hasValue: _, offset: _) => {
+                val evaluation: U64 = midOpenScope(state: inout state)
                 result = buildMidReturn(c: inout c, state: inout state, stmtId: stmtId)
+                midFinishEvaluationScope(state: inout state, scope: evaluation)
             }
             Stmt.ExprStmt(expr: val expr) => {
+                val evaluation: U64 = midOpenScope(state: inout state)
                 if midExprIsCall(c: c, exprId: expr) {
                     val destinationLocal: U64 = addMidTemporary(state: inout state, typeTerm: c.semanticExprTerm(exprId: expr))
                     result = buildMidCallInto(c: inout c, state: inout state, exprId: expr, destination: <MidPlace local=destinationLocal typeTerm=c.semanticExprTerm(exprId: expr) />)
@@ -1155,8 +1212,13 @@ export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64)
                 } else {
                     result = <MidBuildError.Unsupported reason=<MidUnsupportedBuild.ExpressionStatement /> />
                 }
+                midFinishEvaluationScope(state: inout state, scope: evaluation)
             }
-            Stmt.Assign(target: _, value: _) => { result = buildMidAssign(c: inout c, state: inout state, stmtId: stmtId) }
+            Stmt.Assign(target: _, value: _) => {
+                val evaluation: U64 = midOpenScope(state: inout state)
+                result = buildMidAssign(c: inout c, state: inout state, stmtId: stmtId)
+                midFinishEvaluationScope(state: inout state, scope: evaluation)
+            }
             Stmt.While(cond: _, body: _) => {
                 result = buildMidWhile(c: inout c, state: inout state, stmtId: stmtId)
             }
@@ -1293,8 +1355,7 @@ export fn buildMidIf(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> 
     match c.arena.stmts[stmtId] {
         Stmt.If(cond: val cond, thenBlk: val thenBlk, elseBlk: val elseBlk, hasElse: val hasElse) => {
             if state.currentBlock >= state.blocks.count() { return <MidBuildError.InvalidBlock /> }
-            val condTerm: U64 = c.semanticExprTerm(exprId: cond)
-            val condition: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: cond, typeTerm: condTerm, allowAccessMarker: false)
+            val condition: MidOperandBuild = materializeMidCondition(c: inout c, state: inout state, exprId: cond)
             match condition.error { MidBuildError.None => {} _ => { return condition.error } }
             val thenTarget: U64 = midNewBlock(state: inout state)
             val elseTarget: U64 = midNewBlock(state: inout state)
@@ -1341,8 +1402,7 @@ export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
             val exitTarget: U64 = midNewBlock(state: inout state)
             midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=headerTarget />)
             state.currentBlock = headerTarget
-            val condTerm: U64 = c.semanticExprTerm(exprId: cond)
-            val condition: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: cond, typeTerm: condTerm, allowAccessMarker: false)
+            val condition: MidOperandBuild = materializeMidCondition(c: inout c, state: inout state, exprId: cond)
             match condition.error { MidBuildError.None => {} _ => { return condition.error } }
             midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[bodyTarget] otherwise=exitTarget />)
             state.currentBlock = bodyTarget

@@ -24,3 +24,7 @@ statement-after
 return-after
 12
 literal-body
+13
+binding-body
+14
+assignment-body
