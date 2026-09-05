@@ -1,0 +1,2 @@
+struct Cache { val value: I64 = 7I64 }
+fn main() { val cache = <Cache /> }

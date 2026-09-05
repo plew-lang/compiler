@@ -1,0 +1,20 @@
+import @Std/Io with { print }
+
+// spec/05: publishing memberwise construction does not expose private fields.
+// Omitted defaults come from the declaration, not from the caller's labels.
+struct Cache {
+    val entries: Array[I64] = [7I64]
+    pub(get) mut val version: I64 = 3I64
+    pub val label: I64 = 1I64
+}
+pub impl Cache {
+    factory
+    fn first() -> I64 { return self.entries[0] }
+}
+
+fn main() {
+    val cache = <Cache label=9I64 />
+    print(cache.first())
+    print(cache.version)
+    print(cache.label)
+}

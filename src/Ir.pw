@@ -420,6 +420,13 @@ export struct SemanticMatch {
 }
 pub impl SemanticMatch { factory }
 
+// Provenance survives default expansion; a diagnostic offset is not authority.
+export enum MakeFieldOrigin {
+    Written
+    DeclarationDefault
+    Synthesized
+}
+
 // One `field=expr` pair inside a JSX construction `<Type field=expr ... />`.
 export struct MakeField {
     pub val nameStart: U64
@@ -428,6 +435,7 @@ export struct MakeField {
     // original-source byte offset of the field name (for diagnostics): nameStart is
     // re-interned and so does not map back to a source line. 0 = unknown.
     pub val offset: U64 = 0
+    pub val origin: MakeFieldOrigin = <MakeFieldOrigin.Written />
 }
 
 // One field binding inside a match pattern `E.V(val a, b: val c)`. `name` is
@@ -2689,7 +2697,21 @@ pub impl TypeRef { factory }
 pub impl CaptureEntry { factory }
 pub impl Local { factory }
 pub impl TypeInfo { factory }
-pub impl MakeField { factory }
+pub impl MakeField {
+    factory
+    fn isWritten() -> Bool {
+        match self.origin {
+            MakeFieldOrigin.Written => { return true }
+            _ => { return false }
+        }
+    }
+    fn requiresFactoryAccess() -> Bool {
+        match self.origin {
+            MakeFieldOrigin.Synthesized => { return false }
+            _ => { return true }
+        }
+    }
+}
 pub impl Bind { factory }
 pub impl Arg { factory }
 pub impl MatchArm { factory }

@@ -450,11 +450,9 @@ pub impl Comp {
             val v: U64 = self.fieldVis(structStart: typeStart, structLen: typeLen, fieldStart: field.nameStart, fieldLen: field.nameLen)
             if !inOwnerImpl {
                 if v == 0U64 || v == 1U64 {
-                    // gate by the field's ORIGINAL source offset (nameStart is re-interned
-                    // and does not map to a module); synthesized constructions carry an
-                    // unloaded offset (the dict literal's `keys`/… use the interned span)
-                    // and are skipped.
-                    if self.offsetIsLoaded(offset: field.offset) {
+                    // Only the caller's written label requests field write authority.
+                    // Declaration defaults retain their source offset for diagnostics.
+                    if field.isWritten() {
                         if v == 0U64 {
                             self.errorAt(offset: field.offset, msg: "cannot set a private field when constructing outside its type's anonymous impl")
                         } else {
@@ -473,7 +471,7 @@ pub impl Comp {
                 mut val ci: U64 = 0
                 while ci < fields.len {
                     val field: MakeField = self.makeFieldAt(fields: fields, index: ci)
-                    if self.offsetIsLoaded(offset: field.offset) {
+                    if field.requiresFactoryAccess() {
                         self.errorAt(offset: field.offset, msg: "constructing this type outside its anonymous impl requires it to declare a public factory (`pub impl Type { factory }`); the default memberwise factory is private (spec/05)")
                     }
                     ci += 1U64
