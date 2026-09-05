@@ -1,0 +1,30 @@
+import @Std/Io with { print }
+
+struct Settings {
+    pub mut val values: Array[I64] = []
+    pub mut val enabled: Bool = false
+    pub mut val count: I64 = 0I64
+}
+pub impl Settings { factory }
+
+fn readEnabled(settings: inout Settings) -> Bool {
+    return settings.enabled
+}
+
+fn report(settings: inout Settings, label: String) {
+    if settings.enabled {
+        print(label)
+        print(settings.count)
+    }
+}
+
+fn main() {
+    mut val settings: Settings = <Settings values=[7I64] enabled=true count=42I64 />
+    print(readEnabled(settings: inout settings))
+    report(settings: inout settings, label: "enabled")
+    settings.enabled = false
+    settings.count = 99I64
+    print(readEnabled(settings: inout settings))
+    report(settings: inout settings, label: "must not print")
+    print(settings.values[0U64])
+}

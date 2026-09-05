@@ -1,0 +1,7 @@
+export struct Payload {
+    pub val value: I64
+}
+
+pub impl Payload {
+    factory empty() { return <Payload value=42 /> }
+}

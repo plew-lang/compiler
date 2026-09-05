@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+trait Peek { fn peek() -> Optional[Self] fn tag() -> I64 }
+struct Sample { pub val value: I64 }
+pub impl Sample { factory }
+pub impl Sample as Peek {
+    fn peek() -> Optional[Self] { return <Optional[Self].Some v=self /> }
+    fn tag() -> I64 { return self.value }
+}
+
+fn main() {
+    val item: any Peek = <Sample value=42I64 />
+    match item.peek() {
+        Optional.Some(v: val value) => { print(value.tag()) }
+        Optional.None => { print(0I64) }
+    }
+    val result: Optional[any Peek] = item.peek()
+    match result {
+        Optional.Some(v: val value) => { print(value.tag()) }
+        Optional.None => { print(0I64) }
+    }
+}

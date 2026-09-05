@@ -162,7 +162,7 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
     return out
 }
 
-fn midSuccessors(term: MidTerminator) -> Array[U64] {
+export fn midSuccessors(term: MidTerminator) -> Array[U64] {
     match term {
         MidTerminator.Goto(target: val target) => { return [target] }
         MidTerminator.Switch(discriminant: _, values: _, targets: val targets, otherwise: val otherwise) => {
@@ -613,17 +613,8 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
         mut val statements: Array[MidStatement] = []
         mut val currentOwnership: Array[MidOwnership] = ownershipAfterCliffs[bi]
         mut val currentAccessibility: Array[MidAccessibility] = accessibility[bi]
-        // The entry flag state reflects ownership at function entry. Flags for
-        // locals initialized later are set by their Assign, not here.
-        if bi == body.entry {
-            li = 0U64
-            while li < originalCount {
-                if needsFlag[li] && body.locals[li].ownsAtEntry {
-                    statements.append(<MidStatement.SetDropFlag local=flagFor[li] isSet=true />)
-                }
-                li += 1U64
-            }
-        }
+        // Flag initialization is emitted in a fresh invocation-entry block
+        // below, so a backedge to the original entry never resets live flags.
         // An accessibility cliff is a block-entry property: all predecessors
         // have already evaluated their branch/call operands, so the inserted
         // conditional drop cannot race source evaluation on either edge.  A
@@ -745,5 +736,18 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
         blocks.append(<MidBlock statements=statements terminator=source.terminator />)
         bi += 1U64
     }
-    return <MidBody bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=locals scopes=body.scopes blocks=blocks entry=body.entry />
+    mut val entry: U64 = body.entry
+    if locals.count() > originalCount {
+        mut val initializers: Array[MidStatement] = []
+        li = 0U64
+        while li < originalCount {
+            if needsFlag[li] {
+                initializers.append(<MidStatement.SetDropFlag local=flagFor[li] isSet=body.locals[li].ownsAtEntry />)
+            }
+            li += 1U64
+        }
+        entry = blocks.count()
+        blocks.append(<MidBlock statements=initializers terminator=<MidTerminator.Goto target=body.entry /> />)
+    }
+    return <MidBody bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=locals scopes=body.scopes blocks=blocks entry=entry />
 }

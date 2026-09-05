@@ -27,7 +27,8 @@ import @Plew/Syntax with { syntaxTraitTypeParamSpan, syntaxTraitTypeParamIsSenda
 import @Plew/Syntax with { MemberId, SyntaxMember, syntaxImplMemberCount, syntaxImplMember, syntaxMember, syntaxMemberTypeParamCount, syntaxMemberTypeParamSpan, syntaxMemberTypeParamIsSendable, syntaxMemberParamCount, syntaxMemberParam, syntaxMemberWhereCount, syntaxMemberWhereParamSpan, syntaxMemberWhereTraitSpan, syntaxMemberWhereType, syntaxMemberWhereTraitType }
 import @Plew/Syntax with { ImplId, SyntaxImpl, syntaxImpl, syntaxImplParamCount, syntaxImplParamSpan, syntaxImplParamIsSendable, syntaxImplTraitArgCount, syntaxImplTraitArg, syntaxImplWhereCount, syntaxImplWhereParamSpan, syntaxImplWhereTraitSpan, syntaxImplWhereType, syntaxImplWhereTraitType }
 import @Plew/Syntax with { Kind, Tok, Lexer, lex, kindCode, rangeEquals, P, SyntaxFile, SyntaxSlice, TopItemId, SyntaxTopItemKind, ImportId, SyntaxImport, TraitId, SyntaxTrait, NewtypeId, SyntaxNewtype, TypeId, SyntaxType, ExprId, SyntaxExpr, SyntaxExprKind, ArgId, SyntaxArg, ParamId, SyntaxParam, MakeFieldId, SyntaxMakeField, BindId, SyntaxBind, PatternId, SyntaxPattern, MatchArmId, SyntaxMatchArm, BlockId, SyntaxBlock, StmtId, SyntaxStmt, SyntaxStmtKind, parseProgramSyntaxInto, syntaxFileTopLevel, syntaxTopItemKind, syntaxTopItemPayload, syntaxTopItemSpan, syntaxImport, syntaxTrait, syntaxTraitTypeParamCount, syntaxNewtype, syntaxType, syntaxTypeArgCount, syntaxTypeArg, syntaxTypeArgLabel, syntaxTypeViewNameCount, syntaxTypeViewName, syntaxTypeProjectionTraitArgCount, syntaxTypeProjectionTraitArg, syntaxTypeProjectionTraitArgLabel, syntaxImportNameCount, syntaxImportNameSpan, syntaxImportNameAliasSpan, syntaxExpr, syntaxExprArgCount, syntaxExprArg, syntaxArg, syntaxExprMakeFieldCount, syntaxExprMakeField, syntaxMakeField, syntaxExprElemCount, syntaxExprElem, syntaxExprDictEntryCount, syntaxExprDictKey, syntaxExprDictValue, syntaxExprParamCount, syntaxExprParam, syntaxExprTypeArgCount, syntaxExprTypeArg, syntaxBlock, syntaxBlockStmtCount, syntaxBlockStmt, syntaxStmt, syntaxStmtBindCount, syntaxStmtBind, syntaxBind, syntaxMatchArmCount, syntaxMatchArmAt, syntaxMatchArm, syntaxPattern, syntaxPatternBindCount, syntaxPatternBind, parseBlockAst, parseExprAst, parseProgramAst, ExprAst, exprAstSpan, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst, emptyExpr }
-import ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
+import ./Ir with { PType, ResolvedViewSource, TypeRef, TypeTerm, TypeArgumentRange, TypeRecordLabelRange, TypeRecordFieldRange, TypeViewIdRange, TypeViewSourceRange, TypeArgumentLabelRange, TypeAssocArgumentRange, TypeAssocArgumentLabelRange, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt, appendBytes, identUnfilledCode, identValueCode, identFnCode, identTypeQualCode, identUndefCode, identNoTarget, identSelfTarget }
+import ./Mid/Ir with { MidCanonicalArena }
 export @Plew/Syntax with { Kind, Tok, Lexer, P, ExprAst, StmtAst, BlockAst, PatternAst, MatchArmAst, ArgAst, MakeFieldAst, BindAst, TypeAst, TypeParamListAst, ParamAst, Span, DeclAst, DeclKind, FieldAst, VariantAst, ImplAst, MemberAst, MemberKind, SigAst, TraitAst, ExternAst, ImportAst, DirectiveAst, DeriveReqAst, TopItemAst }
 export ./Ir with { PType, ResolvedViewSource, TypeRef, ArcClass, CaptureEntry, Local, TypeInfo, SemanticExprType, SemanticAggregateKind, SemanticAggregateElement, SemanticAggregate, MakeField, MakeFieldRange, Bind, BindRange, Arg, ArgRange, ExprRange, MatchArm, MatchArmRange, TraitBindRange, TraitReqRange, FuncBindRange, FuncTypeRange, FuncParamRange, ConformTypeRange, ConformBindRange, ConformWitnessRange, ConformFuncIdRange, PatInfo, IdentBinding, Block, Param, FieldDef, StructDef, Variant, TraitDef, TraitOwner, DeriveReq, AssocBinding, ChainSite, SyntheticCallSite, AccessCandidate, AccessUse, SemanticAccess, CallSiteKey, CallTemplateReceiver, CallTemplate, DestructureSite, Conform, MethodAlias, FuncBound, FnInst, InstanceEnvironment, CallResolution, FinalAggregateResolution, FinalReturnResolution, BodyInstance, EnumDef, Func, RuntimeIntrinsic, RuntimeIntrinsicDeclaration, ViewSource, Callable, UnifyBind, TraitInstanceKey, TraitAssocPredicate, TraitConstraint, WitnessBind, WitnessMatch, StaticConformanceProof, TraitProofState, StaticMemberResolution, TraitCycleTerm, TraitCycleNode, TraitCycleBind, TraitCycleSearch, Global, NewtypeDef, Arena, Decls, Modules, MonoWork, TypeCache, InternedSpan, Interner, ParseScratch, Cursor, Expr, Stmt }
 import ./Path with { resolveImport, extractSpan, dirPrefixLen, computeStdRoot, findSrcRoot, findPkgDir, packageRootPath, genSiblingPath, pathSeen, moduleIdOfPath }
@@ -42,10 +43,14 @@ export struct Comp {
     // single owner of the program's data that all passes read; `c.arena.exprs`,
     // `c.arena.funcs`, `c.arena.bytes`, etc.
     pub mut val arena: Arena = <Arena />
+    // Frozen Mid IR is compiler-owned immutable data, not a by-value body
+    // passed between build/instantiate/drop/LLVM. Its canonical nodes are
+    // scalar rows plus owner-specific typed pools (Mid/Ir D1b).
+    pub mut val mid: MidCanonicalArena = <MidCanonicalArena />
     // The sole compiler-owned immutable syntax store.  The loader appends each
     // file while discovering the module graph, then all frontend passes retain
     // only TopItemId ranges into this table (never Array[TopItemAst]).
-    pub mut val syntax: SyntaxFile = <SyntaxFile />
+    pub mut val syntax: SyntaxFile = <SyntaxFile.empty />
     // Source/synthetic call-origin allocator.  It never participates in AST
     // indexing and remains stable even if the arena representation changes.
     pub mut val nextExprOriginSerial: U64 = 1U64
@@ -543,10 +548,90 @@ pub impl Comp {
     // is interned here so every TypeRef carries its `nameId`, regardless of which
     // construction site (lowerType / Mono substitution / Self synthesis) built it.
     inout fn pushType(t: TypeRef) -> U64 {
+        // Every producer (including substitution and view rebuilding) publishes
+        // the receiver relation here. Lower is not the only source of types.
+        // Allocate the receiver before reserving this row's stable index.
+        mut val projectionReceiver: U64 = t.projectionReceiver
+        if t.assocNameId != 0U64 && projectionReceiver == 0U64 {
+            projectionReceiver = self.typeTermProjectionReceiver(t: t)
+        }
         val id: U64 = self.arena.types.count()
         val nid: U64 = intern(c: inout self, start: t.nameStart, len: t.nameLen)
-        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        val argsStart: U64 = self.arena.typeArgumentPool.count()
+        mut val i: U64 = 0U64
+        while i < t.args.count() {
+            self.arena.typeArgumentPool.append(t.args[i])
+            i += 1U64
+        }
+        val recordLabelStart: U64 = self.arena.typeRecordLabelPool.count()
+        i = 0U64
+        while i < t.recordFieldLabels.count() {
+            self.arena.typeRecordLabelPool.append(t.recordFieldLabels[i])
+            i += 1U64
+        }
+        val recordFieldStart: U64 = self.arena.typeRecordFieldPool.count()
+        i = 0U64
+        while i < t.recordFieldTerms.count() {
+            self.arena.typeRecordFieldPool.append(t.recordFieldTerms[i])
+            i += 1U64
+        }
+        val viewIdStart: U64 = self.arena.typeViewIdPool.count()
+        i = 0U64
+        while i < t.viewIds.count() {
+            self.arena.typeViewIdPool.append(t.viewIds[i])
+            i += 1U64
+        }
+        val viewSourceStart: U64 = self.arena.typeViewSourcePool.count()
+        i = 0U64
+        while i < t.viewSources.count() {
+            self.arena.typeViewSourcePool.append(t.viewSources[i])
+            i += 1U64
+        }
+        val labelStart: U64 = self.arena.typeArgumentLabelPool.count()
+        i = 0U64
+        while i < t.argLabels.count() {
+            self.arena.typeArgumentLabelPool.append(t.argLabels[i])
+            i += 1U64
+        }
+        val assocArgStart: U64 = self.arena.typeAssocArgumentPool.count()
+        i = 0U64
+        while i < t.assocTraitArgs.count() {
+            self.arena.typeAssocArgumentPool.append(t.assocTraitArgs[i])
+            i += 1U64
+        }
+        val assocLabelStart: U64 = self.arena.typeAssocArgumentLabelPool.count()
+        i = 0U64
+        while i < t.assocTraitArgLabels.count() {
+            self.arena.typeAssocArgumentLabelPool.append(t.assocTraitArgLabels[i])
+            i += 1U64
+        }
+        self.arena.typeTerms.append(<TypeTerm nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=<TypeArgumentRange start=argsStart len=t.args.count() /> isRecord=t.isRecord recordFieldLabels=<TypeRecordLabelRange start=recordLabelStart len=t.recordFieldLabels.count() /> recordFieldTerms=<TypeRecordFieldRange start=recordFieldStart len=t.recordFieldTerms.count() /> viewExtId=t.viewExtId viewIds=<TypeViewIdRange start=viewIdStart len=t.viewIds.count() /> viewSources=<TypeViewSourceRange start=viewSourceStart len=t.viewSources.count() /> isAny=t.isAny argLabels=<TypeArgumentLabelRange start=labelStart len=t.argLabels.count() /> assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=<TypeAssocArgumentRange start=assocArgStart len=t.assocTraitArgs.count() /> assocTraitArgLabels=<TypeAssocArgumentLabelRange start=assocLabelStart len=t.assocTraitArgLabels.count() /> assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
+        self.arena.types.append(<TypeRef nameStart=t.nameStart nameLen=t.nameLen nameId=nid paramId=t.paramId args=t.args isRecord=t.isRecord recordFieldLabels=t.recordFieldLabels recordFieldTerms=t.recordFieldTerms viewExtId=t.viewExtId viewIds=t.viewIds viewSources=t.viewSources isAny=t.isAny argLabels=t.argLabels assocTraitStart=t.assocTraitStart assocTraitLen=t.assocTraitLen assocTraitId=t.assocTraitId assocTraitArgs=t.assocTraitArgs assocTraitArgLabels=t.assocTraitArgLabels assocNameStart=t.assocNameStart assocNameLen=t.assocNameLen assocNameId=t.assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable hasDecl=t.hasDecl declOffset=t.declOffset hasAssocTraitDecl=t.hasAssocTraitDecl assocTraitDeclOffset=t.assocTraitDeclOffset siteOffset=t.siteOffset />)
         return id
+    }
+
+    // TypeTerm child access is owner-specific. Do not publish a generic pool
+    // accessor: the range's type documents which semantic relation is read.
+    fn typeTermArgAt(ref: U64, index: U64) -> U64 {
+        if ref >= self.arena.typeTerms.count() { return 0U64 }
+        // Do not copy the complete TypeTerm row just to read one relation.
+        // This field projection is the arena read boundary: the scalar range
+        // is copied, never the type's unrelated semantic identity fields.
+        val args: TypeArgumentRange = self.arena.typeTerms[ref].args
+        if index >= args.len { return 0U64 }
+        return self.arena.typeArgumentPool[args.start + index]
+    }
+
+    inout fn copyTypeTermArgs(ref: U64) -> Array[U64] {
+        mut val out: Array[U64] = []
+        if ref >= self.arena.typeTerms.count() { return out }
+        val args: TypeArgumentRange = self.arena.typeTerms[ref].args
+        mut val i: U64 = 0U64
+        while i < args.len {
+            out.append(self.typeTermArgAt(ref: ref, index: i))
+            i += 1U64
+        }
+        return out
     }
 
     // Rebuild one semantic type term with an explicitly selected view surface.
@@ -957,13 +1042,23 @@ export fn tracePhaseCount(c: inout Comp, label: String, count: U64) {
     }
 }
 
+// A compact worklist progress boundary.  `--trace-phases` must stay usable on
+// the compiler's own thousands of declarations: log every `stride` completed
+// units, not every visit.  A phase that fails to advance to its next boundary
+// is then refined with a smaller structural unit before it is run again.
+export fn tracePhaseProgress(c: inout Comp, label: String, count: U64, stride: U64) {
+    if c.tracePhases && count % stride == 0U64 {
+        tracePhaseCount(c: inout c, label: label, count: count)
+    }
+}
+
 // Lowering a single top-level item can itself be the dominant unit of work.
 // Unlike aggregate counters printed after a phase completes, this is a
 // start-boundary heartbeat: if no later line arrives, `index` and `span`
 // identify the item whose lowering is still active.  It is trace-only and
 // never participates in source semantics or generated LLVM.
 fn traceLowerTopItem(c: inout Comp, index: U64, span: Span) {
-    if c.tracePhases {
+    if c.tracePhases && index % 64U64 == 0U64 {
         eprint(text: "[trace-phase] lower:top-item index=")
         traceU64(n: index)
         eprint(text: " span=")
@@ -1049,6 +1144,7 @@ export fn runFrontend(c: inout Comp) {
     // origin is known, so a source occurrence resolves one declaration identity everywhere.
     // reserve TypeRef index 0 as the "no type" sentinel so a `ty` field of 0
     // (synthetic locals, untyped positions) never aliases a real parsed type.
+    c.arena.typeTerms.append(<TypeTerm nameStart=0U64 nameLen=0U64 />)
     c.arena.types.append(<TypeRef nameStart=0 nameLen=0 args=[] isRecord=false recordFieldLabels=[] recordFieldTerms=[] />)
     // reserve Block index 0 as a dummy so a `body` field of 0 is an unambiguous
     // "no body" sentinel (extern fns, trait-requirement signatures). Without this,
@@ -1448,11 +1544,14 @@ export fn runFrontend(c: inout Comp) {
     tracePhase(c: inout c, label: "load:done")
     tracePhase(c: inout c, label: "predeclare:start")
     mut val rootIndex: U64 = 0U64
+    mut val predeclareIndex: U64 = 0U64
     while rootIndex < pendingRoots.count() {
         val roots: SyntaxSlice = pendingRoots[rootIndex]
         mut val itemIndex: U64 = 0U64
         while itemIndex < roots.count {
+            tracePhaseCount(c: inout c, label: "predeclare:top-item", count: predeclareIndex)
             c.predeclareSyntaxTraitItem(item: syntaxFileTopLevel(file: c.syntax, index: roots.start + itemIndex))
+            predeclareIndex += 1U64
             itemIndex += 1U64
         }
         rootIndex += 1U64
@@ -1493,6 +1592,10 @@ export fn runFrontend(c: inout Comp) {
     // import name aliases (spec/15): rewrite `alias(args)` to the real imported name
     // for each `with { real as alias }`, before visibility/resolution analysis.
     c.rewriteImportAliases()
+    // Defaults depend on the complete declaration set, not file load order.
+    // Custom factories have already consumed their written label sets; only
+    // structural memberwise Make nodes remain for default materialization.
+    c.normalizeMemberwiseDefaults()
     // module-level variable init order (spec/15): topologically sort globals so a
     // forward reference in an initializer reads the already-initialized value.
     c.orderGlobalsByDependency()

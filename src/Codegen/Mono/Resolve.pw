@@ -239,7 +239,7 @@ pub impl Comp {
             return false
         }
         val t: TypeRef = self.arena.types[ref]
-        if t.paramId == 0U64 && t.args.count() == 0 {
+        if t.paramId == 0U64 && t.args.count() == 0U64 {
             return false
         }
         return self.genericEnumIndex(nameStart: t.nameStart, nameLen: t.nameLen) < self.arena.enums.count()
@@ -249,14 +249,12 @@ pub impl Comp {
         if a == b {
             return true
         }
-        if a >= self.arena.types.count() || b >= self.arena.types.count() { return false }
-        val ta: TypeRef = self.arena.types[a]
-        val tb: TypeRef = self.arena.types[b]
-        if !(self.typeTermSameHead(a: ta, b: tb)) { return false }
-        if self.typeTermChildCount(t: ta) != self.typeTermChildCount(t: tb) { return false }
+        if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
+        if !(self.typeTermRefSameHead(a: a, b: b)) { return false }
+        if self.typeTermRefChildCount(ref: a) != self.typeTermRefChildCount(ref: b) { return false }
         mut val i: U64 = 0U64
-        while i < self.typeTermChildCount(t: ta) {
-            if self.typeTermIdentityChildLabel(t: ta, index: i) != self.typeTermIdentityChildLabel(t: tb, index: i) || !(self.typeRefEq(a: self.typeTermChildRef(t: ta, index: i), b: self.typeTermChildRef(t: tb, index: i))) { return false }
+        while i < self.typeTermRefChildCount(ref: a) {
+            if self.typeTermRefIdentityChildLabel(ref: a, index: i) != self.typeTermRefIdentityChildLabel(ref: b, index: i) || !(self.typeRefEq(a: self.typeTermRefChildRef(ref: a, index: i), b: self.typeTermRefChildRef(ref: b, index: i))) { return false }
             i += 1U64
         }
         return true
@@ -281,7 +279,7 @@ pub impl Comp {
         val start: U64 = self.arena.bytes.count()
         self.appendMangle(ref: ref)
         val n: U64 = self.arena.bytes.count()
-        return <Bind nameStart=start nameLen=(n - start) fieldStart=ref fieldLen=0 />
+        return <Bind nameStart=start nameLen=(n - start) fieldStart=ref fieldLen=0U64 />
     }
 
     inout fn sameMangle(refA: U64, refB: U64) -> Bool {
@@ -316,7 +314,7 @@ pub impl Comp {
         if r >= self.arena.types.count() {
             return false
         }
-        return self.arena.types[r].args.count() > 0
+        return self.arena.types[r].args.count() > 0U64
     }
 
     // Resolve a term that is a binder in the current method's receiver pattern
@@ -461,15 +459,15 @@ pub impl Comp {
         if receiverPatternArg != 0U64 && receiverPatternArg != tyRef {
             return self.resolveTy(tyRef: receiverPatternArg)
         }
-        if t.args.count() == 0 {
+        if t.args.count() == 0U64 {
             // `Self`/`Item` as types (provided methods on a trait): resolve to the
             // receiver type and its associated `Item` binding (set per method).
-            if self.cur.selfRef != 0 {
+            if self.cur.selfRef != 0U64 {
                 if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Self") {
                     return self.cur.selfRef
                 }
             }
-            if self.cur.itemRef != 0 {
+            if self.cur.itemRef != 0U64 {
                 if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Item") {
                     return self.cur.itemRef
                 }
@@ -519,7 +517,7 @@ pub impl Comp {
         val qId: U64 = intern(c: inout self, start: start, len: len)
         mut val ni: U64 = 0
         while ni < self.arena.structs.count() {
-            if self.arena.structs[ni].typeParams.count() == 0 {
+            if self.arena.structs[ni].typeParams.count() == 0U64 {
                 if self.arena.structs[ni].nameId == qId {
                     return false
                 }
@@ -528,7 +526,7 @@ pub impl Comp {
         }
         mut val nj: U64 = 0
         while nj < self.arena.enums.count() {
-            if self.arena.enums[nj].typeParams.count() == 0 {
+            if self.arena.enums[nj].typeParams.count() == 0U64 {
                 if self.arena.enums[nj].nameId == qId {
                     return false
                 }

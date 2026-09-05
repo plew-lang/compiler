@@ -1,0 +1,29 @@
+import @Std/Io with { print }
+
+struct Inner[T] {
+    pub mut val nodes: Array[T] = []
+}
+
+pub impl[T] Inner[T] {
+    factory
+}
+
+struct Store[T] {
+    pub mut val inner: Inner[T] = <Inner />
+}
+
+pub impl[T] Store[T] {
+    factory
+}
+
+pub impl[T] Store[T] {
+    inout fn appendNode(node: T) {
+        self.inner.nodes.append(node)
+    }
+}
+
+fn main() {
+    mut val store: Store[I64] = <Store />
+    store.appendNode(node: 3)
+    print(store.inner.nodes[0U64])
+}

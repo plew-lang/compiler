@@ -92,7 +92,7 @@ pub impl LlvmCtx {
                         val gaf: Func = c.arena.funcs[afi]
                         val gsavedP: Array[Bind] = c.cur.typeParams
                         val gsavedA: Array[U64] = c.cur.typeArgs
-                        c.cur.typeParams = gaf.typeParams
+                        c.cur.typeParams = c.copyFuncBinds(binds: gaf.typeParams)
                         c.cur.typeArgs = ginf
                         val gPinMark: U64 = self.pinCells.count()
                         mut val gav: Array[LLVMValueRef] = []

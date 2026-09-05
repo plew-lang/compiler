@@ -60,13 +60,25 @@ pub impl Comp {
         self.checkTypeViewSources()
         mut val gvi: U64 = 0
         while gvi < self.arena.globals.count() {
+            if self.tracePhases {
+                eprint(text: "[trace-phase] verify:global index=")
+                traceU64(n: gvi)
+                eprint(text: "\n")
+            }
             self.verifyStmt(stmtId: self.arena.globals[gvi].letStmt)
             gvi += 1
         }
         self.cur.locals = []
         self.cur.verifyMovedIdx = []
+        // Verification consumes the closed source declaration frontier.  Its
+        // expression checks can discover implementation-only callable rows;
+        // feeding those rows back into this same acceptance walk makes the
+        // verifier recursively verify its own derived work instead of the
+        // program the user wrote.  Derived bodies are checked at their explicit
+        // instantiation/emission boundary, so snapshot the authored frontier.
+        val sourceFuncLimit: U64 = self.arena.funcs.count()
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
+        while fi < sourceFuncLimit {
             val f: Func = self.arena.funcs[fi]
             // Verify EVERY module's bodies, not just the entry module: a Plew program's
             // acceptance rules apply uniformly to imported code too (std, the compiler's
@@ -95,13 +107,21 @@ pub impl Comp {
                     // expressions infer as unknown (0) and are left to the conservative
                     // pass-through. (The retired C emitter used to be the only check here.)
                     self.cur.checkFn = fi
+                    if self.tracePhases {
+                        eprint(text: "[trace-phase] verify:function index=")
+                        traceU64(n: fi)
+                        eprint(text: " offset=")
+                        traceU64(n: f.defOffset)
+                        eprint(text: "\n")
+                    }
                     self.verifyFunc(f: f)
                 }
                 }
             }
             fi += 1
         }
-        self.checkDeclShapes()
+        if self.tracePhases { eprint(text: "[trace-phase] verify:decl-shapes\n") }
+        self.checkDeclShapes(sourceFuncLimit: sourceFuncLimit)
     }
 
     // The source-selection proof for both `value#Name` and `Type#Name`.
@@ -267,7 +287,7 @@ pub impl Comp {
         return false
     }
 
-    inout fn checkDeclShapes() {
+    inout fn checkDeclShapes(sourceFuncLimit: U64) {
         // the `--gen` harness (spec/16) is a synthesized, trusted artifact that may
         // duplicate derive scaffolding by construction; the actual generated source is
         // decl-shape-checked when the final program is compiled normally (non-gen).
@@ -278,7 +298,7 @@ pub impl Comp {
         self.checkBlanketHeadless()
         self.checkNewtypeCycles()
         self.checkDupTypeNames()
-        self.checkDupParamLabels()
+        self.checkDupParamLabels(sourceFuncLimit: sourceFuncLimit)
         mut val si: U64 = 0
         while si < self.arena.structs.count() {
             val sd: StructDef = self.arena.structs[si]
@@ -437,9 +457,12 @@ pub impl Comp {
         }
     }
 
-    inout fn checkDupParamLabels() {
+    // This declaration-only check belongs to the same closed authored frontier
+    // as verifyProgram.  It must not observe implementation rows appended while
+    // expression verification resolves generic call sites.
+    inout fn checkDupParamLabels(sourceFuncLimit: U64) {
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
+        while fi < sourceFuncLimit {
             val f: Func = self.arena.funcs[fi]
             if !(f.isExtern || f.isProvided) {
                 if self.moduleOf(offset: f.nameStart) == 0U64 {

@@ -1,0 +1,75 @@
+import @Std/Io with { write }
+import /Mid/Ir with { MidPlace, MidConstant, MidOperand, MidRvalue, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+import /Mid/Drop with { elaborateMidDrops }
+import /Mid/Verify with { MidVerifyError, verifyMidBody }
+
+fn condition() -> MidOperand {
+    return <MidOperand.Constant value=<MidConstant.Integer value=1U64 isNegative=false isBool=true typeTerm=0U64 /> />
+}
+
+fn verifyCase(label: String, body: MidBody, valid: Bool) {
+    mut val accepted: Bool = false
+    mut val uninitialized: Bool = false
+    match verifyMidBody(body: body).error {
+        MidVerifyError.None => { accepted = true }
+        MidVerifyError.UninitializedDropFlag => { uninitialized = true }
+        _ => {}
+    }
+    write(s: label)
+    if (valid && accepted) || (!valid && uninitialized) { write(s: ":ok\n") }
+    else { write(s: ":wrong\n") }
+}
+
+fn main() {
+    val owner: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false ownsAtEntry=true />
+    val flag: MidLocalDecl = <MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false isDropFlag=true />
+    val place: MidPlace = <MidPlace local=0U64 />
+    val clear: MidStatement = <MidStatement.SetDropFlag local=1U64 isSet=false />
+    val set: MidStatement = <MidStatement.SetDropFlag local=1U64 isSet=true />
+    val branch: MidTerminator = <MidTerminator.Switch discriminant=condition() values=[1I64] targets=[1U64] otherwise=2U64 />
+    val drop: MidStatement = <MidStatement.Drop place=place />
+    val join: MidBlock = <MidBlock statements=[<MidStatement.ConditionalDrop place=place flag=1U64 />] terminator=<MidTerminator.Return /> />
+    val moved: MidBlock = <MidBlock statements=[drop, clear] terminator=<MidTerminator.Goto target=3U64 /> />
+    val kept: MidBlock = <MidBlock terminator=<MidTerminator.Goto target=3U64 /> />
+    verifyCase(label: "missing", body: <MidBody locals=[owner, flag] blocks=[<MidBlock terminator=branch />, moved, kept, join] />, valid: false)
+    verifyCase(label: "entry", body: <MidBody locals=[owner, flag] blocks=[<MidBlock statements=[set] terminator=branch />, moved, kept, join] />, valid: true)
+    val setKept: MidBlock = <MidBlock statements=[set] terminator=<MidTerminator.Goto target=3U64 /> />
+    verifyCase(label: "both-branches", body: <MidBody locals=[owner, flag] blocks=[<MidBlock terminator=branch />, moved, setKept, join] />, valid: true)
+    val loopingJoin: MidBlock = <MidBlock statements=[<MidStatement.ConditionalDrop place=place flag=1U64 />, clear] terminator=<MidTerminator.Goto target=3U64 /> />
+    verifyCase(label: "backedge-not-initializer", body: <MidBody locals=[owner, flag] blocks=[<MidBlock terminator=branch />, moved, kept, loopingJoin] />, valid: false)
+    verifyCase(label: "initialized-loop", body: <MidBody locals=[owner, flag] blocks=[<MidBlock statements=[set] terminator=branch />, moved, kept, loopingJoin] />, valid: true)
+
+    val local: MidLocalDecl = <MidLocalDecl typeTerm=1U64 sourceScope=0U64 isUnique=true isParameter=false />
+    val assigned: MidBlock = <MidBlock statements=[<MidStatement.Assign destination=place value=<MidRvalue.Use operand=condition() /> />] terminator=<MidTerminator.Goto target=3U64 /> />
+    val body: MidBody = <MidBody locals=[local] blocks=[<MidBlock terminator=branch />, assigned, kept, <MidBlock terminator=<MidTerminator.Return /> />] />
+    val elaborated: MidBody = elaborateMidDrops(body: body)
+    mut val flags: U64 = 0U64
+    mut val initialized: U64 = 0U64
+    mut val i: U64 = 0U64
+    while i < elaborated.locals.count() {
+        if elaborated.locals[i].isDropFlag { flags += 1U64 }
+        i += 1U64
+    }
+    i = 0U64
+    while i < elaborated.blocks[elaborated.entry].statements.count() {
+        match elaborated.blocks[elaborated.entry].statements[i] {
+            MidStatement.SetDropFlag(local: _, isSet: val isSet) => {
+                if !isSet { initialized += 1U64 }
+            }
+            _ => {}
+        }
+        i += 1U64
+    }
+    if flags > 0U64 && initialized == flags { write(s: "producer:ok\n") }
+    else { write(s: "producer:wrong\n") }
+    if elaborated.entry >= body.blocks.count() {
+        match elaborated.blocks[elaborated.entry].terminator {
+            MidTerminator.Goto(target: val target) => {
+                if target == body.entry { write(s: "invocation-entry:ok\n") }
+                else { write(s: "invocation-entry:wrong\n") }
+            }
+            _ => { write(s: "invocation-entry:wrong\n") }
+        }
+    } else { write(s: "invocation-entry:wrong\n") }
+    verifyCase(label: "producer-verified", body: elaborated, valid: true)
+}

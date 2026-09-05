@@ -99,7 +99,7 @@ pub impl LlvmCtx {
                     val f: Func = c.arena.funcs[fin.fnIdx]
                     val savedP: Array[Bind] = c.cur.typeParams
                     val savedA: Array[U64] = c.cur.typeArgs
-                    c.cur.typeParams = f.typeParams
+                    c.cur.typeParams = c.copyFuncBinds(binds: f.typeParams)
                     c.cur.typeArgs = fin.args
                     val savedSelf: U64 = c.cur.selfRef
                     val savedItem: U64 = c.cur.itemRef
@@ -147,7 +147,7 @@ pub impl LlvmCtx {
         val savedR: U64 = self.curRecvInstRef
         val savedSelf: U64 = c.cur.selfRef
         val savedItem: U64 = c.cur.itemRef
-        c.cur.typeParams = f.typeParams
+        c.cur.typeParams = c.copyFuncBinds(binds: f.typeParams)
         c.cur.typeArgs = fin.args
         // an `assoc fn` witness (`impl[T] Array[T] as Eq`, `impl Point as Eq`): bind
         // `Self`/`Item` to the receiver so a `Self` param / `-> Self` / a `.field` access in

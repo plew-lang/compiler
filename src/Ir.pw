@@ -42,6 +42,110 @@ export struct ResolvedViewSource {
 }
 pub impl ResolvedViewSource { factory }
 
+// `TypeTerm` is the immutable semantic type row stored by Arena.  Type
+// children are relations, not owned implementation details of a table row:
+// reading a TypeTerm during grounding or LLVM lowering must never retain/drop
+// an Array.  The legacy TypeRef mirror remains during migration only; all new
+// high-frequency consumers must use these typed ranges and Comp readers.
+export struct TypeArgumentRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeArgumentRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+export struct TypeRecordLabelRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeRecordLabelRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+export struct TypeRecordFieldRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeRecordFieldRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+export struct TypeViewIdRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeViewIdRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+export struct TypeViewSourceRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeViewSourceRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+export struct TypeArgumentLabelRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeArgumentLabelRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+export struct TypeAssocArgumentRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeAssocArgumentRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+export struct TypeAssocArgumentLabelRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl TypeAssocArgumentLabelRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct TypeTerm {
+    pub val nameStart: U64
+    pub val nameLen: U64
+    pub val nameId: U64 = 0U64
+    pub val paramId: U64 = 0U64
+    pub val args: TypeArgumentRange = <TypeArgumentRange start=0U64 len=0U64 />
+    pub val isRecord: Bool = false
+    pub val recordFieldLabels: TypeRecordLabelRange = <TypeRecordLabelRange start=0U64 len=0U64 />
+    pub val recordFieldTerms: TypeRecordFieldRange = <TypeRecordFieldRange start=0U64 len=0U64 />
+    pub val viewExtId: U64 = 0U64
+    pub val viewIds: TypeViewIdRange = <TypeViewIdRange start=0U64 len=0U64 />
+    pub val viewSources: TypeViewSourceRange = <TypeViewSourceRange start=0U64 len=0U64 />
+    pub val isAny: Bool = false
+    pub val argLabels: TypeArgumentLabelRange = <TypeArgumentLabelRange start=0U64 len=0U64 />
+    pub val assocTraitStart: U64 = 0U64
+    pub val assocTraitLen: U64 = 0U64
+    pub val assocTraitId: U64 = 0U64
+    pub val assocTraitArgs: TypeAssocArgumentRange = <TypeAssocArgumentRange start=0U64 len=0U64 />
+    pub val assocTraitArgLabels: TypeAssocArgumentLabelRange = <TypeAssocArgumentLabelRange start=0U64 len=0U64 />
+    pub val assocNameStart: U64 = 0U64
+    pub val assocNameLen: U64 = 0U64
+    pub val assocNameId: U64 = 0U64
+    // A projection owns no implicit receiver copy: `S#P.Item` points at the
+    // separately interned semantic term for `S`. Zero for non-projections.
+    pub val projectionReceiver: U64 = 0U64
+    pub val isSendable: Bool = false
+    pub val hasDecl: Bool = false
+    pub val declOffset: U64 = 0U64
+    pub val hasAssocTraitDecl: Bool = false
+    pub val assocTraitDeclOffset: U64 = 0U64
+    pub val siteOffset: U64 = 0U64
+}
+pub impl TypeTerm { factory }
+
 // A structured type reference: a head type name span plus a list of type
 // arguments (indices into Comp.arena.types). Non-generic types have an empty args
 // list. `Array[E]` is {name="Array", args=[E]}; `Optional[I32]` is
@@ -108,6 +212,10 @@ export struct TypeRef {
     pub val assocNameStart: U64 = 0
     pub val assocNameLen: U64 = 0
     pub val assocNameId: U64 = 0
+    // Migration mirror of TypeTerm.projectionReceiver. New semantic readers
+    // must consume the scalar TypeTerm relation, never reconstruct a receiver
+    // by copying this row's argument arrays.
+    pub val projectionReceiver: U64 = 0U64
     // `any sendable P` / `sendable fn(...) -> R`: a type-level sendability guarantee
     // written at the surface. It is recorded as part of the type spelling now; the
     // full capture/effect/spawn checks land with the ownership IR.
@@ -1112,6 +1220,51 @@ export struct EnumPayloadConversion {
 }
 pub impl EnumPayloadConversion { factory }
 
+// Frozen proof rows are the ownership-safe form of StaticConformanceProof and
+// ValueConversionProof.  The source-facing sums above remain a transitional
+// construction vocabulary; semantic tables and Mid IR carry only these IDs.
+// `tag` values are private to the frontend proof publisher, not a language ABI.
+export struct StaticProofNode {
+    pub val tag: U64
+    pub val conformIdx: U64 = 0U64
+    pub val witnessBinds: U64 = 0U64
+    pub val witnessBindCount: U64 = 0U64
+    pub val boundIdx: U64 = 0U64
+    pub val path: U64 = 0U64
+    pub val pathCount: U64 = 0U64
+    pub val traitIdx: U64 = 0U64
+    pub val receiverRef: U64 = 0U64
+    pub val terminalConformIdx: U64 = 0U64
+}
+pub impl StaticProofNode { factory }
+
+export struct FrozenWitnessMatch {
+    pub val conformIdx: U64
+    pub val binds: U64 = 0U64
+    pub val bindCount: U64 = 0U64
+}
+pub impl FrozenWitnessMatch { factory }
+
+export struct ConversionProofNode {
+    pub val tag: U64
+    pub val sourceRef: U64 = 0U64
+    pub val targetRef: U64 = 0U64
+    pub val traitIdx: U64 = 0U64
+    pub val staticProof: U64 = 0U64
+    pub val element: U64 = 0U64
+    pub val enumIdx: U64 = 0U64
+    pub val payloads: U64 = 0U64
+    pub val payloadCount: U64 = 0U64
+}
+pub impl ConversionProofNode { factory }
+
+export struct FrozenEnumPayloadConversion {
+    pub val sourceRef: U64
+    pub val targetRef: U64
+    pub val conversion: U64
+}
+pub impl FrozenEnumPayloadConversion { factory }
+
 // One worklist state while resolving a concrete trait instance.  The current
 // trait key is ground; `edges` is the predecessor proof needed both for a
 // final callable and for associated-output grounding.  Keeping this state in
@@ -1294,6 +1447,37 @@ export enum CallArgumentPassing {
     Move
 }
 
+// `CallResolution` is read by the frontend fixpoint, Mid instantiation, and
+// LLVM lowering.  Its key row must consequently be freely copyable: an inline
+// Array would make an ordinary table read an ownership operation.  Keep each
+// independently meaningful payload in its own Arena pool.  The separate
+// range types prevent a parameter-type slice from being passed where selected
+// substitution arguments are required merely because both currently contain
+// TypeRef ids.
+export struct CallResolutionTypeArgRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallResolutionTypeArgRange { factory fn count() -> U64 { return self.len } }
+
+export struct CallResolutionParameterTypeRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallResolutionParameterTypeRange { factory fn count() -> U64 { return self.len } }
+
+export struct CallResolutionConversionRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallResolutionConversionRange { factory fn count() -> U64 { return self.len } }
+
+export struct CallResolutionArgumentPassingRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl CallResolutionArgumentPassingRange { factory fn count() -> U64 { return self.len } }
+
 // The selected callable for one semantic call site while compiling one concrete
 // function body instance.  A site can be a written expression or an implicit
 // call introduced by a control construct (for example `for`'s iterator/next
@@ -1323,20 +1507,20 @@ export struct CallResolution {
     // Func's parameter order (receiver arguments first for a method).  Keeping
     // them with the target prevents LLVM from running a second generic
     // inference pass over the AST.
-    pub val calleeTypeArgs: Array[U64] = []
+    pub val calleeTypeArgs: CallResolutionTypeArgRange = <CallResolutionTypeArgRange start=0U64 len=0U64 />
     // Fully-grounded ABI parameter types in the selected Func's declaration
     // order.  Argument lowering consumes these directly; it must not reopen
     // the callee's symbolic `Param.ty` under the caller's ambient environment.
-    pub val parameterTypeRefs: Array[U64] = []
+    pub val parameterTypeRefs: CallResolutionParameterTypeRange = <CallResolutionParameterTypeRange start=0U64 len=0U64 />
     // One proof per ABI parameter, in declaration order.  It is selected
     // together with the ground ABI type; Mid/LLVM must never infer a box or
     // container repack from an argument expression after this boundary.
-    pub val argumentConversions: Array[ValueConversionProof] = []
+    pub val argumentConversions: CallResolutionConversionRange = <CallResolutionConversionRange start=0U64 len=0U64 />
     // The selected ownership ABI is frozen beside parameter types and value
     // conversions. Mid and legacy lowering consume this record; neither may
     // infer passing from source shape or re-read Func flags.
     pub val receiverPassing: CallReceiverPassing = <CallReceiverPassing.None />
-    pub val argumentPassings: Array[CallArgumentPassing] = []
+    pub val argumentPassings: CallResolutionArgumentPassingRange = <CallResolutionArgumentPassingRange start=0U64 len=0U64 />
     // Concrete receiver identity at source selection.  0 for an ordinary
     // free call; association/operator calls retain their subject type here.
     // Backend consumes this rather than reconstructing it from the shared AST.
@@ -1770,6 +1954,15 @@ export struct Arena {
     // Deferred semantic type-source recipes are a separate dependency graph;
     // TypeRef remains the canonical structural type arena. IDs are one-based.
     pub mut val semanticTypeRecipes: Array[SemanticTypeRecipe] = []
+    // Immutable semantic evidence DAG. Rows contain only scalar identities
+    // and typed ranges; final calls and Mid bodies must not embed recursive
+    // proof values with owning Array payloads.
+    pub mut val staticProofs: Array[StaticProofNode] = []
+    pub mut val staticProofWitnessBindPool: Array[WitnessBind] = []
+    pub mut val staticProofU64Pool: Array[U64] = []
+    pub mut val staticProofWitnessPool: Array[FrozenWitnessMatch] = []
+    pub mut val conversionProofs: Array[ConversionProofNode] = []
+    pub mut val conversionPayloadPool: Array[FrozenEnumPayloadConversion] = []
     // Source byte offset of each expr (parallel to `exprs`; 0 = unknown). Lower
     // records the parsed ExprAst's span start (the AST carries a span on every
     // node); backend-synthesized exprs keep 0. THE diagnostic-position store:
@@ -1792,6 +1985,18 @@ export struct Arena {
     pub mut val funcs: Array[Func] = []
     pub mut val structs: Array[StructDef] = []
     pub mut val enums: Array[EnumDef] = []
+    // Canonical scalar semantic type rows. `types` is the legacy mirror while
+    // consumers migrate; both tables have the same index during that period.
+    // New hot-path readers must use typeTerms and these owner-specific pools.
+    pub mut val typeTerms: Array[TypeTerm] = []
+    pub mut val typeArgumentPool: Array[U64] = []
+    pub mut val typeRecordLabelPool: Array[U64] = []
+    pub mut val typeRecordFieldPool: Array[U64] = []
+    pub mut val typeViewIdPool: Array[U64] = []
+    pub mut val typeViewSourcePool: Array[ResolvedViewSource] = []
+    pub mut val typeArgumentLabelPool: Array[U64] = []
+    pub mut val typeAssocArgumentPool: Array[U64] = []
+    pub mut val typeAssocArgumentLabelPool: Array[U64] = []
     pub mut val types: Array[TypeRef] = []
     pub mut val globals: Array[Global] = []
     pub mut val newtypes: Array[NewtypeDef] = []
@@ -1799,6 +2004,16 @@ export struct Arena {
     // MonoWork's transient discovery queues.  LLVM consumes this immutable
     // semantic result after frontend finalization.
     pub mut val finalCallees: Array[CallResolution] = []
+    // Payload pools for the scalar CallResolution table.  They are semantic
+    // output, not backend caches: a descriptor range is immutable after its
+    // single publication and backend consumers may only read it through the
+    // owner-aware APIs on Comp.
+    pub mut val finalCalleeTypeArgPool: Array[U64] = []
+    pub mut val finalCalleeParameterTypePool: Array[U64] = []
+    // One-based ConversionProofNode IDs.  Keeping recursive proof values in a
+    // final-call row/pool made an ordinary descriptor read an ARC operation.
+    pub mut val finalCalleeConversionPool: Array[U64] = []
+    pub mut val finalCalleeArgumentPassingPool: Array[CallArgumentPassing] = []
     // Concrete aggregate conversions, keyed by (BodyInstance, source ExprId).
     // This is semantic output alongside finalCallees, not a backend cache.
     pub mut val finalAggregates: Array[FinalAggregateResolution] = []

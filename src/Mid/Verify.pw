@@ -3,7 +3,7 @@
 // lowering once Mid bodies become the production input.
 
 import ./Ir with { MidPlace, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
-import ./Drop with { analyzeMidOwnership }
+import ./Drop with { analyzeMidOwnership, midSuccessors }
 
 export enum MidVerifyError {
     None
@@ -12,6 +12,7 @@ export enum MidVerifyError {
     MoveUnavailable
     DropUnavailable
     InvalidDropFlag
+    UninitializedDropFlag
     UnelaboratedScopeExit
     UnelaboratedAccess
     UninstantiatedReturnBoundary
@@ -76,11 +77,126 @@ fn midTargetIsValid(body: MidBody, target: U64) -> Bool {
     return target < body.blocks.count()
 }
 
+// A flag's value (owned or not) is separate from whether it has been written.
+// Meet across reachable predecessors: one uninitialized path is enough to
+// reject a read. The invocation edge starts with no initialized flags, even
+// when a loop backedge writes them. Unreachable predecessors add no evidence.
+fn verifyMidFlagInitialization(body: MidBody) -> MidVerification {
+    mut val flags: Array[U64] = []
+    mut val local: U64 = 0U64
+    while local < body.locals.count() {
+        if body.locals[local].isDropFlag { flags.append(local) }
+        local += 1U64
+    }
+    if body.entry >= body.blocks.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> /> }
+    mut val incoming: Array[Array[Bool]] = []
+    mut val reachable: Array[Bool] = []
+    mut val block: U64 = 0U64
+    while block < body.blocks.count() {
+        mut val empty: Array[Bool] = []
+        mut val fi: U64 = 0U64
+        while fi < flags.count() {
+            empty.append(false)
+            fi += 1U64
+        }
+        incoming.append(empty)
+        reachable.append(block == body.entry)
+        block += 1U64
+    }
+    mut val changed: Bool = true
+    while changed {
+        changed = false
+        block = 0U64
+        while block < body.blocks.count() {
+            if reachable[block] {
+                mut val outgoing: Array[Bool] = incoming[block]
+                mut val si: U64 = 0U64
+                while si < body.blocks[block].statements.count() {
+                    match body.blocks[block].statements[si] {
+                        MidStatement.SetDropFlag(local: val written, isSet: _) => {
+                            if written >= body.locals.count() || !body.locals[written].isDropFlag {
+                                return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=block local=written />
+                            }
+                            mut val fi: U64 = 0U64
+                            while fi < flags.count() {
+                                if flags[fi] == written { outgoing.set(i: fi, value: true) }
+                                fi += 1U64
+                            }
+                        }
+                        _ => {}
+                    }
+                    si += 1U64
+                }
+                val successors: Array[U64] = midSuccessors(term: body.blocks[block].terminator)
+                si = 0U64
+                while si < successors.count() {
+                    val target: U64 = successors[si]
+                    if target >= body.blocks.count() { return <MidVerification error=<MidVerifyError.InvalidTarget /> block=block /> }
+                    if !reachable[target] {
+                        incoming.set(i: target, value: outgoing)
+                        reachable.set(i: target, value: true)
+                        changed = true
+                    } else {
+                        mut val merged: Array[Bool] = incoming[target]
+                        mut val fi: U64 = 0U64
+                        while fi < flags.count() {
+                            if merged[fi] && !outgoing[fi] {
+                                merged.set(i: fi, value: false)
+                                changed = true
+                            }
+                            fi += 1U64
+                        }
+                        incoming.set(i: target, value: merged)
+                    }
+                    si += 1U64
+                }
+            }
+            block += 1U64
+        }
+    }
+    block = 0U64
+    while block < body.blocks.count() {
+        if reachable[block] {
+            mut val initialized: Array[Bool] = incoming[block]
+            mut val si: U64 = 0U64
+            while si < body.blocks[block].statements.count() {
+                match body.blocks[block].statements[si] {
+                    MidStatement.SetDropFlag(local: val written, isSet: _) => {
+                        mut val fi: U64 = 0U64
+                        while fi < flags.count() {
+                            if flags[fi] == written { initialized.set(i: fi, value: true) }
+                            fi += 1U64
+                        }
+                    }
+                    MidStatement.ConditionalDrop(place: _, flag: val flag) => {
+                        if flag >= body.locals.count() || !body.locals[flag].isDropFlag {
+                            return <MidVerification error=<MidVerifyError.InvalidDropFlag /> block=block local=flag />
+                        }
+                        mut val fi: U64 = 0U64
+                        while fi < flags.count() {
+                            if flags[fi] == flag && !initialized[fi] {
+                                return <MidVerification error=<MidVerifyError.UninitializedDropFlag /> block=block local=flag />
+                            }
+                            fi += 1U64
+                        }
+                    }
+                    _ => {}
+                }
+                si += 1U64
+            }
+        }
+        block += 1U64
+    }
+    return <MidVerification />
+}
+
 // Validate pre-drop-elaboration Mid. A `MaybeOwned` source is deliberately not
 // movable: the accessibility-cliff insertion must first make both incoming paths
 // uniformly consumed. This is what prevents a conditional move from becoming a
 // use-after-move dependent on runtime branch history.
 export fn verifyMidBody(body: MidBody) -> MidVerification {
+    val flags: MidVerification = verifyMidFlagInitialization(body: body)
+    match flags.error { MidVerifyError.None => {} _ => { return flags } }
     val incoming: Array[Array[MidOwnership]] = analyzeMidOwnership(body: body)
     mut val bi: U64 = 0U64
     while bi < body.blocks.count() {

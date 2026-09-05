@@ -180,6 +180,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.MoveUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.DropUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.InvalidDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                                MidVerifyError.UninitializedDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UnelaboratedScopeExit => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
@@ -193,6 +194,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.MoveUnavailable => { eprint(text: "move-unavailable") }
                                                 MidVerifyError.DropUnavailable => { eprint(text: "drop-unavailable") }
                                                 MidVerifyError.InvalidDropFlag => { eprint(text: "invalid-drop-flag") }
+                                                MidVerifyError.UninitializedDropFlag => { eprint(text: "uninitialized-drop-flag") }
                                                 MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
                                                 _ => { eprint(text: "unknown") }
                                             }

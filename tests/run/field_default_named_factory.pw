@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+
+struct Payload {
+    pub val value: I64
+}
+
+pub impl Payload {
+    factory empty() {
+        return <Payload value=42 />
+    }
+}
+
+struct Container {
+    pub val payload: Payload = <Payload.empty />
+}
+
+pub impl Container {
+    factory
+}
+
+fn main() {
+    val container: Container = <Container />
+    print(container.payload.value)
+}

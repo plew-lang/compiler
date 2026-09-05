@@ -396,6 +396,29 @@ pub impl Comp {
     // re-erases to the existential itself — so the declared return grounds to a
     // concrete type under that env. Unknown (scalarInfo) when the grounded form
     // still mentions an unbound name — never record a half-ground type.
+    // Requirement Self is declaration-owned even when the consumer is a
+    // concrete witness or an existential thunk. Both ends use this same
+    // substitution; a Cursor selfRef is not a substitute for its ParamId.
+    inout fn groundTraitRequirementType(ref: U64, traitIdx: U64, receiverRef: U64, params: Array[Bind], args: Array[U64]) -> U64 {
+        if traitIdx >= self.decls.traits.count() { return ref }
+        val trait: TraitDef = self.decls.traits[traitIdx]
+        mut val boundParams: Array[Bind] = []
+        mut val boundArgs: Array[U64] = []
+        if trait.selfParamId != 0U64 {
+            self.appendTraitSelfBinder(scope: inout boundParams, owner: trait.nameStart)
+            boundArgs.append(receiverRef)
+        }
+        mut val i: U64 = 0U64
+        while i < params.count() && i < args.count() {
+            if trait.selfParamId == 0U64 || params[i].paramId != trait.selfParamId {
+                boundParams.append(params[i])
+                boundArgs.append(args[i])
+            }
+            i += 1U64
+        }
+        return self.groundTermInEnvironment(ref: ref, params: boundParams, values: boundArgs, selfRef: receiverRef)
+    }
+
     inout fn anyMemberRetInfo(anyRef: U64, req: Func) -> TypeInfo {
         if !(req.hasRet) || req.retTy == 0U64 {
             return scalarInfo()
@@ -447,10 +470,21 @@ pub impl Comp {
         self.cur.typeParams = tp
         self.cur.typeArgs = ta
         self.cur.selfRef = anyRef
-        val g: U64 = self.groundTypeRef(ref: req.retTy)
+        val substituted: U64 = self.groundTraitRequirementType(ref: req.retTy, traitIdx: tri, receiverRef: anyRef, params: tp, args: ta)
+        val g: U64 = self.groundTypeRef(ref: substituted)
         self.cur.typeParams = savedP
         self.cur.typeArgs = savedA
         self.cur.selfRef = savedS
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] existential result declared=")
+            self.traceMonoTypeHead(ref: req.retTy)
+            eprint(text: " grounded=")
+            self.traceMonoTypeHead(ref: g)
+            eprint(text: " ground=")
+            if g != 0U64 && self.tyRefIsGround(ref: g) { eprint(text: "true") }
+            else { eprint(text: "false") }
+            eprint(text: "\n")
+        }
         if g != 0U64 && self.tyRefIsGround(ref: g) {
             return self.typeInfoOfRef(ref: g)
         }
@@ -1035,7 +1069,7 @@ pub impl Comp {
                             if aComplete {
                                 val aSavedP: Array[Bind] = self.cur.typeParams
                                 val aSavedA: Array[U64] = self.cur.typeArgs
-                                self.cur.typeParams = af.typeParams
+                                self.cur.typeParams = self.copyFuncBinds(binds: af.typeParams)
                                 self.cur.typeArgs = ainf
                                 val agr: U64 = self.groundTypeRef(ref: af.retTy)
                                 self.cur.typeParams = aSavedP
@@ -1172,7 +1206,7 @@ pub impl Comp {
                                 // below): exprType inside inferFnArgs must not see the
                                 // method's typeParams paired with the enclosing typeArgs.
                                 val g2inf: Array[U64] = self.inferFnArgs(f: mf, args: args)
-                                self.cur.typeParams = mf.typeParams
+                                self.cur.typeParams = self.copyFuncBinds(binds: mf.typeParams)
                                 self.cur.typeArgs = g2inf
                             }
                             val gr2: U64 = self.groundTypeRef(ref: mf.retTy)
@@ -1197,7 +1231,7 @@ pub impl Comp {
                             val oinf: Array[U64] = self.inferFnArgs(f: mf, args: args)
                             val oSavedP: Array[Bind] = self.cur.typeParams
                             val oSavedA: Array[U64] = self.cur.typeArgs
-                            self.cur.typeParams = mf.typeParams
+                            self.cur.typeParams = self.copyFuncBinds(binds: mf.typeParams)
                             self.cur.typeArgs = oinf
                             val og: U64 = self.groundTypeRef(ref: mf.retTy)
                             self.cur.typeParams = oSavedP
@@ -1272,7 +1306,7 @@ pub impl Comp {
                                 if envOk {
                                     val aSavedP: Array[Bind] = self.cur.typeParams
                                     val aSavedA: Array[U64] = self.cur.typeArgs
-                                    self.cur.typeParams = mf.typeParams
+                                    self.cur.typeParams = self.copyFuncBinds(binds: mf.typeParams)
                                     self.cur.typeArgs = aargs
                                     val agr: U64 = self.groundTypeRef(ref: mf.retTy)
                                     self.cur.typeParams = aSavedP

@@ -28,6 +28,7 @@ import ../../Ir with { SemanticMatch, SemanticMatchArm, SemanticMatchPayload }
 
 pub impl Comp {
 
+
     inout fn syntheticCallReceiverTerm(exprId: U64, fallback: U64) -> U64 {
         mut val i: U64 = 0U64
         while i < self.decls.syntheticCallSites.count() {
@@ -337,6 +338,24 @@ pub impl Comp {
     // the parametric receiver and source selector are both available; the
     // function TypeTerm is grounded only when the shared body is instantiated.
     inout fn recordDynamicMethodCall(exprId: U64, receiverExpr: U64, receiverTerm: U64, nameStart: U64, nameLen: U64, args: ArgRange) {
+        if self.traceCodegen {
+            eprint(text: "[trace-codegen] record dynamic-method body=")
+            eprintU64(n: self.cur.checkFn)
+            eprint(text: " expr=")
+            eprintU64(n: exprId)
+            eprint(text: " receiver-expr=")
+            eprintU64(n: receiverExpr)
+            eprint(text: " receiver-term=")
+            eprintU64(n: receiverTerm)
+            eprint(text: " receiver-type=")
+            self.traceMonoTypeHead(ref: receiverTerm)
+            if receiverTerm != 0U64 && receiverTerm < self.arena.types.count() {
+                eprint(text: " receiver-any=")
+                if self.arena.types[receiverTerm].isAny { eprint(text: "true") }
+                else { eprint(text: "false") }
+            }
+            eprint(text: "\n")
+        }
         if receiverTerm == 0U64 || receiverTerm >= self.arena.types.count() { return }
         val receiver: CallTemplateReceiver = self.directReceiverTemplateForExpr(exprId: receiverExpr)
         val recvTy: TypeRef = self.arena.types[receiverTerm]
@@ -1736,8 +1755,17 @@ pub impl Comp {
             self.recordStmt(stmtId: self.arena.globals[gvi].letStmt)
             gvi += 1
         }
+        // This phase records the parametric semantic contract of the declaration
+        // set that existed at its start.  Recording can discover derived
+        // call/proof facts, which may materialize implementation-only Func rows;
+        // those are consumers of this contract, not new source declarations to
+        // recursively record here.  Iterating the live growing table made one
+        // semantic walk feed itself and eventually reinterpret range payloads as
+        // owned values in a later duplicate body.  Freeze the declaration frontier
+        // before the walk so each authored body is recorded exactly once.
+        val sourceFuncLimit: U64 = self.arena.funcs.count()
         mut val fi: U64 = 0
-        while fi < self.arena.funcs.count() {
+        while fi < sourceFuncLimit {
             val f: Func = self.arena.funcs[fi]
             // A trait-provided body is copied per conformance, but its lexical
             // source body owns one shared CallTemplate set.  Skipping every
@@ -1745,6 +1773,13 @@ pub impl Comp {
             // semantic template that Mono is required to consume.  Record the
             // source declaration once and skip only generated provided copies.
             if !(f.isExtern) && f.body != 0U64 && !(f.isProvided && f.srcTraitId != 0U64) {
+                if self.tracePhases {
+                    eprint(text: "[trace-phase] semantic-expression-record:body index=")
+                    traceU64(n: fi)
+                    eprint(text: " offset=")
+                    traceU64(n: f.defOffset)
+                    eprint(text: "\n")
+                }
                 self.cur.locals = []
                 self.seedGlobalLocals(useMod: self.globalSeedModeFor(f: f))
                 self.cur.hasRecv = f.hasRecv

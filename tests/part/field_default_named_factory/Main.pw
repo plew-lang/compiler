@@ -1,0 +1,7 @@
+import @Std/Io with { print }
+import ./Container with { Container }
+
+fn main() {
+    val container: Container = <Container />
+    print(container.payload.value)
+}

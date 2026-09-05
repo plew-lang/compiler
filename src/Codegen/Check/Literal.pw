@@ -487,7 +487,7 @@ pub impl Comp {
         }
         val savedP: Array[Bind] = self.cur.typeParams
         val savedA: Array[U64] = self.cur.typeArgs
-        self.cur.typeParams = f.typeParams
+        self.cur.typeParams = self.copyFuncBinds(binds: f.typeParams)
         self.cur.typeArgs = ginf
         mut val k: U64 = 0
         while k < args.len {

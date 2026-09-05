@@ -1,0 +1,23 @@
+// Internal frontend regression: compile this module, not a standalone part file.
+// Imports the actual Comp implementation; does not invoke the compiler driver.
+import ../../src/Frontend with { Comp }
+import ../../src/Ir with { TypeRef }
+import @Std/Io with { print }
+
+fn main() {
+    mut val compiler: Comp = <Comp />
+    compiler.appendSrc(from: [65U8, 66U8])
+    compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] />)
+    val first: U64 = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=1U64 args=[] />)
+    val second: U64 = compiler.pushType(t: <TypeRef nameStart=1U64 nameLen=1U64 args=[] />)
+    // Synthetic/substituted projections also pass through pushType, without Lower.
+    val projection: U64 = compiler.pushType(t: <TypeRef nameStart=0U64 nameLen=1U64 args=[first] assocTraitId=10U64 assocNameId=11U64 />)
+    val changed: U64 = compiler.rebuildTypeTerm(t: compiler.arena.types[projection], args: [second], assocTraitArgs: [])
+    val receiver: U64 = compiler.typeTermRefProjectionReceiver(ref: projection)
+    print(receiver != 0U64)
+    print(compiler.typeTermRefChildRef(ref: receiver, index: 0U64) == first)
+    print(!compiler.typeRefEq(a: projection, b: changed))
+    val before: U64 = compiler.arena.types.count()
+    compiler.typeRefEq(a: projection, b: changed)
+    print(compiler.arena.types.count() == before)
+}

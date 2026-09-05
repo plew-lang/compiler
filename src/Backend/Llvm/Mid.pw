@@ -32,6 +32,7 @@ pub impl LlvmCtx {
             MidVerifyError.MoveUnavailable => { return 3U64 }
             MidVerifyError.DropUnavailable => { return 4U64 }
             MidVerifyError.InvalidDropFlag => { return 5U64 }
+            MidVerifyError.UninitializedDropFlag => { return 9U64 }
             MidVerifyError.UnelaboratedScopeExit => { return 6U64 }
             MidVerifyError.UnelaboratedAccess => { return 7U64 }
             MidVerifyError.UninstantiatedReturnBoundary => { return 8U64 }
@@ -291,7 +292,7 @@ pub impl LlvmCtx {
                     val current: MidAggregateElement = elements[element]
                     if current.targetTerm == 0U64 || current.targetTerm >= c.arena.types.count() { return false }
                     if !(self.midOperandLlvmSupported(c: inout c, body: body, operand: current.operand)) { return false }
-                    match current.conversion {
+                    match c.thawValueConversionProof(id: current.conversion) {
                         ValueConversionProof.Identity => {
                             if !(c.typeRefEq(a: self.midOperandTypeTerm(operand: current.operand), b: current.targetTerm)) { return false }
                         }
@@ -334,7 +335,7 @@ pub impl LlvmCtx {
                     MidOperand.Move(place: _) => {}
                     _ => { return false }
                 }
-                match conversion {
+                match c.thawValueConversionProof(id: conversion) {
                     ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val proof) => {
                         return sourceRef != 0U64 && sourceRef < c.arena.types.count() && targetRef != 0U64 && targetRef < c.arena.types.count() && traitIdx < c.decls.traits.count() && !(c.proofIsMissing(proof: proof))
                     }
@@ -462,6 +463,9 @@ pub impl LlvmCtx {
     inout fn midInitialDirectCallPreflight(c: inout Comp, body: MidBody, resolution: U64, receiver: MidCallReceiver, args: Array[MidOperand], destination: MidPlace) -> MidCallPreflight {
         if resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
         val selected: CallResolution = c.arena.finalCallees[resolution]
+        val selectedTypeArgs: Array[U64] = c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs)
+        val selectedParameterTypes: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
+        val selectedArgumentPassings: Array[CallArgumentPassing] = c.copyFinalCalleeArgumentPassings(passings: selected.argumentPassings)
         match selected.target {
             CallTarget.Direct => {}
             CallTarget.RuntimeIntrinsic(intrinsic: _) => {}
@@ -517,21 +521,21 @@ pub impl LlvmCtx {
                                 }
                                 BufferIntrinsic.Append => {
                                     if callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.Reserve => {
                                     if callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.Set => {
                                     if callee.hasRet || args.count() != 3U64 || selected.parameterTypeRefs.count() != 3U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[2U64])) { return <MidCallPreflight.Argument /> }
@@ -539,7 +543,7 @@ pub impl LlvmCtx {
                                 }
                                 BufferIntrinsic.InsertAt => {
                                     if callee.hasRet || args.count() != 3U64 || selected.parameterTypeRefs.count() != 3U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[2U64])) { return <MidCallPreflight.Argument /> }
@@ -547,14 +551,14 @@ pub impl LlvmCtx {
                                 }
                                 BufferIntrinsic.RemoveLast => {
                                     if !callee.hasRet || args.count() != 1U64 || selected.parameterTypeRefs.count() != 1U64 || selected.resultTypeRef == 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
                                     if elementRef == 0U64 || !(c.typeRefEq(a: selected.resultTypeRef, b: elementRef)) { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.RemoveAt => {
                                     if !callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 || selected.resultTypeRef == 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
@@ -562,7 +566,7 @@ pub impl LlvmCtx {
                                 }
                                 BufferIntrinsic.SwapRemove => {
                                     if !callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 || selected.resultTypeRef == 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
@@ -570,27 +574,27 @@ pub impl LlvmCtx {
                                 }
                                 BufferIntrinsic.Clear => {
                                     if callee.hasRet || args.count() != 1U64 || selected.parameterTypeRefs.count() != 1U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.Truncate => {
                                     if callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.BytewiseComparable => {
                                     if !callee.hasRet || args.count() != 1U64 || selected.parameterTypeRefs.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
                                 }
                                 BufferIntrinsic.Eq => {
                                     if !callee.hasRet || args.count() != 2U64 || selected.parameterTypeRefs.count() != 2U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.Buffer /> }
-                                    val bufferRef: U64 = selected.parameterTypeRefs[0U64]
-                                    if !(c.typeRefEq(a: selected.parameterTypeRefs[1U64], b: bufferRef)) { return <MidCallPreflight.Buffer /> }
+                                    val bufferRef: U64 = selectedParameterTypes[0U64]
+                                    if !(c.typeRefEq(a: selectedParameterTypes[1U64], b: bufferRef)) { return <MidCallPreflight.Buffer /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[0U64])) { return <MidCallPreflight.Argument /> }
                                     if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[1U64])) { return <MidCallPreflight.Argument /> }
                                     if self.midBufferElementRef(c: inout c, bufferRef: bufferRef) == 0U64 { return <MidCallPreflight.Buffer /> }
@@ -616,15 +620,15 @@ pub impl LlvmCtx {
         }
         if callee.isExtern { return <MidCallPreflight.Extern /> }
         if callee.typeParams.count() != selected.calleeTypeArgs.count() { return <MidCallPreflight.GenericArguments /> }
-        if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: selected.calleeTypeArgs)) { return <MidCallPreflight.GenericArguments /> }
-        if args.count() != callee.params.count() || selected.parameterTypeRefs.count() != args.count() || selected.argumentPassings.count() != args.count() { return <MidCallPreflight.ArgumentShape /> }
+        if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: selectedTypeArgs)) { return <MidCallPreflight.GenericArguments /> }
+        if args.count() != callee.params.count() || selectedParameterTypes.count() != args.count() || selectedArgumentPassings.count() != args.count() { return <MidCallPreflight.ArgumentShape /> }
         if callee.hasRet {
             if destination.projections.count() != 0U64 || selected.resultTypeRef == 0U64 { return <MidCallPreflight.Result /> }
         }
         mut val i: U64 = 0U64
         while i < args.count() {
-            if selected.parameterTypeRefs[i] >= c.arena.types.count() { return <MidCallPreflight.ArgumentShape /> }
-            match selected.argumentPassings[i] {
+            if selectedParameterTypes[i] >= c.arena.types.count() { return <MidCallPreflight.ArgumentShape /> }
+            match selectedArgumentPassings[i] {
             CallArgumentPassing.Inout => {
                 match args[i] {
                     MidOperand.Borrow(place: val place, capability: val capability) => {
@@ -819,6 +823,11 @@ pub impl LlvmCtx {
             _ => { return false }
         }
         val selected: CallResolution = c.arena.finalCallees[resolution]
+        // The scalar resolution row is copied once; payloads cross into this
+        // LLVM ABI routine only through explicit compatibility copies.
+        val selectedTypeArgs: Array[U64] = c.copyFinalCalleeTypeArgs(args: selected.calleeTypeArgs)
+        val selectedParameterTypes: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
+        val selectedArgumentPassings: Array[CallArgumentPassing] = c.copyFinalCalleeArgumentPassings(passings: selected.argumentPassings)
         val calleeDef: Func = c.arena.funcs[selected.callee]
         match selected.target {
             CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
@@ -888,7 +897,7 @@ pub impl LlvmCtx {
                         }
                         BufferIntrinsic.Append => {
                             if selected.parameterTypeRefs.count() != 2U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -916,7 +925,7 @@ pub impl LlvmCtx {
                         }
                         BufferIntrinsic.Reserve => {
                             if selected.parameterTypeRefs.count() != 2U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -946,7 +955,7 @@ pub impl LlvmCtx {
                         // would lose the required inout slot writeback.
                         BufferIntrinsic.Set => {
                             if selected.parameterTypeRefs.count() != 3U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -984,7 +993,7 @@ pub impl LlvmCtx {
                         // value acquires the Buffer's ownership share.
                         BufferIntrinsic.InsertAt => {
                             if selected.parameterTypeRefs.count() != 3U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -1020,7 +1029,7 @@ pub impl LlvmCtx {
                         // value.  Count update is the ownership transfer.
                         BufferIntrinsic.RemoveLast => {
                             if selected.parameterTypeRefs.count() != 1U64 || selected.resultTypeRef == 0U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 || !(c.typeRefEq(a: selected.resultTypeRef, b: elemRef)) { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -1049,7 +1058,7 @@ pub impl LlvmCtx {
                         // it has no ARC traffic of its own.
                         BufferIntrinsic.RemoveAt => {
                             if selected.parameterTypeRefs.count() != 2U64 || selected.resultTypeRef == 0U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 || !(c.typeRefEq(a: selected.resultTypeRef, b: elemRef)) { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -1080,7 +1089,7 @@ pub impl LlvmCtx {
                         // still leaves only the returned value as owner.
                         BufferIntrinsic.SwapRemove => {
                             if selected.parameterTypeRefs.count() != 2U64 || selected.resultTypeRef == 0U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 || !(c.typeRefEq(a: selected.resultTypeRef, b: elemRef)) { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -1111,7 +1120,7 @@ pub impl LlvmCtx {
                         // capacity remain in place.
                         BufferIntrinsic.Clear => {
                             if selected.parameterTypeRefs.count() != 1U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -1137,7 +1146,7 @@ pub impl LlvmCtx {
                         // a true no-op, including capacity and element shares.
                         BufferIntrinsic.Truncate => {
                             if selected.parameterTypeRefs.count() != 2U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 { return false }
                             val elemTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elemRef)
                             match args[0U64] {
@@ -1167,7 +1176,7 @@ pub impl LlvmCtx {
                         }
                         BufferIntrinsic.BytewiseComparable => {
                             if selected.parameterTypeRefs.count() != 1U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
                             if elemRef == 0U64 { return false }
                             val result: LLVMValueRef = self.genLlvmBufferBytewiseComparable(elemTy: self.llvmTypeOfRef(c: inout c, ref: elemRef))
                             LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
@@ -1175,8 +1184,8 @@ pub impl LlvmCtx {
                         }
                         BufferIntrinsic.Eq => {
                             if selected.parameterTypeRefs.count() != 2U64 { return false }
-                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selected.parameterTypeRefs[0U64])
-                            if elemRef == 0U64 || !(c.typeRefEq(a: selected.parameterTypeRefs[1U64], b: selected.parameterTypeRefs[0U64])) { return false }
+                            val elemRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: selectedParameterTypes[0U64])
+                            if elemRef == 0U64 || !(c.typeRefEq(a: selectedParameterTypes[1U64], b: selectedParameterTypes[0U64])) { return false }
                             val left: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[0U64])
                             val right: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: args[1U64])
                             val result: LLVMValueRef = self.genLlvmBufferEqValues(c: inout c, elemTy: self.llvmTypeOfRef(c: inout c, ref: elemRef), lhs: left, rhs: right)
@@ -1204,15 +1213,15 @@ pub impl LlvmCtx {
             val receiverArgCount: U64 = c.recvParamCount(nameStart: recvTy.nameStart, nameLen: recvTy.nameLen)
             mut val ownArgs: Array[U64] = []
             mut val typeArgIndex: U64 = receiverArgCount
-            while typeArgIndex < selected.calleeTypeArgs.count() {
-                ownArgs.append(selected.calleeTypeArgs[typeArgIndex])
+            while typeArgIndex < selectedTypeArgs.count() {
+                ownArgs.append(selectedTypeArgs[typeArgIndex])
                 typeArgIndex += 1U64
             }
             methodSlot = self.ensureGenMethodDeclared(c: inout c, mfi: selected.callee, instRef: selected.recvTypeRef, ownArgs: ownArgs, bodyId: selected.calleeBodyId)
             if methodSlot >= self.genMethK.count() { return false }
             useMethodInstance = true
         } else {
-            freeSlot = self.ensureFnInst(c: inout c, fnIdx: selected.callee, args: selected.calleeTypeArgs, recvInstRef: selected.recvTypeRef)
+            freeSlot = self.ensureFnInst(c: inout c, fnIdx: selected.callee, args: selectedTypeArgs, recvInstRef: selected.recvTypeRef)
             if freeSlot >= self.genFnK.count() { return false }
         }
         mut val values: Array[LLVMValueRef] = []
@@ -1241,7 +1250,7 @@ pub impl LlvmCtx {
         mut val i: U64 = 0U64
         while i < args.count() {
             mut val value: LLVMValueRef = LLVMConstNull(self.ptrty)
-            match selected.argumentPassings[i] {
+            match selectedArgumentPassings[i] {
             CallArgumentPassing.Inout => {
                 match args[i] {
                     MidOperand.Borrow(place: val place, capability: val capability) => {
@@ -1253,15 +1262,15 @@ pub impl LlvmCtx {
             CallArgumentPassing.Borrow => {
                 value = self.midEmitOperand(c: inout c, body: body, operand: args[i])
                 if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
-                    val parameter: TypeRef = c.arena.types[selected.parameterTypeRefs[i]]
-                    value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: selected.parameterTypeRefs[i]), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
+                    val parameter: TypeRef = c.arena.types[selectedParameterTypes[i]]
+                    value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: selectedParameterTypes[i]), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
                 }
             }
             CallArgumentPassing.Move => {
                 value = self.midEmitOperand(c: inout c, body: body, operand: args[i])
                 if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 {
-                    val parameter: TypeRef = c.arena.types[selected.parameterTypeRefs[i]]
-                    value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: selected.parameterTypeRefs[i]), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
+                    val parameter: TypeRef = c.arena.types[selectedParameterTypes[i]]
+                    value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: selectedParameterTypes[i]), unsigned: isUnsignedName(c: inout c, start: parameter.nameStart, len: parameter.nameLen))
                 }
             }
             }
@@ -1503,7 +1512,7 @@ pub impl LlvmCtx {
     // without retaining.  A non-identity proof returns a freshly owned
     // converted value itself.
     inout fn midEmitAggregateElement(c: inout Comp, body: MidBody, element: MidAggregateElement) -> LLVMValueRef {
-        match element.conversion {
+        match c.thawValueConversionProof(id: element.conversion) {
             ValueConversionProof.Identity => {
                 val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: element.operand)
                 if self.midOperandNeedsOwnedDestination(operand: element.operand) {
@@ -1511,7 +1520,7 @@ pub impl LlvmCtx {
                 }
                 return value
             }
-            _ => { return self.midEmitValueConversion(c: inout c, body: body, operand: element.operand, conversion: element.conversion) }
+            _ => { return self.midEmitValueConversion(c: inout c, body: body, operand: element.operand, conversion: c.thawValueConversionProof(id: element.conversion)) }
         }
     }
 
@@ -1709,7 +1718,7 @@ pub impl LlvmCtx {
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
                     MidRvalue.Convert(operand: val operand, conversion: val conversion) => {
-                        val value: LLVMValueRef = self.midEmitValueConversion(c: inout c, body: body, operand: operand, conversion: conversion)
+                        val value: LLVMValueRef = self.midEmitValueConversion(c: inout c, body: body, operand: operand, conversion: c.thawValueConversionProof(id: conversion))
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
                     MidRvalue.EnumTag(place: val place, enumIndex: _, sourceStmt: _, resultTerm: _) => {

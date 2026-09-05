@@ -11,6 +11,32 @@
 // The st.genMeth* slot for (mfi, instRef), or st.genMethK.count() if not registered.
 
 pub impl LlvmCtx {
+    inout fn pushGenMethOwn(args: Array[U64]) -> LlvmTypeArgRange {
+        val start: U64 = self.genMethOwnArgs.count()
+        mut val i: U64 = 0U64
+        while i < args.count() {
+            self.genMethOwnArgs.append(args[i])
+            i += 1U64
+        }
+        return <LlvmTypeArgRange start=start len=args.count() />
+    }
+
+    fn genMethOwnArgAt(range: LlvmTypeArgRange, index: U64) -> U64 {
+        return self.genMethOwnArgs[range.start + index]
+    }
+
+    inout fn copyGenMethOwn(slot: U64) -> Array[U64] {
+        mut val out: Array[U64] = []
+        if slot >= self.genMethOwn.count() { return out }
+        val range: LlvmTypeArgRange = self.genMethOwn[slot]
+        mut val i: U64 = 0U64
+        while i < range.len {
+            out.append(self.genMethOwnArgAt(range: range, index: i))
+            i += 1U64
+        }
+        return out
+    }
+
     // Trace helpers deliberately print a bounded semantic key rather than LLVM pointer
     // values. A malformed growing type term must remain inspectable without the trace
     // printer itself recursing until the host stack overflows.
@@ -58,7 +84,12 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn traceGenMethod(c: inout Comp, event: String, mfi: U64, instRef: U64, ownArgs: Array[U64]) {
+    // Keep the generic-method trace scalar. `genMethOwn` is a scalar range
+    // table over a typed argument pool; copying its compatibility Array merely
+    // to print it exercises ownership work that the trace is meant to diagnose.
+    // The method/receiver identity is enough to locate an emission;
+    // a future payload trace must read through a dedicated owner-aware API.
+    inout fn traceGenMethod(c: inout Comp, event: String, mfi: U64, instRef: U64) {
         if !(c.traceCodegen) { return }
         if mfi >= c.arena.funcs.count() { return }
         val f: Func = c.arena.funcs[mfi]
@@ -74,14 +105,7 @@ pub impl LlvmCtx {
         self.traceCodegenType(c: inout c, ref: instRef, depth: 0U64)
         eprint(text: " receiverRef=")
         self.traceCodegenU64(n: instRef)
-        eprint(text: " own=[")
-        mut val i: U64 = 0U64
-        while i < ownArgs.count() {
-            if i > 0U64 { eprint(text: ",") }
-            self.traceCodegenType(c: inout c, ref: ownArgs[i], depth: 0U64)
-            i += 1U64
-        }
-        eprint(text: "]\n")
+        eprint(text: "\n")
     }
 
     inout fn genMethSlotFor(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) -> U64 {
@@ -92,7 +116,7 @@ pub impl LlvmCtx {
                     // a method-own-param terminal (`fold[B]`) is keyed by its own args too,
                     // so the same receiver instance folding into different accumulators maps
                     // to distinct slots.
-                    if self.genMethBody[i] == bodyId && typeArgsEq(c: inout c, a: self.genMethOwn[i], b: ownArgs) {
+                    if self.genMethBody[i] == bodyId && typeArgsEq(c: inout c, a: self.copyGenMethOwn(slot: i), b: ownArgs) {
                         return i
                     }
                 }
@@ -131,15 +155,15 @@ pub impl LlvmCtx {
     }
 
     inout fn declareOneGenMethod(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) {
-        self.traceGenMethod(c: inout c, event: "declare", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+        self.traceGenMethod(c: inout c, event: "declare", mfi: mfi, instRef: instRef)
         val mf: Func = c.arena.funcs[mfi]
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         val savedR: U64 = self.curRecvInstRef
-        c.cur.typeParams = mf.typeParams
+        c.cur.typeParams = c.copyFuncBinds(binds: mf.typeParams)
         // env = receiver instance args ++ method-own args (the latter empty for ordinary
         // methods); pairs 1:1 with mf.typeParams = [receiver params..., own params...].
-        c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: ownArgs)
+        c.cur.typeArgs = concatArgs(add: c.copyTypeTermArgs(ref: instRef), base: ownArgs)
         self.curRecvInstRef = instRef
         // Declaration and body emission must consume the same selected proof.
         // Re-querying `Item` from just the receiver here loses the direct
@@ -185,8 +209,8 @@ pub impl LlvmCtx {
         self.genMethVal.append(fv)
         self.genMethTy.append(fty)
         self.genMethBody.append(bodyId)
-        self.genMethOwn.append(ownArgs)
-        self.traceGenMethod(c: inout c, event: "registered", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+        self.genMethOwn.append(self.pushGenMethOwn(args: ownArgs))
+        self.traceGenMethod(c: inout c, event: "registered", mfi: mfi, instRef: instRef)
         c.cur.selfRef = sDs
         c.cur.itemRef = sDi
         c.cur.typeParams = savedP
@@ -199,13 +223,13 @@ pub impl LlvmCtx {
     inout fn emitOneGenMethod(c: inout Comp, slot: U64) {
         val mfi: U64 = self.genMethK[slot]
         val instRef: U64 = self.genMethInst[slot]
-        self.traceGenMethod(c: inout c, event: "emit", mfi: mfi, instRef: instRef, ownArgs: self.genMethOwn[slot])
+        self.traceGenMethod(c: inout c, event: "emit", mfi: mfi, instRef: instRef)
         val mf: Func = c.arena.funcs[mfi]
         val savedP: Array[Bind] = c.cur.typeParams
         val savedA: Array[U64] = c.cur.typeArgs
         val savedR: U64 = self.curRecvInstRef
-        c.cur.typeParams = mf.typeParams
-        c.cur.typeArgs = concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot])
+        c.cur.typeParams = c.copyFuncBinds(binds: mf.typeParams)
+        c.cur.typeArgs = concatArgs(add: c.copyTypeTermArgs(ref: instRef), base: self.copyGenMethOwn(slot: slot))
         self.curRecvInstRef = instRef
         mut val environment: InstanceEnvironment = c.bodyInstanceEnvironment(fnIdx: mfi, args: c.cur.typeArgs, recvInstRef: instRef)
         val bodyId: U64 = self.genMethBody[slot]
@@ -249,10 +273,10 @@ pub impl LlvmCtx {
     // can't be declared (the method has its own type params beyond the receiver
     // instance's — provided map[B]/filter is handled separately). Idempotent.
     inout fn ensureGenMethodDeclared(c: inout Comp, mfi: U64, instRef: U64, ownArgs: Array[U64], bodyId: U64 = 0U64) -> U64 {
-        self.traceGenMethod(c: inout c, event: "request", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+        self.traceGenMethod(c: inout c, event: "request", mfi: mfi, instRef: instRef)
         val existing: U64 = self.genMethSlotFor(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
         if existing < self.genMethK.count() {
-            self.traceGenMethod(c: inout c, event: "reuse", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+            self.traceGenMethod(c: inout c, event: "reuse", mfi: mfi, instRef: instRef)
             return existing
         }
         // the method's type params must pair 1:1 with the instance's args plus the
@@ -269,7 +293,7 @@ pub impl LlvmCtx {
         self.declareOneGenMethod(c: inout c, mfi: mfi, instRef: instRef, ownArgs: ownArgs, bodyId: bodyId)
         val slot: U64 = self.genMethK.count() - 1U64
         self.genMethEmit.append(slot)
-        self.traceGenMethod(c: inout c, event: "enqueue", mfi: mfi, instRef: instRef, ownArgs: ownArgs)
+        self.traceGenMethod(c: inout c, event: "enqueue", mfi: mfi, instRef: instRef)
         return slot
     }
 }

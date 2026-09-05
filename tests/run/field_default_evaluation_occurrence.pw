@@ -1,0 +1,48 @@
+import @Std/Io with { print }
+
+fn evaluated() -> I64 {
+    print("evaluated")
+    return 42I64
+}
+
+struct Payload { pub val value: I64 }
+pub impl Payload { factory }
+struct Container { pub val payload: Payload = <Payload value=evaluated() /> }
+pub impl Container { factory }
+struct Pair { pub val first: Container pub val second: Container }
+pub impl Pair { factory }
+
+fn siblings() {
+    val pair: Pair = <Pair first=<Container /> second=<Container /> />
+    print(pair.first.payload.value)
+    print(pair.second.payload.value)
+}
+
+fn sequential() {
+    val first: Container = <Container />
+    val second: Container = <Container />
+    print(first.payload.value)
+    print(second.payload.value)
+}
+
+fn branch(selected: Bool) -> Container {
+    if selected { return <Container /> }
+    return <Container />
+}
+
+fn repeated() {
+    mut val index: U64 = 0U64
+    while index < 2U64 {
+        val container: Container = <Container />
+        print(container.payload.value)
+        index += 1U64
+    }
+}
+
+fn main() {
+    sequential()
+    print(branch(selected: false).payload.value)
+    print(branch(selected: true).payload.value)
+    repeated()
+    siblings()
+}

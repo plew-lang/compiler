@@ -451,7 +451,11 @@ pub impl Comp {
             }
             tpi += 1
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        mut val projectionReceiver: U64 = 0U64
+        if assocNameId != 0U64 {
+            projectionReceiver = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
+        }
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=nm.nameStart nameLen=nm.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=nm.nameStart len=nm.nameLen isArray=false ref=ref />
         if t.args.count() > 0 {
             if rangeEquals(bytes: self.arena.bytes, start: nm.nameStart, len: nm.nameLen, kw: "Array") {
@@ -606,7 +610,11 @@ pub impl Comp {
             }
             tpi += 1U64
         }
-        val ref: U64 = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId isSendable=t.isSendable siteOffset=site />)
+        mut val projectionReceiver: U64 = 0U64
+        if assocNameId != 0U64 {
+            projectionReceiver = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels isSendable=t.isSendable siteOffset=site />)
+        }
+        val ref: U64 = self.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=paramId args=args isRecord=false recordFieldLabels=[] recordFieldTerms=[] viewExtId=viewExtId viewIds=viewIds viewSources=viewSources isAny=t.isAny argLabels=argLabels assocTraitStart=assocTraitStart assocTraitLen=assocTraitLen assocTraitId=assocTraitId assocTraitArgs=assocTraitArgs assocTraitArgLabels=assocTraitArgLabels assocNameStart=assocNameStart assocNameLen=assocNameLen assocNameId=assocNameId projectionReceiver=projectionReceiver isSendable=t.isSendable siteOffset=site />)
         mut val result: PType = <PType start=name.nameStart len=name.nameLen isArray=false ref=ref />
         if syntaxTypeArgCount(file: self.syntax, ty: t) > 0U64 {
             if rangeEquals(bytes: self.arena.bytes, start: name.nameStart, len: name.nameLen, kw: "Array") {
@@ -896,17 +904,34 @@ pub impl Comp {
     // default is evaluated at this construction site, not in a backend-only
     // implicit path.  Keeping it in the Make expression means Verify, Mono's
     // final-callee walk, and LLVM all consume one identical expression tree.
-    inout fn appendOmittedMakeDefaults(out: inout Array[MakeField], typeName: String, isEnum: Bool) {
-        if isEnum || typeName.bytes().count() == 0U64 { return }
-        val tn: Bind = self.internBytes(s: typeName)
-        val real: Bind = self.aliasReal(start: tn.nameStart, len: tn.nameLen)
-        self.appendOmittedMakeDefaultsByTypeId(out: inout out, typeId: intern(c: inout self, start: real.nameStart, len: real.nameLen), isEnum: isEnum)
-    }
-
-    inout fn appendOmittedMakeDefaultsSpans(out: inout Array[MakeField], typeName: Span, isEnum: Bool) {
-        if typeName.end <= typeName.start { return }
-        val real: Bind = self.aliasReal(start: typeName.start, len: typeName.end - typeName.start)
-        self.appendOmittedMakeDefaultsByTypeId(out: inout out, typeId: intern(c: inout self, start: real.nameStart, len: real.nameLen), isEnum: isEnum)
+    // Run only after ALL declarations have been lowered and custom factories
+    // have been selected. Lowering one file cannot know the fields of a later
+    // imported declaration; adding defaults before factory selection can also
+    // change the written label set used to select a custom factory.
+    inout fn normalizeMemberwiseDefaults() {
+        val limit: U64 = self.arena.exprs.count()
+        mut val exprId: U64 = 0U64
+        while exprId < limit {
+            match self.arena.exprs[exprId] {
+                Expr.Make(val typeStart, val typeLen, val variantStart, val variantLen, val isEnum, val ty, val fields) => {
+                    if !isEnum && typeLen != 0U64 {
+                        mut val values: Array[MakeField] = []
+                        mut val i: U64 = 0U64
+                        while i < fields.len {
+                            values.append(self.makeFieldAt(fields: fields, index: i))
+                            i += 1U64
+                        }
+                        val real: Bind = self.aliasReal(start: typeStart, len: typeLen)
+                        self.appendOmittedMakeDefaultsByTypeId(out: inout values, typeId: intern(c: inout self, start: real.nameStart, len: real.nameLen), isEnum: false)
+                        if values.count() != fields.len {
+                            self.arena.exprs.set(i: exprId, value: <Expr.Make typeStart=typeStart typeLen=typeLen variantStart=variantStart variantLen=variantLen isEnum=isEnum ty=ty fields=self.pushMakeFields(fields: values) />)
+                        }
+                    }
+                }
+                _ => {}
+            }
+            exprId += 1U64
+        }
     }
 
     inout fn appendOmittedMakeDefaultsByTypeId(out: inout Array[MakeField], typeId: U64, isEnum: Bool) {
@@ -959,7 +984,6 @@ pub impl Comp {
             out.append(<MakeField nameStart=nm.nameStart nameLen=nm.nameLen value=v offset=f.span.start />)
             i += 1
         }
-        self.appendOmittedMakeDefaults(out: inout out, typeName: typeName, isEnum: isEnum)
         return out
     }
 
@@ -981,7 +1005,6 @@ pub impl Comp {
             out.append(<MakeField nameStart=f.name.start nameLen=f.name.end - f.name.start value=value offset=f.span.start />)
             i += 1U64
         }
-        self.appendOmittedMakeDefaultsByTypeId(out: inout out, typeId: typeId, isEnum: isEnum)
         return out
     }
 

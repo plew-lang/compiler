@@ -1,0 +1,20 @@
+// Temporary recovery entry for a carrier that misses imported field defaults.
+// The compiler implementation is unchanged: supply the SAME empty syntax
+// value explicitly at its construction site. Do not use this entry to claim
+// normal self-host recovery; src/_.pw must compile and run afterwards.
+import @Std/Process with { argCount, argAt }
+import @Plew/Syntax with { SyntaxFile }
+import ../src/Frontend with { Comp, runFrontend }
+import ../src/Backend with { emitLlvm, emitLlvmRuntime }
+
+fn main() {
+    if argCount() > 1 {
+        if argAt(1) == "--runtime" {
+            emitLlvmRuntime()
+            return
+        }
+    }
+    mut val compiler: Comp = <Comp syntax=<SyntaxFile.empty /> />
+    runFrontend(c: inout compiler)
+    emitLlvm(c: inout compiler)
+}

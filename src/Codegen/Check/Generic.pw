@@ -1004,6 +1004,11 @@ pub impl Comp {
                 shouldCheck = false
             }
             if shouldCheck && !f.isExtern {
+                // A generic declaration body can recursively resolve a large
+                // symbolic call graph.  Mark the exact authored body before
+                // entering it: a repeated phase name is not progress, whereas
+                // this monotonically increasing declaration index is.
+                tracePhaseProgress(c: inout self, label: "generic-body-check:function", count: fi, stride: 16U64)
                 // Generic signature views are authored source-sets even though
                 // their TypeRefs carry siteOffset=0 (the general verifier uses
                 // that sentinel to skip concrete receiver checks).  Validate

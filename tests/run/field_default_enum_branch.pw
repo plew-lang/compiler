@@ -1,0 +1,22 @@
+import @Std/Io with { print }
+
+enum State { Empty Filled(value: String) }
+struct Container { pub val state: State = <State.Empty /> }
+pub impl Container { factory }
+
+fn select(first: Bool) -> Container {
+    if first { return <Container /> }
+    return <Container />
+}
+
+fn display(container: Container) {
+    match container.state {
+        State.Empty => { print("empty") }
+        State.Filled(value: val value) => { print(value) }
+    }
+}
+
+fn main() {
+    display(container: select(first: false))
+    display(container: select(first: true))
+}

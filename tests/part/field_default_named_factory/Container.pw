@@ -1,0 +1,7 @@
+import ./Payload with { Payload }
+
+export struct Container {
+    pub val payload: Payload = <Payload.empty />
+}
+
+pub impl Container { factory }

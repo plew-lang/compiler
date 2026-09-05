@@ -76,7 +76,7 @@ pub impl LlvmCtx {
         // genLlvmMakeEnum's merge. Pure callee env (the prior code) dropped the caller's,
         // leaving such a construction an ungrounded template.
         c.cur.typeParams = concatParams(add: c.copyFuncBinds(binds: mf.typeParams), base: savedP)
-        c.cur.typeArgs = concatArgs(add: concatArgs(add: c.arena.types[instRef].args, base: self.genMethOwn[slot]), base: savedA)
+        c.cur.typeArgs = concatArgs(add: concatArgs(add: c.arena.types[instRef].args, base: self.copyGenMethOwn(slot: slot)), base: savedA)
         // bind Self/Item for an own-param provided call so an argument typed by `Item`
         // coerces against the receiver's real item type (see emitOneGenMethod).
         val sGs: U64 = c.cur.selfRef
@@ -121,61 +121,30 @@ pub impl LlvmCtx {
         return LLVMConstNull(self.ptrty)
     }
 
-    // Pointer to an addressable PLACE expression (lvalue), or a null constant if `id`
-    // is not a place. Recurses through nested field/element access so a deep place
-    // like `c.arena.items` (a field of a field) yields a real pointer into the
-    // original storage — what `inout`, array `.append`, `.set`, and index-assign all
-    // need to write through (a non-recursive one-level scheme would copy instead).
-    inout fn placePtrStrict(c: inout Comp, id: U64) -> LLVMValueRef {
+    // Resolve an addressable PLACE expression.  The recursion carries both the
+    // pointer and the pointee layout actually used for the preceding GEP.  Do not
+    // reconstruct that layout from the child expression: a generic instance such
+    // as `Store[SyntaxNewtype].inner` has a different LLVM type from `Inner[T]` in
+    // the shared body AST.
+    inout fn placeStrict(c: inout Comp, id: U64) -> LlvmPlace {
+        val none: LlvmPlace = <LlvmPlace ptr=LLVMConstNull(self.ptrty) pointeeTy=LLVMConstNull(self.ptrty) typeRef=0U64 structIdx=c.arena.structs.count() />
         match c.arena.exprs[id] {
             Expr.Ident(val start, val len) => {
                 val li: U64 = self.findLocal(c: inout c, start: start, len: len)
                 if li < self.nLocals {
-                    return self.locPtr[li]
+                    return <LlvmPlace ptr=self.locPtr[li] pointeeTy=self.locTy[li] typeRef=self.locTypeRef[li] structIdx=self.locStructIdx[li] />
                 }
             }
             Expr.Field(val base, val nameStart, val nameLen) => {
-                // fast path: the base is an addressable local. Use ITS tracked LLVM type
-                // (so a generic-struct local's field GEPs with the right instance type).
-                match c.arena.exprs[base] {
-                    Expr.Ident(start: val bs, len: val bl) => {
-                        val bli: U64 = self.findLocal(c: inout c, start: bs, len: bl)
-                        // The backend local table is the authority for an
-                        // addressable receiver.  In a generic body `self` can
-                        // carry a concrete Array/Box instance while the shared
-                        // AST still exposes only its template spelling; asking
-                        // exprStructIdx first then turns `self.data` into a
-                        // non-place.  Use the exact storage type, with the
-                        // expression recovery only as a legacy fallback.
-                        mut val bsi: U64 = c.arena.structs.count()
-                        if bli < self.nLocals { bsi = self.locStructIdx[bli] }
-                        if bsi >= c.arena.structs.count() {
-                            bsi = self.exprStructIdx(c: inout c, id: base)
-                        }
-                        if bli < self.nLocals && bsi < c.arena.structs.count() {
-                            val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                            if fidx < c.arena.structs[bsi].fields.count() {
-                                return LLVMBuildStructGEP2(self.b, self.locTy[bli], self.locPtr[bli], fidx, anon())
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                // recursive path: the base is itself a place (nested field / element).
-                // Pointer to the base, then GEP the field using the base struct's own
-                // named LLVM type (the non-generic case — generic nested places fall
-                // through to a null result, as before).
-                val basePtr: LLVMValueRef = self.placePtrStrict(c: inout c, id: base)
-                if LLVMIsNull(basePtr) == 0I32 {
-                    val bsi: U64 = self.exprStructIdx(c: inout c, id: base)
+                val basePlace: LlvmPlace = self.placeStrict(c: inout c, id: base)
+                if LLVMIsNull(basePlace.ptr) == 0I32 {
+                    val bsi: U64 = basePlace.structIdx
                     if bsi < c.arena.structs.count() {
-                        val sd: StructDef = c.arena.structs[bsi]
-                        val reg: U64 = self.structRegSlot(c: inout c, start: sd.nameStart, len: sd.nameLen)
-                        if reg < self.genStructRefs.count() {
-                            val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
-                            if fidx < c.arena.structs[bsi].fields.count() {
-                                return LLVMBuildStructGEP2(self.b, self.genStructTys[reg], basePtr, fidx, anon())
-                            }
+                        val fidx: U64 = structFieldIndex(c: inout c, sidx: bsi, start: nameStart, len: nameLen)
+                        if fidx < c.arena.structs[bsi].fields.count() {
+                            val fld: FieldDef = c.arena.structs[bsi].fields[fidx]
+                            val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: basePlace.typeRef)
+                            return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, basePlace.pointeeTy, basePlace.ptr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(basePlace.pointeeTy, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
                         }
                     }
                 }
@@ -192,9 +161,9 @@ pub impl LlvmCtx {
                     // place pointer and load the array value from it — the one cell
                     // evaluation (which also arms the cell pin below).
                     if c.placeHasDeref(id: base) {
-                        val basePtr: LLVMValueRef = self.placePtrStrict(c: inout c, id: base)
-                        if LLVMIsNull(basePtr) == 0I32 {
-                            arr = LLVMBuildLoad2(self.b, self.arrayTy, basePtr, anon())
+                        val basePlace: LlvmPlace = self.placeStrict(c: inout c, id: base)
+                        if LLVMIsNull(basePlace.ptr) == 0I32 {
+                            arr = LLVMBuildLoad2(self.b, basePlace.pointeeTy, basePlace.ptr, anon())
                             loaded = true
                         }
                     }
@@ -205,7 +174,8 @@ pub impl LlvmCtx {
                     val count: LLVMValueRef = self.arrValCount(c: inout c, arr: arr)
                     val idx: LLVMValueRef = self.genLlvmExpr(c: inout c, id: index)
                     self.emitBoundsCheck(c: inout c, idx: idx, count: count)
-                    return self.arrElemPtr(elemTy: elemTy, data: data, idx: idx)
+                    val elemRef: U64 = self.arrayExprElemRef(c: inout c, arrayExpr: base)
+                    return <LlvmPlace ptr=self.arrElemPtr(elemTy: elemTy, data: data, idx: idx) pointeeTy=elemTy typeRef=elemRef structIdx=self.structIdxOfRef(c: inout c, ref: elemRef) />
                 }
             }
             Expr.Deref(val base) => {
@@ -222,7 +192,8 @@ pub impl LlvmCtx {
                     // owned (+1) temporary — home it so the count releases at statement end.
                     val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                     self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
-                    return cellPtr
+                    val pointeeRef: U64 = c.arena.types[refTy].args[0U64]
+                    return <LlvmPlace ptr=cellPtr pointeeTy=self.refPointeeTy(c: inout c, refTy: refTy) typeRef=pointeeRef structIdx=self.structIdxOfRef(c: inout c, ref: pointeeRef) />
                 }
             }
             Expr.Arrow(val base, val nameStart, val nameLen) => {
@@ -242,13 +213,21 @@ pub impl LlvmCtx {
                         val pty: LLVMTypeRef = self.refPointeeTy(c: inout c, refTy: refTy)
                         val cellPtr: LLVMValueRef = self.refCellFromValue(v: self.genBorrowedArg(c: inout c, argExpr: base))
                         self.pinDerefCell(c: inout c, cell: cellPtr, refTy: refTy)
-                        return LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon())
+                        val fld: FieldDef = c.arena.structs[psidx].fields[fidx]
+                        val pref: U64 = c.arena.types[refTy].args[0U64]
+                        val fieldRef: U64 = self.fieldStoreTypeRef(c: inout c, fld: fld, baseRef: pref)
+                        return <LlvmPlace ptr=LLVMBuildStructGEP2(self.b, pty, cellPtr, fidx, anon()) pointeeTy=LLVMStructGetTypeAtIndex(pty, truncU32(n: fidx)) typeRef=fieldRef structIdx=self.structIdxOfRef(c: inout c, ref: fieldRef) />
                     }
                 }
             }
             _ => {}
         }
-        return LLVMConstNull(self.ptrty)
+        return none
+    }
+
+    // Compatibility projection while write paths migrate to `LlvmPlace`.
+    inout fn placePtrStrict(c: inout Comp, id: U64) -> LLVMValueRef {
+        return self.placeStrict(c: inout c, id: id).ptr
     }
 
     inout fn placePtrOf(c: inout Comp, id: U64) -> LLVMValueRef {

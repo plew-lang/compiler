@@ -103,14 +103,13 @@ export struct MidBuildState {
     pub mut val scopes: Array[MidScope] = []
     pub mut val blocks: Array[MidBlock] = []
     pub mut val bindings: Array[MidSourceBinding] = []
-    // A call used as a value is materialized once under its immutable frontend
-    // CallSiteKey.  Reusing this identity preserves source evaluation order
-    // without falling back to an AST/name lookup when another template refers
-    // to the same completed result.
+    // Completed dependencies of the CURRENT evaluation, not a function-wide
+    // cache. Immutable source identity selects meaning; it does not identify
+    // a runtime evaluation (defaults may share source across constructions).
     pub mut val callValues: Array[MidCallValue] = []
-    // Aggregate construction is likewise a first-class value dependency. This
-    // table preserves its once-only source evaluation without a backend AST
-    // fallback or a second source-name lookup.
+    // Call/aggregate consumers own nested evaluation scopes. Their dependency
+    // values cannot escape to a sibling consumer; only the completed result
+    // is published into the parent's evaluation scope.
     pub mut val aggregateValues: Array[MidAggregateValue] = []
     // Nested loops select only their innermost target. These parallel private
     // stacks are deliberately separate from lexical scopes: a loop has two
@@ -126,7 +125,11 @@ export struct MidBuildState {
     // solely to read its already-recorded CallTemplate by CallSiteKey.
     pub val sourceFunction: U64 = 0U64
 }
-pub impl MidBuildState { factory }
+pub impl MidBuildState {
+    factory initial(sourceFunction: U64) {
+        return <MidBuildState scopes=[<MidScope />] blocks=[<MidBlock />] sourceFunction=sourceFunction />
+    }
+}
 
 pub impl MidBuildState {
     inout fn pushLoopTarget(breakTarget: U64, continueTarget: U64, enclosingScope: U64) {
@@ -567,6 +570,27 @@ fn midSemanticAggregateElementsComplete(aggregate: SemanticAggregate) -> Bool {
 fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggregate: SemanticAggregate) -> MidOperandBuild {
     val prior: MidCallValueLookup = midAggregateValueForExpr(state: state, exprId: aggregate.exprId)
     if prior.found { return <MidOperandBuild operand=<MidOperand.Copy place=prior.place /> /> }
+    val parentCalls: Array[MidCallValue] = state.callValues
+    val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
+    state.callValues = []
+    state.aggregateValues = []
+    val built: MidOperandBuild = buildMidAggregateEvaluation(c: inout c, state: inout state, aggregate: aggregate)
+    state.callValues = parentCalls
+    state.aggregateValues = parentAggregates
+    match built.error { MidBuildError.None => {} _ => { return built } }
+    match built.operand {
+        MidOperand.Copy(place: val place) => {
+            state.aggregateValues.append(<MidAggregateValue exprId=aggregate.exprId place=place />)
+        }
+        _ => {}
+    }
+    return built
+}
+
+// Children belong to this construction's evaluation. In particular, an
+// omitted default has the same source origin in two constructions but must
+// produce a new runtime value in each of them.
+fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggregate: SemanticAggregate) -> MidOperandBuild {
     if !(midSemanticAggregateElementsComplete(aggregate: aggregate)) {
         return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=aggregate.resultTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.IncompleteAggregate /> /> />
     }
@@ -611,7 +635,6 @@ fn materializeMidAggregateValue(c: inout Comp, state: inout MidBuildState, aggre
             midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=writeDestination value=<MidRvalue.Aggregate exprId=aggregate.exprId kind=<MidAggregateKind.Array /> resultTerm=aggregate.resultTerm fieldCount=aggregate.fieldCount elements=elements /> />)
         }
     }
-    state.aggregateValues.append(<MidAggregateValue exprId=aggregate.exprId place=writeDestination />)
     return <MidOperandBuild operand=<MidOperand.Copy place=writeDestination /> />
 }
 
@@ -933,6 +956,17 @@ fn midCallReceiver(c: inout Comp, state: inout MidBuildState, exprId: U64, templ
 // provenance come entirely from the frozen CallTemplate; source Expr ids are
 // used only to materialize those already-selected value operands.
 fn buildMidCallInto(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> MidBuildError {
+    val parentCalls: Array[MidCallValue] = state.callValues
+    val parentAggregates: Array[MidAggregateValue] = state.aggregateValues
+    state.callValues = []
+    state.aggregateValues = []
+    val built: MidBuildError = buildMidCallEvaluation(c: inout c, state: inout state, exprId: exprId, destination: destination)
+    state.callValues = parentCalls
+    state.aggregateValues = parentAggregates
+    return built
+}
+
+fn buildMidCallEvaluation(c: inout Comp, state: inout MidBuildState, exprId: U64, destination: MidPlace) -> MidBuildError {
     val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
     if !midTemplateIsCallable(template: template) {
         match template.kind { CallTemplateKind.Pending => { return <MidBuildError.MissingCallTemplate /> } _ => { return <MidBuildError.UnsupportedCallTemplate /> } }
@@ -1096,6 +1130,10 @@ export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64)
     mut val result: MidBuildError = <MidBuildError.None />
     mut val i: U64 = 0U64
     while i < block.stmtLen {
+        // A completed value from an earlier statement is not an operand of
+        // this evaluation. Lexical variables live in bindings/locals instead.
+        state.callValues = []
+        state.aggregateValues = []
         val stmtId: U64 = c.arena.blockStmtPool[block.stmtStart + i]
         match c.arena.stmts[stmtId] {
             Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, ty: _, init: _) => {
@@ -1359,7 +1397,7 @@ export fn buildParametricMidBody(c: inout Comp, fnIdx: U64) -> MidBodyBuild {
     if f.hasRecv && f.recvTy == 0U64 {
         return <MidBodyBuild body=emptyMidBody(sourceFunction: fnIdx) error=<MidBuildError.InvalidFunction /> />
     }
-    mut val state: MidBuildState = <MidBuildState scopes=[<MidScope />] blocks=[<MidBlock />] sourceFunction=fnIdx />
+    mut val state: MidBuildState = <MidBuildState.initial sourceFunction=fnIdx />
     if f.hasRecv {
         // `self` is the first ABI parameter exactly like an ordinary source
         // parameter.  An `inout fn` receiver is therefore a capability-bearing

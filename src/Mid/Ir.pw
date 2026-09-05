@@ -8,7 +8,139 @@
 // Copy / Move / Drop operations on places; raw retain/release is not an IR
 // escape hatch.
 
-import ../Ir with { CallSiteKey, ValueConversionProof }
+import ../Ir with { CallSiteKey }
+
+// Canonical Mid storage is deliberately separate from the builder vocabulary
+// below.  A Mid body is read by instantiation, drop elaboration, verification,
+// and LLVM many times; none of those reads may copy an owning Array hidden in a
+// struct or enum payload.  The current MidBody form remains the transitional
+// draft carrier while users migrate to these IDs.  Once the migration is
+// complete, only MidCanonicalArena survives past the builder/freeze boundary.
+export struct MidRange {
+    pub val start: U64
+    pub val len: U64
+}
+pub impl MidRange {
+    factory
+    fn count() -> U64 { return self.len }
+}
+
+export struct MidBodyNode {
+    pub val bodyInstance: U64 = 0U64
+    pub val sourceFunction: U64 = 0U64
+    pub val locals: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val scopes: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val blocks: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val entry: U64 = 0U64
+}
+pub impl MidBodyNode { factory }
+
+export struct MidPlaceNode {
+    pub val local: U64
+    pub val projections: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val typeTerm: U64 = 0U64
+}
+pub impl MidPlaceNode { factory }
+
+export struct MidAggregateElementNode {
+    pub val fieldIndex: U64
+    pub val operand: U64
+    pub val targetTerm: U64 = 0U64
+    // A proof ID, not a recursive ValueConversionProof payload.  The proof
+    // arena is introduced together with final frontend proof DAG migration.
+    pub val conversion: U64 = 0U64
+}
+pub impl MidAggregateElementNode { factory }
+
+export struct MidSwitchCase {
+    pub val value: I64
+    pub val target: U64
+}
+pub impl MidSwitchCase { factory }
+
+// Every child reference here is a stable ID into MidCanonicalArena.  These
+// records intentionally use integer tags instead of reusing the transitional
+// nested enums: their payloads must stay scalar even when the draft enums gain
+// new source-lowering forms.
+export struct MidOperandNode {
+    pub val tag: U64
+    pub val place: U64 = 0U64
+    pub val capability: U64 = 0U64
+    pub val integerValue: U64 = 0U64
+    pub val integerNegative: Bool = false
+    pub val integerBool: Bool = false
+    pub val stringStart: U64 = 0U64
+    pub val stringLen: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+    pub val accessCandidate: U64 = 0U64
+}
+pub impl MidOperandNode { factory }
+
+export struct MidRvalueNode {
+    pub val tag: U64
+    pub val operand: U64 = 0U64
+    pub val exprId: U64 = 0U64
+    pub val kindTag: U64 = 0U64
+    pub val enumIndex: U64 = 0U64
+    pub val variantIndex: U64 = 0U64
+    pub val resultTerm: U64 = 0U64
+    pub val fieldCount: U64 = 0U64
+    pub val elements: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val conversion: U64 = 0U64
+    pub val sourceStmt: U64 = 0U64
+    pub val fieldIndex: U64 = 0U64
+    pub val bindTarget: U64 = 0U64
+}
+pub impl MidRvalueNode { factory }
+
+export struct MidStatementNode {
+    pub val tag: U64
+    pub val destination: U64 = 0U64
+    pub val value: U64 = 0U64
+    pub val source: U64 = 0U64
+    pub val flag: U64 = 0U64
+    pub val isSet: Bool = false
+    pub val scope: U64 = 0U64
+}
+pub impl MidStatementNode { factory }
+
+export struct MidTerminatorNode {
+    pub val tag: U64
+    pub val target: U64 = 0U64
+    pub val discriminant: U64 = 0U64
+    pub val cases: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val otherwise: U64 = 0U64
+    pub val calleeTag: U64 = 0U64
+    pub val callee: U64 = 0U64
+    pub val receiver: U64 = 0U64
+    pub val args: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val destination: U64 = 0U64
+    pub val state: U64 = 0U64
+}
+pub impl MidTerminatorNode { factory }
+
+export struct MidBlockNode {
+    pub val statements: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val terminator: U64 = 0U64
+}
+pub impl MidBlockNode { factory }
+
+export struct MidCanonicalArena {
+    pub mut val bodies: Array[MidBodyNode] = []
+    pub mut val locals: Array[MidLocalDecl] = []
+    pub mut val scopes: Array[MidScope] = []
+    pub mut val blocks: Array[MidBlockNode] = []
+    pub mut val statements: Array[MidStatementNode] = []
+    pub mut val terminators: Array[MidTerminatorNode] = []
+    pub mut val places: Array[MidPlaceNode] = []
+    pub mut val projections: Array[MidProjection] = []
+    pub mut val operands: Array[MidOperandNode] = []
+    pub mut val rvalues: Array[MidRvalueNode] = []
+    pub mut val aggregateElements: Array[MidAggregateElementNode] = []
+    pub mut val switchCases: Array[MidSwitchCase] = []
+    pub mut val callArguments: Array[U64] = []
+}
+pub impl MidCanonicalArena { factory }
 
 // A projection is kept first-class even though Path 1 only moves root locals.
 // Field/index paths are already needed for assignments and future borrow/access
@@ -104,7 +236,10 @@ export struct MidAggregateElement {
     // the source operand so instantiation can freeze a ValueConversionProof
     // without inspecting a declaration or field spelling.
     pub val targetTerm: U64 = 0U64
-    pub val conversion: ValueConversionProof = <ValueConversionProof.Identity />
+    // Frozen frontend ConversionProofNode ID. Zero is invalid for an
+    // instantiated aggregate element; builder leaves it zero until the
+    // BodyInstance-specific final aggregate resolution supplies it.
+    pub val conversion: U64 = 0U64
 }
 pub impl MidAggregateElement { factory }
 
@@ -123,7 +258,9 @@ export enum MidRvalue {
     // than a backend temporary list owns the temporary's lifetime.  The
     // closed proof selects leaf boxing versus structural re-packing; Mid never
     // reconstructs either decision from source syntax.
-    Convert(operand: MidOperand, conversion: ValueConversionProof)
+    // Frozen frontend ConversionProofNode ID. Mid transports selected evidence
+    // but never embeds/reconstructs its recursive proof payload.
+    Convert(operand: MidOperand, conversion: U64)
     // Read an enum tag from an already-evaluated place.  The enum declaration
     // slot comes from SemanticMatch; this is a read-only layout operation and
     // never owns/copies the complete enum value.

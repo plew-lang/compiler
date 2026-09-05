@@ -49,11 +49,8 @@ progress_stream() {
         {
             print
             done += 1
-            if ($1 == "FAIL" || done % 25 == 0 || done == total) {
-                suffix = ""
-                if ($1 == "FAIL") suffix = " (failure)"
-                printf "plewc: %s %d/%d complete%s\n", phase, done, total, suffix > "/dev/stderr"
-            }
+            printf "plewc: %s %d/%d complete: %s\n", phase, done, total, $0 > "/dev/stderr"
+            fflush("/dev/stderr")
         }
     '
 }

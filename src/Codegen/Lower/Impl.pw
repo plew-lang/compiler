@@ -1028,13 +1028,13 @@ pub impl Comp {
         mut val i: U64 = 0U64
         while i < syntaxTraitSupertraitCount(file: self.syntax, trait: t) {
             val span: Span = syntaxTraitSupertraitSpan(file: self.syntax, trait: t, index: i)
-            supertraits.append(<Bind nameStart=span.start nameLen=span.end - span.start fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
+            supertraits.append(<Bind nameStart=span.start nameLen=span.end - span.start nameId=intern(c: inout self, start: span.start, len: span.end - span.start) fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
             i += 1U64
         }
         i = 0U64
         while i < syntaxTraitAssocTypeCount(file: self.syntax, trait: t) {
             val span: Span = syntaxTraitAssocTypeSpan(file: self.syntax, trait: t, index: i)
-            assocTypes.append(<Bind nameStart=span.start nameLen=span.end - span.start fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
+            assocTypes.append(<Bind nameStart=span.start nameLen=span.end - span.start nameId=intern(c: inout self, start: span.start, len: span.end - span.start) fieldStart=span.start fieldLen=span.end - span.start offset=span.start />)
             i += 1U64
         }
         i = 0U64

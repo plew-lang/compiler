@@ -360,6 +360,96 @@ pub impl Comp {
         return true
     }
 
+    // Ref-based counterparts for the hot structural traversals.  `TypeRef`
+    // remains a migration mirror and is allowed only at construction/adaptor
+    // boundaries; equality must not copy its Array payload at every recursive
+    // step.  `typeTerms` has the same stable index as `types`.
+    inout fn typeTermRefChildCount(ref: U64) -> U64 {
+        if ref >= self.arena.typeTerms.count() { return 0U64 }
+        val t = self.arena.typeTerms[ref]
+        if t.isRecord { return t.recordFieldTerms.len }
+        if t.assocNameId != 0U64 { return 1U64 + t.assocTraitArgs.len }
+        return t.args.len + t.assocTraitArgs.len
+    }
+
+    inout fn typeTermRefProjectionReceiver(ref: U64) -> U64 {
+        if ref >= self.arena.typeTerms.count() { return 0U64 }
+        return self.arena.typeTerms[ref].projectionReceiver
+    }
+
+    inout fn typeTermRefChildRef(ref: U64, index: U64) -> U64 {
+        if ref >= self.arena.typeTerms.count() { return 0U64 }
+        val t = self.arena.typeTerms[ref]
+        if t.isRecord {
+            if index < t.recordFieldTerms.len { return self.arena.typeRecordFieldPool[t.recordFieldTerms.start + index] }
+            return 0U64
+        }
+        if t.assocNameId != 0U64 {
+            if index == 0U64 { return self.typeTermRefProjectionReceiver(ref: ref) }
+            val traitIndex: U64 = index - 1U64
+            if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + traitIndex] }
+            return 0U64
+        }
+        if index < t.args.len { return self.arena.typeArgumentPool[t.args.start + index] }
+        val traitIndex: U64 = index - t.args.len
+        if traitIndex < t.assocTraitArgs.len { return self.arena.typeAssocArgumentPool[t.assocTraitArgs.start + traitIndex] }
+        return 0U64
+    }
+
+    inout fn typeTermRefIdentityChildLabel(ref: U64, index: U64) -> U64 {
+        if ref >= self.arena.typeTerms.count() { return 0U64 }
+        val t = self.arena.typeTerms[ref]
+        if t.isRecord {
+            if index < t.recordFieldLabels.len { return self.arena.typeRecordLabelPool[t.recordFieldLabels.start + index] }
+            return 0U64
+        }
+        if t.assocNameId != 0U64 {
+            if index == 0U64 { return 0U64 }
+            val traitIndex: U64 = index - 1U64
+            if traitIndex < t.assocTraitArgLabels.len { return self.arena.typeAssocArgumentLabelPool[t.assocTraitArgLabels.start + traitIndex] }
+            return 0U64
+        }
+        // Non-existential argument labels are call syntax, not type identity.
+        if t.isAny && index < t.argLabels.len { return self.arena.typeArgumentLabelPool[t.argLabels.start + index] }
+        return 0U64
+    }
+
+    inout fn sameTypeTermViewIds(a: U64, b: U64) -> Bool {
+        if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
+        val ta = self.arena.typeTerms[a]
+        val tb = self.arena.typeTerms[b]
+        if ta.viewIds.len != tb.viewIds.len { return false }
+        mut val i: U64 = 0U64
+        while i < ta.viewIds.len {
+            val wanted: U64 = self.arena.typeViewIdPool[ta.viewIds.start + i]
+            mut val found: Bool = false
+            mut val j: U64 = 0U64
+            while j < tb.viewIds.len {
+                if wanted == self.arena.typeViewIdPool[tb.viewIds.start + j] { found = true }
+                j += 1U64
+            }
+            if !found { return false }
+            i += 1U64
+        }
+        return true
+    }
+
+    inout fn typeTermRefSameHead(a: U64, b: U64) -> Bool {
+        if a >= self.arena.typeTerms.count() || b >= self.arena.typeTerms.count() { return false }
+        val ta = self.arena.typeTerms[a]
+        val tb = self.arena.typeTerms[b]
+        if ta.isRecord || tb.isRecord { return ta.isRecord && tb.isRecord && ta.isSendable == tb.isSendable }
+        if ta.nameId != 0U64 && tb.nameId != 0U64 {
+            if ta.nameId != tb.nameId { return false }
+        } else if !(spansEqual(c: inout self, aStart: ta.nameStart, aLen: ta.nameLen, bStart: tb.nameStart, bLen: tb.nameLen)) {
+            return false
+        }
+        if ta.isAny != tb.isAny || ta.isSendable != tb.isSendable || ta.paramId != tb.paramId { return false }
+        if ta.viewExtId != tb.viewExtId || !(self.sameTypeTermViewIds(a: a, b: b)) { return false }
+        if (ta.hasDecl && tb.hasDecl && ta.declOffset != tb.declOffset) || ta.assocTraitId != tb.assocTraitId || (ta.hasAssocTraitDecl && tb.hasAssocTraitDecl && ta.assocTraitDeclOffset != tb.assocTraitDeclOffset) || ta.assocNameId != tb.assocNameId { return false }
+        return true
+    }
+
     // Reassemble a projection after a structural traversal transformed its
     // receiver and/or positional trait arguments.  Keeping the receiver
     // replacement here prevents each substitution path from accidentally
@@ -473,7 +563,7 @@ pub impl Comp {
     }
 
     inout fn ensureArrayElemDeps(elemRef: U64) {
-        if elemRef == 0 {
+        if elemRef == 0U64 {
             return
         }
         val r: U64 = self.resolveTy(tyRef: elemRef)
@@ -482,7 +572,7 @@ pub impl Comp {
         }
         val t: TypeRef = self.arena.types[r]
         if rangeEquals(bytes: self.arena.bytes, start: t.nameStart, len: t.nameLen, kw: "Array") {
-            if t.args.count() > 0 {
+            if t.args.count() > 0U64 {
                 self.registerArrayElemRef(elemRef: t.args[0])
             }
         }
@@ -708,7 +798,7 @@ pub impl Comp {
         if t.assocNameId != 0U64 {
             return self.resolveTy(tyRef: ref)
         }
-        if t.args.count() == 0 {
+        if t.args.count() == 0U64 {
             val rg: U64 = self.groundRecordStruct(ref: ref)
             if rg != ref {
                 return rg
@@ -841,14 +931,14 @@ pub impl Comp {
     }
 
     inout fn setSelfItemEnv(recvStart: U64, recvLen: U64, recvInstRef: U64) {
-        if recvInstRef != 0 {
+        if recvInstRef != 0U64 {
             self.cur.selfRef = recvInstRef
         } else {
             self.cur.selfRef = self.simpleTypeRef(nameStart: recvStart, nameLen: recvLen)
         }
         val itemR0: U64 = self.assocItemRef(recvStart: recvStart, recvLen: recvLen, recvInstRef: recvInstRef)
-        if itemR0 == 0 {
-            self.cur.itemRef = 0
+        if itemR0 == 0U64 {
+            self.cur.itemRef = 0U64
         } else {
             self.cur.itemRef = itemR0
         }
@@ -1121,7 +1211,7 @@ pub impl Comp {
             val sd: StructDef = self.arena.structs[si]
             if sd.nameId == qInst {
                 if sd.typeParams.count() == inst.args.count() {
-                    if sd.typeParams.count() > 0 {
+                    if sd.typeParams.count() > 0U64 {
                         val savedP: Array[Bind] = self.cur.typeParams
                         val savedA: Array[U64] = self.cur.typeArgs
                         self.cur.typeParams = sd.typeParams
@@ -1176,6 +1266,7 @@ pub impl Comp {
     inout fn collectGenInsts() {
         mut val fi: U64 = 0
         while fi < self.arena.funcs.count() {
+            tracePhaseProgress(c: inout self, label: "instantiation-collection:function", count: fi, stride: 64U64)
             val f: Func = self.arena.funcs[fi]
             // skip generic templates: their param/return types contain type
             // parameters (not concrete), resolved per instantiation instead.
@@ -1223,8 +1314,9 @@ pub impl Comp {
         }
         mut val si: U64 = 0
         while si < self.arena.structs.count() {
+            tracePhaseProgress(c: inout self, label: "instantiation-collection:struct", count: si, stride: 64U64)
             val s: StructDef = self.arena.structs[si]
-            if s.typeParams.count() == 0 {
+            if s.typeParams.count() == 0U64 {
                 val fs: Array[FieldDef] = s.fields
                 mut val k: U64 = 0
                 while k < fs.count() {
@@ -1236,8 +1328,9 @@ pub impl Comp {
         }
         mut val ei: U64 = 0
         while ei < self.arena.enums.count() {
+            tracePhaseProgress(c: inout self, label: "instantiation-collection:enum", count: ei, stride: 64U64)
             val e: EnumDef = self.arena.enums[ei]
-            if e.typeParams.count() == 0 {
+            if e.typeParams.count() == 0U64 {
                 val vs: Array[Variant] = e.variants
                 mut val vi: U64 = 0
                 while vi < vs.count() {
@@ -1254,6 +1347,7 @@ pub impl Comp {
         }
         mut val sti: U64 = 0
         while sti < self.arena.stmts.count() {
+            tracePhaseProgress(c: inout self, label: "instantiation-collection:statement", count: sti, stride: 256U64)
             match self.arena.stmts[sti] {
                 Stmt.Let(mutable: _, nameStart: _, nameLen: _, tyStart: _, tyLen: _, tyIsArray: _, val ty, init: _) => {
                     // annotations only: un-annotated lets register their INFERRED types
@@ -1270,6 +1364,7 @@ pub impl Comp {
         }
         mut val xi: U64 = 0
         while xi < self.arena.exprs.count() {
+            tracePhaseProgress(c: inout self, label: "instantiation-collection:expression", count: xi, stride: 256U64)
             match self.arena.exprs[xi] {
                 Expr.Cast(val operand, val tyStart, val tyLen, val ty) => {
                     self.scanType(ref: ty)

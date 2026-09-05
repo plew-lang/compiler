@@ -89,12 +89,8 @@ pub impl LlvmCtx {
         mut val dstRetRef: U64 = 0
         mut val srcRetRef: U64 = 0
         if retContainerSelf {
-            val savedSelf: U64 = c.cur.selfRef
-            c.cur.selfRef = anyRef
-            dstRetRef = c.groundTypeRef(ref: req.retTy)
-            c.cur.selfRef = wInstRef
-            srcRetRef = c.groundTypeRef(ref: req.retTy)
-            c.cur.selfRef = savedSelf
+            dstRetRef = c.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: anyRef, params: envParams, args: envArgs)
+            srcRetRef = c.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: wInstRef, params: envParams, args: envArgs)
         }
         if haveEnv {
             c.cur.typeParams = savedEP
@@ -748,10 +744,7 @@ pub impl LlvmCtx {
         // (`Self` = the existential), so reconstruct the same signature here to call it.
         mut val dstRetRef: U64 = 0
         if retContainerSelf {
-            val savedSelf: U64 = c.cur.selfRef
-            c.cur.selfRef = anyRef
-            dstRetRef = c.groundTypeRef(ref: req.retTy)
-            c.cur.selfRef = savedSelf
+            dstRetRef = c.groundTraitRequirementType(ref: req.retTy, traitIdx: traitIdx, receiverRef: anyRef, params: envParams, args: envArgs)
         }
         if haveEnv {
             c.cur.typeParams = savedEP
@@ -996,6 +989,7 @@ pub impl LlvmCtx {
                                         MidVerifyError.MoveUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.DropUnavailable => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.InvalidDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                        MidVerifyError.UninitializedDropFlag => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.UnelaboratedScopeExit => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                         MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
