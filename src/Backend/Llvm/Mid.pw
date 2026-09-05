@@ -1435,10 +1435,11 @@ pub impl LlvmCtx {
     // A Buffer element slot is an owning destination.  Normal calls normalize
     // a by-value parameter to `Borrow`: that describes the call ABI (+0), not
     // permission for an escaping store to alias the caller's owner.  Therefore
-    // every non-moving operand acquires one ARC share here.  Only an explicit
-    // Move transfers its existing share directly into the slot.
+    // a Borrow needs one ARC share here. Copy already acquired a share in
+    // operand emission, and Move transfers its existing share into the slot.
     inout fn midOperandNeedsOwnedDestination(operand: MidOperand) -> Bool {
         match operand {
+            MidOperand.Copy(place: _) => { return false }
             MidOperand.Move(place: _) => { return false }
             _ => { return true }
         }
@@ -1540,8 +1541,8 @@ pub impl LlvmCtx {
     // Constructing an aggregate is a value boundary just like a call.  The
     // semantic carrier has already selected the slot conversion; backend code
     // only realizes it and never compares declaration spellings or searches
-    // for a witness.  Each aggregate field is an owning destination, so only
-    // an explicit Move transfers an existing share.  Borrow is the normal
+    // for a witness. Each aggregate field takes the emitted owned Copy/Move
+    // value without another retain. Borrow is the normal
     // by-value ABI (+0), not permission for the aggregate to alias its source
     // without retaining.  A non-identity proof returns a freshly owned
     // converted value itself.
@@ -1571,12 +1572,10 @@ pub impl LlvmCtx {
                 val structIdx: U64 = c.structIndexByName(start: source.nameStart, len: source.nameLen)
                 if structIdx >= c.arena.structs.count() { return LLVMConstNull(self.anyTy) }
                 val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: operand)
-                // A Copy/Borrow operand leaves its source owner alive, so the
-                // fresh box must acquire its own ARC ownership.  A Move hands
-                // that ownership directly to the box cell.
-                match operand {
-                    MidOperand.Move(place: _) => {}
-                    _ => { self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true) }
+                // The box takes the operand's ownership. Only a borrowed
+                // value still needs a share; Copy acquired it during emission.
+                if self.midOperandNeedsOwnedDestination(operand: operand) {
+                    self.valueArc(c: inout c, v: value, typeRef: sourceRef, retain: true)
                 }
                 return self.boxIntoAny(c: inout c, v: value, sidx: structIdx, anyRef: targetRef, traitIdx: traitIdx)
             }

@@ -1,0 +1,18 @@
+import @Std/Io with { write }
+trait Named { fn name() -> String }
+struct Payload { pub val text: String }
+pub impl Payload { factory }
+pub impl Payload as Named { fn name() -> String { return self.text } }
+fn describe(payloads: Array[any Named]) { write(s: payloads[0U64].name()) }
+fn copyBoundary(payloads: Array[Payload]) { describe(payloads: payloads) }
+fn exercise() {
+    val payloads: Array[Payload] = [<Payload text=("heap" + "\n") />]
+    copyBoundary(payloads: payloads)
+    write(s: payloads[0U64].text)
+}
+
+fn main() {
+    exercise()
+    exercise()
+    exercise()
+}

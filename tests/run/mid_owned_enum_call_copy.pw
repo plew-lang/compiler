@@ -1,0 +1,24 @@
+import @Std/Io with { write }
+trait Named { fn name() -> String }
+struct Payload { pub val text: String }
+pub impl Payload { factory }
+pub impl Payload as Named { fn name() -> String { return self.text } }
+fn describe(payload: Optional[any Named]) {
+    match payload {
+        Optional.Some(v: val value) => { write(s: value.name()) }
+        Optional.None => { write(s: "none\n") }
+    }
+}
+fn copyBoundary(payload: Optional[Payload]) { describe(payload: payload) }
+fn exercise() {
+    val payload: Payload = <Payload text=("heap" + "\n") />
+    copyBoundary(payload: <Optional[Payload].Some v=payload />)
+    copyBoundary(payload: <Optional[Payload].None />)
+    write(s: payload.text)
+}
+
+fn main() {
+    exercise()
+    exercise()
+    exercise()
+}

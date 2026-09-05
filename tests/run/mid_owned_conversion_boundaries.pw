@@ -1,0 +1,42 @@
+import @Std/Io with { write }
+
+trait Named { fn name() -> String }
+struct Item { pub val text: String }
+pub impl Item { factory }
+pub impl Item as Named { fn name() -> String { return self.text } }
+struct Holder { pub val item: Item }
+pub impl Holder { factory }
+
+fn aggregateCopy(item: Item) -> Holder { return <Holder item=item /> }
+fn existentialCopy(item: Item) -> any Named { return item }
+fn arrayCopy(items: Array[Item]) -> Array[any Named] { return items }
+fn enumCopy(item: Optional[Item]) -> Optional[any Named] { return item }
+
+fn writeOptional(item: Optional[any Named]) {
+    match item {
+        Optional.Some(v: val value) => { write(s: value.name()) }
+        Optional.None => { write(s: "none\n") }
+    }
+}
+
+fn exercise() {
+    val text: String = "heap" + "\n"
+    val item: Item = <Item text=text />
+    val holder: Holder = aggregateCopy(item: item)
+    write(s: holder.item.text)
+    write(s: existentialCopy(item: item).name())
+    val items: Array[Item] = [item]
+    val erased: Array[any Named] = arrayCopy(items: items)
+    write(s: erased[0U64].name())
+    writeOptional(item: enumCopy(item: <Optional[Item].Some v=item />))
+    writeOptional(item: enumCopy(item: <Optional[Item].None />))
+    // Copy and structural conversion must leave the original owners usable.
+    write(s: item.text)
+    write(s: items[0U64].text)
+}
+
+fn main() {
+    exercise()
+    exercise()
+    exercise()
+}
