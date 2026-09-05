@@ -507,7 +507,7 @@ done
 # enclosing function must contain no raw-buffer retain from either count()
 # receiver. The old Mid lowering has two such retains and this is therefore a
 # real red gate for the CallResolution passing contract.
-mid_borrowed_read_receiver_results=$(sh -c '
+mid_borrowed_read_receiver_results=$(
     source="tests/run/mid_borrowed_read_receiver_cfg_lowering.pw"
     ll="/tmp/t_mid_borrowed_read_receiver_$$.ll"
     if ! "$PLEWC" --emit-mid-coverage "$source" >"$ll" 2>/dev/null; then
@@ -527,7 +527,7 @@ mid_borrowed_read_receiver_results=$(sh -c '
     else
         echo "FAIL mid-borrowed-read-receiver(owned-read)"
     fi
-' sh)
+)
 mbrrpass=$(printf '%s\n' "$mid_borrowed_read_receiver_results" | grep -c '^PASS' || true)
 for n in $(printf '%s\n' "$mid_borrowed_read_receiver_results" | sed -n 's/^FAIL //p'); do
     fail=$((fail + 1)); failed="$failed $n"
