@@ -125,6 +125,13 @@ else
     fail=$((fail + 1)); failed="$failed cli-options"
 fi
 
+# Lifetime output alone must not pass through a legacy caller unnoticed.
+if sh ./test-mid-temporary-lifetime.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-temporary-lifetime"
+fi
+
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as

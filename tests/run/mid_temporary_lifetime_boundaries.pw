@@ -1,0 +1,70 @@
+import @Std/Io with { print, write }
+
+unique struct Resource {
+    pub val tag: I64
+    deinit { print(self.tag) }
+}
+pub impl Resource { factory }
+
+// Construction admission is tested separately. These callers must own the
+// returned temporary even while the helper still uses legacy aggregate code.
+fn resource(tag: I64) -> Resource { return <Resource tag=tag /> }
+fn positive(item: borrow Resource) -> Bool { return item.tag > 0I64 }
+fn below(item: borrow Resource, index: I64) -> Bool { return index < item.tag }
+
+fn ifTemporary() {
+    if positive(item: resource(tag: 1I64)) { write(s: "if-body\n") }
+    write(s: "if-after\n")
+}
+
+fn whileTemporary() {
+    mut val index: I64 = 0I64
+    while below(item: resource(tag: 2I64), index: index) {
+        write(s: "while-body\n")
+        index += 1I64
+    }
+    write(s: "while-after\n")
+}
+
+fn andTemporary() {
+    if false && positive(item: resource(tag: 3I64)) { write(s: "unexpected\n") }
+    if true && positive(item: resource(tag: 4I64)) { write(s: "and-body\n") }
+    write(s: "and-after\n")
+}
+
+fn orTemporary() {
+    if true || positive(item: resource(tag: 5I64)) { write(s: "or-skipped\n") }
+    if false || positive(item: resource(tag: 6I64)) { write(s: "or-body\n") }
+    write(s: "or-after\n")
+}
+
+fn nestedTemporary() {
+    if positive(item: resource(tag: 7I64)) && positive(item: resource(tag: 8I64)) {
+        write(s: "nested-body\n")
+    }
+}
+
+fn statementTemporary() {
+    positive(item: resource(tag: 9I64))
+    write(s: "statement-after\n")
+}
+
+fn returnTemporary() -> Bool {
+    val owner: Resource = resource(tag: 10I64)
+    return positive(item: resource(tag: 11I64))
+}
+
+fn contextTypedTemporary() {
+    if positive(item: resource(tag: 12)) { write(s: "literal-body\n") }
+}
+
+fn main() {
+    ifTemporary()
+    whileTemporary()
+    andTemporary()
+    orTemporary()
+    nestedTemporary()
+    statementTemporary()
+    if returnTemporary() { write(s: "return-after\n") }
+    contextTypedTemporary()
+}

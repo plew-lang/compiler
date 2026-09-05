@@ -209,7 +209,7 @@ pub impl LlvmCtx {
                             }
                             }
                             _ => {
-                                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fi)
+                                self.recordMidInstantiate(c: inout c, bodyId: bodyId, fnIdx: fi, reason: instantiated.error)
                                 if c.traceCodegen { eprint(text: "[trace-codegen] Mid main: instantiation failed\n") }
                             }
                         }

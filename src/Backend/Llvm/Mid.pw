@@ -116,8 +116,8 @@ pub impl LlvmCtx {
         self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 1U64, detail: 0U64)
     }
 
-    inout fn recordMidInstantiate(c: inout Comp, bodyId: U64, fnIdx: U64) {
-        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 2U64, detail: 0U64)
+    inout fn recordMidInstantiate(c: inout Comp, bodyId: U64, fnIdx: U64, reason: MidInstantiateError) {
+        self.recordMidCoverage(c: inout c, bodyId: bodyId, fnIdx: fnIdx, stage: 2U64, detail: self.midInstantiateCoverageDetail(reason: reason))
     }
 
     inout fn recordMidAccess(c: inout Comp, bodyId: U64, fnIdx: U64) {
@@ -154,7 +154,7 @@ pub impl LlvmCtx {
         match stage {
             0U64 => { self.emitMidCoverageBuild(detail: detail) }
             1U64 => { eprint(text: "missing-body-instance") }
-            2U64 => { eprint(text: "instantiate") }
+            2U64 => { self.emitMidCoverageInstantiate(detail: detail) }
             3U64 => { eprint(text: "access") }
             4U64 => { self.emitMidCoverageVerify(detail: detail) }
             5U64 => { self.emitMidCoveragePreflight(detail: detail) }
@@ -162,6 +162,44 @@ pub impl LlvmCtx {
             _ => { eprint(text: "unknown") }
         }
         eprint(text: "\n")
+    }
+
+    fn midInstantiateCoverageDetail(reason: MidInstantiateError) -> U64 {
+        match reason {
+            MidInstantiateError.None => { return 0U64 }
+            MidInstantiateError.InvalidBodyInstance => { return 1U64 }
+            MidInstantiateError.MissingCallResolution => { return 2U64 }
+            MidInstantiateError.CallResolutionIndex => { return 3U64 }
+            MidInstantiateError.CallResolutionArity => { return 4U64 }
+            MidInstantiateError.CallResolutionPassing => { return 5U64 }
+            MidInstantiateError.CallConversionSource => { return 6U64 }
+            MidInstantiateError.CallConversionTarget => { return 7U64 }
+            MidInstantiateError.MissingReturnResolution => { return 8U64 }
+            MidInstantiateError.InvalidReturnResolution => { return 9U64 }
+            MidInstantiateError.MissingFinalResolution => { return 10U64 }
+            MidInstantiateError.InvalidFinalResolution => { return 11U64 }
+            MidInstantiateError.InvalidLocalResultType => { return 12U64 }
+        }
+    }
+
+    fn emitMidCoverageInstantiate(detail: U64) {
+        eprint(text: "instantiate:")
+        match detail {
+            0U64 => { eprint(text: "none") }
+            1U64 => { eprint(text: "invalid-body-instance") }
+            2U64 => { eprint(text: "missing-call-resolution") }
+            3U64 => { eprint(text: "call-resolution-index") }
+            4U64 => { eprint(text: "call-resolution-arity") }
+            5U64 => { eprint(text: "call-resolution-passing") }
+            6U64 => { eprint(text: "call-conversion-source") }
+            7U64 => { eprint(text: "call-conversion-target") }
+            8U64 => { eprint(text: "missing-return-resolution") }
+            9U64 => { eprint(text: "invalid-return-resolution") }
+            10U64 => { eprint(text: "missing-final-resolution") }
+            11U64 => { eprint(text: "invalid-final-resolution") }
+            12U64 => { eprint(text: "invalid-local-result-type") }
+            _ => { eprint(text: "unknown") }
+        }
     }
 
     fn emitMidCoverageBuild(detail: U64) {
