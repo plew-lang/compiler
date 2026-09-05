@@ -132,6 +132,13 @@ else
     fail=$((fail + 1)); failed="$failed mid-temporary-lifetime"
 fi
 
+# Heap-copy ownership tests must exercise Mid rather than legacy lowering.
+if sh ./test-mid-copy-owned-destination.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-copy-owned-destination"
+fi
+
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as

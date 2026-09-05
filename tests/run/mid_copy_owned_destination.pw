@@ -1,0 +1,28 @@
+import @Std/Io with { write }
+
+// Concatenation is heap-backed: immortal literals would hide surplus retains.
+// Exercise both assignment from Copy and each return boundary independently.
+fn bindingCopy(value: String) {
+    val copy: String = value
+    write(s: copy)
+}
+
+fn returningCopy(value: String, early: Bool) -> String {
+    if early { return value }
+    return value
+}
+
+fn runCopies() {
+    val source: String = "owned " + "copy\n"
+    bindingCopy(value: source)
+    write(s: returningCopy(value: source, early: true))
+    write(s: returningCopy(value: source, early: false))
+    write(s: source)
+}
+
+// Leave the owning frame before process-exit leak scanning.
+fn main() {
+    runCopies()
+    runCopies()
+    runCopies()
+}

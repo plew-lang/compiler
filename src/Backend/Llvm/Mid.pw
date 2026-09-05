@@ -1432,10 +1432,6 @@ pub impl LlvmCtx {
         }
     }
 
-    inout fn midOperandIsCopy(operand: MidOperand) -> Bool {
-        match operand { MidOperand.Copy(place: _) => { return true } _ => { return false } }
-    }
-
     // A Buffer element slot is an owning destination.  Normal calls normalize
     // a by-value parameter to `Borrow`: that describes the call ABI (+0), not
     // permission for an escaping store to alias the caller's owner.  Therefore
@@ -1737,18 +1733,14 @@ pub impl LlvmCtx {
                         mut val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: operand)
                         val ty: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: destination.local)
                         if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: ty, unsigned: false) }
-                        if self.midOperandIsCopy(operand: operand) && destination.local < body.locals.count() {
-                            self.valueArc(c: inout c, v: value, typeRef: body.locals[destination.local].typeTerm, retain: true)
-                        }
+                        // Operand emission already acquired Copy's one owned
+                        // share (or transferred Move's). Store takes that share.
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
                     MidRvalue.ReturnBoundary(exprId: _, targetTerm: _, operand: val operand) => {
                         mut val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: operand)
                         val ty: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: destination.local)
                         if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: ty, unsigned: false) }
-                        if self.midOperandIsCopy(operand: operand) && destination.local < body.locals.count() {
-                            self.valueArc(c: inout c, v: value, typeRef: body.locals[destination.local].typeTerm, retain: true)
-                        }
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
                     MidRvalue.Aggregate(exprId: _, kind: val kind, resultTerm: val resultTerm, fieldCount: val fieldCount, elements: val elements) => {
