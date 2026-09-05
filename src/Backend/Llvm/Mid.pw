@@ -1389,10 +1389,16 @@ pub impl LlvmCtx {
         return pointer
     }
 
+    // Read the representation without acquiring or consuming ownership.
+    // The enclosing Mid operation determines how that representation is used.
+    inout fn midReadPlace(c: inout Comp, body: MidBody, place: MidPlace) -> LLVMValueRef {
+        return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
+    }
+
     inout fn midEmitOperand(c: inout Comp, body: MidBody, operand: MidOperand) -> LLVMValueRef {
         match operand {
             MidOperand.Copy(place: val place) => {
-                val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
+                val value: LLVMValueRef = self.midReadPlace(c: inout c, body: body, place: place)
                 // Copy is an owned value operation under Plew value semantics.
                 // The source place retains its owner; this new value receives
                 // its own ARC share before any subsequent Mid drop consumes it.
@@ -1402,13 +1408,13 @@ pub impl LlvmCtx {
                 return value
             }
             MidOperand.Move(place: val place) => {
-                return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
+                return self.midReadPlace(c: inout c, body: body, place: place)
             }
             MidOperand.Borrow(place: val place, capability: _) => {
                 // The first lowering slice has no by-reference consumer yet.
                 // Keep the value load here only for copyable scalar control
                 // operands; call/inout lowering will consume the place itself.
-                return LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
+                return self.midReadPlace(c: inout c, body: body, place: place)
             }
             MidOperand.Constant(value: val value) => {
                 match value {
@@ -1584,12 +1590,20 @@ pub impl LlvmCtx {
                 // an independently-owned destination buffer.  A Move source
                 // needs a separate consume/drop rule before it can join this
                 // initial slice; never silently treat that transfer as Copy.
-                match operand { MidOperand.Copy(place: _) => {} _ => { return LLVMConstNull(self.ptrty) } }
-                return self.midEmitArrayRepack(c: inout c, body: body, source: self.midEmitOperand(c: inout c, body: body, operand: operand), sourceRef: sourceRef, targetRef: targetRef, element: element)
+                match operand {
+                    MidOperand.Copy(place: val place) => {
+                        return self.midEmitArrayRepack(c: inout c, body: body, source: self.midReadPlace(c: inout c, body: body, place: place), sourceRef: sourceRef, targetRef: targetRef, element: element)
+                    }
+                    _ => { return LLVMConstNull(self.ptrty) }
+                }
             }
             ValueConversionProof.EnumRepack(sourceRef: val sourceRef, targetRef: val targetRef, enumIdx: val enumIdx, payloads: val payloads) => {
-                match operand { MidOperand.Copy(place: _) => {} _ => { return LLVMConstNull(self.ptrty) } }
-                return self.midEmitEnumRepack(c: inout c, source: self.midEmitOperand(c: inout c, body: body, operand: operand), sourceRef: sourceRef, targetRef: targetRef, enumIdx: enumIdx, payloads: payloads)
+                match operand {
+                    MidOperand.Copy(place: val place) => {
+                        return self.midEmitEnumRepack(c: inout c, source: self.midReadPlace(c: inout c, body: body, place: place), sourceRef: sourceRef, targetRef: targetRef, enumIdx: enumIdx, payloads: payloads)
+                    }
+                    _ => { return LLVMConstNull(self.ptrty) }
+                }
             }
             _ => { return LLVMConstNull(self.anyTy) }
         }
