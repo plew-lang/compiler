@@ -1,0 +1,16 @@
+import @Std/Io with { print }
+
+fn items[T](example: T, values: Array[T] = []) -> Array[T] { return values }
+
+fn exercise() {
+    mut val numbers: Array[I64] = items(example: 1I64)
+    mut val words: Array[String] = items(example: "sample")
+    numbers.append(42I64)
+    words.append("heap" + "-value")
+    print(numbers[0U64])
+    print(words[0U64])
+    print(items(example: 2I64).count())
+    print(items(example: "another").count())
+}
+
+fn main() { exercise() }

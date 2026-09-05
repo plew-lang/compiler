@@ -1,0 +1,15 @@
+import @Std/Io with { print, write }
+import ./Defaults with { choose }
+
+fn message() -> String {
+    write(s: "caller\n")
+    return "explicit" + "-value"
+}
+
+fn exercise() {
+    print(choose())
+    print(choose())
+    print(choose(value: message()))
+}
+
+fn main() { exercise() }

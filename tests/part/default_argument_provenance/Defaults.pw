@@ -1,0 +1,8 @@
+import @Std/Io with { write }
+
+fn message() -> String {
+    write(s: "default\n")
+    return "decl" + "aration"
+}
+
+export fn choose(value: String = message()) -> String { return value }

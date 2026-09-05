@@ -1,0 +1,26 @@
+import @Std/Io with { print, write }
+
+unique struct Resource {
+    pub val tag: I64
+    deinit { print(self.tag) }
+}
+pub impl Resource { factory }
+
+fn resource() -> Resource {
+    write(s: "create\n")
+    return <Resource tag=7I64 />
+}
+
+fn inspect(item: borrow Resource = resource()) -> Bool {
+    write(s: "inspect\n")
+    return item.tag > 0I64
+}
+
+fn exercise() {
+    if inspect() { write(s: "body\n") }
+    write(s: "after\n")
+    if false && inspect() { write(s: "unexpected\n") }
+    if inspect() { write(s: "again\n") }
+}
+
+fn main() { exercise() }
