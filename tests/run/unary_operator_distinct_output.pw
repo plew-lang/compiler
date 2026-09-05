@@ -1,0 +1,24 @@
+import @Std/Io with { print }
+import @Std/Core with { Neg, BitNot }
+
+struct Number { pub val value: I64 }
+pub impl Number { factory }
+
+impl Number as Neg {
+    type Output = I64
+    assoc fn neg(value~: Number) -> I64 { return 0I64 - value.value }
+}
+impl Number as BitNot {
+    type Output = I64
+    assoc fn bitnot(value~: Number) -> I64 { return 0I64 - value.value - 1I64 }
+}
+
+fn negativeOutput(value: Number) -> I64 { return -value }
+fn logicalOutput(value: Bool) -> Bool { return !value }
+fn bitwiseOutput(value: Number) -> I64 { return ~value }
+
+fn main() {
+    print(negativeOutput(value: <Number value=7I64 />))
+    print(logicalOutput(value: false))
+    print(bitwiseOutput(value: <Number value=11I64 />))
+}
