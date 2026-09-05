@@ -252,7 +252,15 @@ pub impl Comp {
 
     inout fn semanticExprTerm(exprId: U64) -> U64 {
         if exprId < self.arena.semanticExprTypes.count() {
-            return self.arena.semanticExprTypes[exprId].term
+            val entry: SemanticExprType = self.arena.semanticExprTypes[exprId]
+            if entry.term != 0U64 { return entry.term }
+            // A checked numeric context is a semantic type constraint, even
+            // when Record captured the literal before that context existed.
+            // Preserve the unknown legacy shape for literal inference; typed
+            // consumers share this projection instead of guessing a width.
+            if entry.literalContext != 0U64 {
+                return self.typedIrRefOfInfo(ti: self.exprIntCtxTypeInfo(id: exprId))
+            }
         }
         return 0U64
     }

@@ -1523,7 +1523,14 @@ pub impl Comp {
             CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
                 return self.bodyCalleeResultForTemplateDependency(exprId: exprId, siteKey: siteKey)
             }
-            CallArgumentSource.Legacy(exprId: _, val info) => {
+            CallArgumentSource.Legacy(exprId: val exprId, val info) => {
+                // Literal context can be checked after the template captured
+                // its unknown adapter. Consume that recorded semantic fact,
+                // without reopening syntax or inferring from the callee ABI.
+                val term: U64 = self.semanticExprTerm(exprId: exprId)
+                if term != 0U64 {
+                    return self.groundTermForBody(ref: term, environment: self.cur.bodyEnvironment, selfRef: self.cur.bodySelfRef, itemRef: self.cur.bodyItemRef)
+                }
                 return self.typedIrRefOfInfo(ti: info)
             }
         }
