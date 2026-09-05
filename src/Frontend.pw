@@ -1101,40 +1101,44 @@ export fn runFrontend(c: inout Comp) {
     mut val emitMidCoverage: Bool = false
     mut val requireMid: Bool = false
     mut val entryArgIdx: I64 = 1
-    if argCount() > 1 {
-        if argAt(1) == "--gen" {
+    while entryArgIdx < argCount() {
+        val option: String = argAt(entryArgIdx)
+        mut val recognized: Bool = false
+        if option == "--gen" {
             genMode = true
-            entryArgIdx = 2
+            recognized = true
         }
         // `plewc --tc-log <file>`: run the new TypeRef-based type checker in
         // log-only mode (print mismatches, reject nothing) for development/triage.
-        if argAt(1) == "--tc-log" {
+        if option == "--tc-log" {
             tcLog = true
-            entryArgIdx = 2
+            recognized = true
         }
         // `plewc --asan <file>`: emit a module that a downstream `opt -passes=asan`
         // can actually instrument (host target triple + `sanitize_address` on every
         // defined function). See Comp.asan and Backend emitLlvm.
-        if argAt(1) == "--asan" {
+        if option == "--asan" {
             asan = true
-            entryArgIdx = 2
+            recognized = true
         }
-        if argAt(1) == "--trace-codegen" {
+        if option == "--trace-codegen" {
             traceCodegen = true
-            entryArgIdx = 2
+            recognized = true
         }
-        if argAt(1) == "--trace-phases" {
+        if option == "--trace-phases" {
             tracePhases = true
-            entryArgIdx = 2
+            recognized = true
         }
-        if argAt(1) == "--emit-mid-coverage" {
+        if option == "--emit-mid-coverage" {
             emitMidCoverage = true
-            entryArgIdx = 2
+            recognized = true
         }
-        if argAt(1) == "--require-mid" {
+        if option == "--require-mid" {
             requireMid = true
-            entryArgIdx = 2
+            recognized = true
         }
+        if !recognized { break }
+        entryArgIdx += 1
     }
     // The caller creates the compiler arena. The loader below fills `bytes`/`moduleRanges` and lowers
     // every item into it: PARSE-DRIVEN LOADING — each file's source is appended to

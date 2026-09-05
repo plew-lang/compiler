@@ -118,6 +118,13 @@ for n in $(printf '%s\n' "$run_results" | sed -n 's/^FAIL //p'); do
 done
 skip=0
 
+# Keep phase tracing composable with both coverage modes used for self-hosting.
+if sh ./test-cli-options.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed cli-options"
+fi
+
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as
