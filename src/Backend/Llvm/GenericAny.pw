@@ -28,6 +28,15 @@ pub impl LlvmCtx {
 pub impl LlvmCtx {
 
     inout fn llvmTypeOfRef(c: inout Comp, ref: U64) -> LLVMTypeRef {
+        if c.arena.types[ref].isRecord {
+            val layoutIndex: U64 = c.recordStructIndex(ref: ref)
+            if layoutIndex < c.arena.structs.count() {
+                val slot: U64 = self.structSlotForSidx(c: inout c, sidx: layoutIndex)
+                if slot < self.genStructTys.count() { return self.genStructTys[slot] }
+            }
+            c.errorAt(offset: c.arena.types[ref].nameStart, msg: "internal error (compiler bug): record LLVM type requires a registered layout matching its semantic field types")
+            return self.i64ty
+        }
         // an existential `any P`: the fat pointer { data, vtable }, not the named
         // trait's (nonexistent) own layout.
         if refIsAny(c: inout c, ref: ref) {

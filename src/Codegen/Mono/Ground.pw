@@ -664,6 +664,40 @@ pub impl Comp {
         return out
     }
 
+    // A synthetic name is an ABI attachment, not Record identity. Explicit
+    // instance grounding preserves that attachment while replacing field terms.
+    // Match layouts against the complete semantic fields without substituting
+    // ambient parameters or recovering terms from a template StructDef.
+    inout fn recordLayoutMatches(ref: U64, structIndex: U64) -> Bool {
+        if ref >= self.arena.types.count() || structIndex >= self.arena.structs.count() { return false }
+        val term: TypeRef = self.arena.types[ref]
+        val layout: StructDef = self.arena.structs[structIndex]
+        if !term.isRecord || term.recordFieldLabels.count() != term.recordFieldTerms.count() { return false }
+        if layout.nameLen == 0U64 || layout.isExtern || layout.typeParams.count() != 0U64 { return false }
+        if self.arena.bytes[layout.nameStart] != 40U8 || layout.fields.count() != term.recordFieldTerms.count() { return false }
+        mut val index: U64 = 0U64
+        while index < layout.fields.count() {
+            val field: FieldDef = layout.fields[index]
+            if field.nameId != term.recordFieldLabels[index] || !self.typeRefEq(a: field.ty, b: term.recordFieldTerms[index]) { return false }
+            index += 1U64
+        }
+        return true
+    }
+
+    inout fn recordStructIndex(ref: U64) -> U64 {
+        if ref >= self.arena.types.count() { return self.arena.structs.count() }
+        val term: TypeRef = self.arena.types[ref]
+        if !term.isRecord { return self.arena.structs.count() }
+        val attached: U64 = self.structIndexByName(start: term.nameStart, len: term.nameLen)
+        if self.recordLayoutMatches(ref: ref, structIndex: attached) { return attached }
+        mut val index: U64 = 0U64
+        while index < self.arena.structs.count() {
+            if self.recordLayoutMatches(ref: ref, structIndex: index) { return index }
+            index += 1U64
+        }
+        return self.arena.structs.count()
+    }
+
     inout fn groundRecordStruct(ref: U64) -> U64 {
         val t: TypeRef = self.arena.types[ref]
         if t.nameLen == 0U64 {
@@ -1158,11 +1192,21 @@ pub impl Comp {
                 self.monoWork.fnTypes.append(ref)
             }
         }
+        // Semantic Record children remain authoritative even when explicit body
+        // grounding retained the template's synthetic layout name.
+        if t.isRecord {
+            mut val field: U64 = 0U64
+            while field < t.recordFieldTerms.count() {
+                self.scanType(ref: t.recordFieldTerms[field])
+                field += 1U64
+            }
+        }
+        // Legacy name-only record adapters still require their registered fields.
         // an anonymous record `(index:U64, value:I32)` (grounded + registered above by
         // groundTypeRef -> groundRecordStruct): scan its field types so a nested generic /
         // array / Ref element registers too. Records carry no type args, so the args loop
         // above misses their components. Detect by the leading `(`.
-        if t.nameLen > 0U64 {
+        if !t.isRecord && t.nameLen > 0U64 {
             if self.arena.bytes[t.nameStart] == 40U8 {
                 val rsi: U64 = self.structIndexByName(start: t.nameStart, len: t.nameLen)
                 if rsi < self.arena.structs.count() {

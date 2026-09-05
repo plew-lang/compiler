@@ -23,6 +23,14 @@ pub impl Comp {
             return <ArcClass.Scalar />
         }
         val t: TypeRef = self.arena.types[ref]
+        if t.isRecord {
+            val layout: U64 = self.recordStructIndex(ref: ref)
+            if layout < self.arena.structs.count() {
+                return <ArcClass.StructVal sidx=layout />
+            }
+            self.errorAt(offset: t.nameStart, msg: "internal error (compiler bug): record ownership requires a registered layout matching its semantic field types")
+            return <ArcClass.Scalar />
+        }
         // an existential `any P` (spec/08): the ref carries the TRAIT's name, so it
         // must classify here — before every name-based class below (falling through
         // would land on Scalar and silently skip the box's release).
