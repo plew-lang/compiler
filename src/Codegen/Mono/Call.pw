@@ -83,28 +83,37 @@ pub impl Comp {
     }
 
     inout fn freezeValueConversionProof(proof: ValueConversionProof) -> U64 {
-        val id: U64 = self.arena.conversionProofs.count() + 1U64
+        // Freeze children first. Their recursive appends must not claim the
+        // parent's ID or interleave the parent's contiguous payload range.
+        mut val node: ConversionProofNode = <ConversionProofNode tag=1U64 />
         match proof {
-            ValueConversionProof.Identity => { self.arena.conversionProofs.append(<ConversionProofNode tag=0U64 />) }
-            ValueConversionProof.Missing => { self.arena.conversionProofs.append(<ConversionProofNode tag=1U64 />) }
+            ValueConversionProof.Identity => { node = <ConversionProofNode tag=0U64 /> }
+            ValueConversionProof.Missing => { node = <ConversionProofNode tag=1U64 /> }
             ValueConversionProof.ExistentialBox(sourceRef: val sourceRef, targetRef: val targetRef, traitIdx: val traitIdx, proof: val staticProof) => {
-                self.arena.conversionProofs.append(<ConversionProofNode tag=2U64 sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx staticProof=self.freezeStaticConformanceProof(proof: staticProof) />)
+                node = <ConversionProofNode tag=2U64 sourceRef=sourceRef targetRef=targetRef traitIdx=traitIdx staticProof=self.freezeStaticConformanceProof(proof: staticProof) />
             }
             ValueConversionProof.ArrayRepack(sourceRef: val sourceRef, targetRef: val targetRef, element: val element) => {
-                self.arena.conversionProofs.append(<ConversionProofNode tag=3U64 sourceRef=sourceRef targetRef=targetRef element=self.freezeValueConversionProof(proof: element) />)
+                node = <ConversionProofNode tag=3U64 sourceRef=sourceRef targetRef=targetRef element=self.freezeValueConversionProof(proof: element) />
             }
             ValueConversionProof.EnumRepack(sourceRef: val sourceRef, targetRef: val targetRef, enumIdx: val enumIdx, payloads: val payloads) => {
-                val start: U64 = self.arena.conversionPayloadPool.count()
+                mut val frozen: Array[FrozenEnumPayloadConversion] = []
                 mut val i: U64 = 0U64
                 while i < payloads.count() {
                     val payload: EnumPayloadConversion = payloads[i]
-                    self.arena.conversionPayloadPool.append(<FrozenEnumPayloadConversion sourceRef=payload.sourceRef targetRef=payload.targetRef conversion=self.freezeValueConversionProof(proof: payload.conversion) />)
+                    frozen.append(<FrozenEnumPayloadConversion sourceRef=payload.sourceRef targetRef=payload.targetRef conversion=self.freezeValueConversionProof(proof: payload.conversion) />)
                     i += 1U64
                 }
-                self.arena.conversionProofs.append(<ConversionProofNode tag=4U64 sourceRef=sourceRef targetRef=targetRef enumIdx=enumIdx payloads=start payloadCount=payloads.count() />)
+                val start: U64 = self.arena.conversionPayloadPool.count()
+                i = 0U64
+                while i < frozen.count() {
+                    self.arena.conversionPayloadPool.append(frozen[i])
+                    i += 1U64
+                }
+                node = <ConversionProofNode tag=4U64 sourceRef=sourceRef targetRef=targetRef enumIdx=enumIdx payloads=start payloadCount=frozen.count() />
             }
         }
-        return id
+        self.arena.conversionProofs.append(node)
+        return self.arena.conversionProofs.count()
     }
 
     fn frozenWitnessMatchAt(index: U64) -> FrozenWitnessMatch {

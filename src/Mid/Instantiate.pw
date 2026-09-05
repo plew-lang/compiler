@@ -154,6 +154,13 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             val resolution: FinalReturnResolution = c.arena.finalReturns[resolutionIndex]
             val expectedTarget: U64 = c.groundTermForBody(ref: targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
             if !(c.typeRefEq(a: resolution.targetTypeRef, b: expectedTarget)) {
+                if c.traceCodegen {
+                    eprint(text: "[trace-codegen] Mid return target mismatch expected=")
+                    c.traceMonoTypeHead(ref: expectedTarget)
+                    eprint(text: " final=")
+                    c.traceMonoTypeHead(ref: resolution.targetTypeRef)
+                    eprint(text: "\n")
+                }
                 if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
                 return <MidRvalue.Use operand=operand />
             }
@@ -170,6 +177,17 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                 return <MidRvalue.Use operand=operand />
             } else {
                 if !(c.typeRefEq(a: midOperandTypeRef(operand: operand), b: midConversionSourceRef(c: c, conversion: conversion))) || !(c.typeRefEq(a: resolution.targetTypeRef, b: midConversionTargetRef(c: c, conversion: conversion))) {
+                    if c.traceCodegen {
+                        eprint(text: "[trace-codegen] Mid return conversion mismatch operand=")
+                        c.traceMonoTypeHead(ref: midOperandTypeRef(operand: operand))
+                        eprint(text: " proof-source=")
+                        c.traceMonoTypeHead(ref: midConversionSourceRef(c: c, conversion: conversion))
+                        eprint(text: " target=")
+                        c.traceMonoTypeHead(ref: resolution.targetTypeRef)
+                        eprint(text: " proof-target=")
+                        c.traceMonoTypeHead(ref: midConversionTargetRef(c: c, conversion: conversion))
+                        eprint(text: "\n")
+                    }
                     if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidReturnResolution /> }
                     return <MidRvalue.Use operand=operand />
                 }
@@ -478,6 +496,10 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
                                                 eprintU64(n: midOperandTypeRef(operand: args[argumentI]))
                                                 eprint(text: " source-term=")
                                                 eprintU64(n: sourceRef)
+                                                eprint(text: " operand=")
+                                                c.traceMonoTypeHead(ref: midOperandTypeRef(operand: args[argumentI]))
+                                                eprint(text: " proof-source=")
+                                                c.traceMonoTypeHead(ref: sourceRef)
                                                 eprint(text: "\n")
                                             }
                                             if !midInstantiateHasError(error: error) { error = <MidInstantiateError.CallConversionSource /> }
