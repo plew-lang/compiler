@@ -11,14 +11,18 @@ pub impl Comp {
     }
 
     // A let binding owns one semantic TypeTerm.  For an annotation that is the
-    // written type; without one it is the already-recorded initializer term.
+    // written type resolved in this declaration environment; without one it
+    // is the already-recorded initializer term.
     // Keep this construction shared by Record and generic-body validation: an
     // unannotated `val it = self` in a provided trait method must remain
     // abstract `Self`, rather than degrading to a name-shaped fallback during
     // the later checker walk.
     inout fn addLetLocal(nameStart: U64, nameLen: U64, tyStart: U64, tyLen: U64, tyIsArray: Bool, ty: U64, init: U64, mutable: Bool, owned: Bool) {
         val inferred: LetEff = self.inferLetType(tyStart: tyStart, tyLen: tyLen, tyIsArray: tyIsArray, ty: ty, init: init)
-        mut val term: U64 = inferred.ty
+        // An annotation can contain abstract associated types below a nominal
+        // constructor. Store Array[Self#Iterator.Item], not the unresolved
+        // Array[Item] spelling that could alias an unrelated nominal Item.
+        mut val term: U64 = self.groundTypeRef(ref: inferred.ty)
         if ty == 0U64 {
             val initializerTerm: U64 = self.parametricExprTerm(exprId: init)
             if initializerTerm != 0U64 { term = initializerTerm }

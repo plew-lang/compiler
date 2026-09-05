@@ -860,6 +860,17 @@ pub impl Comp {
             return
         }
         if !(self.typesCompatible(expected: expectedRef, inferred: inferred)) {
+            if self.traceCodegen {
+                eprint(text: "[trace-codegen] generic-type-mismatch expected=")
+                self.traceMonoTypeHead(ref: expectedRef)
+                eprint(text: " grounded-expected=")
+                self.traceMonoTypeHead(ref: self.groundTypeRef(ref: expectedRef))
+                eprint(text: " inferred=")
+                self.traceMonoTypeHead(ref: inferred)
+                eprint(text: " grounded-inferred=")
+                self.traceMonoTypeHead(ref: self.groundTypeRef(ref: inferred))
+                eprint(text: "\n")
+            }
             self.errorAt(offset: self.exprOffset(id: valueExpr), msg: "type mismatch in a generic body: a type parameter is a distinct opaque type, not the type required here (spec/06)")
         }
     }
@@ -1064,7 +1075,11 @@ pub impl Comp {
                 mut val pi: U64 = 0
                 while pi < f.params.count() {
                     val p: Param = self.funcParamAt(params: f.params, index: pi)
-                    self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: p.ty, isInout: p.isInout, isMut: false, owned: false)
+                    // Parameter annotations belong to this declaration's
+                    // abstract environment, including associated types nested
+                    // in a function value's parameter and result types.
+                    val parameterTerm: U64 = self.groundTypeRef(ref: p.ty)
+                    self.addLocal(nameStart: p.nameStart, nameLen: p.nameLen, tyStart: p.tyStart, tyLen: p.tyLen, isArray: p.tyIsArray, ty: parameterTerm, isInout: p.isInout, isMut: false, owned: false)
                     pi += 1
                 }
                 self.checkBoundsBlock(blkId: f.body)
