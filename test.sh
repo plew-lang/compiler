@@ -212,7 +212,7 @@ mid_short_circuit_results=$(sh -c '
     if ! "$PLEWC" --emit-mid-coverage "$source" >/tmp/t_mid_short_circuit_$$.ll 2>"$coverage"; then
         echo "FAIL mid-short-circuit(emit)"; exit 0
     fi
-    if grep -Eq "name=(andFalse|andTrue|orTrue|orFalse|andLoop|orLoop) category=" "$coverage"; then
+    if grep -Eq "name=(andFalse|andTrue|orTrue|orFalse|andLoop|orLoop|argumentAndFalse|argumentOrTrue|negatedOrTrue|negatedAndTrue|nestedArgument) category=" "$coverage"; then
         echo "FAIL mid-short-circuit(legacy)"
     else
         echo "PASS mid-short-circuit"

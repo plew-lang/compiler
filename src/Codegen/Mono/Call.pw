@@ -4640,7 +4640,9 @@ pub impl Comp {
             Expr.Binary(val op, val lhs, val rhs) => {
                 self.scanExprInsts(exprId: lhs)
                 self.scanExprInsts(exprId: rhs)
-                self.recordBodyOperatorCallee(exprId: exprId)
+                if op != opAnd() && op != opOr() {
+                    self.recordBodyOperatorCallee(exprId: exprId)
+                }
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
                 mut val i: U64 = 0

@@ -6,3 +6,10 @@ rhs
 or-false
 and-loop
 or-loop
+argument-and
+argument-or
+negated-or
+rhs
+negated-and
+rhs
+nested-argument

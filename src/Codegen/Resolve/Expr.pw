@@ -524,8 +524,13 @@ pub impl Comp {
             Expr.Unary(op: _, operand: _) => {
                 return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
             }
-            Expr.Binary(op: _, lhs: _, rhs: _) => {
-                return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+            Expr.Binary(op: val op, lhs: _, rhs: _) => {
+                // Logical connectors are control flow, not trait calls. Their
+                // Bool term is complete; Mid materializes their short-circuit
+                // CFG through the ordinary value source path below.
+                if op != opAnd() && op != opOr() {
+                    return <CallArgumentSource.PriorCallResult exprId=exprId siteKey=self.templateCallSiteKey(fnIdx: self.cur.checkFn, exprId: exprId) />
+                }
             }
             _ => {}
         }
@@ -574,6 +579,7 @@ pub impl Comp {
     }
 
     inout fn recordOperatorTemplate(exprId: U64, op: I64, operandExprs: Array[U64], isUnary: Bool) {
+        if !isUnary && (op == opAnd() || op == opOr()) { return }
         mut val operands: Array[CallArgumentSource] = []
         mut val i: U64 = 0U64
         while i < operandExprs.count() {
