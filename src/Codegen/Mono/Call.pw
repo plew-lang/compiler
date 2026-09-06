@@ -4023,6 +4023,16 @@ pub impl Comp {
         }
     }
 
+    fn finalAccessCandidateForExpr(exprId: U64) -> U64 {
+        mut val candidateI: U64 = 0U64
+        while candidateI < self.decls.accessCandidates.count() {
+            val candidate = self.decls.accessCandidates[candidateI]
+            if candidate.readExpr == exprId || candidate.placeExpr == exprId { return candidateI + 1U64 }
+            candidateI = candidateI + 1U64
+        }
+        return 0U64
+    }
+
     // Freeze storage provenance only after the final-callable worklist has
     // reached a fixpoint. This joins two already-selected calls; it neither
     // names Index/IndexSet nor asks the type checker to resolve a second
@@ -4055,13 +4065,20 @@ pub impl Comp {
                                 val keyTerm: U64 = self.semanticExprTerm(exprId: keyExpr)
                                 val valueTerm: U64 = self.semanticExprTerm(exprId: candidate.readExpr)
                                 val accessTerm: U64 = self.semanticExprTerm(exprId: use.accessExpr)
-                                val baseInput: U64 = self.freezeFinalAccessInput(exprId: baseExpr)
+                                val nestedCandidate: U64 = self.finalAccessCandidateForExpr(exprId: baseExpr)
+                                mut val baseInput: U64 = 0U64
+                                if nestedCandidate != 0U64 {
+                                    self.arena.semanticAccessInputs.append(<SemanticAccessInput tag=4U64 typeTerm=baseTerm />)
+                                    baseInput = self.arena.semanticAccessInputs.count()
+                                } else {
+                                    baseInput = self.freezeFinalAccessInput(exprId: baseExpr)
+                                }
                                 val keyInput: U64 = self.freezeFinalAccessInput(exprId: keyExpr)
                                 val accessInput: U64 = self.freezeFinalAccessProjection(rootExpr: candidate.readExpr, exprId: use.accessExpr)
                                 if baseInput == 0U64 || keyInput == 0U64 || accessInput == 0U64 {
                                     self.errorAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access candidate has no frozen Mid input recipe")
                                 } else {
-                                    self.arena.semanticAccesses.append(<SemanticAccess bodyId=parent.bodyId candidateIndex=use.candidateIndex baseInput=baseInput keyInput=keyInput accessInput=accessInput baseExpr=baseExpr keyExpr=keyExpr baseTerm=baseTerm keyTerm=keyTerm valueTerm=valueTerm accessExpr=use.accessExpr accessTerm=accessTerm readResolution=readResolution writeResolution=writeResolution parentResolution=parentIndex role=use.role argIndex=use.argIndex parameterIndex=use.parameterIndex write=use.write />)
+                                    self.arena.semanticAccesses.append(<SemanticAccess bodyId=parent.bodyId candidateIndex=use.candidateIndex nestedCandidate=nestedCandidate baseInput=baseInput keyInput=keyInput accessInput=accessInput baseExpr=baseExpr keyExpr=keyExpr baseTerm=baseTerm keyTerm=keyTerm valueTerm=valueTerm accessExpr=use.accessExpr accessTerm=accessTerm readResolution=readResolution writeResolution=writeResolution parentResolution=parentIndex role=use.role argIndex=use.argIndex parameterIndex=use.parameterIndex write=use.write />)
                                 }
                             }
                             _ => { self.errorAt(offset: self.exprOffset(id: parent.exprId), msg: "internal error: access candidate lost its indexed storage path") }

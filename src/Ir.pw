@@ -2283,6 +2283,10 @@ pub impl AccessUse { factory }
 export struct SemanticAccess {
     pub val bodyId: U64
     pub val candidateIndex: U64
+    // One-based candidate identity for a nested access used as this access's
+    // base, or zero when the base is an ordinary frozen input. This removes
+    // the former Mid-side search through AccessCandidate source Expr IDs.
+    pub val nestedCandidate: U64 = 0U64
     // One-based SemanticAccessInput identities for the selected getter
     // receiver/key and the selected projection passed to the parent call.
     // They intentionally replace the former AST navigation anchors below.
