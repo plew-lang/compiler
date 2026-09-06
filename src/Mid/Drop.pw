@@ -323,6 +323,41 @@ export fn analyzeCanonicalMidAccessibility(c: Comp, canonical: MidCanonicalBody)
     return incoming
 }
 
+fn canonicalMidIsAccessibilityCliff(c: Comp, canonical: MidCanonicalBody, ownership: Array[Array[MidOwnership]], accessibility: Array[Array[MidAccessibility]], blockI: U64, local: U64) -> Bool {
+    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return false }
+    val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    if blockI >= body.blocks.len || blockI >= ownership.count() || blockI >= accessibility.count() || local >= ownership[blockI].count() || local >= accessibility[blockI].count() { return false }
+    match ownership[blockI][local] { MidOwnership.MaybeOwned => {} _ => { return false } }
+    match accessibility[blockI][local] { MidAccessibility.Unavailable => {} _ => { return false } }
+    if blockI == body.entry { return true }
+    mut val sawPredecessor: Bool = false
+    mut val predecessor: U64 = 0U64
+    while predecessor < body.blocks.len {
+        val source: MidBlockNode = c.mid.blocks[body.blocks.start + predecessor]
+        if source.terminator != 0U64 && source.terminator <= c.mid.terminators.count() {
+            val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[source.terminator - 1U64])
+            mut val successorI: U64 = 0U64
+            while successorI < successors.count() {
+                if successors[successorI] == blockI {
+                    sawPredecessor = true
+                    val predecessorOwnership: Array[MidOwnership] = canonicalMidTransferBlock(c: c, body: body, block: source, input: ownership[predecessor])
+                    val predecessorAccessibility: Array[MidAccessibility] = canonicalMidAccessibilityTransfer(c: c, body: body, block: source, input: accessibility[predecessor])
+                    if local >= predecessorOwnership.count() || local >= predecessorAccessibility.count() { return false }
+                    match predecessorOwnership[local] {
+                        MidOwnership.MaybeOwned => {
+                            match predecessorAccessibility[local] { MidAccessibility.Unavailable => {} _ => { return true } }
+                        }
+                        _ => { return true }
+                    }
+                }
+                successorI = successorI + 1U64
+            }
+        }
+        predecessor = predecessor + 1U64
+    }
+    return !sawPredecessor
+}
+
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
     return body.scopes[scope].firstLocal
