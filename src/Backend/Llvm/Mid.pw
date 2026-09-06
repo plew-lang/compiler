@@ -2392,6 +2392,27 @@ pub impl LlvmCtx {
             }
             return self.genLlvmArrayValues(c: inout c, values: elements, elemTy: elementTy, elemRef: elementRef)
         }
+        if value.tag == 4U64 {
+            if value.resultTerm == 0U64 || value.resultTerm >= c.arena.types.count() || value.enumIndex >= c.arena.enums.count() || value.variantIndex >= c.arena.enums[value.enumIndex].variants.count() { return LLVMConstNull(self.ptrty) }
+            val result: TypeRef = c.arena.types[value.resultTerm]
+            val savedParams: Array[Bind] = c.cur.typeParams
+            val savedArgs: Array[U64] = c.cur.typeArgs
+            c.cur.typeParams = c.arena.enums[value.enumIndex].typeParams
+            c.cur.typeArgs = result.args
+            mut val elements: Array[LLVMValueRef] = []
+            mut val elementI: U64 = 0U64
+            while elementI < value.elements.len {
+                val element: MidAggregateElementNode = c.mid.aggregateElements[value.elements.start + elementI]
+                mut val child: LLVMValueRef = self.midCanonicalEmitAggregateElement(c: inout c, body: body, element: element)
+                if element.isBoxed { child = self.midEmitAggregateBox(c: inout c, value: child) }
+                elements.append(child)
+                elementI = elementI + 1U64
+            }
+            val built: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: value.enumIndex, ety: self.midCanonicalPlaceTy(c: inout c, body: body, place: destination), vi: value.variantIndex, payloadVals: elements)
+            c.cur.typeParams = savedParams
+            c.cur.typeArgs = savedArgs
+            return built
+        }
         return LLVMConstNull(self.ptrty)
     }
 
@@ -2405,9 +2426,9 @@ pub impl LlvmCtx {
             if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
             val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
             val rvalue: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
-            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 5U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 { return false }
+            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 3U64 && rvalue.tag != 4U64 && rvalue.tag != 5U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 { return false }
             mut val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand)
-            if rvalue.tag == 3U64 || rvalue.tag == 5U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
+            if rvalue.tag == 3U64 || rvalue.tag == 4U64 || rvalue.tag == 5U64 { value = self.midCanonicalEmitAggregate(c: inout c, body: body, destination: destination, value: rvalue) }
             if rvalue.tag == 8U64 { value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), unsigned: rvalue.kindTag != 1U64) }
             if rvalue.tag == 9U64 {
                 if rvalue.kindTag == 1U64 { value = LLVMBuildSIToFP(self.b, value, self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), anon()) }
