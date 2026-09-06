@@ -1,0 +1,10 @@
+ordinary-selected-call
+receiver-environment
+caller-result-term
+ordinary-result-dependency
+record-idempotent
+distinct-evaluations
+no-source-lookup
+bound-default-result
+completed-record-idempotent
+bound-explicit-preserved

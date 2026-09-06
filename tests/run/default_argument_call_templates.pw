@@ -1,0 +1,82 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Arg, CallArgumentSource, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    val unit = c.kwSpan(kw: "", kwLen: 0U64)
+    val unitTerm = c.simpleTypeRef(nameStart: unit.nameStart, nameLen: unit.nameLen)
+    val integer = c.kwSpan(kw: "I64", kwLen: 3U64)
+    val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val name = c.internTmpName(prefix: "item", n: 0U64)
+    val expression = c.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+    val parameters = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+        tyStart=integer.nameStart tyLen=integer.nameLen tyIsArray=false ty=term
+        isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=expression />])
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen params=parameters
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unitTerm body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false />)
+    c.prepareDefaultArgumentGenerators()
+    c.cur.checkFn = 0U64
+    c.cur.recordCallTemplates = true
+    val generator = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
+    val first = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
+        calleeTypeArgs: [term], resultTerm: term, existingExpr: c.arena.exprs.count())
+    val firstKey = c.templateCallSiteKey(fnIdx: 0U64, exprId: first)
+    val template = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: first)
+    match template.kind {
+        CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val args, calleeTypeArgs: val typeArgs, proof: _) => {
+            if callee == generator && args.count() == 0U64 && typeArgs.count() == 1U64 && typeArgs[0U64] == term { write(s: "ordinary-selected-call\n") }
+            match receiver {
+                CallTemplateReceiver.Term(term: val receiverTerm) => {
+                    if receiverTerm == term { write(s: "receiver-environment\n") }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    if c.semanticExprTerm(exprId: first) == term { write(s: "caller-result-term\n") }
+    match c.callArgumentSource(exprId: first) {
+        CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
+            if exprId == first && c.sameCallSiteKey(a: firstKey, b: siteKey) { write(s: "ordinary-result-dependency\n") }
+        }
+        _ => {}
+    }
+    val repeated = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
+        calleeTypeArgs: [term], resultTerm: term, existingExpr: first)
+    if repeated == first && c.decls.callTemplates.count() == 1U64 { write(s: "record-idempotent\n") }
+    val second = c.recordDefaultArgumentCall(generator: generator, receiver: <CallTemplateReceiver.Term term=term />,
+        calleeTypeArgs: [term], resultTerm: term, existingExpr: c.arena.exprs.count())
+    if first != second && !c.sameCallSiteKey(a: firstKey, b: c.templateCallSiteKey(fnIdx: 0U64, exprId: second)) { write(s: "distinct-evaluations\n") }
+    if c.decls.callables.count() == 0U64 { write(s: "no-source-lookup\n") }
+    val empty = c.pushArgs(args: [])
+    match c.recordBoundCallArguments(callee: 0U64, args: empty, receiver: <CallTemplateReceiver.None />,
+        calleeTypeArgs: [], parameterTerms: [term]) {
+        Optional.Some(v: val completed) => {
+            if completed.count() == 1U64 && completed[0U64].hasLabel && completed[0U64].labelStart == name.nameStart {
+                val defaultExpr = c.callArgumentExprId(source: completed[0U64].source)
+                if defaultExpr != expression && c.semanticExprTerm(exprId: defaultExpr) == term { write(s: "bound-default-result\n") }
+                val expressionCount = c.arena.exprs.count()
+                match c.recordBoundCallArguments(callee: 0U64, args: empty, receiver: <CallTemplateReceiver.None />,
+                    calleeTypeArgs: [], parameterTerms: [term], previous: completed) {
+                    Optional.Some(v: val repeatedArguments) => {
+                        if c.callArgumentExprId(source: repeatedArguments[0U64].source) == defaultExpr && c.arena.exprs.count() == expressionCount { write(s: "completed-record-idempotent\n") }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+    val explicitArgs = c.pushArgs(args: [<Arg expr=expression isInout=false labelStart=name.nameStart labelLen=name.nameLen hasLabel=true />])
+    val expressionCount = c.arena.exprs.count()
+    match c.recordBoundCallArguments(callee: 0U64, args: explicitArgs, receiver: <CallTemplateReceiver.None />,
+        calleeTypeArgs: [], parameterTerms: [term]) {
+        Optional.Some(v: val completed) => {
+            if completed.count() == 1U64 && c.callArgumentExprId(source: completed[0U64].source) == expression && c.arena.exprs.count() == expressionCount { write(s: "bound-explicit-preserved\n") }
+        }
+        _ => {}
+    }
+}

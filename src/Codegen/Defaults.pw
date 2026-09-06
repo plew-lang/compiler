@@ -3,6 +3,105 @@
 // but take no value parameters and never capture `self` or another argument.
 // They are deliberately absent from the source callable surface.
 pub impl Comp {
+    // Convert the selected parameter binding into the one argument sequence
+    // consumed by finalization and Mid. Signature terms/substitutions arrive
+    // from the caller's completed parametric selection, not from AST recovery.
+    // An incomplete binding/signature does not publish a partial argument list.
+    inout fn recordBoundCallArguments(callee: U64, args: ArgRange, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Optional[Array[CallTemplateArgument]] {
+        mut val bindings: Array[CallParameterBinding] = []
+        match self.bindCallParameters(callee: callee, args: args) {
+            Optional.Some(val v) => { bindings = v }
+            Optional.None => { return <Optional.None /> }
+        }
+        if parameterTerms.count() != bindings.count() { return <Optional.None /> }
+        // Check all required result terms before creating any call occurrence.
+        mut val index: U64 = 0U64
+        while index < bindings.count() {
+            match bindings[index] {
+                CallParameterBinding.Default(generator: _) => {
+                    if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.types.count() { return <Optional.None /> }
+                }
+                _ => {}
+            }
+            index += 1U64
+        }
+        val parameters: FuncParamRange = self.arena.funcs[callee].params
+        mut val completed: Array[CallTemplateArgument] = []
+        index = 0U64
+        while index < bindings.count() {
+            match bindings[index] {
+                CallParameterBinding.Explicit(val argumentIndex) => {
+                    val argument: Arg = self.argAt(args: args, index: argumentIndex)
+                    completed.append(<CallTemplateArgument source=self.callArgumentSource(exprId: argument.expr) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+                }
+                CallParameterBinding.Default(val generator) => {
+                    mut val existing: U64 = self.arena.exprs.count()
+                    if index < previous.count() {
+                        match previous[index].source {
+                            CallArgumentSource.PriorCallResult(exprId: val exprId, siteKey: val siteKey) => {
+                                val template: CallTemplate = self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: exprId)
+                                if self.sameCallSiteKey(a: template.siteKey, b: siteKey) {
+                                    match template.kind {
+                                        CallTemplateKind.Direct(callee: val priorCallee, receiver: _, args: _, calleeTypeArgs: _, proof: _) => {
+                                            if priorCallee == generator { existing = exprId }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    val call: U64 = self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: calleeTypeArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof)
+                    val parameter: Param = self.funcParamAt(params: parameters, index: index)
+                    completed.append(<CallTemplateArgument source=self.callArgumentSource(exprId: call) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
+                }
+            }
+            index += 1U64
+        }
+        return <Optional.Some v=completed />
+    }
+
+    // A default slot evaluates an ordinary, declaration-selected zero-argument
+    // function. Its result is represented by the same PriorCallResult source
+    // as a written nested call. The parent retains the returned expression in
+    // its completed argument list; re-recording that slot reuses its identity,
+    // while a different call occurrence allocates a fresh synthetic origin.
+    // `resultTerm` and substitutions are already expressed in the caller's
+    // parametric environment. This method performs no inference/name lookup.
+    inout fn recordDefaultArgumentCall(generator: U64, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], resultTerm: U64, existingExpr: U64, proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> U64 {
+        if !self.cur.recordCallTemplates || generator >= self.arena.funcs.count() {
+            self.errorAt(offset: 0U64, msg: "internal error: default argument call requires a selected generator during Record")
+            return self.arena.exprs.count()
+        }
+        val function: Func = self.arena.funcs[generator]
+        if function.params.count() != 0U64 || function.hasRecv {
+            self.errorAt(offset: function.defOffset, msg: "internal error: default argument generator captures value parameters")
+            return self.arena.exprs.count()
+        }
+        mut val call: U64 = existingExpr
+        val noArgs: ArgRange = self.pushArgs(args: [])
+        if call < self.arena.exprs.count() {
+            val previous: CallTemplate = self.callTemplateForSourceBody(fnIdx: self.cur.checkFn, exprId: call)
+            mut val matches: Bool = false
+            match previous.kind {
+                CallTemplateKind.Direct(callee: val callee, receiver: _, args: val args, calleeTypeArgs: _, proof: _) => {
+                    matches = callee == generator && args.count() == 0U64
+                }
+                _ => {}
+            }
+            if !matches {
+                self.errorAt(offset: function.defOffset, msg: "internal error: default argument evaluation identity changed")
+                return self.arena.exprs.count()
+            }
+        } else {
+            call = self.pushExpr(e: <Expr.Call nameStart=function.nameStart nameLen=function.nameLen args=noArgs />)
+            self.decls.syntheticCallSites.append(<SyntheticCallSite exprId=call originSerial=self.arena.exprOriginSerial[call] receiverTerm=0U64 />)
+        }
+        self.recordSemanticExprCall(exprId: call, callee: generator, receiver: receiver, args: noArgs, calleeTypeArgs: calleeTypeArgs, resultTerm: resultTerm, proof: proof)
+        return call
+    }
+
     // Bind only after selecting the declaration. Keep the authored arguments
     // intact, but produce one entry per parameter in evaluation order. A single
     // monotone walk also rejects leftover/duplicate/out-of-order arguments.
