@@ -76,6 +76,48 @@ fn instantiateCanonicalOperand(c: inout Comp, operandId: U64, environment: BodyI
     return c.mid.operands.count()
 }
 
+// Ground the canonical rvalue forms whose semantics are already closed in
+// their row. Return/aggregate/cast boundaries are deliberately handled below
+// their own frontend-proof readers rather than being treated as this case.
+fn instantiateCanonicalClosedRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val source = c.mid.rvalues[rvalueId - 1U64]
+    match source.tag {
+        1U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=1U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) />)
+        }
+        6U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=6U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) conversion=source.conversion />)
+        }
+        8U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=8U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) kindTag=source.kindTag targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        9U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=9U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) kindTag=source.kindTag targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        10U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) targetTerm=c.groundTermForBody(ref: source.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        11U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=11U64 place=instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) enumIndex=source.enumIndex sourceStmt=source.sourceStmt resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        12U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=12U64 place=instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceStmt=source.sourceStmt resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        13U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=13U64 place=instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceStmt=source.sourceStmt resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        14U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=14U64 place=instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceStmt=source.sourceStmt resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        15U64 => {
+            c.mid.rvalues.append(<MidRvalueNode tag=15U64 place=instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef) enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceStmt=source.sourceStmt resultTerm=c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) />)
+        }
+        _ => { return 0U64 }
+    }
+    return c.mid.rvalues.count()
+}
+
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
     if !(callee.hasRecv) {
         match passing { CallReceiverPassing.None => { return true } _ => { return false } }
