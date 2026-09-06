@@ -8,7 +8,7 @@ import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidRvalueNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -380,6 +380,66 @@ fn instantiateCanonicalCallReceiver(c: inout Comp, receiverId: U64, environment:
     return c.mid.callReceivers.count()
 }
 
+fn canonicalMidRvalueResultType(c: Comp, rvalueId: U64) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+    match value.tag {
+        1U64 => { return canonicalMidOperandTypeRef(c: c, operandId: value.operand) }
+        2U64 => { return value.targetTerm }
+        3U64 => { return value.resultTerm }
+        4U64 => { return value.resultTerm }
+        5U64 => { return value.resultTerm }
+        6U64 => {
+            if c.conversionProofIsIdentity(id: value.conversion) { return 0U64 }
+            return midConversionTargetRef(c: c, conversion: value.conversion)
+        }
+        7U64 => { return value.targetTerm }
+        8U64 => { return value.targetTerm }
+        9U64 => { return value.targetTerm }
+        10U64 => { return value.targetTerm }
+        11U64 => { return value.resultTerm }
+        12U64 => { return value.resultTerm }
+        13U64 => { return value.resultTerm }
+        14U64 => { return value.resultTerm }
+        15U64 => { return value.resultTerm }
+        _ => { return 0U64 }
+    }
+}
+
+// Local declarations are rows too: append their final ground type only after
+// the body rewrite has seen resolution boundaries. This preserves append-only
+// canonical storage instead of mutating an already-published local row.
+fn appendCanonicalInstantiatedLocals(c: inout Comp, source: MidBodyNode, blockStart: U64, environment: BodyInstance, itemRef: U64) -> MidRange {
+    val localStart: U64 = c.mid.locals.count()
+    mut val localI: U64 = 0U64
+    while localI < source.locals.len {
+        val sourceLocal: MidLocalDecl = c.mid.locals[source.locals.start + localI]
+        mut val typeTerm: U64 = c.groundTermForBody(ref: sourceLocal.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+        if !sourceLocal.isParameter {
+            mut val blockI: U64 = 0U64
+            while blockI < source.blocks.len {
+                val block: MidBlockNode = c.mid.blocks[blockStart + blockI]
+                mut val statementI: U64 = 0U64
+                while statementI < block.statements.len {
+                    val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+                    if statement.tag == 1U64 && statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                        val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                        if destination.local == localI && destination.projections.len == 0U64 {
+                            val resultType: U64 = canonicalMidRvalueResultType(c: c, rvalueId: statement.value)
+                            if resultType != 0U64 { typeTerm = resultType }
+                        }
+                    }
+                    statementI = statementI + 1U64
+                }
+                blockI = blockI + 1U64
+            }
+        }
+        c.mid.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=sourceLocal.sourceScope isUnique=sourceLocal.isUnique isParameter=sourceLocal.isParameter isBorrowed=sourceLocal.isBorrowed isInout=sourceLocal.isInout ownsAtEntry=sourceLocal.ownsAtEntry isDropFlag=sourceLocal.isDropFlag isReturnPlace=sourceLocal.isReturnPlace sourceNameStart=sourceLocal.sourceNameStart />)
+        localI = localI + 1U64
+    }
+    return <MidRange start=localStart len=source.locals.len />
+}
+
 // The call-free subgraph validates the body-level append discipline before
 // call conversion cleanup grows blocks. Calls fail closed here; the completed
 // canonical instantiator replaces this boundary rather than falling back.
@@ -391,13 +451,6 @@ export fn instantiateCanonicalMidWithoutCalls(c: inout Comp, body: MidCanonicalB
     val environment: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
     if environment.fnIdx >= c.arena.funcs.count() { return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> /> }
     val itemRef: U64 = c.bodyProvidedItemTerm(f: c.arena.funcs[environment.fnIdx], environment: environment.environment)
-    val localStart: U64 = c.mid.locals.count()
-    mut val localI: U64 = 0U64
-    while localI < source.locals.len {
-        val local: MidLocalDecl = c.mid.locals[source.locals.start + localI]
-        c.mid.locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
-        localI = localI + 1U64
-    }
     val scopeStart: U64 = c.mid.scopes.count()
     mut val scopeI: U64 = 0U64
     while scopeI < source.scopes.len {
@@ -423,7 +476,8 @@ export fn instantiateCanonicalMidWithoutCalls(c: inout Comp, body: MidCanonicalB
         c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.len /> terminator=c.mid.terminators.count() />)
         blockI = blockI + 1U64
     }
-    c.mid.bodies.append(<MidBodyNode bodyInstance=bodyId sourceFunction=source.sourceFunction locals=<MidRange start=localStart len=source.locals.len /> scopes=<MidRange start=scopeStart len=source.scopes.len /> blocks=<MidRange start=blockStart len=source.blocks.len /> entry=source.entry />)
+    val locals: MidRange = appendCanonicalInstantiatedLocals(c: inout c, source: source, blockStart: blockStart, environment: environment, itemRef: itemRef)
+    c.mid.bodies.append(<MidBodyNode bodyInstance=bodyId sourceFunction=source.sourceFunction locals=locals scopes=<MidRange start=scopeStart len=source.scopes.len /> blocks=<MidRange start=blockStart len=source.blocks.len /> entry=source.entry />)
     return <MidCanonicalInstantiation body=<MidCanonicalBody body=c.mid.bodies.count() /> error=error />
 }
 
