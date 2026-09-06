@@ -414,6 +414,37 @@ fn canonicalMidDropPlan(c: Comp, canonical: MidCanonicalBody, ownership: Array[A
     return <MidCanonicalDropPlan needsFlag=needsFlag cliffAtEntry=cliffs />
 }
 
+// Flag locals are appended after the source local prefix.  Their mapping is
+// derived from the immutable plan rather than carried as a mutable side table,
+// so every later canonical reader can reproduce the same local identity.
+fn canonicalMidFlagLocal(plan: MidCanonicalDropPlan, sourceLocalCount: U64, local: U64) -> U64 {
+    if local >= plan.needsFlag.count() || !plan.needsFlag[local] { return 0U64 }
+    mut val flag: U64 = sourceLocalCount
+    mut val prior: U64 = 0U64
+    while prior < local {
+        if plan.needsFlag[prior] { flag = flag + 1U64 }
+        prior = prior + 1U64
+    }
+    return flag
+}
+
+fn canonicalMidAppendDropLocals(c: inout Comp, body: MidBodyNode, plan: MidCanonicalDropPlan) -> MidRange {
+    val start: U64 = c.mid.locals.count()
+    mut val local: U64 = 0U64
+    while local < body.locals.len {
+        c.mid.locals.append(c.mid.locals[body.locals.start + local])
+        local = local + 1U64
+    }
+    local = 0U64
+    while local < body.locals.len && local < plan.needsFlag.count() {
+        if plan.needsFlag[local] {
+            c.mid.locals.append(<MidLocalDecl typeTerm=0U64 sourceScope=0U64 isUnique=false isParameter=false ownsAtEntry=false isDropFlag=true isReturnPlace=false sourceNameStart=0U64 />)
+        }
+        local = local + 1U64
+    }
+    return <MidRange start=start len=c.mid.locals.count() - start />
+}
+
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
     return body.scopes[scope].firstLocal
