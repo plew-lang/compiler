@@ -28,7 +28,6 @@ export enum MidInstantiateError {
     MissingFinalResolution
     InvalidFinalResolution
     InvalidLocalResultType
-    UnsupportedCanonicalCall
 }
 
 export struct MidInstantiation {

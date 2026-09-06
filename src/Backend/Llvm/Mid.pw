@@ -185,7 +185,6 @@ pub impl LlvmCtx {
             MidInstantiateError.MissingReturnResolution => { return 8U64 }
             MidInstantiateError.InvalidReturnResolution => { return 9U64 }
             MidInstantiateError.InvalidCastResolution => { return 13U64 }
-            MidInstantiateError.UnsupportedCanonicalCall => { return 14U64 }
             MidInstantiateError.MissingFinalResolution => { return 10U64 }
             MidInstantiateError.InvalidFinalResolution => { return 11U64 }
             MidInstantiateError.InvalidLocalResultType => { return 12U64 }
@@ -208,7 +207,6 @@ pub impl LlvmCtx {
             10U64 => { eprint(text: "missing-final-resolution") }
             11U64 => { eprint(text: "invalid-final-resolution") }
             12U64 => { eprint(text: "invalid-local-result-type") }
-            14U64 => { eprint(text: "unsupported-canonical-call") }
             _ => { eprint(text: "unknown") }
         }
     }
