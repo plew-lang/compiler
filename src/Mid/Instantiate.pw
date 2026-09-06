@@ -223,7 +223,7 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                         if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
                     }
                 }
-                instantiated.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand targetTerm=targetTerm conversion=conversion />)
+                instantiated.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand targetTerm=targetTerm isBoxed=element.isBoxed conversion=conversion />)
                 i += 1U64
             }
             return <MidRvalue.Aggregate exprId=exprId kind=kind resultTerm=resultRef fieldCount=fieldCount elements=instantiated />
@@ -300,6 +300,27 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
                 }
             }
             return <MidRvalue.EnumPayloadBorrow place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+        }
+        // Boxed payload reads have identical declaration identity and logical
+        // type requirements. Delegate their grounding/validation to the
+        // ordinary variants, then preserve only the physical cell-read opcode.
+        MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            val checked: MidRvalue = instantiateMidRvalue(c: inout c, value: <MidRvalue.EnumPayloadCopy place=place enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
+            match checked {
+                MidRvalue.EnumPayloadCopy(place: val groundedPlace, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val groundedResult) => {
+                    return <MidRvalue.EnumPayloadBoxedCopy place=groundedPlace enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+                }
+                _ => { return checked }
+            }
+        }
+        MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            val checked: MidRvalue = instantiateMidRvalue(c: inout c, value: <MidRvalue.EnumPayloadBorrow place=place enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error)
+            match checked {
+                MidRvalue.EnumPayloadBorrow(place: val groundedPlace, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val groundedResult) => {
+                    return <MidRvalue.EnumPayloadBoxedBorrow place=groundedPlace enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+                }
+                _ => { return checked }
+            }
         }
     }
 }
@@ -411,6 +432,8 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
     }
 }
 

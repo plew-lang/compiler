@@ -46,6 +46,7 @@ export struct MidAggregateElementNode {
     pub val fieldIndex: U64
     pub val operand: U64
     pub val targetTerm: U64 = 0U64
+    pub val isBoxed: Bool
     // A proof ID, not a recursive ValueConversionProof payload.  The proof
     // arena is introduced together with final frontend proof DAG migration.
     pub val conversion: U64 = 0U64
@@ -239,6 +240,9 @@ export struct MidAggregateElement {
     // the source operand so instantiation can freeze a ValueConversionProof
     // without inspecting a declaration or field spelling.
     pub val targetTerm: U64 = 0U64
+    // `true` means a fresh owning cell holds the logical `targetTerm` value
+    // before its pointer is inserted into this aggregate's physical slot.
+    pub val isBoxed: Bool
     // Frozen frontend ConversionProofNode ID. Zero is invalid for an
     // instantiated aggregate element; builder leaves it zero until the
     // BodyInstance-specific final aggregate resolution supplies it.
@@ -278,6 +282,11 @@ export enum MidRvalue {
     // ownership nor a drop obligation; an eventual Copy(place) is the sole
     // operation that obtains an independent value-semantic share.
     EnumPayloadBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
+    // The corresponding operations for a recursive field stored in an owning
+    // cell. The logical resultTerm is loaded from that selected cell; no enum
+    // layout query remains in LLVM.
+    EnumPayloadBoxedCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
+    EnumPayloadBoxedBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
 }
 
 // A parametric body names a frontend CallTemplate by its semantic site identity.

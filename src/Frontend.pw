@@ -1312,6 +1312,11 @@ export fn runFrontend(c: inout Comp) {
         while qi < loaded.count() {
             val ent: Bind = loaded[qi]
             qi += 1
+            // Loading can parse a large transitive graph before any later
+            // phase exists. Preserve the exact completed-file count for the
+            // long-process trace contract; this is a real worklist counter,
+            // not a liveness heartbeat.
+            tracePhaseCount(c: inout c, label: "load:file", count: qi)
             val moduleId: U64 = ent.fieldStart
             val path: Array[U8] = extractSpan(buf: pathBuf, start: ent.nameStart, len: ent.nameLen)
             if path.count() == ioPath.count() {

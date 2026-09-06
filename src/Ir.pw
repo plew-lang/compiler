@@ -370,6 +370,11 @@ export struct SemanticAggregateElement {
     // own generic arguments are applied.  This makes element conversion a
     // closed source->target fact rather than a Mid/backend field re-query.
     pub val targetTerm: U64 = 0U64
+    // Recursive value fields are still semantic values at the source boundary,
+    // but their aggregate owns a freshly allocated cell in concrete layout.
+    // This binary physical fact is selected once by Record and later phases
+    // transport/realize it without rediscovering a FieldDef.
+    pub val isBoxed: Bool
     pub val term: U64
 }
 pub impl SemanticAggregateElement { factory }
@@ -395,6 +400,10 @@ export struct SemanticMatchPayload {
     pub val bindTarget: U64 = 0U64
     pub val fieldIndex: U64 = 0U64
     pub val fieldTerm: U64 = 0U64
+    // Physical recursive-field storage selected while recording the pattern.
+    // The bound value remains the logical fieldTerm; Mid dereferences this
+    // cell before binding it and never re-queries the enum declaration.
+    pub val isBoxed: Bool
 }
 pub impl SemanticMatchPayload { factory }
 

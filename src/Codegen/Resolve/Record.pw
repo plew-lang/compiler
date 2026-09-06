@@ -678,7 +678,25 @@ pub impl Comp {
                     } else {
                         fieldIndex = self.fieldIndexOfReceiver(receiverRef: resultTerm, fieldStart: field.nameStart, fieldLen: field.nameLen)
                     }
-                    elements.append(<SemanticAggregateElement fieldIndex=fieldIndex exprId=field.value targetTerm=self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: isEnum, variantIndex: variantIndex, fieldIndex: fieldIndex) term=self.parametricExprTerm(exprId: field.value) />)
+                    // The physical recursive-field decision is frozen beside
+                    // this selected slot. Keep it in Record's existing
+                    // aggregate walk: this is layout selection, not a later
+                    // backend query and not a separate semantic pass.
+                    mut val isBoxed: Bool = false
+                    if isEnum {
+                        if enumIndex < self.arena.enums.count() && variantIndex < self.arena.enums[enumIndex].variants.count() {
+                            val declaredFields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
+                            if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
+                        }
+                    } else if resultTerm < self.arena.types.count() && !(self.arena.types[resultTerm].isRecord) {
+                        val result: TypeRef = self.arena.types[resultTerm]
+                        val structIndex: U64 = self.anyStructIndex(nameStart: result.nameStart, nameLen: result.nameLen)
+                        if structIndex < self.arena.structs.count() {
+                            val declaredFields: Array[FieldDef] = self.arena.structs[structIndex].fields
+                            if fieldIndex < declaredFields.count() { isBoxed = self.fieldIsBoxed(f: declaredFields[fieldIndex]) }
+                        }
+                    }
+                    elements.append(<SemanticAggregateElement fieldIndex=fieldIndex exprId=field.value targetTerm=self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: isEnum, variantIndex: variantIndex, fieldIndex: fieldIndex) isBoxed=isBoxed term=self.parametricExprTerm(exprId: field.value) />)
                     i += 1U64
                 }
                 // Named memberwise construction evaluates in declaration
@@ -720,7 +738,7 @@ pub impl Comp {
                 mut val i: U64 = 0U64
                 while i < elems.len {
                     val child: U64 = self.exprAt(exprs: elems, index: i)
-                    elements.append(<SemanticAggregateElement fieldIndex=i exprId=child targetTerm=self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: false, variantIndex: 0U64, fieldIndex: i) term=self.parametricExprTerm(exprId: child) />)
+                    elements.append(<SemanticAggregateElement fieldIndex=i exprId=child targetTerm=self.aggregateSlotTypeRef(resultRef: resultTerm, isEnum: false, variantIndex: 0U64, fieldIndex: i) isBoxed=false term=self.parametricExprTerm(exprId: child) />)
                     i += 1U64
                 }
                 self.putSemanticAggregate(aggregate: <SemanticAggregate ownerFnIdx=self.cur.checkFn exprId=exprId kind=<SemanticAggregateKind.Array /> resultTerm=resultTerm fieldCount=elems.len elements=elements />)
@@ -898,7 +916,9 @@ pub impl Comp {
                         if fieldIndex >= fields.count() { return }
                         val fieldTerm: U64 = self.aggregateSlotTypeRef(resultRef: scrutineeTerm, isEnum: true, variantIndex: variantIndex, fieldIndex: fieldIndex)
                         if fieldTerm == 0U64 { return }
-                        payloads.append(<SemanticMatchPayload bindTarget=bind.nameStart fieldIndex=fieldIndex fieldTerm=fieldTerm />)
+                        val fields: Array[FieldDef] = self.arena.enums[enumIndex].variants[variantIndex].fields
+                        if fieldIndex >= fields.count() { return }
+                        payloads.append(<SemanticMatchPayload bindTarget=bind.nameStart fieldIndex=fieldIndex fieldTerm=fieldTerm isBoxed=self.fieldIsBoxed(f: fields[fieldIndex]) />)
                     }
                     bindIndex += 1U64
                 }

@@ -361,17 +361,6 @@ pub impl LlvmCtx {
                     }
                     MidAggregateKind.Enum(enumIdx: val enumIdx, variantIndex: val variantIndex) => {
                         if enumIdx >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIdx].variants.count() { return false }
-                        // A recursive payload changes a semantic enum value into a
-                        // heap-cell owner. That ownership operation must become an
-                        // explicit Mid rvalue before this body can enter Mid; the
-                        // initial Aggregate carrier records only semantic values and
-                        // slots. Do not synthesize a hidden box in LLVM.
-                        mut val boxed: U64 = 0U64
-                        while boxed < elements.count() {
-                            val fieldIndex: U64 = elements[boxed].fieldIndex
-                            if c.fieldIsBoxed(f: c.arena.enums[enumIdx].variants[variantIndex].fields[fieldIndex]) { return false }
-                            boxed += 1U64
-                        }
                         val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: resultTerm)
                         if enumSlot >= self.genEnumRefs.count() || self.genEnumDefs[enumSlot] != enumIdx { return false }
                         return true
@@ -439,6 +428,20 @@ pub impl LlvmCtx {
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
             MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
+                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
+                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+                return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
+            }
+            MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
+                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
+                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+                return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
+            }
+            MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
                 if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
                 if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
@@ -1745,6 +1748,7 @@ pub impl LlvmCtx {
                 while i < elements.count() {
                     val element: MidAggregateElement = elements[i]
                     mut val child: LLVMValueRef = self.midEmitAggregateElement(c: inout c, body: body, element: element)
+                    if element.isBoxed { child = self.midEmitAggregateBox(c: inout c, value: child) }
                     val fieldTy: LLVMTypeRef = LLVMStructGetTypeAtIndex(ty, truncU32(n: element.fieldIndex))
                     if LLVMGetTypeKind(LLVMTypeOf(child)) == 8U32 { child = self.coerceInt(v: child, target: fieldTy, unsigned: false) }
                     value = LLVMBuildInsertValue(self.b, value, child, element.fieldIndex, anon())
@@ -1778,7 +1782,10 @@ pub impl LlvmCtx {
                 mut val values: Array[LLVMValueRef] = []
                 mut val i: U64 = 0U64
                 while i < elements.count() {
-                    values.append(self.midEmitAggregateElement(c: inout c, body: body, element: elements[i]))
+                    val element: MidAggregateElement = elements[i]
+                    mut val value: LLVMValueRef = self.midEmitAggregateElement(c: inout c, body: body, element: element)
+                    if element.isBoxed { value = self.midEmitAggregateBox(c: inout c, value: value) }
+                    values.append(value)
                     i += 1U64
                 }
                 val result: LLVMValueRef = self.buildEnumFromValues(c: inout c, eid: enumIdx, ety: self.midLocalTy(c: inout c, body: body, local: destination.local), vi: variantIndex, payloadVals: values)
@@ -1808,6 +1815,19 @@ pub impl LlvmCtx {
             }
             _ => { return self.midEmitValueConversion(c: inout c, body: body, operand: element.operand, conversion: c.thawValueConversionProof(id: element.conversion)) }
         }
+    }
+
+    // `MidAggregateElement.isBoxed` is a frontend-frozen physical layout fact.
+    // The emitted child already carries exactly one owned share for the
+    // aggregate slot; moving it into this fresh rc=1 cell transfers that share
+    // without retain/release. The aggregate's normal drop path owns and later
+    // releases the cell, which in turn destroys this stored logical value.
+    // No FieldDef or source expression is consulted here.
+    inout fn midEmitAggregateBox(c: inout Comp, value: LLVMValueRef) -> LLVMValueRef {
+        val valueTy: LLVMTypeRef = LLVMTypeOf(value)
+        val cell: LLVMValueRef = self.rawbufAlloc(c: inout c, elemSize: LLVMSizeOf(valueTy), cap: LLVMConstInt(self.i64ty, 1U64, 0I32))
+        LLVMBuildStore(self.b, value, cell)
+        return cell
     }
 
     // Materialize the exact frontend-selected existential conversion.  The
@@ -2028,6 +2048,22 @@ pub impl LlvmCtx {
                         val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
                         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
                         LLVMBuildStore(self.b, LLVMBuildExtractValue(self.b, payload, fieldIndex, anon()), self.midLocalPtr(body: body, local: destination.local))
+                    }
+                    MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                        val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
+                        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
+                        val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
+                        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
+                        val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fieldIndex, anon())
+                        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: resultTerm), cell, anon()), self.midLocalPtr(body: body, local: destination.local))
+                    }
+                    MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                        val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
+                        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
+                        val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
+                        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
+                        val cell: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fieldIndex, anon())
+                        LLVMBuildStore(self.b, LLVMBuildLoad2(self.b, self.llvmTypeOfRef(c: inout c, ref: resultTerm), cell, anon()), self.midLocalPtr(body: body, local: destination.local))
                     }
                 }
             }

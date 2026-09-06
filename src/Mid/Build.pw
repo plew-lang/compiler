@@ -658,7 +658,7 @@ fn buildMidAggregateEvaluation(c: inout Comp, state: inout MidBuildState, aggreg
             operand = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: element.exprId, typeTerm: element.term, allowAccessMarker: false)
         }
         match operand.error { MidBuildError.None => {} _ => { return operand } }
-        elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand.operand targetTerm=element.targetTerm />)
+        elements.append(<MidAggregateElement fieldIndex=element.fieldIndex operand=operand.operand targetTerm=element.targetTerm isBoxed=element.isBoxed />)
         i += 1U64
     }
     match aggregate.kind {
@@ -1404,7 +1404,13 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
                     val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: isBorrowed)
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
                     if isBorrowed {
-                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBorrow place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
+                        if payload.isBoxed {
+                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedBorrow place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
+                        } else {
+                            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBorrow place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
+                        }
+                    } else if payload.isBoxed {
+                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBoxedCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
                     } else {
                         midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
                     }

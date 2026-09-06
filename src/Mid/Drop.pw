@@ -88,6 +88,8 @@ fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => {}
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
+        MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
+        MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
     }
 }
 
@@ -308,6 +310,8 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                     MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => {}
                     MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
                     MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
+                    MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
+                    MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
                 }
                 if destination.projections.count() == 0U64 && destination.local < out.count() {
                     out.set(i: destination.local, value: <MidAccessibility.Available />)
@@ -464,6 +468,8 @@ fn midRvalueMovedRoot(value: MidRvalue) -> U64 {
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }
+        MidRvalue.EnumPayloadBoxedCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }
+        MidRvalue.EnumPayloadBoxedBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }
     }
 }
 
