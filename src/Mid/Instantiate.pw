@@ -8,7 +8,7 @@ import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -347,6 +347,36 @@ fn instantiateCanonicalNonCallTerminator(c: inout Comp, terminatorId: U64, envir
         _ => { return false }
     }
     return true
+}
+
+fn instantiateCanonicalCallTarget(c: inout Comp, targetId: U64, bodyId: U64, error: inout MidInstantiateError) -> U64 {
+    if targetId == 0U64 || targetId > c.mid.callTargets.count() { return 0U64 }
+    val source: MidCallTargetNode = c.mid.callTargets[targetId - 1U64]
+    match source.tag {
+        2U64 => { c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=source.resolution />) }
+        1U64 => {
+            val site: CallSiteKey = <CallSiteKey ownerFnIdx=source.ownerFnIdx originKind=source.originKind originStart=source.originStart originEnd=source.originEnd originSerial=source.originSerial slot=source.slot />
+            val resolution: U64 = midFinalResolution(c: c, bodyId: bodyId, site: site)
+            if resolution == 0U64 {
+                if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingCallResolution /> }
+                return 0U64
+            }
+            c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution - 1U64 />)
+        }
+        _ => { return 0U64 }
+    }
+    return c.mid.callTargets.count()
+}
+
+fn instantiateCanonicalCallReceiver(c: inout Comp, receiverId: U64, environment: BodyInstance, itemRef: U64) -> U64 {
+    if receiverId == 0U64 || receiverId > c.mid.callReceivers.count() { return 0U64 }
+    val source: MidCallReceiverNode = c.mid.callReceivers[receiverId - 1U64]
+    match source.tag {
+        1U64 => { c.mid.callReceivers.append(<MidCallReceiverNode tag=1U64 />) }
+        2U64 => { c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=instantiateCanonicalOperand(c: inout c, operandId: source.operand, environment: environment, itemRef: itemRef) />) }
+        _ => { return 0U64 }
+    }
+    return c.mid.callReceivers.count()
 }
 
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
