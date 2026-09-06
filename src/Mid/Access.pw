@@ -3,10 +3,10 @@
 // this pass consumes only frozen SemanticAccess and already-resolved calls.
 
 import ../Frontend with { Comp }
-import ../Ir with { Expr, SemanticExprType, SemanticAccess, CallResolution }
+import ../Ir with { Expr, SemanticExprType, SemanticAccess, SemanticAccessInput, CallResolution }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidProjection, MidPlace, MidConstant, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+import ./Ir with { MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCanonicalBody, MidProjection, MidPlace, MidConstant, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
 
 export enum MidAccessError {
     None
@@ -27,6 +27,64 @@ export struct MidAccessElaboration {
     pub val error: MidAccessError = <MidAccessError.None />
 }
 pub impl MidAccessElaboration { factory }
+
+export struct MidCanonicalAccessElaboration {
+    pub val body: MidCanonicalBody = <MidCanonicalBody body=0U64 />
+    pub val error: MidAccessError = <MidAccessError.None />
+}
+pub impl MidCanonicalAccessElaboration { factory }
+
+fn canonicalAccessLocalPlace(c: inout Comp, body: MidBodyNode, declarationTarget: U64, typeTerm: U64) -> U64 {
+    mut val localI: U64 = 0U64
+    while localI < body.locals.len {
+        val local: MidLocalDecl = c.mid.locals[body.locals.start + localI]
+        if local.sourceNameStart == declarationTarget {
+            c.mid.places.append(<MidPlaceNode local=localI typeTerm=typeTerm />)
+            return c.mid.places.count()
+        }
+        localI = localI + 1U64
+    }
+    return 0U64
+}
+
+// Materialize a selected semantic input without looking at Expr/TypeCache.
+// Root is nonzero only for the getter-value projection passed to a parent.
+fn canonicalAccessInputPlace(c: inout Comp, body: MidBodyNode, inputId: U64, root: U64) -> U64 {
+    if inputId == 0U64 || inputId > c.arena.semanticAccessInputs.count() { return 0U64 }
+    val input: SemanticAccessInput = c.arena.semanticAccessInputs[inputId - 1U64]
+    match input.tag {
+        1U64 => { return canonicalAccessLocalPlace(c: inout c, body: body, declarationTarget: input.declarationTarget, typeTerm: input.typeTerm) }
+        3U64 => {
+            val base: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: input.base, root: root)
+            if base == 0U64 || base > c.mid.places.count() { return 0U64 }
+            val parent: MidPlaceNode = c.mid.places[base - 1U64]
+            val projectionStart: U64 = c.mid.projections.count()
+            mut val projectionI: U64 = 0U64
+            while projectionI < parent.projections.len {
+                c.mid.projections.append(c.mid.projections[parent.projections.start + projectionI])
+                projectionI = projectionI + 1U64
+            }
+            c.mid.projections.append(<MidProjectionNode tag=1U64 index=input.fieldIndex typeTerm=input.typeTerm />)
+            c.mid.places.append(<MidPlaceNode local=parent.local projections=<MidRange start=projectionStart len=parent.projections.len + 1U64 /> typeTerm=input.typeTerm />)
+            return c.mid.places.count()
+        }
+        4U64 => { return root }
+        _ => { return 0U64 }
+    }
+}
+
+fn canonicalAccessInputOperand(c: inout Comp, body: MidBodyNode, inputId: U64, root: U64) -> U64 {
+    if inputId == 0U64 || inputId > c.arena.semanticAccessInputs.count() { return 0U64 }
+    val input: SemanticAccessInput = c.arena.semanticAccessInputs[inputId - 1U64]
+    if input.tag == 2U64 {
+        c.mid.operands.append(<MidOperandNode tag=5U64 integerValue=input.integerValue integerNegative=input.integerNegative integerBool=input.integerBool typeTerm=input.typeTerm />)
+        return c.mid.operands.count()
+    }
+    val place: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: inputId, root: root)
+    if place == 0U64 { return 0U64 }
+    c.mid.operands.append(<MidOperandNode tag=1U64 place=place />)
+    return c.mid.operands.count()
+}
 
 fn midAccessFor(c: Comp, bodyId: U64, parentResolution: U64, candidate: U64) -> U64 {
     mut val i: U64 = 0U64
