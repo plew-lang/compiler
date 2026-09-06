@@ -2777,6 +2777,24 @@ pub impl LlvmCtx {
                                     i = i + 1U64
                                 }
                             }
+                            BufferIntrinsic.RemoveLast => {
+                                if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 1U64 || selected.resultTypeRef == 0U64 { return <MidCallPreflight.Buffer /> }
+                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
+                                if elementRef == 0U64 || !c.typeRefEq(a: selected.resultTypeRef, b: elementRef) || !self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)) { return <MidCallPreflight.Argument /> }
+                            }
+                            BufferIntrinsic.RemoveAt => {
+                                if !callee.hasRet || term.args.len != 2U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 2U64 || selected.resultTypeRef == 0U64 { return <MidCallPreflight.Buffer /> }
+                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
+                                if elementRef == 0U64 || !c.typeRefEq(a: selected.resultTypeRef, b: elementRef) || !self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)) || !self.midCanonicalRuntimeReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64)) { return <MidCallPreflight.Argument /> }
+                            }
+                            BufferIntrinsic.SwapRemove => {
+                                if !callee.hasRet || term.args.len != 2U64 || term.destination == 0U64 || selected.parameterTypeRefs.len != 2U64 || selected.resultTypeRef == 0U64 { return <MidCallPreflight.Buffer /> }
+                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
+                                if elementRef == 0U64 || !c.typeRefEq(a: selected.resultTypeRef, b: elementRef) || !self.midCanonicalBufferInoutOperandSupported(c: inout c, body: body, bufferRef: bufferRef, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)) || !self.midCanonicalRuntimeReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64)) { return <MidCallPreflight.Argument /> }
+                            }
                             _ => { return <MidCallPreflight.Buffer /> }
                         }
                         return <MidCallPreflight.None />
@@ -2892,6 +2910,52 @@ pub impl LlvmCtx {
                                 if self.midCanonicalOperandNeedsOwnedDestination(c: c, operandId: valueOperandId) && c.arcNeedsRelease(ref: elementRef) { self.valueArc(c: inout c, v: value, typeRef: elementRef, retain: true) }
                                 LLVMBuildStore(self.b, value, self.arrElemPtr(elemTy: elementTy, data: data, idx: index))
                                 self.rawbufSetCount(c: inout c, data: data, n: LLVMBuildAdd(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()))
+                            }
+                            BufferIntrinsic.RemoveLast => {
+                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
+                                val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
+                                val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
+                                val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+                                self.emitBoundsCheck(c: inout c, idx: LLVMConstInt(self.i64ty, 0U64, 0I32), count: count)
+                                val nextCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+                                val result: LLVMValueRef = LLVMBuildLoad2(self.b, elementTy, self.arrElemPtr(elemTy: elementTy, data: data, idx: nextCount), anon())
+                                self.rawbufSetCount(c: inout c, data: data, n: nextCount)
+                                LLVMBuildStore(self.b, result, destination)
+                            }
+                            BufferIntrinsic.RemoveAt => {
+                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
+                                val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
+                                val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
+                                val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+                                val index: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
+                                self.emitBoundsCheck(c: inout c, idx: index, count: count)
+                                val result: LLVMValueRef = LLVMBuildLoad2(self.b, elementTy, self.arrElemPtr(elemTy: elementTy, data: data, idx: index), anon())
+                                val nextCount: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+                                self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elementTy), dst: index, src: LLVMBuildAdd(self.b, index, LLVMConstInt(self.i64ty, 1U64, 0I32), anon()), n: LLVMBuildSub(self.b, nextCount, index, anon()))
+                                self.rawbufSetCount(c: inout c, data: data, n: nextCount)
+                                LLVMBuildStore(self.b, result, destination)
+                            }
+                            BufferIntrinsic.SwapRemove => {
+                                val bufferRef: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: 0U64)
+                                val elementRef: U64 = self.midBufferElementRef(c: inout c, bufferRef: bufferRef)
+                                val elementTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: elementRef)
+                                val bufferOperand: MidOperandNode = c.mid.operands[self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64) - 1U64]
+                                val slot: LLVMValueRef = self.midCanonicalPlacePtr(c: inout c, body: body, place: c.mid.places[bufferOperand.place - 1U64])
+                                val data: LLVMValueRef = self.cowArraySlot(c: inout c, slotPtr: slot, elemTy: elementTy, elemRef: elementRef)
+                                val count: LLVMValueRef = self.rawbufCount(c: inout c, data: data)
+                                val index: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 1U64))
+                                self.emitBoundsCheck(c: inout c, idx: index, count: count)
+                                val result: LLVMValueRef = LLVMBuildLoad2(self.b, elementTy, self.arrElemPtr(elemTy: elementTy, data: data, idx: index), anon())
+                                val last: LLVMValueRef = LLVMBuildSub(self.b, count, LLVMConstInt(self.i64ty, 1U64, 0I32), anon())
+                                self.rawbufMove(c: inout c, data: data, elemSize: LLVMSizeOf(elementTy), dst: index, src: last, n: LLVMConstInt(self.i64ty, 1U64, 0I32))
+                                self.rawbufSetCount(c: inout c, data: data, n: last)
+                                LLVMBuildStore(self.b, result, destination)
                             }
                             _ => { return false }
                         }
