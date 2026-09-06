@@ -2132,6 +2132,10 @@ export struct Arena {
     // provenance. It is derived from final call descriptors after their
     // worklist reaches a fixpoint.
     pub mut val semanticAccesses: Array[SemanticAccess] = []
+    // Closed access-input recipes are published with SemanticAccess. Mid
+    // elaboration reads these scalar nodes instead of reopening source Expr or
+    // TypeCache to recover an already-selected local/field path.
+    pub mut val semanticAccessInputs: Array[SemanticAccessInput] = []
     // Canonical semantic body instances. Mono interns a complete body key here;
     // the backend consumes the same id rather than reconstructing an enclosing
     // substitution environment at every call site.
@@ -2279,6 +2283,12 @@ pub impl AccessUse { factory }
 export struct SemanticAccess {
     pub val bodyId: U64
     pub val candidateIndex: U64
+    // One-based SemanticAccessInput identities for the selected getter
+    // receiver/key and the selected projection passed to the parent call.
+    // They intentionally replace the former AST navigation anchors below.
+    pub val baseInput: U64 = 0U64
+    pub val keyInput: U64 = 0U64
+    pub val accessInput: U64 = 0U64
     // Frozen evaluation inputs of the indexed storage path. These remain AST
     // navigation anchors only: Mid uses them to materialize the already
     // selected receiver/key operands and never re-resolves their meaning.
@@ -2302,6 +2312,23 @@ export struct SemanticAccess {
     pub val write: Bool = false
 }
 pub impl SemanticAccess { factory }
+
+// A body-specific, closed recipe for values used by get-modify-set
+// elaboration. tag=1 Local declaration identity, 2 Integer literal,
+// 3 Field(selected physical field of `base`), 4 GetterValueRoot. `typeTerm`
+// is already final for the body instance; there is no AST/type query after
+// this freeze boundary.
+export struct SemanticAccessInput {
+    pub val tag: U64
+    pub val declarationTarget: U64 = 0U64
+    pub val integerValue: U64 = 0U64
+    pub val integerNegative: Bool = false
+    pub val integerBool: Bool = false
+    pub val base: U64 = 0U64
+    pub val fieldIndex: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+}
+pub impl SemanticAccessInput { factory }
 
 // The stable identity of a semantic call occurrence.  `ownerFnIdx` is the
 // declaration body (globals use the one-past-last Func sentinel).  originKind
