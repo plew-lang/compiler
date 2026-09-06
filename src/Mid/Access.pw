@@ -6,7 +6,7 @@ import ../Frontend with { Comp }
 import ../Ir with { Expr, SemanticExprType, SemanticAccess, SemanticAccessInput, CallResolution }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidBodyNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCanonicalBody, MidProjection, MidPlace, MidConstant, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidProjection, MidPlace, MidConstant, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
 
 export enum MidAccessError {
     None
@@ -33,6 +33,14 @@ export struct MidCanonicalAccessElaboration {
     pub val error: MidAccessError = <MidAccessError.None />
 }
 pub impl MidCanonicalAccessElaboration { factory }
+
+struct MidCanonicalAccessSite {
+    pub val candidate: U64 = 0U64
+    pub val role: U64 = 0U64
+    pub val parentResolution: U64 = 0U64
+    pub val chainLen: U64 = 0U64
+}
+pub impl MidCanonicalAccessSite { factory }
 
 fn canonicalAccessLocalPlace(c: inout Comp, body: MidBodyNode, declarationTarget: U64, typeTerm: U64) -> U64 {
     mut val localI: U64 = 0U64
@@ -84,6 +92,73 @@ fn canonicalAccessInputOperand(c: inout Comp, body: MidBodyNode, inputId: U64, r
     if place == 0U64 { return 0U64 }
     c.mid.operands.append(<MidOperandNode tag=1U64 place=place />)
     return c.mid.operands.count()
+}
+
+fn canonicalAccessFor(c: Comp, bodyId: U64, parentResolution: U64, candidate: U64) -> U64 {
+    mut val accessI: U64 = 0U64
+    while accessI < c.arena.semanticAccesses.count() {
+        val access: SemanticAccess = c.arena.semanticAccesses[accessI]
+        if access.bodyId == bodyId && access.parentResolution == parentResolution && access.candidateIndex == candidate && access.write {
+            return accessI + 1U64
+        }
+        accessI = accessI + 1U64
+    }
+    return 0U64
+}
+
+fn canonicalAccessChainLen(c: Comp, bodyId: U64, parentResolution: U64, candidate: U64) -> U64 {
+    mut val current: U64 = canonicalAccessFor(c: c, bodyId: bodyId, parentResolution: parentResolution, candidate: candidate)
+    mut val count: U64 = 0U64
+    while current != 0U64 && count < c.arena.semanticAccesses.count() {
+        count = count + 1U64
+        val access: SemanticAccess = c.arena.semanticAccesses[current - 1U64]
+        if access.nestedCandidate == 0U64 { return count }
+        current = canonicalAccessFor(c: c, bodyId: bodyId, parentResolution: access.writeResolution, candidate: access.nestedCandidate - 1U64)
+    }
+    return 0U64
+}
+
+// Finds the one selected inout access marker carried by a parent call. The
+// marker itself is already in canonical Mid; SemanticAccess supplies its
+// closed storage provenance and read/write resolutions.
+fn canonicalAccessSite(c: Comp, body: MidBodyNode, term: MidTerminatorNode) -> MidCanonicalAccessSite {
+    if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCanonicalAccessSite /> }
+    val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+    if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCanonicalAccessSite /> }
+    mut val candidate: U64 = 0U64
+    mut val role: U64 = 0U64
+    if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+        val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+        if receiver.tag == 2U64 && receiver.operand != 0U64 && receiver.operand <= c.mid.operands.count() {
+            val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
+            if operand.tag == 8U64 {
+                candidate = operand.accessCandidate
+                role = 1U64
+            }
+        }
+    }
+    if role == 0U64 {
+        mut val argumentI: U64 = 0U64
+        while argumentI < term.args.len {
+            val argument: U64 = c.mid.callArguments[term.args.start + argumentI]
+            if argument != 0U64 && argument <= c.mid.operands.count() {
+                val operand: MidOperandNode = c.mid.operands[argument - 1U64]
+                if operand.tag == 8U64 {
+                    candidate = operand.accessCandidate
+                    role = 2U64
+                    argumentI = term.args.len
+                } else {
+                    argumentI = argumentI + 1U64
+                }
+            } else {
+                argumentI = argumentI + 1U64
+            }
+        }
+    }
+    if role == 0U64 { return <MidCanonicalAccessSite /> }
+    val chainLen: U64 = canonicalAccessChainLen(c: c, bodyId: body.bodyInstance, parentResolution: target.resolution, candidate: candidate)
+    if chainLen == 0U64 { return <MidCanonicalAccessSite role=role parentResolution=target.resolution /> }
+    return <MidCanonicalAccessSite candidate=candidate role=role parentResolution=target.resolution chainLen=chainLen />
 }
 
 fn midAccessFor(c: Comp, bodyId: U64, parentResolution: U64, candidate: U64) -> U64 {
