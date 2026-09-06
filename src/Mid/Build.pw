@@ -53,6 +53,15 @@ export enum MidUnsupportedBuild {
     FieldBase
 }
 
+// Assignment fallback is not one semantic limitation. A target that cannot be
+// named as a Mid place needs a different lowering from one that deliberately
+// contains Index storage: the latter has a selected getter/setter writeback
+// contract and must go through Mid/Access rather than become a raw store.
+export enum MidUnsupportedAssign {
+    NotPlace
+    IndexProjection
+}
+
 export enum MidBuildError {
     None
     InvalidStatement
@@ -61,7 +70,7 @@ export enum MidBuildError {
     MissingSemanticType
     UnboundLocalIdentifier
     Unsupported(reason: MidUnsupportedBuild)
-    UnsupportedAssign
+    UnsupportedAssign(reason: MidUnsupportedAssign)
     UnsupportedWhile
     UnsupportedFor
     UnsupportedMatch
@@ -1189,8 +1198,11 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 }
                 projection += 1U64
             }
-            if !destinationLookup.found || !physicalFieldPath {
-                return <MidBuildError.UnsupportedAssign />
+            if !destinationLookup.found {
+                return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.NotPlace /> />
+            }
+            if !physicalFieldPath {
+                return <MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.IndexProjection /> />
             }
             val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
             val temporary: MidPlace = <MidPlace local=temporaryLocal typeTerm=term />
@@ -1199,7 +1211,7 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
                 match call { MidBuildError.None => {} _ => { return call } }
             } else {
                 val aggregate: MidAggregateLookup = midSemanticAggregateForSourceBody(c: inout c, sourceFunction: state.sourceFunction, exprId: value)
-                mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.UnsupportedAssign /> />
+                mut val operand: MidOperandBuild = <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=term /> /> error=<MidBuildError.UnsupportedAssign reason=<MidUnsupportedAssign.NotPlace /> /> />
                 if aggregate.found {
                     operand = materializeMidAggregateValue(c: inout c, state: inout state, aggregate: aggregate.aggregate)
                 } else {

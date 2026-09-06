@@ -1013,7 +1013,7 @@ pub impl LlvmCtx {
                 MidBuildError.MissingSemanticType => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 4U64) }
                 MidBuildError.UnboundLocalIdentifier => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 5U64) }
                 MidBuildError.Unsupported(reason: val unsupported) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 100U64 + self.midUnsupportedBuildCoverageDetail(reason: unsupported)) }
-                MidBuildError.UnsupportedAssign => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 6U64) }
+                MidBuildError.UnsupportedAssign(reason: val reason) => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 20U64 + self.midUnsupportedAssignCoverageDetail(reason: reason)) }
                 MidBuildError.UnsupportedWhile => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 7U64) }
                 MidBuildError.UnsupportedFor => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 8U64) }
                 MidBuildError.UnsupportedMatch => { self.recordMidBuild(c: inout c, bodyId: bodyId, fnIdx: fi, detail: 9U64) }

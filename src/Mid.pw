@@ -6,13 +6,13 @@
 import ./Mid/Ir with { MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
 import ./Mid/Drop with { analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops }
 import ./Mid/Verify with { MidVerifyError, MidVerification, verifyMidBody }
-import ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody }
+import ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody }
 import ./Mid/Instantiate with { MidInstantiateError, MidInstantiation, instantiateMidBody }
 import ./Mid/Access with { MidAccessError, MidAccessElaboration, elaborateMidAccesses }
 
 export ./Mid/Ir with { MidProjection, MidPlace, MidBorrowCapability, MidOwnership, MidAccessibility, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidProgram }
 export ./Mid/Drop with { analyzeMidOwnership, analyzeMidAccessibility, elaborateMidDrops }
 export ./Mid/Verify with { MidVerifyError, MidVerification, verifyMidBody }
-export ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody }
+export ./Mid/Build with { MidSourceBinding, MidBindingLookup, MidPlaceLookup, MidUnsupportedBuild, MidUnsupportedAssign, MidBuildError, MidBodyBuild, MidCallValue, MidAggregateValue, MidBuildState, emptyMidBody, addMidLocal, midLocalForBinding, midPlaceForRecordedIdent, buildMidLet, buildMidReturn, buildMidBlock, buildMidIf, buildParametricMidBody }
 export ./Mid/Instantiate with { MidInstantiateError, MidInstantiation, instantiateMidBody }
 export ./Mid/Access with { MidAccessError, MidAccessElaboration, elaborateMidAccesses }

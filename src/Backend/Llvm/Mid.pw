@@ -24,6 +24,13 @@ pub impl LlvmCtx {
         }
     }
 
+    fn midUnsupportedAssignCoverageDetail(reason: MidUnsupportedAssign) -> U64 {
+        match reason {
+            MidUnsupportedAssign.NotPlace => { return 0U64 }
+            MidUnsupportedAssign.IndexProjection => { return 1U64 }
+        }
+    }
+
     fn midVerifyCoverageDetail(reason: MidVerifyError) -> U64 {
         match reason {
             MidVerifyError.None => { return 0U64 }
@@ -211,6 +218,11 @@ pub impl LlvmCtx {
             self.emitMidCoverageUnsupportedBuild(detail: detail - 100U64)
             return
         }
+        if detail >= 20U64 && detail < 22U64 {
+            eprint(text: "assign:")
+            self.emitMidCoverageAssign(detail: detail - 20U64)
+            return
+        }
         match detail {
             0U64 => { eprint(text: "none") } 1U64 => { eprint(text: "invalid-statement") }
             2U64 => { eprint(text: "invalid-block") } 3U64 => { eprint(text: "invalid-function") }
@@ -221,6 +233,14 @@ pub impl LlvmCtx {
             12U64 => { eprint(text: "break") } 13U64 => { eprint(text: "continue") }
             14U64 => { eprint(text: "missing-terminator") } 15U64 => { eprint(text: "missing-call-template") }
             16U64 => { eprint(text: "unsupported-call-template") } _ => { eprint(text: "unknown") }
+        }
+    }
+
+    fn emitMidCoverageAssign(detail: U64) {
+        match detail {
+            0U64 => { eprint(text: "not-place") }
+            1U64 => { eprint(text: "index-projection") }
+            _ => { eprint(text: "unknown") }
         }
     }
 
