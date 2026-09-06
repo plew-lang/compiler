@@ -47,6 +47,16 @@ export struct MidCanonicalInstantiation {
 }
 pub impl MidCanonicalInstantiation { factory }
 
+struct MidCanonicalCallInstantiation {
+    pub val sourceStatementCount: U64 = 0U64
+    pub val sourceTerminator: U64 = 0U64
+    pub val cleanupStatements: MidRange = <MidRange start=0U64 len=0U64 />
+    pub val cleanupTerminator: U64 = 0U64
+    pub val hasCleanup: Bool = false
+    pub val error: MidInstantiateError = <MidInstantiateError.None />
+}
+pub impl MidCanonicalCallInstantiation { factory }
+
 fn midInstantiateHasError(error: MidInstantiateError) -> Bool {
     match error {
         MidInstantiateError.None => { return false }
@@ -510,10 +520,141 @@ fn canonicalRemapTarget(c: Comp, source: MidBodyNode, bodyId: U64, target: U64) 
     return target + canonicalCleanupBeforeBlock(c: c, source: source, bodyId: bodyId, target: target)
 }
 
-// The call-free subgraph validates the body-level append discipline before
-// call conversion cleanup grows blocks. Calls fail closed here; the completed
-// canonical instantiator replaces this boundary rather than falling back.
-export fn instantiateCanonicalMidWithoutCalls(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
+fn canonicalBorrowOperand(c: inout Comp, operand: U64) -> U64 {
+    if operand == 0U64 || operand > c.mid.operands.count() { return 0U64 }
+    val source: MidOperandNode = c.mid.operands[operand - 1U64]
+    if source.tag != 1U64 { return operand }
+    c.mid.operands.append(<MidOperandNode tag=3U64 place=source.place capability=1U64 />)
+    return c.mid.operands.count()
+}
+
+fn canonicalReceiverWithPassing(c: inout Comp, receiver: U64, passing: CallReceiverPassing) -> U64 {
+    if receiver == 0U64 || receiver > c.mid.callReceivers.count() { return 0U64 }
+    val source: MidCallReceiverNode = c.mid.callReceivers[receiver - 1U64]
+    match passing {
+        CallReceiverPassing.None => {
+            if source.tag != 1U64 { return 0U64 }
+            return receiver
+        }
+        CallReceiverPassing.Borrow => {
+            if source.tag != 2U64 { return 0U64 }
+            c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=canonicalBorrowOperand(c: inout c, operand: source.operand) />)
+            return c.mid.callReceivers.count()
+        }
+        _ => { return receiver }
+    }
+}
+
+fn instantiateCanonicalNonCallTerminatorRemapped(c: inout Comp, terminatorId: U64, environment: BodyInstance, itemRef: U64, source: MidBodyNode, bodyId: U64) -> Bool {
+    if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return false }
+    val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+    match term.tag {
+        1U64 => { c.mid.terminators.append(<MidTerminatorNode tag=1U64 />) }
+        2U64 => { c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: term.target) />) }
+        3U64 => {
+            val caseStart: U64 = c.mid.switchCases.count()
+            mut val caseI: U64 = 0U64
+            while caseI < term.cases.len {
+                val item: MidSwitchCase = c.mid.switchCases[term.cases.start + caseI]
+                c.mid.switchCases.append(<MidSwitchCase value=item.value target=canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: item.target) />)
+                caseI = caseI + 1U64
+            }
+            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=instantiateCanonicalOperand(c: inout c, operandId: term.discriminant, environment: environment, itemRef: itemRef) cases=<MidRange start=caseStart len=term.cases.len /> otherwise=canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: term.otherwise) />)
+        }
+        5U64 => { c.mid.terminators.append(<MidTerminatorNode tag=5U64 />) }
+        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=instantiateCanonicalOperand(c: inout c, operandId: term.value, environment: environment, itemRef: itemRef) />) }
+        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, operandId: term.value, environment: environment, itemRef: itemRef) />) }
+        8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
+        9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
+        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: term.resume) />) }
+        _ => { return false }
+    }
+    return true
+}
+
+fn instantiateCanonicalCallTerminator(c: inout Comp, term: MidTerminatorNode, source: MidBodyNode, bodyId: U64, blockI: U64, environment: BodyInstance, itemRef: U64, nextLocal: inout U64) -> MidCanonicalCallInstantiation {
+    val resolutionId: U64 = canonicalCallResolution(c: c, terminator: term, bodyId: bodyId)
+    if resolutionId == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingCallResolution /> /> }
+    val resolution: U64 = resolutionId - 1U64
+    val selected: CallResolution = c.arena.finalCallees[resolution]
+    if selected.callee >= c.arena.funcs.count() || selected.argumentConversions.len != term.args.len || selected.parameterTypeRefs.len != term.args.len || selected.argumentPassings.len != term.args.len {
+        return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionArity /> />
+    }
+    val callee: Func = c.arena.funcs[selected.callee]
+    if callee.params.count() != term.args.len || !midReceiverPassingMatches(callee: callee, passing: selected.receiverPassing) {
+        return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
+    }
+    mut val targetError: MidInstantiateError = <MidInstantiateError.None />
+    val callTarget: U64 = instantiateCanonicalCallTarget(c: inout c, targetId: term.callTarget, bodyId: bodyId, error: inout targetError)
+    if callTarget == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.MissingCallResolution /> /> }
+    val rawReceiver: U64 = instantiateCanonicalCallReceiver(c: inout c, receiverId: term.callReceiver, environment: environment, itemRef: itemRef)
+    val receiver: U64 = canonicalReceiverWithPassing(c: inout c, receiver: rawReceiver, passing: selected.receiverPassing)
+    if receiver == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> /> }
+    val argumentStart: U64 = c.mid.callArguments.count()
+    val conversionStatementStart: U64 = c.mid.statements.count()
+    mut val argumentI: U64 = 0U64
+    mut val cleanupCount: U64 = 0U64
+    while argumentI < term.args.len {
+        val conversion: U64 = c.finalCalleeConversionAt(conversions: selected.argumentConversions, index: argumentI)
+        val targetType: U64 = c.finalCalleeParameterTypeAt(types: selected.parameterTypeRefs, index: argumentI)
+        val passing: CallArgumentPassing = c.finalCalleeArgumentPassingAt(passings: selected.argumentPassings, index: argumentI)
+        if !midArgumentPassingMatches(parameter: c.funcParamAt(params: callee.params, index: argumentI), passing: passing) {
+            return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> />
+        }
+        mut val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: c.mid.callArguments[term.args.start + argumentI], environment: environment, itemRef: itemRef)
+        if operand == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionSource /> /> }
+        if !c.conversionProofIsIdentity(id: conversion) {
+            match passing {
+                CallArgumentPassing.Borrow => {}
+                _ => { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> /> }
+            }
+            val sourceType: U64 = midConversionSourceRef(c: c, conversion: conversion)
+            val conversionTarget: U64 = midConversionTargetRef(c: c, conversion: conversion)
+            if sourceType == 0U64 || !c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: sourceType) { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionSource /> /> }
+            if conversionTarget == 0U64 || !c.typeRefEq(a: targetType, b: conversionTarget) { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallConversionTarget /> /> }
+            val temporary: U64 = nextLocal
+            nextLocal = nextLocal + 1U64
+            c.mid.places.append(<MidPlaceNode local=temporary typeTerm=conversionTarget />)
+            val temporaryPlace: U64 = c.mid.places.count()
+            c.mid.rvalues.append(<MidRvalueNode tag=6U64 operand=operand conversion=conversion />)
+            c.mid.statements.append(<MidStatementNode tag=1U64 destination=temporaryPlace value=c.mid.rvalues.count() />)
+            c.mid.operands.append(<MidOperandNode tag=1U64 place=temporaryPlace />)
+            operand = c.mid.operands.count()
+            cleanupCount = cleanupCount + 1U64
+        }
+        match passing {
+            CallArgumentPassing.Borrow => { operand = canonicalBorrowOperand(c: inout c, operand: operand) }
+            _ => {}
+        }
+        if operand == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.CallResolutionPassing /> /> }
+        c.mid.callArguments.append(operand)
+        argumentI = argumentI + 1U64
+    }
+    val destination: U64 = instantiateCanonicalPlace(c: inout c, placeId: term.destination, environment: environment, itemRef: itemRef)
+    if destination == 0U64 { return <MidCanonicalCallInstantiation error=<MidInstantiateError.InvalidFinalResolution /> /> }
+    val cleanupTarget: U64 = canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: blockI) + 1U64
+    val continuation: U64 = canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: term.target)
+    if cleanupCount > 0U64 {
+        c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=cleanupTarget args=<MidRange start=argumentStart len=term.args.len /> destination=destination callTarget=callTarget callReceiver=receiver />)
+        val sourceTerminator: U64 = c.mid.terminators.count()
+        val cleanupStart: U64 = c.mid.statements.count()
+        mut val cleanupI: U64 = 0U64
+        while cleanupI < cleanupCount {
+            val conversionStatement: MidStatementNode = c.mid.statements[conversionStatementStart + cleanupI]
+            c.mid.statements.append(<MidStatementNode tag=3U64 destination=conversionStatement.destination />)
+            cleanupI = cleanupI + 1U64
+        }
+        c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=continuation />)
+        return <MidCanonicalCallInstantiation sourceStatementCount=cleanupCount sourceTerminator=sourceTerminator cleanupStatements=<MidRange start=cleanupStart len=cleanupCount /> cleanupTerminator=c.mid.terminators.count() hasCleanup=true />
+    }
+    c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=continuation args=<MidRange start=argumentStart len=term.args.len /> destination=destination callTarget=callTarget callReceiver=receiver />)
+    return <MidCanonicalCallInstantiation sourceStatementCount=cleanupCount sourceTerminator=c.mid.terminators.count() />
+}
+
+// Canonical instantiation is a direct append-only rewrite. Converted borrow
+// arguments receive their own cleanup continuation, while every pre-existing
+// CFG edge is remapped around those inserted blocks.
+export fn instantiateCanonicalMidBody(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
     if body.body == 0U64 || body.body > c.mid.bodies.count() || bodyId == 0U64 || bodyId > c.arena.bodyInstances.count() {
         return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> />
     }
@@ -530,6 +671,8 @@ export fn instantiateCanonicalMidWithoutCalls(c: inout Comp, body: MidCanonicalB
     val blockStart: U64 = c.mid.blocks.count()
     mut val error: MidInstantiateError = <MidInstantiateError.None />
     mut val blockI: U64 = 0U64
+    mut val outputBlockLen: U64 = 0U64
+    mut val nextLocal: U64 = source.locals.len
     while blockI < source.blocks.len {
         val block: MidBlockNode = c.mid.blocks[source.blocks.start + blockI]
         val statementStart: U64 = c.mid.statements.count()
@@ -541,13 +684,24 @@ export fn instantiateCanonicalMidWithoutCalls(c: inout Comp, body: MidCanonicalB
             statementI = statementI + 1U64
         }
         val terminator: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
-        if terminator.tag == 4U64 { return <MidCanonicalInstantiation error=<MidInstantiateError.UnsupportedCanonicalCall /> /> }
-        if !instantiateCanonicalNonCallTerminator(c: inout c, terminatorId: block.terminator, environment: environment, itemRef: itemRef) { return <MidCanonicalInstantiation error=error /> }
-        c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.len /> terminator=c.mid.terminators.count() />)
+        if terminator.tag == 4U64 {
+            val call: MidCanonicalCallInstantiation = instantiateCanonicalCallTerminator(c: inout c, term: terminator, source: source, bodyId: bodyId, blockI: blockI, environment: environment, itemRef: itemRef, nextLocal: inout nextLocal)
+            if midInstantiateHasError(error: call.error) { return <MidCanonicalInstantiation error=call.error /> }
+            c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.len + call.sourceStatementCount /> terminator=call.sourceTerminator />)
+            outputBlockLen = outputBlockLen + 1U64
+            if call.hasCleanup {
+                c.mid.blocks.append(<MidBlockNode statements=call.cleanupStatements terminator=call.cleanupTerminator />)
+                outputBlockLen = outputBlockLen + 1U64
+            }
+        } else {
+            if !instantiateCanonicalNonCallTerminatorRemapped(c: inout c, terminatorId: block.terminator, environment: environment, itemRef: itemRef, source: source, bodyId: bodyId) { return <MidCanonicalInstantiation error=error /> }
+            c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.len /> terminator=c.mid.terminators.count() />)
+            outputBlockLen = outputBlockLen + 1U64
+        }
         blockI = blockI + 1U64
     }
-    val locals: MidRange = appendCanonicalInstantiatedLocals(c: inout c, source: source, blockStart: blockStart, blockLen: source.blocks.len, environment: environment, itemRef: itemRef)
-    c.mid.bodies.append(<MidBodyNode bodyInstance=bodyId sourceFunction=source.sourceFunction locals=locals scopes=<MidRange start=scopeStart len=source.scopes.len /> blocks=<MidRange start=blockStart len=source.blocks.len /> entry=source.entry />)
+    val locals: MidRange = appendCanonicalInstantiatedLocals(c: inout c, source: source, blockStart: blockStart, blockLen: outputBlockLen, environment: environment, itemRef: itemRef)
+    c.mid.bodies.append(<MidBodyNode bodyInstance=bodyId sourceFunction=source.sourceFunction locals=locals scopes=<MidRange start=scopeStart len=source.scopes.len /> blocks=<MidRange start=blockStart len=outputBlockLen /> entry=canonicalRemapTarget(c: c, source: source, bodyId: bodyId, target: source.entry) />)
     return <MidCanonicalInstantiation body=<MidCanonicalBody body=c.mid.bodies.count() /> error=error />
 }
 
