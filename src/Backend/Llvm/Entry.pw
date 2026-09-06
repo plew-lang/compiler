@@ -114,7 +114,7 @@ pub impl LlvmCtx {
         // globals, ABI parameters, calls and aggregate values gain explicit
         // Mid forms rather than being recovered through legacy backend state.
         mut val midReady: Bool = false
-        mut val midBody: MidBody = <MidBody />
+        mut val canonicalMid: MidCanonicalBody = <MidCanonicalBody body=0U64 />
         val rootEnvironment: InstanceEnvironment = <InstanceEnvironment />
         val bodyId: U64 = c.findBodyInstance(fnIdx: fi, environment: rootEnvironment)
         if c.arena.globals.count() == 0U64 {
@@ -122,10 +122,10 @@ pub impl LlvmCtx {
             match parametric.error {
                 MidBuildError.None => {
                     if bodyId != 0U64 {
-                        val instantiated: MidInstantiation = instantiateMidBody(c: inout c, body: parametric.body, bodyId: bodyId)
+                        val instantiated: MidCanonicalInstantiation = instantiateCanonicalMidBody(c: inout c, body: parametric.canonical, bodyId: bodyId)
                         match instantiated.error {
                             MidInstantiateError.None => {
-                                val accesses: MidAccessElaboration = elaborateMidAccesses(c: inout c, body: instantiated.body)
+                                val accesses: MidCanonicalAccessElaboration = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
                                 mut val accessReady: Bool = true
                                 match accesses.error {
                                     MidAccessError.None => {}
@@ -152,13 +152,13 @@ pub impl LlvmCtx {
                                     }
                                 }
                                 if accessReady {
-                                    val elaborated: MidBody = elaborateMidDrops(body: accesses.body)
-                                    val verification: MidVerification = verifyMidBody(body: elaborated)
+                                    val elaborated: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: accesses.body)
+                                    val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: elaborated)
                                     match verification.error {
                                         MidVerifyError.None => {
-                                            match self.midInitialLlvmPreflight(c: inout c, body: elaborated) {
+                                            match self.midCanonicalLlvmPreflight(c: inout c, canonical: elaborated) {
                                                 MidLlvmPreflight.Ready => {
-                                                    midBody = elaborated
+                                                    canonicalMid = elaborated
                                                     midReady = true
                                                 }
                                                 MidLlvmPreflight.AbiLocals => { self.recordMidPreflight(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidLlvmPreflight.AbiLocals />) }
@@ -277,10 +277,10 @@ pub impl LlvmCtx {
         // initialize module-level variables (spec/15) before the body runs.
         self.callInitGlobals(c: inout c)
         if midReady {
-            // `midInitialLlvmSupported` completed before beginFnBody, so this
+            // canonical preflight completed before beginFnBody, so this
             // call cannot fail into an AST fallback after partially emitting a
             // function.  A failure here is therefore a backend invariant bug.
-            if !(self.genLlvmMidBody(c: inout c, body: midBody)) {
+            if !(self.genLlvmCanonicalMidBody(c: inout c, canonical: canonicalMid)) {
                 c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid body failed LLVM lowering")
             }
             return

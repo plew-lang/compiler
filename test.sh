@@ -174,6 +174,15 @@ else
     fail=$((fail + 1)); failed="$failed mid-if-all-diverge"
 fi
 
+# Entry and ordinary functions must both consume the frozen canonical body.
+# This guards the architectural one-way boundary independently of fixture
+# execution, which is temporarily unavailable for fresh WIP candidates.
+if sh ./test-mid-canonical-production.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-canonical-production"
+fi
+
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as

@@ -823,7 +823,7 @@ pub impl LlvmCtx {
         // recover through legacy backend state; each gains a Mid form before it
         // joins this path.
         mut val midReady: Bool = false
-        mut val midBody: MidBody = <MidBody />
+        mut val canonicalMid: MidCanonicalBody = <MidCanonicalBody body=0U64 />
         mut val midEligible: Bool = true
         if f.isAsync {
             self.recordMidEligibility(c: inout c, bodyId: bodyId, fnIdx: fi, reason: <MidEligibilityReason.Async />)
@@ -884,7 +884,7 @@ pub impl LlvmCtx {
                             self.traceCodegenU64(n: fi)
                             eprint(text: "\n")
                         }
-                        val instantiated: MidInstantiation = instantiateMidBody(c: inout c, body: parametric.body, bodyId: bodyId)
+                        val instantiated: MidCanonicalInstantiation = instantiateCanonicalMidBody(c: inout c, body: parametric.canonical, bodyId: bodyId)
                         if c.traceCodegen {
                             eprint(text: "[trace-codegen] Mid instantiate-done name=")
                             self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -901,7 +901,7 @@ pub impl LlvmCtx {
                                     self.traceCodegenU64(n: fi)
                                     eprint(text: "\n")
                                 }
-                                val accesses: MidAccessElaboration = elaborateMidAccesses(c: inout c, body: instantiated.body)
+                                val accesses: MidCanonicalAccessElaboration = elaborateCanonicalMidAccesses(c: inout c, canonical: instantiated.body)
                                 if c.traceCodegen {
                                     eprint(text: "[trace-codegen] Mid access-done name=")
                                     self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -926,7 +926,7 @@ pub impl LlvmCtx {
                                         self.traceCodegenU64(n: fi)
                                         eprint(text: "\n")
                                     }
-                                    val elaborated: MidBody = elaborateMidDrops(body: accesses.body)
+                                    val elaborated: MidCanonicalBody = elaborateCanonicalMidDrops(c: inout c, canonical: accesses.body)
                                     if c.traceCodegen {
                                         eprint(text: "[trace-codegen] Mid drops-done name=")
                                         self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -941,7 +941,7 @@ pub impl LlvmCtx {
                                         self.traceCodegenU64(n: fi)
                                         eprint(text: "\n")
                                     }
-                                    val verification: MidVerification = verifyMidBody(body: elaborated)
+                                    val verification: MidVerification = verifyCanonicalMidBody(c: c, canonical: elaborated)
                                     if c.traceCodegen {
                                         eprint(text: "[trace-codegen] Mid verify-done name=")
                                         self.traceCodegenName(c: inout c, start: f.nameStart, len: f.nameLen)
@@ -960,9 +960,9 @@ pub impl LlvmCtx {
                                             self.traceCodegenU64(n: fi)
                                             eprint(text: "\n")
                                         }
-                                        match self.midInitialLlvmPreflight(c: inout c, body: elaborated, abiParameterCount: abiParameterCount) {
+                                        match self.midCanonicalLlvmPreflight(c: inout c, canonical: elaborated, abiParameterCount: abiParameterCount) {
                                             MidLlvmPreflight.Ready => {
-                                                midBody = elaborated
+                                                canonicalMid = elaborated
                                                 midReady = true
                                                 if c.traceCodegen {
                                                     eprint(text: "[trace-codegen] Mid function ready name=")
@@ -1041,7 +1041,7 @@ pub impl LlvmCtx {
                 self.traceCodegenU64(n: fi)
                 eprint(text: "\n")
             }
-            if !(self.genLlvmMidBody(c: inout c, body: midBody)) {
+            if !(self.genLlvmCanonicalMidBody(c: inout c, canonical: canonicalMid)) {
                 c.errorAt(offset: 0U64, msg: "internal error: preflighted Mid function failed LLVM lowering")
             }
             if c.traceCodegen {
