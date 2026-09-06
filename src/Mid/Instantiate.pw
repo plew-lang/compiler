@@ -202,6 +202,52 @@ fn instantiateCanonicalAggregate(c: inout Comp, rvalueId: U64, environment: Body
     return c.mid.rvalues.count()
 }
 
+fn instantiateCanonicalCastBoundary(c: inout Comp, rvalueId: U64, environment: BodyInstance, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val sourceNode = c.mid.rvalues[rvalueId - 1U64]
+    if sourceNode.tag != 7U64 { return 0U64 }
+    val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: sourceNode.operand, environment: environment, itemRef: itemRef)
+    val sourceRef: U64 = c.groundTermForBody(ref: sourceNode.sourceTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    val targetRef: U64 = c.groundTermForBody(ref: sourceNode.targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    if operand == 0U64 || sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= c.arena.types.count() || targetRef >= c.arena.types.count() || !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: sourceRef)) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+        return 0U64
+    }
+    val source: TypeRef = c.arena.types[sourceRef]
+    val target: TypeRef = c.arena.types[targetRef]
+    val sourceUnderlying: U64 = c.newtypeUnderRef(start: source.nameStart, len: source.nameLen)
+    val targetUnderlying: U64 = c.newtypeUnderRef(start: target.nameStart, len: target.nameLen)
+    if sourceUnderlying != 0U64 && c.typeRefEq(a: sourceUnderlying, b: targetRef) {
+        c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=operand targetTerm=targetRef />)
+        return c.mid.rvalues.count()
+    }
+    if targetUnderlying != 0U64 && c.typeRefEq(a: sourceRef, b: targetUnderlying) {
+        c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=operand targetTerm=targetRef />)
+        return c.mid.rvalues.count()
+    }
+    if c.isIntType(start: source.nameStart, len: source.nameLen) {
+        val signed: Bool = c.intSigned(start: source.nameStart, len: source.nameLen)
+        if c.isIntType(start: target.nameStart, len: target.nameLen) {
+            if c.losslessInt(srcStart: source.nameStart, srcLen: source.nameLen, dstStart: target.nameStart, dstLen: target.nameLen) {
+                if signed { c.mid.rvalues.append(<MidRvalueNode tag=8U64 operand=operand kindTag=1U64 targetTerm=targetRef />) }
+                else { c.mid.rvalues.append(<MidRvalueNode tag=8U64 operand=operand kindTag=2U64 targetTerm=targetRef />) }
+                return c.mid.rvalues.count()
+            }
+        }
+        if c.isFloatType(start: target.nameStart, len: target.nameLen) {
+            if signed { c.mid.rvalues.append(<MidRvalueNode tag=9U64 operand=operand kindTag=1U64 targetTerm=targetRef />) }
+            else { c.mid.rvalues.append(<MidRvalueNode tag=9U64 operand=operand kindTag=2U64 targetTerm=targetRef />) }
+            return c.mid.rvalues.count()
+        }
+    }
+    if c.isFloatType(start: source.nameStart, len: source.nameLen) && c.isFloatType(start: target.nameStart, len: target.nameLen) {
+        c.mid.rvalues.append(<MidRvalueNode tag=10U64 operand=operand targetTerm=targetRef />)
+        return c.mid.rvalues.count()
+    }
+    if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+    return 0U64
+}
+
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
     if !(callee.hasRecv) {
         match passing { CallReceiverPassing.None => { return true } _ => { return false } }
