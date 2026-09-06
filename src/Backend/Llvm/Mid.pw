@@ -2319,6 +2319,75 @@ pub impl LlvmCtx {
         }
     }
 
+    inout fn midCanonicalEmitDrop(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
+        if placeId == 0U64 || placeId > c.mid.places.count() { return false }
+        val place: MidPlaceNode = c.mid.places[placeId - 1U64]
+        if place.local >= body.locals.len { return false }
+        mut val projectionI: U64 = 0U64
+        while projectionI < place.projections.len {
+            if c.mid.projections[place.projections.start + projectionI].tag != 1U64 { return false }
+            projectionI = projectionI + 1U64
+        }
+        val value: LLVMValueRef = self.midCanonicalReadPlace(c: inout c, body: body, place: place)
+        self.valueArc(c: inout c, v: value, typeRef: place.typeTerm, retain: false)
+        return true
+    }
+
+    inout fn midCanonicalEmitConditionalDrop(c: inout Comp, body: MidBodyNode, placeId: U64, flag: U64) -> Bool {
+        if flag >= body.locals.len { return false }
+        val flagValue: LLVMValueRef = LLVMBuildLoad2(self.b, self.i1ty, self.midCanonicalLocalPtr(body: body, local: flag), anon())
+        val thenBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop"))
+        val continueBlock: LLVMBasicBlockRef = LLVMAppendBasicBlockInContext(self.ctx, self.curFn, cstr(s: "mid.drop.cont"))
+        LLVMBuildCondBr(self.b, flagValue, thenBlock, continueBlock)
+        LLVMPositionBuilderAtEnd(self.b, thenBlock)
+        if !self.midCanonicalEmitDrop(c: inout c, body: body, placeId: placeId) { return false }
+        LLVMBuildBr(self.b, continueBlock)
+        LLVMPositionBuilderAtEnd(self.b, continueBlock)
+        return true
+    }
+
+    // The first direct statement slice deliberately covers the scalar rows
+    // whose semantics are independent of aggregate/call lowering.  Other
+    // canonical tags remain fail-closed until their direct emitters exist.
+    inout fn midCanonicalEmitStatement(c: inout Comp, body: MidBodyNode, statementId: U64) -> Bool {
+        if statementId == 0U64 || statementId > c.mid.statements.count() { return false }
+        val statement: MidStatementNode = c.mid.statements[statementId - 1U64]
+        if statement.tag == 1U64 {
+            if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.value == 0U64 || statement.value > c.mid.rvalues.count() { return false }
+            val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+            val rvalue: MidRvalueNode = c.mid.rvalues[statement.value - 1U64]
+            if rvalue.tag != 1U64 && rvalue.tag != 2U64 && rvalue.tag != 8U64 && rvalue.tag != 9U64 && rvalue.tag != 10U64 { return false }
+            mut val value: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: rvalue.operand)
+            if rvalue.tag == 8U64 { value = self.coerceInt(v: value, target: self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), unsigned: rvalue.kindTag != 1U64) }
+            if rvalue.tag == 9U64 {
+                if rvalue.kindTag == 1U64 { value = LLVMBuildSIToFP(self.b, value, self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), anon()) }
+                else { value = LLVMBuildUIToFP(self.b, value, self.llvmTypeOfRef(c: inout c, ref: rvalue.targetTerm), anon()) }
+            }
+            val targetTy: LLVMTypeRef = self.midCanonicalPlaceTy(c: inout c, body: body, place: destination)
+            if LLVMGetTypeKind(LLVMTypeOf(value)) == 8U32 { value = self.coerceInt(v: value, target: targetTy, unsigned: false) }
+            LLVMBuildStore(self.b, value, self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+            return true
+        }
+        if statement.tag == 2U64 {
+            if statement.destination == 0U64 || statement.destination > c.mid.places.count() || statement.source == 0U64 || statement.source > c.mid.places.count() { return false }
+            val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+            val source: MidPlaceNode = c.mid.places[statement.source - 1U64]
+            LLVMBuildStore(self.b, self.midCanonicalReadPlace(c: inout c, body: body, place: source), self.midCanonicalPlacePtr(c: inout c, body: body, place: destination))
+            return true
+        }
+        if statement.tag == 3U64 { return self.midCanonicalEmitDrop(c: inout c, body: body, placeId: statement.destination) }
+        if statement.tag == 4U64 { return self.midCanonicalEmitConditionalDrop(c: inout c, body: body, placeId: statement.destination, flag: statement.flag) }
+        if statement.tag == 5U64 {
+            if statement.flag >= body.locals.len { return false }
+            mut val bit: U64 = 0U64
+            if statement.isSet { bit = 1U64 }
+            LLVMBuildStore(self.b, LLVMConstInt(self.i1ty, bit, 0I32), self.midCanonicalLocalPtr(body: body, local: statement.flag))
+            return true
+        }
+        if statement.tag == 7U64 { return true }
+        return false
+    }
+
     // Allocate each Mid local once in the function entry. Source parameters
     // are bound from the ABI by their checked contiguous Mid-local prefix;
     // globals and receivers deliberately remain distinct Mid forms rather
