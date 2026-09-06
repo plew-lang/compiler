@@ -9,6 +9,7 @@ for source in tests/run/default_args.pw tests/run/default_arg_array.pw \
     tests/run/default_eval_order.pw tests/run/default_eval_order_method.pw \
     tests/run/default_eval_order_generic_method.pw \
     tests/run/mid_default_argument_lifetime.pw tests/run/mid_default_argument_generic.pw \
+    tests/run/mid_default_argument_internal_lifetime.pw \
     tests/part/default_argument_provenance/Main.pw; do
     echo "check $source(default-arguments)" >&2
     if ! "$PLEWC" --emit-mid-coverage "$source" >"$directory/input.ll" 2>"$directory/coverage"; then

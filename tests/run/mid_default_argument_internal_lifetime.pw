@@ -1,0 +1,31 @@
+import @Std/Io with { print, write }
+
+unique struct Resource {
+    pub val tag: I64
+    deinit { print(self.tag) }
+}
+pub impl Resource { factory }
+
+fn inspect(item: borrow Resource) -> Bool {
+    write(s: "inspect\n")
+    return item.tag > 0I64
+}
+
+fn next() -> I64 {
+    write(s: "next\n")
+    return 1I64
+}
+
+fn consume(flag: Bool = inspect(item: <Resource tag=8I64 />), count: I64 = next()) {
+    if flag { print(count) }
+}
+
+fn exercise() {
+    consume()
+    consume(count: next())
+    consume(flag: true, count: 2I64)
+    consume()
+    write(s: "after\n")
+}
+
+fn main() { exercise() }
