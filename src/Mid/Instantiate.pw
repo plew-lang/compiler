@@ -8,7 +8,7 @@ import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -163,6 +163,42 @@ fn instantiateCanonicalReturnBoundary(c: inout Comp, rvalueId: U64, environment:
         return 0U64
     }
     c.mid.rvalues.append(<MidRvalueNode tag=6U64 operand=operand conversion=conversion />)
+    return c.mid.rvalues.count()
+}
+
+fn instantiateCanonicalAggregate(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val source = c.mid.rvalues[rvalueId - 1U64]
+    if source.tag < 3U64 || source.tag > 5U64 { return 0U64 }
+    val resolutionIndex: U64 = c.finalAggregateIndex(bodyId: bodyId, exprId: source.exprId)
+    if resolutionIndex >= c.arena.finalAggregates.count() {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
+        return 0U64
+    }
+    val resolution: FinalAggregateResolution = c.arena.finalAggregates[resolutionIndex]
+    if source.elements.len != resolution.elementTargetRefs.count() || source.elements.len != resolution.elementConversions.count() {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+        return 0U64
+    }
+    val start: U64 = c.mid.aggregateElements.count()
+    mut val i: U64 = 0U64
+    while i < source.elements.len {
+        val element = c.mid.aggregateElements[source.elements.start + i]
+        val operand: U64 = instantiateCanonicalOperand(c: inout c, operandId: element.operand, environment: environment, itemRef: itemRef)
+        val targetTerm: U64 = resolution.elementTargetRefs[i]
+        val conversion: U64 = c.freezeValueConversionProof(proof: resolution.elementConversions[i])
+        if operand == 0U64 || targetTerm == 0U64 || conversion == 0U64 {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+            return 0U64
+        }
+        if c.conversionProofIsIdentity(id: conversion) && !(c.typeRefEq(a: canonicalMidOperandTypeRef(c: c, operandId: operand), b: targetTerm)) {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+            return 0U64
+        }
+        c.mid.aggregateElements.append(<MidAggregateElementNode fieldIndex=element.fieldIndex operand=operand targetTerm=targetTerm isBoxed=element.isBoxed conversion=conversion />)
+        i = i + 1U64
+    }
+    c.mid.rvalues.append(<MidRvalueNode tag=source.tag exprId=source.exprId enumIndex=source.enumIndex variantIndex=source.variantIndex resultTerm=resolution.resultTypeRef fieldCount=source.fieldCount elements=<MidRange start=start len=source.elements.len /> />)
     return c.mid.rvalues.count()
 }
 
