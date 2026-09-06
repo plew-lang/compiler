@@ -1,5 +1,5 @@
 import @Std/Io with { write }
-import /Mid with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidCanonicalArena, MidCanonicalBody }
+import /Mid with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidCanonicalArena, MidCanonicalBody, canonicalMidBodyIsWellFormed }
 
 fn main() {
     val source: MidPlace = <MidPlace local=2U64 projections=[<MidProjection.Field index=3U64 typeTerm=11U64 />, <MidProjection.Index indexLocal=4U64 typeTerm=12U64 />] typeTerm=12U64 />
@@ -21,6 +21,7 @@ fn main() {
     val firstProjection = arena.projections[place.projections.start]
     val terminator = arena.terminators[block.terminator - 1U64]
     val message = arena.operands[terminator.value - 1U64]
+    if !canonicalMidBodyIsWellFormed(arena: arena, body: frozen) { write(s: "malformed\n") }
     write(s: "body=" + frozen.body.toString() + "\n")
     write(s: "projection=" + firstProjection.tag.toString() + ":" + firstProjection.index.toString() + "\n")
     write(s: "aggregate=" + rvalue.exprId.toString() + ":" + element.conversion.toString() + "\n")

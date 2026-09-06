@@ -716,3 +716,94 @@ pub impl MidCanonicalArena {
         return storeMidCanonicalBody(arena: inout self, body: body)
     }
 }
+
+// This verifier deliberately reads only canonical rows. It is the first
+// post-freeze consumer and protects every later pass from malformed IDs/ranges
+// without reconstructing a MidBody draft. Semantic ownership verification
+// remains a separate pass over the same representation.
+fn midRangeFits(range: MidRange, count: U64) -> Bool {
+    return range.start <= count && range.len <= count - range.start
+}
+
+fn midCanonicalOperandIsWellFormed(arena: MidCanonicalArena, operand: U64) -> Bool {
+    if operand == 0U64 || operand > arena.operands.count() { return false }
+    val node: MidOperandNode = arena.operands[operand - 1U64]
+    if node.tag >= 1U64 && node.tag <= 4U64 {
+        return node.place != 0U64 && node.place <= arena.places.count()
+    }
+    match node.tag {
+        5U64 => { return true }
+        6U64 => { return true }
+        7U64 => { return true }
+        8U64 => { return true }
+        _ => { return false }
+    }
+}
+
+fn midCanonicalPlaceIsWellFormed(arena: MidCanonicalArena, place: U64) -> Bool {
+    if place == 0U64 || place > arena.places.count() { return false }
+    val node: MidPlaceNode = arena.places[place - 1U64]
+    if !midRangeFits(range: node.projections, count: arena.projections.count()) { return false }
+    mut val i: U64 = 0U64
+    while i < node.projections.len {
+        val projection: MidProjectionNode = arena.projections[node.projections.start + i]
+        if projection.tag != 1U64 && projection.tag != 2U64 { return false }
+        i = i + 1U64
+    }
+    return true
+}
+
+fn midCanonicalRvalueIsWellFormed(arena: MidCanonicalArena, rvalue: U64) -> Bool {
+    if rvalue == 0U64 || rvalue > arena.rvalues.count() { return false }
+    val node: MidRvalueNode = arena.rvalues[rvalue - 1U64]
+    if node.tag >= 1U64 && node.tag <= 10U64 && node.operand != 0U64 {
+        if !midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand) { return false }
+    }
+    if node.tag >= 11U64 && node.tag <= 15U64 {
+        if !midCanonicalPlaceIsWellFormed(arena: arena, place: node.operand) { return false }
+    }
+    if node.tag >= 3U64 && node.tag <= 5U64 {
+        if !midRangeFits(range: node.elements, count: arena.aggregateElements.count()) { return false }
+        mut val i: U64 = 0U64
+        while i < node.elements.len {
+            if !midCanonicalOperandIsWellFormed(arena: arena, operand: arena.aggregateElements[node.elements.start + i].operand) { return false }
+            i = i + 1U64
+        }
+    }
+    return node.tag >= 1U64 && node.tag <= 15U64
+}
+
+export fn canonicalMidBodyIsWellFormed(arena: MidCanonicalArena, body: MidCanonicalBody) -> Bool {
+    if body.body == 0U64 || body.body > arena.bodies.count() { return false }
+    val node: MidBodyNode = arena.bodies[body.body - 1U64]
+    if !midRangeFits(range: node.locals, count: arena.locals.count()) || !midRangeFits(range: node.scopes, count: arena.scopes.count()) || !midRangeFits(range: node.blocks, count: arena.blocks.count()) || node.entry >= node.blocks.len { return false }
+    mut val blockI: U64 = 0U64
+    while blockI < node.blocks.len {
+        val block: MidBlockNode = arena.blocks[node.blocks.start + blockI]
+        if !midRangeFits(range: block.statements, count: arena.statements.count()) || block.terminator == 0U64 || block.terminator > arena.terminators.count() { return false }
+        mut val statementI: U64 = 0U64
+        while statementI < block.statements.len {
+            val statement: MidStatementNode = arena.statements[block.statements.start + statementI]
+            if statement.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.destination) { return false }
+            if statement.source != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: statement.source) { return false }
+            if statement.value != 0U64 && !midCanonicalRvalueIsWellFormed(arena: arena, rvalue: statement.value) { return false }
+            if statement.tag < 1U64 || statement.tag > 7U64 { return false }
+            statementI = statementI + 1U64
+        }
+        val terminator: MidTerminatorNode = arena.terminators[block.terminator - 1U64]
+        if terminator.discriminant != 0U64 && !midCanonicalOperandIsWellFormed(arena: arena, operand: terminator.discriminant) { return false }
+        if terminator.value != 0U64 && !midCanonicalOperandIsWellFormed(arena: arena, operand: terminator.value) { return false }
+        if !midRangeFits(range: terminator.cases, count: arena.switchCases.count()) || !midRangeFits(range: terminator.args, count: arena.callArguments.count()) { return false }
+        mut val argI: U64 = 0U64
+        while argI < terminator.args.len {
+            if !midCanonicalOperandIsWellFormed(arena: arena, operand: arena.callArguments[terminator.args.start + argI]) { return false }
+            argI = argI + 1U64
+        }
+        if terminator.callTarget != 0U64 && terminator.callTarget > arena.callTargets.count() { return false }
+        if terminator.callReceiver != 0U64 && terminator.callReceiver > arena.callReceivers.count() { return false }
+        if terminator.destination != 0U64 && !midCanonicalPlaceIsWellFormed(arena: arena, place: terminator.destination) { return false }
+        if terminator.tag < 1U64 || terminator.tag > 10U64 { return false }
+        blockI = blockI + 1U64
+    }
+    return true
+}
