@@ -1,6 +1,6 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Bind, CallTemplateKind, CallTemplateReceiver, Expr, Func, FuncBindRange, StaticConformanceProof, TypeRef }
+import /Ir with { Bind, CallArgumentSource, CallTemplateKind, CallTemplateReceiver, Expr, Func, FuncBindRange, Param, StaticConformanceProof, TypeRef }
 
 fn inferredArgument(c: inout Comp, pattern: U64, expected: U64, params: FuncBindRange) -> U64 {
     val valueParams = c.pushFuncParams(params: [])
@@ -40,7 +40,10 @@ fn main() {
     val expectedTerm = c.pushType(t: <TypeRef nameStart=array.nameStart nameLen=array.nameLen args=[callerTerm] />)
     val concreteTerm = c.pushType(t: <TypeRef nameStart=array.nameStart nameLen=array.nameLen args=[integerTerm] />)
     val params = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
-    val valueParams = c.pushFuncParams(params: [])
+    val defaultExpr = c.pushExpr(e: <Expr.Array elems=c.pushExprs(exprs: []) />)
+    val valueParams = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen
+        tyStart=array.nameStart tyLen=array.nameLen tyIsArray=false ty=returnTerm
+        isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=defaultExpr />])
     c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
         hasRet=true retStart=array.nameStart retLen=array.nameLen retIsArray=false retTy=returnTerm body=0U64
         hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
@@ -73,4 +76,41 @@ fn main() {
     if inferredArgument(c: inout c, pattern: recordPattern, expected: recordExpected, params: params) == callerTerm { write(s: "structural-record-children\n") }
     val relabelled = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[2U64] recordFieldTerms=[callerTerm] />)
     if inferredArgument(c: inout c, pattern: recordPattern, expected: relabelled, params: params) == 0U64 { write(s: "structural-record-labels\n") }
+    val index = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: expression))
+    val before = c.arena.exprs.count()
+    if !c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64) && c.arena.exprs.count() == before { write(s: "unprepared-no-publication\n") }
+    c.prepareDefaultArgumentGenerators()
+    c.cur.checkFn = 999U64
+    c.cur.recordCallTemplates = false
+    if c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64) { write(s: "completed-parent-plan\n") }
+    if c.cur.checkFn == 999U64 && !c.cur.recordCallTemplates { write(s: "record-cursor-restored\n") }
+    match c.decls.callTemplates[index].kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: val completed, calleeTypeArgs: _, proof: _) => {
+            if completed.count() == 1U64 {
+                match completed[0U64].source {
+                    CallArgumentSource.PriorCallResult(exprId: val generated, siteKey: val site) => {
+                        if site.ownerFnIdx == 0U64 && c.typeRefEq(a: c.semanticExprTerm(exprId: generated), b: expectedTerm) { write(s: "caller-parametric-default-result\n") }
+                        val generatorTemplate = c.callTemplateForSourceBody(fnIdx: 0U64, exprId: generated)
+                        match generatorTemplate.kind {
+                            CallTemplateKind.Direct(callee: val generator, receiver: _, args: val generatorArgs, calleeTypeArgs: val typeArgs, proof: _) => {
+                                if generator == c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64) && generatorArgs.count() == 0U64 && typeArgs.count() == 1U64 && typeArgs[0U64] == callerTerm { write(s: "selected-generator-environment\n") }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+    val completedCount = c.decls.callTemplates.count()
+    if c.completeRecordedDirectDefaults(templateIndex: index, receiverTerm: 0U64) && c.decls.callTemplates.count() == completedCount && args.len == 0U64 { write(s: "completed-plan-idempotent\n") }
+    c.cur.checkFn = 0U64
+    c.cur.recordCallTemplates = true
+    val unresolved = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
+    c.recordCallTemplate(exprId: unresolved, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
+    val unresolvedIndex = c.callTemplateIndex(siteKey: c.templateCallSiteKey(fnIdx: 0U64, exprId: unresolved))
+    val unresolvedCount = c.decls.callTemplates.count()
+    if !c.completeRecordedDirectDefaults(templateIndex: unresolvedIndex, receiverTerm: 0U64) && c.decls.callTemplates.count() == unresolvedCount { write(s: "unresolved-no-publication\n") }
 }

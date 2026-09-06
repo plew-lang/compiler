@@ -3,6 +3,53 @@
 // but take no value parameters and never capture `self` or another argument.
 // They are deliberately absent from the source callable surface.
 pub impl Comp {
+    // Complete an already selected call after Record has joined its argument
+    // and expected-result evidence. `receiverTerm` is the recorded receiver
+    // recipe's result in the caller environment, never a fresh name lookup.
+    // The parent row is published only once every parameter has an operand.
+    inout fn completeRecordedDirectDefaults(templateIndex: U64, receiverTerm: U64) -> Bool {
+        if templateIndex >= self.decls.callTemplates.count() { return false }
+        val template = self.decls.callTemplates[templateIndex]
+        match template.kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val arguments, calleeTypeArgs: val typeArgs, proof: val proof) => {
+                if callee >= self.arena.funcs.count() { return false }
+                val function = self.arena.funcs[callee]
+                // This also makes completion idempotent: the saved ordinary
+                // default calls are not reclassified as omitted arguments.
+                if arguments.count() == function.params.count() { return true }
+                if arguments.count() > function.params.count() || self.decls.defaultGeneratorRanges.count() == 0U64 { return false }
+                if typeArgs.count() != function.typeParams.count() || !self.fnArgsAllResolved(args: typeArgs) { return false }
+                if (function.hasRecv || function.isAssoc) && receiverTerm == 0U64 { return false }
+                val environment = self.bodyInstanceEnvironment(fnIdx: callee, args: typeArgs, recvInstRef: receiverTerm, selectedProof: proof)
+                val item = self.bodyProvidedItemTerm(f: function, environment: environment)
+                mut val parameterTerms: Array[U64] = []
+                mut val index: U64 = 0U64
+                while index < function.params.count() {
+                    val parameter = self.funcParamAt(params: function.params, index: index)
+                    parameterTerms.append(self.groundTermForBody(ref: parameter.ty, environment: environment, selfRef: environment.receiverRef, itemRef: item))
+                    index += 1U64
+                }
+                // Source local resolution has ended. Install only the owner
+                // used to key synthetic calls; never rebuild lexical locals.
+                val previousOwner = self.cur.checkFn
+                val previousRecording = self.cur.recordCallTemplates
+                self.cur.checkFn = template.siteKey.ownerFnIdx
+                self.cur.recordCallTemplates = true
+                val completed = self.recordBoundCallArguments(callee: callee, args: arguments, receiver: receiver, calleeTypeArgs: typeArgs, parameterTerms: parameterTerms, proof: proof)
+                self.cur.checkFn = previousOwner
+                self.cur.recordCallTemplates = previousRecording
+                match completed {
+                    Optional.Some(v: val args) => {
+                        self.decls.callTemplates.set(i: templateIndex, value: <CallTemplate siteKey=template.siteKey expectedResultTerm=template.expectedResultTerm kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=typeArgs proof=proof /> />)
+                        return true
+                    }
+                    Optional.None => { return false }
+                }
+            }
+            _ => { return false }
+        }
+    }
+
     // Convert the selected parameter binding into the one argument sequence
     // consumed by finalization and Mid. Signature terms/substitutions arrive
     // from the caller's completed parametric selection, not from AST recovery.

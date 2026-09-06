@@ -8,3 +8,10 @@ conflict-no-partial-publication
 projection-not-inverted
 structural-record-children
 structural-record-labels
+unprepared-no-publication
+completed-parent-plan
+record-cursor-restored
+caller-parametric-default-result
+selected-generator-environment
+completed-plan-idempotent
+unresolved-no-publication
