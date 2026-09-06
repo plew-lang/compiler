@@ -8,7 +8,7 @@ import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -315,6 +315,35 @@ fn instantiateCanonicalStatement(c: inout Comp, statementId: U64, environment: B
         5U64 => { c.mid.statements.append(<MidStatementNode tag=5U64 flag=source.flag isSet=source.isSet />) }
         6U64 => { c.mid.statements.append(<MidStatementNode tag=6U64 scope=source.scope />) }
         7U64 => { c.mid.statements.append(<MidStatementNode tag=7U64 />) }
+        _ => { return false }
+    }
+    return true
+}
+
+// Call is intentionally excluded until its selected passing/conversion proof
+// is emitted with its continuation cleanup. Every other terminator has a
+// closed scalar payload and can be grounded without a draft reconstruction.
+fn instantiateCanonicalNonCallTerminator(c: inout Comp, terminatorId: U64, environment: BodyInstance, itemRef: U64) -> Bool {
+    if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return false }
+    val source = c.mid.terminators[terminatorId - 1U64]
+    match source.tag {
+        1U64 => { c.mid.terminators.append(<MidTerminatorNode tag=1U64 />) }
+        2U64 => { c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=source.target />) }
+        3U64 => {
+            val caseStart: U64 = c.mid.switchCases.count()
+            mut val i: U64 = 0U64
+            while i < source.cases.len {
+                c.mid.switchCases.append(c.mid.switchCases[source.cases.start + i])
+                i = i + 1U64
+            }
+            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=instantiateCanonicalOperand(c: inout c, operandId: source.discriminant, environment: environment, itemRef: itemRef) cases=<MidRange start=caseStart len=source.cases.len /> otherwise=source.otherwise />)
+        }
+        5U64 => { c.mid.terminators.append(<MidTerminatorNode tag=5U64 />) }
+        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=instantiateCanonicalOperand(c: inout c, operandId: source.value, environment: environment, itemRef: itemRef) />) }
+        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=instantiateCanonicalOperand(c: inout c, operandId: source.value, environment: environment, itemRef: itemRef) />) }
+        8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
+        9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
+        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=source.state resume=source.resume />) }
         _ => { return false }
     }
     return true
