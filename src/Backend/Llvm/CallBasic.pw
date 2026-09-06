@@ -261,6 +261,24 @@ pub impl LlvmCtx {
                 return LLVMConstInt(self.i64ty, 0U64, 0I32)
             }
         }
+        // The remaining AST caller shares the finalized C signature with Mid.
+        // Unsupported C ABI forms retain their explicit migration boundary.
+        val externalResolution: U64 = c.bodyCalleeIndex(exprId: callId)
+        if externalResolution < c.arena.finalCallees.count() {
+            val selected: CallResolution = c.arena.finalCallees[externalResolution]
+            if self.resolvedCCallSupported(c: inout c, selected: selected) {
+                val slot: U64 = self.declareResolvedCFunction(c: inout c, selected: selected)
+                mut val values: Array[LLVMValueRef] = []
+                mut val index: U64 = 0U64
+                while index < args.len {
+                    values.append(self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: index).expr))
+                    index += 1U64
+                }
+                val result: LLVMValueRef = LLVMBuildCall2(self.b, self.declTy[slot], self.declFn[slot], arrayCPtr(values), values.count(), anon())
+                if c.arena.funcs[selected.callee].hasRet { return result }
+                return LLVMConstInt(self.i64ty, 0U64, 0I32)
+            }
+        }
         mut val resolvedPlewIntrinsic: Bool = false
         if cfi < c.arena.funcs.count() {
             val cfIntrinsic: Func = c.arena.funcs[cfi]

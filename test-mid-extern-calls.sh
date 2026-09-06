@@ -13,7 +13,7 @@ for source in tests/run/mid_extern_scalar_call.pw \
     echo "check $source(extern-calls)" >&2
     names='main'
     if [ "$source" = tests/run/mid_extern_scalar_call.pw ]; then
-        names='main|exercise|mark'
+        names='main|exercise|mark|signed|unsigned|floating'
     fi
     if ! "$PLEWC" --emit-mid-coverage "$source" >"$directory/input.ll" 2>"$directory/coverage"; then
         cat "$directory/coverage" >&2

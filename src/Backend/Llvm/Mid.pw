@@ -656,7 +656,7 @@ pub impl LlvmCtx {
             }
             _ => {}
         }
-        if callee.isExtern { return <MidCallPreflight.Extern /> }
+        if callee.isExtern && !self.resolvedCCallSupported(c: inout c, selected: selected) { return <MidCallPreflight.Extern /> }
         if callee.typeParams.count() != selected.calleeTypeArgs.count() { return <MidCallPreflight.GenericArguments /> }
         if callee.typeParams.count() > 0U64 && !(c.fnArgsAllGround(args: selectedTypeArgs)) { return <MidCallPreflight.GenericArguments /> }
         if args.count() != callee.params.count() || selectedParameterTypes.count() != args.count() || selectedArgumentPassings.count() != args.count() { return <MidCallPreflight.ArgumentShape /> }
@@ -1237,11 +1237,17 @@ pub impl LlvmCtx {
             }
             _ => {}
         }
-        if calleeDef.isExtern { return false }
+        mut val externalSlot: U64 = self.declId.count()
+        if calleeDef.isExtern {
+            if !self.resolvedCCallSupported(c: inout c, selected: selected) { return false }
+            externalSlot = self.declareResolvedCFunction(c: inout c, selected: selected)
+        }
         mut val useMethodInstance: Bool = false
         mut val methodSlot: U64 = self.genMethK.count()
         mut val freeSlot: U64 = self.genFnK.count()
-        if calleeDef.hasRecv {
+        if calleeDef.isExtern {
+            // External declarations have no Plew BodyInstance to instantiate.
+        } else if calleeDef.hasRecv {
             if selected.recvTypeRef == 0U64 { return false }
             // A receiver call has a distinct ABI and body environment from a
             // free function.  Mono has already fixed both the receiver
@@ -1316,7 +1322,9 @@ pub impl LlvmCtx {
             i += 1U64
         }
         mut val result: LLVMValueRef = LLVMConstInt(self.i64ty, 0U64, 0I32)
-        if useMethodInstance {
+        if calleeDef.isExtern {
+            result = LLVMBuildCall2(self.b, self.declTy[externalSlot], self.declFn[externalSlot], arrayCPtr(values), values.count(), anon())
+        } else if useMethodInstance {
             result = LLVMBuildCall2(self.b, self.genMethTy[methodSlot], self.genMethVal[methodSlot], arrayCPtr(values), values.count(), anon())
         } else {
             result = LLVMBuildCall2(self.b, self.genFnTy[freeSlot], self.genFnVal[freeSlot], arrayCPtr(values), values.count(), anon())

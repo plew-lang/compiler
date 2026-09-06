@@ -6,6 +6,70 @@
 
 pub impl LlvmCtx {
 
+    // C scalar/pointer ABI slice. Consume grounded types, never recover a
+    // signature from the spelling at a call site. Narrow integers require
+    // target ABI extension attributes; aggregates require C classification.
+    // Neither may silently inherit the ordinary Plew calling convention.
+    inout fn resolvedCTypeSupported(c: inout Comp, ref: U64) -> Bool {
+        if ref == 0U64 || ref >= c.arena.types.count() { return false }
+        val ty: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: ref)
+        val kind: U32 = LLVMGetTypeKind(ty)
+        if kind == 12U32 { return true }
+        if kind == 8U32 { return LLVMGetIntTypeWidth(ty) >= 32U32 }
+        val term: TypeRef = c.arena.types[ref]
+        // F32 currently has a double Plew representation, not a C float ABI.
+        return kind == 3U32 && rangeEquals(bytes: c.arena.bytes, start: term.nameStart, len: term.nameLen, kw: "F64")
+    }
+
+    inout fn resolvedCCallSupported(c: inout Comp, selected: CallResolution) -> Bool {
+        if selected.callee >= c.arena.funcs.count() { return false }
+        val declaration: Func = c.arena.funcs[selected.callee]
+        if !declaration.isExtern || !declaration.isCExtern || declaration.hasRecv || declaration.isAsync { return false }
+        if declaration.typeParams.count() != 0U64 || selected.parameterTypeRefs.count() != declaration.params.count() { return false }
+        val parameters: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
+        mut val index: U64 = 0U64
+        while index < parameters.count() {
+            if !self.resolvedCTypeSupported(c: inout c, ref: parameters[index]) { return false }
+            index += 1U64
+        }
+        return !declaration.hasRet || self.resolvedCTypeSupported(c: inout c, ref: selected.resultTypeRef)
+    }
+
+    // Both Mid and the remaining legacy caller use one declaration cache and
+    // one finalized signature. The source span below spells only the selected
+    // foreign symbol; it does not resolve a callable or a type.
+    inout fn declareResolvedCFunction(c: inout Comp, selected: CallResolution) -> U64 {
+        val declaration: Func = c.arena.funcs[selected.callee]
+        val key: U64 = declaration.nameId + 1000000000U64
+        mut val slot: U64 = 0U64
+        while slot < self.declId.count() {
+            if self.declId[slot] == key { return slot }
+            slot += 1U64
+        }
+        val parameters: Array[U64] = c.copyFinalCalleeParameterTypes(types: selected.parameterTypeRefs)
+        mut val types: Array[LLVMTypeRef] = []
+        mut val index: U64 = 0U64
+        while index < parameters.count() {
+            types.append(self.llvmTypeOfRef(c: inout c, ref: parameters[index]))
+            index += 1U64
+        }
+        mut val result: LLVMTypeRef = self.voidty
+        if declaration.hasRet { result = self.llvmTypeOfRef(c: inout c, ref: selected.resultTypeRef) }
+        val signature: LLVMTypeRef = LLVMFunctionType(result, arrayCPtr(types), types.count(), 0I32)
+        mut val symbol: Array[U8] = []
+        index = 0U64
+        while index < declaration.nameLen {
+            symbol.append(c.arena.bytes[declaration.nameStart + index])
+            index += 1U64
+        }
+        symbol.append(0U8)
+        val function: LLVMValueRef = LLVMAddFunction(self.mod, arrayCPtr(symbol), signature)
+        self.declId.append(key)
+        self.declFn.append(function)
+        self.declTy.append(signature)
+        return slot
+    }
+
     // The runtime representation ignores a view, but all source-sensitive
     // checks consume this complete unordered set.  Keep the scalar accessor
     // below only for old one-source callers while migrating them.

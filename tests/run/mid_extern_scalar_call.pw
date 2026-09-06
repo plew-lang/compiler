@@ -14,10 +14,14 @@ fn mark(value: I64) -> I64 {
     return value
 }
 
+fn signed(value: I32) -> I32 { return externalSigned(value) }
+fn unsigned(value: U32) -> U32 { return externalUnsigned(value) }
+fn floating(value: F64) -> F64 { return externalFloat(value) }
+
 fn exercise() {
-    print(externalSigned(-123I32))
-    print(externalUnsigned(4000000000U32))
-    print(externalFloat(1.5F64) == 3.0F64)
+    print(signed(value: -123I32))
+    print(unsigned(value: 4000000000U32))
+    print(floating(value: 1.5F64) == 3.0F64)
     print(externalPair(mark(value: 1I64), mark(value: 2I64)))
     print(externalSequence())
 }
