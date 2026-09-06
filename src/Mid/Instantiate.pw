@@ -234,6 +234,48 @@ fn instantiateCanonicalCastBoundary(c: inout Comp, rvalueId: U64, environment: B
     return 0U64
 }
 
+fn instantiateCanonicalEnumMatchRvalue(c: inout Comp, rvalueId: U64, environment: BodyInstance, bodyId: U64, itemRef: U64, error: inout MidInstantiateError) -> U64 {
+    if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return 0U64 }
+    val source = c.mid.rvalues[rvalueId - 1U64]
+    if source.tag < 11U64 || source.tag > 15U64 || source.place == 0U64 || source.place > c.mid.places.count() { return 0U64 }
+    val sourcePlace = c.mid.places[source.place - 1U64]
+    val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, stmtId: source.sourceStmt)
+    if matchIndex >= c.arena.finalMatches.count() {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
+        return 0U64
+    }
+    val resolution = c.arena.finalMatches[matchIndex]
+    val scrutineeType: U64 = c.groundTermForBody(ref: sourcePlace.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    if resolution.enumIndex != source.enumIndex || !(c.typeRefEq(a: resolution.scrutineeTypeRef, b: scrutineeType)) {
+        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+        return 0U64
+    }
+    val resultTerm: U64 = c.groundTermForBody(ref: source.resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+    if source.tag != 11U64 {
+        mut val found: Bool = false
+        mut val armI: U64 = 0U64
+        while armI < resolution.arms.count() {
+            val arm = resolution.arms[armI]
+            if arm.hasVariant && arm.variantIndex == source.variantIndex {
+                mut val payloadI: U64 = 0U64
+                while payloadI < arm.payloads.count() {
+                    val payload = arm.payloads[payloadI]
+                    if payload.bindTarget == source.bindTarget && payload.fieldIndex == source.fieldIndex && c.typeRefEq(a: payload.fieldTypeRef, b: resultTerm) { found = true }
+                    payloadI = payloadI + 1U64
+                }
+            }
+            armI = armI + 1U64
+        }
+        if !found {
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+            return 0U64
+        }
+    }
+    val place: U64 = instantiateCanonicalPlace(c: inout c, placeId: source.place, environment: environment, itemRef: itemRef)
+    c.mid.rvalues.append(<MidRvalueNode tag=source.tag place=place enumIndex=source.enumIndex variantIndex=source.variantIndex fieldIndex=source.fieldIndex bindTarget=source.bindTarget sourceStmt=source.sourceStmt resultTerm=resultTerm />)
+    return c.mid.rvalues.count()
+}
+
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
     if !(callee.hasRecv) {
         match passing { CallReceiverPassing.None => { return true } _ => { return false } }
