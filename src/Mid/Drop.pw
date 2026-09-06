@@ -162,6 +162,7 @@ fn midTransferBlock(body: MidBody, block: MidBlock, input: Array[MidOwnership]) 
         MidTerminator.ReturnValue(value: val value) => {
             midConsumeOperand(states: inout out, operand: value)
         }
+        MidTerminator.Panic(message: val message) => { midConsumeOperand(states: inout out, operand: message) }
         _ => {}
     }
     return out

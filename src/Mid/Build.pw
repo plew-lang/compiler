@@ -1283,7 +1283,14 @@ export fn buildMidBlock(c: inout Comp, state: inout MidBuildState, blockId: U64)
             }
             Stmt.For(varStart: _, varLen: _, varTyStart: _, varTyLen: _, isRange: _, inclusive: _, iter: _, rangeHi: _, body: _, isStruct: _, patStart: _, patLen: _, binds: _) => { result = <MidBuildError.UnsupportedFor /> }
             Stmt.Match(scrut: _, arms: _) => { result = buildMidMatch(c: inout c, state: inout state, stmtId: stmtId) }
-            Stmt.Panic(msg: _, offset: _) => { result = <MidBuildError.UnsupportedPanic /> }
+            Stmt.Panic(msg: val message, offset: _) => {
+                val messageTerm: U64 = c.semanticExprTerm(exprId: message)
+                val built: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: message, typeTerm: messageTerm, allowAccessMarker: false)
+                match built.error {
+                    MidBuildError.None => { midSetTerminator(state: inout state, terminator: <MidTerminator.Panic message=built.operand />) }
+                    _ => { result = built.error }
+                }
+            }
             Stmt.Give(value: _) => { result = <MidBuildError.UnsupportedGive /> }
             Stmt.Break(offset: _) => { result = buildMidLoopExit(state: inout state, isContinue: false) }
             Stmt.Continue(offset: _) => { result = buildMidLoopExit(state: inout state, isContinue: true) }

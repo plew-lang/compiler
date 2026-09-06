@@ -338,6 +338,10 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                 val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: value, block: bi)
                 match result.error { MidVerifyError.None => {} _ => { return result } }
             }
+            MidTerminator.Panic(message: val message) => {
+                val result: MidVerification = midVerifyConsumeOperand(states: inout states, operand: message, block: bi)
+                match result.error { MidVerifyError.None => {} _ => { return result } }
+            }
             _ => {}
         }
         bi += 1U64

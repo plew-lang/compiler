@@ -364,6 +364,10 @@ export enum MidTerminator {
     Call(callee: MidCallTarget, receiver: MidCallReceiver, args: Array[MidOperand], destination: MidPlace, target: U64)
     Return
     ReturnValue(value: MidOperand)
+    // Source `panic message`: evaluate the already-typed String operand, call
+    // the runtime noreturn sink, and end this CFG path.  It is deliberately a
+    // terminator rather than a call with an invented continuation.
+    Panic(message: MidOperand)
     Unreachable
     Abort
     Suspend(state: U64, resume: U64)

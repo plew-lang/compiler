@@ -935,6 +935,13 @@ pub impl LlvmCtx {
                         _ => { return <MidLlvmPreflight.ReturnValue /> }
                     }
                 }
+                MidTerminator.Panic(message: val message) => {
+                    if !(self.midOperandLlvmSupported(c: inout c, body: body, operand: message)) { return <MidLlvmPreflight.Terminator /> }
+                    val messageRef: U64 = self.midOperandTypeTerm(operand: message)
+                    if messageRef == 0U64 || messageRef >= c.arena.types.count() { return <MidLlvmPreflight.Terminator /> }
+                    val messageTy: TypeRef = c.arena.types[messageRef]
+                    if !rangeEquals(bytes: c.arena.bytes, start: messageTy.nameStart, len: messageTy.nameLen, kw: "String") { return <MidLlvmPreflight.Terminator /> }
+                }
                 MidTerminator.Unreachable => {}
                 MidTerminator.Abort => {}
                 _ => { return <MidLlvmPreflight.Terminator /> }
@@ -2254,6 +2261,11 @@ pub impl LlvmCtx {
                 MidTerminator.ReturnValue(value: val value) => {
                     if self.curIsMain || self.curRetVoid { return false }
                     LLVMBuildRet(self.b, self.midEmitOperand(c: inout c, body: body, operand: value))
+                }
+                MidTerminator.Panic(message: val message) => {
+                    val value: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: message)
+                    self.emitStrSinkValue(c: inout c, rtName: "plew_panic_raw", rtId: 4U64, value: value)
+                    LLVMBuildUnreachable(self.b)
                 }
                 MidTerminator.Unreachable => { LLVMBuildUnreachable(self.b) }
                 MidTerminator.Abort => { LLVMBuildUnreachable(self.b) }

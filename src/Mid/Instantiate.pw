@@ -431,6 +431,7 @@ fn instantiateMidTerminator(c: inout Comp, term: MidTerminator, environment: Bod
         }
         MidTerminator.Return => { return <MidTerminator.Return /> }
         MidTerminator.ReturnValue(value: val value) => { return <MidTerminator.ReturnValue value=instantiateMidOperand(c: inout c, operand: value, environment: environment, itemRef: itemRef) /> }
+        MidTerminator.Panic(message: val message) => { return <MidTerminator.Panic message=instantiateMidOperand(c: inout c, operand: message, environment: environment, itemRef: itemRef) /> }
         MidTerminator.Unreachable => { return <MidTerminator.Unreachable /> }
         MidTerminator.Abort => { return <MidTerminator.Abort /> }
         MidTerminator.Suspend(state: val state, resume: val resume) => { return <MidTerminator.Suspend state=state resume=resume /> }
