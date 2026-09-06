@@ -1642,6 +1642,94 @@ pub impl LlvmCtx {
         return LLVMConstNull(self.ptrty)
     }
 
+    // Canonical Mid has the same function-local index space as the draft
+    // builder, but its declarations and projections live in typed arena rows.
+    // These readers intentionally take the body node/range rather than
+    // reconstructing a MidPlace or MidBody with owning Array payloads.
+    inout fn midCanonicalLocalPtr(body: MidBodyNode, local: U64) -> LLVMValueRef {
+        if local < body.locals.len && local < self.nLocals { return self.locPtr[local] }
+        return LLVMConstNull(self.ptrty)
+    }
+
+    inout fn midCanonicalLocalTy(c: inout Comp, body: MidBodyNode, local: U64) -> LLVMTypeRef {
+        if local >= body.locals.len { return self.i64ty }
+        val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
+        if declaration.isDropFlag { return self.i1ty }
+        if declaration.typeTerm == 0U64 || declaration.typeTerm >= c.arena.types.count() { return self.i64ty }
+        return self.llvmTypeOfRef(c: inout c, ref: declaration.typeTerm)
+    }
+
+    inout fn midCanonicalPlaceTy(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> LLVMTypeRef {
+        if place.projections.len == 0U64 { return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local) }
+        if place.typeTerm != 0U64 && place.typeTerm < c.arena.types.count() { return self.llvmTypeOfRef(c: inout c, ref: place.typeTerm) }
+        return self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
+    }
+
+    inout fn midCanonicalPlacePtr(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> LLVMValueRef {
+        if place.local >= body.locals.len { return LLVMConstNull(self.ptrty) }
+        mut val pointer: LLVMValueRef = self.midCanonicalLocalPtr(body: body, local: place.local)
+        mut val currentTy: LLVMTypeRef = self.midCanonicalLocalTy(c: inout c, body: body, local: place.local)
+        mut val projectionI: U64 = 0U64
+        while projectionI < place.projections.len {
+            val projection: MidProjectionNode = c.mid.projections[place.projections.start + projectionI]
+            if projection.tag == 1U64 {
+                pointer = LLVMBuildStructGEP2(self.b, currentTy, pointer, projection.index, anon())
+                currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
+            } else if projection.tag == 2U64 {
+                if projection.indexLocal >= body.locals.len { return LLVMConstNull(self.ptrty) }
+                val array: LLVMValueRef = LLVMBuildLoad2(self.b, currentTy, pointer, anon())
+                val data: LLVMValueRef = self.arrValData(c: inout c, arr: array)
+                val index: LLVMValueRef = LLVMBuildLoad2(self.b, self.midCanonicalLocalTy(c: inout c, body: body, local: projection.indexLocal), self.midCanonicalLocalPtr(body: body, local: projection.indexLocal), anon())
+                self.emitBoundsCheck(c: inout c, idx: index, count: self.rawbufCount(c: inout c, data: data))
+                currentTy = self.llvmTypeOfRef(c: inout c, ref: projection.typeTerm)
+                pointer = self.arrElemPtr(elemTy: currentTy, data: data, idx: index)
+            } else { return LLVMConstNull(self.ptrty) }
+            projectionI = projectionI + 1U64
+        }
+        return pointer
+    }
+
+    inout fn midCanonicalReadPlace(c: inout Comp, body: MidBodyNode, place: MidPlaceNode) -> LLVMValueRef {
+        return LLVMBuildLoad2(self.b, self.midCanonicalPlaceTy(c: inout c, body: body, place: place), self.midCanonicalPlacePtr(c: inout c, body: body, place: place), anon())
+    }
+
+    inout fn midCanonicalEmitOperand(c: inout Comp, body: MidBodyNode, operandId: U64) -> LLVMValueRef {
+        if operandId == 0U64 || operandId > c.mid.operands.count() { return LLVMConstNull(self.ptrty) }
+        val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+        if operand.tag >= 1U64 && operand.tag <= 4U64 {
+            if operand.place == 0U64 || operand.place > c.mid.places.count() { return LLVMConstNull(self.ptrty) }
+            val place: MidPlaceNode = c.mid.places[operand.place - 1U64]
+            val value: LLVMValueRef = self.midCanonicalReadPlace(c: inout c, body: body, place: place)
+            if operand.tag == 1U64 && place.typeTerm != 0U64 && place.typeTerm < c.arena.types.count() && c.arcNeedsRelease(ref: place.typeTerm) {
+                self.valueArc(c: inout c, v: value, typeRef: place.typeTerm, retain: true)
+            }
+            return value
+        }
+        if operand.tag == 5U64 {
+            mut val ty: LLVMTypeRef = self.i64ty
+            if operand.integerBool { ty = self.i1ty }
+            else if operand.typeTerm != 0U64 && operand.typeTerm < c.arena.types.count() { ty = self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm) }
+            val literal: LLVMValueRef = LLVMConstInt(ty, operand.integerValue, 0I32)
+            if operand.integerNegative { return LLVMBuildNeg(self.b, literal, anon()) }
+            return literal
+        }
+        if operand.tag == 6U64 {
+            return self.genLlvmStr(c: inout c, start: operand.stringStart, len: operand.stringLen)
+        }
+        if operand.tag == 7U64 {
+            return LLVMConstRealOfStringAndSize(self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm), floatTextCPtr(c: inout c, start: operand.stringStart, len: operand.stringLen), floatTextLen(c: inout c, start: operand.stringStart, len: operand.stringLen))
+        }
+        return LLVMConstNull(self.ptrty)
+    }
+
+    inout fn midCanonicalOperandTypeTerm(c: Comp, body: MidBodyNode, operandId: U64) -> U64 {
+        if operandId == 0U64 || operandId > c.mid.operands.count() { return 0U64 }
+        val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+        if operand.tag >= 1U64 && operand.tag <= 4U64 && operand.place != 0U64 && operand.place <= c.mid.places.count() { return c.mid.places[operand.place - 1U64].typeTerm }
+        if operand.tag >= 5U64 && operand.tag <= 7U64 { return operand.typeTerm }
+        return 0U64
+    }
+
     inout fn midLocalTy(c: inout Comp, body: MidBody, local: U64) -> LLVMTypeRef {
         if local >= body.locals.count() { return self.i64ty }
         val declaration: MidLocalDecl = body.locals[local]
@@ -2217,6 +2305,39 @@ pub impl LlvmCtx {
             self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
             self.setLocalOwned(owned: declaration.ownsAtEntry)
             local += 1U64
+        }
+        return true
+    }
+
+    inout fn midPrepareCanonicalLocals(c: inout Comp, body: MidBodyNode, abiParameterStart: U64 = 0U64) -> Bool {
+        self.nLocals = 0U64
+        self.locStart = []
+        self.locLen = []
+        self.locPtr = []
+        self.locTy = []
+        self.locKind = []
+        self.locStructIdx = []
+        self.locIsArr = []
+        self.locElemTy = []
+        self.locElemKind = []
+        self.locTypeRef = []
+        self.locElemTypeRef = []
+        self.locOwned = []
+        self.locMoved = []
+        self.locCellHome = []
+        mut val local: U64 = 0U64
+        while local < body.locals.len {
+            val declaration: MidLocalDecl = c.mid.locals[body.locals.start + local]
+            val ty: LLVMTypeRef = self.midCanonicalLocalTy(c: inout c, body: body, local: local)
+            mut val slot: LLVMValueRef = self.entryAlloca(ty: ty)
+            if declaration.isParameter {
+                val abiIndex: U64 = abiParameterStart + local
+                if declaration.isInout { slot = LLVMGetParam(self.curFn, abiIndex) }
+                else { LLVMBuildStore(self.b, LLVMGetParam(self.curFn, abiIndex), slot) }
+            }
+            self.pushLocalR(nameStart: declaration.sourceNameStart, nameLen: 0U64, ptr: slot, ty: ty, kind: 0U64, structIdx: c.arena.structs.count(), isArr: false, elemTy: self.i64ty, elemKind: 0U64, typeRef: declaration.typeTerm)
+            self.setLocalOwned(owned: declaration.ownsAtEntry)
+            local = local + 1U64
         }
         return true
     }
