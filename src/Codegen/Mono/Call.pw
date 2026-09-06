@@ -1546,6 +1546,23 @@ pub impl Comp {
         }
     }
 
+    // Navigation adapter for the remaining AST consumers. Once a written
+    // call has a Record template, its argument plan is authoritative, including
+    // ordinary generator calls for omitted defaults. Never recover that plan
+    // from the declaration's default Expr. Before Record, and for non-call
+    // templates handled by other paths, retain the existing authored range.
+    inout fn callArgumentRangeForCurrentBody(exprId: U64, authored: ArgRange) -> ArgRange {
+        if self.callTemplatesClosed {
+            match self.callTemplateForCurrentBody(exprId: exprId).kind {
+                CallTemplateKind.Direct(callee: _, receiver: _, args: val args, calleeTypeArgs: _, proof: _) => { return self.templateArgumentRange(arguments: args) }
+                CallTemplateKind.StaticMethod(receiver: _, args: val args, resolution: _, resultTerm: _) => { return self.templateArgumentRange(arguments: args) }
+                CallTemplateKind.Dynamic(receiver: _, args: val args, target: _) => { return self.templateArgumentRange(arguments: args) }
+                _ => {}
+            }
+        }
+        return authored
+    }
+
     inout fn templateArgumentRange(arguments: Array[CallTemplateArgument]) -> ArgRange {
         mut val args: Array[Arg] = []
         mut val i: U64 = 0U64
@@ -4646,22 +4663,24 @@ pub impl Comp {
                 }
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
+                val callArgs = self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args)
                 mut val i: U64 = 0
-                while i < args.len {
-                    self.scanExprInsts(exprId: self.argAt(args: args, index: i).expr)
+                while i < callArgs.len {
+                    self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
                     i += 1
                 }
-                self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
+                self.registerCallInst(id: exprId, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: self.resolveBodyCallee(exprId: exprId))
                 self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.ExtMethod(val recv, source: _, val nameStart, val nameLen, val args) => {
                 self.scanExprInsts(exprId: recv)
+                val callArgs = self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args)
                 mut val i: U64 = 0
-                while i < args.len {
-                    self.scanExprInsts(exprId: self.argAt(args: args, index: i).expr)
+                while i < callArgs.len {
+                    self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
                     i += 1
                 }
-                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: self.resolveBodyCallee(exprId: exprId))
+                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: self.resolveBodyCallee(exprId: exprId))
                 self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.ExtView(val recv, source: _, strip: _) => {
@@ -4669,13 +4688,14 @@ pub impl Comp {
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
                 self.scanExprInsts(exprId: recv)
+                val callArgs = self.callArgumentRangeForCurrentBody(exprId: exprId, authored: args)
                 mut val i: U64 = 0
-                while i < args.len {
-                    self.scanExprInsts(exprId: self.argAt(args: args, index: i).expr)
+                while i < callArgs.len {
+                    self.scanExprInsts(exprId: self.argAt(args: callArgs, index: i).expr)
                     i += 1
                 }
                 val finalIdx: U64 = self.resolveBodyCallee(exprId: exprId)
-                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args, finalIdx: finalIdx)
+                self.registerMethodInst(callId: exprId, recv: recv, nameStart: nameStart, nameLen: nameLen, args: callArgs, finalIdx: finalIdx)
                 self.finalizeAccessWriteFacets(parentExpr: exprId)
             }
             Expr.Field(val base, val nameStart, val nameLen) => { self.scanExprInsts(exprId: base) }

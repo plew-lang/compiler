@@ -14,4 +14,6 @@ record-cursor-restored
 caller-parametric-default-result
 selected-generator-environment
 completed-plan-idempotent
+pre-record-authored-navigation
+consumer-default-navigation
 unresolved-no-publication

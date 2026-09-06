@@ -372,13 +372,13 @@ pub impl LlvmCtx {
                 return self.loadRefPointee(c: inout c, base: base)
             }
             Expr.Call(val nameStart, val nameLen, val args) => {
-                return self.genLlvmCall(c: inout c, callId: id, nameStart: nameStart, nameLen: nameLen, args: args)
+                return self.genLlvmCall(c: inout c, callId: id, nameStart: nameStart, nameLen: nameLen, args: c.callArgumentRangeForCurrentBody(exprId: id, authored: args))
             }
             Expr.Method(val recv, val nameStart, val nameLen, val args) => {
-                return self.genLlvmMethod(c: inout c, callId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                return self.genLlvmMethod(c: inout c, callId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: c.callArgumentRangeForCurrentBody(exprId: id, authored: args))
             }
             Expr.ExtMethod(val recv, source: _, val nameStart, val nameLen, val args) => {
-                return self.genLlvmMethod(c: inout c, callId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: args)
+                return self.genLlvmMethod(c: inout c, callId: id, recv: recv, nameStart: nameStart, nameLen: nameLen, args: c.callArgumentRangeForCurrentBody(exprId: id, authored: args))
             }
             Expr.ExtView(val recv, source: _, strip: _) => {
                 // a value re-view is zero-cost: the value is unchanged (the view only
