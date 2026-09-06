@@ -1,0 +1,27 @@
+import @Std/Io with { print }
+
+extern(c) {
+    fn externalSigned(value~: I32) -> I32
+    fn externalUnsigned(value~: U32) -> U32
+    fn externalFloat(value~: F64) -> F64
+    fn externalRecord(value~: I64)
+    fn externalSequence() -> I64
+    fn externalPair(first~: I64, second~: I64) -> I64
+}
+
+fn mark(value: I64) -> I64 {
+    externalRecord(value)
+    return value
+}
+
+fn exercise() {
+    print(externalSigned(-123I32))
+    print(externalUnsigned(4000000000U32))
+    print(externalFloat(1.5F64) == 3.0F64)
+    print(externalPair(mark(value: 1I64), mark(value: 2I64)))
+    print(externalSequence())
+}
+
+fn main() {
+    exercise()
+}
