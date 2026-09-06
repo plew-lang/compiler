@@ -1,0 +1,10 @@
+// `panic` evaluates its message and then diverges. The untaken branch lets
+// this fixture verify the Mid terminator without aborting the test process.
+import @Std/Io with { print }
+
+fn main() {
+    if false {
+        panic "unreachable"
+    }
+    print("ok")
+}
