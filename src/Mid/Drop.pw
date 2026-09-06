@@ -85,6 +85,8 @@ fn midConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue) {
             }
         }
         MidRvalue.Convert(operand: val operand, conversion: _) => { midConsumeOperand(states: inout states, operand: operand) }
+        MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: val operand) => { midConsumeOperand(states: inout states, operand: operand) }
+        MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => { midConsumeOperand(states: inout states, operand: operand) }
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => {}
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
@@ -306,7 +308,9 @@ fn midAccessibilityTransfer(body: MidBody, block: MidBlock, input: Array[MidAcce
                             element += 1U64
                         }
                     }
-                    MidRvalue.Convert(operand: val operand, conversion: _) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+        MidRvalue.Convert(operand: val operand, conversion: _) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+        MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: val operand) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
+        MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => { midMakeOperandUnavailable(states: inout out, operand: operand) }
                     MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => {}
                     MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
                     MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => {}
@@ -465,6 +469,8 @@ fn midRvalueMovedRoot(value: MidRvalue) -> U64 {
             return 18446744073709551615U64
         }
         MidRvalue.Convert(operand: val operand, conversion: _) => { return midOperandMovedRoot(operand: operand) }
+        MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: val operand) => { return midOperandMovedRoot(operand: operand) }
+        MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => { return midOperandMovedRoot(operand: operand) }
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return 18446744073709551615U64 }

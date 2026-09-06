@@ -5,10 +5,10 @@
 // re-types an AST expression nor searches callable candidates.
 
 import ../Frontend with { Comp }
-import ../Ir with { CallSiteKey, BodyInstance, Func, Param, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
+import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -21,6 +21,7 @@ export enum MidInstantiateError {
     CallConversionTarget
     MissingReturnResolution
     InvalidReturnResolution
+    InvalidCastResolution
     // Aggregate, return, and match descriptors are all final frontend facts.
     // At this boundary the relevant invariant is their presence and internal
     // agreement, not the source construct that happened to navigate to one.
@@ -239,6 +240,40 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
         MidRvalue.Convert(operand: val operand, conversion: val conversion) => {
             return <MidRvalue.Convert operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) conversion=conversion />
         }
+        MidRvalue.CastBoundary(exprId: _, sourceTerm: val sourceTerm, targetTerm: val targetTerm, operand: val rawOperand) => {
+            val operand: MidOperand = instantiateMidOperand(c: inout c, operand: rawOperand, environment: environment, itemRef: itemRef)
+            val sourceRef: U64 = c.groundTermForBody(ref: sourceTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+            val targetRef: U64 = c.groundTermForBody(ref: targetTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+            if sourceRef == 0U64 || targetRef == 0U64 || sourceRef >= c.arena.types.count() || targetRef >= c.arena.types.count() || !(c.typeRefEq(a: midOperandTypeRef(operand: operand), b: sourceRef)) {
+                if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+                return <MidRvalue.Use operand=operand />
+            }
+            val source: TypeRef = c.arena.types[sourceRef]
+            val target: TypeRef = c.arena.types[targetRef]
+            // Newtype wrap/unwrap is the spec's explicit zero-cost exception.
+            // It is closed by the selected nominal types, rather than a backend
+            // check of the authored cast spelling.
+            if c.newtypeUnderRef(start: source.nameStart, len: source.nameLen) != 0U64 || c.newtypeUnderRef(start: target.nameStart, len: target.nameLen) != 0U64 {
+                return <MidRvalue.Cast operand=operand kind=<MidCastKind.IdentityRetag /> targetTerm=targetRef />
+            }
+            if c.isIntType(start: source.nameStart, len: source.nameLen) {
+                val sourceSigned: Bool = c.intSigned(start: source.nameStart, len: source.nameLen)
+                if c.isIntType(start: target.nameStart, len: target.nameLen) {
+                    return <MidRvalue.Cast operand=operand kind=<MidCastKind.IntegerWiden sourceSigned=sourceSigned /> targetTerm=targetRef />
+                }
+                if c.isFloatType(start: target.nameStart, len: target.nameLen) {
+                    return <MidRvalue.Cast operand=operand kind=<MidCastKind.IntegerToFloat sourceSigned=sourceSigned /> targetTerm=targetRef />
+                }
+            }
+            if c.isFloatType(start: source.nameStart, len: source.nameLen) && c.isFloatType(start: target.nameStart, len: target.nameLen) {
+                return <MidRvalue.Cast operand=operand kind=<MidCastKind.IdentityRetag /> targetTerm=targetRef />
+            }
+            if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+            return <MidRvalue.Use operand=operand />
+        }
+        MidRvalue.Cast(operand: val operand, kind: val kind, targetTerm: val targetTerm) => {
+            return <MidRvalue.Cast operand=instantiateMidOperand(c: inout c, operand: operand, environment: environment, itemRef: itemRef) kind=kind targetTerm=targetTerm />
+        }
         MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
             val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, stmtId: sourceStmt)
             if matchIndex >= c.arena.finalMatches.count() {
@@ -437,6 +472,8 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
             if c.conversionProofIsIdentity(id: conversion) { return 0U64 }
             return midConversionTargetRef(c: c, conversion: conversion)
         }
+        MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: val targetTerm, operand: _) => { return targetTerm }
+        MidRvalue.Cast(operand: _, kind: _, targetTerm: val targetTerm) => { return targetTerm }
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }

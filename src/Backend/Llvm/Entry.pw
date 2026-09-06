@@ -184,6 +184,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.UnelaboratedScopeExit => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UnelaboratedAccess => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 MidVerifyError.UninstantiatedReturnBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
+                                                MidVerifyError.UninstantiatedCastBoundary => { self.recordMidVerify(c: inout c, bodyId: bodyId, fnIdx: fi, reason: verification.error) }
                                                 _ => {}
                                             }
                                         if c.traceCodegen {
@@ -196,6 +197,7 @@ pub impl LlvmCtx {
                                                 MidVerifyError.InvalidDropFlag => { eprint(text: "invalid-drop-flag") }
                                                 MidVerifyError.UninitializedDropFlag => { eprint(text: "uninitialized-drop-flag") }
                                                 MidVerifyError.UnelaboratedScopeExit => { eprint(text: "scope-exit") }
+                                                MidVerifyError.UninstantiatedCastBoundary => { eprint(text: "cast-boundary") }
                                                 _ => { eprint(text: "unknown") }
                                             }
                                             eprint(text: " block=")

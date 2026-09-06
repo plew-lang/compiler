@@ -1,0 +1,20 @@
+// Primitive `as` has no user-visible `from` factory in the current Core
+// surface, but its frontend-selected representation conversion must still be
+// carried through Mid rather than re-derived from Expr.Cast by LLVM.
+import @Std/Io with { print }
+
+newtype UserNumber = I64
+
+fn main() {
+    val signed: I32 = 7
+    val widened: I64 = signed as I64
+    print(widened)
+
+    val unsigned: U16 = 9
+    val float: F64 = unsigned as F64
+    print(float)
+
+    val tagged: UserNumber = widened as UserNumber
+    val untagged: I64 = tagged as I64
+    print(untagged)
+}

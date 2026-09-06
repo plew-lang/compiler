@@ -268,6 +268,12 @@ export enum MidRvalue {
     // Frozen frontend ConversionProofNode ID. Mid transports selected evidence
     // but never embeds/reconstructs its recursive proof payload.
     Convert(operand: MidOperand, conversion: U64)
+    // An authored primitive/newtype `as` is a source-level conversion boundary,
+    // not an LLVM-side reinterpretation of Expr.Cast.  The parametric form
+    // carries only Record-selected TypeTerms; instantiation grounds and closes
+    // it into Cast before verification/backend lowering.
+    CastBoundary(exprId: U64, sourceTerm: U64, targetTerm: U64, operand: MidOperand)
+    Cast(operand: MidOperand, kind: MidCastKind, targetTerm: U64)
     // Read an enum tag from an already-evaluated place.  The enum declaration
     // slot comes from SemanticMatch; this is a read-only layout operation and
     // never owns/copies the complete enum value.
@@ -287,6 +293,15 @@ export enum MidRvalue {
     // layout query remains in LLVM.
     EnumPayloadBoxedCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
     EnumPayloadBoxedBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
+}
+
+// Closed representation operation selected from the frozen, grounded source
+// and target terms.  User-defined `From` casts are rewritten into ordinary
+// calls before Mid; this enum therefore has no callable/witness escape hatch.
+export enum MidCastKind {
+    IntegerWiden(sourceSigned: Bool)
+    IntegerToFloat(sourceSigned: Bool)
+    IdentityRetag
 }
 
 // A parametric body names a frontend CallTemplate by its semantic site identity.

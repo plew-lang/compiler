@@ -36,6 +36,7 @@ pub impl LlvmCtx {
             MidVerifyError.UnelaboratedScopeExit => { return 6U64 }
             MidVerifyError.UnelaboratedAccess => { return 7U64 }
             MidVerifyError.UninstantiatedReturnBoundary => { return 8U64 }
+            MidVerifyError.UninstantiatedCastBoundary => { return 10U64 }
         }
     }
 
@@ -176,6 +177,7 @@ pub impl LlvmCtx {
             MidInstantiateError.CallConversionTarget => { return 7U64 }
             MidInstantiateError.MissingReturnResolution => { return 8U64 }
             MidInstantiateError.InvalidReturnResolution => { return 9U64 }
+            MidInstantiateError.InvalidCastResolution => { return 13U64 }
             MidInstantiateError.MissingFinalResolution => { return 10U64 }
             MidInstantiateError.InvalidFinalResolution => { return 11U64 }
             MidInstantiateError.InvalidLocalResultType => { return 12U64 }
@@ -409,6 +411,12 @@ pub impl LlvmCtx {
                     }
                     _ => { return false }
                 }
+            }
+            // A boundary is only valid before body-instance instantiation.
+            // LLVM must not classify a source `as` expression itself.
+            MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => { return false }
+            MidRvalue.Cast(operand: val operand, kind: _, targetTerm: val targetTerm) => {
+                return targetTerm != 0U64 && targetTerm < c.arena.types.count() && self.midOperandLlvmSupported(c: inout c, body: body, operand: operand)
             }
             MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: _, resultTerm: val resultTerm) => {
                 if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
@@ -840,6 +848,14 @@ pub impl LlvmCtx {
                         if !(self.midInitialRvalueSupported(c: inout c, body: body, value: value)) { return <MidLlvmPreflight.UnsupportedRvalue /> }
                         match value {
                             MidRvalue.Convert(operand: val operand, conversion: _) => {
+                                match operand {
+                                    MidOperand.Copy(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidLlvmPreflight.ConversionOperand /> } }
+                                    MidOperand.Move(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidLlvmPreflight.ConversionOperand /> } }
+                                    _ => { return <MidLlvmPreflight.ConversionOperand /> }
+                                }
+                            }
+                            MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => { return <MidLlvmPreflight.UnsupportedRvalue /> }
+                            MidRvalue.Cast(operand: val operand, kind: _, targetTerm: _) => {
                                 match operand {
                                     MidOperand.Copy(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidLlvmPreflight.ConversionOperand /> } }
                                     MidOperand.Move(place: val place) => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidLlvmPreflight.ConversionOperand /> } }
@@ -2054,6 +2070,27 @@ pub impl LlvmCtx {
                     }
                     MidRvalue.Convert(operand: val operand, conversion: val conversion) => {
                         val value: LLVMValueRef = self.midEmitValueConversion(c: inout c, body: body, operand: operand, conversion: c.thawValueConversionProof(id: conversion))
+                        LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
+                    }
+                    MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => {
+                        // Preflight rejects this form. Keep an unreachable-safe
+                        // store shape for bootstrap enum exhaustiveness.
+                        LLVMBuildStore(self.b, LLVMConstNull(self.midLocalTy(c: inout c, body: body, local: destination.local)), self.midLocalPtr(body: body, local: destination.local))
+                    }
+                    MidRvalue.Cast(operand: val operand, kind: val kind, targetTerm: val targetTerm) => {
+                        val targetTy: LLVMTypeRef = self.llvmTypeOfRef(c: inout c, ref: targetTerm)
+                        val source: LLVMValueRef = self.midEmitOperand(c: inout c, body: body, operand: operand)
+                        mut val value: LLVMValueRef = source
+                        match kind {
+                            MidCastKind.IntegerWiden(sourceSigned: val sourceSigned) => {
+                                value = self.coerceInt(v: source, target: targetTy, unsigned: !sourceSigned)
+                            }
+                            MidCastKind.IntegerToFloat(sourceSigned: val sourceSigned) => {
+                                if sourceSigned { value = LLVMBuildSIToFP(self.b, source, targetTy, anon()) }
+                                else { value = LLVMBuildUIToFP(self.b, source, targetTy, anon()) }
+                            }
+                            MidCastKind.IdentityRetag => {}
+                        }
                         LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
                     }
                     MidRvalue.EnumTag(place: val place, enumIndex: _, sourceStmt: _, resultTerm: _) => {

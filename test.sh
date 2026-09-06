@@ -153,6 +153,11 @@ if sh ./test-mid-field-overwrite.sh; then
 else
     fail=$((fail + 1)); failed="$failed mid-field-overwrite"
 fi
+if sh ./test-mid-numeric-cast.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-numeric-cast"
+fi
 
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body

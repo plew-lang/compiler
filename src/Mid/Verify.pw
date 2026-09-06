@@ -16,6 +16,7 @@ export enum MidVerifyError {
     UnelaboratedScopeExit
     UnelaboratedAccess
     UninstantiatedReturnBoundary
+    UninstantiatedCastBoundary
 }
 
 export struct MidVerification {
@@ -68,6 +69,11 @@ fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, b
             return <MidVerification />
         }
         MidRvalue.Convert(operand: val operand, conversion: _) => { return midVerifyConsumeOperand(states: inout states, operand: operand, block: block) }
+        MidRvalue.CastBoundary(exprId: _, sourceTerm: _, targetTerm: _, operand: _) => { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
+        MidRvalue.Cast(operand: val operand, kind: _, targetTerm: val targetTerm) => {
+            if !isGrounded || targetTerm == 0U64 { return <MidVerification error=<MidVerifyError.UninstantiatedCastBoundary /> block=block /> }
+            return midVerifyConsumeOperand(states: inout states, operand: operand, block: block)
+        }
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return <MidVerification /> }

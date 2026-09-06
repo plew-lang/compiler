@@ -767,6 +767,22 @@ fn midValueOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprI
             val template: CallTemplate = c.callTemplateForSourceBody(fnIdx: state.sourceFunction, exprId: exprId)
             return materializeMidCallValue(c: inout c, state: inout state, exprId: exprId, siteKey: template.siteKey)
         }
+        Expr.Cast(operand: val sourceExpr, tyStart: _, tyLen: _, ty: val targetTerm) => {
+            // The cast's type facts were recorded before Mid construction.
+            // Builder uses Expr.Cast only as syntax navigation to its operand;
+            // it neither classifies nor chooses the representation operation.
+            val sourceTerm: U64 = c.semanticExprTerm(exprId: sourceExpr)
+            val selectedTarget: U64 = c.semanticExprTerm(exprId: exprId)
+            if sourceTerm == 0U64 || selectedTarget == 0U64 || targetTerm == 0U64 || !(c.typeRefEq(a: selectedTarget, b: targetTerm)) {
+                return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.MissingSemanticType /> />
+            }
+            val source: MidOperandBuild = midValueOperandForSourceExpr(c: inout c, state: inout state, exprId: sourceExpr, typeTerm: sourceTerm, allowAccessMarker: false)
+            match source.error { MidBuildError.None => {} _ => { return source } }
+            val local: U64 = addMidTemporary(state: inout state, typeTerm: selectedTarget)
+            val destination: MidPlace = <MidPlace local=local typeTerm=selectedTarget />
+            midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.CastBoundary exprId=exprId sourceTerm=sourceTerm targetTerm=selectedTarget operand=source.operand /> />)
+            return <MidOperandBuild operand=<MidOperand.Copy place=destination /> />
+        }
         Expr.Index(base: _, index: _) => {
             val lookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: exprId, typeTerm: typeTerm)
             if !lookup.found {
