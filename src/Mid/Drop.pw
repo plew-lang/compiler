@@ -448,7 +448,7 @@ fn canonicalMidAppendDropLocals(c: inout Comp, body: MidBodyNode, plan: MidCanon
 // Flags are initialized once at invocation entry, never at the source entry
 // block itself: a loop backedge can revisit that block while a conditional
 // move remains live. `target` is already the rewritten source entry index.
-fn canonicalMidAppendDropFlagEntry(c: inout Comp, body: MidBodyNode, plan: MidCanonicalDropPlan, target: U64) -> U64 {
+fn canonicalMidAppendDropFlagEntry(c: inout Comp, body: MidBodyNode, plan: MidCanonicalDropPlan, target: U64, blockStart: U64) -> U64 {
     val statementStart: U64 = c.mid.statements.count()
     mut val local: U64 = 0U64
     while local < body.locals.len && local < plan.needsFlag.count() {
@@ -461,7 +461,7 @@ fn canonicalMidAppendDropFlagEntry(c: inout Comp, body: MidBodyNode, plan: MidCa
     if c.mid.statements.count() == statementStart { return 0U64 }
     c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=target />)
     c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=c.mid.statements.count() - statementStart /> terminator=c.mid.terminators.count() />)
-    return c.mid.blocks.count()
+    return c.mid.blocks.count() - blockStart - 1U64
 }
 
 fn canonicalMidMovedRoot(c: Comp, operandId: U64) -> U64 {
@@ -486,6 +486,322 @@ fn canonicalMidRvalueMovedRoot(c: Comp, rvalueId: U64) -> U64 {
         }
     }
     return 18446744073709551615U64
+}
+
+// A planned accessibility-cliff cleanup changes the ownership state seen by
+// later lexical cleanup.  Compute that fixed point directly over canonical
+// rows instead of materializing a draft MidBody solely for this analysis.
+// ConditionalDrop consumes in either run-time arm, which is exactly the
+// ownership effect needed for this conservative planning pass.
+fn canonicalMidTransferBlockAfterCliffs(c: Comp, body: MidBodyNode, block: MidBlockNode, input: Array[MidOwnership], plan: MidCanonicalDropPlan, blockI: U64) -> Array[MidOwnership] {
+    mut val afterCliffs: Array[MidOwnership] = input
+    mut val local: U64 = 0U64
+    while local < afterCliffs.count() && blockI < plan.cliffAtEntry.count() && local < plan.cliffAtEntry[blockI].count() {
+        if plan.cliffAtEntry[blockI][local] { afterCliffs.set(i: local, value: <MidOwnership.Consumed />) }
+        local = local + 1U64
+    }
+    return canonicalMidTransferBlock(c: c, body: body, block: block, input: afterCliffs)
+}
+
+fn canonicalMidOwnershipAfterCliffs(c: Comp, canonical: MidCanonicalBody, plan: MidCanonicalDropPlan) -> Array[Array[MidOwnership]] {
+    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return [] }
+    val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    mut val incoming: Array[Array[MidOwnership]] = []
+    mut val reachable: Array[Bool] = []
+    mut val initial: Array[MidOwnership] = []
+    mut val localI: U64 = 0U64
+    while localI < body.locals.len {
+        if c.mid.locals[body.locals.start + localI].ownsAtEntry { initial.append(<MidOwnership.Owned />) } else { initial.append(<MidOwnership.Consumed />) }
+        localI = localI + 1U64
+    }
+    mut val blockI: U64 = 0U64
+    while blockI < body.blocks.len {
+        mut val empty: Array[MidOwnership] = []
+        localI = 0U64
+        while localI < body.locals.len {
+            empty.append(<MidOwnership.Consumed />)
+            localI = localI + 1U64
+        }
+        incoming.append(empty)
+        reachable.append(false)
+        blockI = blockI + 1U64
+    }
+    if body.entry >= body.blocks.len { return incoming }
+    incoming.set(i: body.entry, value: initial)
+    reachable.set(i: body.entry, value: true)
+    mut val changed: Bool = true
+    while changed {
+        changed = false
+        blockI = 0U64
+        while blockI < body.blocks.len {
+            if reachable[blockI] {
+                val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+                val out: Array[MidOwnership] = canonicalMidTransferBlockAfterCliffs(c: c, body: body, block: block, input: incoming[blockI], plan: plan, blockI: blockI)
+                if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+                    val successors: Array[U64] = canonicalMidSuccessors(c: c, term: c.mid.terminators[block.terminator - 1U64])
+                    mut val successorI: U64 = 0U64
+                    while successorI < successors.count() {
+                        val successor: U64 = successors[successorI]
+                        if successor < body.blocks.len {
+                            if !reachable[successor] {
+                                incoming.set(i: successor, value: out)
+                                reachable.set(i: successor, value: true)
+                                changed = true
+                            } else {
+                                val before: Array[MidOwnership] = incoming[successor]
+                                mut val merged: Array[MidOwnership] = []
+                                localI = 0U64
+                                while localI < before.count() {
+                                    merged.append(midOwnershipJoin(left: before[localI], right: out[localI]))
+                                    localI = localI + 1U64
+                                }
+                                if midOwnershipStateChanged(before: before, after: merged) {
+                                    incoming.set(i: successor, value: merged)
+                                    changed = true
+                                }
+                            }
+                        }
+                        successorI = successorI + 1U64
+                    }
+                }
+            }
+            blockI = blockI + 1U64
+        }
+    }
+    return incoming
+}
+
+fn canonicalMidAppendRootPlace(c: inout Comp, body: MidBodyNode, local: U64) -> U64 {
+    if local >= body.locals.len { return 0U64 }
+    c.mid.places.append(<MidPlaceNode local=local typeTerm=c.mid.locals[body.locals.start + local].typeTerm />)
+    return c.mid.places.count()
+}
+
+fn canonicalMidPhysicalFieldPlace(c: Comp, placeId: U64) -> Bool {
+    if placeId == 0U64 || placeId > c.mid.places.count() { return false }
+    val place: MidPlaceNode = c.mid.places[placeId - 1U64]
+    if place.projections.len == 0U64 { return false }
+    mut val projectionI: U64 = 0U64
+    while projectionI < place.projections.len {
+        if c.mid.projections[place.projections.start + projectionI].tag != 1U64 { return false }
+        projectionI = projectionI + 1U64
+    }
+    return true
+}
+
+// Drops rewrite CFG-local statement/terminator ownership.  The scalar rows
+// below deliberately copy call-owned child ranges even when their operands
+// are immutable shared IDs: a rewritten body owns a closed terminator slice
+// without ever thawing it into the draft enum vocabulary.
+fn canonicalMidCopyIdentityTerminator(c: inout Comp, terminatorId: U64) -> U64 {
+    if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return 0U64 }
+    val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+    match term.tag {
+        1U64 => { c.mid.terminators.append(<MidTerminatorNode tag=1U64 />) }
+        2U64 => { c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=term.target />) }
+        3U64 => {
+            val caseStart: U64 = c.mid.switchCases.count()
+            mut val caseI: U64 = 0U64
+            while caseI < term.cases.len {
+                c.mid.switchCases.append(c.mid.switchCases[term.cases.start + caseI])
+                caseI = caseI + 1U64
+            }
+            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=term.discriminant cases=<MidRange start=caseStart len=term.cases.len /> otherwise=term.otherwise />)
+        }
+        4U64 => {
+            val argumentStart: U64 = c.mid.callArguments.count()
+            mut val argumentI: U64 = 0U64
+            while argumentI < term.args.len {
+                c.mid.callArguments.append(c.mid.callArguments[term.args.start + argumentI])
+                argumentI = argumentI + 1U64
+            }
+            mut val target: U64 = 0U64
+            if term.callTarget != 0U64 && term.callTarget <= c.mid.callTargets.count() {
+                c.mid.callTargets.append(c.mid.callTargets[term.callTarget - 1U64])
+                target = c.mid.callTargets.count()
+            }
+            mut val receiver: U64 = 0U64
+            if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+                c.mid.callReceivers.append(c.mid.callReceivers[term.callReceiver - 1U64])
+                receiver = c.mid.callReceivers.count()
+            }
+            c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=term.target args=<MidRange start=argumentStart len=term.args.len /> destination=term.destination callTarget=target callReceiver=receiver />)
+        }
+        5U64 => { c.mid.terminators.append(<MidTerminatorNode tag=5U64 />) }
+        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=term.value />) }
+        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=term.value />) }
+        8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
+        9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
+        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=term.resume />) }
+        _ => { return 0U64 }
+    }
+    return c.mid.terminators.count()
+}
+
+// This is the canonical counterpart of elaborateMidDrops.  It reads the
+// frozen CFG, performs all ownership planning from scalar rows, and emits a
+// new frozen body.  In particular, no branch returns through MidBody or the
+// draft MidStatement/MidTerminator sums.
+export fn elaborateCanonicalMidDrops(c: inout Comp, canonical: MidCanonicalBody) -> MidCanonicalBody {
+    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidCanonicalBody body=0U64 /> }
+    val source: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    val ownership: Array[Array[MidOwnership]] = analyzeCanonicalMidOwnership(c: c, canonical: canonical)
+    val accessibility: Array[Array[MidAccessibility]] = analyzeCanonicalMidAccessibility(c: c, canonical: canonical)
+    val plan: MidCanonicalDropPlan = canonicalMidDropPlan(c: c, canonical: canonical, ownership: ownership, accessibility: accessibility)
+    val ownershipAfterCliffs: Array[Array[MidOwnership]] = canonicalMidOwnershipAfterCliffs(c: c, canonical: canonical, plan: plan)
+    val locals: MidRange = canonicalMidAppendDropLocals(c: inout c, body: source, plan: plan)
+    val scopeStart: U64 = c.mid.scopes.count()
+    mut val scopeI: U64 = 0U64
+    while scopeI < source.scopes.len {
+        c.mid.scopes.append(c.mid.scopes[source.scopes.start + scopeI])
+        scopeI = scopeI + 1U64
+    }
+    val scopes: MidRange = <MidRange start=scopeStart len=source.scopes.len />
+    val blockStart: U64 = c.mid.blocks.count()
+    mut val blockI: U64 = 0U64
+    while blockI < source.blocks.len {
+        val block: MidBlockNode = c.mid.blocks[source.blocks.start + blockI]
+        val statementStart: U64 = c.mid.statements.count()
+        mut val currentOwnership: Array[MidOwnership] = []
+        if blockI < ownershipAfterCliffs.count() { currentOwnership = ownershipAfterCliffs[blockI] }
+        mut val currentAccessibility: Array[MidAccessibility] = []
+        if blockI < accessibility.count() { currentAccessibility = accessibility[blockI] }
+
+        // Candidate cliffs were included in ownershipAfterCliffs.  Emit the
+        // concrete operation selected by that state, then clear its flag so a
+        // loop backedge cannot replay the same conditional destruction.
+        mut val local: U64 = 0U64
+        while local < source.locals.len && blockI < plan.cliffAtEntry.count() && local < plan.cliffAtEntry[blockI].count() {
+            if plan.needsFlag[local] && plan.cliffAtEntry[blockI][local] {
+                val place: U64 = canonicalMidAppendRootPlace(c: inout c, body: source, local: local)
+                if local < currentOwnership.count() {
+                    match currentOwnership[local] {
+                        MidOwnership.Owned => { c.mid.statements.append(<MidStatementNode tag=3U64 destination=place />) }
+                        MidOwnership.MaybeOwned => { c.mid.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                        _ => {}
+                    }
+                    currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
+                }
+                if local < currentAccessibility.count() { currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />) }
+                c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) isSet=false />)
+            }
+            local = local + 1U64
+        }
+
+        mut val statementI: U64 = 0U64
+        while statementI < block.statements.len {
+            val statement: MidStatementNode = c.mid.statements[block.statements.start + statementI]
+            if statement.tag == 1U64 {
+                c.mid.statements.append(statement)
+                val moved: U64 = canonicalMidRvalueMovedRoot(c: c, rvalueId: statement.value)
+                if moved < source.locals.len && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: moved) isSet=false />) }
+                if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                    val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                    if destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                }
+                canonicalMidConsumeRvalue(c: c, states: inout currentOwnership, rvalueId: statement.value)
+                if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                    val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                    if destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
+                        currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
+                        if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
+                    }
+                }
+            } else if statement.tag == 2U64 {
+                if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                    val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                    if destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
+                        match currentOwnership[destination.local] {
+                            MidOwnership.Owned => {
+                                c.mid.statements.append(<MidStatementNode tag=3U64 destination=statement.destination />)
+                                if destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=false />) }
+                            }
+                            _ => {}
+                        }
+                    } else if canonicalMidPhysicalFieldPlace(c: c, placeId: statement.destination) {
+                        c.mid.statements.append(<MidStatementNode tag=3U64 destination=statement.destination />)
+                    }
+                }
+                c.mid.statements.append(statement)
+                if statement.source != 0U64 && statement.source <= c.mid.places.count() {
+                    val sourcePlace: MidPlaceNode = c.mid.places[statement.source - 1U64]
+                    if sourcePlace.projections.len == 0U64 && sourcePlace.local < currentOwnership.count() {
+                        currentOwnership.set(i: sourcePlace.local, value: <MidOwnership.Consumed />)
+                        if sourcePlace.local < currentAccessibility.count() { currentAccessibility.set(i: sourcePlace.local, value: <MidAccessibility.Unavailable />) }
+                        if sourcePlace.local < source.locals.len && plan.needsFlag[sourcePlace.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: sourcePlace.local) isSet=false />) }
+                    }
+                }
+                if statement.destination != 0U64 && statement.destination <= c.mid.places.count() {
+                    val destination: MidPlaceNode = c.mid.places[statement.destination - 1U64]
+                    if destination.projections.len == 0U64 && destination.local < currentOwnership.count() {
+                        currentOwnership.set(i: destination.local, value: <MidOwnership.Owned />)
+                        if destination.local < currentAccessibility.count() { currentAccessibility.set(i: destination.local, value: <MidAccessibility.Available />) }
+                        if destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                    }
+                }
+            } else if statement.tag == 6U64 {
+                if statement.scope < source.scopes.len {
+                    val scope: MidScope = c.mid.scopes[source.scopes.start + statement.scope]
+                    local = scope.firstLocal + scope.localCount
+                    while local > scope.firstLocal {
+                        local = local - 1U64
+                        if local < source.locals.len && local < currentOwnership.count() {
+                            val place: U64 = canonicalMidAppendRootPlace(c: inout c, body: source, local: local)
+                            match currentOwnership[local] {
+                                MidOwnership.Owned => { c.mid.statements.append(<MidStatementNode tag=3U64 destination=place />) }
+                                MidOwnership.MaybeOwned => {
+                                    if plan.needsFlag[local] { c.mid.statements.append(<MidStatementNode tag=4U64 destination=place flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: local) />) }
+                                }
+                                _ => {}
+                            }
+                            currentOwnership.set(i: local, value: <MidOwnership.Consumed />)
+                            if local < currentAccessibility.count() { currentAccessibility.set(i: local, value: <MidAccessibility.Unavailable />) }
+                        }
+                    }
+                }
+            } else {
+                c.mid.statements.append(statement)
+            }
+            statementI = statementI + 1U64
+        }
+
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+            val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+            if term.tag == 4U64 {
+                if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+                    val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+                    val moved: U64 = canonicalMidMovedRoot(c: c, operandId: receiver.operand)
+                    if moved < source.locals.len && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: moved) isSet=false />) }
+                }
+                mut val argumentI: U64 = 0U64
+                while argumentI < term.args.len {
+                    val moved: U64 = canonicalMidMovedRoot(c: c, operandId: c.mid.callArguments[term.args.start + argumentI])
+                    if moved < source.locals.len && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: moved) isSet=false />) }
+                    argumentI = argumentI + 1U64
+                }
+                if term.destination != 0U64 && term.destination <= c.mid.places.count() {
+                    val destination: MidPlaceNode = c.mid.places[term.destination - 1U64]
+                    if destination.projections.len == 0U64 && destination.local < source.locals.len && plan.needsFlag[destination.local] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: destination.local) isSet=true />) }
+                }
+            }
+            if term.tag == 6U64 {
+                val moved: U64 = canonicalMidMovedRoot(c: c, operandId: term.value)
+                if moved < source.locals.len && plan.needsFlag[moved] { c.mid.statements.append(<MidStatementNode tag=5U64 flag=canonicalMidFlagLocal(plan: plan, sourceLocalCount: source.locals.len, local: moved) isSet=false />) }
+            }
+        }
+        val terminator: U64 = canonicalMidCopyIdentityTerminator(c: inout c, terminatorId: block.terminator)
+        c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=c.mid.statements.count() - statementStart /> terminator=terminator />)
+        blockI = blockI + 1U64
+    }
+    mut val entry: U64 = source.entry
+    if c.mid.locals.count() > locals.start + source.locals.len {
+        entry = canonicalMidAppendDropFlagEntry(c: inout c, body: source, plan: plan, target: source.entry, blockStart: blockStart)
+    }
+    val result: MidBodyNode = <MidBodyNode bodyInstance=source.bodyInstance sourceFunction=source.sourceFunction locals=locals scopes=scopes blocks=<MidRange start=blockStart len=c.mid.blocks.count() - blockStart /> entry=entry />
+    val resultId: MidCanonicalBody = <MidCanonicalBody body=c.mid.bodies.count() + 1U64 />
+    c.mid.bodies.append(result)
+    if !c.mid.isWellFormed(body: resultId) { return <MidCanonicalBody body=0U64 /> }
+    return resultId
 }
 
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
