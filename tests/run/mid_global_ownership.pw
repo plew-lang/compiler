@@ -1,0 +1,32 @@
+import @Std/Io with { print, write }
+
+unique struct Resource {
+    pub val tag: I64
+    deinit { print(self.tag) }
+}
+pub impl Resource { factory }
+
+mut val current: Resource = <Resource tag=10I64 />
+mut val items: Array[I64] = [1I64, 2I64]
+
+fn replace() {
+    current = <Resource tag=20I64 />
+    write(s: "replaced\n")
+}
+
+fn snapshot() {
+    val saved = items
+    items.append(3I64)
+    print(saved.count())
+    print(items.count())
+    print(saved[0U64])
+}
+
+fn shadow(current: I64) { print(current) }
+
+fn main() {
+    replace()
+    snapshot()
+    shadow(current: 99I64)
+    write(s: "done\n")
+}
