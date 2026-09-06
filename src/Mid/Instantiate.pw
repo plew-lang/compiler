@@ -253,12 +253,21 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             // Newtype wrap/unwrap is the spec's explicit zero-cost exception.
             // It is closed by the selected nominal types, rather than a backend
             // check of the authored cast spelling.
-            if c.newtypeUnderRef(start: source.nameStart, len: source.nameLen) != 0U64 || c.newtypeUnderRef(start: target.nameStart, len: target.nameLen) != 0U64 {
+            val sourceUnderlying: U64 = c.newtypeUnderRef(start: source.nameStart, len: source.nameLen)
+            val targetUnderlying: U64 = c.newtypeUnderRef(start: target.nameStart, len: target.nameLen)
+            if sourceUnderlying != 0U64 && c.typeRefEq(a: sourceUnderlying, b: targetRef) {
+                return <MidRvalue.Cast operand=operand kind=<MidCastKind.IdentityRetag /> targetTerm=targetRef />
+            }
+            if targetUnderlying != 0U64 && c.typeRefEq(a: sourceRef, b: targetUnderlying) {
                 return <MidRvalue.Cast operand=operand kind=<MidCastKind.IdentityRetag /> targetTerm=targetRef />
             }
             if c.isIntType(start: source.nameStart, len: source.nameLen) {
                 val sourceSigned: Bool = c.intSigned(start: source.nameStart, len: source.nameLen)
                 if c.isIntType(start: target.nameStart, len: target.nameLen) {
+                    if !(c.losslessInt(srcStart: source.nameStart, srcLen: source.nameLen, dstStart: target.nameStart, dstLen: target.nameLen)) {
+                        if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidCastResolution /> }
+                        return <MidRvalue.Use operand=operand />
+                    }
                     return <MidRvalue.Cast operand=operand kind=<MidCastKind.IntegerWiden sourceSigned=sourceSigned /> targetTerm=targetRef />
                 }
                 if c.isFloatType(start: target.nameStart, len: target.nameLen) {
