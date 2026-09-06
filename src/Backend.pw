@@ -1914,10 +1914,24 @@ fn floatTextCPtr(c: inout Comp, start: U64, len: U64) -> CPtr[U8] {
     mut val bs: Array[U8] = []
     mut val i: U64 = 0
     while i < len {
-        bs.append(c.arena.bytes[start + i])
+        val byte: U8 = c.arena.bytes[start + i]
+        // `_` is lexical digit grouping, not part of LLVM's numeric grammar.
+        // Both legacy and Mid use this normalization; numeric value formation
+        // must not depend on which lowering path happened to be selected.
+        if byte != 95U8 { bs.append(byte) }
         i += 1U64
     }
     return cstr(s: stringFromBytesUnchecked(bs))
+}
+
+inout fn floatTextLen(c: inout Comp, start: U64, len: U64) -> U64 {
+    mut val out: U64 = 0U64
+    mut val i: U64 = 0U64
+    while i < len {
+        if c.arena.bytes[start + i] != 95U8 { out += 1U64 }
+        i += 1U64
+    }
+    return out
 }
 
 fn cstr(s: String) -> CPtr[U8] {

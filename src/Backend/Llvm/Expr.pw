@@ -41,7 +41,7 @@ pub impl LlvmCtx {
             Expr.Float(val start, val len, tyStart: _, tyLen: _) => {
                 // a float literal: parse the digit text (c.arena.bytes[start..start+len]) straight
                 // to an IEEE double constant. F32 uses double for now (see f64ty).
-                return LLVMConstRealOfStringAndSize(self.f64ty, floatTextCPtr(c: inout c, start: start, len: len), len)
+                return LLVMConstRealOfStringAndSize(self.f64ty, floatTextCPtr(c: inout c, start: start, len: len), floatTextLen(c: inout c, start: start, len: len))
             }
             Expr.Ident(val start, val len) => {
                 // the binding category recorded by the name-resolution pass (entry-module

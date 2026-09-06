@@ -135,6 +135,9 @@ fn instantiateMidOperand(c: inout Comp, operand: MidOperand, environment: BodyIn
                 MidConstant.StringLiteral(start: val start, len: val len, typeTerm: val typeTerm) => {
                     return <MidOperand.Constant value=<MidConstant.StringLiteral start=start len=len typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) /> />
                 }
+                MidConstant.FloatLiteral(start: val start, len: val len, typeTerm: val typeTerm) => {
+                    return <MidOperand.Constant value=<MidConstant.FloatLiteral start=start len=len typeTerm=c.groundTermForBody(ref: typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) /> />
+                }
             }
         }
         MidOperand.Access(candidate: val candidate) => { return <MidOperand.Access candidate=candidate /> }
@@ -345,6 +348,7 @@ fn midOperandTypeRef(operand: MidOperand) -> U64 {
             match value {
                 MidConstant.Integer(value: _, isNegative: _, isBool: _, typeTerm: val typeTerm) => { return typeTerm }
                 MidConstant.StringLiteral(start: _, len: _, typeTerm: val typeTerm) => { return typeTerm }
+                MidConstant.FloatLiteral(start: _, len: _, typeTerm: val typeTerm) => { return typeTerm }
             }
         }
         MidOperand.Access(candidate: _) => { return 0U64 }

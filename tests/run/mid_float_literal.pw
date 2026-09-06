@@ -1,0 +1,17 @@
+import @Std/Io with { print }
+
+fn identity[T](value~: T) -> T { return value }
+fn narrow() -> F32 { return 1.25 }
+fn wide() -> F64 { return 2.5e-1 }
+fn separated() -> F64 { return 1_000.5 }
+fn defaultValue(value~: F64 = 3.5) -> F64 { return value }
+
+fn main() {
+    print(identity(1.5F64))
+    print(identity(2.5F32))
+    print(narrow())
+    print(wide())
+    print(defaultValue())
+    print(-4.5F64)
+    print(separated())
+}

@@ -877,6 +877,19 @@ pub impl Comp {
         // aggregate carrier, so Mid consumes the same selected E and never
         // reconstructs it from an element literal or method receiver query.
         match self.arena.exprs[exprId] {
+            // A suffix owns its type. An unsuffixed float is bidirectional in
+            // the same way as an unsuffixed integer, but unlike integers the
+            // old literal-context carrier has no float width. Publish the
+            // already-validated F32/F64 term directly so every frozen
+            // consumer, including Mid return resolution, observes it.
+            Expr.Float(start: _, len: _, tyStart: _, tyLen: val suffixLen) => {
+                if suffixLen == 0U64 {
+                    val expected: TypeRef = self.arena.types[expectedTerm]
+                    if self.isFloatType(start: expected.nameStart, len: expected.nameLen) {
+                        self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
+                    }
+                }
+            }
             Expr.Array(elems: _) => {
                 self.recordSemanticExprTerm(exprId: exprId, term: expectedTerm)
                 self.recordSemanticAggregate(exprId: exprId)

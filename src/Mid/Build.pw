@@ -523,6 +523,9 @@ fn midOperandForSourceExpr(c: inout Comp, state: inout MidBuildState, exprId: U6
         Expr.Str(start: val start, len: val len) => {
             return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.StringLiteral start=start len=len typeTerm=typeTerm /> /> />
         }
+        Expr.Float(start: val start, len: val len, tyStart: _, tyLen: _) => {
+            return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.FloatLiteral start=start len=len typeTerm=typeTerm /> /> />
+        }
         _ => { return <MidOperandBuild operand=<MidOperand.Constant value=<MidConstant.Integer value=0U64 isNegative=false isBool=false typeTerm=typeTerm /> /> error=<MidBuildError.Unsupported reason=<MidUnsupportedBuild.Operand /> /> /> }
     }
 }

@@ -205,6 +205,9 @@ export enum MidConstant {
     // not an ExprId and carries no type/call/name decision; lowering may decode
     // its bytes but must not reopen semantic expression resolution.
     StringLiteral(start: U64, len: U64, typeTerm: U64)
+    // Validated numeric text with its selected type, just like StringLiteral.
+    // Append-only while older compiler generations bootstrap this enum.
+    FloatLiteral(start: U64, len: U64, typeTerm: U64)
 }
 
 // Every produced Mid value has explicit ownership provenance.

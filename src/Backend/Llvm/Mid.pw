@@ -303,12 +303,24 @@ pub impl LlvmCtx {
     // Every operand place is validated before emission.  In particular, an
     // `Assign(Use(Copy(place)))` must not bypass projection preflight merely
     // because it is not a call argument or conversion input.
+    inout fn midConstantLlvmSupported(c: inout Comp, value: MidConstant) -> Bool {
+        match value {
+            MidConstant.FloatLiteral(start: val start, len: val len, typeTerm: val term) => {
+                if term == 0U64 || term >= c.arena.types.count() { return false }
+                if start > c.arena.bytes.count() || len == 0U64 || len > c.arena.bytes.count() - start { return false }
+                val kind: U32 = LLVMGetTypeKind(self.llvmTypeOfRef(c: inout c, ref: term))
+                return kind == 2U32 || kind == 3U32
+            }
+            _ => { return true }
+        }
+    }
+
     inout fn midOperandLlvmSupported(c: inout Comp, body: MidBody, operand: MidOperand) -> Bool {
         match operand {
             MidOperand.Copy(place: val place) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
             MidOperand.Move(place: val place) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
             MidOperand.Borrow(place: val place, capability: _) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
-            MidOperand.Constant(value: _) => { return true }
+            MidOperand.Constant(value: val value) => { return self.midConstantLlvmSupported(c: inout c, value: value) }
             MidOperand.Access(candidate: _) => { return false }
         }
     }
@@ -459,7 +471,7 @@ pub impl LlvmCtx {
         match operand {
             MidOperand.Borrow(place: val place, capability: val capability) => { match capability { MidBorrowCapability.Read => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) } _ => { return false } } }
             MidOperand.Copy(place: val place) => { return self.midPlaceLlvmSupported(c: inout c, body: body, place: place) }
-            MidOperand.Constant(value: _) => { return true }
+            MidOperand.Constant(value: val value) => { return self.midConstantLlvmSupported(c: inout c, value: value) }
             _ => { return false }
         }
     }
@@ -684,7 +696,7 @@ pub impl LlvmCtx {
             CallArgumentPassing.Borrow => {
                 match args[i] {
                     MidOperand.Borrow(place: val place, capability: val capability) => { match capability { MidBorrowCapability.Read => { if !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return <MidCallPreflight.Argument /> } } _ => { return <MidCallPreflight.Argument /> } } }
-                    MidOperand.Constant(value: _) => {}
+                    MidOperand.Constant(value: val value) => { if !self.midConstantLlvmSupported(c: inout c, value: value) { return <MidCallPreflight.Argument /> } }
                     _ => { return <MidCallPreflight.Argument /> }
                 }
             }
@@ -1437,6 +1449,9 @@ pub impl LlvmCtx {
                 MidConstant.StringLiteral(start: val start, len: val len, typeTerm: _) => {
                     return self.genLlvmStr(c: inout c, start: start, len: len)
                 }
+                MidConstant.FloatLiteral(start: val start, len: val len, typeTerm: val term) => {
+                    return LLVMConstRealOfStringAndSize(self.llvmTypeOfRef(c: inout c, ref: term), floatTextCPtr(c: inout c, start: start, len: len), floatTextLen(c: inout c, start: start, len: len))
+                }
                 }
             }
             // An access marker is rejected by preflight. Returning null here
@@ -1468,6 +1483,7 @@ pub impl LlvmCtx {
                 match value {
                     MidConstant.Integer(value: _, isNegative: _, isBool: _, typeTerm: val term) => { return term }
                     MidConstant.StringLiteral(start: _, len: _, typeTerm: val term) => { return term }
+                    MidConstant.FloatLiteral(start: _, len: _, typeTerm: val term) => { return term }
                 }
             }
             MidOperand.Access(candidate: _) => { return 0U64 }
