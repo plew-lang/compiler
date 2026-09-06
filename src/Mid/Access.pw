@@ -6,7 +6,7 @@ import ../Frontend with { Comp }
 import ../Ir with { Expr, SemanticExprType, SemanticAccess, SemanticAccessInput, CallResolution }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidTerminatorNode, MidCanonicalBody, MidProjection, MidPlace, MidConstant, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidCallTargetNode, MidCallReceiverNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCanonicalBody, MidProjection, MidPlace, MidConstant, MidOperand, MidBorrowCapability, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidBody }
 
 export enum MidAccessError {
     None
@@ -121,19 +121,23 @@ fn canonicalAccessChainLen(c: Comp, bodyId: U64, parentResolution: U64, candidat
 // Finds the one selected inout access marker carried by a parent call. The
 // marker itself is already in canonical Mid; SemanticAccess supplies its
 // closed storage provenance and read/write resolutions.
-fn canonicalAccessSite(c: Comp, body: MidBodyNode, term: MidTerminatorNode) -> MidCanonicalAccessSite {
+fn canonicalAccessSiteAt(c: Comp, body: MidBodyNode, term: MidTerminatorNode, ordinal: U64) -> MidCanonicalAccessSite {
     if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCanonicalAccessSite /> }
     val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
     if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCanonicalAccessSite /> }
     mut val candidate: U64 = 0U64
     mut val role: U64 = 0U64
+    mut val seen: U64 = 0U64
     if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
         val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
         if receiver.tag == 2U64 && receiver.operand != 0U64 && receiver.operand <= c.mid.operands.count() {
             val operand: MidOperandNode = c.mid.operands[receiver.operand - 1U64]
             if operand.tag == 8U64 {
-                candidate = operand.accessCandidate
-                role = 1U64
+                if seen == ordinal {
+                    candidate = operand.accessCandidate
+                    role = 1U64
+                }
+                seen = seen + 1U64
             }
         }
     }
@@ -144,21 +148,572 @@ fn canonicalAccessSite(c: Comp, body: MidBodyNode, term: MidTerminatorNode) -> M
             if argument != 0U64 && argument <= c.mid.operands.count() {
                 val operand: MidOperandNode = c.mid.operands[argument - 1U64]
                 if operand.tag == 8U64 {
-                    candidate = operand.accessCandidate
-                    role = 2U64
-                    argumentI = term.args.len
-                } else {
-                    argumentI = argumentI + 1U64
+                    if seen == ordinal {
+                        candidate = operand.accessCandidate
+                        role = 2U64
+                    }
+                    seen = seen + 1U64
                 }
-            } else {
-                argumentI = argumentI + 1U64
             }
+            argumentI = argumentI + 1U64
         }
     }
     if role == 0U64 { return <MidCanonicalAccessSite /> }
     val chainLen: U64 = canonicalAccessChainLen(c: c, bodyId: body.bodyInstance, parentResolution: target.resolution, candidate: candidate)
     if chainLen == 0U64 { return <MidCanonicalAccessSite role=role parentResolution=target.resolution /> }
     return <MidCanonicalAccessSite candidate=candidate role=role parentResolution=target.resolution chainLen=chainLen />
+}
+
+fn canonicalAccessSite(c: Comp, body: MidBodyNode, term: MidTerminatorNode) -> MidCanonicalAccessSite {
+    return canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: 0U64)
+}
+
+fn canonicalAccessMarkerCount(c: Comp, term: MidTerminatorNode) -> U64 {
+    if term.tag != 4U64 { return 0U64 }
+    mut val count: U64 = 0U64
+    if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+        val receiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+        if receiver.tag == 2U64 && receiver.operand != 0U64 && receiver.operand <= c.mid.operands.count() && c.mid.operands[receiver.operand - 1U64].tag == 8U64 { count = count + 1U64 }
+    }
+    mut val argumentI: U64 = 0U64
+    while argumentI < term.args.len {
+        val argument: U64 = c.mid.callArguments[term.args.start + argumentI]
+        if argument != 0U64 && argument <= c.mid.operands.count() && c.mid.operands[argument - 1U64].tag == 8U64 { count = count + 1U64 }
+        argumentI = argumentI + 1U64
+    }
+    return count
+}
+
+// The source block itself becomes the innermost getter. A chain of n access
+// facets then needs n-1 further getters, one parent call, and setter/cleanup
+// pairs: 3n+1 contiguous canonical blocks in total.
+fn canonicalAccessBlockWidth(c: Comp, body: MidBodyNode, blockI: U64) -> U64 {
+    if blockI >= body.blocks.len { return 0U64 }
+    val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+    if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return 1U64 }
+    val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+    val markerCount: U64 = canonicalAccessMarkerCount(c: c, term: term)
+    if markerCount == 0U64 { return 1U64 }
+    mut val totalChainLen: U64 = 0U64
+    mut val markerI: U64 = 0U64
+    while markerI < markerCount {
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        if site.role == 0U64 || site.chainLen == 0U64 { return 1U64 }
+        totalChainLen = totalChainLen + site.chainLen
+        markerI = markerI + 1U64
+    }
+    return totalChainLen * 3U64 + 1U64
+}
+
+fn canonicalAccessBlockStart(c: Comp, body: MidBodyNode, target: U64) -> U64 {
+    mut val start: U64 = 0U64
+    mut val blockI: U64 = 0U64
+    while blockI < target && blockI < body.blocks.len {
+        start = start + canonicalAccessBlockWidth(c: c, body: body, blockI: blockI)
+        blockI = blockI + 1U64
+    }
+    return start
+}
+
+// A canonical access rewrite owns a new block slice.  Statement/rvalue and
+// operand rows are immutable global facts, but blocks and terminators contain
+// CFG-relative targets and must be copied into that slice.  Keeping the
+// remapping here (rather than in LLVM) makes every downstream Mid consumer
+// see the same closed CFG.
+fn canonicalAccessRemapTarget(c: Comp, body: MidBodyNode, target: U64) -> U64 {
+    return canonicalAccessBlockStart(c: c, body: body, target: target)
+}
+
+fn canonicalAccessCopyStatements(c: inout Comp, block: MidBlockNode) -> MidRange {
+    val start: U64 = c.mid.statements.count()
+    mut val statementI: U64 = 0U64
+    while statementI < block.statements.len {
+        c.mid.statements.append(c.mid.statements[block.statements.start + statementI])
+        statementI = statementI + 1U64
+    }
+    return <MidRange start=start len=block.statements.len />
+}
+
+// This is deliberately a scalar-row copy, not a thaw into MidTerminator.
+// Existing operands/places remain immutable IDs; only control-flow edges and
+// their owner-specific argument/case ranges are recreated.
+fn canonicalAccessCopyTerminator(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> U64 {
+    if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return 0U64 }
+    val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+    match term.tag {
+        1U64 => { c.mid.terminators.append(<MidTerminatorNode tag=1U64 />) }
+        2U64 => { c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=canonicalAccessRemapTarget(c: c, body: body, target: term.target) />) }
+        3U64 => {
+            val caseStart: U64 = c.mid.switchCases.count()
+            mut val caseI: U64 = 0U64
+            while caseI < term.cases.len {
+                val item: MidSwitchCase = c.mid.switchCases[term.cases.start + caseI]
+                c.mid.switchCases.append(<MidSwitchCase value=item.value target=canonicalAccessRemapTarget(c: c, body: body, target: item.target) />)
+                caseI = caseI + 1U64
+            }
+            c.mid.terminators.append(<MidTerminatorNode tag=3U64 discriminant=term.discriminant cases=<MidRange start=caseStart len=term.cases.len /> otherwise=canonicalAccessRemapTarget(c: c, body: body, target: term.otherwise) />)
+        }
+        4U64 => {
+            val argumentStart: U64 = c.mid.callArguments.count()
+            mut val argumentI: U64 = 0U64
+            while argumentI < term.args.len {
+                c.mid.callArguments.append(c.mid.callArguments[term.args.start + argumentI])
+                argumentI = argumentI + 1U64
+            }
+            mut val callTarget: U64 = 0U64
+            if term.callTarget != 0U64 && term.callTarget <= c.mid.callTargets.count() {
+                c.mid.callTargets.append(c.mid.callTargets[term.callTarget - 1U64])
+                callTarget = c.mid.callTargets.count()
+            }
+            mut val callReceiver: U64 = 0U64
+            if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+                c.mid.callReceivers.append(c.mid.callReceivers[term.callReceiver - 1U64])
+                callReceiver = c.mid.callReceivers.count()
+            }
+            c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=canonicalAccessRemapTarget(c: c, body: body, target: term.target) args=<MidRange start=argumentStart len=term.args.len /> destination=term.destination callTarget=callTarget callReceiver=callReceiver />)
+        }
+        5U64 => { c.mid.terminators.append(<MidTerminatorNode tag=5U64 />) }
+        6U64 => { c.mid.terminators.append(<MidTerminatorNode tag=6U64 value=term.value />) }
+        7U64 => { c.mid.terminators.append(<MidTerminatorNode tag=7U64 value=term.value />) }
+        8U64 => { c.mid.terminators.append(<MidTerminatorNode tag=8U64 />) }
+        9U64 => { c.mid.terminators.append(<MidTerminatorNode tag=9U64 />) }
+        10U64 => { c.mid.terminators.append(<MidTerminatorNode tag=10U64 state=term.state resume=canonicalAccessRemapTarget(c: c, body: body, target: term.resume) />) }
+        _ => { return 0U64 }
+    }
+    return c.mid.terminators.count()
+}
+
+fn canonicalAccessChainAt(c: Comp, body: MidBodyNode, site: MidCanonicalAccessSite, stage: U64) -> U64 {
+    mut val current: U64 = canonicalAccessFor(c: c, bodyId: body.bodyInstance, parentResolution: site.parentResolution, candidate: site.candidate)
+    mut val currentStage: U64 = 0U64
+    while current != 0U64 && currentStage < stage {
+        val access: SemanticAccess = c.arena.semanticAccesses[current - 1U64]
+        if access.nestedCandidate == 0U64 { return 0U64 }
+        current = canonicalAccessFor(c: c, bodyId: body.bodyInstance, parentResolution: access.writeResolution, candidate: access.nestedCandidate - 1U64)
+        currentStage = currentStage + 1U64
+    }
+    return current
+}
+
+fn canonicalAccessSetterHasResult(c: Comp, access: SemanticAccess) -> Bool {
+    if access.writeResolution >= c.arena.finalCallees.count() { return false }
+    val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+    return setter.callee < c.arena.funcs.count() && c.arena.funcs[setter.callee].hasRet
+}
+
+fn canonicalAccessMarkerLocalBase(c: Comp, body: MidBodyNode, term: MidTerminatorNode, localBase: U64, marker: U64) -> U64 {
+    mut val local: U64 = localBase
+    mut val markerI: U64 = 0U64
+    while markerI < marker {
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        mut val stage: U64 = 0U64
+        while stage < site.chainLen {
+            local = local + 1U64
+            val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
+            if accessId != 0U64 && canonicalAccessSetterHasResult(c: c, access: c.arena.semanticAccesses[accessId - 1U64]) { local = local + 1U64 }
+            stage = stage + 1U64
+        }
+        markerI = markerI + 1U64
+    }
+    return local
+}
+
+fn canonicalAccessSetterLocal(c: Comp, body: MidBodyNode, term: MidTerminatorNode, localBase: U64, marker: U64, stage: U64) -> U64 {
+    val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: marker)
+    val base: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: marker)
+    val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
+    if accessId == 0U64 { return 0U64 }
+    val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
+    if !canonicalAccessSetterHasResult(c: c, access: access) { return base + stage }
+    mut val resultOffset: U64 = 0U64
+    mut val prior: U64 = 0U64
+    while prior < stage {
+        val priorId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: prior)
+        if priorId != 0U64 && canonicalAccessSetterHasResult(c: c, access: c.arena.semanticAccesses[priorId - 1U64]) { resultOffset = resultOffset + 1U64 }
+        prior = prior + 1U64
+    }
+    return base + site.chainLen + resultOffset
+}
+
+fn canonicalAccessAppendLocals(c: inout Comp, body: MidBodyNode) -> MidAccessError {
+    mut val localI: U64 = 0U64
+    while localI < body.locals.len {
+        c.mid.locals.append(c.mid.locals[body.locals.start + localI])
+        localI = localI + 1U64
+    }
+    mut val blockI: U64 = 0U64
+    while blockI < body.blocks.len {
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+            val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+            val markerCount: U64 = canonicalAccessMarkerCount(c: c, term: term)
+            mut val markerI: U64 = 0U64
+            while markerI < markerCount {
+                val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+                if site.role == 0U64 || site.chainLen == 0U64 { return <MidAccessError.MissingOuterSemanticAccess /> }
+                val outerId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: 0U64)
+                if outerId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+                val outer: SemanticAccess = c.arena.semanticAccesses[outerId - 1U64]
+                if outer.role != site.role { return <MidAccessError.AccessRoleMismatch /> }
+                mut val stage: U64 = 0U64
+                while stage < site.chainLen {
+                    val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
+                    if accessId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+                    val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
+                    if !access.write || access.readResolution >= c.arena.finalCallees.count() || access.writeResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+                    c.mid.locals.append(<MidLocalDecl typeTerm=access.valueTerm sourceScope=0U64 isUnique=false isParameter=false />)
+                    stage = stage + 1U64
+                }
+                stage = 0U64
+                while stage < site.chainLen {
+                    val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
+                    val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
+                    if canonicalAccessSetterHasResult(c: c, access: access) {
+                        val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+                        c.mid.locals.append(<MidLocalDecl typeTerm=setter.resultTypeRef sourceScope=0U64 isUnique=false isParameter=false />)
+                    }
+                    stage = stage + 1U64
+                }
+                markerI = markerI + 1U64
+            }
+        }
+        blockI = blockI + 1U64
+    }
+    return <MidAccessError.None />
+}
+
+fn canonicalAccessAppendPlace(c: inout Comp, local: U64, typeTerm: U64) -> U64 {
+    c.mid.places.append(<MidPlaceNode local=local typeTerm=typeTerm />)
+    return c.mid.places.count()
+}
+
+fn canonicalAccessAppendCopy(c: inout Comp, place: U64) -> U64 {
+    if place == 0U64 || place > c.mid.places.count() { return 0U64 }
+    c.mid.operands.append(<MidOperandNode tag=1U64 place=place />)
+    return c.mid.operands.count()
+}
+
+fn canonicalAccessAppendInoutBorrow(c: inout Comp, place: U64) -> U64 {
+    if place == 0U64 || place > c.mid.places.count() { return 0U64 }
+    c.mid.operands.append(<MidOperandNode tag=4U64 place=place capability=2U64 />)
+    return c.mid.operands.count()
+}
+
+fn canonicalAccessBaseOperand(c: inout Comp, body: MidBodyNode, access: SemanticAccess, nestedValuePlace: U64) -> U64 {
+    if nestedValuePlace != 0U64 { return canonicalAccessAppendCopy(c: inout c, place: nestedValuePlace) }
+    return canonicalAccessInputOperand(c: inout c, body: body, inputId: access.baseInput, root: 0U64)
+}
+
+fn canonicalAccessKeyOperand(c: inout Comp, body: MidBodyNode, access: SemanticAccess) -> U64 {
+    return canonicalAccessInputOperand(c: inout c, body: body, inputId: access.keyInput, root: 0U64)
+}
+
+fn canonicalAccessAppendResolvedTarget(c: inout Comp, resolution: U64) -> U64 {
+    if resolution >= c.arena.finalCallees.count() { return 0U64 }
+    c.mid.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution />)
+    return c.mid.callTargets.count()
+}
+
+fn canonicalAccessAppendValueReceiver(c: inout Comp, operand: U64) -> U64 {
+    if operand == 0U64 || operand > c.mid.operands.count() { return 0U64 }
+    c.mid.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=operand />)
+    return c.mid.callReceivers.count()
+}
+
+fn canonicalAccessGetterTarget(c: Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, marker: U64, stage: U64) -> U64 {
+    val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: marker)
+    val markerBase: U64 = canonicalAccessGetterStart(c: c, body: body, term: term, blockStart: blockStart, marker: marker)
+    if stage != 0U64 { return markerBase + site.chainLen - stage }
+    val markerCount: U64 = canonicalAccessMarkerCount(c: c, term: term)
+    if marker + 1U64 < markerCount {
+        return canonicalAccessGetterStart(c: c, body: body, term: term, blockStart: blockStart, marker: marker + 1U64)
+    }
+    return blockStart + canonicalAccessTotalChainLen(c: c, body: body, term: term)
+}
+
+fn canonicalAccessTotalChainLen(c: Comp, body: MidBodyNode, term: MidTerminatorNode) -> U64 {
+    mut val total: U64 = 0U64
+    mut val markerI: U64 = 0U64
+    while markerI < canonicalAccessMarkerCount(c: c, term: term) {
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        total = total + site.chainLen
+        markerI = markerI + 1U64
+    }
+    return total
+}
+
+fn canonicalAccessGetterStart(c: Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, marker: U64) -> U64 {
+    mut val start: U64 = blockStart
+    mut val markerI: U64 = 0U64
+    while markerI < marker {
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        start = start + site.chainLen
+        markerI = markerI + 1U64
+    }
+    return start
+}
+
+fn canonicalAccessSetterStart(c: Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, marker: U64) -> U64 {
+    val total: U64 = canonicalAccessTotalChainLen(c: c, body: body, term: term)
+    mut val start: U64 = blockStart + total + 1U64
+    mut val markerI: U64 = marker + 1U64
+    while markerI < canonicalAccessMarkerCount(c: c, term: term) {
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        start = start + site.chainLen * 2U64
+        markerI = markerI + 1U64
+    }
+    return start
+}
+
+fn canonicalAccessAppendParentTerminator(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, localBase: U64) -> MidAccessError {
+    if term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    val sourceTarget: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+    if sourceTarget.tag != 2U64 || sourceTarget.resolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    val argumentStart: U64 = c.mid.callArguments.count()
+    mut val markerI: U64 = 0U64
+    mut val receiverId: U64 = 0U64
+    if term.callReceiver != 0U64 && term.callReceiver <= c.mid.callReceivers.count() {
+        val sourceReceiver: MidCallReceiverNode = c.mid.callReceivers[term.callReceiver - 1U64]
+        if sourceReceiver.tag == 2U64 && sourceReceiver.operand != 0U64 && sourceReceiver.operand <= c.mid.operands.count() && c.mid.operands[sourceReceiver.operand - 1U64].tag == 8U64 {
+            val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+            val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: 0U64)
+            if accessId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+            val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
+            val valueLocal: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: markerI)
+            val valuePlace: U64 = canonicalAccessAppendPlace(c: inout c, local: valueLocal, typeTerm: access.valueTerm)
+            val projected: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: access.accessInput, root: valuePlace)
+            val borrowed: U64 = canonicalAccessAppendInoutBorrow(c: inout c, place: projected)
+            receiverId = canonicalAccessAppendValueReceiver(c: inout c, operand: borrowed)
+            if receiverId == 0U64 { return <MidAccessError.UnsupportedAccessProjection /> }
+            markerI = markerI + 1U64
+        } else {
+            c.mid.callReceivers.append(sourceReceiver)
+            receiverId = c.mid.callReceivers.count()
+        }
+    }
+    mut val argumentI: U64 = 0U64
+    while argumentI < term.args.len {
+        val argument: U64 = c.mid.callArguments[term.args.start + argumentI]
+        if argument != 0U64 && argument <= c.mid.operands.count() && c.mid.operands[argument - 1U64].tag == 8U64 {
+            val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+            val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: 0U64)
+            if accessId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+            val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
+            val valueLocal: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: markerI)
+            val valuePlace: U64 = canonicalAccessAppendPlace(c: inout c, local: valueLocal, typeTerm: access.valueTerm)
+            val projected: U64 = canonicalAccessInputPlace(c: inout c, body: body, inputId: access.accessInput, root: valuePlace)
+            val borrowed: U64 = canonicalAccessAppendInoutBorrow(c: inout c, place: projected)
+            if borrowed == 0U64 { return <MidAccessError.UnsupportedAccessProjection /> }
+            c.mid.callArguments.append(borrowed)
+            markerI = markerI + 1U64
+        } else {
+            c.mid.callArguments.append(argument)
+        }
+        argumentI = argumentI + 1U64
+    }
+    if markerI != canonicalAccessMarkerCount(c: c, term: term) { return <MidAccessError.ParentAccessArgumentMismatch /> }
+    val target: U64 = canonicalAccessAppendResolvedTarget(c: inout c, resolution: sourceTarget.resolution)
+    if target == 0U64 || receiverId == 0U64 { return <MidAccessError.UnresolvedAccessCall /> }
+    val firstSetter: U64 = canonicalAccessSetterStart(c: c, body: body, term: term, blockStart: blockStart, marker: canonicalAccessMarkerCount(c: c, term: term) - 1U64)
+    c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=firstSetter args=<MidRange start=argumentStart len=term.args.len /> destination=term.destination callTarget=target callReceiver=receiverId />)
+    return <MidAccessError.None />
+}
+
+fn canonicalAccessAppendGetter(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, localBase: U64, marker: U64, stage: U64, statements: MidRange) -> MidAccessError {
+    val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: marker)
+    val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
+    if accessId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+    val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
+    val valueLocal: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: marker) + stage
+    val valuePlace: U64 = canonicalAccessAppendPlace(c: inout c, local: valueLocal, typeTerm: access.valueTerm)
+    mut val nestedPlace: U64 = 0U64
+    if stage + 1U64 < site.chainLen {
+        val nestedId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage + 1U64)
+        if nestedId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+        val nested: SemanticAccess = c.arena.semanticAccesses[nestedId - 1U64]
+        nestedPlace = canonicalAccessAppendPlace(c: inout c, local: canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: marker) + stage + 1U64, typeTerm: nested.valueTerm)
+    }
+    val base: U64 = canonicalAccessBaseOperand(c: inout c, body: body, access: access, nestedValuePlace: nestedPlace)
+    val key: U64 = canonicalAccessKeyOperand(c: inout c, body: body, access: access)
+    val target: U64 = canonicalAccessAppendResolvedTarget(c: inout c, resolution: access.readResolution)
+    val receiver: U64 = canonicalAccessAppendValueReceiver(c: inout c, operand: base)
+    if base == 0U64 { return <MidAccessError.UnsupportedAccessBase /> }
+    if key == 0U64 { return <MidAccessError.UnsupportedAccessKey /> }
+    if target == 0U64 || receiver == 0U64 { return <MidAccessError.UnresolvedAccessCall /> }
+    val argumentStart: U64 = c.mid.callArguments.count()
+    c.mid.callArguments.append(key)
+    c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=canonicalAccessGetterTarget(c: c, body: body, term: term, blockStart: blockStart, marker: marker, stage: stage) args=<MidRange start=argumentStart len=1U64 /> destination=valuePlace callTarget=target callReceiver=receiver />)
+    c.mid.blocks.append(<MidBlockNode statements=statements terminator=c.mid.terminators.count() />)
+    return <MidAccessError.None />
+}
+
+fn canonicalAccessAppendSetter(c: inout Comp, body: MidBodyNode, term: MidTerminatorNode, blockStart: U64, localBase: U64, marker: U64, stage: U64) -> MidAccessError {
+    val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: marker)
+    val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
+    if accessId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+    val access: SemanticAccess = c.arena.semanticAccesses[accessId - 1U64]
+    val valueLocal: U64 = canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: marker) + stage
+    val valuePlace: U64 = canonicalAccessAppendPlace(c: inout c, local: valueLocal, typeTerm: access.valueTerm)
+    mut val nestedPlace: U64 = 0U64
+    if stage + 1U64 < site.chainLen {
+        val nestedId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage + 1U64)
+        if nestedId == 0U64 { return <MidAccessError.InvalidAccessChain /> }
+        val nested: SemanticAccess = c.arena.semanticAccesses[nestedId - 1U64]
+        nestedPlace = canonicalAccessAppendPlace(c: inout c, local: canonicalAccessMarkerLocalBase(c: c, body: body, term: term, localBase: localBase, marker: marker) + stage + 1U64, typeTerm: nested.valueTerm)
+    }
+    mut val base: U64 = canonicalAccessBaseOperand(c: inout c, body: body, access: access, nestedValuePlace: nestedPlace)
+    val key: U64 = canonicalAccessKeyOperand(c: inout c, body: body, access: access)
+    if base == 0U64 { return <MidAccessError.UnsupportedAccessBase /> }
+    if key == 0U64 { return <MidAccessError.UnsupportedAccessKey /> }
+    if access.writeResolution >= c.arena.finalCallees.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    val setter: CallResolution = c.arena.finalCallees[access.writeResolution]
+    if setter.callee >= c.arena.funcs.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    if c.arena.funcs[setter.callee].selfInout {
+        if base > c.mid.operands.count() || c.mid.operands[base - 1U64].tag != 1U64 { return <MidAccessError.UnsupportedSetterReceiver /> }
+        base = canonicalAccessAppendInoutBorrow(c: inout c, place: c.mid.operands[base - 1U64].place)
+    }
+    val receiver: U64 = canonicalAccessAppendValueReceiver(c: inout c, operand: base)
+    val target: U64 = canonicalAccessAppendResolvedTarget(c: inout c, resolution: access.writeResolution)
+    if receiver == 0U64 || target == 0U64 { return <MidAccessError.UnresolvedAccessCall /> }
+    val destinationLocal: U64 = canonicalAccessSetterLocal(c: c, body: body, term: term, localBase: localBase, marker: marker, stage: stage)
+    val destinationTerm: U64 = if canonicalAccessSetterHasResult(c: c, access: access) { give setter.resultTypeRef } else { give access.valueTerm }
+    val destination: U64 = canonicalAccessAppendPlace(c: inout c, local: destinationLocal, typeTerm: destinationTerm)
+    val argumentStart: U64 = c.mid.callArguments.count()
+    c.mid.callArguments.append(key)
+    c.mid.callArguments.append(canonicalAccessAppendCopy(c: inout c, place: valuePlace))
+    val setterStart: U64 = canonicalAccessSetterStart(c: c, body: body, term: term, blockStart: blockStart, marker: marker)
+    val cleanupBlock: U64 = setterStart + stage * 2U64 + 1U64
+    c.mid.terminators.append(<MidTerminatorNode tag=4U64 target=cleanupBlock args=<MidRange start=argumentStart len=2U64 /> destination=destination callTarget=target callReceiver=receiver />)
+    c.mid.blocks.append(<MidBlockNode terminator=c.mid.terminators.count() />)
+    val cleanupStart: U64 = c.mid.statements.count()
+    c.mid.statements.append(<MidStatementNode tag=3U64 destination=valuePlace />)
+    if canonicalAccessSetterHasResult(c: c, access: access) { c.mid.statements.append(<MidStatementNode tag=3U64 destination=destination />) }
+    mut val continuation: U64 = 0U64
+    if stage + 1U64 < site.chainLen {
+        continuation = setterStart + (stage + 1U64) * 2U64
+    } else {
+        if marker != 0U64 {
+            continuation = canonicalAccessSetterStart(c: c, body: body, term: term, blockStart: blockStart, marker: marker - 1U64)
+        } else {
+            continuation = canonicalAccessRemapTarget(c: c, body: body, target: term.target)
+        }
+    }
+    c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=continuation />)
+    val cleanupLen: U64 = if canonicalAccessSetterHasResult(c: c, access: access) { give 2U64 } else { give 1U64 }
+    c.mid.blocks.append(<MidBlockNode statements=<MidRange start=cleanupStart len=cleanupLen /> terminator=c.mid.terminators.count() />)
+    return <MidAccessError.None />
+}
+
+fn canonicalAccessGeneratedLocalCount(c: Comp, body: MidBodyNode, term: MidTerminatorNode) -> U64 {
+    mut val count: U64 = 0U64
+    mut val markerI: U64 = 0U64
+    while markerI < canonicalAccessMarkerCount(c: c, term: term) {
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        mut val stage: U64 = 0U64
+        while stage < site.chainLen {
+            count = count + 1U64
+            val accessId: U64 = canonicalAccessChainAt(c: c, body: body, site: site, stage: stage)
+            if accessId != 0U64 && canonicalAccessSetterHasResult(c: c, access: c.arena.semanticAccesses[accessId - 1U64]) { count = count + 1U64 }
+            stage = stage + 1U64
+        }
+        markerI = markerI + 1U64
+    }
+    return count
+}
+
+fn canonicalAccessBlockLocalBase(c: Comp, body: MidBodyNode, blockI: U64) -> U64 {
+    mut val base: U64 = body.locals.len
+    mut val prior: U64 = 0U64
+    while prior < blockI && prior < body.blocks.len {
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + prior]
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() {
+            base = base + canonicalAccessGeneratedLocalCount(c: c, body: body, term: c.mid.terminators[block.terminator - 1U64])
+        }
+        prior = prior + 1U64
+    }
+    return base
+}
+
+fn canonicalAccessExpandBlock(c: inout Comp, body: MidBodyNode, blockI: U64, block: MidBlockNode) -> MidAccessError {
+    if block.terminator == 0U64 || block.terminator > c.mid.terminators.count() { return <MidAccessError.UnresolvedAccessCall /> }
+    val term: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+    val markerCount: U64 = canonicalAccessMarkerCount(c: c, term: term)
+    if markerCount == 0U64 { return <MidAccessError.None /> }
+    val blockStart: U64 = c.mid.blocks.count()
+    val localBase: U64 = canonicalAccessBlockLocalBase(c: c, body: body, blockI: blockI)
+    val statements: MidRange = canonicalAccessCopyStatements(c: inout c, block: block)
+    mut val markerI: U64 = 0U64
+    while markerI < markerCount {
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        mut val stage: U64 = site.chainLen
+        while stage > 0U64 {
+            stage = stage - 1U64
+            val getterStatements: MidRange = if markerI == 0U64 && stage + 1U64 == site.chainLen { give statements } else { give <MidRange start=0U64 len=0U64 /> }
+            val error: MidAccessError = canonicalAccessAppendGetter(c: inout c, body: body, term: term, blockStart: blockStart, localBase: localBase, marker: markerI, stage: stage, statements: getterStatements)
+            match error { MidAccessError.None => {} _ => { return error } }
+        }
+        markerI = markerI + 1U64
+    }
+    val parentError: MidAccessError = canonicalAccessAppendParentTerminator(c: inout c, body: body, term: term, blockStart: blockStart, localBase: localBase)
+    match parentError { MidAccessError.None => {} _ => { return parentError } }
+    c.mid.blocks.append(<MidBlockNode terminator=c.mid.terminators.count() />)
+    markerI = markerCount
+    while markerI > 0U64 {
+        markerI = markerI - 1U64
+        val site: MidCanonicalAccessSite = canonicalAccessSiteAt(c: c, body: body, term: term, ordinal: markerI)
+        mut val stage: U64 = 0U64
+        while stage < site.chainLen {
+            val error: MidAccessError = canonicalAccessAppendSetter(c: inout c, body: body, term: term, blockStart: blockStart, localBase: localBase, marker: markerI, stage: stage)
+            match error { MidAccessError.None => {} _ => { return error } }
+            stage = stage + 1U64
+        }
+    }
+    return <MidAccessError.None />
+}
+
+// Canonical access elaboration is a single append-only CFG rewrite.  It reads
+// final call identities and frozen input recipes only; neither AST recovery
+// nor a `MidBody` thaw bridge is permitted after this boundary.
+export fn elaborateCanonicalMidAccesses(c: inout Comp, canonical: MidCanonicalBody) -> MidCanonicalAccessElaboration {
+    if canonical.body == 0U64 || canonical.body > c.mid.bodies.count() { return <MidCanonicalAccessElaboration error=<MidAccessError.UnresolvedAccessCall /> /> }
+    val body: MidBodyNode = c.mid.bodies[canonical.body - 1U64]
+    mut val hasAccess: Bool = false
+    mut val scanBlock: U64 = 0U64
+    while scanBlock < body.blocks.len {
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + scanBlock]
+        if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() && canonicalAccessMarkerCount(c: c, term: c.mid.terminators[block.terminator - 1U64]) != 0U64 { hasAccess = true }
+        scanBlock = scanBlock + 1U64
+    }
+    if !hasAccess { return <MidCanonicalAccessElaboration body=canonical /> }
+    val localStart: U64 = c.mid.locals.count()
+    val localError: MidAccessError = canonicalAccessAppendLocals(c: inout c, body: body)
+    match localError { MidAccessError.None => {} _ => { return <MidCanonicalAccessElaboration error=localError /> } }
+    val scopeStart: U64 = c.mid.scopes.count()
+    mut val scopeI: U64 = 0U64
+    while scopeI < body.scopes.len {
+        c.mid.scopes.append(c.mid.scopes[body.scopes.start + scopeI])
+        scopeI = scopeI + 1U64
+    }
+    val blockStart: U64 = c.mid.blocks.count()
+    mut val blockI: U64 = 0U64
+    while blockI < body.blocks.len {
+        val block: MidBlockNode = c.mid.blocks[body.blocks.start + blockI]
+        val markerCount: U64 = if block.terminator != 0U64 && block.terminator <= c.mid.terminators.count() { give canonicalAccessMarkerCount(c: c, term: c.mid.terminators[block.terminator - 1U64]) } else { give 0U64 }
+        if markerCount == 0U64 {
+            val statements: MidRange = canonicalAccessCopyStatements(c: inout c, block: block)
+            val terminator: U64 = canonicalAccessCopyTerminator(c: inout c, body: body, terminatorId: block.terminator)
+            if terminator == 0U64 { return <MidCanonicalAccessElaboration error=<MidAccessError.UnresolvedAccessCall /> /> }
+            c.mid.blocks.append(<MidBlockNode statements=statements terminator=terminator />)
+        } else {
+            val error: MidAccessError = canonicalAccessExpandBlock(c: inout c, body: body, blockI: blockI, block: block)
+            match error { MidAccessError.None => {} _ => { return <MidCanonicalAccessElaboration error=error /> } }
+        }
+        blockI = blockI + 1U64
+    }
+    val result: MidCanonicalBody = <MidCanonicalBody body=c.mid.bodies.count() + 1U64 />
+    c.mid.bodies.append(<MidBodyNode bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=<MidRange start=localStart len=c.mid.locals.count() - localStart /> scopes=<MidRange start=scopeStart len=body.scopes.len /> blocks=<MidRange start=blockStart len=c.mid.blocks.count() - blockStart /> entry=canonicalAccessRemapTarget(c: c, body: body, target: body.entry) />)
+    if !c.mid.isWellFormed(body: result) { return <MidCanonicalAccessElaboration error=<MidAccessError.InvalidAccessChain /> /> }
+    return <MidCanonicalAccessElaboration body=result />
 }
 
 fn midAccessFor(c: Comp, bodyId: U64, parentResolution: U64, candidate: U64) -> U64 {
