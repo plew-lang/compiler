@@ -2520,15 +2520,128 @@ pub impl LlvmCtx {
         }
     }
 
+    inout fn midCanonicalRuntimeCoreStringFfiPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
+        if terminatorId == 0U64 || terminatorId > c.mid.terminators.count() { return <MidCallPreflight.Resolution /> }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        if term.tag != 4U64 || term.callTarget == 0U64 || term.callTarget > c.mid.callTargets.count() { return <MidCallPreflight.Resolution /> }
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        if target.tag != 2U64 || target.resolution >= c.arena.finalCallees.count() { return <MidCallPreflight.Resolution /> }
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        match selected.target { CallTarget.RuntimeIntrinsic(intrinsic: _) => {} _ => { return <MidCallPreflight.Target /> } }
+        if selected.callee >= c.arena.funcs.count() { return <MidCallPreflight.Callee /> }
+        val callee: Func = c.arena.funcs[selected.callee]
+        if !callee.isExtern || callee.isCExtern || callee.hasRecv || !self.midCanonicalReceiverSupported(c: inout c, body: body, receiverId: term.callReceiver, passing: <CallReceiverPassing.None />) { return <MidCallPreflight.RuntimeAbi /> }
+        match selected.target {
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                match intrinsic {
+                    RuntimeIntrinsic.CoreString(intrinsic: _) => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                    RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
+                        match ffi {
+                            FfiIntrinsic.CString => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            FfiIntrinsic.CFree => { if callee.hasRet || term.args.len != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            FfiIntrinsic.StringFromCString => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            FfiIntrinsic.ArrayCPtr => { if !callee.hasRet || term.args.len != 1U64 || term.destination == 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                        }
+                    }
+                    _ => { return <MidCallPreflight.Target /> }
+                }
+            }
+            _ => { return <MidCallPreflight.Target /> }
+        }
+        if !self.midCanonicalRuntimeReadOperandSupported(c: inout c, body: body, operandId: self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)) { return <MidCallPreflight.Argument /> }
+        return <MidCallPreflight.None />
+    }
+
+    inout fn midCanonicalEmitRuntimeCoreStringFfiCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
+        match self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId) { MidCallPreflight.None => {} _ => { return false } }
+        val term: MidTerminatorNode = c.mid.terminators[terminatorId - 1U64]
+        val target: MidCallTargetNode = c.mid.callTargets[term.callTarget - 1U64]
+        val selected: CallResolution = c.arena.finalCallees[target.resolution]
+        val argument: U64 = self.midCanonicalCallArgumentAt(c: c, term: term, index: 0U64)
+        match selected.target {
+            CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
+                match intrinsic {
+                    RuntimeIntrinsic.CoreString(intrinsic: val coreString) => {
+                        match coreString {
+                            CoreStringIntrinsic.FromBytesUnchecked => {
+                                val array: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument)
+                                val arrayTerm: U64 = self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: argument)
+                                if arrayTerm != 0U64 && arrayTerm < c.arena.types.count() && c.arcNeedsRelease(ref: arrayTerm) { self.valueArc(c: inout c, v: array, typeRef: arrayTerm, retain: true) }
+                                val result: LLVMValueRef = self.arrValMake(c: inout c, data: self.arrValData(c: inout c, arr: array), count: self.arrValCount(c: inout c, arr: array), aggTy: self.stringLlvmTy(c: inout c))
+                                LLVMBuildStore(self.b, result, self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                            CoreStringIntrinsic.FloatToString => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                parameters.append(self.f64ty)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                                mut val values: Array[LLVMValueRef] = []
+                                values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument))
+                                LLVMBuildStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_f64_to_str", nameId: 9140U64, fnTy: signature), arrayCPtr(values), 1U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                        }
+                        return true
+                    }
+                    RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
+                        match ffi {
+                            FfiIntrinsic.CString => {
+                                val text: LLVMValueRef = self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument)
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                parameters.append(self.ptrty)
+                                parameters.append(self.i64ty)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.ptrty, arrayCPtr(parameters), 2U64, 0I32)
+                                mut val values: Array[LLVMValueRef] = []
+                                values.append(self.arrValData(c: inout c, arr: text))
+                                values.append(self.arrValCount(c: inout c, arr: text))
+                                LLVMBuildStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_cString", nameId: 29U64, fnTy: signature), arrayCPtr(values), 2U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                            FfiIntrinsic.CFree => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                parameters.append(self.ptrty)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(parameters), 1U64, 0I32)
+                                mut val values: Array[LLVMValueRef] = []
+                                values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument))
+                                LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_cFree", nameId: 72U64, fnTy: signature), arrayCPtr(values), 1U64, anon())
+                            }
+                            FfiIntrinsic.StringFromCString => {
+                                mut val parameters: Array[LLVMTypeRef] = []
+                                parameters.append(self.ptrty)
+                                val signature: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(parameters), 1U64, 0I32)
+                                mut val values: Array[LLVMValueRef] = []
+                                values.append(self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument))
+                                LLVMBuildStore(self.b, LLVMBuildCall2(self.b, signature, self.getOrDeclare(c: inout c, name: "plew_stringFromCString", nameId: 30U64, fnTy: signature), arrayCPtr(values), 1U64, anon()), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local))
+                            }
+                            FfiIntrinsic.ArrayCPtr => { LLVMBuildStore(self.b, self.arrValData(c: inout c, arr: self.midCanonicalEmitOperand(c: inout c, body: body, operandId: argument)), self.midCanonicalLocalPtr(body: body, local: c.mid.places[term.destination - 1U64].local)) }
+                        }
+                        return true
+                    }
+                    _ => { return false }
+                }
+            }
+            _ => { return false }
+        }
+    }
+
     inout fn midCanonicalCallPreflight(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> MidCallPreflight {
         val direct: MidCallPreflight = self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId)
-        match direct { MidCallPreflight.Target => { return self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId) } _ => { return direct } }
+        match direct {
+            MidCallPreflight.Target => {
+                val processIo: MidCallPreflight = self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId)
+                match processIo { MidCallPreflight.Target => { return self.midCanonicalRuntimeCoreStringFfiPreflight(c: inout c, body: body, terminatorId: terminatorId) } _ => { return processIo } }
+            }
+            _ => { return direct }
+        }
     }
 
     inout fn midCanonicalEmitCall(c: inout Comp, body: MidBodyNode, terminatorId: U64) -> Bool {
         match self.midCanonicalDirectCallPreflight(c: inout c, body: body, terminatorId: terminatorId) {
             MidCallPreflight.None => { return self.midCanonicalEmitDirectCall(c: inout c, body: body, terminatorId: terminatorId) }
-            MidCallPreflight.Target => { return self.midCanonicalEmitRuntimeProcessIoCall(c: inout c, body: body, terminatorId: terminatorId) }
+            MidCallPreflight.Target => {
+                match self.midCanonicalRuntimeProcessIoPreflight(c: inout c, body: body, terminatorId: terminatorId) {
+                    MidCallPreflight.None => { return self.midCanonicalEmitRuntimeProcessIoCall(c: inout c, body: body, terminatorId: terminatorId) }
+                    MidCallPreflight.Target => { return self.midCanonicalEmitRuntimeCoreStringFfiCall(c: inout c, body: body, terminatorId: terminatorId) }
+                    _ => { return false }
+                }
+            }
             _ => { return false }
         }
     }
