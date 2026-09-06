@@ -42,6 +42,17 @@ export struct MidPlaceNode {
 }
 pub impl MidPlaceNode { factory }
 
+// `tag` is 1=Field, 2=Index.  A canonical node never embeds the draft
+// `MidProjection` enum: all payload fields remain scalar and the parent Place
+// owns only a range in this dedicated pool.
+export struct MidProjectionNode {
+    pub val tag: U64
+    pub val index: U64 = 0U64
+    pub val indexLocal: U64 = 0U64
+    pub val typeTerm: U64 = 0U64
+}
+pub impl MidProjectionNode { factory }
+
 export struct MidAggregateElementNode {
     pub val fieldIndex: U64
     pub val operand: U64
@@ -91,8 +102,31 @@ export struct MidRvalueNode {
     pub val sourceStmt: U64 = 0U64
     pub val fieldIndex: U64 = 0U64
     pub val bindTarget: U64 = 0U64
+    pub val sourceTerm: U64 = 0U64
+    pub val targetTerm: U64 = 0U64
 }
 pub impl MidRvalueNode { factory }
+
+// `tag` is 1=Template, 2=Resolved. Template identity is copied field-wise so
+// canonical Mid never retains a source-level struct payload behind a variant.
+export struct MidCallTargetNode {
+    pub val tag: U64
+    pub val resolution: U64 = 0U64
+    pub val ownerFnIdx: U64 = 0U64
+    pub val originKind: U64 = 0U64
+    pub val originStart: U64 = 0U64
+    pub val originEnd: U64 = 0U64
+    pub val originSerial: U64 = 0U64
+    pub val slot: U64 = 0U64
+}
+pub impl MidCallTargetNode { factory }
+
+// `tag` is 1=None, 2=Value. `operand` is a one-based canonical operand ID.
+export struct MidCallReceiverNode {
+    pub val tag: U64
+    pub val operand: U64 = 0U64
+}
+pub impl MidCallReceiverNode { factory }
 
 export struct MidStatementNode {
     pub val tag: U64
@@ -117,6 +151,14 @@ export struct MidTerminatorNode {
     pub val args: MidRange = <MidRange start=0U64 len=0U64 />
     pub val destination: U64 = 0U64
     pub val state: U64 = 0U64
+    pub val resume: U64 = 0U64
+    // ReturnValue and Panic use this one-based operand ID.  Keeping it named
+    // avoids overloading Switch's discriminant with an unrelated role.
+    pub val value: U64 = 0U64
+    // Canonical call identities are owner-specific pools, not an enum payload
+    // embedded in this terminator row.
+    pub val callTarget: U64 = 0U64
+    pub val callReceiver: U64 = 0U64
 }
 pub impl MidTerminatorNode { factory }
 
@@ -134,14 +176,24 @@ export struct MidCanonicalArena {
     pub mut val statements: Array[MidStatementNode] = []
     pub mut val terminators: Array[MidTerminatorNode] = []
     pub mut val places: Array[MidPlaceNode] = []
-    pub mut val projections: Array[MidProjection] = []
+    pub mut val projections: Array[MidProjectionNode] = []
     pub mut val operands: Array[MidOperandNode] = []
     pub mut val rvalues: Array[MidRvalueNode] = []
     pub mut val aggregateElements: Array[MidAggregateElementNode] = []
     pub mut val switchCases: Array[MidSwitchCase] = []
     pub mut val callArguments: Array[U64] = []
+    pub mut val callTargets: Array[MidCallTargetNode] = []
+    pub mut val callReceivers: Array[MidCallReceiverNode] = []
 }
 pub impl MidCanonicalArena { factory }
+
+// A one-based immutable body ID in MidCanonicalArena.  Zero is never a
+// frozen body, which keeps optional node references and the first body
+// unambiguous without reserving dummy arena rows.
+export struct MidCanonicalBody {
+    pub val body: U64
+}
+pub impl MidCanonicalBody { factory }
 
 // A projection is kept first-class even though Path 1 only moves root locals.
 // Field/index paths are already needed for assignments and future borrow/access
@@ -437,3 +489,230 @@ export struct MidProgram {
     pub val bodies: Array[MidBody] = []
 }
 pub impl MidProgram { factory }
+
+// --- Draft -> canonical freeze ------------------------------------------------
+//
+// These helpers are intentionally one-way. `MidBody` is still the mutable
+// construction vocabulary, but after this boundary every child is a stable,
+// one-based ID or an owner-specific range in `MidCanonicalArena`.  No helper
+// reconstructs a draft enum/Array from the arena: consumers must eventually
+// read this representation directly.
+
+fn midFreezeProjection(arena: inout MidCanonicalArena, projection: MidProjection) {
+    match projection {
+        MidProjection.Field(index: val index, typeTerm: val typeTerm) => {
+            arena.projections.append(<MidProjectionNode tag=1U64 index=index typeTerm=typeTerm />)
+        }
+        MidProjection.Index(indexLocal: val indexLocal, typeTerm: val typeTerm) => {
+            arena.projections.append(<MidProjectionNode tag=2U64 indexLocal=indexLocal typeTerm=typeTerm />)
+        }
+    }
+}
+
+fn midFreezePlace(arena: inout MidCanonicalArena, place: MidPlace) -> U64 {
+    val projectionStart: U64 = arena.projections.count()
+    mut val projectionI: U64 = 0U64
+    while projectionI < place.projections.count() {
+        midFreezeProjection(arena: inout arena, projection: place.projections[projectionI])
+        projectionI = projectionI + 1U64
+    }
+    arena.places.append(<MidPlaceNode local=place.local projections=<MidRange start=projectionStart len=place.projections.count() /> typeTerm=place.typeTerm />)
+    return arena.places.count()
+}
+
+fn midFreezeOperand(arena: inout MidCanonicalArena, operand: MidOperand) -> U64 {
+    match operand {
+        MidOperand.Copy(place: val place) => {
+            arena.operands.append(<MidOperandNode tag=1U64 place=midFreezePlace(arena: inout arena, place: place) />)
+        }
+        MidOperand.Move(place: val place) => {
+            arena.operands.append(<MidOperandNode tag=2U64 place=midFreezePlace(arena: inout arena, place: place) />)
+        }
+        MidOperand.Borrow(place: val place, capability: val capability) => {
+            match capability {
+                MidBorrowCapability.Read => { arena.operands.append(<MidOperandNode tag=3U64 place=midFreezePlace(arena: inout arena, place: place) capability=1U64 />) }
+                MidBorrowCapability.Inout => { arena.operands.append(<MidOperandNode tag=4U64 place=midFreezePlace(arena: inout arena, place: place) capability=2U64 />) }
+            }
+        }
+        MidOperand.Constant(value: val value) => {
+            match value {
+                MidConstant.Integer(value: val value, isNegative: val isNegative, isBool: val isBool, typeTerm: val typeTerm) => {
+                    arena.operands.append(<MidOperandNode tag=5U64 integerValue=value integerNegative=isNegative integerBool=isBool typeTerm=typeTerm />)
+                }
+                MidConstant.StringLiteral(start: val start, len: val len, typeTerm: val typeTerm) => {
+                    arena.operands.append(<MidOperandNode tag=6U64 stringStart=start stringLen=len typeTerm=typeTerm />)
+                }
+                MidConstant.FloatLiteral(start: val start, len: val len, typeTerm: val typeTerm) => {
+                    arena.operands.append(<MidOperandNode tag=7U64 stringStart=start stringLen=len typeTerm=typeTerm />)
+                }
+            }
+        }
+        MidOperand.Access(candidate: val candidate) => {
+            arena.operands.append(<MidOperandNode tag=8U64 accessCandidate=candidate />)
+        }
+    }
+    return arena.operands.count()
+}
+
+fn midFreezeAggregateElement(arena: inout MidCanonicalArena, element: MidAggregateElement) {
+    arena.aggregateElements.append(<MidAggregateElementNode fieldIndex=element.fieldIndex operand=midFreezeOperand(arena: inout arena, operand: element.operand) targetTerm=element.targetTerm isBoxed=element.isBoxed conversion=element.conversion />)
+}
+
+fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
+    match value {
+        MidRvalue.Use(operand: val operand) => {
+            arena.rvalues.append(<MidRvalueNode tag=1U64 operand=midFreezeOperand(arena: inout arena, operand: operand) />)
+        }
+        MidRvalue.ReturnBoundary(exprId: val exprId, targetTerm: val targetTerm, operand: val operand) => {
+            arena.rvalues.append(<MidRvalueNode tag=2U64 operand=midFreezeOperand(arena: inout arena, operand: operand) exprId=exprId targetTerm=targetTerm />)
+        }
+        MidRvalue.Aggregate(exprId: val exprId, kind: val kind, resultTerm: val resultTerm, fieldCount: val fieldCount, elements: val elements) => {
+            val start: U64 = arena.aggregateElements.count()
+            mut val i: U64 = 0U64
+            while i < elements.count() {
+                midFreezeAggregateElement(arena: inout arena, element: elements[i])
+                i = i + 1U64
+            }
+            match kind {
+                MidAggregateKind.Struct => { arena.rvalues.append(<MidRvalueNode tag=3U64 exprId=exprId resultTerm=resultTerm fieldCount=fieldCount elements=<MidRange start=start len=elements.count() /> />) }
+                MidAggregateKind.Enum(enumIdx: val enumIdx, variantIndex: val variantIndex) => { arena.rvalues.append(<MidRvalueNode tag=4U64 exprId=exprId enumIndex=enumIdx variantIndex=variantIndex resultTerm=resultTerm fieldCount=fieldCount elements=<MidRange start=start len=elements.count() /> />) }
+                MidAggregateKind.Array => { arena.rvalues.append(<MidRvalueNode tag=5U64 exprId=exprId resultTerm=resultTerm fieldCount=fieldCount elements=<MidRange start=start len=elements.count() /> />) }
+            }
+        }
+        MidRvalue.Convert(operand: val operand, conversion: val conversion) => {
+            arena.rvalues.append(<MidRvalueNode tag=6U64 operand=midFreezeOperand(arena: inout arena, operand: operand) conversion=conversion />)
+        }
+        MidRvalue.CastBoundary(exprId: val exprId, sourceTerm: val sourceTerm, targetTerm: val targetTerm, operand: val operand) => {
+            arena.rvalues.append(<MidRvalueNode tag=7U64 operand=midFreezeOperand(arena: inout arena, operand: operand) exprId=exprId sourceTerm=sourceTerm targetTerm=targetTerm />)
+        }
+        MidRvalue.Cast(operand: val operand, kind: val kind, targetTerm: val targetTerm) => {
+            match kind {
+                MidCastKind.IntegerWiden(sourceSigned: val sourceSigned) => {
+                    if sourceSigned { arena.rvalues.append(<MidRvalueNode tag=8U64 operand=midFreezeOperand(arena: inout arena, operand: operand) kindTag=1U64 targetTerm=targetTerm />) }
+                    else { arena.rvalues.append(<MidRvalueNode tag=8U64 operand=midFreezeOperand(arena: inout arena, operand: operand) kindTag=2U64 targetTerm=targetTerm />) }
+                }
+                MidCastKind.IntegerToFloat(sourceSigned: val sourceSigned) => {
+                    if sourceSigned { arena.rvalues.append(<MidRvalueNode tag=9U64 operand=midFreezeOperand(arena: inout arena, operand: operand) kindTag=1U64 targetTerm=targetTerm />) }
+                    else { arena.rvalues.append(<MidRvalueNode tag=9U64 operand=midFreezeOperand(arena: inout arena, operand: operand) kindTag=2U64 targetTerm=targetTerm />) }
+                }
+                MidCastKind.IdentityRetag => { arena.rvalues.append(<MidRvalueNode tag=10U64 operand=midFreezeOperand(arena: inout arena, operand: operand) targetTerm=targetTerm />) }
+            }
+        }
+        MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=11U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex sourceStmt=sourceStmt resultTerm=resultTerm />)
+        }
+        MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=12U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        }
+        MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=13U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        }
+        MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=14U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        }
+        MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            arena.rvalues.append(<MidRvalueNode tag=15U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+        }
+    }
+    return arena.rvalues.count()
+}
+
+fn midFreezeCallTarget(arena: inout MidCanonicalArena, target: MidCallTarget) -> U64 {
+    match target {
+        MidCallTarget.Template(site: val site) => { arena.callTargets.append(<MidCallTargetNode tag=1U64 ownerFnIdx=site.ownerFnIdx originKind=site.originKind originStart=site.originStart originEnd=site.originEnd originSerial=site.originSerial slot=site.slot />) }
+        MidCallTarget.Resolved(resolution: val resolution) => { arena.callTargets.append(<MidCallTargetNode tag=2U64 resolution=resolution />) }
+    }
+    return arena.callTargets.count()
+}
+
+fn midFreezeCallReceiver(arena: inout MidCanonicalArena, receiver: MidCallReceiver) -> U64 {
+    match receiver {
+        MidCallReceiver.None => { arena.callReceivers.append(<MidCallReceiverNode tag=1U64 />) }
+        MidCallReceiver.Value(operand: val operand) => { arena.callReceivers.append(<MidCallReceiverNode tag=2U64 operand=midFreezeOperand(arena: inout arena, operand: operand) />) }
+    }
+    return arena.callReceivers.count()
+}
+
+fn midFreezeStatement(arena: inout MidCanonicalArena, statement: MidStatement) {
+    match statement {
+        MidStatement.Assign(destination: val destination, value: val value) => { arena.statements.append(<MidStatementNode tag=1U64 destination=midFreezePlace(arena: inout arena, place: destination) value=midFreezeRvalue(arena: inout arena, value: value) />) }
+        MidStatement.Overwrite(destination: val destination, source: val source) => { arena.statements.append(<MidStatementNode tag=2U64 destination=midFreezePlace(arena: inout arena, place: destination) source=midFreezePlace(arena: inout arena, place: source) />) }
+        MidStatement.Drop(place: val place) => { arena.statements.append(<MidStatementNode tag=3U64 destination=midFreezePlace(arena: inout arena, place: place) />) }
+        MidStatement.ConditionalDrop(place: val place, flag: val flag) => { arena.statements.append(<MidStatementNode tag=4U64 destination=midFreezePlace(arena: inout arena, place: place) flag=flag />) }
+        MidStatement.SetDropFlag(local: val local, isSet: val isSet) => { arena.statements.append(<MidStatementNode tag=5U64 flag=local isSet=isSet />) }
+        MidStatement.ScopeExit(scope: val scope) => { arena.statements.append(<MidStatementNode tag=6U64 scope=scope />) }
+        MidStatement.Nop => { arena.statements.append(<MidStatementNode tag=7U64 />) }
+    }
+}
+
+fn midFreezeTerminator(arena: inout MidCanonicalArena, terminator: MidTerminator) -> U64 {
+    match terminator {
+        MidTerminator.Open => { arena.terminators.append(<MidTerminatorNode tag=1U64 />) }
+        MidTerminator.Goto(target: val target) => { arena.terminators.append(<MidTerminatorNode tag=2U64 target=target />) }
+        MidTerminator.Switch(discriminant: val discriminant, values: val values, targets: val targets, otherwise: val otherwise) => {
+            val start: U64 = arena.switchCases.count()
+            mut val i: U64 = 0U64
+            while i < values.count() {
+                arena.switchCases.append(<MidSwitchCase value=values[i] target=targets[i] />)
+                i = i + 1U64
+            }
+            arena.terminators.append(<MidTerminatorNode tag=3U64 discriminant=midFreezeOperand(arena: inout arena, operand: discriminant) cases=<MidRange start=start len=values.count() /> otherwise=otherwise />)
+        }
+        MidTerminator.Call(callee: val callee, receiver: val receiver, args: val args, destination: val destination, target: val target) => {
+            val start: U64 = arena.callArguments.count()
+            mut val i: U64 = 0U64
+            while i < args.count() {
+                arena.callArguments.append(midFreezeOperand(arena: inout arena, operand: args[i]))
+                i = i + 1U64
+            }
+            arena.terminators.append(<MidTerminatorNode tag=4U64 target=target args=<MidRange start=start len=args.count() /> destination=midFreezePlace(arena: inout arena, place: destination) callTarget=midFreezeCallTarget(arena: inout arena, target: callee) callReceiver=midFreezeCallReceiver(arena: inout arena, receiver: receiver) />)
+        }
+        MidTerminator.Return => { arena.terminators.append(<MidTerminatorNode tag=5U64 />) }
+        MidTerminator.ReturnValue(value: val value) => { arena.terminators.append(<MidTerminatorNode tag=6U64 value=midFreezeOperand(arena: inout arena, operand: value) />) }
+        MidTerminator.Panic(message: val message) => { arena.terminators.append(<MidTerminatorNode tag=7U64 value=midFreezeOperand(arena: inout arena, operand: message) />) }
+        MidTerminator.Unreachable => { arena.terminators.append(<MidTerminatorNode tag=8U64 />) }
+        MidTerminator.Abort => { arena.terminators.append(<MidTerminatorNode tag=9U64 />) }
+        MidTerminator.Suspend(state: val state, resume: val resume) => { arena.terminators.append(<MidTerminatorNode tag=10U64 state=state resume=resume />) }
+    }
+    return arena.terminators.count()
+}
+
+fn storeMidCanonicalBody(arena: inout MidCanonicalArena, body: MidBody) -> MidCanonicalBody {
+    val localStart: U64 = arena.locals.count()
+    mut val i: U64 = 0U64
+    while i < body.locals.count() {
+        arena.locals.append(body.locals[i])
+        i = i + 1U64
+    }
+    val scopeStart: U64 = arena.scopes.count()
+    i = 0U64
+    while i < body.scopes.count() {
+        arena.scopes.append(body.scopes[i])
+        i = i + 1U64
+    }
+    val blockStart: U64 = arena.blocks.count()
+    i = 0U64
+    while i < body.blocks.count() {
+        val block: MidBlock = body.blocks[i]
+        val statementStart: U64 = arena.statements.count()
+        mut val statementI: U64 = 0U64
+        while statementI < block.statements.count() {
+            midFreezeStatement(arena: inout arena, statement: block.statements[statementI])
+            statementI = statementI + 1U64
+        }
+        val terminator: U64 = midFreezeTerminator(arena: inout arena, terminator: block.terminator)
+        arena.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.count() /> terminator=terminator />)
+        i = i + 1U64
+    }
+    arena.bodies.append(<MidBodyNode bodyInstance=body.bodyInstance sourceFunction=body.sourceFunction locals=<MidRange start=localStart len=body.locals.count() /> scopes=<MidRange start=scopeStart len=body.scopes.count() /> blocks=<MidRange start=blockStart len=body.blocks.count() /> entry=body.entry />)
+    return <MidCanonicalBody body=arena.bodies.count() />
+}
+
+pub impl MidCanonicalArena {
+    // Freezing belongs to the owner of the typed pools. The inout receiver
+    // makes the only mutation point explicit and keeps the public API from
+    // suggesting that a frozen body can be detached from its arena.
+    inout fn store(body: MidBody) -> MidCanonicalBody {
+        return storeMidCanonicalBody(arena: inout self, body: body)
+    }
+}
