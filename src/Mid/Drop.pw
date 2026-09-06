@@ -445,6 +445,25 @@ fn canonicalMidAppendDropLocals(c: inout Comp, body: MidBodyNode, plan: MidCanon
     return <MidRange start=start len=c.mid.locals.count() - start />
 }
 
+// Flags are initialized once at invocation entry, never at the source entry
+// block itself: a loop backedge can revisit that block while a conditional
+// move remains live. `target` is already the rewritten source entry index.
+fn canonicalMidAppendDropFlagEntry(c: inout Comp, body: MidBodyNode, plan: MidCanonicalDropPlan, target: U64) -> U64 {
+    val statementStart: U64 = c.mid.statements.count()
+    mut val local: U64 = 0U64
+    while local < body.locals.len && local < plan.needsFlag.count() {
+        if plan.needsFlag[local] {
+            val flag: U64 = canonicalMidFlagLocal(plan: plan, sourceLocalCount: body.locals.len, local: local)
+            c.mid.statements.append(<MidStatementNode tag=5U64 flag=flag isSet=c.mid.locals[body.locals.start + local].ownsAtEntry />)
+        }
+        local = local + 1U64
+    }
+    if c.mid.statements.count() == statementStart { return 0U64 }
+    c.mid.terminators.append(<MidTerminatorNode tag=2U64 target=target />)
+    c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=c.mid.statements.count() - statementStart /> terminator=c.mid.terminators.count() />)
+    return c.mid.blocks.count()
+}
+
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
     return body.scopes[scope].firstLocal
