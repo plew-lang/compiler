@@ -3,7 +3,7 @@
 // recovering a place by spelling from the AST.
 
 import ../Frontend with { Comp }
-import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identSelfTarget }
+import ../Ir with { Bind, TypeRef, SemanticExprType, SemanticAggregateKind, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, Expr, Stmt, Param, Func, AccessCandidate, CallSiteKey, CallTemplate, CallTemplateKind, CallTemplateReceiver, CallTemplateArgument, CallArgumentSource, identValueCode, identSelfTarget }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
 import ../Ops with { opAnd, opOr }
@@ -231,16 +231,18 @@ export fn midLocalForBinding(state: MidBuildState, declarationTarget: U64) -> Mi
 }
 
 // The builder's only source-identifier boundary. Record/Verify has already
-// selected the lexical binding and stored it in TypeCache. The binding category
-// is intentionally not a second admission rule: `self`, locals, and parameters
-// are all value bindings, while globals/callables remain absent from this
-// body's binding table. A Mid local is produced only when that exact
-// declaration target is registered in this body. No source spelling, scope
-// scan, or AST pattern match is permitted here.
+// selected the lexical binding and stored it in TypeCache. The category and
+// declaration target are both required: target numeric domains overlap (for
+// example, a function index can equal a local declaration offset), so the
+// binding table alone must not reinterpret a callable as a local. `self`,
+// locals, and parameters are value bindings; globals remain absent from this
+// body's table. No source spelling, scope scan, or AST pattern match is
+// permitted here.
 export fn midPlaceForRecordedIdent(c: Comp, state: MidBuildState, exprId: U64, typeTerm: U64) -> MidPlaceLookup {
     if exprId >= c.typeCache.identBind.count() || exprId >= c.typeCache.identTarget.count() {
         return <MidPlaceLookup />
     }
+    if c.typeCache.identBind[exprId] != identValueCode() { return <MidPlaceLookup /> }
     val local: MidBindingLookup = midLocalForBinding(state: state, declarationTarget: c.typeCache.identTarget[exprId])
     if !local.found { return <MidPlaceLookup /> }
     if local.local >= state.locals.count() { return <MidPlaceLookup /> }
