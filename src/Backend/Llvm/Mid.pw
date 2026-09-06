@@ -1730,6 +1730,59 @@ pub impl LlvmCtx {
         return 0U64
     }
 
+    inout fn midCanonicalPlaceLlvmSupported(c: inout Comp, body: MidBodyNode, placeId: U64) -> Bool {
+        if placeId == 0U64 || placeId > c.mid.places.count() { return false }
+        val place: MidPlaceNode = c.mid.places[placeId - 1U64]
+        if place.local >= body.locals.len { return false }
+        mut val projectionI: U64 = 0U64
+        while projectionI < place.projections.len {
+            val projection: MidProjectionNode = c.mid.projections[place.projections.start + projectionI]
+            if projection.tag == 1U64 {
+                if projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.types.count() { return false }
+            } else if projection.tag == 2U64 {
+                if projection.indexLocal >= body.locals.len || projection.typeTerm == 0U64 || projection.typeTerm >= c.arena.types.count() { return false }
+            } else { return false }
+            projectionI = projectionI + 1U64
+        }
+        return true
+    }
+
+    inout fn midCanonicalOperandLlvmSupported(c: inout Comp, body: MidBodyNode, operandId: U64) -> Bool {
+        if operandId == 0U64 || operandId > c.mid.operands.count() { return false }
+        val operand: MidOperandNode = c.mid.operands[operandId - 1U64]
+        if operand.tag >= 1U64 && operand.tag <= 4U64 { return self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: operand.place) }
+        if operand.tag == 5U64 { return operand.typeTerm == 0U64 || operand.typeTerm < c.arena.types.count() }
+        if operand.tag == 6U64 { return operand.stringStart <= c.arena.bytes.count() && operand.stringLen <= c.arena.bytes.count() - operand.stringStart }
+        if operand.tag == 7U64 {
+            if operand.typeTerm == 0U64 || operand.typeTerm >= c.arena.types.count() || operand.stringStart > c.arena.bytes.count() || operand.stringLen == 0U64 || operand.stringLen > c.arena.bytes.count() - operand.stringStart { return false }
+            val kind: U32 = LLVMGetTypeKind(self.llvmTypeOfRef(c: inout c, ref: operand.typeTerm))
+            return kind == 2U32 || kind == 3U32
+        }
+        return false
+    }
+
+    inout fn midCanonicalInitialRvalueSupported(c: inout Comp, body: MidBodyNode, rvalueId: U64) -> Bool {
+        if rvalueId == 0U64 || rvalueId > c.mid.rvalues.count() { return false }
+        val value: MidRvalueNode = c.mid.rvalues[rvalueId - 1U64]
+        if value.tag == 1U64 { return self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) }
+        if value.tag == 2U64 { return value.targetTerm != 0U64 && value.targetTerm < c.arena.types.count() && self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) && c.typeRefEq(a: self.midCanonicalOperandTypeTerm(c: c, body: body, operandId: value.operand), b: value.targetTerm) }
+        if value.tag >= 3U64 && value.tag <= 5U64 {
+            if value.resultTerm == 0U64 || value.resultTerm >= c.arena.types.count() || value.fieldCount != value.elements.len { return false }
+            mut val elementI: U64 = 0U64
+            while elementI < value.elements.len {
+                val element: MidAggregateElementNode = c.mid.aggregateElements[value.elements.start + elementI]
+                if element.targetTerm == 0U64 || element.targetTerm >= c.arena.types.count() || !self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: element.operand) || c.conversionProofIsMissing(id: element.conversion) { return false }
+                elementI = elementI + 1U64
+            }
+            return true
+        }
+        if value.tag == 6U64 { return self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) && !c.conversionProofIsMissing(id: value.conversion) }
+        if value.tag == 7U64 { return false }
+        if value.tag >= 8U64 && value.tag <= 10U64 { return value.targetTerm != 0U64 && value.targetTerm < c.arena.types.count() && self.midCanonicalOperandLlvmSupported(c: inout c, body: body, operandId: value.operand) }
+        if value.tag >= 11U64 && value.tag <= 15U64 { return value.place != 0U64 && value.place <= c.mid.places.count() && self.midCanonicalPlaceLlvmSupported(c: inout c, body: body, placeId: value.place) && value.resultTerm != 0U64 && value.resultTerm < c.arena.types.count() }
+        return false
+    }
+
     inout fn midLocalTy(c: inout Comp, body: MidBody, local: U64) -> LLVMTypeRef {
         if local >= body.locals.count() { return self.i64ty }
         val declaration: MidLocalDecl = body.locals[local]
