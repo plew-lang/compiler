@@ -1,0 +1,76 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Bind, CallTemplateKind, CallTemplateReceiver, Expr, Func, FuncBindRange, StaticConformanceProof, TypeRef }
+
+fn inferredArgument(c: inout Comp, pattern: U64, expected: U64, params: FuncBindRange) -> U64 {
+    val valueParams = c.pushFuncParams(params: [])
+    val callee = c.arena.funcs.count()
+    c.arena.funcs.append(<Func nameStart=0U64 nameLen=0U64 typeParams=params params=valueParams
+        hasRet=true retStart=0U64 retLen=0U64 retIsArray=false retTy=pattern body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    val kind = c.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=<CallTemplateReceiver.None /> args=[] calleeTypeArgs=[0U64] proof=<StaticConformanceProof.Missing /> />, expectedTerm: expected)
+    match kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val args, proof: _) => { return args[0U64] }
+        _ => { return 0U64 }
+    }
+}
+
+fn savedArgument(c: inout Comp, expression: U64) -> U64 {
+    match c.callTemplateForSourceBody(fnIdx: 0U64, exprId: expression).kind {
+        CallTemplateKind.Direct(callee: _, receiver: _, args: _, calleeTypeArgs: val args, proof: _) => {
+            if args.count() == 1U64 { return args[0U64] }
+        }
+        _ => {}
+    }
+    return 0U64
+}
+
+fn main() {
+    mut val c: Comp = <Comp />
+    // Production arenas reserve zero for the missing-type sentinel.
+    val unit = c.kwSpan(kw: "", kwLen: 0U64)
+    val unitTerm = c.simpleTypeRef(nameStart: unit.nameStart, nameLen: unit.nameLen)
+    val name = c.internTmpName(prefix: "T", n: 0U64)
+    val array = c.internTmpName(prefix: "Array", n: 0U64)
+    val integer = c.internTmpName(prefix: "Integer", n: 0U64)
+    val integerTerm = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val calleeTerm = c.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=71U64 args=[] />)
+    val callerTerm = c.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=91U64 args=[] />)
+    val returnTerm = c.pushType(t: <TypeRef nameStart=array.nameStart nameLen=array.nameLen args=[calleeTerm] />)
+    val expectedTerm = c.pushType(t: <TypeRef nameStart=array.nameStart nameLen=array.nameLen args=[callerTerm] />)
+    val concreteTerm = c.pushType(t: <TypeRef nameStart=array.nameStart nameLen=array.nameLen args=[integerTerm] />)
+    val params = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
+    val valueParams = c.pushFuncParams(params: [])
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=params params=valueParams
+        hasRet=true retStart=array.nameStart retLen=array.nameLen retIsArray=false retTy=returnTerm body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false />)
+    c.cur.checkFn = 0U64
+    c.cur.recordCallTemplates = true
+    val args = c.pushArgs(args: [])
+    val expression = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
+    c.recordCallTemplate(exprId: expression, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
+    c.recordCallTemplateExpectedResult(exprId: expression, expectedTerm: expectedTerm)
+    if savedArgument(c: inout c, expression: expression) == callerTerm { write(s: "caller-symbolic-binder\n") }
+    c.recordCallTemplate(exprId: expression, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
+    if savedArgument(c: inout c, expression: expression) == callerTerm { write(s: "record-order-stable\n") }
+    val second = c.pushExpr(e: <Expr.Call nameStart=name.nameStart nameLen=name.nameLen args=args />)
+    c.recordCallTemplateExpectedResult(exprId: second, expectedTerm: concreteTerm)
+    c.recordCallTemplate(exprId: second, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [0U64])
+    if savedArgument(c: inout c, expression: second) == integerTerm { write(s: "context-before-selection\n") }
+    c.recordCallTemplate(exprId: second, callee: 0U64, receiver: <CallTemplateReceiver.None />, args: args, calleeTypeArgs: [callerTerm])
+    if savedArgument(c: inout c, expression: second) == callerTerm { write(s: "explicit-binding-preserved\n") }
+    val other = c.internTmpName(prefix: "Other", n: 0U64)
+    val otherTerm = c.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[callerTerm] />)
+    if inferredArgument(c: inout c, pattern: returnTerm, expected: otherTerm, params: params) == 0U64 { write(s: "constructor-identity\n") }
+    if inferredArgument(c: inout c, pattern: callerTerm, expected: integerTerm, params: params) == 0U64 { write(s: "foreign-binder-rigid\n") }
+    val pairPattern = c.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[calleeTerm, calleeTerm] />)
+    val pairExpected = c.pushType(t: <TypeRef nameStart=other.nameStart nameLen=other.nameLen args=[callerTerm, integerTerm] />)
+    if inferredArgument(c: inout c, pattern: pairPattern, expected: pairExpected, params: params) == 0U64 { write(s: "conflict-no-partial-publication\n") }
+    val projection = c.pushType(t: <TypeRef nameStart=name.nameStart nameLen=name.nameLen paramId=71U64 args=[] assocNameId=1U64 />)
+    if inferredArgument(c: inout c, pattern: projection, expected: integerTerm, params: params) == 0U64 { write(s: "projection-not-inverted\n") }
+    val recordPattern = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[1U64] recordFieldTerms=[calleeTerm] />)
+    val recordExpected = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[1U64] recordFieldTerms=[callerTerm] />)
+    if inferredArgument(c: inout c, pattern: recordPattern, expected: recordExpected, params: params) == callerTerm { write(s: "structural-record-children\n") }
+    val relabelled = c.pushType(t: <TypeRef nameStart=0U64 nameLen=0U64 args=[] isRecord=true recordFieldLabels=[2U64] recordFieldTerms=[callerTerm] />)
+    if inferredArgument(c: inout c, pattern: recordPattern, expected: relabelled, params: params) == 0U64 { write(s: "structural-record-labels\n") }
+}

@@ -1,0 +1,10 @@
+caller-symbolic-binder
+record-order-stable
+context-before-selection
+explicit-binding-preserved
+constructor-identity
+foreign-binder-rigid
+conflict-no-partial-publication
+projection-not-inverted
+structural-record-children
+structural-record-labels

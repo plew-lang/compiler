@@ -448,7 +448,8 @@ pub impl Comp {
         val index: U64 = self.callTemplateIndex(siteKey: siteKey)
         if index < self.decls.callTemplates.count() {
             val prior: CallTemplate = self.decls.callTemplates[index]
-            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof /> expectedResultTerm=prior.expectedResultTerm />)
+            val kind = self.completeCallTemplateResult(kind: <CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof />, expectedTerm: prior.expectedResultTerm)
+            self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=siteKey kind=kind expectedResultTerm=prior.expectedResultTerm />)
             return
         }
         self.appendCallTemplate(template: <CallTemplate siteKey=siteKey kind=<CallTemplateKind.Direct callee=callee receiver=receiver args=templateArgs calleeTypeArgs=calleeTypeArgs proof=proof /> />)
@@ -616,7 +617,60 @@ pub impl Comp {
             return
         }
         val prior: CallTemplate = self.decls.callTemplates[index]
-        self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=prior.kind expectedResultTerm=expectedTerm />)
+        val kind = self.completeCallTemplateResult(kind: prior.kind, expectedTerm: expectedTerm)
+        self.decls.callTemplates.set(i: index, value: <CallTemplate siteKey=prior.siteKey kind=kind expectedResultTerm=expectedTerm />)
+    }
+
+    // Bidirectional completion belongs to Record, before default evaluation
+    // sites are formed. The same join is used whichever fact arrives first.
+    // A contextual conversion may prevent exact matching; then retain the
+    // selected evidence, never overwrite it or publish partial substitutions.
+    inout fn completeCallTemplateResult(kind: CallTemplateKind, expectedTerm: U64) -> CallTemplateKind {
+        if expectedTerm == 0U64 { return kind }
+        match kind {
+            CallTemplateKind.Direct(callee: val callee, receiver: val receiver, args: val args, calleeTypeArgs: val typeArgs, proof: val proof) => {
+                if callee >= self.arena.funcs.count() { return kind }
+                val function = self.arena.funcs[callee]
+                if function.typeParams.count() == 0U64 || typeArgs.count() > function.typeParams.count() { return kind }
+                if typeArgs.count() == function.typeParams.count() && self.fnArgsAllResolved(args: typeArgs) { return kind }
+                mut val completed: Array[U64] = typeArgs
+                while completed.count() < function.typeParams.count() { completed.append(0U64) }
+                if !self.matchCallResultArguments(pattern: function.retTy, expected: expectedTerm, params: function.typeParams, values: inout completed) { return kind }
+                return <CallTemplateKind.Direct callee=callee receiver=receiver args=args calleeTypeArgs=completed proof=proof />
+            }
+            _ => { return kind }
+        }
+    }
+
+    // Only the selected callee's bare ParamIds are inference variables.
+    // Caller binders are rigid, even if they have the same spelling. Traverse
+    // the canonical type children/labels shared with structural equality.
+    // Projections are not injective and therefore cannot supply substitutions.
+    inout fn matchCallResultArguments(pattern: U64, expected: U64, params: FuncBindRange, values: inout Array[U64]) -> Bool {
+        if pattern == 0U64 || expected == 0U64 || pattern >= self.arena.typeTerms.count() || expected >= self.arena.typeTerms.count() { return false }
+        val term = self.arena.typeTerms[pattern]
+        if term.assocNameId != 0U64 { return self.typeRefEq(a: pattern, b: expected) }
+        if term.paramId != 0U64 && !term.isAny && !term.isSendable && term.args.len == 0U64 && term.assocTraitId == 0U64 && term.viewExtId == 0U64 && term.viewIds.len == 0U64 && term.viewSources.len == 0U64 {
+            mut val index: U64 = 0U64
+            while index < params.count() && index < values.count() {
+                if self.funcBindAt(binds: params, index: index).paramId == term.paramId {
+                    if values[index] != 0U64 { return self.typeRefEq(a: values[index], b: expected) }
+                    values.set(i: index, value: expected)
+                    return true
+                }
+                index += 1U64
+            }
+        }
+        if !self.typeTermRefSameHead(a: pattern, b: expected) { return false }
+        val count = self.typeTermRefChildCount(ref: pattern)
+        if count != self.typeTermRefChildCount(ref: expected) { return false }
+        mut val index: U64 = 0U64
+        while index < count {
+            if self.typeTermRefIdentityChildLabel(ref: pattern, index: index) != self.typeTermRefIdentityChildLabel(ref: expected, index: index) { return false }
+            if !self.matchCallResultArguments(pattern: self.typeTermRefChildRef(ref: pattern, index: index), expected: self.typeTermRefChildRef(ref: expected, index: index), params: params, values: inout values) { return false }
+            index += 1U64
+        }
+        return true
     }
 
     inout fn callTemplateForCurrentBody(exprId: U64) -> CallTemplate {
