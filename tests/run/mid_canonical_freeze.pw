@@ -7,14 +7,17 @@ fn main() {
     val argument: MidOperand = <MidOperand.Borrow place=source capability=<MidBorrowCapability.Read /> />
     val aggregate: MidRvalue = <MidRvalue.Aggregate exprId=17U64 kind=<MidAggregateKind.Enum enumIdx=18U64 variantIndex=19U64 /> resultTerm=20U64 fieldCount=1U64 elements=[<MidAggregateElement fieldIndex=0U64 operand=argument targetTerm=21U64 isBoxed=true conversion=22U64 />] />
     val assign: MidStatement = <MidStatement.Assign destination=destination value=aggregate />
+    val enumRead: MidStatement = <MidStatement.Assign destination=destination value=<MidRvalue.EnumTag place=source enumIndex=26U64 sourceStmt=27U64 resultTerm=28U64 /> />
     val panic: MidTerminator = <MidTerminator.Panic message=<MidOperand.Constant value=<MidConstant.StringLiteral start=23U64 len=24U64 typeTerm=25U64 /> /> />
-    val draft: MidBody = <MidBody sourceFunction=26U64 locals=[<MidLocalDecl typeTerm=13U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock statements=[assign] terminator=panic />] entry=0U64 />
+    val draft: MidBody = <MidBody sourceFunction=29U64 locals=[<MidLocalDecl typeTerm=13U64 sourceScope=0U64 isUnique=false isParameter=false />] scopes=[<MidScope firstLocal=0U64 localCount=1U64 />] blocks=[<MidBlock statements=[assign, enumRead] terminator=panic />] entry=0U64 />
     mut val arena: MidCanonicalArena = <MidCanonicalArena />
     val frozen: MidCanonicalBody = arena.store(body: draft)
     val body = arena.bodies[frozen.body - 1U64]
     val block = arena.blocks[body.blocks.start]
     val statement = arena.statements[block.statements.start]
     val rvalue = arena.rvalues[statement.value - 1U64]
+    val enumStatement = arena.statements[block.statements.start + 1U64]
+    val enumRvalue = arena.rvalues[enumStatement.value - 1U64]
     val element = arena.aggregateElements[rvalue.elements.start]
     val operand = arena.operands[element.operand - 1U64]
     val place = arena.places[operand.place - 1U64]
@@ -25,5 +28,6 @@ fn main() {
     write(s: "body=" + frozen.body.toString() + "\n")
     write(s: "projection=" + firstProjection.tag.toString() + ":" + firstProjection.index.toString() + "\n")
     write(s: "aggregate=" + rvalue.exprId.toString() + ":" + element.conversion.toString() + "\n")
+    write(s: "enum-place=" + enumRvalue.place.toString() + ":" + enumRvalue.operand.toString() + "\n")
     write(s: "panic=" + message.stringStart.toString() + ":" + message.stringLen.toString() + "\n")
 }

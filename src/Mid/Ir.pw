@@ -91,6 +91,9 @@ pub impl MidOperandNode { factory }
 export struct MidRvalueNode {
     pub val tag: U64
     pub val operand: U64 = 0U64
+    // Enum layout reads consume a place directly; this must not masquerade as
+    // an operand ID in canonical consumers.
+    pub val place: U64 = 0U64
     pub val exprId: U64 = 0U64
     pub val kindTag: U64 = 0U64
     pub val enumIndex: U64 = 0U64
@@ -599,19 +602,19 @@ fn midFreezeRvalue(arena: inout MidCanonicalArena, value: MidRvalue) -> U64 {
             }
         }
         MidRvalue.EnumTag(place: val place, enumIndex: val enumIndex, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=11U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex sourceStmt=sourceStmt resultTerm=resultTerm />)
+            arena.rvalues.append(<MidRvalueNode tag=11U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex sourceStmt=sourceStmt resultTerm=resultTerm />)
         }
         MidRvalue.EnumPayloadCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=12U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+            arena.rvalues.append(<MidRvalueNode tag=12U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
         }
         MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=13U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+            arena.rvalues.append(<MidRvalueNode tag=13U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
         }
         MidRvalue.EnumPayloadBoxedCopy(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=14U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+            arena.rvalues.append(<MidRvalueNode tag=14U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
         }
         MidRvalue.EnumPayloadBoxedBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
-            arena.rvalues.append(<MidRvalueNode tag=15U64 operand=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
+            arena.rvalues.append(<MidRvalueNode tag=15U64 place=midFreezePlace(arena: inout arena, place: place) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=resultTerm />)
         }
     }
     return arena.rvalues.count()
@@ -764,7 +767,7 @@ fn midCanonicalRvalueIsWellFormed(arena: MidCanonicalArena, rvalue: U64) -> Bool
         if !midCanonicalOperandIsWellFormed(arena: arena, operand: node.operand) { return false }
     }
     if node.tag >= 11U64 && node.tag <= 15U64 {
-        if !midCanonicalPlaceIsWellFormed(arena: arena, place: node.operand) { return false }
+        if !midCanonicalPlaceIsWellFormed(arena: arena, place: node.place) { return false }
     }
     if node.tag >= 3U64 && node.tag <= 5U64 {
         if !midRangeFits(range: node.elements, count: arena.aggregateElements.count()) { return false }
