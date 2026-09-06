@@ -1,6 +1,6 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Bind, Expr, Func, Param, StaticConformanceProof, TraitDef }
+import /Ir with { Bind, Expr, Func, Param, StaticConformanceProof, TraitDef, TraitOwner }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -12,6 +12,7 @@ fn main() {
     c.modules.ranges.append(<Bind nameStart=name.nameStart nameLen=name.nameLen fieldStart=7U64 fieldLen=0U64 />)
     val traitName = c.internTmpName(prefix: "Trait", n: 0U64)
     c.decls.traits.append(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId selfParamId=81U64 />)
+    c.decls.traitOwners.append(<TraitOwner nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId arity=0U64 />)
     val binds = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
     val expression = c.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
     val parameters = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
@@ -26,6 +27,12 @@ fn main() {
         hasRecv=true recvStart=integer.nameStart recvLen=integer.nameLen recvTy=term
         selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
         isProvided=true provTraitOwner=traitName.nameStart />)
+    // The canonical source may be later in the table than its placed copy.
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=binds params=parameters
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unitTerm body=0U64
+        hasRecv=true recvStart=traitName.nameStart recvLen=traitName.nameLen recvId=traitName.nameId
+        selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
+        provTraitOwner=traitName.nameStart />)
     c.prepareDefaultArgumentGenerators()
     val free = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
     val provided = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
@@ -44,4 +51,8 @@ fn main() {
     val defaultEnv = c.bodyInstanceEnvironment(fnIdx: provided, args: [term], recvInstRef: term, selectedProof: proof)
     if providedEnv.params.count() == 2U64 && c.sameInstanceEnvironment(a: providedEnv, b: defaultEnv) { write(s: "provided-self-and-proof\n") }
     if !c.arena.funcs[provided].hasRecv && !c.arena.funcs[provided].isProvided { write(s: "independent-value-abi\n") }
+    val abstractGenerator = c.defaultArgumentGenerator(ownerFnIdx: 2U64, parameterIndex: 0U64)
+    val abstractEnv = c.bodyInstanceEnvironment(fnIdx: abstractGenerator, args: [term], recvInstRef: term, selectedProof: proof)
+    if abstractEnv.params.count() == 2U64 && c.sameInstanceEnvironment(a: providedEnv, b: abstractEnv) { write(s: "abstract-source-self\n") }
+    if abstractGenerator == provided { write(s: "forward-source-owner\n") }
 }

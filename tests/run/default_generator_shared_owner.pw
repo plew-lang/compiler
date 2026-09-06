@@ -1,0 +1,42 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Bind, Expr, Func, FuncBound, Param }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    val expression = c.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=0U64 tyLen=0U64 isNeg=false />)
+    val parameters = c.pushFuncParams(params: [<Param nameStart=0U64 nameLen=1U64 nameId=7U64
+        tyStart=0U64 tyLen=1U64 tyIsArray=false ty=17U64
+        isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=expression />])
+    val body = c.pushBlock(stmts: [])
+    val own = <Bind nameStart=0U64 nameLen=1U64 paramId=71U64 fieldStart=0U64 fieldLen=0U64 />
+    val receiver = <Bind nameStart=0U64 nameLen=1U64 paramId=91U64 fieldStart=0U64 fieldLen=0U64 />
+    val originalTypes = c.pushFuncBinds(binds: [own])
+    val placedTypes = c.pushFuncBinds(binds: [receiver, own])
+    c.arena.funcs.append(<Func nameStart=0U64 nameLen=1U64 nameId=7U64 params=parameters typeParams=originalTypes
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body
+        hasRecv=true recvStart=31U64 recvLen=1U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false provTraitOwner=31U64 />)
+    // This is a placed copy of the same semantic body, not another authored
+    // declaration which happens to share parameter storage.
+    c.arena.funcs.append(<Func nameStart=0U64 nameLen=1U64 nameId=7U64 params=parameters typeParams=placedTypes
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=0U64 body=body
+        hasRecv=true recvStart=41U64 recvLen=1U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false isProvided=true provTraitOwner=31U64 />)
+    c.decls.funcBounds.append(<FuncBound fnIdx=0U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
+    c.decls.funcBounds.append(<FuncBound fnIdx=1U64 paramStart=0U64 paramLen=1U64 paramTy=17U64 />)
+    if c.callTemplateBodyOwner(fnIdx: 1U64) == 0U64 { write(s: "source-owner\n") }
+    c.prepareDefaultArgumentGenerators()
+    val original = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
+    val placed = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
+    if original == placed { write(s: "shared-declaration\n") }
+    if c.arena.funcs.count() == 3U64 { write(s: "one-record-body\n") }
+    if c.arena.funcs[placed].lexicalOwnerFnId == 1U64 { write(s: "lexical-source-owner\n") }
+    if c.decls.funcBounds.count() == 3U64 && c.decls.funcBounds[2U64].fnIdx == original { write(s: "source-bounds-once\n") }
+    match c.defaultGeneratorTypeArguments(callee: 1U64, generator: placed, args: [99U64, 17U64]) {
+        Optional.Some(val v) => {
+            if v.count() == 1U64 && v[0U64] == 17U64 { write(s: "lexical-binder-projection\n") }
+        }
+        _ => {}
+    }
+}

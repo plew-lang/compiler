@@ -15,11 +15,22 @@ pub impl Comp {
         }
         if parameterTerms.count() != bindings.count() { return <Optional.None /> }
         // Check all required result terms before creating any call occurrence.
+        mut val generatorArgs: Array[U64] = []
+        mut val hasGeneratorArgs: Bool = false
         mut val index: U64 = 0U64
         while index < bindings.count() {
             match bindings[index] {
-                CallParameterBinding.Default(generator: _) => {
+                CallParameterBinding.Default(val generator) => {
                     if parameterTerms[index] == 0U64 || parameterTerms[index] >= self.arena.types.count() { return <Optional.None /> }
+                    // Every default of this callable shares one lexical binder
+                    // environment. Project it once, not once per parameter.
+                    if !hasGeneratorArgs {
+                        match self.defaultGeneratorTypeArguments(callee: callee, generator: generator, args: calleeTypeArgs) {
+                            Optional.Some(val v) => { generatorArgs = v }
+                            Optional.None => { return <Optional.None /> }
+                        }
+                        hasGeneratorArgs = true
+                    }
                 }
                 _ => {}
             }
@@ -52,7 +63,7 @@ pub impl Comp {
                             _ => {}
                         }
                     }
-                    val call: U64 = self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: calleeTypeArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof)
+                    val call: U64 = self.recordDefaultArgumentCall(generator: generator, receiver: receiver, calleeTypeArgs: generatorArgs, resultTerm: parameterTerms[index], existingExpr: existing, proof: proof)
                     val parameter: Param = self.funcParamAt(params: parameters, index: index)
                     completed.append(<CallTemplateArgument source=self.callArgumentSource(exprId: call) isInout=false labelStart=parameter.nameStart labelLen=parameter.nameLen hasLabel=!parameter.noLabel />)
                 }
@@ -143,6 +154,37 @@ pub impl Comp {
         return functionId - 1U64
     }
 
+    // Placed provided copies prepend receiver binders to the source method's
+    // binders. A source-owned generator retains only its lexical signature;
+    // positional truncation would substitute the receiver argument for T.
+    inout fn defaultGeneratorTypeArguments(callee: U64, generator: U64, args: Array[U64]) -> Optional[Array[U64]] {
+        if callee >= self.arena.funcs.count() || generator >= self.arena.funcs.count() { return <Optional.None /> }
+        val source: FuncBindRange = self.arena.funcs[callee].typeParams
+        val target: FuncBindRange = self.arena.funcs[generator].typeParams
+        if args.count() != source.count() { return <Optional.None /> }
+        if source.start == target.start && source.len == target.len { return <Optional.Some v=args /> }
+        mut val projected: Array[U64] = []
+        mut val index: U64 = 0U64
+        while index < target.count() {
+            val parameter: Bind = self.funcBindAt(binds: target, index: index)
+            if parameter.paramId == 0U64 { return <Optional.None /> }
+            mut val value: U64 = 0U64
+            mut val matches: U64 = 0U64
+            mut val candidate: U64 = 0U64
+            while candidate < source.count() {
+                if self.funcBindAt(binds: source, index: candidate).paramId == parameter.paramId {
+                    value = args[candidate]
+                    matches += 1U64
+                }
+                candidate += 1U64
+            }
+            if matches != 1U64 || value == 0U64 { return <Optional.None /> }
+            projected.append(value)
+            index += 1U64
+        }
+        return <Optional.Some v=projected />
+    }
+
     // Prepare before semantic recording, after checking the authored defaults.
     // The caller must transfer default-expression ownership to these bodies
     // when enabling this phase; recording the same expression as both a parent
@@ -151,15 +193,18 @@ pub impl Comp {
         if self.decls.defaultGeneratorRanges.count() != 0U64 { return }
         val declarationLimit: U64 = self.arena.funcs.count()
         val boundLimit: U64 = self.decls.funcBounds.count()
+        mut val owners: Array[U64] = []
         mut val owner: U64 = 0U64
         while owner < declarationLimit {
             val source: Func = self.arena.funcs[owner]
+            val lexicalOwner: U64 = self.callTemplateBodyOwner(fnIdx: owner)
+            owners.append(lexicalOwner)
             val start: U64 = self.decls.defaultGeneratorFunctions.count()
             mut val parameterIndex: U64 = 0U64
             while parameterIndex < source.params.count() {
                 val parameter: Param = self.funcParamAt(params: source.params, index: parameterIndex)
                 mut val functionId: U64 = 0U64
-                if parameter.hasDefault {
+                if parameter.hasDefault && lexicalOwner == owner {
                     val generator: U64 = self.createDefaultArgumentGenerator(ownerFnIdx: owner, parameter: parameter)
                     functionId = generator + 1U64
                 }
@@ -169,16 +214,35 @@ pub impl Comp {
             self.decls.defaultGeneratorRanges.append(<DefaultGeneratorRange start=start len=source.params.count() />)
             owner += 1U64
         }
-        self.copyDefaultGeneratorBounds(boundLimit: boundLimit)
+        // All canonical rows exist before resolving aliases, including a
+        // placed copy which precedes its source declaration in the table.
+        owner = 0U64
+        while owner < declarationLimit {
+            val lexicalOwner: U64 = owners[owner]
+            if lexicalOwner != owner {
+                val destination: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[owner]
+                val source: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[lexicalOwner]
+                if destination.len != source.len {
+                    self.errorAt(offset: self.arena.funcs[owner].defOffset, msg: "internal error: provided default parameter shape differs from its source")
+                }
+                mut val parameterIndex: U64 = 0U64
+                while parameterIndex < destination.len {
+                    self.decls.defaultGeneratorFunctions.set(i: destination.start + parameterIndex, value: self.decls.defaultGeneratorFunctions[source.start + parameterIndex])
+                    parameterIndex += 1U64
+                }
+            }
+            owner += 1U64
+        }
+        self.copyDefaultGeneratorBounds(boundLimit: boundLimit, owners: owners)
     }
 
     // Walk authored bounds once, not once per generator. Each relevant row is
     // copied to the generator's function identity, retaining canonical binders.
-    inout fn copyDefaultGeneratorBounds(boundLimit: U64) {
+    inout fn copyDefaultGeneratorBounds(boundLimit: U64, owners: Array[U64]) {
         mut val index: U64 = 0U64
         while index < boundLimit {
             val bound: FuncBound = self.decls.funcBounds[index]
-            if bound.fnIdx < self.decls.defaultGeneratorRanges.count() {
+            if bound.fnIdx < owners.count() && owners[bound.fnIdx] == bound.fnIdx {
                 val range: DefaultGeneratorRange = self.decls.defaultGeneratorRanges[bound.fnIdx]
                 mut val parameterIndex: U64 = 0U64
                 while parameterIndex < range.len {

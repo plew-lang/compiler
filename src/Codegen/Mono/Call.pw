@@ -880,7 +880,7 @@ pub impl Comp {
             // A copied provided body still contains the source trait's
             // lexical `Self` ParamId.  Bind it here with the concrete
             // conformer, alongside ordinary method/receiver binders.
-            if f.isProvided && f.provTraitOwner != 0U64 {
+            if (f.isProvided || self.methodRecvIsTrait(f: f)) && f.provTraitOwner != 0U64 {
                 mut val ti: U64 = 0U64
                 while ti < self.decls.traits.count() {
                     val traitDef: TraitDef = self.decls.traits[ti]
@@ -1014,7 +1014,7 @@ pub impl Comp {
         // conformance that selected it.  Never materialize one with Missing
         // evidence; abstract checking records its template, while a concrete
         // call re-enters here with a reified proof.
-        if declaration.isProvided && self.proofIsMissing(proof: environment.proof) { return 0U64 }
+        if (declaration.isProvided || self.methodRecvIsTrait(f: declaration)) && self.proofIsMissing(proof: environment.proof) { return 0U64 }
         val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
         mut val i: U64 = 0U64
         while i < self.monoWork.bodyInstances.count() {

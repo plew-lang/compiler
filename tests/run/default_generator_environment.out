@@ -5,3 +5,5 @@ foreign-private-hidden
 free-binders
 provided-self-and-proof
 independent-value-abi
+abstract-source-self
+forward-source-owner

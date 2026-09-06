@@ -1069,10 +1069,12 @@ pub impl Comp {
     // Mono caller obtains the same output without borrowing Cursor state.
     inout fn bodyProvidedItemTerm(f: Func, environment: InstanceEnvironment) -> U64 {
         val declaration: Func = self.lexicalFunction(f: f)
-        if !(declaration.isProvided) { return 0U64 }
+        if !(declaration.isProvided) && !(self.methodRecvIsTrait(f: declaration)) { return 0U64 }
         val item: Bind = self.kwSpan(kw: "Item", kwLen: 4U64)
         val itemId: U64 = intern(c: inout self, start: item.nameStart, len: item.nameLen)
-        return self.associatedOutputInProof(proof: environment.proof, traitOwner: declaration.originTraitOwner, assocId: itemId)
+        mut val traitOwner: U64 = declaration.originTraitOwner
+        if traitOwner == 0U64 { traitOwner = declaration.provTraitOwner }
+        return self.associatedOutputInProof(proof: environment.proof, traitOwner: traitOwner, assocId: itemId)
     }
 
     inout fn clearSelfItemEnv() {
