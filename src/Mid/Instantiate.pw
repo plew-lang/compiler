@@ -8,7 +8,7 @@ import ../Frontend with { Comp }
 import ../Ir with { CallSiteKey, BodyInstance, Func, Param, TypeRef, CallResolution, CallReceiverPassing, CallArgumentPassing, FinalAggregateResolution, FinalReturnResolution, ValueConversionProof }
 import ../Diag with { eprintU64 }
 import @Std/Io with { eprint }
-import ./Ir with { MidRange, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
+import ./Ir with { MidRange, MidBodyNode, MidBlockNode, MidPlaceNode, MidProjectionNode, MidOperandNode, MidAggregateElementNode, MidStatementNode, MidTerminatorNode, MidSwitchCase, MidCallTargetNode, MidCallReceiverNode, MidCanonicalBody, MidProjection, MidPlace, MidBorrowCapability, MidConstant, MidOperand, MidAggregateKind, MidAggregateElement, MidRvalue, MidCastKind, MidCallTarget, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody }
 
 export enum MidInstantiateError {
     None
@@ -28,6 +28,7 @@ export enum MidInstantiateError {
     MissingFinalResolution
     InvalidFinalResolution
     InvalidLocalResultType
+    UnsupportedCanonicalCall
 }
 
 export struct MidInstantiation {
@@ -377,6 +378,53 @@ fn instantiateCanonicalCallReceiver(c: inout Comp, receiverId: U64, environment:
         _ => { return 0U64 }
     }
     return c.mid.callReceivers.count()
+}
+
+// The call-free subgraph validates the body-level append discipline before
+// call conversion cleanup grows blocks. Calls fail closed here; the completed
+// canonical instantiator replaces this boundary rather than falling back.
+export fn instantiateCanonicalMidWithoutCalls(c: inout Comp, body: MidCanonicalBody, bodyId: U64) -> MidCanonicalInstantiation {
+    if body.body == 0U64 || body.body > c.mid.bodies.count() || bodyId == 0U64 || bodyId > c.arena.bodyInstances.count() {
+        return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> />
+    }
+    val source: MidBodyNode = c.mid.bodies[body.body - 1U64]
+    val environment: BodyInstance = c.arena.bodyInstances[bodyId - 1U64]
+    if environment.fnIdx >= c.arena.funcs.count() { return <MidCanonicalInstantiation error=<MidInstantiateError.InvalidBodyInstance /> /> }
+    val itemRef: U64 = c.bodyProvidedItemTerm(f: c.arena.funcs[environment.fnIdx], environment: environment.environment)
+    val localStart: U64 = c.mid.locals.count()
+    mut val localI: U64 = 0U64
+    while localI < source.locals.len {
+        val local: MidLocalDecl = c.mid.locals[source.locals.start + localI]
+        c.mid.locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
+        localI = localI + 1U64
+    }
+    val scopeStart: U64 = c.mid.scopes.count()
+    mut val scopeI: U64 = 0U64
+    while scopeI < source.scopes.len {
+        c.mid.scopes.append(c.mid.scopes[source.scopes.start + scopeI])
+        scopeI = scopeI + 1U64
+    }
+    val blockStart: U64 = c.mid.blocks.count()
+    mut val error: MidInstantiateError = <MidInstantiateError.None />
+    mut val blockI: U64 = 0U64
+    while blockI < source.blocks.len {
+        val block: MidBlockNode = c.mid.blocks[source.blocks.start + blockI]
+        val statementStart: U64 = c.mid.statements.count()
+        mut val statementI: U64 = 0U64
+        while statementI < block.statements.len {
+            if !instantiateCanonicalStatement(c: inout c, statementId: block.statements.start + statementI + 1U64, environment: environment, bodyId: bodyId, itemRef: itemRef, error: inout error) {
+                return <MidCanonicalInstantiation error=error />
+            }
+            statementI = statementI + 1U64
+        }
+        val terminator: MidTerminatorNode = c.mid.terminators[block.terminator - 1U64]
+        if terminator.tag == 4U64 { return <MidCanonicalInstantiation error=<MidInstantiateError.UnsupportedCanonicalCall /> /> }
+        if !instantiateCanonicalNonCallTerminator(c: inout c, terminatorId: block.terminator, environment: environment, itemRef: itemRef) { return <MidCanonicalInstantiation error=error /> }
+        c.mid.blocks.append(<MidBlockNode statements=<MidRange start=statementStart len=block.statements.len /> terminator=c.mid.terminators.count() />)
+        blockI = blockI + 1U64
+    }
+    c.mid.bodies.append(<MidBodyNode bodyInstance=bodyId sourceFunction=source.sourceFunction locals=<MidRange start=localStart len=source.locals.len /> scopes=<MidRange start=scopeStart len=source.scopes.len /> blocks=<MidRange start=blockStart len=source.blocks.len /> entry=source.entry />)
+    return <MidCanonicalInstantiation body=<MidCanonicalBody body=c.mid.bodies.count() /> error=error />
 }
 
 fn midReceiverPassingMatches(callee: Func, passing: CallReceiverPassing) -> Bool {
