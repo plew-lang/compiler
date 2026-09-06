@@ -1682,6 +1682,11 @@ export struct EnumDef {
 export struct Func {
     pub val nameStart: U64
     pub val nameLen: U64
+    // One-based lexical declaration owner for an implementation-only body.
+    // Zero means this function owns its environment. The owner is canonical
+    // (not another forwarding row); it supplies scope/type/proof provenance,
+    // never value parameters, body identity, or source callable visibility.
+    pub val lexicalOwnerFnId: U64 = 0U64
     // interned ids (Phase C): name and (for methods/assoc) receiver type name.
     pub val nameId: U64 = 0
     pub val recvId: U64 = 0

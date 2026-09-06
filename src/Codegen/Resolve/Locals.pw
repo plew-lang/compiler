@@ -37,6 +37,11 @@ pub impl Comp {
     // module's globals remain visible — the narrow residual is a method reading another
     // module's private global, which needs a real per-Func decl offset to close).
     inout fn globalSeedModeFor(f: Func) -> U64 {
+        if f.lexicalOwnerFnId != 0U64 {
+            // A generated name has no source module. Its declaration owner
+            // does; do not reinterpret it as entry-module or ambient scope.
+            return self.moduleOf(offset: self.fnAnchor(f: self.lexicalFunction(f: f)))
+        }
         if f.hasRecv || f.isAssoc {
             return 4000000000U64
         }

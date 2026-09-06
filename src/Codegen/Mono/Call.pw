@@ -876,7 +876,7 @@ pub impl Comp {
         val canonicalRecv: U64 = self.canonicalBodyReceiverRef(fnIdx: fnIdx, recvInstRef: recvInstRef)
         mut val proof: StaticConformanceProof = <StaticConformanceProof.Missing />
         if fnIdx < self.arena.funcs.count() {
-            val f: Func = self.arena.funcs[fnIdx]
+            val f: Func = self.lexicalFunction(f: self.arena.funcs[fnIdx])
             // A copied provided body still contains the source trait's
             // lexical `Self` ParamId.  Bind it here with the concrete
             // conformer, alongside ordinary method/receiver binders.
@@ -1003,8 +1003,9 @@ pub impl Comp {
         // T only when this final CallTemplate edge is grounded. Check exactly
         // here, before the instance becomes reachable by LLVM.
         val environment: InstanceEnvironment = self.bodyInstanceEnvironment(fnIdx: fnIdx, args: args, recvInstRef: recvInstRef, selectedProof: selectedProof)
-        if f.hasRecv && environment.receiverRef != 0U64 {
-            self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: f, args: args, instRef: environment.receiverRef)
+        val declaration: Func = self.lexicalFunction(f: f)
+        if declaration.hasRecv && environment.receiverRef != 0U64 {
+            self.checkOneMethodReceiverBounds(fnIdx: fnIdx, f: declaration, args: args, instRef: environment.receiverRef)
         } else if f.typeParams.count() > 0U64 && args.count() == f.typeParams.count() && self.fnArgsAllGround(args: args) {
             self.checkOneFnInstBounds(fin: <FnInst fnIdx=fnIdx args=args recvInstRef=recvInstRef />)
         }
@@ -1013,7 +1014,7 @@ pub impl Comp {
         // conformance that selected it.  Never materialize one with Missing
         // evidence; abstract checking records its template, while a concrete
         // call re-enters here with a reified proof.
-        if f.isProvided && self.proofIsMissing(proof: environment.proof) { return 0U64 }
+        if declaration.isProvided && self.proofIsMissing(proof: environment.proof) { return 0U64 }
         val bodyId: U64 = self.internBodyInstance(fnIdx: fnIdx, environment: environment)
         mut val i: U64 = 0U64
         while i < self.monoWork.bodyInstances.count() {

@@ -1,0 +1,7 @@
+source-module
+generator-module
+private-global-visible
+foreign-private-hidden
+free-binders
+provided-self-and-proof
+independent-value-abi

@@ -2,6 +2,20 @@
 
 pub impl Comp {
 
+    inout fn lexicalFunction(f: Func) -> Func {
+        if f.lexicalOwnerFnId == 0U64 { return f }
+        val owner: U64 = f.lexicalOwnerFnId - 1U64
+        if owner >= self.arena.funcs.count() {
+            self.errorAt(offset: f.defOffset, msg: "internal error: lexical function owner is missing")
+            return f
+        }
+        val declaration: Func = self.arena.funcs[owner]
+        if declaration.lexicalOwnerFnId != 0U64 {
+            self.errorAt(offset: f.defOffset, msg: "internal error: lexical function owner is not canonical")
+        }
+        return declaration
+    }
+
     inout fn nameIsMain(f: Func) -> Bool {
         if f.hasRecv {
             return false
@@ -23,13 +37,14 @@ pub impl Comp {
     }
 
     inout fn methodRecvIsTrait(f: Func) -> Bool {
-        if f.hasRecv {
+        val declaration: Func = self.lexicalFunction(f: f)
+        if declaration.hasRecv {
             // Provenance and receiver kind are distinct.  A generated
             // concrete witness retains `provTraitOwner` so proof-driven
             // dispatch can identify its trait origin, but its receiver is
             // still the concrete type.  Only the receiver declaration itself
             // decides whether this is an abstract trait method.
-            return self.traitModuleByIdArity(traitId: f.recvId, arity: f.provTraitArity) != 4000000000U64
+            return self.traitModuleByIdArity(traitId: declaration.recvId, arity: declaration.provTraitArity) != 4000000000U64
         }
         return false
     }

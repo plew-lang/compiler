@@ -1,0 +1,47 @@
+import @Std/Io with { write }
+import /Frontend with { Comp }
+import /Ir with { Bind, Expr, Func, Param, StaticConformanceProof, TraitDef }
+
+fn main() {
+    mut val c: Comp = <Comp />
+    val unit = c.kwSpan(kw: "", kwLen: 0U64)
+    val unitTerm = c.simpleTypeRef(nameStart: unit.nameStart, nameLen: unit.nameLen)
+    val integer = c.kwSpan(kw: "I64", kwLen: 3U64)
+    val term = c.simpleTypeRef(nameStart: integer.nameStart, nameLen: integer.nameLen)
+    val name = c.internTmpName(prefix: "declaration", n: 0U64)
+    c.modules.ranges.append(<Bind nameStart=name.nameStart nameLen=name.nameLen fieldStart=7U64 fieldLen=0U64 />)
+    val traitName = c.internTmpName(prefix: "Trait", n: 0U64)
+    c.decls.traits.append(<TraitDef nameStart=traitName.nameStart nameLen=traitName.nameLen nameId=traitName.nameId selfParamId=81U64 />)
+    val binds = c.pushFuncBinds(binds: [<Bind nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId paramId=71U64 fieldStart=0U64 fieldLen=0U64 />])
+    val expression = c.pushExpr(e: <Expr.Int value=7U64 offset=0U64 isBool=false tyStart=integer.nameStart tyLen=integer.nameLen isNeg=false />)
+    val parameters = c.pushFuncParams(params: [<Param nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+        tyStart=integer.nameStart tyLen=integer.nameLen tyIsArray=false ty=term
+        isInout=false isMove=false isBorrow=false noLabel=false hasDefault=true defaultExpr=expression />])
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=binds params=parameters
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unitTerm body=0U64
+        hasRecv=false recvStart=0U64 recvLen=0U64 selfInout=false selfMove=false
+        isAssoc=false isAsync=false isExtern=false />)
+    c.arena.funcs.append(<Func nameStart=name.nameStart nameLen=name.nameLen typeParams=binds params=parameters
+        hasRet=false retStart=0U64 retLen=0U64 retIsArray=false retTy=unitTerm body=0U64
+        hasRecv=true recvStart=integer.nameStart recvLen=integer.nameLen recvTy=term
+        selfInout=false selfMove=false isAssoc=false isAsync=false isExtern=false
+        isProvided=true provTraitOwner=traitName.nameStart />)
+    c.prepareDefaultArgumentGenerators()
+    val free = c.defaultArgumentGenerator(ownerFnIdx: 0U64, parameterIndex: 0U64)
+    val provided = c.defaultArgumentGenerator(ownerFnIdx: 1U64, parameterIndex: 0U64)
+    if c.globalSeedModeFor(f: c.arena.funcs[0U64]) == 7U64 { write(s: "source-module\n") }
+    val generatorModule = c.globalSeedModeFor(f: c.arena.funcs[free])
+    if generatorModule == 7U64 { write(s: "generator-module\n") }
+    if c.globalVisibleFrom(useMod: generatorModule, gMod: 7U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "private-global-visible\n") }
+    if !c.globalVisibleFrom(useMod: generatorModule, gMod: 8U64, nameStart: name.nameStart, nameLen: name.nameLen) { write(s: "foreign-private-hidden\n") }
+    val sourceEnv = c.bodyInstanceEnvironment(fnIdx: 0U64, args: [term], recvInstRef: 0U64)
+    val generatorEnv = c.bodyInstanceEnvironment(fnIdx: free, args: [term], recvInstRef: 0U64)
+    if c.sameInstanceEnvironment(a: sourceEnv, b: generatorEnv) { write(s: "free-binders\n") }
+    // Test environment transport, not entailment: a selected abstract proof
+    // is passed through unchanged and the lexical Self ParamId is bound.
+    val proof: StaticConformanceProof = <StaticConformanceProof.AssumedBound boundIdx=0U64 />
+    val providedEnv = c.bodyInstanceEnvironment(fnIdx: 1U64, args: [term], recvInstRef: term, selectedProof: proof)
+    val defaultEnv = c.bodyInstanceEnvironment(fnIdx: provided, args: [term], recvInstRef: term, selectedProof: proof)
+    if providedEnv.params.count() == 2U64 && c.sameInstanceEnvironment(a: providedEnv, b: defaultEnv) { write(s: "provided-self-and-proof\n") }
+    if !c.arena.funcs[provided].hasRecv && !c.arena.funcs[provided].isProvided { write(s: "independent-value-abi\n") }
+}

@@ -160,7 +160,7 @@ pub impl Comp {
                 val parameter: Param = self.funcParamAt(params: source.params, index: parameterIndex)
                 mut val functionId: U64 = 0U64
                 if parameter.hasDefault {
-                    val generator: U64 = self.createDefaultArgumentGenerator(source: source, parameter: parameter)
+                    val generator: U64 = self.createDefaultArgumentGenerator(ownerFnIdx: owner, parameter: parameter)
                     functionId = generator + 1U64
                 }
                 self.decls.defaultGeneratorFunctions.append(functionId)
@@ -193,7 +193,10 @@ pub impl Comp {
         }
     }
 
-    inout fn createDefaultArgumentGenerator(source: Func, parameter: Param) -> U64 {
+    inout fn createDefaultArgumentGenerator(ownerFnIdx: U64, parameter: Param) -> U64 {
+        val source: Func = self.arena.funcs[ownerFnIdx]
+        mut val lexicalOwner: U64 = source.lexicalOwnerFnId
+        if lexicalOwner == 0U64 { lexicalOwner = ownerFnIdx + 1U64 }
         val functionIdx: U64 = self.arena.funcs.count()
         // This spelling is diagnostic/mangling only. Selection uses the
         // owner/parameter table above, never a source-visible name lookup.
@@ -202,6 +205,7 @@ pub impl Comp {
         val body: U64 = self.pushBlock(stmts: [returned])
         val generator: Func = <Func
             nameStart=name.nameStart nameLen=name.nameLen nameId=name.nameId
+            lexicalOwnerFnId=lexicalOwner
             typeParams=source.typeParams
             hasRet=true retStart=parameter.tyStart retLen=parameter.tyLen
             retIsArray=parameter.tyIsArray retTy=parameter.ty body=body

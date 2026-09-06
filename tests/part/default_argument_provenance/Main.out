@@ -4,3 +4,5 @@ default
 declaration
 caller
 explicit-value
+declaration-global
+caller-global

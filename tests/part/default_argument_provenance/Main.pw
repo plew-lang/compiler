@@ -1,5 +1,7 @@
 import @Std/Io with { print, write }
-import ./Defaults with { choose }
+import ./Defaults with { choose, chooseGlobal }
+
+val secret: String = "caller-global"
 
 fn message() -> String {
     write(s: "caller\n")
@@ -10,6 +12,8 @@ fn exercise() {
     print(choose())
     print(choose())
     print(choose(value: message()))
+    print(chooseGlobal())
+    print(chooseGlobal(value: secret))
 }
 
 fn main() { exercise() }

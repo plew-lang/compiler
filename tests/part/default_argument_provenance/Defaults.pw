@@ -6,3 +6,6 @@ fn message() -> String {
 }
 
 export fn choose(value: String = message()) -> String { return value }
+
+val secret: String = "declaration-global"
+export fn chooseGlobal(value: String = secret) -> String { return value }
