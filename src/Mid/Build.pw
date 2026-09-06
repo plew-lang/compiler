@@ -303,6 +303,44 @@ fn midTerminatorIsOpen(terminator: MidTerminator) -> Bool {
     match terminator { MidTerminator.Open => { return true } _ => { return false } }
 }
 
+fn midOperandIsTrue(operand: MidOperand) -> Bool {
+    match operand {
+        MidOperand.Constant(value: val value) => {
+            match value {
+                MidConstant.Integer(value: val value, isNegative: val negative, isBool: val isBool, typeTerm: _) => { return isBool && !negative && value == 1U64 }
+                _ => { return false }
+            }
+        }
+        _ => { return false }
+    }
+}
+
+// Builder-time reachability for freshly constructed CFG edges. This is used
+// only to close a structurally retained block that has no predecessor; it does
+// not perform value-range analysis or replace the ownership verifier's CFG
+// dataflow.
+fn midBlockHasIncoming(state: MidBuildState, target: U64) -> Bool {
+    mut val block: U64 = 0U64
+    while block < state.blocks.count() {
+        match state.blocks[block].terminator {
+            MidTerminator.Goto(target: val edge) => { if edge == target { return true } }
+            MidTerminator.Switch(discriminant: _, values: _, targets: val edges, otherwise: val otherwise) => {
+                if otherwise == target { return true }
+                mut val edgeIndex: U64 = 0U64
+                while edgeIndex < edges.count() {
+                    if edges[edgeIndex] == target { return true }
+                    edgeIndex += 1U64
+                }
+            }
+            MidTerminator.Call(callee: _, receiver: _, args: _, destination: _, target: val edge) => { if edge == target { return true } }
+            MidTerminator.Suspend(state: _, resume: val edge) => { if edge == target { return true } }
+            _ => {}
+        }
+        block += 1U64
+    }
+    return false
+}
+
 fn midNewBlock(state: inout MidBuildState) -> U64 {
     val index: U64 = state.blocks.count()
     state.blocks.append(<MidBlock />)
@@ -1540,7 +1578,14 @@ export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
             state.currentBlock = headerTarget
             val condition: MidOperandBuild = materializeMidCondition(c: inout c, state: inout state, exprId: cond)
             match condition.error { MidBuildError.None => {} _ => { return condition.error } }
-            midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[bodyTarget] otherwise=exitTarget />)
+            if midOperandIsTrue(operand: condition.operand) {
+                // A literal true has no false control edge. Keep the exit block
+                // for an authored `break`, but do not invent an unreachable
+                // Switch successor that later looks like source fallthrough.
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=bodyTarget />)
+            } else {
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Switch discriminant=condition.operand values=[1I64] targets=[bodyTarget] otherwise=exitTarget />)
+            }
             state.currentBlock = bodyTarget
             state.pushLoopTarget(breakTarget: exitTarget, continueTarget: headerTarget, enclosingScope: state.currentScope)
             val bodyResult: MidBuildError = buildMidBlock(c: inout c, state: inout state, blockId: body)
@@ -1550,6 +1595,9 @@ export fn buildMidWhile(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
                 midSetTerminator(state: inout state, terminator: <MidTerminator.Goto target=headerTarget />)
             }
             state.currentBlock = exitTarget
+            if !midBlockHasIncoming(state: state, target: exitTarget) {
+                midSetTerminator(state: inout state, terminator: <MidTerminator.Unreachable />)
+            }
             return <MidBuildError.None />
         }
         _ => { return <MidBuildError.InvalidStatement /> }

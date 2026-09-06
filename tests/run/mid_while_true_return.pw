@@ -1,0 +1,11 @@
+import @Std/Io with { print }
+
+fn select() -> I64 {
+    while true {
+        return 7
+    }
+}
+
+fn main() {
+    print(select())
+}
