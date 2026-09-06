@@ -2,7 +2,7 @@
 // dataflow, never source AST or LLVM state. Backend entry will call it before
 // lowering once Mid bodies become the production input.
 
-import ./Ir with { MidPlace, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
+import ./Ir with { MidPlace, MidProjection, MidOperand, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBody, MidOwnership }
 import ./Drop with { analyzeMidOwnership, midSuccessors }
 
 export enum MidVerifyError {
@@ -215,25 +215,64 @@ export fn verifyMidBody(body: MidBody) -> MidVerification {
                     }
                 }
                 MidStatement.Overwrite(destination: val destination, source: val source) => {
-                    if destination.projections.count() != 0U64 || source.projections.count() != 0U64 || destination.local >= states.count() || source.local >= states.count() || destination.local == source.local {
+                    mut val physicalFieldPath: Bool = true
+                    mut val projection: U64 = 0U64
+                    while projection < destination.projections.count() {
+                        match destination.projections[projection] {
+                            MidProjection.Field(index: _, typeTerm: _) => {}
+                            _ => { physicalFieldPath = false }
+                        }
+                        projection += 1U64
+                    }
+                    if !physicalFieldPath || source.projections.count() != 0U64 || destination.local >= states.count() || source.local >= states.count() || destination.local == source.local || destination.typeTerm == 0U64 || destination.typeTerm != body.locals[source.local].typeTerm {
                         return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local />
                     }
                     match states[source.local] {
                         MidOwnership.Owned => { states.set(i: source.local, value: <MidOwnership.Consumed />) }
                         _ => { return <MidVerification error=<MidVerifyError.MoveUnavailable /> block=bi local=source.local /> }
                     }
-                    match states[destination.local] {
-                        MidOwnership.MaybeOwned => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local /> }
-                        _ => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                    if destination.projections.count() == 0U64 {
+                        match states[destination.local] {
+                            MidOwnership.MaybeOwned => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local /> }
+                            _ => { states.set(i: destination.local, value: <MidOwnership.Owned />) }
+                        }
+                    } else {
+                        // A projected overwrite replaces storage already
+                        // owned by its root; it is not partial initialization.
+                        // Keep the root state unchanged, but reject a path
+                        // where its field would be read/dropped after a move.
+                        match states[destination.local] {
+                            MidOwnership.Owned => {}
+                            _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=destination.local /> }
+                        }
                     }
                 }
                 MidStatement.Drop(place: val place) => {
-                    if place.projections.count() != 0U64 || place.local >= states.count() {
+                    mut val physicalFieldPath: Bool = true
+                    mut val projection: U64 = 0U64
+                    while projection < place.projections.count() {
+                        match place.projections[projection] {
+                            MidProjection.Field(index: _, typeTerm: _) => {}
+                            _ => { physicalFieldPath = false }
+                        }
+                        projection += 1U64
+                    }
+                    if !physicalFieldPath || place.local >= states.count() {
                         return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local />
                     }
-                    match states[place.local] {
-                        MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
-                        _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local /> }
+                    if place.projections.count() == 0U64 {
+                        match states[place.local] {
+                            MidOwnership.Owned => { states.set(i: place.local, value: <MidOwnership.Consumed />) }
+                            _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local /> }
+                        }
+                    } else {
+                        // A field Drop consumes only the subvalue. The root
+                        // remains the owning storage and must itself still be
+                        // valid on every incoming path.
+                        match states[place.local] {
+                            MidOwnership.Owned => {}
+                            _ => { return <MidVerification error=<MidVerifyError.DropUnavailable /> block=bi local=place.local /> }
+                        }
                     }
                 }
                 MidStatement.ConditionalDrop(place: val place, flag: val flag) => {

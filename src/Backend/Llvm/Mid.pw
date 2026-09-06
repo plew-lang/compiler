@@ -850,12 +850,30 @@ pub impl LlvmCtx {
                         }
                     }
                     MidStatement.Overwrite(destination: val destination, source: val source) => {
-                        if destination.projections.count() != 0U64 || source.projections.count() != 0U64 || destination.local >= body.locals.count() || source.local >= body.locals.count() {
+                        mut val physicalFieldPath: Bool = true
+                        mut val projection: U64 = 0U64
+                        while projection < destination.projections.count() {
+                            match destination.projections[projection] {
+                                MidProjection.Field(index: _, typeTerm: _) => {}
+                                _ => { physicalFieldPath = false }
+                            }
+                            projection += 1U64
+                        }
+                        if !physicalFieldPath || source.projections.count() != 0U64 || destination.local >= body.locals.count() || source.local >= body.locals.count() {
                             return <MidLlvmPreflight.AssignmentProjection />
                         }
                     }
                     MidStatement.Drop(place: val place) => {
-                        if place.projections.count() != 0U64 { return <MidLlvmPreflight.DropProjection /> }
+                        mut val physicalFieldPath: Bool = true
+                        mut val projection: U64 = 0U64
+                        while projection < place.projections.count() {
+                            match place.projections[projection] {
+                                MidProjection.Field(index: _, typeTerm: _) => {}
+                                _ => { physicalFieldPath = false }
+                            }
+                            projection += 1U64
+                        }
+                        if !physicalFieldPath { return <MidLlvmPreflight.DropProjection /> }
                     }
                     MidStatement.ConditionalDrop(place: val place, flag: _) => {
                         if place.projections.count() != 0U64 { return <MidLlvmPreflight.DropProjection /> }
@@ -1715,9 +1733,18 @@ pub impl LlvmCtx {
     }
 
     inout fn midEmitDrop(c: inout Comp, body: MidBody, place: MidPlace) {
-        if place.local >= body.locals.count() || place.projections.count() != 0U64 { return }
-        val typeRef: U64 = body.locals[place.local].typeTerm
-        val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midLocalTy(c: inout c, body: body, local: place.local), self.midLocalPtr(body: body, local: place.local), anon())
+        mut val physicalFieldPath: Bool = true
+        mut val projection: U64 = 0U64
+        while projection < place.projections.count() {
+            match place.projections[projection] {
+                MidProjection.Field(index: _, typeTerm: _) => {}
+                _ => { physicalFieldPath = false }
+            }
+            projection += 1U64
+        }
+        if place.local >= body.locals.count() || !physicalFieldPath { return }
+        val typeRef: U64 = place.typeTerm
+        val value: LLVMValueRef = LLVMBuildLoad2(self.b, self.midPlaceTy(c: inout c, body: body, place: place), self.midPlacePtr(c: inout c, body: body, place: place), anon())
         self.valueArc(c: inout c, v: value, typeRef: typeRef, retain: false)
     }
 
@@ -2068,9 +2095,9 @@ pub impl LlvmCtx {
                 }
             }
             MidStatement.Overwrite(destination: val destination, source: val source) => {
-                val ty: LLVMTypeRef = self.midLocalTy(c: inout c, body: body, local: destination.local)
+                val ty: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: destination)
                 val value: LLVMValueRef = LLVMBuildLoad2(self.b, ty, self.midLocalPtr(body: body, local: source.local), anon())
-                LLVMBuildStore(self.b, value, self.midLocalPtr(body: body, local: destination.local))
+                LLVMBuildStore(self.b, value, self.midPlacePtr(c: inout c, body: body, place: destination))
             }
             MidStatement.Drop(place: val place) => { self.midEmitDrop(c: inout c, body: body, place: place) }
             MidStatement.ConditionalDrop(place: val place, flag: val flag) => { self.midEmitConditionalDrop(c: inout c, body: body, place: place, flag: flag) }

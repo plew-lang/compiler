@@ -146,6 +146,14 @@ else
     fail=$((fail + 1)); failed="$failed mid-owned-conversion"
 fi
 
+# A direct struct field store is physical Mid Place storage, not an index
+# access/writeback. Keep its ownership drop/store path out of legacy lowering.
+if sh ./test-mid-field-overwrite.sh; then
+    :
+else
+    fail=$((fail + 1)); failed="$failed mid-field-overwrite"
+fi
+
 # --- Mid migration coverage: `--emit-mid-coverage` is observational, while
 # `--require-mid` is the fail-closed gate over exactly the same frozen body
 # instances.  This deliberately does not pin a permanent legacy fallback: as

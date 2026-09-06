@@ -1,0 +1,61 @@
+// A physical field place is distinct from indexed get-modify-set access.
+// Mid must lower this physical field replacement without delegating the
+// function to the legacy emitter. Ownership-sensitive fields are covered once
+// the place operation itself is established.
+import @Std/Io with { print }
+
+val midFieldOverwriteAnchor: I64 = 0I64
+
+struct Holder { pub mut val value: I64 }
+pub impl Holder { factory }
+
+struct StringHolder { pub mut val value: String }
+pub impl StringHolder { factory }
+
+struct NestedHolder { pub mut val value: String }
+pub impl NestedHolder { factory }
+
+struct OuterHolder { pub mut val nested: NestedHolder }
+pub impl OuterHolder { factory }
+
+fn replaceField() {
+    mut val holder: Holder = <Holder value=1I64 />
+    holder.value = 42I64
+    print(holder.value)
+}
+
+fn replaceOwnedField() {
+    mut val holder: StringHolder = <StringHolder value="before" />
+    holder.value = "after"
+    // The Drop inserted for `holder.value` releases the old ARC value before
+    // overwrite; the replacement remains owned by the root until scope exit.
+    print(holder.value)
+}
+
+fn replaceNestedOwnedField() {
+    mut val holder: OuterHolder = <OuterHolder nested=<NestedHolder value="nested-before" /> />
+    holder.nested.value = "nested-after"
+    // Every projection here is a physical field slot. The old inner String
+    // must be released before the new value occupies that same slot.
+    print(holder.nested.value)
+}
+
+fn replacement() -> String {
+    print("make-replacement")
+    return "call-after"
+}
+
+fn replaceCallOwnedField() {
+    mut val holder: StringHolder = <StringHolder value="call-before" />
+    // The RHS call completes before Drop(holder.value) and Overwrite. This is
+    // observable even though String's retain/release itself is not.
+    holder.value = replacement()
+    print(holder.value)
+}
+
+fn main() {
+    replaceField()
+    replaceOwnedField()
+    replaceNestedOwnedField()
+    replaceCallOwnedField()
+}

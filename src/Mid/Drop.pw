@@ -3,7 +3,7 @@
 // this pass computes their ownership consequences for drop elaboration and the
 // always-on verifier.
 
-import ./Ir with { MidPlace, MidOperand, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
+import ./Ir with { MidPlace, MidProjection, MidOperand, MidAggregateElement, MidRvalue, MidCallReceiver, MidStatement, MidTerminator, MidBlock, MidLocalDecl, MidScope, MidBody, MidOwnership, MidAccessibility }
 
 fn midScopeFirst(body: MidBody, scope: U64) -> U64 {
     if scope >= body.scopes.count() { return body.locals.count() }
@@ -679,6 +679,23 @@ export fn elaborateMidDrops(body: MidBody) -> MidBody {
                                 }
                             }
                             _ => {}
+                        }
+                    } else {
+                        mut val physicalFieldPath: Bool = true
+                        mut val projection: U64 = 0U64
+                        while projection < destination.projections.count() {
+                            match destination.projections[projection] {
+                                MidProjection.Field(index: _, typeTerm: _) => {}
+                                _ => { physicalFieldPath = false }
+                            }
+                            projection += 1U64
+                        }
+                        if physicalFieldPath {
+                            // A field overwrite replaces an owned subvalue while
+                            // retaining ownership of its root. The source was
+                            // materialized before this point, so this explicit
+                            // projection Drop preserves RHS-before-destruction.
+                            statements.append(<MidStatement.Drop place=destination />)
                         }
                     }
                     statements.append(statement)

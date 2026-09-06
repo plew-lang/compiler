@@ -1116,8 +1116,9 @@ export fn buildMidLet(c: inout Comp, state: inout MidBuildState, stmtId: U64) ->
 // consuming replacement explicit.  In particular this preserves the source
 // order of `value = value` and `value = make(value)`: neither backend lowering
 // nor drop elaboration may decide to destroy `value` before RHS evaluation.
-// Projection writes deliberately remain SemanticAccess work; treating one as
-// a root store here would bypass its selected getter/setter/writeback proof.
+// A direct field path is physical storage and keeps its selected field slots
+// in Mid. Index paths deliberately remain SemanticAccess work: treating one
+// as a raw store here would bypass its getter/setter/writeback and CoW proof.
 export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64) -> MidBuildError {
     if stmtId >= c.arena.stmts.count() { return <MidBuildError.InvalidStatement /> }
     match c.arena.stmts[stmtId] {
@@ -1125,7 +1126,16 @@ export fn buildMidAssign(c: inout Comp, state: inout MidBuildState, stmtId: U64)
             val term: U64 = c.semanticExprTerm(exprId: target)
             if term == 0U64 { return <MidBuildError.MissingSemanticType /> }
             val destinationLookup: MidPlaceLookup = midPlaceForSourceExpr(c: inout c, state: inout state, exprId: target, typeTerm: term)
-            if !destinationLookup.found || destinationLookup.place.projections.count() != 0U64 {
+            mut val physicalFieldPath: Bool = true
+            mut val projection: U64 = 0U64
+            while projection < destinationLookup.place.projections.count() {
+                match destinationLookup.place.projections[projection] {
+                    MidProjection.Field(index: _, typeTerm: _) => {}
+                    _ => { physicalFieldPath = false }
+                }
+                projection += 1U64
+            }
+            if !destinationLookup.found || !physicalFieldPath {
                 return <MidBuildError.UnsupportedAssign />
             }
             val temporaryLocal: U64 = addMidTemporary(state: inout state, typeTerm: term)
@@ -1400,6 +1410,12 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
                         traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "unique-payload")
                         return <MidBuildError.UnsupportedMatch />
                     }
+                    // ARC payloads remain borrowed from the matched enum for
+                    // the arm's lexical lifetime. A subsequent value use of
+                    // this local is represented as MidOperand.Copy and gains
+                    // its own ARC share there; eagerly copying the payload at
+                    // every pattern binding would make the representation
+                    // needlessly expensive and duplicate the source owner.
                     val isBorrowed: Bool = c.arcNeedsRelease(ref: payload.fieldTerm)
                     val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: isBorrowed)
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
