@@ -1,0 +1,13 @@
+// The Process runtime ABI is chosen by its bundled declaration, not a source
+// spelling. The exit edge is unreachable at runtime but remains compiled.
+import @Std/Process with { argCount, argAt, exit, execOut, execCode }
+
+fn main() {
+    val count = argCount()
+    val first = argAt(0I64)
+    val output = execOut(cmd: "")
+    val code = execCode()
+    if count < 0I64 {
+        exit(code: 0I64)
+    }
+}

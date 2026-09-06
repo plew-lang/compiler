@@ -204,6 +204,38 @@ pub impl LlvmCtx {
         }
     }
 
+    inout fn genProcessRuntimeIntrinsic(c: inout Comp, intrinsic: ProcessIntrinsic, args: ArgRange) -> LLVMValueRef {
+        match intrinsic {
+            ProcessIntrinsic.ArgCount => {
+                mut val p: Array[LLVMTypeRef] = []
+                val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+            }
+            ProcessIntrinsic.ArgAt => {
+                mut val p: Array[LLVMTypeRef] = []
+                p.append(self.i64ty)
+                val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 1U64, 0I32)
+                mut val values: Array[LLVMValueRef] = []
+                values.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argAt", nameId: 51U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+            }
+            ProcessIntrinsic.Exit => {
+                mut val p: Array[LLVMTypeRef] = []
+                p.append(self.i64ty)
+                val ty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(p), 1U64, 0I32)
+                mut val values: Array[LLVMValueRef] = []
+                values.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_exit", nameId: 1U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+            }
+            ProcessIntrinsic.ExecOut => { return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr) }
+            ProcessIntrinsic.ExecCode => {
+                mut val p: Array[LLVMTypeRef] = []
+                val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
+                return LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_execCode", nameId: 71U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+            }
+        }
+    }
+
     // The legacy AST emitter still evaluates source operands, but the selected
     // FFI operation is a frozen enum. This is the compatibility counterpart of
     // Mid's Ffi lowering, not a source-name dispatch.
@@ -271,17 +303,7 @@ pub impl LlvmCtx {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
                         RuntimeIntrinsic.Io(intrinsic: val io) => { return self.genIoRuntimeIntrinsic(c: inout c, intrinsic: io, args: args) }
-                        RuntimeIntrinsic.ArgCount => {
-                            if args.len != 0U64 {
-                                c.errorAt(offset: nameStart, msg: "internal error: argCount runtime intrinsic has an invalid ABI arity")
-                                return LLVMConstInt(self.i64ty, 0U64, 0I32)
-                            }
-                            mut val ptys: Array[LLVMTypeRef] = []
-                            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-                            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: fty)
-                            mut val av: Array[LLVMValueRef] = []
-                            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
-                        }
+                        RuntimeIntrinsic.Process(intrinsic: val process) => { return self.genProcessRuntimeIntrinsic(c: inout c, intrinsic: process, args: args) }
                         RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
                             return self.genFfiRuntimeIntrinsic(c: inout c, intrinsic: ffi, args: args)
                         }
@@ -401,16 +423,6 @@ pub impl LlvmCtx {
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
-        // @Std/Process argAt(i: I64) -> String (strty {ptr,i64}).
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "argAt") {
-            mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(self.i64ty)
-            val fty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(ptys), 1U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argAt", nameId: 51U64, fnTy: fty)
-            mut val av: Array[LLVMValueRef] = []
-            av.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false))
-            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
-        }
         // @Std/Random entropyU64() -> U64: a fresh 64-bit value from the OS entropy
         // source (the seed for the in-language PRNG).
         if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "entropyU64") {
@@ -485,19 +497,6 @@ pub impl LlvmCtx {
             mut val ptys: Array[LLVMTypeRef] = []
             val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
             val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_dict_seed", nameId: 53U64, fnTy: fty)
-            mut val av: Array[LLVMValueRef] = []
-            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
-        }
-        // @Std/Process execOut(cmd: String) -> String: run `sh -c cmd`, capture stdout
-        // (the cmd String is a {ptr,i64} value, same path-intrinsic shape).
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "execOut") {
-            return self.emitPathStrIntrinsic(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.stringLlvmTy(c: inout c), pathExpr: c.argAt(args: args, index: 0U64).expr)
-        }
-        // execCode() -> I64: the exit status of the last execOut.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "execCode") {
-            mut val ptys: Array[LLVMTypeRef] = []
-            val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_execCode", nameId: 71U64, fnTy: fty)
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
@@ -592,16 +591,6 @@ pub impl LlvmCtx {
             LLVMBuildUnreachable(self.b)
             LLVMPositionBuilderAtEnd(self.b, okBB)
             return LLVMConstInt(self.i64ty, 0U64, 0I32)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "exit") {
-            // void plew_exit(i64): truncate-free (the code is already i64), then call.
-            mut val ptys: Array[LLVMTypeRef] = []
-            ptys.append(self.i64ty)
-            val fty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(ptys), 1U64, 0I32)
-            val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_exit", nameId: 1U64, fnTy: fty)
-            mut val av: Array[LLVMValueRef] = []
-            av.append(self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: self.valueKind(c: inout c, id: c.argAt(args: args, index: 0U64).expr) == 3U64))
-            return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 1U64, anon())
         }
         }
         // A resolved non-extern Plew fn (user or std) was already emitted by identity at the

@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -1964,7 +1964,20 @@ pub impl Comp {
                                     _ => {}
                                 }
                             }
-                            RuntimeIntrinsic.ArgCount => { match other { RuntimeIntrinsic.ArgCount => { return true } _ => {} } }
+                            RuntimeIntrinsic.Process(intrinsic: val left) => {
+                                match other {
+                                    RuntimeIntrinsic.Process(intrinsic: val right) => {
+                                        match left {
+                                            ProcessIntrinsic.ArgCount => { match right { ProcessIntrinsic.ArgCount => { return true } _ => {} } }
+                                            ProcessIntrinsic.ArgAt => { match right { ProcessIntrinsic.ArgAt => { return true } _ => {} } }
+                                            ProcessIntrinsic.Exit => { match right { ProcessIntrinsic.Exit => { return true } _ => {} } }
+                                            ProcessIntrinsic.ExecOut => { match right { ProcessIntrinsic.ExecOut => { return true } _ => {} } }
+                                            ProcessIntrinsic.ExecCode => { match right { ProcessIntrinsic.ExecCode => { return true } _ => {} } }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
                             RuntimeIntrinsic.Ffi(intrinsic: val left) => {
                                 match other {
                                     RuntimeIntrinsic.Ffi(intrinsic: val right) => {

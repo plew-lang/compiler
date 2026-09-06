@@ -540,8 +540,19 @@ pub impl LlvmCtx {
             match selected.target {
                 CallTarget.RuntimeIntrinsic(intrinsic: val intrinsic) => {
                     match intrinsic {
-                        RuntimeIntrinsic.ArgCount => {
-                            if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> }
+                        RuntimeIntrinsic.Process(intrinsic: val process) => {
+                            match process {
+                                ProcessIntrinsic.ArgCount => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                ProcessIntrinsic.ArgAt => { if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                ProcessIntrinsic.Exit => { if callee.hasRet || args.count() != 1U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                ProcessIntrinsic.ExecOut => { if !callee.hasRet || args.count() != 1U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                                ProcessIntrinsic.ExecCode => { if !callee.hasRet || args.count() != 0U64 || destination.projections.count() != 0U64 { return <MidCallPreflight.RuntimeAbi /> } }
+                            }
+                            mut val i: U64 = 0U64
+                            while i < args.count() {
+                                if !(self.midReadOperandSupported(c: inout c, body: body, operand: args[i])) { return <MidCallPreflight.Argument /> }
+                                i += 1U64
+                            }
                         }
                         RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {
                             match ffi {
@@ -937,13 +948,42 @@ pub impl LlvmCtx {
                     }
                     return true
                 }
-                RuntimeIntrinsic.ArgCount => {
-                    mut val ptys: Array[LLVMTypeRef] = []
-                    val fty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(ptys), 0U64, 0I32)
-                    val callee: LLVMValueRef = self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: fty)
-                    mut val av: Array[LLVMValueRef] = []
-                    val result: LLVMValueRef = LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
-                    LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                RuntimeIntrinsic.Process(intrinsic: val process) => {
+                    match process {
+                        ProcessIntrinsic.ArgCount => {
+                            mut val p: Array[LLVMTypeRef] = []
+                            val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
+                            val result: LLVMValueRef = LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argCount", nameId: 50U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                        }
+                        ProcessIntrinsic.ArgAt => {
+                            mut val p: Array[LLVMTypeRef] = []
+                            p.append(self.i64ty)
+                            val ty: LLVMTypeRef = LLVMFunctionType(self.stringLlvmTy(c: inout c), arrayCPtr(p), 1U64, 0I32)
+                            mut val values: Array[LLVMValueRef] = []
+                            values.append(self.extendToI64(v: self.midEmitOperand(c: inout c, body: body, operand: args[0U64]), unsigned: false))
+                            val result: LLVMValueRef = LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_argAt", nameId: 51U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                        }
+                        ProcessIntrinsic.ExecOut => {
+                            val result: LLVMValueRef = self.emitPathStrIntrinsicValue(c: inout c, rtName: "plew_execOut", rtId: 70U64, retTy: self.stringLlvmTy(c: inout c), path: self.midEmitOperand(c: inout c, body: body, operand: args[0U64]))
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                        }
+                        ProcessIntrinsic.ExecCode => {
+                            mut val p: Array[LLVMTypeRef] = []
+                            val ty: LLVMTypeRef = LLVMFunctionType(self.i64ty, arrayCPtr(p), 0U64, 0I32)
+                            val result: LLVMValueRef = LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_execCode", nameId: 71U64, fnTy: ty), arrayCPtr(p), 0U64, anon())
+                            LLVMBuildStore(self.b, result, self.midLocalPtr(body: body, local: destination.local))
+                        }
+                        ProcessIntrinsic.Exit => {
+                            mut val p: Array[LLVMTypeRef] = []
+                            p.append(self.i64ty)
+                            val ty: LLVMTypeRef = LLVMFunctionType(self.voidty, arrayCPtr(p), 1U64, 0I32)
+                            mut val values: Array[LLVMValueRef] = []
+                            values.append(self.extendToI64(v: self.midEmitOperand(c: inout c, body: body, operand: args[0U64]), unsigned: false))
+                            LLVMBuildCall2(self.b, ty, self.getOrDeclare(c: inout c, name: "plew_exit", nameId: 1U64, fnTy: ty), arrayCPtr(values), 1U64, anon())
+                        }
+                    }
                     return true
                 }
                 RuntimeIntrinsic.Ffi(intrinsic: val ffi) => {

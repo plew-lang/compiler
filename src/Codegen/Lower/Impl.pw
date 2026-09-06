@@ -37,7 +37,11 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.FileExists /> /> /> }
         }
         if owner == self.modules.processModule {
-            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ArgCount /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argAt") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ArgAt /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "exit") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.Exit /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "execOut") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ExecOut /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "execCode") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ExecCode /> /> /> }
         }
         if owner == self.modules.ffiModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CString /> /> /> }
@@ -76,7 +80,11 @@ pub impl Comp {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "fileExists") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Io intrinsic=<IoIntrinsic.FileExists /> /> /> }
         }
         if owner == self.modules.processModule {
-            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.ArgCount /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argCount") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ArgCount /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "argAt") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ArgAt /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "exit") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.Exit /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "execOut") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ExecOut /> /> /> }
+            if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "execCode") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Process intrinsic=<ProcessIntrinsic.ExecCode /> /> /> }
         }
         if owner == self.modules.ffiModule {
             if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "cString") { return <RuntimeIntrinsicDeclaration.Bound intrinsic=<RuntimeIntrinsic.Ffi intrinsic=<FfiIntrinsic.CString /> /> /> }

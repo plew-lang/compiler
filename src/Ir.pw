@@ -1411,10 +1411,18 @@ export enum BufferIntrinsic {
 
 export enum RuntimeIntrinsic {
     Io(intrinsic: IoIntrinsic)
-    ArgCount
+    Process(intrinsic: ProcessIntrinsic)
     Ffi(intrinsic: FfiIntrinsic)
     Numeric(intrinsic: NumericIntrinsic)
     Buffer(intrinsic: BufferIntrinsic)
+}
+
+export enum ProcessIntrinsic {
+    ArgCount
+    ArgAt
+    Exit
+    ExecOut
+    ExecCode
 }
 
 // The bundled I/O ABI.  Its declaration owner and selected identity decide
