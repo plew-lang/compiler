@@ -1,7 +1,7 @@
 // Part of monomorphization (root: _.pw): call-site / closure-capture
 // registration and instance scanning.
 
-import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
+import ../../Ir with { ForTypeRecipe, CallArgumentSource, CallTemplateArgument, CallTemplateKind, DynamicCallTemplateTarget, StaticMemberResolution, AccessUse, SemanticAccess, SemanticAggregate, SemanticAggregateElement, SemanticMatch, SemanticMatchArm, SemanticMatchPayload, FinalAggregateResolution, FinalMatchResolution, FinalMatchArmResolution, FinalMatchPayloadResolution, FinalReturnResolution, EnumPayloadConversion, ValueConversionProof, StaticConformanceProof, WitnessMatch, WitnessBind, StaticProofNode, FrozenWitnessMatch, ConversionProofNode, FrozenEnumPayloadConversion, CallResultProjection, CallReceiverPassing, CallArgumentPassing, CallResolutionTypeArgRange, CallResolutionParameterTypeRange, CallResolutionConversionRange, CallResolutionArgumentPassingRange, RuntimeIntrinsicDeclaration, IoIntrinsic, ProcessIntrinsic, CoreStringIntrinsic, NumericIntrinsic, NumericConversionIntrinsic, NumericWidth, IntegerOperation, FloatWidth, FloatOperation, BoolOperation, NumericOverflow, BufferIntrinsic }
 import ../../Diag with { eprintU64 }
 
 // Walk an expression, registering any generic free function calls it contains
@@ -2055,7 +2055,30 @@ pub impl Comp {
                     _ => { return false }
                 }
             }
+            NumericIntrinsic.Conversion(intrinsic: val left) => {
+                match b {
+                    NumericIntrinsic.Conversion(intrinsic: val right) => { return self.sameNumericConversionIntrinsic(a: left, b: right) }
+                    _ => { return false }
+                }
+            }
         }
+    }
+
+    fn sameNumericConversionIntrinsic(a: NumericConversionIntrinsic, b: NumericConversionIntrinsic) -> Bool {
+        match a {
+            NumericConversionIntrinsic.BitCastI64 => { match b { NumericConversionIntrinsic.BitCastI64 => { return true } _ => {} } }
+            NumericConversionIntrinsic.BitCastU64 => { match b { NumericConversionIntrinsic.BitCastU64 => { return true } _ => {} } }
+            NumericConversionIntrinsic.TruncU8 => { match b { NumericConversionIntrinsic.TruncU8 => { return true } _ => {} } }
+            NumericConversionIntrinsic.TruncU16 => { match b { NumericConversionIntrinsic.TruncU16 => { return true } _ => {} } }
+            NumericConversionIntrinsic.TruncU32 => { match b { NumericConversionIntrinsic.TruncU32 => { return true } _ => {} } }
+            NumericConversionIntrinsic.TruncI8 => { match b { NumericConversionIntrinsic.TruncI8 => { return true } _ => {} } }
+            NumericConversionIntrinsic.TruncI16 => { match b { NumericConversionIntrinsic.TruncI16 => { return true } _ => {} } }
+            NumericConversionIntrinsic.TruncI32 => { match b { NumericConversionIntrinsic.TruncI32 => { return true } _ => {} } }
+            NumericConversionIntrinsic.IsNanF64 => { match b { NumericConversionIntrinsic.IsNanF64 => { return true } _ => {} } }
+            NumericConversionIntrinsic.F64ToI64 => { match b { NumericConversionIntrinsic.F64ToI64 => { return true } _ => {} } }
+            NumericConversionIntrinsic.F64ToU64 => { match b { NumericConversionIntrinsic.F64ToU64 => { return true } _ => {} } }
+        }
+        return false
     }
 
     fn sameBufferIntrinsic(a: BufferIntrinsic, b: BufferIntrinsic) -> Bool {

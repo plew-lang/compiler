@@ -191,6 +191,29 @@ pub impl LlvmCtx {
                     }
                 }
             }
+            NumericIntrinsic.Conversion(intrinsic: val conversion) => {
+                if values.count() != 1U64 {
+                    c.errorAt(offset: errorOffset, msg: "internal error: numeric conversion runtime intrinsic has an invalid ABI arity")
+                    return LLVMConstInt(self.i64ty, 0U64, 0I32)
+                }
+                val value: LLVMValueRef = values[0U64]
+                match conversion {
+                    NumericConversionIntrinsic.BitCastI64 => { return self.extendToI64(v: value, unsigned: true) }
+                    NumericConversionIntrinsic.BitCastU64 => { return self.extendToI64(v: value, unsigned: false) }
+                    NumericConversionIntrinsic.TruncU8 => { return self.coerceInt(v: value, target: self.i8ty, unsigned: true) }
+                    NumericConversionIntrinsic.TruncU16 => { return self.coerceInt(v: value, target: self.i16ty, unsigned: true) }
+                    NumericConversionIntrinsic.TruncU32 => { return self.coerceInt(v: value, target: self.i32ty, unsigned: true) }
+                    NumericConversionIntrinsic.TruncI8 => { return self.coerceInt(v: value, target: self.i8ty, unsigned: false) }
+                    NumericConversionIntrinsic.TruncI16 => { return self.coerceInt(v: value, target: self.i16ty, unsigned: false) }
+                    NumericConversionIntrinsic.TruncI32 => { return self.coerceInt(v: value, target: self.i32ty, unsigned: false) }
+                    NumericConversionIntrinsic.IsNanF64 => {
+                        val float: LLVMValueRef = self.coerceLlvmValueToF64(value: value)
+                        return LLVMBuildFCmp(self.b, 8U32, float, float, anon())
+                    }
+                    NumericConversionIntrinsic.F64ToI64 => { return LLVMBuildFPToSI(self.b, self.coerceLlvmValueToF64(value: value), self.i64ty, anon()) }
+                    NumericConversionIntrinsic.F64ToU64 => { return LLVMBuildFPToUI(self.b, self.coerceLlvmValueToF64(value: value), self.i64ty, anon()) }
+                }
+            }
         }
     }
 
@@ -215,6 +238,7 @@ pub impl LlvmCtx {
                     BoolOperation.Eq => { return 2U64 }
                 }
             }
+            NumericIntrinsic.Conversion(intrinsic: _) => { return 1U64 }
         }
     }
 

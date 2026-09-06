@@ -1,0 +1,10 @@
+// A user declaration with a Core floor spelling is ordinary Plew code.
+// It must not be selected as truncU8's primitive ABI operation.
+import @Std/Io with { writeByte }
+
+fn truncU8(n: U64) -> U8 { return 90U8 }
+
+fn main() {
+    writeByte(truncU8(n: 1U64))
+    writeByte(10U8)
+}

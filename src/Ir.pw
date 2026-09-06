@@ -1382,10 +1382,29 @@ export enum NumericOverflow {
     Wrapping
 }
 
+// Scalar floor operations that are conversions or predicates rather than an
+// arithmetic operator.  Their source/target ABI is fixed by the selected
+// Core declaration; keeping them in this closed domain prevents backend name
+// dispatch and keeps their single-evaluation rule shared by Mid and legacy.
+export enum NumericConversionIntrinsic {
+    BitCastI64
+    BitCastU64
+    TruncU8
+    TruncU16
+    TruncU32
+    TruncI8
+    TruncI16
+    TruncI32
+    IsNanF64
+    F64ToI64
+    F64ToU64
+}
+
 export enum NumericIntrinsic {
     Integer(width: NumericWidth, unsigned: Bool, operation: IntegerOperation, overflow: NumericOverflow)
     Float(width: FloatWidth, operation: FloatOperation)
     Bool(operation: BoolOperation)
+    Conversion(intrinsic: NumericConversionIntrinsic)
 }
 
 // The finite safe Buffer floor.  The element type and inout/value argument

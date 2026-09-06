@@ -1,0 +1,29 @@
+// Every Core scalar conversion floor is selected by declaration identity and
+// lowered by Mid.  The values exercise signed/unsigned ABI directions as well
+// as the NaN predicate; only byte-sized observables are written.
+import @Std/Core with { bitCastI64, bitCastU64, truncU8, truncU16, truncU32, truncI8, truncI16, truncI32, isNanF64, f64ToI64, f64ToU64 }
+import @Std/Io with { writeByte }
+
+fn main() {
+    val byte: U8 = truncU8(n: 65U64)
+    val word: U16 = truncU16(n: 66U64)
+    val dword: U32 = truncU32(n: 67U64)
+    val signedByte: I8 = truncI8(n: -1I64)
+    val signedWord: I16 = truncI16(n: -2I64)
+    val signedDword: I32 = truncI32(n: -3I64)
+    val signedBits: I64 = bitCastI64(n: 67U64)
+    val unsignedBits: U64 = bitCastU64(n: signedBits)
+    val fromFloatSigned: I64 = f64ToI64(f: 68.0F64)
+    val fromFloatUnsigned: U64 = f64ToU64(f: 69.0F64)
+
+    writeByte(byte)
+    writeByte(truncU8(n: unsignedBits))
+    writeByte(truncU8(n: bitCastU64(n: fromFloatSigned)))
+    writeByte(truncU8(n: fromFloatUnsigned))
+    if isNanF64(f: 0.0F64) {
+        writeByte(88U8)
+    } else {
+        writeByte(78U8)
+    }
+    writeByte(10U8)
+}

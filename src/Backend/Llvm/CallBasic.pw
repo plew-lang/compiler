@@ -452,64 +452,6 @@ pub impl LlvmCtx {
             mut val av: Array[LLVMValueRef] = []
             return LLVMBuildCall2(self.b, fty, callee, arrayCPtr(av), 0U64, anon())
         }
-        // (Prelude internal) bitCastU64(n: I64) -> U64: reinterpret a signed integer's
-        // two's-complement bit pattern as U64 (for hashing signed keys — `as U64` is
-        // lossless-only and rejects negatives). A no-op at the LLVM level: I64 and U64 are
-        // both i64, so the argument value passes through unchanged.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastU64") {
-            return self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: false)
-        }
-        // (Core internal) bitCastI64(n: U64) -> I64: the inverse reinterpret of bitCastU64
-        // (a non-negative U64's bit pattern as I64, after a range check). Also a no-op at
-        // the LLVM level (U64 and I64 are both i64), so the argument passes through.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastI64") {
-            return self.extendToI64(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), unsigned: true)
-        }
-        // (Prelude internal) truncU8(n: U64) -> U8: keep the low 8 bits (`as U8` is
-        // lossless-only and rejects wider values). Used to assemble UTF-8 bytes during
-        // string literal `\u{...}` decoding.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU8") {
-            return self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i8ty, unsigned: true)
-        }
-        // (Prelude internal) truncU16/U32(n: U64) -> UX: narrow a range-checked unsigned
-        // integer (low bits; trunc is signedness-agnostic, but the result type is unsigned).
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU16") {
-            return self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i16ty, unsigned: true)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncU32") {
-            return self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i32ty, unsigned: true)
-        }
-        // (Prelude internal) truncI8/I16/I32(n: I64) -> IX: narrow a RANGE-CHECKED signed
-        // integer (`as` is lossless-only and rejects narrowing). The fallible `convert`
-        // factories (spec/12 TryFrom) call these only after proving the value fits.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI8") {
-            return self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i8ty, unsigned: false)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI16") {
-            return self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i16ty, unsigned: false)
-        }
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "truncI32") {
-            return self.coerceInt(v: self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), target: self.i32ty, unsigned: false)
-        }
-        // (Core internal) isNanF64(f: F64) -> Bool: `fcmp uno f, f` (unordered = true iff
-        // NaN). A direct intrinsic because Plew's `==`/`!=` on floats PANIC on a NaN
-        // operand (spec/02), so the fallible float->int `convert` (spec/12 TryFrom) must
-        // test NaN with this BEFORE any ordered comparison.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "isNanF64") {
-            return LLVMBuildFCmp(self.b, 8U32, self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), anon())
-        }
-        // (Core internal) f64ToI64(f: F64) -> I64: truncate toward zero (`fptosi`). Called
-        // only after the `convert` factory proves the value is finite and in [-2^63, 2^63)
-        // (out of that range, fptosi is UB) — so this is the in-range raw conversion.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToI64") {
-            return LLVMBuildFPToSI(self.b, self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), self.i64ty, anon())
-        }
-        // (Core internal) f64ToU64(f: F64) -> U64: truncate toward zero (`fptoui`). Called
-        // only after the `convert` factory proves the value is finite and in [0, 2^64) —
-        // out of that range fptoui is UB — so this is the in-range raw conversion.
-        if rangeEquals(bytes: c.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToU64") {
-            return LLVMBuildFPToUI(self.b, self.genLlvmExpr(c: inout c, id: c.argAt(args: args, index: 0U64).expr), self.i64ty, anon())
-        }
         // (Prelude internal) __dictSeed() -> U64: the per-process dictionary hash seed —
         // a lazily-initialized random value (stable for the process), so SipHash is keyed
         // unpredictably across runs (DoS resistance) while staying consistent within a run.

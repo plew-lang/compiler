@@ -111,6 +111,7 @@ pub impl Comp {
     // is intentionally a parser over the *declaration spelling* only: it runs
     // once during frontend lowering and never becomes a backend fallback.
     inout fn classifyCoreNumericIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout NumericIntrinsic) -> Bool {
+        if self.classifyCoreNumericConversionIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout intrinsic) { return true }
         if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "boolNot") {
             intrinsic = <NumericIntrinsic.Bool operation=<BoolOperation.Not /> />
             return true
@@ -121,6 +122,21 @@ pub impl Comp {
         }
         if self.classifyCoreFloatIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout intrinsic) { return true }
         return self.classifyCoreIntegerIntrinsic(nameStart: nameStart, nameLen: nameLen, intrinsic: inout intrinsic)
+    }
+
+    inout fn classifyCoreNumericConversionIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout NumericIntrinsic) -> Bool {
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastI64") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.BitCastI64 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "bitCastU64") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.BitCastU64 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "truncU8") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.TruncU8 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "truncU16") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.TruncU16 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "truncU32") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.TruncU32 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "truncI8") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.TruncI8 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "truncI16") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.TruncI16 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "truncI32") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.TruncI32 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "isNanF64") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.IsNanF64 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToI64") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.F64ToI64 /> /> return true }
+        if rangeEquals(bytes: self.arena.bytes, start: nameStart, len: nameLen, kw: "f64ToU64") { intrinsic = <NumericIntrinsic.Conversion intrinsic=<NumericConversionIntrinsic.F64ToU64 /> /> return true }
+        return false
     }
 
     inout fn classifyCoreStringIntrinsic(nameStart: U64, nameLen: U64, intrinsic: inout CoreStringIntrinsic) -> Bool {
