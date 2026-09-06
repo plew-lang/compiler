@@ -1,6 +1,6 @@
 import @Std/Io with { write }
 import /Frontend with { Comp }
-import /Ir with { Arg, CallArgumentSource, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param }
+import /Ir with { CallArgumentSource, CallTemplateArgument, CallTemplateKind, CallTemplateReceiver, Expr, Func, Param }
 
 fn main() {
     mut val c: Comp = <Comp />
@@ -51,7 +51,7 @@ fn main() {
         calleeTypeArgs: [term], resultTerm: term, existingExpr: c.arena.exprs.count())
     if first != second && !c.sameCallSiteKey(a: firstKey, b: c.templateCallSiteKey(fnIdx: 0U64, exprId: second)) { write(s: "distinct-evaluations\n") }
     if c.decls.callables.count() == 0U64 { write(s: "no-source-lookup\n") }
-    val empty = c.pushArgs(args: [])
+    val empty: Array[CallTemplateArgument] = []
     match c.recordBoundCallArguments(callee: 0U64, args: empty, receiver: <CallTemplateReceiver.None />,
         calleeTypeArgs: [], parameterTerms: [term]) {
         Optional.Some(v: val completed) => {
@@ -70,12 +70,23 @@ fn main() {
         }
         _ => {}
     }
-    val explicitArgs = c.pushArgs(args: [<Arg expr=expression isInout=false labelStart=name.nameStart labelLen=name.nameLen hasLabel=true />])
+    // Completion runs after the lexical cursor has gone away. It must retain
+    // the recorded local identity, even when source recovery would disagree.
+    val explicitArgs: Array[CallTemplateArgument] = [<CallTemplateArgument
+        source=<CallArgumentSource.Local exprId=expression localIndex=17U64 term=term />
+        isInout=true labelStart=name.nameStart labelLen=name.nameLen hasLabel=true />]
+    c.cur.locals = []
     val expressionCount = c.arena.exprs.count()
     match c.recordBoundCallArguments(callee: 0U64, args: explicitArgs, receiver: <CallTemplateReceiver.None />,
         calleeTypeArgs: [], parameterTerms: [term]) {
         Optional.Some(v: val completed) => {
             if completed.count() == 1U64 && c.callArgumentExprId(source: completed[0U64].source) == expression && c.arena.exprs.count() == expressionCount { write(s: "bound-explicit-preserved\n") }
+            match completed[0U64].source {
+                CallArgumentSource.Local(exprId: val exprId, localIndex: val localIndex, term: val savedTerm) => {
+                    if exprId == expression && localIndex == 17U64 && savedTerm == term && completed[0U64].isInout { write(s: "frozen-local-preserved\n") }
+                }
+                _ => {}
+            }
         }
         _ => {}
     }

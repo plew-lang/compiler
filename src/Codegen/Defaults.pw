@@ -7,9 +7,9 @@ pub impl Comp {
     // consumed by finalization and Mid. Signature terms/substitutions arrive
     // from the caller's completed parametric selection, not from AST recovery.
     // An incomplete binding/signature does not publish a partial argument list.
-    inout fn recordBoundCallArguments(callee: U64, args: ArgRange, receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Optional[Array[CallTemplateArgument]] {
+    inout fn recordBoundCallArguments(callee: U64, args: Array[CallTemplateArgument], receiver: CallTemplateReceiver, calleeTypeArgs: Array[U64], parameterTerms: Array[U64], previous: Array[CallTemplateArgument] = [], proof: StaticConformanceProof = <StaticConformanceProof.Missing />) -> Optional[Array[CallTemplateArgument]] {
         mut val bindings: Array[CallParameterBinding] = []
-        match self.bindCallParameters(callee: callee, args: args) {
+        match self.bindCallParameters(callee: callee, args: self.templateArgumentRange(arguments: args)) {
             Optional.Some(val v) => { bindings = v }
             Optional.None => { return <Optional.None /> }
         }
@@ -42,8 +42,10 @@ pub impl Comp {
         while index < bindings.count() {
             match bindings[index] {
                 CallParameterBinding.Explicit(val argumentIndex) => {
-                    val argument: Arg = self.argAt(args: args, index: argumentIndex)
-                    completed.append(<CallTemplateArgument source=self.callArgumentSource(exprId: argument.expr) isInout=argument.isInout labelStart=argument.labelStart labelLen=argument.labelLen hasLabel=argument.hasLabel />)
+                    // Record already resolved lexical local identity and call
+                    // dependencies. Completion has no lexical cursor and must
+                    // not reconstruct these facts from the source expression.
+                    completed.append(args[argumentIndex])
                 }
                 CallParameterBinding.Default(val generator) => {
                     mut val existing: U64 = self.arena.exprs.count()

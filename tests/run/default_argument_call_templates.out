@@ -8,3 +8,4 @@ no-source-lookup
 bound-default-result
 completed-record-idempotent
 bound-explicit-preserved
+frozen-local-preserved
