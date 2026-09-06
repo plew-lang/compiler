@@ -272,6 +272,35 @@ fn instantiateMidRvalue(c: inout Comp, value: MidRvalue, environment: BodyInstan
             }
             return <MidRvalue.EnumPayloadCopy place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
         }
+        MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: val bindTarget, sourceStmt: val sourceStmt, resultTerm: val resultTerm) => {
+            val matchIndex: U64 = c.finalMatchIndex(bodyId: bodyId, stmtId: sourceStmt)
+            val groundedResult: U64 = c.groundTermForBody(ref: resultTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef)
+            if matchIndex >= c.arena.finalMatches.count() {
+                if !midInstantiateHasError(error: error) { error = <MidInstantiateError.MissingFinalResolution /> }
+            } else {
+                val resolution = c.arena.finalMatches[matchIndex]
+                if resolution.enumIndex != enumIndex || !(c.typeRefEq(a: resolution.scrutineeTypeRef, b: c.groundTermForBody(ref: place.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef))) {
+                    if !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+                } else {
+                    mut val arm: U64 = 0U64
+                    mut val found: Bool = false
+                    while arm < resolution.arms.count() {
+                        val current = resolution.arms[arm]
+                        if current.hasVariant && current.variantIndex == variantIndex {
+                            mut val payload: U64 = 0U64
+                            while payload < current.payloads.count() {
+                                val selected = current.payloads[payload]
+                                if selected.bindTarget == bindTarget && selected.fieldIndex == fieldIndex && c.typeRefEq(a: selected.fieldTypeRef, b: groundedResult) { found = true }
+                                payload += 1U64
+                            }
+                        }
+                        arm += 1U64
+                    }
+                    if !found && !midInstantiateHasError(error: error) { error = <MidInstantiateError.InvalidFinalResolution /> }
+                }
+            }
+            return <MidRvalue.EnumPayloadBorrow place=instantiateMidPlace(c: inout c, place: place, environment: environment, itemRef: itemRef) enumIndex=enumIndex variantIndex=variantIndex fieldIndex=fieldIndex bindTarget=bindTarget sourceStmt=sourceStmt resultTerm=groundedResult />
+        }
     }
 }
 
@@ -381,11 +410,12 @@ fn midRvalueResultType(c: Comp, value: MidRvalue) -> U64 {
         }
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
+        MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => { return resultTerm }
     }
 }
 
 fn midWithTypeTerm(local: MidLocalDecl, typeTerm: U64) -> MidLocalDecl {
-    return <MidLocalDecl typeTerm=typeTerm sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />
+    return <MidLocalDecl typeTerm=typeTerm sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />
 }
 
 // Ground a parametric Mid body exactly once for one frontend BodyInstance.
@@ -405,7 +435,7 @@ export fn instantiateMidBody(c: inout Comp, body: MidBody, bodyId: U64) -> MidIn
     mut val localI: U64 = 0U64
     while localI < body.locals.count() {
         val local: MidLocalDecl = body.locals[localI]
-        locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
+        locals.append(<MidLocalDecl typeTerm=c.groundTermForBody(ref: local.typeTerm, environment: environment.environment, selfRef: environment.environment.receiverRef, itemRef: itemRef) sourceScope=local.sourceScope isUnique=local.isUnique isParameter=local.isParameter isBorrowed=local.isBorrowed isInout=local.isInout ownsAtEntry=local.ownsAtEntry isDropFlag=local.isDropFlag isReturnPlace=local.isReturnPlace sourceNameStart=local.sourceNameStart />)
         localI += 1U64
     }
     mut val blocks: Array[MidBlock] = []

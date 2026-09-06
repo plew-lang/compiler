@@ -1,0 +1,19 @@
+import @Std/Io with { print }
+
+// Pattern binding initially borrows the active ARC payload from `payload`.
+// Returning it must make the ordinary value-semantic Copy explicit, so the
+// result survives the match scrutinee's scope exit.
+fn describe(payload: Optional[String]) -> String {
+    match payload {
+        Optional.Some(v: val text) => { return text }
+        Optional.None => { return "none" }
+    }
+}
+
+fn main() {
+    print(describe(payload: <Optional[String].Some v="yes" />))
+    print(describe(payload: <Optional[String].None />))
+}
+
+// expected: yes
+// expected: none

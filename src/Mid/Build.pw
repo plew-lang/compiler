@@ -192,9 +192,9 @@ export fn emptyMidBody(sourceFunction: U64) -> MidBody {
 // from the same resolver record later read at each identifier use. The caller
 // supplies the already-recorded TypeTerm; this builder never calls a type
 // recovery query or lexical name lookup.
-export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false) -> U64 {
+export fn addMidLocal(state: inout MidBuildState, declarationTarget: U64, typeTerm: U64, isUnique: Bool, isParameter: Bool, ownsAtEntry: Bool, isInout: Bool = false, isBorrowed: Bool = false) -> U64 {
     val local: U64 = state.locals.count()
-    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isInout=isInout ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
+    state.locals.append(<MidLocalDecl typeTerm=typeTerm sourceScope=state.currentScope isUnique=isUnique isParameter=isParameter isBorrowed=isBorrowed isInout=isInout ownsAtEntry=ownsAtEntry isDropFlag=false isReturnPlace=false sourceNameStart=declarationTarget />)
     state.bindings.append(<MidSourceBinding declarationTarget=declarationTarget local=local scope=state.currentScope />)
     return local
 }
@@ -1400,13 +1400,14 @@ export fn buildMidMatch(c: inout Comp, state: inout MidBuildState, stmtId: U64) 
                         traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "unique-payload")
                         return <MidBuildError.UnsupportedMatch />
                     }
-                    if c.arcNeedsRelease(ref: payload.fieldTerm) {
-                        traceMidUnsupportedMatch(c: c, state: state, stmtId: stmtId, reason: "owned-payload")
-                        return <MidBuildError.UnsupportedMatch />
-                    }
-                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false)
+                    val isBorrowed: Bool = c.arcNeedsRelease(ref: payload.fieldTerm)
+                    val local: U64 = addMidLocal(state: inout state, declarationTarget: payload.bindTarget, typeTerm: payload.fieldTerm, isUnique: false, isParameter: false, ownsAtEntry: false, isBorrowed: isBorrowed)
                     val destination: MidPlace = <MidPlace local=local typeTerm=payload.fieldTerm />
-                    midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
+                    if isBorrowed {
+                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadBorrow place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
+                    } else {
+                        midAppendStatement(state: inout state, statement: <MidStatement.Assign destination=destination value=<MidRvalue.EnumPayloadCopy place=scrutinee.place enumIndex=semantic.enumIndex variantIndex=semanticArm.variantIndex fieldIndex=payload.fieldIndex bindTarget=payload.bindTarget sourceStmt=stmtId resultTerm=payload.fieldTerm /> />)
+                    }
                     payloadIndex += 1U64
                 }
                 val sourceArm = c.matchArmAt(arms: sourceArms, index: armIndex)

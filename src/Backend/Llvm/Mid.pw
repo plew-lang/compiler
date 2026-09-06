@@ -438,6 +438,13 @@ pub impl LlvmCtx {
                 val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
                 return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
             }
+            MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: val resultTerm) => {
+                if resultTerm == 0U64 || resultTerm >= c.arena.types.count() { return false }
+                if enumIndex >= c.arena.enums.count() || variantIndex >= c.arena.enums[enumIndex].variants.count() || place.typeTerm == 0U64 || place.typeTerm >= c.arena.types.count() { return false }
+                if fieldIndex >= c.arena.enums[enumIndex].variants[variantIndex].fields.count() || !(self.midPlaceLlvmSupported(c: inout c, body: body, place: place)) { return false }
+                val enumSlot: U64 = self.genEnumSlot(c: inout c, ref: place.typeTerm)
+                return enumSlot < self.genEnumRefs.count() && self.genEnumDefs[enumSlot] == enumIndex
+            }
         }
     }
 
@@ -2014,6 +2021,13 @@ pub impl LlvmCtx {
                         val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
                         val field: LLVMValueRef = LLVMBuildExtractValue(self.b, payload, fieldIndex, anon())
                         LLVMBuildStore(self.b, field, self.midLocalPtr(body: body, local: destination.local))
+                    }
+                    MidRvalue.EnumPayloadBorrow(place: val place, enumIndex: val enumIndex, variantIndex: val variantIndex, fieldIndex: val fieldIndex, bindTarget: _, sourceStmt: _, resultTerm: _) => {
+                        val enumTy: LLVMTypeRef = self.midPlaceTy(c: inout c, body: body, place: place)
+                        val payloadTy: LLVMTypeRef = self.variantPayloadTy(c: inout c, eid: enumIndex, vi: variantIndex, instanceRef: place.typeTerm)
+                        val payloadPtr: LLVMValueRef = self.enumMatchPayloadStorage(c: inout c, scrutTy: enumTy, scrutSlot: self.midPlacePtr(c: inout c, body: body, place: place), instanceRef: place.typeTerm)
+                        val payload: LLVMValueRef = LLVMBuildLoad2(self.b, payloadTy, payloadPtr, anon())
+                        LLVMBuildStore(self.b, LLVMBuildExtractValue(self.b, payload, fieldIndex, anon()), self.midLocalPtr(body: body, local: destination.local))
                     }
                 }
             }

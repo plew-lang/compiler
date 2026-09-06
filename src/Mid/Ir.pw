@@ -273,6 +273,11 @@ export enum MidRvalue {
     // layout depends on the selected variant, and all three declaration slots
     // are frozen by SemanticMatch rather than rediscovered by LLVM.
     EnumPayloadCopy(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
+    // Bind an ARC payload as a read-only alias of the live scrutinee. The
+    // destination local is marked borrowed, so this operation neither creates
+    // ownership nor a drop obligation; an eventual Copy(place) is the sole
+    // operation that obtains an independent value-semantic share.
+    EnumPayloadBorrow(place: MidPlace, enumIndex: U64, variantIndex: U64, fieldIndex: U64, bindTarget: U64, sourceStmt: U64, resultTerm: U64)
 }
 
 // A parametric body names a frontend CallTemplate by its semantic site identity.
@@ -356,6 +361,9 @@ export struct MidLocalDecl {
     pub val sourceScope: U64
     pub val isUnique: Bool
     pub val isParameter: Bool
+    // A match payload borrow aliases a live scrutinee. It is a usable source
+    // Place but never owns the representation stored in its local slot.
+    pub val isBorrowed: Bool = false
     // An inout parameter's Place is supplied directly by the caller ABI; it
     // is not a value copied into a callee-owned local slot.
     pub val isInout: Bool = false

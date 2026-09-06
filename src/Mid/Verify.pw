@@ -70,6 +70,7 @@ fn midVerifyConsumeRvalue(states: inout Array[MidOwnership], value: MidRvalue, b
         MidRvalue.Convert(operand: val operand, conversion: _) => { return midVerifyConsumeOperand(states: inout states, operand: operand, block: block) }
         MidRvalue.EnumTag(place: _, enumIndex: _, sourceStmt: _, resultTerm: _) => { return <MidVerification /> }
         MidRvalue.EnumPayloadCopy(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return <MidVerification /> }
+        MidRvalue.EnumPayloadBorrow(place: _, enumIndex: _, variantIndex: _, fieldIndex: _, bindTarget: _, sourceStmt: _, resultTerm: _) => { return <MidVerification /> }
     }
 }
 
